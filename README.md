@@ -24,7 +24,7 @@
 
 **Main capabilities:**
 
-- **Reception:** Manage the daily patient list (waiting room), add patients manually or via file import, generate one-time links for tablet forms
+- **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, generate one-time links for tablet forms
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
 - **Backend:** PDF generation from form data, Transactional Outbox for async processing, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
@@ -158,11 +158,12 @@ Scheduled tasks (e.g. retention and Outbox processing) are configured via `djang
 
 ### In scope
 
-- Reception module: daily list (CRUD + file import)
+- Reception module: daily list (CRUD + daily file import)
 - Patient web app (RWD/tablet) for consent signing, body map, and e-signature
 - Doctor module: medical section, draft/publish, edit and resend
 - PDF generation (consents, body map, signature)
 - HiDrive mock (Phases 1–2) and HiDrive API integration (Phase 3)
+- Daily import of patient/visit lists from files exported from Doctolib (no direct Doctolib API integration)
 - SMS notifications (link to download document)
 - Logging (e.g. OpenTelemetry as per PRD)
 - UI language: German
@@ -172,7 +173,8 @@ Scheduled tasks (e.g. retention and Outbox processing) are configured via `djang
 - Advanced consent content versioning in an admin UI (changes require dev/config)
 - Patients filling the full medical questionnaire
 - Complex business reporting (BI)
-- Integrations other than Doctolib, HiDrive, and SMSApi
+- Direct API integration with Doctolib
+- Integrations other than HiDrive and SMSApi
 
 ---
 
@@ -182,11 +184,11 @@ The product is developed in **three phases**:
 
 | Phase | Focus |
 |-------|--------|
-| **1** | Tablets, digital consents, body schema, patient e-signature; waiting room managed manually or via import |
+| **1** | Tablets, digital consents, body schema, patient e-signature; waiting room managed manually or via daily file import |
 | **2** | Doctor panel for medical data and document approval; automated archive upload and SMS |
-| **3** | Full integration: Doctolib (patient list), HiDrive (archiving API) |
+| **3** | Improved daily import process for files exported from Doctolib + HiDrive API (archiving) |
 
-Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and django-cron (e.g. retention). Further features (e.g. Doctolib sync, HiDrive API, full tablet UI) are defined in the product and implementation plans.
+Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and django-cron (e.g. retention). Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
 
 ---
 
