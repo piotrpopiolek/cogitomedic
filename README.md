@@ -27,7 +27,7 @@
 - **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, generate one-time links for tablet forms
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
-- **Backend:** PDF generation from form data, Transactional Outbox for async processing, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
+- **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed by cron workers via Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
 
 The user interface is in **German**.
 
@@ -152,6 +152,8 @@ All commands are run from the project root with the virtual environment activate
 
 Scheduled tasks (e.g. retention and Outbox processing) are configured via `django-cron` and `CRON_CLASSES` in `cogitomedica/settings.py`.
 
+Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
+
 ---
 
 ## Project Scope
@@ -166,6 +168,7 @@ Scheduled tasks (e.g. retention and Outbox processing) are configured via `djang
 - Daily import of patient/visit lists from files exported from Doctolib (no direct Doctolib API integration)
 - SMS notifications (link to download document)
 - Logging (e.g. OpenTelemetry as per PRD)
+- Operational dashboards: simplified reception/doctor view + advanced admin/maintenance view
 - UI language: German
 
 ### Out of scope
