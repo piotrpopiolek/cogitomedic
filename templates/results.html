@@ -1,0 +1,16 @@
+{% extends "index.html" %} {% load i18n static %} {% block content %}
+<div class="content">
+  <h3>{{ user.first_name }} {{ user.last_name }}</h3>
+  {% if file %}
+  <h5>Ihre Untersuchungsergebnisse sind jetzt verfügbar</h5>
+  <a href="{% url 'download_file' file %}" target="_blank"
+    >Ergebnisse abrufen</a
+  >
+  {% else %}
+  <h5>
+    Ihre Ergebnisse sind noch nicht verfügbar. Wir benachrichtigen Sie per SMS,
+    sobald sie vorliegen.
+  </h5>
+  {% endif %}
+</div>
+{% endblock %}
