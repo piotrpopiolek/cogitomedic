@@ -51,6 +51,22 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Integracja z SMSApi do powiadamiania pacjentów o dostępności dokumentu.
 - Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
 
+### 3.5. Observability i gotowość operacyjna (wymaganie obowiązkowe)
+- System musi emitować metryki techniczne i operacyjne (nie tylko logi), minimum:
+  - Outbox: `pending_count`, `failed_count`, `dead_letter_count`, `oldest_pending_age_seconds`, `processing_latency_p95/p99`.
+  - Integracje: skuteczność `HiDrive` i `SMS` (success ratio), liczba błędów per provider i per typ błędu.
+  - Import: liczba importów udanych/nieudanych, `row_error_rate`, czas przetwarzania importu.
+  - Dokumenty: czas od publikacji do `hidrive_sent=true`, czas od publikacji do `sms_sent=true`.
+- Muszą istnieć dashboardy operacyjne:
+  - Dashboard recepcji (status importu, zaległe dokumenty, awarie krytyczne).
+  - Dashboard utrzymaniowy (SLO/SLI, retry, dead letter, trend 24h/7d).
+- Musi istnieć alerting 24/7 z progami i eskalacją:
+  - Alert krytyczny: `oldest_pending_age_seconds > 900` w godzinach pracy.
+  - Alert krytyczny: `failed_count > 0` przez ponad 10 min dla `HIDRIVE_UPLOAD` lub `SMS_SEND`.
+  - Alert ostrzegawczy: skuteczność SMS lub HiDrive poniżej 98% w oknie 1h.
+- Każdy alert ma mieć runbook z instrukcją diagnostyki i obejścia awaryjnego.
+- Alerting i runbook są częścią Definition of Done dla funkcji, które modyfikują outbox/import/integracje.
+
 ## 4. Granice produktu
 
 ### W zakresie (In-Scope)
@@ -186,11 +202,47 @@ Kryteria akceptacji:
 - Usunięcie następuje TYLKO GDY: flaga zapisu do HiDrive == true ORAZ flaga wysyłki SMS == true.
 - Zdarzenie usunięcia jest logowane w systemie.
 
+ID: US-014
+Tytuł: Monitoring outbox i integracji
+Opis: Jako zespół utrzymania, chcę widzieć metryki i alerty dla outbox oraz integracji, aby wykrywać awarie zanim zgłosi je recepcja.
+Kryteria akceptacji:
+- Dostępny jest dashboard operacyjny z metrykami p95/p99, success ratio, queue depth i oldest pending.
+- Alerty krytyczne/ostrzegawcze działają zgodnie z progami z sekcji 3.5.
+- Do każdego alertu istnieje runbook i osoba dyżurna wie, jak wykonać procedurę.
+
+ID: US-015
+Tytuł: Idempotentny import wieloźródłowy
+Opis: Jako recepcja, chcę aby ręczne dodanie, import pliku i autoimport nie tworzyły duplikatów wizyt i pacjentów.
+Kryteria akceptacji:
+- Wszystkie ścieżki wejścia korzystają z jednej warstwy ingestii i tych samych walidacji.
+- Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
+
 ## 6. Metryki sukcesu
 
 Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe dla monitoringu technicznego):
-- Dostępność systemu (Uptime) na poziomie 99.9% w godzinach pracy placówki.
-- Skuteczność zapisu do HiDrive (procent udanych transferów vs błędy).
-- Skuteczność dostarczania SMS (procent dostarczonych wiadomości).
-- Liczba dokumentów w stanie błędu (stuck in Outbox) > 0.
-- Czas ładowania formularza na tablecie < 2 sekundy.
+- Dostępność systemu (Uptime) na poziomie >= 99.9% w godzinach pracy placówki.
+- Skuteczność zapisu do HiDrive >= 99.0% (okno 24h).
+- Skuteczność wysyłki SMS >= 98.0% (okno 24h).
+- `oldest_pending_age_seconds` dla outbox < 900 s w godzinach pracy.
+- Czas od publikacji dokumentu do zakończenia ścieżki `HiDrive+SMS` p95 < 5 minut.
+- Czas ładowania formularza na tablecie p95 < 2 sekundy.
+- MTTR dla alertów krytycznych (integracje/outbox/import) <= 30 minut.
+
+## 7. Zasady ograniczania złożoności (MVP)
+
+- Faza 1 ma ograniczoną maszynę stanów:
+  - `queue_entry`: `WAITING -> IN_PROGRESS -> PATIENT_COMPLETED -> DOCTOR_IN_PROGRESS -> PUBLISHED` (+ `CANCELLED`).
+  - `outbox_event`: `PENDING -> PROCESSING -> PROCESSED` (+ `FAILED`, `DEAD_LETTER`).
+- Logika domenowa jest implementowana w warstwie aplikacyjnej (serwisy domenowe), a nie przez triggery DB.
+- Każde przejście stanu musi mieć testy pozytywne i negatywne.
+- Nowe stany, tabele i integracje są dodawane etapowo po walidacji użycia produkcyjnego.
+
+## 8. Kontrakt danych JSON i pola krytyczne
+
+- Każdy JSON przechowywany w DB (`body_map_data`, `medical_payload`, `outbox payload`) musi mieć wersję schematu (`schema_version`).
+- Walidacja JSON odbywa się przy zapisie (Pydantic/JSON Schema) i jest obowiązkowa dla API oraz zadań background.
+- Zmiana kontraktu JSON wymaga:
+  - nowej wersji schematu,
+  - migracji danych historycznych,
+  - testów kompatybilności wstecznej.
+- Dane klinicznie/prawnie krytyczne (np. rozpoznanie/procedura) muszą być zapisane w kolumnach relacyjnych i mogą być duplikowane w JSON tylko pomocniczo.

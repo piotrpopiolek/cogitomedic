@@ -35,6 +35,7 @@
 - `date_of_birth` `date` NOT NULL
 - `phone` `varchar(20)` NOT NULL
 - `email` `citext` NOT NULL
+- `doctolib_patient_id` `varchar(64)` NULL UNIQUE
 - `street` `varchar(150)` NULL
 - `city` `varchar(100)` NULL
 - `postal_code` `varchar(20)` NULL
@@ -58,16 +59,36 @@
 - `changed_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `reason` `varchar(100)` NULL
 
+#### `clinic_site`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `code` `varchar(20)` NOT NULL UNIQUE
+- `name` `varchar(120)` NOT NULL
+- `is_active` `boolean` NOT NULL DEFAULT `true`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+
+#### `consulting_room`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `clinic_site_id` `uuid` NOT NULL FK -> `clinic_site(id)` ON DELETE RESTRICT
+- `code` `varchar(20)` NOT NULL
+- `name` `varchar(120)` NOT NULL
+- `is_active` `boolean` NOT NULL DEFAULT `true`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (clinic_site_id, code)`
+
 #### `daily_queue`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `queue_date` `date` NOT NULL
+- `clinic_site_id` `uuid` NOT NULL FK -> `clinic_site(id)` ON DELETE RESTRICT
+- `consulting_room_id` `uuid` NOT NULL FK -> `consulting_room(id)` ON DELETE RESTRICT
+- `shift_code` `queue_shift_enum` NOT NULL DEFAULT `'FULL_DAY'`
 - `source` `queue_source_enum` NOT NULL DEFAULT `'MANUAL'`
 - `status` `queue_status_enum` NOT NULL DEFAULT `'OPEN'`
 - `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
-  - `UNIQUE (queue_date)`
+  - `UNIQUE (queue_date, clinic_site_id, consulting_room_id, shift_code)`
 
 #### `queue_entry`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -127,6 +148,7 @@
 - `queue_entry_id` `uuid` NOT NULL UNIQUE FK -> `queue_entry(id)` ON DELETE CASCADE
 - `session_id` `uuid` NOT NULL UNIQUE FK -> `patient_form_session(id)` ON DELETE RESTRICT
 - `form_status` `intake_status_enum` NOT NULL DEFAULT `'IN_PROGRESS'`
+- `body_map_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `body_map_data` `jsonb` NOT NULL DEFAULT `'[]'::jsonb`
 - `signature_file_path` `varchar(500)` NULL
 - `signature_sha256` `char(64)` NULL
@@ -166,7 +188,10 @@
 - `medical_document_id` `uuid` NOT NULL FK -> `medical_document(id)` ON DELETE CASCADE
 - `version_no` `integer` NOT NULL
 - `version_status` `doc_version_status_enum` NOT NULL DEFAULT `'DRAFT'`
+- `medical_payload_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `medical_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
+- `diagnosis_code` `varchar(50)` NULL
+- `procedure_code` `varchar(50)` NULL
 - `pdf_local_path` `varchar(500)` NULL
 - `pdf_checksum_sha256` `char(64)` NULL
 - `hidrive_path` `varchar(500)` NULL
@@ -186,12 +211,14 @@
   - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL AND pdf_local_path IS NOT NULL))`
   - `CHECK ((hidrive_sent = false) OR hidrive_sent_at IS NOT NULL)`
   - `CHECK ((sms_sent = false) OR sms_sent_at IS NOT NULL)`
+- `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
 
 #### `outbox_event`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `aggregate_type` `varchar(50)` NOT NULL
 - `aggregate_id` `uuid` NOT NULL
 - `event_type` `outbox_event_type_enum` NOT NULL
+- `payload_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `payload` `jsonb` NOT NULL
 - `status` `outbox_status_enum` NOT NULL DEFAULT `'PENDING'`
 - `retry_count` `smallint` NOT NULL DEFAULT `0`
@@ -248,6 +275,8 @@
 ## 2. Relacje między tabelami
 
 - `staff_user` 1:N `daily_queue` (użytkownik tworzy wiele list dziennych).
+- `clinic_site` 1:N `consulting_room` (lokalizacja ma wiele gabinetów).
+- `consulting_room` 1:N `daily_queue` (gabinet ma wiele list dziennych w czasie).
 - `daily_queue` 1:N `queue_entry` (lista dzienna zawiera wiele wpisów pacjentów).
 - `patient` 1:N `queue_entry` (pacjent może mieć wiele wizyt/wpisów).
 - `queue_entry` 1:1 `patient_form_session` (aktywna sesja tokenowa; kolejne wygenerowania realizowane jako nowe rekordy historyczne, max 1 aktywna przez ograniczenie aplikacyjne).
@@ -269,6 +298,7 @@
 - `patient(last_name, first_name, date_of_birth)`
 - `patient(phone)`
 - `daily_queue(queue_date)`
+- `daily_queue(queue_date, clinic_site_id, consulting_room_id, shift_code)` UNIQUE
 - `queue_entry(daily_queue_id, entry_status, position_no)`
 - `queue_entry(patient_id, created_at DESC)`
 - `patient_form_session(token_hash)` UNIQUE
@@ -281,7 +311,7 @@
 - `medical_document_version(version_status, published_at DESC)`
 - `medical_document_version(hidrive_sent, sms_sent, published_at)` (retencja + monitoring)
 - `outbox_event(status, available_at)`
-- `outbox_event(event_type, status, retry_count, available_at)`
+- `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(aggregate_type, aggregate_id, created_at DESC)`
 - `patient_import_batch(status, created_at DESC)`
 - `patient_import_batch(source_system, created_at DESC)`
@@ -291,7 +321,10 @@
 - `outbox_event(status, available_at)` WHERE `status IN ('PENDING','FAILED')`
 - `medical_document_version(published_at)` WHERE `version_status='PUBLISHED' AND hidrive_sent=true AND sms_sent=true AND local_pdf_deleted_at IS NULL`
 - `patient_form_session(expires_at)` WHERE `consumed_at IS NULL`
+- `patient_form_session(queue_entry_id)` UNIQUE WHERE `consumed_at IS NULL`
 - `queue_entry(daily_queue_id, position_no)` WHERE `entry_status IN ('WAITING','IN_PROGRESS')`
+- `patient(doctolib_patient_id)` WHERE `doctolib_patient_id IS NOT NULL`
+- `queue_entry(daily_queue_id, visit_external_id)` UNIQUE WHERE `visit_external_id IS NOT NULL`
 
 ### 3.3. Indeksy GIN dla JSONB
 - `patient_intake_form` -> `GIN (body_map_data jsonb_path_ops)`
@@ -303,6 +336,7 @@
 
 ### 4.1. Typy ENUM
 - `staff_role_enum`: `RECEPTION`, `DOCTOR`, `ADMIN`
+- `queue_shift_enum`: `FULL_DAY`, `MORNING`, `AFTERNOON`, `EVENING`
 - `queue_source_enum`: `MANUAL`, `IMPORT`
 - `queue_status_enum`: `OPEN`, `CLOSED`
 - `queue_entry_status_enum`: `WAITING`, `IN_PROGRESS`, `PATIENT_COMPLETED`, `DOCTOR_IN_PROGRESS`, `PUBLISHED`, `CANCELLED`
@@ -315,22 +349,28 @@
 - `import_source_system_enum`: `DOCTOLIB_EXPORT`, `OTHER`
 - `import_status_enum`: `PROCESSING`, `COMPLETED`, `COMPLETED_WITH_ERRORS`, `FAILED`
 
-### 4.2. Funkcje i triggery
-- `set_updated_at()` trigger BEFORE UPDATE dla tabel z `updated_at`.
-- `enforce_single_active_session()` trigger:
-  - blokuje utworzenie >1 aktywnej sesji (`consumed_at IS NULL` i `expires_at > now()`) dla tego samego `queue_entry_id`.
-- `validate_required_consents_before_submit()` trigger:
-  - przy zmianie `patient_intake_form.form_status` na `SUBMITTED` sprawdza, czy wszystkie aktywne i wymagane zgody (`consent_definition.is_required=true`) mają `accepted=true`.
-- `publish_document_version()` funkcja:
-  - atomowo ustawia wersję jako `PUBLISHED`, inkrementuje `medical_document.current_version_no`, aktualizuje status dokumentu, zapisuje `published_at`.
-- `enqueue_outbox_after_publish()` trigger AFTER UPDATE/INSERT:
-  - po publikacji tworzy wpis `HIDRIVE_UPLOAD`; po potwierdzeniu sukcesu uploadu generuje `SMS_SEND`.
-- `retention_guard()` trigger:
-  - uniemożliwia ustawienie `local_pdf_deleted_at` jeśli `hidrive_sent=false` lub `sms_sent=false`.
+### 4.2. Zasady aplikacyjne zamiast triggerów (docelowo: 0 triggerów domenowych)
+- `updated_at` aktualizowane w warstwie aplikacyjnej (`auto_now=True` w modelach Django lub centralny serwis repozytorium).
+- Jedna aktywna sesja formularza:
+  - realizowana przez częściowy unikalny indeks `UNIQUE(queue_entry_id) WHERE consumed_at IS NULL`,
+  - wygaszanie sesji wykonywane przez job cleanup, który oznacza wygasłe sesje jako zużyte technicznie.
+- Walidacja wymaganych zgód przed `SUBMITTED`:
+  - wykonywana w serwisie domenowym `submit_patient_intake_form()` wewnątrz transakcji,
+  - brak przejścia stanu, jeśli niezaakceptowano wszystkich aktywnych zgód wymaganych.
+- Publikacja wersji dokumentu:
+  - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
+  - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`.
+- Enqueue outbox po publikacji:
+  - wpis `HIDRIVE_UPLOAD` tworzony jawnie przez serwis publikacji w tej samej transakcji,
+  - wpis `SMS_SEND` tworzony jawnie przez worker po potwierdzeniu sukcesu uploadu.
+- Ochrona retencji:
+  - realizowana przez `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))` w `medical_document_version`,
+  - dodatkowo job retencji wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
 
 ### 4.3. Zasady integralności i bezpieczeństwa
 - Wszystkie FK w module dokumentów z `ON DELETE RESTRICT` dla danych medycznych (brak przypadkowego usunięcia historii).
 - `token_hash` przechowywany wyłącznie jako hash SHA-256 (brak jawnego tokenu w DB).
+- `Doctolib Patient ID` jest jedynym kluczem tożsamości pacjenta i źródłem gwarancji unikalności rekordów pacjenta.
 - Włączenie rozszerzeń:
   - `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
   - `CREATE EXTENSION IF NOT EXISTS citext;`
@@ -342,6 +382,12 @@
   - `body_map_data` (koordynaty znaczników),
   - `medical_payload` (sztywna struktura formularza medycznego w kodzie, ale elastyczne przechowanie),
   - `payload` outbox.
+- JSONB jest wersjonowany (`*_schema_version`) i walidowany kontraktem aplikacyjnym; każda zmiana kontraktu wymaga migracji danych historycznych.
+- Dane klinicznie/prawnie krytyczne (`diagnosis_code`, `procedure_code`) są składowane relacyjnie, a JSONB pełni rolę pomocniczą.
+- Observability nie opiera się na tabelach OLTP jako źródle metryk czasu rzeczywistego:
+  - metryki outbox/import/integracji emitowane przez OpenTelemetry do backendu metryk (np. Prometheus/Grafana),
+  - alerting i progi utrzymywane jako konfiguracja-as-code,
+  - tabela `audit_event` służy do śladu zdarzeń i dochodzeń powdrożeniowych, nie do bieżącego monitoringu SLA.
 - Wersjonowanie dokumentu realizowane w `medical_document_version`, co spełnia wymaganie ponownej publikacji i nadpisania pliku w HiDrive, zachowując historię audytową po stronie DB.
 - Retencja 30 dni: operacja usuwa lokalny plik PDF (i ustawia `local_pdf_deleted_at`), ale nie usuwa rekordu wersji; dzięki temu pozostaje pełny ślad operacyjny.
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
