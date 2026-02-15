@@ -7,7 +7,7 @@ Cogitomedica Digital Consents to aplikacja internetowa mająca na celu cyfryzacj
 Projekt realizowany jest w trzech fazach:
 - Faza 1: Obsługa tabletów, cyfrowe zgody, schemat ciała i podpis elektroniczny pacjenta. Zarządzanie kolejką (Poczekalnia) odbywa się ręcznie lub przez import.
 - Faza 2: Panel lekarza do uzupełniania danych medycznych, zatwierdzanie dokumentów oraz automatyzacja wysyłki (zapis do archiwum i powiadomienie SMS).
-- Faza 3: Pełna integracja z zewnętrznymi systemami: Doctolib (pobieranie danych pacjentów) oraz HiDrive (docelowe API archiwizacji).
+- Faza 3: Usprawnienie procesu importu listy dziennej z plików eksportowanych z Doctolib oraz integracja z API HiDrive (docelowe API archiwizacji).
 
 Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językiem interfejsu dla wszystkich użytkowników jest język niemiecki.
 
@@ -28,7 +28,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 ### 3.1. Zarządzanie pacjentami i Poczekalnia
 - System umożliwia ręczne dodawanie pacjenta do listy dziennej (Poczekalni).
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
-- W Fazie 3 lista dzienna pobierana jest automatycznie z integracji Doctolib.
+- W Fazie 3 lista dzienna jest uzupełniana codziennym importem pliku eksportowanego z Doctolib (bez bezpośredniej integracji API).
 - Generowanie unikalnego linku z jednorazowym tokenem dla pacjenta w celu uruchomienia formularza na tablecie.
 
 ### 3.2. Interfejs Pacjenta (Tablet)
@@ -67,7 +67,8 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Zaawansowany system wersjonowania treści zgód w panelu administracyjnym (zmiany wymagają ingerencji deweloperskiej/konfiguracyjnej).
 - Wypełnianie ankiety medycznej (wywiadu) przez pacjenta.
 - Skomplikowane raportowanie biznesowe (BI).
-- Integracja z innymi systemami niż Doctolib, HiDrive i SMSApi.
+- Bezpośrednia integracja API z Doctolib.
+- Integracja z innymi systemami niż HiDrive i SMSApi.
 
 ## 5. Historyjki użytkowników
 
@@ -159,11 +160,13 @@ Kryteria akceptacji:
 
 ### System i Backend
 ID: US-011
-Tytuł: Integracja z Doctolib (Faza 3)
-Opis: System automatycznie pobiera listę wizyt z Doctolib, aby wyeliminować ręczne wprowadzanie danych.
+Tytuł: Codzienny import listy wizyt z pliku (Faza 3)
+Opis: System codziennie importuje listę wizyt z pliku wyeksportowanego z Doctolib, aby wyeliminować ręczne wprowadzanie danych.
 Kryteria akceptacji:
-- Synchronizacja następuje w określonych interwałach lub na żądanie.
+- System przyjmuje plik .xlsx lub .csv zgodny z ustalonym szablonem eksportu.
+- Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
 - Dane (imię, nazwisko, data urodzenia, kontakt) są mapowane do struktury pacjenta w systemie.
+- Błędy importu są raportowane na poziomie wiersza.
 
 ID: US-012
 Tytuł: Przetwarzanie Outbox (HiDrive i SMS)

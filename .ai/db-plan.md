@@ -218,7 +218,8 @@
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `source_file_name` `varchar(255)` NOT NULL
 - `source_file_sha256` `char(64)` NOT NULL
-- `import_type` `import_type_enum` NOT NULL DEFAULT `'CSV_XLSX'`
+- `import_type` `import_type_enum` NOT NULL DEFAULT `'DAILY_FILE_IMPORT'`
+- `source_system` `import_source_system_enum` NOT NULL DEFAULT `'DOCTOLIB_EXPORT'`
 - `status` `import_status_enum` NOT NULL DEFAULT `'PROCESSING'`
 - `total_rows` `integer` NOT NULL DEFAULT `0`
 - `inserted_rows` `integer` NOT NULL DEFAULT `0`
@@ -239,29 +240,6 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `CHECK (row_number > 0)`
-
-#### `doctolib_sync_run`
-- `id` `uuid` PK DEFAULT `gen_random_uuid()`
-- `started_at` `timestamptz` NOT NULL DEFAULT `now()`
-- `finished_at` `timestamptz` NULL
-- `status` `sync_status_enum` NOT NULL DEFAULT `'RUNNING'`
-- `fetched_count` `integer` NOT NULL DEFAULT `0`
-- `created_count` `integer` NOT NULL DEFAULT `0`
-- `updated_count` `integer` NOT NULL DEFAULT `0`
-- `error_count` `integer` NOT NULL DEFAULT `0`
-- `error_message` `text` NULL
-
-#### `doctolib_appointment`
-- `id` `uuid` PK DEFAULT `gen_random_uuid()`
-- `sync_run_id` `uuid` NOT NULL FK -> `doctolib_sync_run(id)` ON DELETE CASCADE
-- `external_appointment_id` `varchar(100)` NOT NULL UNIQUE
-- `queue_entry_id` `uuid` NULL FK -> `queue_entry(id)` ON DELETE SET NULL
-- `patient_id` `uuid` NULL FK -> `patient(id)` ON DELETE SET NULL
-- `appointment_start_at` `timestamptz` NOT NULL
-- `appointment_end_at` `timestamptz` NULL
-- `payload_raw` `jsonb` NOT NULL
-- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
-- `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 
 #### `audit_event`
 - `id` `bigserial` PK
@@ -287,7 +265,6 @@
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
 - `medical_document_version` 1:N `outbox_event` (np. zdarzenia `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
 - `patient_import_batch` 1:N `patient_import_error`.
-- `doctolib_sync_run` 1:N `doctolib_appointment`; `doctolib_appointment` opcjonalnie mapowany do `patient` i `queue_entry`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
   - `results_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
@@ -315,7 +292,7 @@
 - `outbox_event(event_type, status, retry_count, available_at)`
 - `outbox_event(aggregate_type, aggregate_id, created_at DESC)`
 - `patient_import_batch(status, created_at DESC)`
-- `doctolib_appointment(external_appointment_id)` UNIQUE
+- `patient_import_batch(source_system, created_at DESC)`
 - `audit_event(event_time DESC)`
 
 ### 3.2. Indeksy częściowe (PostgreSQL partial indexes)
@@ -334,7 +311,7 @@
 
 ### 4.1. Typy ENUM
 - `staff_role_enum`: `RECEPTION`, `DOCTOR`, `ADMIN`
-- `queue_source_enum`: `MANUAL`, `IMPORT`, `DOCTOLIB`
+- `queue_source_enum`: `MANUAL`, `IMPORT`
 - `queue_status_enum`: `OPEN`, `CLOSED`
 - `queue_entry_status_enum`: `WAITING`, `IN_PROGRESS`, `PATIENT_COMPLETED`, `DOCTOR_IN_PROGRESS`, `PUBLISHED`, `CANCELLED`
 - `intake_status_enum`: `IN_PROGRESS`, `SUBMITTED`
@@ -342,9 +319,9 @@
 - `doc_version_status_enum`: `DRAFT`, `PUBLISHED`
 - `outbox_event_type_enum`: `HIDRIVE_UPLOAD`, `SMS_SEND`
 - `outbox_status_enum`: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`, `DEAD_LETTER`
-- `import_type_enum`: `CSV_XLSX`, `DOCTOLIB`
+- `import_type_enum`: `DAILY_FILE_IMPORT`
+- `import_source_system_enum`: `DOCTOLIB_EXPORT`, `OTHER`
 - `import_status_enum`: `PROCESSING`, `COMPLETED`, `COMPLETED_WITH_ERRORS`, `FAILED`
-- `sync_status_enum`: `RUNNING`, `SUCCESS`, `FAILED`, `PARTIAL_SUCCESS`
 
 ### 4.2. Funkcje i triggery
 - `set_updated_at()` trigger BEFORE UPDATE dla tabel z `updated_at`.
@@ -375,5 +352,5 @@
   - `payload` outbox.
 - Wersjonowanie dokumentu realizowane w `medical_document_version`, co spełnia wymaganie ponownej publikacji i nadpisania pliku w HiDrive, zachowując historię audytową po stronie DB.
 - Retencja 30 dni: operacja usuwa lokalny plik PDF (i ustawia `local_pdf_deleted_at`), ale nie usuwa rekordu wersji; dzięki temu pozostaje pełny ślad operacyjny.
-- Integracja Doctolib jest izolowana do dedykowanych tabel synchronizacji, co umożliwia wdrożenie Fazy 3 bez zmian w rdzeniu modelu dokumentów.
+- Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Obecny moduł `results_labresults` może działać równolegle (legacy), a nowy moduł zgód powinien być wdrażany migracyjnie bez regresji istniejącej funkcji SMS.
