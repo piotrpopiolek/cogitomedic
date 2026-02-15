@@ -169,7 +169,9 @@ Tytuł: Zapis szkicu i publikacja
 Opis: Jako lekarz, chcę mieć możliwość zapisu pracy jako szkic lub ostatecznej publikacji dokumentu.
 Kryteria akceptacji:
 - Opcja Zapisz jako szkic pozwala na późniejszą edycję i nie uruchamia wysyłki.
-- Opcja Zatwierdź i wyślij blokuje edycję (chyba że wywołana zostanie akcja edycji specjalnej), generuje PDF i dodaje zadania do kolejki Outbox.
+- Opcja Zatwierdź i wyślij blokuje edycję, zmienia status na Opublikowany i kolejkuje zadanie generowania PDF w tle (asynchronicznie).
+- UI lekarza nie jest blokowane przez proces generowania PDF, uploadu czy wysyłki SMS.
+- Status generowania dokumentu jest widoczny w systemie (np. "Przetwarzanie...").
 
 ID: US-010
 Tytuł: Edycja opublikowanego dokumentu
@@ -196,8 +198,9 @@ Tytuł: Przetwarzanie Outbox (HiDrive i SMS)
 Opis: System automatycznie przetwarza kolejkę zadań, aby zapisać pliki w chmurze i powiadomić pacjenta.
 Kryteria akceptacji:
 - Cron uruchamia przetwarzanie tabeli Outbox.
-- Krok 1: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
-- Krok 2: Po sukcesie Kroku 1, wysyłka SMS z linkiem do pacjenta.
+- Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez worker/cron, a nie w żądaniu HTTP.
+- Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
+- Krok 3: Po sukcesie Kroku 2, wysyłka SMS z linkiem do pacjenta.
 - W przypadku błędu, zadanie otrzymuje status błędu i jest ponawiane w kolejnym cyklu (zgodnie z polityką retry).
 - Dokument ma status Opublikowany, ale flagi hidrive_sent/sms_sent odzwierciedlają stan faktyczny.
 
@@ -216,6 +219,7 @@ Kryteria akceptacji:
 - Dostępny jest dashboard operacyjny z metrykami p95/p99, success ratio, queue depth i oldest pending.
 - Alerty krytyczne/ostrzegawcze działają zgodnie z progami z sekcji 3.5.
 - Do każdego alertu istnieje runbook i osoba dyżurna wie, jak wykonać procedurę.
+- Jeśli generowanie PDF (`medical_document_version`) wejdzie w stan `FAILED` lub zdarzenie outbox wejdzie w stan `DEAD_LETTER`, na dashboardzie zespołu utrzymania pojawia się wyraźne powiadomienie (czerwona lampka/toast) o błędzie przetwarzania.
 
 ID: US-015
 Tytuł: Idempotentny import wieloźródłowy
@@ -224,6 +228,25 @@ Kryteria akceptacji:
 - Wszystkie ścieżki wejścia korzystają z jednej warstwy ingestii i tych samych walidacji.
 - Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
 - Dla danych importowanych kluczem tożsamości pacjenta jest wyłącznie `Doctolib Patient ID`; rekordy ręczne bez tego ID są traktowane jako tymczasowe i wymagają domknięcia alertu administracyjnego.
+
+ID: US-018
+Tytuł: Scalanie pacjentów (Merge Temporary to Confirmed)
+Opis: Jako administrator, chcę połączyć rekord pacjenta tymczasowego (bez ID) z rekordem potwierdzonym (z importu), aby przenieść historię zgód i zamknąć alert tożsamości.
+Kryteria akceptacji:
+- Dostępna jest funkcja "Scal z potwierdzonym" dla rekordów o statusie `TEMPORARY`.
+- System pozwala wskazać docelowy rekord `CONFIRMED` (wyszukiwanie po nazwisku/ID).
+- Po zatwierdzeniu: historia (zgody, dokumenty, wizyty) jest przepinana na rekord docelowy.
+- Rekord źródłowy (`TEMPORARY`) jest archiwizowany lub usuwany.
+- Alert dotyczący braku tożsamości dla rekordu źródłowego jest automatycznie zamykany.
+
+ID: US-017
+Tytuł: Awaryjny import z szablonu (Excel Template Fallback)
+Opis: Jako administrator, chcę mieć możliwość pobrania awaryjnego szablonu Excel i zaimportowania go, aby utrzymać ciągłość pracy recepcji w przypadku nagłej zmiany formatu pliku Doctolib.
+Kryteria akceptacji:
+- System udostępnia do pobrania stały szablon `.xlsx` z kolumnami: `doctolib_id`, `first_name`, `last_name`, `dob`, `phone`, `email`.
+- Dostępny jest dedykowany importer "Awaryjny", który akceptuje wyłącznie pliki zgodne z tym szablonem (sztywna walidacja).
+- Procedura awaryjna (kopiuj-wklej z zepsutego pliku do szablonu) jest udokumentowana w runbooku dla administratora/recepcji.
+- Użycie importera awaryjnego jest logowane jako incydent operacyjny.
 
 ## 6. Metryki sukcesu
 

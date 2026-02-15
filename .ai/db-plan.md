@@ -195,6 +195,7 @@
 - `medical_document_id` `uuid` NOT NULL FK -> `medical_document(id)` ON DELETE CASCADE
 - `version_no` `integer` NOT NULL
 - `version_status` `doc_version_status_enum` NOT NULL DEFAULT `'DRAFT'`
+- `pdf_generation_status` `pdf_status_enum` NOT NULL DEFAULT `'PENDING'`
 - `medical_payload_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `medical_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
 - `diagnosis_code` `varchar(50)` NULL
@@ -358,7 +359,8 @@
 - `intake_status_enum`: `IN_PROGRESS`, `SUBMITTED`
 - `medical_doc_status_enum`: `DRAFT`, `PUBLISHED`
 - `doc_version_status_enum`: `DRAFT`, `PUBLISHED`
-- `outbox_event_type_enum`: `HIDRIVE_UPLOAD`, `SMS_SEND`
+- `pdf_status_enum`: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
+- `outbox_event_type_enum`: `GENERATE_PDF`, `HIDRIVE_UPLOAD`, `SMS_SEND`
 - `outbox_status_enum`: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`, `DEAD_LETTER`
 - `import_type_enum`: `DAILY_FILE_IMPORT`
 - `import_source_system_enum`: `DOCTOLIB_EXPORT`, `OTHER`
@@ -382,8 +384,9 @@
   - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
   - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`.
 - Enqueue outbox po publikacji:
-  - wpis `HIDRIVE_UPLOAD` tworzony jawnie przez serwis publikacji w tej samej transakcji,
-  - wpis `SMS_SEND` tworzony jawnie przez worker po potwierdzeniu sukcesu uploadu.
+  - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
+  - wpis `HIDRIVE_UPLOAD` tworzony przez worker po sukcesie generowania PDF,
+  - wpis `SMS_SEND` tworzony przez worker po sukcesie uploadu.
 - Ochrona retencji:
   - realizowana przez `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))` w `medical_document_version`,
   - dodatkowo job retencji wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
