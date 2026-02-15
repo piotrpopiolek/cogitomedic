@@ -172,6 +172,7 @@ Kryteria akceptacji:
 - Opcja Zatwierdź i wyślij blokuje edycję, zmienia status na Opublikowany i kolejkuje zadanie generowania PDF w tle (asynchronicznie).
 - UI lekarza nie jest blokowane przez proces generowania PDF, uploadu czy wysyłki SMS.
 - Status generowania dokumentu jest widoczny w systemie (np. "Przetwarzanie...").
+- Akcja "Zatwierdź i wyślij" jest idempotentna: wielokrotne kliknięcie dla tego samego dokumentu nie tworzy wielu publikacji ani wielu łańcuchów zadań.
 
 ID: US-010
 Tytuł: Edycja opublikowanego dokumentu
@@ -216,10 +217,12 @@ ID: US-014
 Tytuł: Monitoring outbox i integracji
 Opis: Jako zespół utrzymania, chcę widzieć metryki i alerty dla outbox oraz integracji, aby wykrywać awarie zanim zgłosi je recepcja.
 Kryteria akceptacji:
-- Dostępny jest dashboard operacyjny z metrykami p95/p99, success ratio, queue depth i oldest pending.
+- Dostępne są dwa dashboardy:
+  - prosty dashboard recepcji/lekarza (status dokumentów i błędów wymagających interwencji),
+  - zaawansowany dashboard administracyjno-utrzymaniowy (metryki p95/p99, success ratio, queue depth, oldest pending).
 - Alerty krytyczne/ostrzegawcze działają zgodnie z progami z sekcji 3.5.
 - Do każdego alertu istnieje runbook i osoba dyżurna wie, jak wykonać procedurę.
-- Jeśli generowanie PDF (`medical_document_version`) wejdzie w stan `FAILED` lub zdarzenie outbox wejdzie w stan `DEAD_LETTER`, na dashboardzie zespołu utrzymania pojawia się wyraźne powiadomienie (czerwona lampka/toast) o błędzie przetwarzania.
+- Jeśli generowanie PDF (`medical_document_version`) wejdzie w stan `FAILED` lub zdarzenie outbox wejdzie w stan `DEAD_LETTER`, na dashboardzie recepcji/lekarza i dashboardzie administracyjnym pojawia się wyraźne powiadomienie (czerwona lampka/toast) o błędzie przetwarzania.
 
 ID: US-015
 Tytuł: Idempotentny import wieloźródłowy

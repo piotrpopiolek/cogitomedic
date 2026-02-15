@@ -36,7 +36,12 @@
 - `phone` `varchar(20)` NOT NULL
 - `email` `citext` NOT NULL
 - `doctolib_patient_id` `varchar(64)` NULL UNIQUE
-- `identity_status` `patient_identity_status_enum` NOT NULL DEFAULT `'CONFIRMED'`
+- `identity_status` `patient_identity_status_enum` GENERATED ALWAYS AS (
+    CASE
+      WHEN doctolib_patient_id IS NULL THEN 'TEMPORARY'::patient_identity_status_enum
+      ELSE 'CONFIRMED'::patient_identity_status_enum
+    END
+  ) STORED
 - `identity_alert_created_at` `timestamptz` NULL
 - `identity_resolution_due_at` `timestamptz` NULL
 - `street` `varchar(150)` NULL
@@ -52,7 +57,7 @@
   - `UNIQUE (external_source, external_source_id)`
   - `CHECK (phone ~ '^[0-9+() -]{7,20}$')`
   - `CHECK (date_of_birth <= current_date)`
-  - `CHECK ((identity_status = 'CONFIRMED' AND doctolib_patient_id IS NOT NULL) OR (identity_status = 'TEMPORARY' AND doctolib_patient_id IS NULL AND identity_alert_created_at IS NOT NULL AND identity_resolution_due_at IS NOT NULL))`
+  - `CHECK (doctolib_patient_id IS NOT NULL OR (identity_alert_created_at IS NOT NULL AND identity_resolution_due_at IS NOT NULL))`
   - `CHECK (identity_resolution_due_at IS NULL OR identity_alert_created_at IS NULL OR identity_resolution_due_at >= identity_alert_created_at)`
 
 #### `patient_contact_history`
@@ -195,6 +200,7 @@
 - `medical_document_id` `uuid` NOT NULL FK -> `medical_document(id)` ON DELETE CASCADE
 - `version_no` `integer` NOT NULL
 - `version_status` `doc_version_status_enum` NOT NULL DEFAULT `'DRAFT'`
+- `publish_request_id` `uuid` NULL
 - `pdf_generation_status` `pdf_status_enum` NOT NULL DEFAULT `'PENDING'`
 - `medical_payload_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `medical_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
@@ -214,9 +220,12 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (medical_document_id, version_no)`
+  - `UNIQUE (medical_document_id, publish_request_id)`
   - `CHECK (version_no > 0)`
   - `CHECK (jsonb_typeof(medical_payload) = 'object')`
-  - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL AND pdf_local_path IS NOT NULL))`
+  - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL))`
+  - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL))`
+  - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND pdf_local_path IS NOT NULL))`
   - `CHECK ((hidrive_sent = false) OR hidrive_sent_at IS NOT NULL)`
   - `CHECK ((sms_sent = false) OR sms_sent_at IS NOT NULL)`
 - `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
@@ -239,6 +248,7 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
+  - `UNIQUE (medical_document_version_id, event_type)`
   - `CHECK (retry_count >= 0 AND max_retries > 0 AND retry_count <= max_retries)`
   - `CHECK (jsonb_typeof(payload) = 'object')`
   - `CHECK (aggregate_type = 'MEDICAL_DOCUMENT_VERSION')`
@@ -369,9 +379,9 @@
 ### 4.2. Zasady aplikacyjne zamiast triggerów (docelowo: 0 triggerów domenowych)
 - `updated_at` aktualizowane w warstwie aplikacyjnej (`auto_now=True` w modelach Django lub centralny serwis repozytorium).
 - Tymczasowa tożsamość pacjenta:
-  - ręczne dodanie bez `Doctolib Patient ID` zapisuje `identity_status='TEMPORARY'`,
+  - ręczne dodanie bez `Doctolib Patient ID` skutkuje `identity_status='TEMPORARY'` (status wyliczany automatycznie z obecności ID),
   - w tej samej transakcji tworzony jest alert administracyjny (kanał operacyjny) i ustawiane są `identity_alert_created_at` oraz `identity_resolution_due_at`,
-  - po uzupełnieniu `Doctolib Patient ID` rekord przechodzi na `identity_status='CONFIRMED'`, a alert jest zamykany.
+  - po uzupełnieniu `Doctolib Patient ID` rekord automatycznie przechodzi na `identity_status='CONFIRMED'`, a alert jest zamykany.
 - Model sesji `latest-wins` (bez ograniczenia do jednej sesji historycznej):
   - nowe wygenerowanie tokenu zawsze tworzy nowy rekord `patient_form_session`,
   - w tej samej transakcji `queue_entry.active_session_id` jest przestawiane na nową sesję,
@@ -382,7 +392,8 @@
   - brak przejścia stanu, jeśli niezaakceptowano wszystkich aktywnych zgód wymaganych.
 - Publikacja wersji dokumentu:
   - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
-  - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`.
+  - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`,
+  - `publish_request_id` (idempotency key) gwarantuje, że wielokrotne kliknięcie "Zatwierdź i wyślij" nie tworzy wielu wersji i wielu łańcuchów outbox.
 - Enqueue outbox po publikacji:
   - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
   - wpis `HIDRIVE_UPLOAD` tworzony przez worker po sukcesie generowania PDF,
