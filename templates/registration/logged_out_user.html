@@ -1,0 +1,8 @@
+{% extends "index.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="content">
+<p><a href="{% url 'accounts:login' %}">{% trans 'Log in again' %}</a></p>
+</div>
+{% endblock %}
