@@ -30,6 +30,8 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
 - W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
 - Generowanie unikalnego linku z jednorazowym tokenem dla pacjenta w celu uruchomienia formularza na tablecie.
+- Dopuszczony jest tryb tymczasowy rekordu pacjenta bez `Doctolib Patient ID` wyłącznie dla ręcznego dodania; system musi automatycznie wygenerować alert dla administratora o konieczności pilnego uzupełnienia identyfikatora.
+- System dopuszcza więcej niż jedną wizytę tego samego pacjenta tego samego dnia w tym samym gabinecie (osobne wpisy kolejki/wizyty).
 
 ### 3.2. Interfejs Pacjenta (Tablet)
 - Aplikacja dostosowana do obsługi dotykowej na 4 dedykowanych tabletach.
@@ -106,6 +108,7 @@ Kryteria akceptacji:
 - Formularz wymaga podania: imienia, nazwiska, daty urodzenia, telefonu, adresu e-mail.
 - System waliduje poprawność adresu e-mail i numeru telefonu.
 - Nowy pacjent pojawia się na liście w widoku Poczekalnia.
+- Jeśli rekord tworzony jest bez `Doctolib Patient ID`, otrzymuje status tymczasowy i automatycznie tworzony jest alert dla administratora.
 
 ID: US-003
 Tytuł: Import pacjentów
@@ -113,6 +116,7 @@ Opis: Jako recepcjonista, chcę zaimportować listę pacjentów z pliku, aby prz
 Kryteria akceptacji:
 - System przyjmuje plik w formacie .xlsx lub .csv.
 - System mapuje kolumny zgodnie ze zdefiniowanym szablonem.
+- `Doctolib Patient ID` jest polem wymaganym dla każdego rekordu importowanego.
 - W przypadku błędów w pliku, import jest przerywany lub błędne wiersze są raportowane.
 - Zaimportowani pacjenci są widoczni w Poczekalni.
 
@@ -122,7 +126,9 @@ Opis: Jako recepcjonista, chcę wygenerować i otworzyć unikalny link dla pacje
 Kryteria akceptacji:
 - Kliknięcie przycisku przy pacjencie generuje unikalny URL z tokenem.
 - Link otwiera formularz w trybie pacjenta (bez menu nawigacyjnego personelu).
-- Token jest ważny do momentu pierwszego skutecznego zapisu formularza przez pacjenta.
+- System działa w modelu `latest-wins`: wygenerowanie nowego linku dla tego samego wpisu kolejki unieważnia poprzedni link.
+- Token jest akceptowany tylko gdy jednocześnie: jest aktywną sesją wpisu kolejki, nie został zużyty (`consumed_at IS NULL`) i nie wygasł (`expires_at > now()`).
+- Po pierwszym skutecznym zapisie formularza token traci ważność.
 
 ### Proces Pacjenta (Tablet)
 ID: US-005
@@ -181,7 +187,8 @@ Opis: System codziennie importuje listę wizyt z plików eksportowanych z Doctol
 Kryteria akceptacji:
 - System przyjmuje plik .xlsx lub .csv zgodny z ustalonym szablonem eksportu.
 - Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
-- Dane (imię, nazwisko, data urodzenia, kontakt) są mapowane do struktury pacjenta w systemie.
+- `Doctolib Patient ID` jest polem obowiązkowym i podstawą mapowania tożsamości pacjenta.
+- Dane (imię, nazwisko, data urodzenia, kontakt) są mapowane do struktury pacjenta jako dane uzupełniające.
 - Błędy importu są raportowane na poziomie wiersza.
 
 ID: US-012
@@ -216,6 +223,7 @@ Opis: Jako recepcja, chcę aby ręczne dodanie, import pliku i autoimport nie tw
 Kryteria akceptacji:
 - Wszystkie ścieżki wejścia korzystają z jednej warstwy ingestii i tych samych walidacji.
 - Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
+- Dla danych importowanych kluczem tożsamości pacjenta jest wyłącznie `Doctolib Patient ID`; rekordy ręczne bez tego ID są traktowane jako tymczasowe i wymagają domknięcia alertu administracyjnego.
 
 ## 6. Metryki sukcesu
 
