@@ -73,24 +73,24 @@ if SENTRY_DSN:
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = True
-DEBUG = False
+DEBUG = True
+# DEBUG = False
 
-# ALLOWED_HOSTS = ['pepedjango.usermd.net', 'www.pepedjango.usermd.net', 'localhost', '127.0.0.1']
-# SECURE_HSTS_PRELOAD = False
-# CSRF_COOKIE_SECURE = False
-# SESSION_COOKIE_SECURE = False
-# SECURE_SSL_REDIRECT = False
-# SECURE_HSTS_SECONDS = 0
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+SECURE_HSTS_PRELOAD = False
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+SECURE_SSL_REDIRECT = False
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 
-ALLOWED_HOSTS = ['ergebnisse.cogitomedica.de', 'www.ergebnisse.cogitomedica.de', 'localhost', '127.0.0.1', '217.154.173.236']
-SECURE_HSTS_PRELOAD = True
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# ALLOWED_HOSTS = ['ergebnisse.cogitomedica.de', 'www.ergebnisse.cogitomedica.de', 'localhost', '127.0.0.1', '217.154.173.236']
+# SECURE_HSTS_PRELOAD = True
+# CSRF_COOKIE_SECURE = True
+# SESSION_COOKIE_SECURE = True
+# SECURE_SSL_REDIRECT = True
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 AUTH_USER_MODEL = 'results.User'
 
