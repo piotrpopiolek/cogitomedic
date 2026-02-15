@@ -2,9 +2,9 @@
 
 ## 1. Lista tabel z ich kolumnami, typami danych i ograniczeniami
 
-### 1.1. Tabele istniejące (do zachowania i rozszerzenia)
+### 1.1. Tabele docelowe (bez kompatybilności wstecznej)
 
-#### `results_user` (istniejąca, rozszerzona)
+#### `staff_user`
 - `id` `bigint` PK
 - `password` `varchar(128)` NOT NULL
 - `last_login` `timestamptz` NULL
@@ -26,15 +26,7 @@
   - `CHECK (role IN ('RECEPTION','DOCTOR','ADMIN'))`
   - `CHECK (phone_number IS NULL OR phone_number ~ '^[0-9+() -]{7,20}$')`
 
-#### `results_labresults` (istniejąca, moduł legacy)
-- Pozostaje bez zmian funkcjonalnych na etapie wdrożenia modułu zgód.
-- Dodatek techniczny:
-  - `created_at` `timestamptz` DEFAULT `now()` (jeśli brak)
-  - indeksy operacyjne pod wysyłkę SMS i pobrania (sekcja indeksów).
-
----
-
-### 1.2. Tabele nowe (wymagane przez PRD)
+### 1.2. Pozostałe tabele wymagane przez PRD
 
 #### `patient`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -62,7 +54,7 @@
 - `patient_id` `uuid` NOT NULL FK -> `patient(id)` ON DELETE CASCADE
 - `phone` `varchar(20)` NULL
 - `email` `citext` NULL
-- `changed_by_user_id` `bigint` NULL FK -> `results_user(id)` ON DELETE SET NULL
+- `changed_by_user_id` `bigint` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `changed_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `reason` `varchar(100)` NULL
 
@@ -71,7 +63,7 @@
 - `queue_date` `date` NOT NULL
 - `source` `queue_source_enum` NOT NULL DEFAULT `'MANUAL'`
 - `status` `queue_status_enum` NOT NULL DEFAULT `'OPEN'`
-- `created_by_user_id` `bigint` NOT NULL FK -> `results_user(id)` ON DELETE RESTRICT
+- `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
@@ -86,7 +78,7 @@
 - `visit_external_id` `varchar(100)` NULL
 - `appointment_time` `timestamptz` NULL
 - `notes` `text` NULL
-- `created_by_user_id` `bigint` NOT NULL FK -> `results_user(id)` ON DELETE RESTRICT
+- `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
@@ -108,7 +100,7 @@
 - `token_hash` `char(64)` NOT NULL UNIQUE
 - `expires_at` `timestamptz` NOT NULL
 - `consumed_at` `timestamptz` NULL
-- `created_by_user_id` `bigint` NOT NULL FK -> `results_user(id)` ON DELETE RESTRICT
+- `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `CHECK (expires_at > created_at)`
@@ -162,8 +154,8 @@
 - `status` `medical_doc_status_enum` NOT NULL DEFAULT `'DRAFT'`
 - `current_version_no` `integer` NOT NULL DEFAULT `0`
 - `last_published_at` `timestamptz` NULL
-- `created_by_user_id` `bigint` NOT NULL FK -> `results_user(id)` ON DELETE RESTRICT
-- `updated_by_user_id` `bigint` NULL FK -> `results_user(id)` ON DELETE SET NULL
+- `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
+- `updated_by_user_id` `bigint` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
@@ -183,8 +175,8 @@
 - `sms_sent` `boolean` NOT NULL DEFAULT `false`
 - `sms_sent_at` `timestamptz` NULL
 - `local_pdf_deleted_at` `timestamptz` NULL
-- `publish_requested_by_user_id` `bigint` NULL FK -> `results_user(id)` ON DELETE SET NULL
-- `published_by_user_id` `bigint` NULL FK -> `results_user(id)` ON DELETE SET NULL
+- `publish_requested_by_user_id` `bigint` NULL FK -> `staff_user(id)` ON DELETE SET NULL
+- `published_by_user_id` `bigint` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `published_at` `timestamptz` NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
@@ -224,7 +216,7 @@
 - `total_rows` `integer` NOT NULL DEFAULT `0`
 - `inserted_rows` `integer` NOT NULL DEFAULT `0`
 - `error_rows` `integer` NOT NULL DEFAULT `0`
-- `created_by_user_id` `bigint` NOT NULL FK -> `results_user(id)` ON DELETE RESTRICT
+- `created_by_user_id` `bigint` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `finished_at` `timestamptz` NULL
 - Ograniczenia:
@@ -245,7 +237,7 @@
 - `id` `bigserial` PK
 - `event_time` `timestamptz` NOT NULL DEFAULT `now()`
 - `event_type` `varchar(80)` NOT NULL
-- `actor_user_id` `bigint` NULL FK -> `results_user(id)` ON DELETE SET NULL
+- `actor_user_id` `bigint` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `patient_id` `uuid` NULL FK -> `patient(id)` ON DELETE SET NULL
 - `medical_document_id` `uuid` NULL FK -> `medical_document(id)` ON DELETE SET NULL
 - `outbox_event_id` `uuid` NULL FK -> `outbox_event(id)` ON DELETE SET NULL
@@ -255,7 +247,7 @@
 
 ## 2. Relacje między tabelami
 
-- `results_user` 1:N `daily_queue` (użytkownik tworzy wiele list dziennych).
+- `staff_user` 1:N `daily_queue` (użytkownik tworzy wiele list dziennych).
 - `daily_queue` 1:N `queue_entry` (lista dzienna zawiera wiele wpisów pacjentów).
 - `patient` 1:N `queue_entry` (pacjent może mieć wiele wizyt/wpisów).
 - `queue_entry` 1:1 `patient_form_session` (aktywna sesja tokenowa; kolejne wygenerowania realizowane jako nowe rekordy historyczne, max 1 aktywna przez ograniczenie aplikacyjne).
@@ -267,9 +259,9 @@
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
-  - `results_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
-  - `results_user.role='DOCTOR'` edytuje `medical_document` i publikuje `medical_document_version`.
-  - `results_user.role='ADMIN'` zarządza słownikami (`consent_definition`) i użytkownikami.
+  - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
+  - `staff_user.role='DOCTOR'` edytuje `medical_document` i publikuje `medical_document_version`.
+  - `staff_user.role='ADMIN'` zarządza słownikami (`consent_definition`) i użytkownikami.
 
 ## 3. Indeksy
 
@@ -353,4 +345,4 @@
 - Wersjonowanie dokumentu realizowane w `medical_document_version`, co spełnia wymaganie ponownej publikacji i nadpisania pliku w HiDrive, zachowując historię audytową po stronie DB.
 - Retencja 30 dni: operacja usuwa lokalny plik PDF (i ustawia `local_pdf_deleted_at`), ale nie usuwa rekordu wersji; dzięki temu pozostaje pełny ślad operacyjny.
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
-- Obecny moduł `results_labresults` może działać równolegle (legacy), a nowy moduł zgód powinien być wdrażany migracyjnie bez regresji istniejącej funkcji SMS.
+- Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
