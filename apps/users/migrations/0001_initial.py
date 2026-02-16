@@ -2,6 +2,7 @@
 
 import django.contrib.auth.models
 import django.contrib.postgres.fields.citext
+import django.contrib.postgres.operations
 from django.db import migrations, models
 import uuid
 
@@ -15,6 +16,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        django.contrib.postgres.operations.CITextExtension(),
         migrations.CreateModel(
             name='StaffUser',
             fields=[
