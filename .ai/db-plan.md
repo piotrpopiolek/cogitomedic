@@ -587,6 +587,59 @@ Każdy element:
 - `generated_text`
 - `edited_text`
 
+#### Pełna tabela kodów enum (Befund v1)
+
+`examination_scope[]`
+- `INTIMATE_AREA_NOT_EXAMINED` — DE: "Intimbereich nicht untersucht", EN: "Intimate area not examined"
+- `ORAL_MUCOSA_NOT_EXAMINED` — DE: "Mundschleimhaut nicht untersucht", EN: "Oral mucosa not examined"
+
+`fitzpatrick_type`
+- `TYPE_I` — DE: "Hauttyp I nach Fitzpatrick", EN: "Fitzpatrick skin type I"
+- `TYPE_II` — DE: "Hauttyp II nach Fitzpatrick", EN: "Fitzpatrick skin type II"
+- `TYPE_III` — DE: "Hauttyp III nach Fitzpatrick", EN: "Fitzpatrick skin type III"
+- `TYPE_IV` — DE: "Hauttyp IV nach Fitzpatrick", EN: "Fitzpatrick skin type IV"
+- `TYPE_V` — DE: "Hauttyp V nach Fitzpatrick", EN: "Fitzpatrick skin type V"
+- `TYPE_VI` — DE: "Hauttyp VI nach Fitzpatrick", EN: "Fitzpatrick skin type VI"
+- `TYPE_II_III` — DE: "Hauttyp II–III nach Fitzpatrick", EN: "Fitzpatrick skin type II–III"
+- `UNDETERMINED` — DE: "Hauttyp nicht eindeutig bestimmbar", EN: "Skin type cannot be determined clearly"
+
+`overall_image_assessment`
+- `NO_CONTROL_NEEDED` — DE: "Keine kontrollbedürftigen Hautveränderungen erkennbar", EN: "No skin changes requiring follow-up identified"
+- `CONTROL_NEEDED` — DE: "Kontrollbedürftige Hautveränderungen erkennbar", EN: "Skin changes requiring follow-up identified"
+
+`lesions[].dermatoscopic_features[]`
+- `ASYMMETRY` — DE: "Asymmetrie", EN: "Asymmetry"
+- `IRREGULAR_BORDER` — DE: "Unregelmäßige Begrenzung", EN: "Irregular border"
+- `INHOMOGENEOUS_PIGMENTATION` — DE: "Inhomogene Pigmentierung", EN: "Inhomogeneous pigmentation"
+- `MULTICOLOR` — DE: "Mehrfarbigkeit", EN: "Multicolor pattern"
+- `ATYPICAL_PIGMENT_NETWORK` — DE: "Atypisches Pigmentnetz", EN: "Atypical pigment network"
+- `IRREGULAR_GLOBULES` — DE: "Unregelmäßige Globuli", EN: "Irregular globules"
+- `IRREGULAR_DOTS` — DE: "Unregelmäßige Punkte", EN: "Irregular dots"
+- `STRUCTURELESS_AREAS` — DE: "Strukturlose Areale", EN: "Structureless areas"
+- `ATYPICAL_VASCULAR_STRUCTURES` — DE: "Atypische Gefäßstrukturen", EN: "Atypical vascular structures"
+- `REGRESSION_AREAS` — DE: "Regressionsareale (weißlich/narbig)", EN: "Regression areas (whitish/scar-like)"
+
+`lesions[].clinical_assessment`
+- `UNREMARKABLE` — DE: "Unauffällige Läsion", EN: "Unremarkable lesion"
+- `SLIGHTLY_ATYPICAL` — DE: "Leicht atypische Läsion", EN: "Slightly atypical lesion"
+- `CONTROL_NEEDED` — DE: "Kontrollbedürftige Läsion", EN: "Lesion requiring follow-up"
+- `SUSPICIOUS` — DE: "Suspekte Läsion", EN: "Suspicious lesion"
+
+`lesions[].malignancy_risk`
+- `NO_SUSPICION` — DE: "Kein Malignitätsverdacht", EN: "No suspicion of malignancy"
+- `LOW_SUSPICION` — DE: "Niedriger Malignitätsverdacht", EN: "Low suspicion of malignancy"
+- `CANNOT_EXCLUDE` — DE: "Malignitätsverdacht kann nicht ausgeschlossen werden", EN: "Malignancy cannot be ruled out"
+
+`recommendations[]`
+- `FOLLOWUP_3_MONTHS` — DE: "Dermatologische Verlaufskontrolle in 3 Monaten empfohlen", EN: "Dermatological follow-up in 3 months recommended"
+- `FOLLOWUP_6_MONTHS` — DE: "Dermatologische Verlaufskontrolle in 6 Monaten empfohlen", EN: "Dermatological follow-up in 6 months recommended"
+- `PROMPT_VISIT_ON_CHANGE` — DE: "Bei klinischer Veränderung zeitnahe persönliche dermatologische Vorstellung empfohlen", EN: "Prompt in-person dermatology visit recommended if clinical change occurs"
+- `NO_SHORT_TERM_FOLLOWUP_REQUIRED` — DE: "Aktuell keine kurzfristige Kontrolle erforderlich", EN: "No short-term follow-up currently required"
+
+`final_assessment`
+- `NO_HIGH_GRADE_SUSPICION` — DE: "Aktuell kein höhergradiger Malignitätsverdacht", EN: "Currently no high-grade suspicion of malignancy"
+- `HIGH_GRADE_CANNOT_BE_EXCLUDED` — DE: "Ein höhergradiger Malignitätsverdacht kann nicht sicher ausgeschlossen werden", EN: "High-grade malignancy suspicion cannot be reliably excluded"
+
 Przykład:
 
 ```json
