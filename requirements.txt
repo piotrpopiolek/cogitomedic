@@ -22,7 +22,7 @@ requests==2.31.0
 sentry-sdk==1.45.0
 smsapi-client==2.8.0
 sqlparse==0.4.4
-typing_extensions==4.7.1
+typing_extensions==4.15.0
 tzdata==2025.2
 urllib3==2.0.4
 weasyprint==68.1
