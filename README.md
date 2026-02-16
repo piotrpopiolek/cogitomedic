@@ -5,6 +5,7 @@
 - [Project Description](#project-description)
 - [Tech Stack](#tech-stack)
 - [Getting Started Locally](#getting-started-locally)
+- [Docker Quick Start](#docker-quick-start)
 - [Available Scripts](#available-scripts)
 - [Project Scope](#project-scope)
 - [Project Status](#project-status)
@@ -84,7 +85,15 @@ The user interface is available in **English** and **German**.
 
 4. **Configure environment**
 
-   Create a `.env` file in the project root (see `.gitignore`; do not commit it). Required variables:
+   Copy `.env.example` to `.env`, then fill in your values:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   (On Windows PowerShell: `Copy-Item .env.example .env`)
+
+   Required variables:
 
    | Variable | Description |
    |----------|-------------|
@@ -133,6 +142,65 @@ The user interface is available in **English** and **German**.
 
 - Collect static files: `python manage.py collectstatic`
 - PDFs are stored under `MEDIA_ROOT` (`pdf_files/` by default); ensure the app has write access.
+
+---
+
+## Docker Quick Start
+
+Minimal Docker setup is available via `Dockerfile` and `docker-compose.yml`:
+
+- `web` service: Django app (`runserver` on port `8000`)
+- `db` service: PostgreSQL 16 (persistent volume `postgres_data`)
+
+### 1) Start stack
+
+PowerShell / CMD:
+
+```bash
+docker compose up --build
+```
+
+If `.env` does not exist yet, create it from the template first:
+
+```bash
+cp .env.example .env
+```
+
+(On Windows PowerShell: `Copy-Item .env.example .env`)
+
+App URL: `http://127.0.0.1:8000`
+
+### 2) Common commands
+
+PowerShell / CMD:
+
+```bash
+docker compose down
+docker compose logs -f web
+docker compose run --rm web python manage.py migrate
+docker compose run --rm web python manage.py createsuperuser
+```
+
+If you use `make` (e.g. Git Bash / WSL), shortcuts are available:
+
+```bash
+make up
+make down
+make logs
+make migrate
+make superuser
+```
+
+### 3) Notes
+
+- Keep secrets in `.env` (do not commit real credentials).
+- In Docker, `DB_HOST` is overridden to `db` automatically by `docker-compose.yml`.
+- For a clean database state:
+
+  ```bash
+  docker compose down -v
+  docker compose up --build
+  ```
 
 ---
 
