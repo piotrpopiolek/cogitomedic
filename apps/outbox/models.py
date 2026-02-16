@@ -71,7 +71,7 @@ class OutboxEvent(models.Model):
             models.Index(fields=["medical_document_version", "-created_at"]),
             models.Index(
                 fields=["status", "available_at"],
-                name="outbox_event_pending_failed_idx",
+                name="outbox_pend_fail_idx",
                 condition=Q(status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED]),
             ),
             GinIndex(

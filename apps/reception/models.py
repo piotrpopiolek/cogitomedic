@@ -255,7 +255,7 @@ class QueueEntry(models.Model):
             models.Index(fields=["active_session"]),
             models.Index(
                 fields=["daily_queue", "position_no"],
-                name="queue_entry_active_position_idx",
+                name="qentry_active_pos_idx",
                 condition=Q(entry_status__in=[QueueEntryStatus.WAITING, QueueEntryStatus.IN_PROGRESS]),
             ),
         ]
