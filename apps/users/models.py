@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+import uuid
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+
+class StaffRole(models.TextChoices):
+    RECEPTION = "RECEPTION", "Reception"
+    DOCTOR = "DOCTOR", "Doctor"
+    ADMIN = "ADMIN", "Admin"
+
+
+class StaffUser(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    code = models.CharField(max_length=50, default="")
+    role = models.CharField(
+        max_length=20,
+        choices=StaffRole.choices,
+        default=StaffRole.RECEPTION,
+    )
+    preferred_locale = models.CharField(max_length=10, default="de-DE")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_user"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(phone_number__isnull=True)
+                | models.Q(phone_number__regex=r"^[0-9+() -]{7,20}$"),
+                name="staff_user_phone_format",
+            )
+        ]
