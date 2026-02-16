@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.postgres.fields import CIEmailField
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
-from apps.core.models import TimeStampedUUIDModel
+class PatientIdentityStatus(models.TextChoices):
+    CONFIRMED = "CONFIRMED", "Confirmed"
+    TEMPORARY = "TEMPORARY", "Temporary"
 
 
 class PatientExternalSource(models.TextChoices):
@@ -60,13 +65,19 @@ class ImportStatus(models.TextChoices):
     FAILED = "FAILED", "Failed"
 
 
-class Patient(TimeStampedUUIDModel):
+class Patient(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField()
     phone = models.CharField(max_length=20)
-    email = models.EmailField()
+    email = CIEmailField()
     doctolib_patient_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    identity_status = models.CharField(
+        max_length=20,
+        choices=PatientIdentityStatus.choices,
+        default=PatientIdentityStatus.TEMPORARY,
+    )
     identity_alert_created_at = models.DateTimeField(blank=True, null=True)
     identity_resolution_due_at = models.DateTimeField(blank=True, null=True)
     street = models.CharField(max_length=150, blank=True, null=True)
@@ -78,9 +89,16 @@ class Patient(TimeStampedUUIDModel):
     )
     external_source_id = models.CharField(max_length=100, blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "patient"
+        indexes = [
+            models.Index(fields=["last_name", "first_name", "date_of_birth"]),
+            models.Index(fields=["phone"]),
+            models.Index(fields=["identity_status", "-created_at"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["external_source", "external_source_id"],
@@ -91,6 +109,15 @@ class Patient(TimeStampedUUIDModel):
                 name="patient_phone_format",
             ),
             models.CheckConstraint(
+                check=Q(
+                    identity_status__in=[
+                        PatientIdentityStatus.CONFIRMED,
+                        PatientIdentityStatus.TEMPORARY,
+                    ]
+                ),
+                name="patient_identity_status_valid",
+            ),
+            models.CheckConstraint(
                 check=Q(doctolib_patient_id__isnull=False)
                 | (
                     Q(identity_alert_created_at__isnull=False)
@@ -98,17 +125,28 @@ class Patient(TimeStampedUUIDModel):
                 ),
                 name="patient_temp_identity_requires_alert",
             ),
+            models.CheckConstraint(
+                check=Q(identity_resolution_due_at__isnull=True)
+                | Q(identity_alert_created_at__isnull=True)
+                | Q(identity_resolution_due_at__gte=F("identity_alert_created_at")),
+                name="patient_identity_due_after_alert",
+            ),
         ]
 
-    @property
-    def identity_status(self) -> str:
-        return "CONFIRMED" if self.doctolib_patient_id else "TEMPORARY"
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.identity_status = (
+            PatientIdentityStatus.CONFIRMED
+            if self.doctolib_patient_id
+            else PatientIdentityStatus.TEMPORARY
+        )
+        super().save(*args, **kwargs)
 
 
-class PatientContactHistory(TimeStampedUUIDModel):
+class PatientContactHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="contact_history")
     phone = models.CharField(max_length=20, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
+    email = CIEmailField(blank=True, null=True)
     changed_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -116,26 +154,31 @@ class PatientContactHistory(TimeStampedUUIDModel):
         null=True,
         related_name="changed_contacts",
     )
+    changed_at = models.DateTimeField(auto_now_add=True)
     reason = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
         db_table = "patient_contact_history"
 
 
-class ClinicSite(TimeStampedUUIDModel):
+class ClinicSite(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "clinic_site"
 
 
-class ConsultingRoom(TimeStampedUUIDModel):
+class ConsultingRoom(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     clinic_site = models.ForeignKey(ClinicSite, on_delete=models.RESTRICT, related_name="rooms")
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "consulting_room"
@@ -147,7 +190,8 @@ class ConsultingRoom(TimeStampedUUIDModel):
         ]
 
 
-class DailyQueue(TimeStampedUUIDModel):
+class DailyQueue(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     queue_date = models.DateField()
     clinic_site = models.ForeignKey(ClinicSite, on_delete=models.RESTRICT, related_name="daily_queues")
     consulting_room = models.ForeignKey(
@@ -159,9 +203,14 @@ class DailyQueue(TimeStampedUUIDModel):
     created_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="created_queues"
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "daily_queue"
+        indexes = [
+            models.Index(fields=["queue_date"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["queue_date", "clinic_site", "consulting_room", "shift_code"],
@@ -170,7 +219,8 @@ class DailyQueue(TimeStampedUUIDModel):
         ]
 
 
-class QueueEntry(TimeStampedUUIDModel):
+class QueueEntry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     daily_queue = models.ForeignKey(DailyQueue, on_delete=models.CASCADE, related_name="entries")
     patient = models.ForeignKey(Patient, on_delete=models.RESTRICT, related_name="queue_entries")
     active_session = models.ForeignKey(
@@ -194,9 +244,21 @@ class QueueEntry(TimeStampedUUIDModel):
         on_delete=models.RESTRICT,
         related_name="created_queue_entries",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "queue_entry"
+        indexes = [
+            models.Index(fields=["daily_queue", "entry_status", "position_no"]),
+            models.Index(fields=["patient", "-created_at"]),
+            models.Index(fields=["active_session"]),
+            models.Index(
+                fields=["daily_queue", "position_no"],
+                name="queue_entry_active_position_idx",
+                condition=Q(entry_status__in=[QueueEntryStatus.WAITING, QueueEntryStatus.IN_PROGRESS]),
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["daily_queue", "position_no"],
@@ -210,17 +272,20 @@ class QueueEntry(TimeStampedUUIDModel):
         ]
 
 
-class TabletDevice(TimeStampedUUIDModel):
+class TabletDevice(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
     device_code = models.CharField(max_length=50, unique=True)
     is_active = models.BooleanField(default=True)
     last_seen_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "tablet_device"
 
 
-class PatientFormSession(TimeStampedUUIDModel):
+class PatientFormSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     queue_entry = models.ForeignKey(
         QueueEntry, on_delete=models.CASCADE, related_name="form_sessions"
     )
@@ -240,14 +305,33 @@ class PatientFormSession(TimeStampedUUIDModel):
         on_delete=models.RESTRICT,
         related_name="created_form_sessions",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "patient_form_session"
+        indexes = [
+            models.Index(fields=["queue_entry", "consumed_at"]),
+            models.Index(fields=["queue_entry", "-created_at"]),
+            models.Index(fields=["form_locale", "-created_at"]),
+            models.Index(
+                fields=["expires_at"],
+                name="session_unconsumed_expires_idx",
+                condition=Q(consumed_at__isnull=True),
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
-                check=Q(expires_at__gt=models.F("created_at")),
+                check=Q(expires_at__gt=F("created_at")),
                 name="session_expiry_after_create",
-            )
+            ),
+            models.CheckConstraint(
+                check=Q(form_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
+                name="session_locale_format",
+            ),
+            models.CheckConstraint(
+                check=Q(consumed_at__isnull=True) | Q(consumed_at__lte=F("expires_at")),
+                name="session_consumed_before_expiry",
+            ),
         ]
 
     @classmethod
@@ -265,7 +349,8 @@ class PatientFormSession(TimeStampedUUIDModel):
         return token_plain
 
 
-class PatientImportBatch(TimeStampedUUIDModel):
+class PatientImportBatch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     source_file_name = models.CharField(max_length=255)
     source_file_sha256 = models.CharField(max_length=64)
     import_type = models.CharField(
@@ -285,13 +370,27 @@ class PatientImportBatch(TimeStampedUUIDModel):
     created_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="import_batches"
     )
+    created_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "patient_import_batch"
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["source_system", "-created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=Q(total_rows__gte=0)
+                & Q(inserted_rows__gte=0)
+                & Q(error_rows__gte=0),
+                name="import_batch_non_negative_counts",
+            )
+        ]
 
 
-class PatientImportError(TimeStampedUUIDModel):
+class PatientImportError(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch = models.ForeignKey(
         PatientImportBatch, on_delete=models.CASCADE, related_name="errors"
     )
@@ -299,6 +398,10 @@ class PatientImportError(TimeStampedUUIDModel):
     error_code = models.CharField(max_length=50)
     error_message = models.TextField()
     raw_row = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "patient_import_error"
+        constraints = [
+            models.CheckConstraint(check=Q(row_number__gt=0), name="import_error_row_positive")
+        ]
