@@ -30,7 +30,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
-- `doctor-text-templates` -> `doctor_text_template`
+- `doctor-text-templates` -> `doctor_text_template` (MVP: tylko prywatne)
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
 - `audit-events` -> `audit_event`
@@ -775,16 +775,20 @@
     ```
   - Response JSON: najnowsza wersja szkicu.
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`.
+  - Uwagi:
+    - `generated_text` i `edited_text` przyjmują wyłącznie plain text (bez znaczników HTML/JS).
+    - Logika zapisu po stronie backendu nigdy automatycznie nie nadpisuje `edited_text`.
 
 - **POST** `/medical-documents/{id}/generate-text`
-  - Opis: Generuje teksty bazowe Befund na podstawie zaznaczonych opcji (per zmiana + podsumowanie globalne), bez publikacji.
+  - Opis: Generuje teksty bazowe Befund na podstawie zaznaczonych opcji (per zmiana + podsumowanie globalne), bez publikacji; domyślnie zachowuje istniejące ręczne edycje.
   - Request JSON:
     ```json
     {
       "medical_payload_schema_version": 1,
       "authoring_locale": "de-DE",
       "template_id": "uuid-optional",
+      "preserve_existing_edited_text": true,
       "medical_payload": {
         "fitzpatrick_type": "TYPE_III",
         "lesions": [
@@ -804,17 +808,22 @@
     ```json
     {
       "generated": true,
+      "edited_text_preserved": true,
       "lesions": [
         {
           "lesion_no": 8,
-          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
+          "edited_text_unchanged": true
         }
       ],
       "summary_generated_text": "Bei der Analyse der digitalen dermatoskopischen Aufnahmen ..."
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_MEDICAL_SELECTIONS`, `404 DOCUMENT_NOT_FOUND`.
+  - Kody błędów: `400 INVALID_MEDICAL_SELECTIONS`, `400 TEMPLATE_PLACEHOLDER_NOT_ALLOWED`, `404 DOCUMENT_NOT_FOUND`.
+  - Uwagi:
+    - Domyślne zachowanie to `preserve_existing_edited_text=true`.
+    - Tryb nadpisania wymaga jawnej zgody klienta (`preserve_existing_edited_text=false`) i jawnego potwierdzenia w UI.
 
 - **POST** `/medical-documents/{id}/publish`
   - Opis: Publikuje wersję dokumentu i idempotentnie kolejkuje łańcuch outbox (US-009/010).
@@ -823,6 +832,7 @@
     ```json
     {
       "publish_request_id": "uuid-or-client-key",
+      "doctor_final_sign_off": true,
       "resend_sms": true
     }
     ```
@@ -831,6 +841,8 @@
     {
       "published": true,
       "idempotent_replay": false,
+      "doctor_final_sign_off": true,
+      "doctor_final_sign_off_at": "2026-02-16T10:07:00Z",
       "medical_document_id": "uuid",
       "version_no": 3,
       "version_status": "PUBLISHED",
@@ -840,31 +852,33 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `400 FINAL_SIGN_OFF_REQUIRED`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
 
 ### 2.10a Szablony tekstów lekarskich
 
 - **GET** `/doctor-text-templates`
-  - Opis: Lista szablonów tekstów dostępnych dla lekarza (globalne + prywatne).
-  - Parametry zapytania: `template_locale`, `scope` (`global|private|all`), `is_active`.
+  - Opis: Lista prywatnych szablonów tekstu dostępnych dla uwierzytelnionego lekarza (MVP: tylko prywatne).
+  - Parametry zapytania: `template_locale`, `is_active`.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
 
 - **POST** `/doctor-text-templates`
 - **GET/PATCH/DELETE** `/doctor-text-templates/{id}`
-  - Opis: CRUD szablonów tekstowych lekarza.
+  - Opis: CRUD prywatnych szablonów tekstowych lekarza (bez zakresu globalnego).
   - Request JSON (create):
     ```json
     {
       "name": "Dr. Meyer Default",
       "template_locale": "de-DE",
       "template_body": "Läsion {{lesion_no}} zeigt ...",
-      "is_global": false,
       "is_active": true
     }
     ```
   - Kody sukcesu: `201 CREATED`, `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `400 TEMPLATE_PLACEHOLDER_NOT_ALLOWED`, `400 INVALID_TEXT_CONTENT`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
+  - Uwagi:
+    - Treść szablonu to wyłącznie plain text (bez HTML/JS).
+    - Placeholdery są obsługiwane wyłącznie z allowlisty (bez logiki warunkowej, pętli i DSL).
 
 - **GET** `/medical-documents/{id}/versions`
   - Opis: Historia wersji.
@@ -1078,6 +1092,7 @@
     - endpointy mutujące (domyślnie): 60 req/min/user.
     - operacje administracyjne: 10 req/min/user.
   - Limity rozmiaru żądań dla podpisów/uploadów.
+  - Sanityzacja plain-text dla narracji lekarza i treści szablonów przed zapisem/generowaniem PDF.
   - Sanityzacja wejścia i allowlisty dla pól sortowania/filtrowania.
   - Audyt wszystkich akcji bezpieczeństwa (błędy logowania, publikacje, retry, merge, retencja).
 
@@ -1140,6 +1155,7 @@
   - `hidrive_sent=true` wymaga ukończonego PDF, `pdf_local_path` i `hidrive_sent_at`.
   - `sms_sent=true` wymaga `sms_sent_at`.
   - `local_pdf_deleted_at` dozwolone tylko gdy `hidrive_sent=true` i `sms_sent=true`.
+  - Publikacja wymaga jawnego `doctor_final_sign_off=true`.
 
 - `outbox_event`
   - Unikalność `(medical_document_version_id, event_type)`.
@@ -1177,11 +1193,14 @@
 
 - Workflow lekarza:
   - Zapis szkicu aktualizuje/tworzy najnowszą wersję draft.
-  - Endpoint `generate-text` tworzy teksty bazowe Befund (`generated_text`) na podstawie wybranych cech/ocen i opcjonalnego szablonu lekarza.
+  - Endpoint `generate-text` tworzy teksty bazowe Befund (`generated_text`) na podstawie wybranych cech/ocen i opcjonalnego prywatnego szablonu lekarza.
+  - Regeneracja domyślnie zachowuje istniejące `edited_text` (brak niejawnego nadpisania).
   - Lekarz zapisuje w `medical_payload` zarówno teksty wygenerowane, jak i finalne teksty edytowane (`edited_text`).
+  - Każda modyfikacja `edited_text` emituje zdarzenie audytowe (`MEDICAL_TEXT_EDITED`) z aktorem i stemplem czasowym.
   - Publikacja używa locka wiersza na `medical_document` i kontroli idempotencji:
     - ten sam `publish_request_id` zwraca sukces-replay;
     - publikacja już w toku zwraca idempotentny sukces (bez duplikacji łańcucha outbox).
+    - publikacja wymaga jawnego potwierdzenia lekarza dla finalnego tekstu narracyjnego.
 
 - Łańcuch transactional outbox:
   - Transakcja publikacji enqueuje `GENERATE_PDF`.
@@ -1235,6 +1254,7 @@ Mapowanie kodów opcji dla Q1–Q11:
   - dane per zmiana (`lesions[]`),
   - teksty wygenerowane i końcowe (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`).
 - Zapis tekstów odbywa się niezależnie od języka UI; `authoring_locale` wskazuje język roboczy lekarza.
+- Pola narracyjne są plain text i podlegają limitom długości oraz sanityzacji po stronie backendu.
 
 Minimalny przykład:
 

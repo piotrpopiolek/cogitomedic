@@ -263,6 +263,9 @@
 - `publish_requested_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `published_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `published_at` `timestamptz` NULL
+- `doctor_final_sign_off` `boolean` NOT NULL DEFAULT `false`
+- `doctor_final_sign_off_at` `timestamptz` NULL
+- `doctor_final_sign_off_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (medical_document_id, version_no)`
@@ -271,6 +274,9 @@
   - `CHECK (jsonb_typeof(medical_payload) = 'object' OR medical_payload IS NULL)`
   - `CHECK ((version_status <> 'PUBLISHED') OR (publish_request_id IS NOT NULL))`
   - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL))`
+  - `CHECK ((doctor_final_sign_off = false) OR (doctor_final_sign_off_at IS NOT NULL AND doctor_final_sign_off_by_user_id IS NOT NULL))`
+  - `CHECK ((doctor_final_sign_off = true) OR (doctor_final_sign_off_at IS NULL AND doctor_final_sign_off_by_user_id IS NULL))`
+  - `CHECK ((version_status <> 'PUBLISHED') OR (doctor_final_sign_off = true))`
   - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL OR is_content_scrubbed = true))`
   - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND (pdf_local_path IS NOT NULL OR is_content_scrubbed = true)))`
   - `CHECK ((hidrive_sent = false) OR hidrive_sent_at IS NOT NULL)`
@@ -280,17 +286,16 @@
 
 #### `doctor_text_template`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
-- `owner_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE CASCADE
+- `owner_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE CASCADE
 - `name` `varchar(120)` NOT NULL
 - `template_locale` `varchar(10)` NOT NULL DEFAULT `'de-DE'`
 - `template_body` `text` NOT NULL
-- `is_global` `boolean` NOT NULL DEFAULT `false`
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `CHECK (template_locale ~ '^(de|en)(-[A-Z]{2})?$')`
-  - `CHECK ((is_global = true AND owner_user_id IS NULL) OR (is_global = false AND owner_user_id IS NOT NULL))`
+  - `CHECK (char_length(template_body) BETWEEN 1 AND 4000)`
   - `UNIQUE (owner_user_id, name, template_locale)`
 
 #### `outbox_event`
@@ -373,13 +378,13 @@
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
 - `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
 - `medical_document_version` 1:N `outbox_event` (relacja egzekwowana FK `outbox_event.medical_document_version_id`; np. `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
-- `staff_user` 1:N `doctor_text_template` (szablony prywatne lekarza); szablony globalne mają `owner_user_id=NULL`.
+- `staff_user` 1:N `doctor_text_template` (wyłącznie szablony prywatne lekarza w MVP).
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
   - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
   - `staff_user.role='DOCTOR'` edytuje `medical_document` i publikuje `medical_document_version`.
-  - `staff_user.role='DOCTOR'` może zarządzać własnymi `doctor_text_template`.
+  - `staff_user.role='DOCTOR'` może zarządzać wyłącznie własnymi `doctor_text_template`.
   - `staff_user.role='ADMIN'` zarządza słownikami (`consent_definition`) i użytkownikami.
 
 ## 3. Indeksy
@@ -407,7 +412,7 @@
 - `medical_document_version(version_status, published_at DESC)`
 - `medical_document_version(hidrive_sent, sms_sent, published_at)` (retencja + monitoring)
 - `doctor_text_template(owner_user_id, template_locale, is_active)`
-- `doctor_text_template(is_global, template_locale, is_active)`
+- `doctor_text_template(owner_user_id, name, template_locale)` UNIQUE
 - `outbox_event(status, available_at)`
 - `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(medical_document_version_id, created_at DESC)`
@@ -470,7 +475,13 @@
 - Publikacja wersji dokumentu:
   - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
   - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`,
+  - publikacja wymaga `doctor_final_sign_off=true` oraz ustawienia `doctor_final_sign_off_at` i `doctor_final_sign_off_by_user_id`,
   - `publish_request_id` (idempotency key) gwarantuje, że wielokrotne kliknięcie "Zatwierdź i wyślij" nie tworzy wielu wersji i wielu łańcuchów outbox.
+- Regeneracja tekstu Befund:
+  - aktualizuje pola `generated_text`/`summary_generated_text`,
+  - domyślnie nie nadpisuje pól `edited_text`/`summary_edited_text` (wymaga jawnego trybu replace).
+- Audyt zmian narracyjnych:
+  - każda zmiana `edited_text` lub `summary_edited_text` tworzy wpis `audit_event` (np. `event_type='MEDICAL_TEXT_EDITED'`) z `actor_user_id`, `medical_document_id` i metadanymi zakresu zmiany.
 - Enqueue outbox po publikacji:
   - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
   - wpis `HIDRIVE_UPLOAD` tworzony przez worker po sukcesie generowania PDF,
@@ -509,6 +520,7 @@
   - tabela `audit_event` służy do śladu zdarzeń i dochodzeń powdrożeniowych, nie do bieżącego monitoringu SLA.
 - Wersjonowanie dokumentu realizowane w `medical_document_version`, co spełnia wymaganie ponownej publikacji i nadpisania pliku w HiDrive, zachowując historię audytową po stronie DB.
 - Retencja 30 dni: operacja usuwa lokalny plik PDF (i ustawia `local_pdf_deleted_at`), ale nie usuwa rekordu wersji; dzięki temu pozostaje pełny ślad operacyjny.
+- Szablony lekarza w MVP są prywatne; brak szablonów globalnych i brak silnika DSL (tylko prosty tekst + placeholdery z allowlisty walidowane w aplikacji).
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
@@ -588,7 +600,7 @@ Przykład:
 - `recommendations[]`
 - `final_assessment`
 - `summary_generated_text`, `summary_edited_text`
-- `template_context` (np. `template_id`, `template_name`, `template_locale`)
+- `template_context` (opcjonalnie: `template_id`, `template_name`, `template_locale`; tylko szablon prywatny lekarza)
 
 #### Struktura `lesions[]`
 Każdy element:
@@ -688,3 +700,5 @@ Przykład:
 - Dla każdej zmiany wymagane są: `lesion_no`, `clinical_assessment`, `malignancy_risk`.
 - `summary_edited_text` jest opcjonalne, ale jeśli puste, do PDF trafia `summary_generated_text`.
 - Do PDF trafia zawsze tekst końcowy (`edited_text` jeśli istnieje, inaczej `generated_text`).
+- Pola narracyjne (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`) są plain text i podlegają limitom długości walidowanym w aplikacji.
+- Regeneracja tekstu nie kasuje automatycznie ręcznej edycji (`edited_text`) bez jawnego trybu replace.

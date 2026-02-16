@@ -44,9 +44,15 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 ### 3.3. Interfejs Lekarza i Personelu
 - Podgląd uzupełnionych formularzy pacjentów.
 - Formularz medyczny dla lekarza (sztywna struktura pól w kodzie: checkboxy, listy rozwijane, pola tekstowe).
-- **Opis lekarski (Befund) – zasada „baza, nie klatka”:** To, co system przygotowuje (np. teksty z checkboxów), ma być **bazą wyjściową**, a nie jedynym, sztywnym tekstem. Lekarz musi móc dopasować język i styl opisu do siebie. System działa tak, że lekarz wybiera opcje (np. checkboxy), a system generuje z tego gotowy tekst – **który lekarz może i powinien móc edytować przed zatwierdzeniem**. Lekarz ma swobodę dopisywania własnych tekstów (np. własne szablony, wolne pole). Nie zamykamy lekarzy w jednym, sztywnym tekście.
+- **Opis lekarski (Befund) – zasada „baza, nie klatka”:** To, co system przygotowuje (np. teksty z checkboxów), ma być **bazą wyjściową**, a nie jedynym, sztywnym tekstem. Lekarz musi móc dopasować język i styl opisu do siebie. System działa tak, że lekarz wybiera opcje (np. checkboxy), a system generuje z tego gotowy tekst – **który lekarz może i powinien móc edytować przed zatwierdzeniem**. Lekarz ma swobodę dopisywania własnych tekstów (wolne pole + prywatne szablony). Nie zamykamy lekarzy w jednym, sztywnym tekście.
 - Struktura Befund obejmuje co najmniej: zakres badania, typ skóry Fitzpatrick, ocenę globalną, listę zmian (Läsionen), cechy dermatoskopowe per zmiana, ocenę kliniczno-dermatoskopową per zmiana, ocenę ryzyka złośliwości per zmiana, rekomendacje oraz końcową ocenę lekarską.
 - System generuje tekst automatycznie na dwóch poziomach: (1) tekst per zmiana, (2) podsumowanie zbiorcze; oba teksty są edytowalne przed publikacją.
+- **Warstwa obowiązkowa (struktura):** Pola krytyczne klinicznie pozostają obowiązkowe i kodowane (enum/multi-select); swoboda tekstu ich nie zastępuje.
+- **Brak automatycznego nadpisywania:** Regeneracja tekstu po zmianie checkboxów nie może kasować ręcznej edycji lekarza bez jawnej akcji „zastąp tekst”.
+- **Final sign-off lekarza:** Publikacja wymaga jawnego potwierdzenia, że tekst końcowy został zweryfikowany przez lekarza.
+- **Audyt medyczno-prawny:** Każda zmiana pól `edited_text` (per zmiana i globalnie) jest logowana: kto, kiedy, jaki zakres.
+- **Bezpieczny MVP szablonów:** Tylko szablony prywatne lekarza, bez logiki warunkowej (if/else), bez DSL, wyłącznie ograniczona lista placeholderów.
+- **Sanityzacja i limity tekstu:** Teksty lekarza i szablony to plain text (bez HTML/JS), z limitami długości i walidacją przed generowaniem PDF.
 - Możliwość zapisu dokumentu jako Szkic lub Opublikowany.
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
@@ -177,7 +183,8 @@ Kryteria akceptacji:
 - Sekcja medyczna obsługuje model zmian skórnych (lista zmian 1..N) i dane per zmiana: cechy dermatoskopowe, ocena kliniczna oraz ryzyko złośliwości.
 - **Generowanie tekstu z checkboxów:** Wybór opcji (checkboxy/listy) powoduje wygenerowanie przez system gotowego tekstu opisu (np. Textbausteine); ten wygenerowany tekst jest **edytowalny** – lekarz może go poprawić, skrócić lub rozwinąć przed zatwierdzeniem.
 - **Generowanie zbiorcze:** Po opisie poszczególnych zmian system generuje podsumowanie globalne Befund (edytowalne).
-- **Swoboda dopisywania:** Lekarz może dopisywać własne teksty (pole wolne, własne szablony), a nie tylko wybierać z gotowych opcji. Język i styl opisu zależą od lekarza.
+- **Swoboda dopisywania:** Lekarz może dopisywać własne teksty (pole wolne, prywatne szablony), a nie tylko wybierać z gotowych opcji. Język i styl opisu zależą od lekarza.
+- **Ochrona ręcznych zmian:** Ponowna regeneracja tekstu nie nadpisuje automatycznie istniejącego `edited_text`.
 - Walidacja wymaganych pól medycznych przed publikacją.
 
 ID: US-009
@@ -189,6 +196,7 @@ Kryteria akceptacji:
 - UI lekarza nie jest blokowane przez proces generowania PDF, uploadu czy wysyłki SMS.
 - Status generowania dokumentu jest widoczny w systemie (np. "Przetwarzanie...").
 - Akcja "Zatwierdź i wyślij" jest idempotentna: wielokrotne kliknięcie dla tego samego dokumentu nie tworzy wielu publikacji ani wielu łańcuchów zadań.
+- Publikacja wymaga ustawienia przez lekarza jawnego potwierdzenia "final sign-off" dla tekstu końcowego.
 - **Mechanizm po stronie serwera:** Przed utworzeniem nowej publikacji serwis sprawdza, czy dla danego dokumentu medycznego istnieje już wersja w stanie „publikacja w toku” (np. wersja ze statusem PUBLISHED, dla której w outbox istnieje zdarzenie `GENERATE_PDF` w statusie PENDING lub PROCESSING). W takim przypadku żądanie publikacji zwraca sukces bez tworzenia nowej wersji ani nowych wpisów outbox (idempotentna odpowiedź). Alternatywnie lub uzupełniająco: żądanie może przekazywać klucz idempotentności (np. `publish_request_id` z frontu); serwer traktuje ten sam klucz dla tego samego dokumentu jako powtórzenie i nie tworzy duplikatów.
 
 ID: US-010
@@ -206,10 +214,12 @@ Tytuł: Własne szablony tekstu lekarza (DE/EN)
 Opis: Jako lekarz, chcę tworzyć i używać własnych szablonów opisu, aby zachować swój styl dokumentacji.
 Kryteria akceptacji:
 - Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (co najmniej dla języka niemieckiego i angielskiego).
+- Szablon jest zawsze prywatny (per lekarz); brak szablonów globalnych kliniki w MVP.
 - Przy generowaniu tekstu z checkboxów lekarz może wskazać szablon bazowy.
+- Szablony wspierają wyłącznie whitelistę prostych placeholderów (np. `{{lesion_no}}`, `{{clinical_assessment}}`, `{{malignancy_risk}}`) i nie wspierają logiki warunkowej.
 - System zapisuje zarówno tekst wygenerowany automatycznie, jak i tekst końcowy po edycji lekarza.
 - Zmiana szablonu po publikacji nie modyfikuje historycznych wersji dokumentu.
-- Szablony globalne (kliniki) i prywatne (per lekarz) są rozróżnione w uprawnieniach.
+- Treść szablonu podlega sanityzacji (plain text) oraz limitowi długości.
 
 ### System i Backend
 ID: US-011
@@ -329,6 +339,9 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 - `anamnesis_payload` przechowuje neutralne językowo kody pytań i opcji; lokalizacja DE/EN jest odpowiedzialnością warstwy prezentacji/słowników.
 - **Opis lekarski (Befund):** W `medical_payload` zapisywany jest zarówno wybór strukturyzowany (checkboxy, opcje – do ewentualnego ponownego wygenerowania tekstu), jak i **końcowy tekst opisu po edycji przez lekarza**. Do PDF i archiwum trafia wersja zatwierdzona przez lekarza (po ewentualnych poprawkach wygenerowanego tekstu lub dopisaniach własnych).
 - `medical_payload` dla Befund v1 zawiera część globalną i per-zmiana (`lesions[]`) oraz pary pól `generated_text` / `edited_text` (per zmiana i dla podsumowania globalnego).
+- `medical_payload` zachowuje zasadę nienadpisywania: po ręcznej edycji regeneracja może uzupełnić `generated_text`, ale nie może automatycznie kasować `edited_text`.
+- Publikacja `medical_document_version` wymaga zapisanego `final_sign_off` lekarza; brak sign-off blokuje publikację.
+- Zmiany `edited_text` są rejestrowane w `audit_event` z informacją o użytkowniku i czasie.
 
 ## 9. Dwujęzyczność i i18n (DE/EN)
 
