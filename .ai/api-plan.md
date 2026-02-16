@@ -30,7 +30,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
-- `doctor-text-templates` -> `doctor_text_template` (private-only MVP)
+- `doctor-text-templates` -> `doctor_text_template`
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
 - `audit-events` -> `audit_event`
@@ -415,13 +415,14 @@
 
 ### 2.7 Patient sessions and token flow (latest-wins)
 
-- **POST** `/queue-entries/{id}/activate-session`
-  - Description: Activate session for patient on the tablet (Select & Handover flow). Replaces old token generation.
+- **POST** `/queue-entries/{id}/sessions`
+  - Description: Generate one-time patient link/token and set as active session (US-004).
   - Query params: none.
   - Request JSON:
     ```json
     {
       "tablet_device_id": "uuid",
+      "ttl_minutes": 30,
       "form_locale": "de-DE"
     }
     ```
@@ -429,12 +430,12 @@
     ```json
     {
       "session_id": "uuid",
-      "status": "ACTIVE",
-      "patient_summary": "Jan Kowalski"
+      "launch_url": "https://app.example.com/patient/form?token=opaque-token",
+      "expires_at": "2026-02-16T10:30:00Z"
     }
     ```
   - Success: `201 CREATED`.
-  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 TABLET_BUSY`, `422 ACTIVATION_FAILED`.
+  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 ENTRY_NOT_ELIGIBLE`, `422 TOKEN_GENERATION_FAILED`.
 
 - **POST** `/patient-sessions/validate`
   - Description: Validate token before tablet form access.
@@ -774,20 +775,16 @@
     ```
   - Response JSON: latest draft version.
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`.
-  - Notes:
-    - `generated_text` and `edited_text` accept plain text only (no HTML/JS markup).
-    - `edited_text` is never auto-overwritten by backend save logic.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`.
 
 - **POST** `/medical-documents/{id}/generate-text`
-  - Description: Generate base Befund texts from selected options (per lesion + global summary), without publishing; preserve existing manual edits by default.
+  - Description: Generate base Befund texts from selected options (per lesion + global summary), without publishing.
   - Request JSON:
     ```json
     {
       "medical_payload_schema_version": 1,
       "authoring_locale": "de-DE",
       "template_id": "uuid-optional",
-      "preserve_existing_edited_text": true,
       "medical_payload": {
         "fitzpatrick_type": "TYPE_III",
         "lesions": [
@@ -807,22 +804,17 @@
     ```json
     {
       "generated": true,
-      "edited_text_preserved": true,
       "lesions": [
         {
           "lesion_no": 8,
-          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-          "edited_text_unchanged": true
+          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
         }
       ],
       "summary_generated_text": "Bei der Analyse der digitalen dermatoskopischen Aufnahmen ..."
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 INVALID_MEDICAL_SELECTIONS`, `400 TEMPLATE_PLACEHOLDER_NOT_ALLOWED`, `404 DOCUMENT_NOT_FOUND`.
-  - Notes:
-    - Default behavior is `preserve_existing_edited_text=true`.
-    - Overwrite mode requires explicit client opt-in (`preserve_existing_edited_text=false`) and explicit confirmation in UI.
+  - Errors: `400 INVALID_MEDICAL_SELECTIONS`, `404 DOCUMENT_NOT_FOUND`.
 
 - **POST** `/medical-documents/{id}/publish`
   - Description: Publish document version and enqueue outbox chain idempotently (US-009/010).
@@ -831,7 +823,6 @@
     ```json
     {
       "publish_request_id": "uuid-or-client-key",
-      "doctor_final_sign_off": true,
       "resend_sms": true
     }
     ```
@@ -840,8 +831,6 @@
     {
       "published": true,
       "idempotent_replay": false,
-      "doctor_final_sign_off": true,
-      "doctor_final_sign_off_at": "2026-02-16T10:07:00Z",
       "medical_document_id": "uuid",
       "version_no": 3,
       "version_status": "PUBLISHED",
@@ -851,33 +840,31 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `400 FINAL_SIGN_OFF_REQUIRED`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
+  - Errors: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
 
 ### 2.10a Doctor text templates
 
 - **GET** `/doctor-text-templates`
-  - Description: List private text templates available to authenticated doctor (MVP: private-only).
-  - Query params: `template_locale`, `is_active`.
+  - Description: List text templates available to the doctor (global + private).
+  - Query params: `template_locale`, `scope` (`global|private|all`), `is_active`.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
 - **POST** `/doctor-text-templates`
 - **GET/PATCH/DELETE** `/doctor-text-templates/{id}`
-  - Description: CRUD for private doctor text templates (no global scope).
+  - Description: CRUD for doctor text templates.
   - Request JSON (create):
     ```json
     {
       "name": "Dr. Meyer Default",
       "template_locale": "de-DE",
       "template_body": "Läsion {{lesion_no}} zeigt ...",
+      "is_global": false,
       "is_active": true
     }
     ```
   - Success: `201 CREATED`, `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `400 TEMPLATE_PLACEHOLDER_NOT_ALLOWED`, `400 INVALID_TEXT_CONTENT`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
-  - Notes:
-    - Template body is plain text only (no HTML/JS).
-    - Template placeholder support is allowlist-based (no conditional logic, no loops, no DSL).
+  - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
 
 - **GET** `/medical-documents/{id}/versions`
   - Description: Version history.
@@ -1009,7 +996,7 @@
   - Errors: `403 FORBIDDEN`, `429 RATE_LIMITED`.
 
 - **POST** `/operations/retention/run`
-  - Description: Manual retention run for documents older than 30 days. Performs hard deletion of local PDFs AND scrubs sensitive DB data (`medical_payload`, `anamnesis_payload`, `body_map`).
+  - Description: Manual retention run for local PDFs older than 30 days.
   - Request JSON:
     ```json
     {
@@ -1021,7 +1008,7 @@
     ```json
     {
       "candidates": 42,
-      "scrubbed_and_deleted": 0,
+      "deleted": 0,
       "skipped_not_safe": 5
     }
     ```
@@ -1091,7 +1078,6 @@
     - write endpoints default: 60 req/min/user.
     - admin operations: 10 req/min/user.
   - Request size limits for signatures/uploads.
-  - Plain-text sanitization for doctor narratives and template bodies before persistence/PDF rendering.
   - Input sanitization and allowlists for ordering/filter fields.
   - Audit logging for all security-sensitive actions (login failures, publish, retries, merges, retention runs).
 
@@ -1154,7 +1140,6 @@
   - `hidrive_sent=true` requires completed PDF, `pdf_local_path`, and `hidrive_sent_at`.
   - `sms_sent=true` requires `sms_sent_at`.
   - `local_pdf_deleted_at` allowed only if `hidrive_sent=true` and `sms_sent=true`.
-  - Publish requires explicit `doctor_final_sign_off=true`.
 
 - `outbox_event`
   - Unique `(medical_document_version_id, event_type)`.
@@ -1192,14 +1177,11 @@
 
 - Doctor workflow:
   - Draft save updates/creates latest draft version.
-  - `generate-text` builds base Befund text blocks (`generated_text`) from selected features/assessments and optional private doctor template.
-  - Regeneration preserves existing `edited_text` by default (no implicit overwrite).
+  - `generate-text` builds base Befund text blocks (`generated_text`) from selected features/assessments and optional doctor template.
   - Doctor persists both generated text and final edited text (`edited_text`) in `medical_payload`.
-  - Every `edited_text` mutation emits an audit event (`MEDICAL_TEXT_EDITED`) with actor and timestamp metadata.
   - Publish uses row lock on `medical_document` and idempotency checks:
     - same `publish_request_id` returns success replay;
     - publication already in progress returns idempotent success (no duplicate outbox chain).
-    - publication requires explicit doctor sign-off of the final narrative text.
 
 - Transactional outbox chain:
   - Publish transaction enqueues `GENERATE_PDF`.
@@ -1212,8 +1194,8 @@
   - API supports optional `resend_sms`.
 
 - Retention policy:
-  - Scheduled/manual retention deletes local PDF AND scrubs sensitive DB columns (`medical_payload`, `anamnesis_payload`, `body_map_data`, `diagnosis_code`) only when both `hidrive_sent=true` and `sms_sent=true` and document age exceeds 30 days.
-  - Deletion action creates audit event and sets `is_content_scrubbed=true`.
+  - Scheduled/manual retention deletes local PDF only when both `hidrive_sent=true` and `sms_sent=true` and document age exceeds 30 days.
+  - Deletion action creates audit event.
 
 - Operational visibility:
   - API exposes health/metrics and outbox/import inspection endpoints.
@@ -1253,7 +1235,6 @@ Option code mapping for Q1–Q11:
   - per-lesion selections (`lesions[]`),
   - generated and final text (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`).
 - Text persistence is language-agnostic; `authoring_locale` records the doctor's working language.
-- Narrative fields are plain text with backend length limits and sanitization.
 
 Minimal example:
 

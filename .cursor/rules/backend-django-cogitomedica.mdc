@@ -1,0 +1,56 @@
+---
+description: Zasady backendu Django dla Cogitomedica
+globs: **/*.py
+alwaysApply: false
+---
+
+# BACKEND (DJANGO) - Cogitomedica
+
+## 1) Architektura i granice warstw
+- Stosuj architekturę warstwową: `views/api` (HTTP), `serializers/schemas` (kontrakty), `services` (logika domenowa), `models` (persistencja).
+- Logika domenowa ma być w serwisach aplikacyjnych; nie implementuj reguł biznesowych jako triggery DB.
+- Wymuszaj DRY: duplikacja kodu jest traktowana jako błąd krytyczny do refaktoryzacji.
+- Projektuj moduły i klasy zgodnie z SOLID, szczególnie SRP i DIP.
+
+## 2) Django/DRF + walidacja danych
+- Dla API używaj spójnych kontraktów wejścia/wyjścia (DRF serializers lub Pydantic, zależnie od kontekstu modułu).
+- Używaj poprawnych metod HTTP i jednoznacznych kodów odpowiedzi.
+- Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do crona.
+
+## 3) ORM, transakcje i idempotencja
+- Używaj ORM Django jako podstawowego mechanizmu dostępu do danych.
+- Zmiany stanu biznesowego i utworzenie eventu outbox muszą być atomowe (`transaction.atomic`).
+- Publikacja dokumentu musi być idempotentna: wspieraj `publish_request_id` i brak duplikacji łańcucha outbox.
+- Używaj blokad wierszy tam, gdzie chronisz przejścia stanów (`select_for_update`).
+
+## 4) Reguły domenowe specyficzne dla projektu
+- Obsługuj role `RECEPTION`, `DOCTOR`, `ADMIN` zgodnie z PRD.
+- Dla manualnie dodanych pacjentów bez `Doctolib Patient ID` utrzymuj status tymczasowy i alert administracyjny.
+- Dla sesji tabletu stosuj model `latest-wins`: nowy token unieważnia poprzedni aktywny.
+- Wymuszaj walidację wymaganych zgód i pytań anamnestycznych przed `SUBMITTED`.
+- Wspieraj wersjonowanie dokumentu medycznego i ponowną publikację bez utraty historii.
+
+## 5) Outbox, zadania tła i integracje
+- Nie wykonuj kroków CPU/I/O ciężkich w żądaniu HTTP.
+- Dla zadań krytycznych i długich (PDF, upload, SMS, import) używaj crona.
+- Utrzymuj sekwencję outbox zgodną z PRD: `GENERATE_PDF -> HIDRIVE_UPLOAD -> SMS_SEND`.
+- Import z Doctolib realizuj przez pliki (`.xlsx`/`.csv`), bez bezpośredniej integracji API.
+
+## 6) Kontrakty JSON i wersjonowanie
+- Każdy JSON zapisany w DB (`body_map_data`, `anamnesis_payload`, `medical_payload`, payload outbox) musi mieć `schema_version`.
+- Zmiana kontraktu JSON wymaga nowej wersji, migracji danych historycznych i testów kompatybilności.
+- Dane klinicznie krytyczne (np. diagnosis/procedure) trzymaj relacyjnie; JSON traktuj pomocniczo.
+
+## 7) Błędy, bezpieczeństwo, obserwowalność
+- Rozdziel obsługę błędów: błędy HTTP w warstwie prezentacji, błędy domenowe w serwisach, globalny handler na poziomie aplikacji.
+- Nigdy nie umieszczaj sekretów w kodzie; używaj `os.getenv()` i bezpiecznego zarządzania konfiguracją.
+- Instrumentuj system przez OpenTelemetry (logi, metryki, traces).
+- Eksportuj metryki do Prometheus i buduj dashboardy/alerty w Grafana.
+- Monitoruj minimum: metryki outbox, skuteczność HiDrive/SMS, metryki importu oraz opóźnienia publikacji.
+
+## 8) Jakość kodu i testy
+- Pracuj w aktywnym środowisku wirtualnym (`venv\Scripts\activate`).
+- Zachowuj PEP 8 i formatowanie `black`.
+- Dla nowego kodu wymagane są adnotacje typów.
+- Każde przejście stanu domenowego testuj scenariuszem pozytywnym i negatywnym (`pytest` lub `pytest-django`).
+- Każdy PR zmieniający outbox/import/integracje musi zawierać testy oraz runbook/alerting jako element Definition of Done.
