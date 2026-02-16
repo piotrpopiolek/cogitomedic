@@ -1,0 +1,14 @@
+.git
+.gitignore
+.cursor
+.ai
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache
+.pytest_cache
+tmp
+*.log
+db.sqlite3
