@@ -36,6 +36,7 @@
 - `phone` `varchar(20)` NOT NULL
 - `email` `citext` NOT NULL
 - `doctolib_patient_id` `varchar(64)` NULL UNIQUE
+- **Faza 1 (MVP):** W warstwie aplikacji przy ręcznym dodawaniu pacjenta `doctolib_patient_id` jest **wymagane** (walidacja formularza). Schemat DB dopuszcza NULL dla kompatybilności z Fazą 2/3 (tryb tymczasowy, merge).
 - `identity_status` `patient_identity_status_enum` GENERATED ALWAYS AS (
     CASE
       WHEN doctolib_patient_id IS NULL THEN 'TEMPORARY'::patient_identity_status_enum
@@ -148,7 +149,9 @@
 - `code` `varchar(60)` NOT NULL
 - `version` `integer` NOT NULL
 - `title_de` `varchar(200)` NOT NULL
+- `title_en` `varchar(200)` NULL
 - `content_de` `text` NOT NULL
+- `content_en` `text` NULL
 - `is_required` `boolean` NOT NULL DEFAULT `true`
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `display_order` `smallint` NOT NULL DEFAULT `0`
@@ -158,6 +161,7 @@
 - Ograniczenia:
   - `UNIQUE (code, version)`
   - `CHECK (effective_to IS NULL OR effective_to >= effective_from)`
+- Uwaga (i18n): Do wyświetlania zgód w EN używać `title_en`/`content_en`; jeśli NULL – fallback do DE. Publikacja wersji zgody może wymagać kompletności DE; EN opcjonalne (zgodnie z PRD „German first”).
 
 #### `anamnesis_question_definition`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -200,15 +204,16 @@
 - `anamnesis_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
 - `signature_file_path` `varchar(500)` NULL
 - `signature_sha256` `char(64)` NULL
+- `is_content_scrubbed` `boolean` NOT NULL DEFAULT `false`
 - `submitted_at` `timestamptz` NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (id, queue_entry_id)`
   - `FK (session_id, queue_entry_id) -> patient_form_session(id, queue_entry_id) ON DELETE RESTRICT`
-  - `CHECK (jsonb_typeof(body_map_data) = 'array')`
-  - `CHECK (jsonb_typeof(anamnesis_payload) = 'object')`
-  - `CHECK ((form_status <> 'SUBMITTED') OR (submitted_at IS NOT NULL AND signature_file_path IS NOT NULL))`
+  - `CHECK (jsonb_typeof(body_map_data) = 'array' OR body_map_data IS NULL)`
+  - `CHECK (jsonb_typeof(anamnesis_payload) = 'object' OR anamnesis_payload IS NULL)`
+  - `CHECK ((form_status <> 'SUBMITTED') OR (submitted_at IS NOT NULL AND (signature_file_path IS NOT NULL OR is_content_scrubbed = true)))`
 
 #### `patient_intake_consent`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -254,6 +259,7 @@
 - `sms_sent` `boolean` NOT NULL DEFAULT `false`
 - `sms_sent_at` `timestamptz` NULL
 - `local_pdf_deleted_at` `timestamptz` NULL
+- `is_content_scrubbed` `boolean` NOT NULL DEFAULT `false`
 - `publish_requested_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `published_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `published_at` `timestamptz` NULL
@@ -262,14 +268,15 @@
   - `UNIQUE (medical_document_id, version_no)`
   - `UNIQUE (medical_document_id, publish_request_id)`
   - `CHECK (version_no > 0)`
-  - `CHECK (jsonb_typeof(medical_payload) = 'object')`
+  - `CHECK (jsonb_typeof(medical_payload) = 'object' OR medical_payload IS NULL)`
   - `CHECK ((version_status <> 'PUBLISHED') OR (publish_request_id IS NOT NULL))`
   - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL))`
-  - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL))`
-  - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND pdf_local_path IS NOT NULL))`
+  - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL OR is_content_scrubbed = true))`
+  - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND (pdf_local_path IS NOT NULL OR is_content_scrubbed = true)))`
   - `CHECK ((hidrive_sent = false) OR hidrive_sent_at IS NOT NULL)`
   - `CHECK ((sms_sent = false) OR sms_sent_at IS NOT NULL)`
   - `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
+  - `CHECK (is_content_scrubbed = false OR (hidrive_sent = true AND sms_sent = true))`
 
 #### `doctor_text_template`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -468,9 +475,14 @@
   - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
   - wpis `HIDRIVE_UPLOAD` tworzony przez worker po sukcesie generowania PDF,
   - wpis `SMS_SEND` tworzony przez worker po sukcesie uploadu.
-- Ochrona retencji:
-  - realizowana przez `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))` w `medical_document_version`,
-  - dodatkowo job retencji wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
+- Ochrona retencji i czyszczenie danych (Hard Delete):
+  - realizowana przez `CHECK (is_content_scrubbed = false OR (hidrive_sent = true AND sms_sent = true))` w `medical_document_version`,
+  - job retencji wykonuje operację w jednej transakcji:
+    1. Weryfikuje status archiwizacji (`hidrive` + `sms`).
+    2. Usuwa plik PDF z dysku i ustawia `local_pdf_deleted_at`.
+    3. Czyści dane wrażliwe: `UPDATE medical_document_version SET medical_payload = NULL, diagnosis_code = NULL, procedure_code = NULL, is_content_scrubbed = true`.
+    4. Czyści dane pacjenta: `UPDATE patient_intake_form SET anamnesis_payload = NULL, body_map_data = NULL, signature_file_path = NULL, is_content_scrubbed = true`.
+  - Dzięki temu baza nie przechowuje danych medycznych starszych niż 30 dni, a jedynie metadane operacyjne.
 
 ### 4.3. Zasady integralności i bezpieczeństwa
 - `ON DELETE RESTRICT` dla bytów medycznych wysokiego poziomu (`queue_entry`, `patient_intake_form`, `medical_document`) w celu ochrony historii klinicznej.

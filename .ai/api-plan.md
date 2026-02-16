@@ -415,14 +415,13 @@
 
 ### 2.7 Patient sessions and token flow (latest-wins)
 
-- **POST** `/queue-entries/{id}/sessions`
-  - Description: Generate one-time patient link/token and set as active session (US-004).
+- **POST** `/queue-entries/{id}/activate-session`
+  - Description: Activate session for patient on the tablet (Select & Handover flow). Replaces old token generation.
   - Query params: none.
   - Request JSON:
     ```json
     {
       "tablet_device_id": "uuid",
-      "ttl_minutes": 30,
       "form_locale": "de-DE"
     }
     ```
@@ -430,12 +429,12 @@
     ```json
     {
       "session_id": "uuid",
-      "launch_url": "https://app.example.com/patient/form?token=opaque-token",
-      "expires_at": "2026-02-16T10:30:00Z"
+      "status": "ACTIVE",
+      "patient_summary": "Jan Kowalski"
     }
     ```
   - Success: `201 CREATED`.
-  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 ENTRY_NOT_ELIGIBLE`, `422 TOKEN_GENERATION_FAILED`.
+  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 TABLET_BUSY`, `422 ACTIVATION_FAILED`.
 
 - **POST** `/patient-sessions/validate`
   - Description: Validate token before tablet form access.
@@ -996,7 +995,7 @@
   - Errors: `403 FORBIDDEN`, `429 RATE_LIMITED`.
 
 - **POST** `/operations/retention/run`
-  - Description: Manual retention run for local PDFs older than 30 days.
+  - Description: Manual retention run for documents older than 30 days. Performs hard deletion of local PDFs AND scrubs sensitive DB data (`medical_payload`, `anamnesis_payload`, `body_map`).
   - Request JSON:
     ```json
     {
@@ -1008,7 +1007,7 @@
     ```json
     {
       "candidates": 42,
-      "deleted": 0,
+      "scrubbed_and_deleted": 0,
       "skipped_not_safe": 5
     }
     ```
@@ -1194,8 +1193,8 @@
   - API supports optional `resend_sms`.
 
 - Retention policy:
-  - Scheduled/manual retention deletes local PDF only when both `hidrive_sent=true` and `sms_sent=true` and document age exceeds 30 days.
-  - Deletion action creates audit event.
+  - Scheduled/manual retention deletes local PDF AND scrubs sensitive DB columns (`medical_payload`, `anamnesis_payload`, `body_map_data`, `diagnosis_code`) only when both `hidrive_sent=true` and `sms_sent=true` and document age exceeds 30 days.
+  - Deletion action creates audit event and sets `is_content_scrubbed=true`.
 
 - Operational visibility:
   - API exposes health/metrics and outbox/import inspection endpoints.

@@ -30,7 +30,8 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
 - W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
 - Generowanie unikalnego linku z jednorazowym tokenem dla pacjenta w celu uruchomienia formularza na tablecie.
-- Dopuszczony jest tryb tymczasowy rekordu pacjenta bez `Doctolib Patient ID` wyłącznie dla ręcznego dodania; system musi automatycznie wygenerować alert dla administratora o konieczności pilnego uzupełnienia identyfikatora.
+- **Faza 1 (MVP):** Przy ręcznym dodawaniu pacjenta pole `Doctolib Patient ID` jest **wymagane**. Recepcja musi podać ID; jeśli go nie zna, zapisuje pacjenta na karteczce i dodaje do systemu po ustaleniu identyfikatora. W Fazie 1 nie ma statusu tymczasowego (TEMPORARY), alertów tożsamości ani operacji scalania pacjentów (merge).
+- **Faza 2/3:** Dopuszczony jest tryb tymczasowy rekordu pacjenta bez `Doctolib Patient ID` wyłącznie dla ręcznego dodania; system automatycznie generuje alert dla administratora oraz udostępnia operację scalania (merge) z rekordem potwierdzonym.
 - System dopuszcza więcej niż jedną wizytę tego samego pacjenta tego samego dnia w tym samym gabinecie (osobne wpisy kolejki/wizyty).
 
 ### 3.2. Interfejs Pacjenta (Tablet)
@@ -50,11 +51,17 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
 ### 3.4. Przetwarzanie i Archiwizacja (Backend)
-- Generowanie dokumentów PDF na podstawie danych z formularzy.
+- **Generowanie PDF:** Dokumenty PDF są generowane na podstawie szablonów HTML/CSS przy użyciu **WeasyPrint** (nie ReportLab). Szablony to pliki HTML + CSS; obrazy (podpis, schemat ciała) są embedowane jako `data:image/png;base64,...`. Pełne wsparcie Unicode (ä, ö, ü, ß) bez dodatkowej konfiguracji. Przy wolumenie < 100 dokumentów/dzień czas generowania (~2–5 s/dokument) jest akceptowalny.
 - **Idempotentność publikacji:** Serwer przed utworzeniem nowej wersji publikowanej i wpisów outbox sprawdza, czy dla danego dokumentu nie ma już publikacji w toku (wersja w trakcie generowania PDF / uploadu); w takim przypadku zwraca sukces bez duplikowania zadań. Dopuszczalne jest uzupełnienie o klucz idempotentności z klienta (`publish_request_id`).
-- Mechanizm Transactional Outbox do obsługi procesów asynchronicznych.
+- **Transactional Outbox (cron):** Mechanizm Transactional Outbox do obsługi procesów asynchronicznych. Przetwarzanie realizuje cron z następującymi parametrami:
+  - Interwał crona: **30 sekund**.
+  - Batch: jeden cykl przetwarza **do 10 eventów**.
+  - Blokada: `SELECT ... FOR UPDATE SKIP LOCKED` przy pobieraniu eventów.
+  - Retry: exponential backoff `available_at = now() + (2^retry_count * 30s)`, cap **1 godzina**.
+  - Circuit breaker HiDrive: po **5 kolejnych** nieudanych uploadach – wstrzymanie HIDRIVE_UPLOAD na **5 minut** i alert krytyczny.
 - Mockowanie systemu plików HiDrive (Faza 1-2) z zachowaniem docelowej struktury katalogów.
 - Integracja z API HiDrive (Faza 3).
+- **Health check HiDrive (Faza 3):** Endpoint lub zadanie crona co **5 minut** pinguje HiDrive API. Jeśli **3 kolejne** pingi się nie powiodą – alert krytyczny.
 - Integracja z SMSApi do powiadamiania pacjentów o dostępności dokumentu.
 - Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
 
@@ -84,7 +91,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Mock i późniejsza integracja z HiDrive.
 - Powiadomienia SMS (link do pobrania).
 - Logowanie zdarzeń (OpenTelemetry).
-- Języki interfejsu: angielski i niemiecki.
+- Języki interfejsu: angielski i niemiecki (patrz sekcja 9 – Dwujęzyczność i i18n).
 
 ### Poza zakresem (Out-of-Scope)
 - Zaawansowany system wersjonowania treści zgód w panelu administracyjnym (zmiany wymagają ingerencji deweloperskiej/konfiguracyjnej).
@@ -110,10 +117,10 @@ ID: US-002
 Tytuł: Ręczne dodawanie pacjenta
 Opis: Jako recepcjonista, chcę ręcznie dodać pacjenta do listy dziennej, wprowadzając jego podstawowe dane, aby umożliwić mu wypełnienie formularza.
 Kryteria akceptacji:
-- Formularz wymaga podania: imienia, nazwiska, daty urodzenia, telefonu, adresu e-mail.
+- Formularz wymaga podania: imienia, nazwiska, daty urodzenia, telefonu, adresu e-mail oraz **Doctolib Patient ID** (w Fazie 1 pole obowiązkowe).
 - System waliduje poprawność adresu e-mail i numeru telefonu.
 - Nowy pacjent pojawia się na liście w widoku Poczekalnia.
-- Jeśli rekord tworzony jest bez `Doctolib Patient ID`, otrzymuje status tymczasowy i automatycznie tworzony jest alert dla administratora.
+- **Faza 1:** Brak `Doctolib Patient ID` uniemożliwia zapis – recepcja dodaje pacjenta po ustaleniu ID (np. zapis na karteczce). **Faza 2/3:** Jeśli rekord tworzony jest bez `Doctolib Patient ID`, otrzymuje status tymczasowy i automatycznie tworzony jest alert dla administratora.
 
 ID: US-003
 Tytuł: Import pacjentów
@@ -126,14 +133,14 @@ Kryteria akceptacji:
 - Zaimportowani pacjenci są widoczni w Poczekalni.
 
 ID: US-004
-Tytuł: Uruchomienie formularza na tablecie
-Opis: Jako recepcjonista, chcę wygenerować i otworzyć unikalny link dla pacjenta na tablecie, aby mógł on rozpocząć proces podpisywania.
+Tytuł: Aktywacja formularza dla pacjenta (Select & Handover)
+Opis: Jako recepcjonista, chcę wybrać pacjenta z listy i aktywować dla niego sesję na tablecie, a następnie podać mu urządzenie, aby wyeliminować konieczność przepisywania linków czy skanowania kodów.
 Kryteria akceptacji:
-- Kliknięcie przycisku przy pacjencie generuje unikalny URL z tokenem.
-- Link otwiera formularz w trybie pacjenta (bez menu nawigacyjnego personelu).
-- System działa w modelu `latest-wins`: wygenerowanie nowego linku dla tego samego wpisu kolejki unieważnia poprzedni link.
-- Token jest akceptowany tylko gdy jednocześnie: jest aktywną sesją wpisu kolejki, nie został zużyty (`consumed_at IS NULL`) i nie wygasł (`expires_at > now()`).
-- Po pierwszym skutecznym zapisie formularza token traci ważność.
+- Recepcjonista wybiera pacjenta z listy "Poczekalnia".
+- Kliknięcie "Rozpocznij wizytę" aktywuje formularz dla tego pacjenta (sesja staje się aktywna).
+- Tablet (będący w trybie nasłuchu lub po odświeżeniu) ładuje dane wybranego pacjenta.
+- Recepcjonista fizycznie przekazuje tablet pacjentowi.
+- System blokuje możliwość aktywacji innej wizyty na tym samym tablecie, dopóki bieżąca nie zostanie zakończona lub anulowana przez recepcję.
 
 ### Proces Pacjenta (Tablet)
 ID: US-005
@@ -186,12 +193,13 @@ Kryteria akceptacji:
 
 ID: US-010
 Tytuł: Edycja opublikowanego dokumentu
-Opis: Jako lekarz, chcę poprawić błąd w już opublikowanym dokumencie i wysłać go ponownie.
+Opis: Jako lekarz, chcę poprawić błąd w już opublikowanym dokumencie i wysłać go ponownie, pod warunkiem, że dokument nie został jeszcze zarchiwizowany i wyczyszczony (okno 30 dni).
 Kryteria akceptacji:
-- Możliwość edycji zatwierdzonego formularza.
+- Możliwość edycji zatwierdzonego formularza istnieje tylko do momentu zadziałania polityki retencji (30 dni).
 - Ponowne zatwierdzenie tworzy nową wersję PDF.
 - Nowa wersja nadpisuje plik w HiDrive (zachowanie tej samej ścieżki/nazwy).
 - System pozwala zdecydować, czy ponownie wysłać SMS do pacjenta.
+- Jeśli dane zostały już wyczyszczone (retencja), edycja jest zablokowana.
 
 ID: US-019
 Tytuł: Własne szablony tekstu lekarza (DE/EN)
@@ -218,19 +226,25 @@ ID: US-012
 Tytuł: Przetwarzanie Outbox (HiDrive i SMS)
 Opis: System automatycznie przetwarza kolejkę zadań, aby zapisać pliki w chmurze i powiadomić pacjenta.
 Kryteria akceptacji:
-- Cron uruchamia przetwarzanie tabeli Outbox.
+- Cron uruchamia przetwarzanie tabeli Outbox w interwale **30 sekund**; jeden cykl przetwarza **do 10 eventów**.
+- Pobieranie eventów z blokadą `SELECT ... FOR UPDATE SKIP LOCKED`.
 - Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez worker/cron, a nie w żądaniu HTTP.
-- Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
+- Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów. Circuit breaker: po 5 kolejnych nieudanych uploadach – wstrzymanie na 5 min i alert.
 - Krok 3: Po sukcesie Kroku 2, wysyłka SMS z linkiem do pacjenta.
-- W przypadku błędu, zadanie otrzymuje status błędu i jest ponawiane w kolejnym cyklu (zgodnie z polityką retry).
+- Retry: exponential backoff `available_at = now() + (2^retry_count * 30s)`, cap 1 h.
 - Dokument ma status Opublikowany, ale flagi hidrive_sent/sms_sent odzwierciedlają stan faktyczny.
 
 ID: US-013
-Tytuł: Polityka retencji (30 dni)
-Opis: System automatycznie usuwa pliki PDF z lokalnego serwera po 30 dniach, aby oszczędzać miejsce i dbać o bezpieczeństwo, ale tylko jeśli są bezpieczne w archiwum.
+Tytuł: Polityka retencji i czyszczenia danych (30 dni)
+Opis: System automatycznie usuwa pliki PDF z lokalnego serwera ORAZ bezpowrotnie czyści wrażliwe dane medyczne z bazy danych po 30 dniach, aby zminimalizować skutki ewentualnego wycieku danych (Privacy by Design).
 Kryteria akceptacji:
 - Cron sprawdza dokumenty starsze niż 30 dni od publikacji.
-- Usunięcie następuje TYLKO GDY: flaga zapisu do HiDrive == true ORAZ flaga wysyłki SMS == true.
+- Procedura czyszczenia uruchamiana jest TYLKO GDY: flaga zapisu do HiDrive == true ORAZ flaga wysyłki SMS == true.
+- Czyszczenie obejmuje:
+  - Usunięcie lokalnego pliku PDF.
+  - Wyzerowanie (NULL) kolumn JSONB: `medical_payload`, `anamnesis_payload`, `body_map_data`.
+  - Wyzerowanie (NULL) kolumn relacyjnych wrażliwych: `diagnosis_code`, `procedure_code`, `signature_file_path`.
+- W bazie pozostają jedynie metadane operacyjne (kto, kiedy, status, ID pacjenta), aby zachować ciągłość audytu.
 - Zdarzenie usunięcia jest logowane w systemie.
 
 ID: US-014
@@ -266,6 +280,7 @@ Kryteria akceptacji:
 ID: US-018
 Tytuł: Scalanie pacjentów (Merge Temporary to Confirmed)
 Opis: Jako administrator, chcę połączyć rekord pacjenta tymczasowego (bez ID) z rekordem potwierdzonym (z importu), aby przenieść historię zgód i zamknąć alert tożsamości.
+**Zakres faz:** Funkcja dostępna **od Fazy 2/3**. W Fazie 1 nie ma statusu TEMPORARY ani operacji merge (w Faza 1 Doctolib Patient ID jest wymagane przy ręcznym dodawaniu).
 Kryteria akceptacji:
 - Dostępna jest funkcja "Scal z potwierdzonym" dla rekordów o statusie `TEMPORARY`.
 - System pozwala wskazać docelowy rekord `CONFIRMED` (wyszukiwanie po nazwisku/ID).
@@ -314,3 +329,10 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 - `anamnesis_payload` przechowuje neutralne językowo kody pytań i opcji; lokalizacja DE/EN jest odpowiedzialnością warstwy prezentacji/słowników.
 - **Opis lekarski (Befund):** W `medical_payload` zapisywany jest zarówno wybór strukturyzowany (checkboxy, opcje – do ewentualnego ponownego wygenerowania tekstu), jak i **końcowy tekst opisu po edycji przez lekarza**. Do PDF i archiwum trafia wersja zatwierdzona przez lekarza (po ewentualnych poprawkach wygenerowanego tekstu lub dopisaniach własnych).
 - `medical_payload` dla Befund v1 zawiera część globalną i per-zmiana (`lesions[]`) oraz pary pól `generated_text` / `edited_text` (per zmiana i dla podsumowania globalnego).
+
+## 9. Dwujęzyczność i i18n (DE/EN)
+
+- **UI (etykiety, komunikaty, nawigacja):** wbudowany system **Django i18n** (`gettext` / `django.utils.translation`). Nie implementować własnego mechanizmu tłumaczeń.
+- **Treści domenowe:** Zgody, pytania anamnestyczne i kody Befund przechowywane w modelu w parach pól `_de` / `_en` (np. `consent_definition`: `title_de`, `title_en`, `content_de`, `content_en`). Walidacja kompletności: wersja zgody nie może być opublikowana, jeśli wymagane pola językowe DE/EN są niepełne.
+- **Priorytet: German first.** Językiem podstawowym jest niemiecki (lekarze, recepcja). Angielski dla pacjentów-obcokrajowców. UI budować najpierw po niemiecku; EN dodawać jako tłumaczenie. **Nie blokować release’u** na brakujące tłumaczenie EN – stosować **fallback do DE**.
+- **Testy i18n:** Dla formularzy zależnych od języka – test parametryczny per formularz, np. `@pytest.mark.parametrize("locale", ["de-DE", "en-GB"])` w testach renderowania formularzy (np. zgody, ankieta).

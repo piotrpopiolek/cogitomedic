@@ -39,8 +39,8 @@ The user interface is available in **English** and **German**.
 |-------|--------------|
 | **Backend** | Python, Django 4.2 |
 | **Database** | PostgreSQL |
-| **PDF** | ReportLab, PyPDF2 |
-| **Scheduling** | django-cron |
+| **PDF** | WeasyPrint (HTML/CSS → PDF; Unicode, embed images as base64). PyPDF2 for merging if needed. |
+| **Scheduling** | django-cron (Outbox: 30s interval, batch up to 10 events, exponential backoff, circuit breaker for HiDrive) |
 | **SMS** | smsapi-client |
 | **Monitoring** | Sentry |
 | **Config** | python-dotenv |
@@ -150,7 +150,7 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py createsuperuser` | Create an admin/superuser account |
 | `python manage.py runcrons` | Run cron jobs (e.g. retention/cleaner) |
 
-Scheduled tasks (e.g. retention and Outbox processing) are configured via `django-cron` and `CRON_CLASSES` in `cogitomedica/settings.py`.
+Scheduled tasks (e.g. retention and Outbox processing) are configured via `django-cron` and `CRON_CLASSES` in `cogitomedica/settings.py`. Outbox processing runs every 30 seconds, handles up to 10 events per run, uses `SELECT ... FOR UPDATE SKIP LOCKED`, exponential backoff for retries (cap 1 h), and a circuit breaker for HiDrive (see `.ai/risk-mitigation-plan.md`).
 
 Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
 
