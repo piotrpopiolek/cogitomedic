@@ -106,7 +106,7 @@
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `daily_queue_id` `uuid` NOT NULL FK -> `daily_queue(id)` ON DELETE CASCADE
 - `patient_id` `uuid` NOT NULL FK -> `patient(id)` ON DELETE RESTRICT
-- `active_session_id` `uuid` NULL FK -> `patient_form_session(id)` ON DELETE SET NULL
+- `active_session_id` `uuid` NULL
 - `entry_status` `queue_entry_status_enum` NOT NULL DEFAULT `'WAITING'`
 - `position_no` `integer` NOT NULL
 - `visit_external_id` `varchar(100)` NULL
@@ -117,6 +117,7 @@
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (daily_queue_id, position_no)`
+  - `FK (active_session_id, id) -> patient_form_session(id, queue_entry_id) ON DELETE RESTRICT`
 
 #### `tablet_device`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -136,6 +137,7 @@
 - `created_by_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
+  - `UNIQUE (id, queue_entry_id)`
   - `CHECK (expires_at > created_at)`
   - `CHECK (consumed_at IS NULL OR consumed_at <= expires_at)`
 
@@ -158,7 +160,7 @@
 #### `patient_intake_form`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `queue_entry_id` `uuid` NOT NULL UNIQUE FK -> `queue_entry(id)` ON DELETE CASCADE
-- `session_id` `uuid` NOT NULL UNIQUE FK -> `patient_form_session(id)` ON DELETE RESTRICT
+- `session_id` `uuid` NOT NULL UNIQUE
 - `form_status` `intake_status_enum` NOT NULL DEFAULT `'IN_PROGRESS'`
 - `body_map_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `body_map_data` `jsonb` NOT NULL DEFAULT `'[]'::jsonb`
@@ -168,6 +170,8 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
+  - `UNIQUE (id, queue_entry_id)`
+  - `FK (session_id, queue_entry_id) -> patient_form_session(id, queue_entry_id) ON DELETE RESTRICT`
   - `CHECK (jsonb_typeof(body_map_data) = 'array')`
   - `CHECK ((form_status <> 'SUBMITTED') OR (submitted_at IS NOT NULL AND signature_file_path IS NOT NULL))`
 
@@ -184,7 +188,7 @@
 #### `medical_document`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `queue_entry_id` `uuid` NOT NULL UNIQUE FK -> `queue_entry(id)` ON DELETE RESTRICT
-- `intake_form_id` `uuid` NOT NULL FK -> `patient_intake_form(id)` ON DELETE RESTRICT
+- `intake_form_id` `uuid` NOT NULL UNIQUE
 - `status` `medical_doc_status_enum` NOT NULL DEFAULT `'DRAFT'`
 - `current_version_no` `integer` NOT NULL DEFAULT `0`
 - `last_published_at` `timestamptz` NULL
@@ -193,6 +197,7 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
+  - `FK (intake_form_id, queue_entry_id) -> patient_intake_form(id, queue_entry_id) ON DELETE RESTRICT`
   - `CHECK (current_version_no >= 0)`
 
 #### `medical_document_version`
@@ -223,12 +228,13 @@
   - `UNIQUE (medical_document_id, publish_request_id)`
   - `CHECK (version_no > 0)`
   - `CHECK (jsonb_typeof(medical_payload) = 'object')`
+  - `CHECK ((version_status <> 'PUBLISHED') OR (publish_request_id IS NOT NULL))`
   - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL))`
   - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL))`
   - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND pdf_local_path IS NOT NULL))`
   - `CHECK ((hidrive_sent = false) OR hidrive_sent_at IS NOT NULL)`
   - `CHECK ((sms_sent = false) OR sms_sent_at IS NOT NULL)`
-- `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
+  - `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
 
 #### `outbox_event`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -306,6 +312,7 @@
 - `patient_intake_form` N:M `consent_definition` przez `patient_intake_consent`.
 - `queue_entry` 1:1 `medical_document` (jeden dokument medyczny dla jednego przebiegu wizyty).
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
+- `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
 - `medical_document_version` 1:N `outbox_event` (relacja egzekwowana FK `outbox_event.medical_document_version_id`; np. `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
@@ -372,7 +379,7 @@
 - `pdf_status_enum`: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
 - `outbox_event_type_enum`: `GENERATE_PDF`, `HIDRIVE_UPLOAD`, `SMS_SEND`
 - `outbox_status_enum`: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`, `DEAD_LETTER`
-- `import_type_enum`: `DAILY_FILE_IMPORT`
+- `import_type_enum`: `DAILY_FILE_IMPORT`, `EMERGENCY_TEMPLATE_IMPORT`
 - `import_source_system_enum`: `DOCTOLIB_EXPORT`, `OTHER`
 - `import_status_enum`: `PROCESSING`, `COMPLETED`, `COMPLETED_WITH_ERRORS`, `FAILED`
 
@@ -403,7 +410,8 @@
   - dodatkowo job retencji wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
 
 ### 4.3. Zasady integralności i bezpieczeństwa
-- Wszystkie FK w module dokumentów z `ON DELETE RESTRICT` dla danych medycznych (brak przypadkowego usunięcia historii).
+- `ON DELETE RESTRICT` dla bytów medycznych wysokiego poziomu (`queue_entry`, `patient_intake_form`, `medical_document`) w celu ochrony historii klinicznej.
+- `ON DELETE CASCADE` dopuszczalne dla bytów technicznych ściśle podrzędnych (`medical_document_version`, `outbox_event`), które nie mają samodzielnego znaczenia biznesowego bez rekordu nadrzędnego.
 - `token_hash` przechowywany wyłącznie jako hash SHA-256 (brak jawnego tokenu w DB).
 - `Doctolib Patient ID` jest obowiązkowym kluczem tożsamości dla danych importowanych; rekordy ręczne bez tego ID są formalnie tymczasowe i wymagają pilnego domknięcia alertu administracyjnego.
 - Włączenie rozszerzeń:

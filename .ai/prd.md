@@ -47,6 +47,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 
 ### 3.4. Przetwarzanie i Archiwizacja (Backend)
 - Generowanie dokumentów PDF na podstawie danych z formularzy.
+- **Idempotentność publikacji:** Serwer przed utworzeniem nowej wersji publikowanej i wpisów outbox sprawdza, czy dla danego dokumentu nie ma już publikacji w toku (wersja w trakcie generowania PDF / uploadu); w takim przypadku zwraca sukces bez duplikowania zadań. Dopuszczalne jest uzupełnienie o klucz idempotentności z klienta (`publish_request_id`).
 - Mechanizm Transactional Outbox do obsługi procesów asynchronicznych.
 - Mockowanie systemu plików HiDrive (Faza 1-2) z zachowaniem docelowej struktury katalogów.
 - Integracja z API HiDrive (Faza 3).
@@ -173,6 +174,7 @@ Kryteria akceptacji:
 - UI lekarza nie jest blokowane przez proces generowania PDF, uploadu czy wysyłki SMS.
 - Status generowania dokumentu jest widoczny w systemie (np. "Przetwarzanie...").
 - Akcja "Zatwierdź i wyślij" jest idempotentna: wielokrotne kliknięcie dla tego samego dokumentu nie tworzy wielu publikacji ani wielu łańcuchów zadań.
+- **Mechanizm po stronie serwera:** Przed utworzeniem nowej publikacji serwis sprawdza, czy dla danego dokumentu medycznego istnieje już wersja w stanie „publikacja w toku” (np. wersja ze statusem PUBLISHED, dla której w outbox istnieje zdarzenie `GENERATE_PDF` w statusie PENDING lub PROCESSING). W takim przypadku żądanie publikacji zwraca sukces bez tworzenia nowej wersji ani nowych wpisów outbox (idempotentna odpowiedź). Alternatywnie lub uzupełniająco: żądanie może przekazywać klucz idempotentności (np. `publish_request_id` z frontu); serwer traktuje ten sam klucz dla tego samego dokumentu jako powtórzenie i nie tworzy duplikatów.
 
 ID: US-010
 Tytuł: Edycja opublikowanego dokumentu
