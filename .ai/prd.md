@@ -5,11 +5,11 @@
 Cogitomedica Digital Consents to aplikacja internetowa mająca na celu cyfryzację procesu przyjmowania pacjentów, podpisywania zgód oraz dokumentacji medycznej w placówce medycznej. System ma zastąpić obieg papierowy rozwiązaniem tabletowym dla pacjentów oraz panelem zarządzania dla personelu.
 
 Projekt realizowany jest w trzech fazach:
-- Faza 1: Obsługa tabletów, cyfrowe zgody, schemat ciała i podpis elektroniczny pacjenta. Zarządzanie kolejką (Poczekalnia) odbywa się ręcznie lub przez import.
+- Faza 1: Obsługa tabletów, cyfrowe zgody, ankieta anamnestyczna (Anamnesebogen), schemat ciała i podpis elektroniczny pacjenta. Zarządzanie kolejką (Poczekalnia) odbywa się ręcznie lub przez import.
 - Faza 2: Panel lekarza do uzupełniania danych medycznych, zatwierdzanie dokumentów oraz automatyzacja wysyłki (zapis do archiwum i powiadomienie SMS).
 - Faza 3: Usprawnienie procesu codziennego importu plików eksportowanych z Doctolib oraz integracja z API HiDrive (docelowe API archiwizacji).
 
-Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językiem interfejsu dla wszystkich użytkowników jest język niemiecki.
+Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językami interfejsu portalu są angielski i niemiecki (użytkownik może wybrać preferowany język).
 
 ## 2. Problem użytkownika
 
@@ -35,13 +35,15 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 
 ### 3.2. Interfejs Pacjenta (Tablet)
 - Aplikacja dostosowana do obsługi dotykowej na 4 dedykowanych tabletach.
-- Formularz zawiera sekcje: Dane osobowe (tylko do odczytu/weryfikacji), Zgody (checkboxy), Schemat ciała (interaktywne zaznaczanie), Podpis (canvas).
-- Brak możliwości edycji ankiety medycznej przez pacjenta.
-- Interfejs w języku niemieckim.
+- Formularz zawiera sekcje: Dane osobowe (tylko do odczytu/weryfikacji), Ankieta anamnestyczna (Anamnesebogen), Zgody (checkboxy), Schemat ciała (interaktywne zaznaczanie), Podpis (canvas).
+- Pacjent może wypełniać ustrukturyzowaną ankietę anamnestyczną (pytania jednokrotnego wyboru i wielokrotnego wyboru, bez swobodnego opisu medycznego).
+- Dla pytania o lokalizację nowych zmian system wspiera warianty: wybór predefiniowanych obszarów ciała, oznaczenie na schemacie ciała oraz opcjonalne pole "Inna lokalizacja".
+- Interfejs dostępny w języku angielskim lub niemieckim (wybór zgodnie z preferencją użytkownika lub ustawieniem sesji/urządzenia).
 
 ### 3.3. Interfejs Lekarza i Personelu
 - Podgląd uzupełnionych formularzy pacjentów.
 - Formularz medyczny dla lekarza (sztywna struktura pól w kodzie: checkboxy, listy rozwijane, pola tekstowe).
+- **Opis lekarski (Befund) – zasada „baza, nie klatka”:** To, co system przygotowuje (np. teksty z checkboxów), ma być **bazą wyjściową**, a nie jedynym, sztywnym tekstem. Lekarz musi móc dopasować język i styl opisu do siebie. System działa tak, że lekarz wybiera opcje (np. checkboxy), a system generuje z tego gotowy tekst – **który lekarz może i powinien móc edytować przed zatwierdzeniem**. Lekarz ma swobodę dopisywania własnych tekstów (np. własne szablony, wolne pole). Nie zamykamy lekarzy w jednym, sztywnym tekście.
 - Możliwość zapisu dokumentu jako Szkic lub Opublikowany.
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
@@ -74,17 +76,17 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 
 ### W zakresie (In-Scope)
 - Moduł recepcji do zarządzania listą dzienną (CRUD + Import).
-- Aplikacja webowa dla pacjenta (RWD/Tablet) do podpisywania zgód.
+- Aplikacja webowa dla pacjenta (RWD/Tablet) do wypełnienia ankiety anamnestycznej, podpisywania zgód i podpisu elektronicznego.
 - Moduł lekarza do uzupełniania części medycznej.
 - Generowanie plików PDF z podpisem i schematem ciała.
 - Mock i późniejsza integracja z HiDrive.
 - Powiadomienia SMS (link do pobrania).
 - Logowanie zdarzeń (OpenTelemetry).
-- Język interfejsu: Niemiecki.
+- Języki interfejsu: angielski i niemiecki.
 
 ### Poza zakresem (Out-of-Scope)
 - Zaawansowany system wersjonowania treści zgód w panelu administracyjnym (zmiany wymagają ingerencji deweloperskiej/konfiguracyjnej).
-- Wypełnianie ankiety medycznej (wywiadu) przez pacjenta.
+- Swobodny opis medyczny (narracyjny) tworzony przez pacjenta bez struktury pytań.
 - Skomplikowane raportowanie biznesowe (BI).
 - Bezpośrednia integracja API z Doctolib.
 - Integracja z innymi systemami niż HiDrive i SMSApi.
@@ -138,7 +140,7 @@ Opis: Jako pacjent, chcę zapoznać się z treścią zgód i zaakceptować je za
 Kryteria akceptacji:
 - Lista zgód jest wyświetlana czytelnie na tablecie.
 - Wymagane zgody są oznaczone i blokują przejście dalej, jeśli nie są zaznaczone.
-- Interfejs jest w języku niemieckim.
+- Interfejs jest dostępny w języku angielskim lub niemieckim.
 
 ID: US-006
 Tytuł: Oznaczenie schematu ciała
@@ -163,6 +165,8 @@ Opis: Jako lekarz, chcę uzupełnić formularz o dane medyczne (rozpoznanie, pro
 Kryteria akceptacji:
 - Dostęp do formularza pacjenta z widocznymi zgodami i schematem ciała.
 - Sekcja medyczna zawiera zdefiniowane pola (listy, checkboxy, pola tekstowe).
+- **Generowanie tekstu z checkboxów:** Wybór opcji (checkboxy/listy) powoduje wygenerowanie przez system gotowego tekstu opisu (np. Textbausteine); ten wygenerowany tekst jest **edytowalny** – lekarz może go poprawić, skrócić lub rozwinąć przed zatwierdzeniem.
+- **Swoboda dopisywania:** Lekarz może dopisywać własne teksty (pole wolne, własne szablony), a nie tylko wybierać z gotowych opcji. Język i styl opisu zależą od lekarza.
 - Walidacja wymaganych pól medycznych przed publikacją.
 
 ID: US-009
@@ -234,6 +238,17 @@ Kryteria akceptacji:
 - Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
 - Dla danych importowanych kluczem tożsamości pacjenta jest wyłącznie `Doctolib Patient ID`; rekordy ręczne bez tego ID są traktowane jako tymczasowe i wymagają domknięcia alertu administracyjnego.
 
+ID: US-016
+Tytuł: Wypełnienie ankiety anamnestycznej przez pacjenta (DE/EN)
+Opis: Jako pacjent, chcę wypełnić na tablecie ankietę anamnestyczną przed wizytą, aby lekarz otrzymał ustrukturyzowany wywiad.
+Kryteria akceptacji:
+- Ankieta zawiera predefiniowane pytania i odpowiedzi (m.in. `Ja/Nein/Weiß nicht` oraz odpowiedniki EN) mapowane do stabilnych kodów technicznych.
+- Treść pytań i odpowiedzi wyświetla się w języku interfejsu pacjenta (angielski lub niemiecki), bez zmiany modelu danych.
+- Odpowiedzi są zapisywane jako dane ustrukturyzowane (kody pytań/opcji), a nie jako wolny tekst.
+- Dla pytania o lokalizację zmian pacjent może wskazać obszar na schemacie ciała i/lub wybrać predefiniowany region; opcjonalnie może wpisać "inną lokalizację".
+- Walidacja blokuje finalizację formularza, jeśli nie udzielono odpowiedzi na pytania oznaczone jako wymagane.
+- Po finalizacji formularza lekarz widzi odpowiedzi anamnestyczne razem ze zgodami i schematem ciała.
+
 ID: US-018
 Tytuł: Scalanie pacjentów (Merge Temporary to Confirmed)
 Opis: Jako administrator, chcę połączyć rekord pacjenta tymczasowego (bez ID) z rekordem potwierdzonym (z importu), aby przenieść historię zgód i zamknąć alert tożsamości.
@@ -275,10 +290,12 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 
 ## 8. Kontrakt danych JSON i pola krytyczne
 
-- Każdy JSON przechowywany w DB (`body_map_data`, `medical_payload`, `outbox payload`) musi mieć wersję schematu (`schema_version`).
+- Każdy JSON przechowywany w DB (`body_map_data`, `anamnesis_payload`, `medical_payload`, `outbox payload`) musi mieć wersję schematu (`schema_version`).
 - Walidacja JSON odbywa się przy zapisie (Pydantic/JSON Schema) i jest obowiązkowa dla API oraz zadań background.
 - Zmiana kontraktu JSON wymaga:
   - nowej wersji schematu,
   - migracji danych historycznych,
   - testów kompatybilności wstecznej.
 - Dane klinicznie/prawnie krytyczne (np. rozpoznanie/procedura) muszą być zapisane w kolumnach relacyjnych i mogą być duplikowane w JSON tylko pomocniczo.
+- `anamnesis_payload` przechowuje neutralne językowo kody pytań i opcji; lokalizacja DE/EN jest odpowiedzialnością warstwy prezentacji/słowników.
+- **Opis lekarski (Befund):** W `medical_payload` zapisywany jest zarówno wybór strukturyzowany (checkboxy, opcje – do ewentualnego ponownego wygenerowania tekstu), jak i **końcowy tekst opisu po edycji przez lekarza**. Do PDF i archiwum trafia wersja zatwierdzona przez lekarza (po ewentualnych poprawkach wygenerowanego tekstu lub dopisaniach własnych).

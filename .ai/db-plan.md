@@ -132,12 +132,14 @@
 - `queue_entry_id` `uuid` NOT NULL FK -> `queue_entry(id)` ON DELETE CASCADE
 - `tablet_device_id` `uuid` NULL FK -> `tablet_device(id)` ON DELETE SET NULL
 - `token_hash` `char(64)` NOT NULL UNIQUE
+- `form_locale` `varchar(10)` NOT NULL DEFAULT `'de-DE'`
 - `expires_at` `timestamptz` NOT NULL
 - `consumed_at` `timestamptz` NULL
 - `created_by_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (id, queue_entry_id)`
+  - `CHECK (form_locale ~ '^(de|en)(-[A-Z]{2})?$')`
   - `CHECK (expires_at > created_at)`
   - `CHECK (consumed_at IS NULL OR consumed_at <= expires_at)`
 
@@ -157,6 +159,36 @@
   - `UNIQUE (code, version)`
   - `CHECK (effective_to IS NULL OR effective_to >= effective_from)`
 
+#### `anamnesis_question_definition`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `code` `varchar(80)` NOT NULL
+- `version` `integer` NOT NULL DEFAULT `1`
+- `question_text_de` `text` NOT NULL
+- `question_text_en` `text` NOT NULL
+- `answer_type` `varchar(30)` NOT NULL DEFAULT `'SINGLE_CHOICE'`
+- `is_required` `boolean` NOT NULL DEFAULT `true`
+- `display_order` `smallint` NOT NULL DEFAULT `0`
+- `is_active` `boolean` NOT NULL DEFAULT `true`
+- `effective_from` `date` NOT NULL DEFAULT `current_date`
+- `effective_to` `date` NULL
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (code, version)`
+  - `CHECK (answer_type IN ('SINGLE_CHOICE','MULTI_CHOICE','BOOLEAN','TEXT_OPTIONAL'))`
+  - `CHECK (effective_to IS NULL OR effective_to >= effective_from)`
+
+#### `anamnesis_option_definition`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `question_id` `uuid` NOT NULL FK -> `anamnesis_question_definition(id)` ON DELETE CASCADE
+- `code` `varchar(80)` NOT NULL
+- `option_text_de` `text` NOT NULL
+- `option_text_en` `text` NOT NULL
+- `display_order` `smallint` NOT NULL DEFAULT `0`
+- `is_active` `boolean` NOT NULL DEFAULT `true`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (question_id, code)`
+
 #### `patient_intake_form`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `queue_entry_id` `uuid` NOT NULL UNIQUE FK -> `queue_entry(id)` ON DELETE CASCADE
@@ -164,6 +196,8 @@
 - `form_status` `intake_status_enum` NOT NULL DEFAULT `'IN_PROGRESS'`
 - `body_map_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `body_map_data` `jsonb` NOT NULL DEFAULT `'[]'::jsonb`
+- `anamnesis_schema_version` `smallint` NOT NULL DEFAULT `1`
+- `anamnesis_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
 - `signature_file_path` `varchar(500)` NULL
 - `signature_sha256` `char(64)` NULL
 - `submitted_at` `timestamptz` NULL
@@ -173,6 +207,7 @@
   - `UNIQUE (id, queue_entry_id)`
   - `FK (session_id, queue_entry_id) -> patient_form_session(id, queue_entry_id) ON DELETE RESTRICT`
   - `CHECK (jsonb_typeof(body_map_data) = 'array')`
+  - `CHECK (jsonb_typeof(anamnesis_payload) = 'object')`
   - `CHECK ((form_status <> 'SUBMITTED') OR (submitted_at IS NOT NULL AND signature_file_path IS NOT NULL))`
 
 #### `patient_intake_consent`
@@ -310,6 +345,8 @@
 - `queue_entry.active_session_id` wskazuje aktualnie obowiązującą sesję w modelu `latest-wins`.
 - `queue_entry` 1:1 `patient_intake_form` (jeden formularz pacjenta na wpis kolejki).
 - `patient_intake_form` N:M `consent_definition` przez `patient_intake_consent`.
+- `anamnesis_question_definition` 1:N `anamnesis_option_definition` (słownik pytań i opcji DE/EN).
+- `patient_intake_form` przechowuje `anamnesis_payload` (odpowiedzi pacjenta kodami pytań/opcji, niezależnie od języka UI).
 - `queue_entry` 1:1 `medical_document` (jeden dokument medyczny dla jednego przebiegu wizyty).
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
 - `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
@@ -335,7 +372,10 @@
 - `patient_form_session(token_hash)` UNIQUE
 - `patient_form_session(queue_entry_id, consumed_at)`
 - `patient_form_session(queue_entry_id, created_at DESC)`
+- `patient_form_session(form_locale, created_at DESC)`
 - `consent_definition(code, is_active, effective_from DESC)`
+- `anamnesis_question_definition(code, is_active, effective_from DESC)`
+- `anamnesis_option_definition(question_id, is_active, display_order)`
 - `patient_intake_form(form_status, submitted_at)`
 - `patient_intake_consent(intake_form_id, accepted)`
 - `medical_document(status, updated_at DESC)`
@@ -360,6 +400,7 @@
 
 ### 3.3. Indeksy GIN dla JSONB
 - `patient_intake_form` -> `GIN (body_map_data jsonb_path_ops)`
+- `patient_intake_form` -> `GIN (anamnesis_payload jsonb_path_ops)`
 - `medical_document_version` -> `GIN (medical_payload jsonb_path_ops)`
 - `outbox_event` -> `GIN (payload jsonb_path_ops)`
 - `audit_event` -> `GIN (metadata jsonb_path_ops)`
@@ -397,6 +438,9 @@
 - Walidacja wymaganych zgód przed `SUBMITTED`:
   - wykonywana w serwisie domenowym `submit_patient_intake_form()` wewnątrz transakcji,
   - brak przejścia stanu, jeśli niezaakceptowano wszystkich aktywnych zgód wymaganych.
+- Walidacja wymaganych pytań anamnestycznych przed `SUBMITTED`:
+  - wykonywana w tym samym serwisie `submit_patient_intake_form()` wewnątrz tej samej transakcji,
+  - brak przejścia stanu, jeśli brak odpowiedzi dla pytań `is_required=true` aktywnych dla danej wersji ankiety.
 - Publikacja wersji dokumentu:
   - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
   - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`,
@@ -423,6 +467,7 @@
 
 - Model jest znormalizowany do 3NF; celowa denormalizacja jest ograniczona do pól JSONB:
   - `body_map_data` (koordynaty znaczników),
+  - `anamnesis_payload` (odpowiedzi pacjenta mapowane przez stabilne kody pytań/opcji, niezależne od lokalizacji DE/EN),
   - `medical_payload` (sztywna struktura formularza medycznego w kodzie, ale elastyczne przechowanie),
   - `payload` outbox.
 - JSONB jest wersjonowany (`*_schema_version`) i walidowany kontraktem aplikacyjnym; każda zmiana kontraktu wymaga migracji danych historycznych.
@@ -436,3 +481,4 @@
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
+- **Języki portalu:** interfejs jest dostępny w języku angielskim i niemieckim. Pole `staff_user.preferred_locale` (np. `en-GB`, `de-DE`) określa preferowany język panelu personelu; dla tabletu pacjenta język może być przekazany w linku lub wybrany w aplikacji.

@@ -2,6 +2,7 @@
 
 ## 0. Założenia
 - Bazowa ścieżka API to `/api/v1`.
+- **Języki portalu:** interfejs użytkownika (panel personelu i tablet pacjenta) jest dostępny w języku **angielskim** i **niemieckim**. Użytkownik personelu ma pole `preferred_locale` (np. `en-GB`, `de-DE`); dla tabletu pacjenta język może wynikać z parametru w linku, nagłówka Accept-Language lub domyślnego ustawienia placówki.
 - Komunikacja tylko przez HTTPS.
 - Domyślny format payloadu to JSON (`application/json`), z wyjątkiem endpointów uploadu plików (`multipart/form-data`).
 - Uwierzytelnianie: sesja dla panelu personelu (cookie Django + CSRF) oraz token bearer dla linków pacjenta/tabletu.
@@ -24,6 +25,7 @@
 - `tablet-devices` -> `tablet_device`
 - `patient-sessions` -> `patient_form_session` (cykl życia tokenu jednorazowego, latest-wins)
 - `consent-definitions` -> `consent_definition`
+- `anamnesis-definitions` -> `anamnesis_question_definition`, `anamnesis_option_definition`
 - `intake-forms` -> `patient_intake_form`
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
@@ -419,7 +421,8 @@
     ```json
     {
       "tablet_device_id": "uuid",
-      "ttl_minutes": 30
+      "ttl_minutes": 30,
+      "form_locale": "de-DE"
     }
     ```
   - Response JSON:
@@ -448,6 +451,7 @@
       "valid": true,
       "session_id": "uuid",
       "queue_entry_id": "uuid",
+      "form_locale": "de-DE",
       "patient_snapshot": {
         "first_name": "Jan",
         "last_name": "Kowalski",
@@ -491,6 +495,39 @@
   - Kody sukcesu: `201 CREATED`, `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `409 DUPLICATE_CODE_VERSION`, `403 FORBIDDEN`.
 
+### 2.8a Definicje pytań anamnestycznych (słownik Admin)
+
+- **GET** `/anamnesis-definitions`
+  - Opis: Lista pytań anamnestycznych i opcji odpowiedzi (DE/EN) aktywnych dla daty.
+  - Parametry zapytania: `is_active`, `effective_on`, `locale` (`de-DE`|`en-GB`|`en-US`), `code`.
+  - Request JSON: brak.
+  - Response JSON:
+    ```json
+    {
+      "schema_version": 1,
+      "items": [
+        {
+          "question_code": "Q1_MALIGNANT_MELANOMA_HISTORY",
+          "question_text": "Wurde bei Ihnen jemals ein malignes Melanom diagnostiziert?",
+          "answer_type": "SINGLE_CHOICE",
+          "is_required": true,
+          "options": [
+            {"option_code": "NO", "label": "Nein"},
+            {"option_code": "YES", "label": "Ja"}
+          ]
+        }
+      ]
+    }
+    ```
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `403 FORBIDDEN`.
+
+- **POST** `/anamnesis-definitions`
+- **GET/PATCH/DELETE** `/anamnesis-definitions/{id}`
+  - Opis: CRUD definicji pytań i opcji anamnestycznych.
+  - Kody sukcesu: `201 CREATED`, `200 OK`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `409 DUPLICATE_CODE_VERSION`, `403 FORBIDDEN`.
+
 ### 2.9 Formularze intake i zgody (Tablet)
 
 - **GET** `/intake-forms/by-session/{session_id}`
@@ -503,6 +540,21 @@
       "intake_form_id": "uuid",
       "queue_entry_id": "uuid",
       "form_status": "IN_PROGRESS",
+      "form_locale": "de-DE",
+      "anamnesis_schema_version": 1,
+      "anamnesis_questions": [
+        {
+          "question_code": "Q1_MALIGNANT_MELANOMA_HISTORY",
+          "question_text": "Wurde bei Ihnen jemals ein malignes Melanom diagnostiziert?",
+          "answer_type": "SINGLE_CHOICE",
+          "is_required": true,
+          "options": [
+            {"option_code": "NO", "label": "Nein"},
+            {"option_code": "YES", "label": "Ja"}
+          ],
+          "answer": {"selected_option_codes": []}
+        }
+      ],
       "body_map_schema_version": 1,
       "body_map_data": [],
       "consents": [
@@ -559,6 +611,36 @@
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`.
 
+- **PUT** `/intake-forms/{id}/anamnesis`
+  - Opis: Podmienia odpowiedzi ankiety anamnestycznej dla formularza intake.
+  - Parametry zapytania: brak.
+  - Request JSON:
+    ```json
+    {
+      "anamnesis_schema_version": 1,
+      "answers": [
+        {"question_code": "Q1_MALIGNANT_MELANOMA_HISTORY", "selected_option_codes": ["NO"]},
+        {"question_code": "Q3_FAMILY_MELANOMA", "selected_option_codes": ["UNKNOWN"]},
+        {
+          "question_code": "Q4_NEW_SKIN_CHANGES_LOCATION",
+          "selected_option_codes": ["YES", "LOWER_BACK"],
+          "free_text": "other location description",
+          "body_map_points": [{"x": 0.42, "y": 0.31, "side": "front"}]
+        }
+      ]
+    }
+    ```
+  - Response JSON:
+    ```json
+    {
+      "intake_form_id": "uuid",
+      "anamnesis_schema_version": 1,
+      "answers_saved": true
+    }
+    ```
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409 FORM_ALREADY_SUBMITTED`.
+
 - **POST** `/intake-forms/{id}/signature`
   - Opis: Upload podpisu pacjenta.
   - Parametry zapytania: brak.
@@ -597,7 +679,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 SIGNATURE_REQUIRED`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
 
 ### 2.10 Dokumenty medyczne i workflow lekarza
 

@@ -29,7 +29,7 @@
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed by cron workers via Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
 
-The user interface is in **German**.
+The user interface is available in **English** and **German**.
 
 ---
 
@@ -169,7 +169,7 @@ Publishing is designed to be idempotent: repeated "publish/send" actions for the
 - SMS notifications (link to download document)
 - Logging (e.g. OpenTelemetry as per PRD)
 - Operational dashboards: simplified reception/doctor view + advanced admin/maintenance view
-- UI language: German
+- UI languages: English and German
 
 ### Out of scope
 
