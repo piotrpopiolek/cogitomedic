@@ -30,6 +30,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
+- `doctor-text-templates` -> `doctor_text_template`
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
 - `audit-events` -> `audit_event`
@@ -703,13 +704,20 @@
       "current_version_no": 2,
       "intake_summary": {
         "consents": [{"code": "PRIVACY", "accepted": true}],
-        "body_map_data": []
+        "body_map_data": [],
+        "anamnesis_answers": [
+          {"question_code": "Q1_MALIGNANT_MELANOMA_HISTORY", "selected_option_codes": ["NO"]}
+        ]
       },
       "current_version": {
         "version_no": 2,
         "version_status": "DRAFT",
         "medical_payload_schema_version": 1,
-        "medical_payload": {},
+        "medical_payload": {
+          "authoring_locale": "de-DE",
+          "fitzpatrick_type": "TYPE_III",
+          "lesions": []
+        },
         "diagnosis_code": null,
         "procedure_code": null
       }
@@ -737,8 +745,29 @@
     {
       "medical_payload_schema_version": 1,
       "medical_payload": {
-        "symptoms": ["pain"],
-        "notes": "Clinical observation"
+        "authoring_locale": "de-DE",
+        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+        "fitzpatrick_type": "TYPE_III",
+        "overall_image_assessment": "CONTROL_NEEDED",
+        "lesions": [
+          {
+            "lesion_no": 8,
+            "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
+            "clinical_assessment": "CONTROL_NEEDED",
+            "malignancy_risk": "NO_SUSPICION",
+            "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
+            "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+          }
+        ],
+        "recommendations": ["FOLLOWUP_3_MONTHS"],
+        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+        "summary_generated_text": "Bei der Analyse ...",
+        "summary_edited_text": "Bei der Analyse ...",
+        "template_context": {
+          "template_id": "uuid",
+          "template_name": "Dr. Meyer Default",
+          "template_locale": "de-DE"
+        }
       },
       "diagnosis_code": "M54.5",
       "procedure_code": "PROC-001"
@@ -747,6 +776,45 @@
   - Response JSON: latest draft version.
   - Success: `200 OK`.
   - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`.
+
+- **POST** `/medical-documents/{id}/generate-text`
+  - Description: Generate base Befund texts from selected options (per lesion + global summary), without publishing.
+  - Request JSON:
+    ```json
+    {
+      "medical_payload_schema_version": 1,
+      "authoring_locale": "de-DE",
+      "template_id": "uuid-optional",
+      "medical_payload": {
+        "fitzpatrick_type": "TYPE_III",
+        "lesions": [
+          {
+            "lesion_no": 8,
+            "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
+            "clinical_assessment": "CONTROL_NEEDED",
+            "malignancy_risk": "NO_SUSPICION"
+          }
+        ],
+        "recommendations": ["FOLLOWUP_3_MONTHS"],
+        "final_assessment": "NO_HIGH_GRADE_SUSPICION"
+      }
+    }
+    ```
+  - Response JSON:
+    ```json
+    {
+      "generated": true,
+      "lesions": [
+        {
+          "lesion_no": 8,
+          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+        }
+      ],
+      "summary_generated_text": "Bei der Analyse der digitalen dermatoskopischen Aufnahmen ..."
+    }
+    ```
+  - Success: `200 OK`.
+  - Errors: `400 INVALID_MEDICAL_SELECTIONS`, `404 DOCUMENT_NOT_FOUND`.
 
 - **POST** `/medical-documents/{id}/publish`
   - Description: Publish document version and enqueue outbox chain idempotently (US-009/010).
@@ -773,6 +841,30 @@
     ```
   - Success: `200 OK`.
   - Errors: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
+
+### 2.10a Doctor text templates
+
+- **GET** `/doctor-text-templates`
+  - Description: List text templates available to the doctor (global + private).
+  - Query params: `template_locale`, `scope` (`global|private|all`), `is_active`.
+  - Success: `200 OK`.
+  - Errors: `403 FORBIDDEN`.
+
+- **POST** `/doctor-text-templates`
+- **GET/PATCH/DELETE** `/doctor-text-templates/{id}`
+  - Description: CRUD for doctor text templates.
+  - Request JSON (create):
+    ```json
+    {
+      "name": "Dr. Meyer Default",
+      "template_locale": "de-DE",
+      "template_body": "Läsion {{lesion_no}} zeigt ...",
+      "is_global": false,
+      "is_active": true
+    }
+    ```
+  - Success: `201 CREATED`, `200 OK`.
+  - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
 
 - **GET** `/medical-documents/{id}/versions`
   - Description: Version history.
@@ -1085,6 +1177,8 @@
 
 - Doctor workflow:
   - Draft save updates/creates latest draft version.
+  - `generate-text` builds base Befund text blocks (`generated_text`) from selected features/assessments and optional doctor template.
+  - Doctor persists both generated text and final edited text (`edited_text`) in `medical_payload`.
   - Publish uses row lock on `medical_document` and idempotency checks:
     - same `publish_request_id` returns success replay;
     - publication already in progress returns idempotent success (no duplicate outbox chain).
@@ -1106,4 +1200,66 @@
 - Operational visibility:
   - API exposes health/metrics and outbox/import inspection endpoints.
   - Required PRD metrics are exported (`pending_count`, `failed_count`, `dead_letter_count`, `oldest_pending_age_seconds`, p95/p99 latencies, provider success ratios, import error rates).
+
+### 4.3 `anamnesis_payload` v1 contract (Q1–Q11)
+
+- API reads/writes anamnesis using stable codes only (`question_code`, `option_code`), independent of DE/EN UI wording.
+- Localization (`question_text`, `option label`) is resolved from `form_locale` and `anamnesis-definitions`.
+
+Minimal `PUT /intake-forms/{id}/anamnesis` request:
+
+```json
+{
+  "anamnesis_schema_version": 1,
+  "answers": [
+    {"question_code": "Q1_MALIGNANT_MELANOMA_HISTORY", "selected_option_codes": ["NO"]},
+    {"question_code": "Q3_FAMILY_MELANOMA_FIRST_DEGREE", "selected_option_codes": ["UNKNOWN"]},
+    {
+      "question_code": "Q4B_NEW_SKIN_CHANGES_LOCATION",
+      "selected_option_codes": ["LOWER_BACK", "OTHER_LOCATION"],
+      "free_text": "right shoulder blade",
+      "body_map_points": [{"x": 0.45, "y": 0.34, "side": "back"}]
+    }
+  ]
+}
+```
+
+Option code mapping for Q1–Q11:
+- `NO`, `YES`, `UNKNOWN` (binary and tri-state questions),
+- `LOWER_BACK`, `THORACIC_SPINE`, `ABDOMEN`, `OTHER_LOCATION` (lesion location).
+
+### 4.4 `medical_payload` v1 contract (Doctor Befund)
+
+- `medical_payload` stores both structured and narrative outputs:
+  - global selections (`fitzpatrick_type`, `overall_image_assessment`, `recommendations`, `final_assessment`),
+  - per-lesion selections (`lesions[]`),
+  - generated and final text (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`).
+- Text persistence is language-agnostic; `authoring_locale` records the doctor's working language.
+
+Minimal example:
+
+```json
+{
+  "medical_payload_schema_version": 1,
+  "medical_payload": {
+    "authoring_locale": "de-DE",
+    "fitzpatrick_type": "TYPE_III",
+    "overall_image_assessment": "CONTROL_NEEDED",
+    "lesions": [
+      {
+        "lesion_no": 8,
+        "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
+        "clinical_assessment": "CONTROL_NEEDED",
+        "malignancy_risk": "NO_SUSPICION",
+        "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
+        "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+      }
+    ],
+    "recommendations": ["FOLLOWUP_3_MONTHS"],
+    "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+    "summary_generated_text": "Bei der Analyse ...",
+    "summary_edited_text": "Bei der Analyse ..."
+  }
+}
+```
 

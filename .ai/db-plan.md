@@ -271,6 +271,21 @@
   - `CHECK ((sms_sent = false) OR sms_sent_at IS NOT NULL)`
   - `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))`
 
+#### `doctor_text_template`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `owner_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE CASCADE
+- `name` `varchar(120)` NOT NULL
+- `template_locale` `varchar(10)` NOT NULL DEFAULT `'de-DE'`
+- `template_body` `text` NOT NULL
+- `is_global` `boolean` NOT NULL DEFAULT `false`
+- `is_active` `boolean` NOT NULL DEFAULT `true`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `CHECK (template_locale ~ '^(de|en)(-[A-Z]{2})?$')`
+  - `CHECK ((is_global = true AND owner_user_id IS NULL) OR (is_global = false AND owner_user_id IS NOT NULL))`
+  - `UNIQUE (owner_user_id, name, template_locale)`
+
 #### `outbox_event`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `medical_document_version_id` `uuid` NOT NULL FK -> `medical_document_version(id)` ON DELETE CASCADE
@@ -351,11 +366,13 @@
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
 - `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
 - `medical_document_version` 1:N `outbox_event` (relacja egzekwowana FK `outbox_event.medical_document_version_id`; np. `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
+- `staff_user` 1:N `doctor_text_template` (szablony prywatne lekarza); szablony globalne mają `owner_user_id=NULL`.
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
   - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
   - `staff_user.role='DOCTOR'` edytuje `medical_document` i publikuje `medical_document_version`.
+  - `staff_user.role='DOCTOR'` może zarządzać własnymi `doctor_text_template`.
   - `staff_user.role='ADMIN'` zarządza słownikami (`consent_definition`) i użytkownikami.
 
 ## 3. Indeksy
@@ -382,6 +399,8 @@
 - `medical_document_version(medical_document_id, version_no DESC)` UNIQUE
 - `medical_document_version(version_status, published_at DESC)`
 - `medical_document_version(hidrive_sent, sms_sent, published_at)` (retencja + monitoring)
+- `doctor_text_template(owner_user_id, template_locale, is_active)`
+- `doctor_text_template(is_global, template_locale, is_active)`
 - `outbox_event(status, available_at)`
 - `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(medical_document_version_id, created_at DESC)`
@@ -482,3 +501,125 @@
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
 - **Języki portalu:** interfejs jest dostępny w języku angielskim i niemieckim. Pole `staff_user.preferred_locale` (np. `en-GB`, `de-DE`) określa preferowany język panelu personelu; dla tabletu pacjenta język może być przekazany w linku lub wybrany w aplikacji.
+
+### 5.1. Kontrakt `anamnesis_payload` v1 (Anamnesebogen Q1–Q11)
+
+#### Kody pytań (językowo neutralne)
+- `Q1_MALIGNANT_MELANOMA_HISTORY` (NO/YES)
+- `Q2_WHITE_SKIN_CANCER_HISTORY` (NO/YES)
+- `Q3_FAMILY_MELANOMA_FIRST_DEGREE` (NO/YES/UNKNOWN)
+- `Q4_NEW_SKIN_CHANGES_PRESENT` (NO/YES)
+- `Q4B_NEW_SKIN_CHANGES_LOCATION` (MULTI: `LOWER_BACK`, `THORACIC_SPINE`, `ABDOMEN`, `OTHER_LOCATION`)
+- `Q5_EXISTING_CHANGES_EVOLUTION` (NO/YES)
+- `Q6_SEVERE_SUNBURNS_CHILDHOOD` (NO/YES)
+- `Q7_OCCUPATIONAL_SUN_EXPOSURE` (NO/YES)
+- `Q8_PRIVATE_SUN_EXPOSURE` (NO/YES)
+- `Q9_SOLARIUM_USAGE` (NO/YES)
+- `Q10_IMMUNOSUPPRESSIVE_MEDICATION` (NO/YES)
+- `Q11_HYDROCHLOROTHIAZIDE_USAGE` (NO/YES/UNKNOWN)
+
+#### Struktura JSON (v1)
+- `schema_version` — wersja kontraktu payloadu.
+- `answered_at` — znacznik czasu ISO8601.
+- `answers[]` — lista odpowiedzi mapowanych kodami pytań/opcji.
+- `body_map_points[]` — opcjonalne punkty dla lokalizacji zmian (Q4/Q4B), kompatybilne z `body_map_data`.
+- `free_text` — opcjonalne doprecyzowanie dla `OTHER_LOCATION`.
+
+Przykład:
+
+```json
+{
+  "schema_version": 1,
+  "answered_at": "2026-02-16T10:02:33Z",
+  "answers": [
+    {"question_code": "Q1_MALIGNANT_MELANOMA_HISTORY", "selected_option_codes": ["NO"]},
+    {"question_code": "Q2_WHITE_SKIN_CANCER_HISTORY", "selected_option_codes": ["YES"]},
+    {"question_code": "Q3_FAMILY_MELANOMA_FIRST_DEGREE", "selected_option_codes": ["UNKNOWN"]},
+    {"question_code": "Q4_NEW_SKIN_CHANGES_PRESENT", "selected_option_codes": ["YES"]},
+    {
+      "question_code": "Q4B_NEW_SKIN_CHANGES_LOCATION",
+      "selected_option_codes": ["LOWER_BACK", "OTHER_LOCATION"],
+      "free_text": "right shoulder blade",
+      "body_map_points": [
+        {"x": 0.45, "y": 0.34, "side": "back", "label": "new_lesion"}
+      ]
+    },
+    {"question_code": "Q5_EXISTING_CHANGES_EVOLUTION", "selected_option_codes": ["NO"]},
+    {"question_code": "Q6_SEVERE_SUNBURNS_CHILDHOOD", "selected_option_codes": ["YES"]},
+    {"question_code": "Q7_OCCUPATIONAL_SUN_EXPOSURE", "selected_option_codes": ["NO"]},
+    {"question_code": "Q8_PRIVATE_SUN_EXPOSURE", "selected_option_codes": ["YES"]},
+    {"question_code": "Q9_SOLARIUM_USAGE", "selected_option_codes": ["NO"]},
+    {"question_code": "Q10_IMMUNOSUPPRESSIVE_MEDICATION", "selected_option_codes": ["NO"]},
+    {"question_code": "Q11_HYDROCHLOROTHIAZIDE_USAGE", "selected_option_codes": ["UNKNOWN"]}
+  ]
+}
+```
+
+#### Reguły walidacyjne v1
+- Dla pytań `NO/YES`: dokładnie jedna opcja.
+- Dla pytań `NO/YES/UNKNOWN`: dokładnie jedna opcja.
+- Dla `Q4B_NEW_SKIN_CHANGES_LOCATION`:
+  - dozwolone wielokrotne opcje,
+  - jeśli wybrano `OTHER_LOCATION`, `free_text` powinno być niepuste,
+  - `body_map_points` jest opcjonalne, ale rekomendowane przy `Q4_NEW_SKIN_CHANGES_PRESENT=YES`.
+- Wartości DE/EN nie są zapisywane w payloadzie; zapisujemy wyłącznie kody.
+
+### 5.2. Kontrakt `medical_payload` v1 (Befund lekarza)
+
+#### Struktura logiczna
+- `schema_version`
+- `authoring_locale` (`de-DE`/`en-*`)
+- `examination_scope[]` (np. `INTIMATE_AREA_NOT_EXAMINED`, `ORAL_MUCOSA_NOT_EXAMINED`)
+- `fitzpatrick_type` (np. `TYPE_I`, `TYPE_II`, ..., `TYPE_VI`, `TYPE_II_III`, `UNDETERMINED`)
+- `overall_image_assessment` (`NO_CONTROL_NEEDED` | `CONTROL_NEEDED`)
+- `lesions[]` (lista zmian 1..N)
+- `recommendations[]`
+- `final_assessment`
+- `summary_generated_text`, `summary_edited_text`
+- `template_context` (np. `template_id`, `template_name`, `template_locale`)
+
+#### Struktura `lesions[]`
+Każdy element:
+- `lesion_no` (int)
+- `dermatoscopic_features[]` (np. `ASYMMETRY`, `IRREGULAR_BORDER`, `MULTICOLOR`)
+- `clinical_assessment` (`UNREMARKABLE`, `SLIGHTLY_ATYPICAL`, `CONTROL_NEEDED`, `SUSPICIOUS`)
+- `malignancy_risk` (`NO_SUSPICION`, `LOW_SUSPICION`, `CANNOT_EXCLUDE`)
+- `generated_text`
+- `edited_text`
+
+Przykład:
+
+```json
+{
+  "schema_version": 1,
+  "authoring_locale": "de-DE",
+  "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+  "fitzpatrick_type": "TYPE_III",
+  "overall_image_assessment": "CONTROL_NEEDED",
+  "lesions": [
+    {
+      "lesion_no": 8,
+      "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
+      "clinical_assessment": "CONTROL_NEEDED",
+      "malignancy_risk": "NO_SUSPICION",
+      "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
+      "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+    }
+  ],
+  "recommendations": ["FOLLOWUP_3_MONTHS"],
+  "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+  "summary_generated_text": "Bei der Analyse ...",
+  "summary_edited_text": "Bei der Analyse ...",
+  "template_context": {
+    "template_id": "uuid",
+    "template_name": "Dr. Meyer Default",
+    "template_locale": "de-DE"
+  }
+}
+```
+
+#### Reguły walidacyjne v1
+- `lesions[]` może być puste tylko gdy `overall_image_assessment=NO_CONTROL_NEEDED`.
+- Dla każdej zmiany wymagane są: `lesion_no`, `clinical_assessment`, `malignancy_risk`.
+- `summary_edited_text` jest opcjonalne, ale jeśli puste, do PDF trafia `summary_generated_text`.
+- Do PDF trafia zawsze tekst końcowy (`edited_text` jeśli istnieje, inaczej `generated_text`).

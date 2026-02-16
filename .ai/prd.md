@@ -44,6 +44,8 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Podgląd uzupełnionych formularzy pacjentów.
 - Formularz medyczny dla lekarza (sztywna struktura pól w kodzie: checkboxy, listy rozwijane, pola tekstowe).
 - **Opis lekarski (Befund) – zasada „baza, nie klatka”:** To, co system przygotowuje (np. teksty z checkboxów), ma być **bazą wyjściową**, a nie jedynym, sztywnym tekstem. Lekarz musi móc dopasować język i styl opisu do siebie. System działa tak, że lekarz wybiera opcje (np. checkboxy), a system generuje z tego gotowy tekst – **który lekarz może i powinien móc edytować przed zatwierdzeniem**. Lekarz ma swobodę dopisywania własnych tekstów (np. własne szablony, wolne pole). Nie zamykamy lekarzy w jednym, sztywnym tekście.
+- Struktura Befund obejmuje co najmniej: zakres badania, typ skóry Fitzpatrick, ocenę globalną, listę zmian (Läsionen), cechy dermatoskopowe per zmiana, ocenę kliniczno-dermatoskopową per zmiana, ocenę ryzyka złośliwości per zmiana, rekomendacje oraz końcową ocenę lekarską.
+- System generuje tekst automatycznie na dwóch poziomach: (1) tekst per zmiana, (2) podsumowanie zbiorcze; oba teksty są edytowalne przed publikacją.
 - Możliwość zapisu dokumentu jako Szkic lub Opublikowany.
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
@@ -165,7 +167,9 @@ Opis: Jako lekarz, chcę uzupełnić formularz o dane medyczne (rozpoznanie, pro
 Kryteria akceptacji:
 - Dostęp do formularza pacjenta z widocznymi zgodami i schematem ciała.
 - Sekcja medyczna zawiera zdefiniowane pola (listy, checkboxy, pola tekstowe).
+- Sekcja medyczna obsługuje model zmian skórnych (lista zmian 1..N) i dane per zmiana: cechy dermatoskopowe, ocena kliniczna oraz ryzyko złośliwości.
 - **Generowanie tekstu z checkboxów:** Wybór opcji (checkboxy/listy) powoduje wygenerowanie przez system gotowego tekstu opisu (np. Textbausteine); ten wygenerowany tekst jest **edytowalny** – lekarz może go poprawić, skrócić lub rozwinąć przed zatwierdzeniem.
+- **Generowanie zbiorcze:** Po opisie poszczególnych zmian system generuje podsumowanie globalne Befund (edytowalne).
 - **Swoboda dopisywania:** Lekarz może dopisywać własne teksty (pole wolne, własne szablony), a nie tylko wybierać z gotowych opcji. Język i styl opisu zależą od lekarza.
 - Walidacja wymaganych pól medycznych przed publikacją.
 
@@ -188,6 +192,16 @@ Kryteria akceptacji:
 - Ponowne zatwierdzenie tworzy nową wersję PDF.
 - Nowa wersja nadpisuje plik w HiDrive (zachowanie tej samej ścieżki/nazwy).
 - System pozwala zdecydować, czy ponownie wysłać SMS do pacjenta.
+
+ID: US-019
+Tytuł: Własne szablony tekstu lekarza (DE/EN)
+Opis: Jako lekarz, chcę tworzyć i używać własnych szablonów opisu, aby zachować swój styl dokumentacji.
+Kryteria akceptacji:
+- Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (co najmniej dla języka niemieckiego i angielskiego).
+- Przy generowaniu tekstu z checkboxów lekarz może wskazać szablon bazowy.
+- System zapisuje zarówno tekst wygenerowany automatycznie, jak i tekst końcowy po edycji lekarza.
+- Zmiana szablonu po publikacji nie modyfikuje historycznych wersji dokumentu.
+- Szablony globalne (kliniki) i prywatne (per lekarz) są rozróżnione w uprawnieniach.
 
 ### System i Backend
 ID: US-011
@@ -299,3 +313,4 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 - Dane klinicznie/prawnie krytyczne (np. rozpoznanie/procedura) muszą być zapisane w kolumnach relacyjnych i mogą być duplikowane w JSON tylko pomocniczo.
 - `anamnesis_payload` przechowuje neutralne językowo kody pytań i opcji; lokalizacja DE/EN jest odpowiedzialnością warstwy prezentacji/słowników.
 - **Opis lekarski (Befund):** W `medical_payload` zapisywany jest zarówno wybór strukturyzowany (checkboxy, opcje – do ewentualnego ponownego wygenerowania tekstu), jak i **końcowy tekst opisu po edycji przez lekarza**. Do PDF i archiwum trafia wersja zatwierdzona przez lekarza (po ewentualnych poprawkach wygenerowanego tekstu lub dopisaniach własnych).
+- `medical_payload` dla Befund v1 zawiera część globalną i per-zmiana (`lesions[]`) oraz pary pól `generated_text` / `edited_text` (per zmiana i dla podsumowania globalnego).
