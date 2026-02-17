@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 from django.test import Client, TestCase
@@ -138,3 +139,45 @@ class OutboxApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         event.refresh_from_db()
         self.assertEqual(event.status, OutboxStatus.PENDING)
+
+    def test_operations_retention_run_endpoint_dry_run_and_execute(self) -> None:
+        temp_pdf = Path("/tmp/retention-test.pdf")
+        temp_pdf.parent.mkdir(parents=True, exist_ok=True)
+        temp_pdf.write_text("pdf")
+
+        self.published_version.hidrive_sent = True
+        self.published_version.sms_sent = True
+        self.published_version.hidrive_sent_at = timezone.now() - timedelta(days=31)
+        self.published_version.sms_sent_at = timezone.now() - timedelta(days=31)
+        self.published_version.published_at = timezone.now() - timedelta(days=31)
+        self.published_version.pdf_local_path = str(temp_pdf)
+        self.published_version.save(
+            update_fields=[
+                "hidrive_sent",
+                "sms_sent",
+                "hidrive_sent_at",
+                "sms_sent_at",
+                "published_at",
+                "pdf_local_path",
+            ]
+        )
+
+        dry_run_response = self.client.post(
+            "/api/v1/operations/retention/run",
+            data=json.dumps({"dry_run": True, "older_than_days": 30}),
+            content_type="application/json",
+        )
+        self.assertEqual(dry_run_response.status_code, 202)
+        self.assertEqual(dry_run_response.json()["deleted"], 0)
+
+        execute_response = self.client.post(
+            "/api/v1/operations/retention/run",
+            data=json.dumps({"dry_run": False, "older_than_days": 30}),
+            content_type="application/json",
+        )
+        self.assertEqual(execute_response.status_code, 202)
+        self.assertGreaterEqual(execute_response.json()["deleted"], 1)
+
+        self.published_version.refresh_from_db()
+        self.assertIsNotNone(self.published_version.local_pdf_deleted_at)
+        self.assertIsNone(self.published_version.pdf_local_path)
