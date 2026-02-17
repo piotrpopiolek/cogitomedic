@@ -45,7 +45,8 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+# Domyślnie w dev: localhost + * (dostęp z tabletu/innych urządzeń w sieci po IP)
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*").split(",") if h.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

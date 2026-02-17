@@ -27,8 +27,9 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
+    # 0.0.0.0 = nasłuch na wszystkich interfejsach (dostęp z tabletu po IP)
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     volumes:
       - .:/app
     depends_on:

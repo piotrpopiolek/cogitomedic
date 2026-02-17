@@ -7,25 +7,22 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
+from apps.core.api_utils import json_error
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
 from apps.intake.services import save_intake_anamnesis_payload, submit_patient_intake_form
 
 
-def _json_error(message: str, *, status: int) -> JsonResponse:
-    return JsonResponse({"error": message}, status=status)
-
-
 @csrf_exempt
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     if request.method != "PUT":
-        return _json_error("Method not allowed.", status=405)
+        return json_error("Method not allowed.", status=405)
 
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
         body = UpdateAnamnesisPayloadRequest.model_validate(payload)
     except json.JSONDecodeError:
-        return _json_error("Invalid JSON payload.", status=400)
+        return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -36,7 +33,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
             answers_payload=[answer.model_dump() for answer in body.answers],
         )
     except StateTransitionError as exc:
-        return _json_error(str(exc), status=409)
+        return json_error(str(exc), status=409)
 
     return JsonResponse(
         {
@@ -51,13 +48,13 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
 @csrf_exempt
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     if request.method != "POST":
-        return _json_error("Method not allowed.", status=405)
+        return json_error("Method not allowed.", status=405)
 
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
         body = SubmitIntakeFormRequest.model_validate(payload)
     except json.JSONDecodeError:
-        return _json_error("Invalid JSON payload.", status=400)
+        return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -67,7 +64,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
             submitted_by_user_id=body.submitted_by_user_id,
         )
     except DomainError as exc:
-        return _json_error(str(exc), status=400)
+        return json_error(str(exc), status=400)
 
     return JsonResponse(
         {
