@@ -3,7 +3,8 @@
 ## 0. Assumptions
 - API base path is `/api/v1`.
 - Backend runtime baseline is **Django 6.0.x**.
-- Background jobs are defined with **Django Tasks** (`django.tasks`) and orchestrated with Transactional Outbox.
+- Background tasks are defined with **Django Tasks** (`django.tasks`) and orchestrated with Transactional Outbox.
+- The project uses one background-processing solution: **Django Tasks + Transactional Outbox**.
 - **Portal languages:** The user interface (staff panel and patient tablet) is available in **English** and **German**. Staff users have a `preferred_locale` field (e.g. `en-GB`, `de-DE`); for the patient tablet the language may be provided via link parameter, Accept-Language header, or clinic default.
 - Transport is HTTPS only.
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
@@ -979,7 +980,7 @@
   - Errors: `409 EVENT_NOT_RETRYABLE`, `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 - **POST** `/operations/outbox/process`
-  - Description: Manual trigger for outbox worker cycle (safe admin endpoint).
+  - Description: Manual trigger for outbox task-processing cycle (safe admin endpoint).
   - Request JSON:
     ```json
     {
@@ -1027,14 +1028,14 @@
   - Errors: `403 FORBIDDEN`.
 
 - **GET** `/observability/health`
-  - Description: Liveness/readiness for app, DB, queue worker, integrations.
+  - Description: Liveness/readiness for app, DB, outbox task processing, integrations.
   - Response JSON:
     ```json
     {
       "status": "ok",
       "checks": {
         "db": "ok",
-        "outbox_worker": "ok",
+        "outbox_tasks": "ok",
         "hidrive": "degraded",
         "sms": "ok"
       }
@@ -1187,8 +1188,8 @@
 
 - Transactional outbox chain:
   - Publish transaction enqueues `GENERATE_PDF`.
-  - Worker enqueues `HIDRIVE_UPLOAD` after successful PDF.
-  - Worker enqueues `SMS_SEND` after successful upload.
+  - Django Tasks processing enqueues `HIDRIVE_UPLOAD` after successful PDF.
+  - Django Tasks processing enqueues `SMS_SEND` after successful upload.
   - Retries and dead-letter managed via outbox status/retry fields.
 
 - Republishing:

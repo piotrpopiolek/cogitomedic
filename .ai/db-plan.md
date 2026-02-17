@@ -453,7 +453,7 @@
   - nowe wygenerowanie tokenu zawsze tworzy nowy rekord `patient_form_session`,
   - w tej samej transakcji `queue_entry.active_session_id` jest przestawiane na nową sesję,
   - walidacja tokenu wymaga jednocześnie: `session.id == queue_entry.active_session_id`, `consumed_at IS NULL`, `expires_at > now()`,
-  - starsze sesje pozostają w historii audytowej i są automatycznie odrzucane przez walidację (bez zależności od joba cleanup).
+  - starsze sesje pozostają w historii audytowej i są automatycznie odrzucane przez walidację (bez zależności od zadania cleanup).
 - Walidacja wymaganych zgód przed `SUBMITTED`:
   - wykonywana w serwisie domenowym `submit_patient_intake_form()` wewnątrz transakcji,
   - brak przejścia stanu, jeśli niezaakceptowano wszystkich aktywnych zgód wymaganych.
@@ -466,11 +466,11 @@
   - `publish_request_id` (idempotency key) gwarantuje, że wielokrotne kliknięcie "Zatwierdź i wyślij" nie tworzy wielu wersji i wielu łańcuchów outbox.
 - Enqueue outbox po publikacji:
   - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
-  - wpis `HIDRIVE_UPLOAD` tworzony przez worker po sukcesie generowania PDF,
-  - wpis `SMS_SEND` tworzony przez worker po sukcesie uploadu.
+  - wpis `HIDRIVE_UPLOAD` tworzony przez zadanie Django Tasks po sukcesie generowania PDF,
+  - wpis `SMS_SEND` tworzony przez zadanie Django Tasks po sukcesie uploadu.
 - Ochrona retencji:
   - realizowana przez `CHECK (local_pdf_deleted_at IS NULL OR (hidrive_sent = true AND sms_sent = true))` w `medical_document_version`,
-  - dodatkowo job retencji wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
+  - dodatkowo zadanie retencji (Django Tasks) wykonuje walidację stanu i zapis audytu przed usunięciem pliku.
 
 ### 4.3. Zasady integralności i bezpieczeństwa
 - `ON DELETE RESTRICT` dla bytów medycznych wysokiego poziomu (`queue_entry`, `patient_intake_form`, `medical_document`) w celu ochrony historii klinicznej.
@@ -480,7 +480,7 @@
 - Włączenie rozszerzeń:
   - `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
   - `CREATE EXTENSION IF NOT EXISTS citext;`
-- Rekomendowany poziom izolacji dla publikacji + outbox: transakcja ACID (`READ COMMITTED` + blokady wierszy `FOR UPDATE SKIP LOCKED` przy workerze zasilanym przez Django Tasks).
+- Rekomendowany poziom izolacji dla publikacji + outbox: transakcja ACID (`READ COMMITTED` + blokady wierszy `FOR UPDATE SKIP LOCKED` w przetwarzaniu zadań Django Tasks).
 
 ## 5. Wszelkie dodatkowe uwagi lub wyjaśnienia dotyczące decyzji projektowych
 
@@ -500,7 +500,7 @@
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
-- Runtime backendu: Django 6 + natywne `django.tasks`; tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu asynchronicznego.
+- Runtime backendu: Django 6 + natywne `django.tasks`; w projekcie obowiązuje jedno rozwiązanie asynchroniczne (Django Tasks + Outbox), a tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu.
 - **Języki portalu:** interfejs jest dostępny w języku angielskim i niemieckim. Pole `staff_user.preferred_locale` (np. `en-GB`, `de-DE`) określa preferowany język panelu personelu; dla tabletu pacjenta język może być przekazany w linku lub wybrany w aplikacji.
 
 ### 5.1. Kontrakt `anamnesis_payload` v1 (Anamnesebogen Q1–Q11)

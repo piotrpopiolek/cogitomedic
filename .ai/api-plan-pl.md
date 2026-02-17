@@ -4,6 +4,7 @@
 - Bazowa ścieżka API to `/api/v1`.
 - Bazowy runtime backendu to **Django 6.0.x**.
 - Zadania tła są definiowane przez **Django Tasks** (`django.tasks`) i orkiestrację przez Transactional Outbox.
+- W projekcie obowiązuje jedno rozwiązanie dla pracy asynchronicznej: **Django Tasks + Transactional Outbox**.
 - **Języki portalu:** interfejs użytkownika (panel personelu i tablet pacjenta) jest dostępny w języku **angielskim** i **niemieckim**. Użytkownik personelu ma pole `preferred_locale` (np. `en-GB`, `de-DE`); dla tabletu pacjenta język może wynikać z parametru w linku, nagłówka Accept-Language lub domyślnego ustawienia placówki.
 - Komunikacja tylko przez HTTPS.
 - Domyślny format payloadu to JSON (`application/json`), z wyjątkiem endpointów uploadu plików (`multipart/form-data`).
@@ -993,7 +994,7 @@
   - Kody błędów: `409 EVENT_NOT_RETRYABLE`, `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 - **POST** `/operations/outbox/process`
-  - Opis: Ręczne uruchomienie cyklu workera outbox (bezpieczny endpoint admina).
+  - Opis: Ręczne uruchomienie cyklu przetwarzania zadań outbox (bezpieczny endpoint admina).
   - Request JSON:
     ```json
     {
@@ -1041,14 +1042,14 @@
   - Kody błędów: `403 FORBIDDEN`.
 
 - **GET** `/observability/health`
-  - Opis: Liveness/readiness aplikacji, DB, workera i integracji.
+  - Opis: Liveness/readiness aplikacji, DB, przetwarzania zadań outbox i integracji.
   - Response JSON:
     ```json
     {
       "status": "ok",
       "checks": {
         "db": "ok",
-        "outbox_worker": "ok",
+        "outbox_tasks": "ok",
         "hidrive": "degraded",
         "sms": "ok"
       }
@@ -1215,7 +1216,7 @@
   - API wspiera opcjonalny `resend_sms`.
 
 - Polityka retencji:
-  - Harmonogram/ręczny job retencji usuwa lokalny PDF tylko gdy `hidrive_sent=true` i `sms_sent=true`, a wiek dokumentu przekracza 30 dni.
+  - Harmonogram/ręczne zadanie retencji (Django Tasks) usuwa lokalny PDF tylko gdy `hidrive_sent=true` i `sms_sent=true`, a wiek dokumentu przekracza 30 dni.
   - Akcja usunięcia zapisuje zdarzenie audytowe.
 
 - Widoczność operacyjna:

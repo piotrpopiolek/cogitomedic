@@ -14,6 +14,7 @@ Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpiecz
 ### 1.1. Aktualna baza technologiczna backendu
 - Backend jest utrzymywany na **Django 6.0.x**.
 - Zadania asynchroniczne są definiowane i uruchamiane przez natywny framework **Django Tasks** (`django.tasks`), a nie przez `django-cron`.
+- W projekcie obowiązuje jedno rozwiązanie dla pracy asynchronicznej: **Django Tasks + Transactional Outbox**.
 - Kontrakty i statusy procesu asynchronicznego (Outbox) pozostają bez zmian względem wymagań domenowych.
 
 ## 2. Problem użytkownika
@@ -224,7 +225,7 @@ Tytuł: Przetwarzanie Outbox (HiDrive i SMS)
 Opis: System automatycznie przetwarza kolejkę zadań, aby zapisać pliki w chmurze i powiadomić pacjenta.
 Kryteria akceptacji:
 - Cron uruchamia przetwarzanie tabeli Outbox.
-- Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez worker zasilany przez Django Tasks, a nie w żądaniu HTTP.
+- Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez zadanie Django Tasks, a nie w żądaniu HTTP.
 - Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
 - Krok 3: Po sukcesie Kroku 2, wysyłka SMS z linkiem do pacjenta.
 - W przypadku błędu, zadanie otrzymuje status błędu i jest ponawiane w kolejnym cyklu (zgodnie z polityką retry).
