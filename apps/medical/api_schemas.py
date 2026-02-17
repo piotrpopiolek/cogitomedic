@@ -28,3 +28,32 @@ class PublishMedicalDocumentRequest(BaseModel):
 
     publish_request_id: UUID
     published_by_user_id: UUID
+
+
+class DoctorTemplateListQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor_user_id: UUID
+    template_locale: str | None = None
+    include_inactive: bool = False
+
+
+class DoctorTemplateCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor_user_id: UUID
+    name: str = Field(min_length=1, max_length=120)
+    template_locale: str = Field(min_length=2, max_length=10)
+    template_body: str = Field(min_length=1)
+    is_global: bool = False
+    is_active: bool = True
+
+
+class DoctorTemplateUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor_user_id: UUID
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    template_locale: str | None = Field(default=None, min_length=2, max_length=10)
+    template_body: str | None = Field(default=None, min_length=1)
+    is_active: bool | None = None

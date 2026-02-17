@@ -142,3 +142,113 @@ class MedicalApiTests(TestCase):
         version = MedicalDocumentVersion.objects.get(id=version_id)
         self.assertEqual(version.version_status, "PUBLISHED")
         self.assertEqual(version.medical_document.status, MedicalDocStatus.PUBLISHED)
+
+
+class DoctorTemplatesApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin_user = StaffUser.objects.create_user(
+            username="api-admin-templates",
+            email="api.admin.templates@example.com",
+            password="safe-password",
+            role=StaffRole.ADMIN,
+            is_staff=True,
+        )
+        self.doctor_user = StaffUser.objects.create_user(
+            username="api-doctor-templates",
+            email="api.doctor.templates@example.com",
+            password="safe-password",
+            role=StaffRole.DOCTOR,
+            is_staff=True,
+        )
+        self.other_doctor_user = StaffUser.objects.create_user(
+            username="api-doctor-templates-2",
+            email="api.doctor.templates2@example.com",
+            password="safe-password",
+            role=StaffRole.DOCTOR,
+            is_staff=True,
+        )
+
+    def test_doctor_templates_create_list_patch_permissions(self) -> None:
+        # Doctor can create private template
+        create_private = self.client.post(
+            "/api/v1/doctor-text-templates",
+            data=json.dumps(
+                {
+                    "actor_user_id": str(self.doctor_user.id),
+                    "name": "My Template",
+                    "template_locale": "de-DE",
+                    "template_body": "Text",
+                    "is_global": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_private.status_code, 201)
+        template_id = create_private.json()["id"]
+
+        # Doctor cannot create global template
+        create_global_forbidden = self.client.post(
+            "/api/v1/doctor-text-templates",
+            data=json.dumps(
+                {
+                    "actor_user_id": str(self.doctor_user.id),
+                    "name": "Global Forbidden",
+                    "template_locale": "de-DE",
+                    "template_body": "Text",
+                    "is_global": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_global_forbidden.status_code, 403)
+
+        # Admin can create global template
+        create_global = self.client.post(
+            "/api/v1/doctor-text-templates",
+            data=json.dumps(
+                {
+                    "actor_user_id": str(self.admin_user.id),
+                    "name": "Global Allowed",
+                    "template_locale": "de-DE",
+                    "template_body": "Global text",
+                    "is_global": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_global.status_code, 201)
+
+        # Doctor sees own + global templates
+        doctor_list = self.client.get(
+            f"/api/v1/doctor-text-templates?actor_user_id={self.doctor_user.id}&include_inactive=true"
+        )
+        self.assertEqual(doctor_list.status_code, 200)
+        self.assertGreaterEqual(len(doctor_list.json()["results"]), 2)
+
+        # Other doctor cannot patch someone else's private template
+        patch_forbidden = self.client.patch(
+            f"/api/v1/doctor-text-templates/{template_id}",
+            data=json.dumps(
+                {
+                    "actor_user_id": str(self.other_doctor_user.id),
+                    "name": "Hack",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_forbidden.status_code, 403)
+
+        # Owner can patch own private template
+        patch_owner = self.client.patch(
+            f"/api/v1/doctor-text-templates/{template_id}",
+            data=json.dumps(
+                {
+                    "actor_user_id": str(self.doctor_user.id),
+                    "is_active": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_owner.status_code, 200)
+        self.assertFalse(patch_owner.json()["is_active"])

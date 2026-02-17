@@ -11,10 +11,20 @@ from apps.core.api_utils import json_error
 from apps.core.exceptions import DomainError
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
+    DoctorTemplateCreateRequest,
+    DoctorTemplateListQuery,
+    DoctorTemplateUpdateRequest,
     PublishMedicalDocumentRequest,
     SaveDraftMedicalDocumentRequest,
 )
 from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.medical.template_services import (
+    TemplateListFilters,
+    TemplateNotFoundError,
+    create_template,
+    list_templates,
+    update_template,
+)
 
 
 def _read_json_body(request: HttpRequest) -> dict:
@@ -109,6 +119,121 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             "version_no": version.version_no,
             "version_status": version.version_status,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+        },
+        status=200,
+    )
+
+
+@csrf_exempt
+def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
+    if request.method == "GET":
+        try:
+            query = DoctorTemplateListQuery.model_validate(
+                {
+                    "actor_user_id": request.GET.get("actor_user_id"),
+                    "template_locale": request.GET.get("template_locale"),
+                    "include_inactive": request.GET.get("include_inactive", "false").lower() == "true",
+                }
+            )
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+        try:
+            templates = list_templates(
+                filters=TemplateListFilters(
+                    actor_user_id=query.actor_user_id,
+                    template_locale=query.template_locale,
+                    include_inactive=query.include_inactive,
+                )
+            )
+        except DomainError as exc:
+            return json_error(str(exc), status=400)
+
+        return JsonResponse(
+            {
+                "results": [
+                    {
+                        "id": str(template.id),
+                        "name": template.name,
+                        "template_locale": template.template_locale,
+                        "template_body": template.template_body,
+                        "is_global": template.is_global,
+                        "is_active": template.is_active,
+                        "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
+                    }
+                    for template in templates
+                ]
+            },
+            status=200,
+        )
+
+    if request.method == "POST":
+        try:
+            body = DoctorTemplateCreateRequest.model_validate(_read_json_body(request))
+        except json.JSONDecodeError:
+            return json_error("Invalid JSON payload.", status=400)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+        try:
+            template = create_template(
+                actor_user_id=body.actor_user_id,
+                name=body.name,
+                template_locale=body.template_locale,
+                template_body=body.template_body,
+                is_global=body.is_global,
+                is_active=body.is_active,
+            )
+        except DomainError as exc:
+            return json_error(str(exc), status=403)
+
+        return JsonResponse(
+            {
+                "id": str(template.id),
+                "name": template.name,
+                "template_locale": template.template_locale,
+                "is_global": template.is_global,
+                "is_active": template.is_active,
+            },
+            status=201,
+        )
+
+    return json_error("Method not allowed.", status=405)
+
+
+@csrf_exempt
+def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) -> JsonResponse:
+    if request.method != "PATCH":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = DoctorTemplateUpdateRequest.model_validate(_read_json_body(request))
+    except json.JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        template = update_template(
+            template_id=template_id,
+            actor_user_id=body.actor_user_id,
+            name=body.name,
+            template_locale=body.template_locale,
+            template_body=body.template_body,
+            is_active=body.is_active,
+        )
+    except TemplateNotFoundError as exc:
+        return json_error(str(exc), status=404)
+    except DomainError as exc:
+        return json_error(str(exc), status=403)
+
+    return JsonResponse(
+        {
+            "id": str(template.id),
+            "name": template.name,
+            "template_locale": template.template_locale,
+            "is_global": template.is_global,
+            "is_active": template.is_active,
         },
         status=200,
     )
