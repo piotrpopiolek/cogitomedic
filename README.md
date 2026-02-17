@@ -40,13 +40,13 @@ The user interface is available in **English** and **German**.
 |-------|--------------|
 | **Backend** | Python, Django 6.0.2 |
 | **Database** | PostgreSQL |
-| **PDF** | WeasyPrint (HTML/CSS → PDF; Unicode, embed images as base64). PyPDF2 for merging if needed. |
+| **PDF** | WeasyPrint (HTML/CSS → PDF; Unicode, embed images as base64). |
 | **Scheduling** | Django 6 Tasks (`django.tasks`) with command-driven enqueueing (`manage.py enqueue_tasks`) |
 | **SMS** | smsapi-client |
 | **Monitoring** | Sentry |
 | **Config** | python-dotenv |
 | **Frontend** | Django templates, HTMX, Alpine.js, SignaturePad.js, Tailwind CSS (per implementation plan) |
-| **Other** | Pillow, django-select2, pycryptodome, requests |
+| **Other** | Pillow, pycryptodome, requests |
 
 ---
 
@@ -81,6 +81,12 @@ The user interface is available in **English** and **German**.
 
    ```bash
    pip install -r requirements.txt
+   ```
+
+   For local development and QA tooling:
+
+   ```bash
+   pip install -r requirements-dev.txt
    ```
 
 4. **Configure environment**
@@ -218,7 +224,7 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py createsuperuser` | Create an admin/superuser account |
 | `python manage.py enqueue_tasks` | Enqueue background tasks (outbox, retention, import) |
 
-Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks`. The default backend in this repository is `ImmediateBackend` for deterministic local development; production should use a worker-capable backend.
+Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks`. In this project we use one background-work contract: **Django Tasks + Transactional Outbox**. The default backend in this repository is `ImmediateBackend` for deterministic local development.
 
 Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
 
@@ -259,7 +265,7 @@ The product is developed in **three phases**:
 | **2** | Doctor panel for medical data and document approval; automated archive upload and SMS |
 | **3** | Improved daily import process for files exported from Doctolib + HiDrive API (archiving) |
 
-Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and Django 6 Tasks for background job contracts. Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
+Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and Django 6 Tasks as the single background-processing solution. Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
 
 ---
 
