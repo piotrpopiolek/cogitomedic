@@ -36,6 +36,7 @@ def save_draft_document_version(
     *,
     medical_document_id: uuid.UUID,
     updated_by_user_id: uuid.UUID,
+    medical_payload_schema_version: int = 1,
     medical_payload: dict,
     diagnosis_code: str | None = None,
     procedure_code: str | None = None,
@@ -56,10 +57,18 @@ def save_draft_document_version(
     )
 
     if latest_version and latest_version.version_status == DocVersionStatus.DRAFT:
+        latest_version.medical_payload_schema_version = medical_payload_schema_version
         latest_version.medical_payload = medical_payload
         latest_version.diagnosis_code = diagnosis_code
         latest_version.procedure_code = procedure_code
-        latest_version.save(update_fields=["medical_payload", "diagnosis_code", "procedure_code"])
+        latest_version.save(
+            update_fields=[
+                "medical_payload_schema_version",
+                "medical_payload",
+                "diagnosis_code",
+                "procedure_code",
+            ]
+        )
         medical_document.updated_by_user_id = updated_by_user_id
         medical_document.save(update_fields=["updated_by_user", "updated_at"])
         create_audit_event(
@@ -86,6 +95,7 @@ def save_draft_document_version(
         medical_document_id=medical_document_id,
         version_no=next_version_no,
         version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=medical_payload_schema_version,
         medical_payload=medical_payload,
         diagnosis_code=diagnosis_code,
         procedure_code=procedure_code,
