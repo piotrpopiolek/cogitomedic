@@ -30,7 +30,7 @@ class ConsentDefinition(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["code", "version"], name="consent_definition_unique"),
             models.CheckConstraint(
-                check=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
+                condition=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
                 name="consent_effective_to_after_from",
             ),
         ]
@@ -71,7 +71,7 @@ class AnamnesisQuestionDefinition(models.Model):
                 name="anamnesis_question_definition_unique",
             ),
             models.CheckConstraint(
-                check=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
+                condition=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
                 name="anamnesis_question_effective_to_after_from",
             ),
         ]
@@ -151,7 +151,7 @@ class PatientIntakeForm(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=Q(form_status=IntakeStatus.IN_PROGRESS)
+                condition=Q(form_status=IntakeStatus.IN_PROGRESS)
                 | (
                     Q(submitted_at__isnull=False)
                     & Q(signature_file_path__isnull=False)
@@ -184,7 +184,7 @@ class PatientIntakeConsent(models.Model):
                 name="intake_consent_unique",
             ),
             models.CheckConstraint(
-                check=(Q(accepted=True) & Q(accepted_at__isnull=False))
+                condition=(Q(accepted=True) & Q(accepted_at__isnull=False))
                 | (Q(accepted=False) & Q(accepted_at__isnull=True)),
                 name="intake_consent_accepted_time",
             ),

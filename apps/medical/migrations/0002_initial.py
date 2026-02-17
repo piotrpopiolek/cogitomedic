@@ -83,31 +83,31 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('version_no__gt', 0)), name='medical_document_version_positive'),
+            constraint=models.CheckConstraint(condition=models.Q(('version_no__gt', 0)), name='medical_document_version_positive'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('version_status', 'DRAFT'), ('publish_request_id__isnull', False), _connector='OR'), name='medical_document_published_requires_request_id'),
+            constraint=models.CheckConstraint(condition=models.Q(('version_status', 'DRAFT'), ('publish_request_id__isnull', False), _connector='OR'), name='medical_document_published_requires_request_id'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('version_status', 'DRAFT'), ('published_at__isnull', False), _connector='OR'), name='medical_document_published_requires_time'),
+            constraint=models.CheckConstraint(condition=models.Q(('version_status', 'DRAFT'), ('published_at__isnull', False), _connector='OR'), name='medical_document_published_requires_time'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('pdf_generation_status', 'COMPLETED'), ('pdf_local_path__isnull', False)), models.Q(('pdf_generation_status', 'COMPLETED'), _negated=True), _connector='OR'), name='medical_document_pdf_completed_requires_path'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('pdf_generation_status', 'COMPLETED'), ('pdf_local_path__isnull', False)), models.Q(('pdf_generation_status', 'COMPLETED'), _negated=True), _connector='OR'), name='medical_document_pdf_completed_requires_path'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('hidrive_sent', False), models.Q(('hidrive_sent', True), ('hidrive_sent_at__isnull', False)), _connector='OR'), name='medical_document_hidrive_sent_requires_time'),
+            constraint=models.CheckConstraint(condition=models.Q(('hidrive_sent', False), models.Q(('hidrive_sent', True), ('hidrive_sent_at__isnull', False)), _connector='OR'), name='medical_document_hidrive_sent_requires_time'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('sms_sent', False), models.Q(('sms_sent', True), ('sms_sent_at__isnull', False)), _connector='OR'), name='medical_document_sms_sent_requires_time'),
+            constraint=models.CheckConstraint(condition=models.Q(('sms_sent', False), models.Q(('sms_sent', True), ('sms_sent_at__isnull', False)), _connector='OR'), name='medical_document_sms_sent_requires_time'),
         ),
         migrations.AddConstraint(
             model_name='medicaldocumentversion',
-            constraint=models.CheckConstraint(check=models.Q(('local_pdf_deleted_at__isnull', True), models.Q(('hidrive_sent', True), ('sms_sent', True)), _connector='OR'), name='medical_document_local_pdf_deletion_guard'),
+            constraint=models.CheckConstraint(condition=models.Q(('local_pdf_deleted_at__isnull', True), models.Q(('hidrive_sent', True), ('sms_sent', True)), _connector='OR'), name='medical_document_local_pdf_deletion_guard'),
         ),
         migrations.AddIndex(
             model_name='medicaldocument',
@@ -115,7 +115,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='medicaldocument',
-            constraint=models.CheckConstraint(check=models.Q(('current_version_no__gte', 0)), name='medical_document_current_version_non_negative'),
+            constraint=models.CheckConstraint(condition=models.Q(('current_version_no__gte', 0)), name='medical_document_current_version_non_negative'),
         ),
         migrations.AddIndex(
             model_name='doctortexttemplate',
@@ -127,11 +127,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='doctortexttemplate',
-            constraint=models.CheckConstraint(check=models.Q(('template_locale__regex', '^(de|en)(-[A-Z]{2})?$')), name='doctor_template_locale_format'),
+            constraint=models.CheckConstraint(condition=models.Q(('template_locale__regex', '^(de|en)(-[A-Z]{2})?$')), name='doctor_template_locale_format'),
         ),
         migrations.AddConstraint(
             model_name='doctortexttemplate',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('is_global', True), ('owner_user__isnull', True)), models.Q(('is_global', False), ('owner_user__isnull', False)), _connector='OR'), name='doctor_template_global_owner_consistency'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('is_global', True), ('owner_user__isnull', True)), models.Q(('is_global', False), ('owner_user__isnull', False)), _connector='OR'), name='doctor_template_global_owner_consistency'),
         ),
         migrations.AddConstraint(
             model_name='doctortexttemplate',

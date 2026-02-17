@@ -49,6 +49,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='auditevent',
-            constraint=models.CheckConstraint(check=models.Q(('metadata__isnull', False)), name='audit_event_metadata_not_null'),
+            constraint=models.CheckConstraint(condition=models.Q(('metadata__isnull', False)), name='audit_event_metadata_not_null'),
         ),
     ]

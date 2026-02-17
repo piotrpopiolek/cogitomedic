@@ -45,7 +45,7 @@ class AuditEvent(models.Model):
         db_table = "audit_event"
         constraints = [
             models.CheckConstraint(
-                check=Q(metadata__isnull=False),
+                condition=Q(metadata__isnull=False),
                 name="audit_event_metadata_not_null",
             )
         ]

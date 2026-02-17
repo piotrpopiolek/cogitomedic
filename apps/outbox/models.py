@@ -51,17 +51,17 @@ class OutboxEvent(models.Model):
                 name="outbox_event_unique_per_type",
             ),
             models.CheckConstraint(
-                check=Q(retry_count__gte=0)
+                condition=Q(retry_count__gte=0)
                 & Q(max_retries__gt=0)
                 & Q(retry_count__lte=F("max_retries")),
                 name="outbox_event_retry_bounds",
             ),
             models.CheckConstraint(
-                check=Q(aggregate_type="MEDICAL_DOCUMENT_VERSION"),
+                condition=Q(aggregate_type="MEDICAL_DOCUMENT_VERSION"),
                 name="outbox_event_aggregate_type_guard",
             ),
             models.CheckConstraint(
-                check=Q(aggregate_id=F("medical_document_version_id")),
+                condition=Q(aggregate_id=F("medical_document_version_id")),
                 name="outbox_event_aggregate_id_guard",
             ),
         ]

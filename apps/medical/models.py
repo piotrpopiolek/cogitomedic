@@ -58,7 +58,7 @@ class MedicalDocument(models.Model):
         db_table = "medical_document"
         constraints = [
             models.CheckConstraint(
-                check=Q(current_version_no__gte=0),
+                condition=Q(current_version_no__gte=0),
                 name="medical_document_current_version_non_negative",
             )
         ]
@@ -126,31 +126,31 @@ class MedicalDocumentVersion(models.Model):
                 fields=["medical_document", "publish_request_id"],
                 name="medical_document_publish_request_unique",
             ),
-            models.CheckConstraint(check=Q(version_no__gt=0), name="medical_document_version_positive"),
+            models.CheckConstraint(condition=Q(version_no__gt=0), name="medical_document_version_positive"),
             models.CheckConstraint(
-                check=Q(version_status=DocVersionStatus.DRAFT) | Q(publish_request_id__isnull=False),
+                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(publish_request_id__isnull=False),
                 name="medical_document_published_requires_request_id",
             ),
             models.CheckConstraint(
-                check=Q(version_status=DocVersionStatus.DRAFT) | Q(published_at__isnull=False),
+                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(published_at__isnull=False),
                 name="medical_document_published_requires_time",
             ),
             models.CheckConstraint(
-                check=Q(pdf_generation_status=PdfStatus.COMPLETED, pdf_local_path__isnull=False)
+                condition=Q(pdf_generation_status=PdfStatus.COMPLETED, pdf_local_path__isnull=False)
                 | ~Q(pdf_generation_status=PdfStatus.COMPLETED),
                 name="medical_document_pdf_completed_requires_path",
             ),
             models.CheckConstraint(
-                check=Q(hidrive_sent=False)
+                condition=Q(hidrive_sent=False)
                 | (Q(hidrive_sent=True) & Q(hidrive_sent_at__isnull=False)),
                 name="medical_document_hidrive_sent_requires_time",
             ),
             models.CheckConstraint(
-                check=Q(sms_sent=False) | (Q(sms_sent=True) & Q(sms_sent_at__isnull=False)),
+                condition=Q(sms_sent=False) | (Q(sms_sent=True) & Q(sms_sent_at__isnull=False)),
                 name="medical_document_sms_sent_requires_time",
             ),
             models.CheckConstraint(
-                check=Q(local_pdf_deleted_at__isnull=True)
+                condition=Q(local_pdf_deleted_at__isnull=True)
                 | (Q(hidrive_sent=True) & Q(sms_sent=True)),
                 name="medical_document_local_pdf_deletion_guard",
             ),
@@ -198,11 +198,11 @@ class DoctorTextTemplate(models.Model):
         db_table = "doctor_text_template"
         constraints = [
             models.CheckConstraint(
-                check=Q(template_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
+                condition=Q(template_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
                 name="doctor_template_locale_format",
             ),
             models.CheckConstraint(
-                check=(Q(is_global=True) & Q(owner_user__isnull=True))
+                condition=(Q(is_global=True) & Q(owner_user__isnull=True))
                 | (Q(is_global=False) & Q(owner_user__isnull=False)),
                 name="doctor_template_global_owner_consistency",
             ),

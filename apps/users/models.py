@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 from django.contrib.auth.models import AbstractUser
-from django.contrib.postgres.fields import CIEmailField
 from django.db import models
 
 
@@ -19,7 +18,7 @@ class StaffUser(AbstractUser):
     username = models.CharField(max_length=150, unique=True)
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=100)
-    email = CIEmailField(unique=True)
+    email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -38,7 +37,7 @@ class StaffUser(AbstractUser):
         db_table = "staff_user"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(phone_number__isnull=True)
+                condition=models.Q(phone_number__isnull=True)
                 | models.Q(phone_number__regex=r"^[0-9+() -]{7,20}$"),
                 name="staff_user_phone_format",
             )
