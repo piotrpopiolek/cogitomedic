@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.exceptions import DomainError
 from apps.medical.models import MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -17,6 +18,10 @@ class OutboxProcessingResult:
     processed: int
     failed: int
     dead_lettered: int
+
+
+class OutboxEventNotRetryableError(DomainError):
+    """Raised when manual retry is requested for non-retryable event."""
 
 
 def _build_hidrive_path(version: MedicalDocumentVersion) -> str:
@@ -166,3 +171,26 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
         failed=failed,
         dead_lettered=dead_lettered,
     )
+
+
+@transaction.atomic
+def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
+    """Move FAILED/DEAD_LETTER event back to PENDING for manual retry."""
+    event = OutboxEvent.objects.select_for_update().get(id=event.id)
+    if event.status not in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]:
+        raise OutboxEventNotRetryableError("Event is not retryable in current status.")
+
+    event.status = OutboxStatus.PENDING
+    event.available_at = timezone.now()
+    event.locked_at = None
+    event.error_message = None
+    event.save(update_fields=["status", "available_at", "locked_at", "error_message", "updated_at"])
+
+    create_audit_event(
+        event_type="OUTBOX_EVENT_RETRY_REQUESTED",
+        patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
+        medical_document_id=event.medical_document_version.medical_document_id,
+        outbox_event_id=event.id,
+        metadata={"event_type": event.event_type, "reason": reason},
+    )
+    return event

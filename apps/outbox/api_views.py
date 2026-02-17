@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+import json
+from uuid import UUID
+
+from django.http import HttpRequest, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from pydantic import ValidationError
+
+from apps.core.api_utils import json_error
+from apps.core.exceptions import DomainError
+from apps.outbox.api_schemas import OutboxEventsQueryParams, ProcessOutboxRequest, RetryOutboxEventRequest
+from apps.outbox.models import OutboxEvent
+from apps.outbox.services import process_outbox_events, retry_outbox_event
+
+
+def _read_json_body(request: HttpRequest) -> dict:
+    return json.loads(request.body.decode("utf-8") or "{}")
+
+
+def outbox_events_view(request: HttpRequest) -> JsonResponse:
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = OutboxEventsQueryParams.model_validate(
+            {
+                "status": request.GET.get("status"),
+                "event_type": request.GET.get("event_type"),
+                "retry_count_gte": request.GET.get("retry_count_gte", 0),
+                "limit": request.GET.get("limit", 50),
+            }
+        )
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    qs = OutboxEvent.objects.order_by("-created_at")
+    if body.status:
+        qs = qs.filter(status=body.status)
+    if body.event_type:
+        qs = qs.filter(event_type=body.event_type)
+    qs = qs.filter(retry_count__gte=body.retry_count_gte)[: body.limit]
+
+    events = [
+        {
+            "id": str(event.id),
+            "medical_document_version_id": str(event.medical_document_version_id),
+            "event_type": event.event_type,
+            "status": event.status,
+            "retry_count": event.retry_count,
+            "max_retries": event.max_retries,
+            "available_at": event.available_at.isoformat() if event.available_at else None,
+            "error_message": event.error_message,
+        }
+        for event in qs
+    ]
+    return JsonResponse({"results": events, "count": len(events)}, status=200)
+
+
+@csrf_exempt
+def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = ProcessOutboxRequest.model_validate(_read_json_body(request))
+    except json.JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    result = process_outbox_events(batch_size=body.limit)
+    return JsonResponse(
+        {
+            "processed": result.processed,
+            "failed": result.failed,
+            "dead_lettered": result.dead_lettered,
+        },
+        status=202,
+    )
+
+
+@csrf_exempt
+def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = RetryOutboxEventRequest.model_validate(_read_json_body(request))
+    except json.JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        event = OutboxEvent.objects.get(id=outbox_event_id)
+    except OutboxEvent.DoesNotExist:
+        return json_error("Outbox event not found.", status=404)
+
+    try:
+        retried = retry_outbox_event(event=event, reason=body.reason)
+    except DomainError as exc:
+        return json_error(str(exc), status=409)
+
+    return JsonResponse(
+        {
+            "id": str(retried.id),
+            "status": retried.status,
+            "retry_count": retried.retry_count,
+        },
+        status=200,
+    )
