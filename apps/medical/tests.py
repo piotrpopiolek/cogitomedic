@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import DocVersionStatus, MedicalDocument, MedicalDocStatus
 from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType
 from apps.reception.models import (
     ClinicSite,
@@ -102,6 +103,12 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(version.version_status, DocVersionStatus.DRAFT)
         self.assertEqual(self.medical_document.current_version_no, 1)
         self.assertEqual(self.medical_document.status, MedicalDocStatus.DRAFT)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="DOCUMENT_DRAFT_SAVED",
+                medical_document_id=self.medical_document.id,
+            ).exists()
+        )
 
     def test_save_draft_document_version_updates_existing_draft(self) -> None:
         first = save_draft_document_version(
@@ -145,6 +152,12 @@ class MedicalServicesTests(TestCase):
             OutboxEvent.objects.filter(
                 medical_document_version=published,
                 event_type=OutboxEventType.GENERATE_PDF,
+            ).exists()
+        )
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="DOCUMENT_PUBLISHED",
+                medical_document_id=self.medical_document.id,
             ).exists()
         )
 

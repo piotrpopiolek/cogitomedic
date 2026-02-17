@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.core.exceptions import IdempotencyConflictError, StateTransitionError
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
+from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 
@@ -61,6 +62,17 @@ def save_draft_document_version(
         latest_version.save(update_fields=["medical_payload", "diagnosis_code", "procedure_code"])
         medical_document.updated_by_user_id = updated_by_user_id
         medical_document.save(update_fields=["updated_by_user", "updated_at"])
+        create_audit_event(
+            event_type="DOCUMENT_DRAFT_SAVED",
+            actor_user_id=updated_by_user_id,
+            patient_id=medical_document.queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            metadata={
+                "medical_document_version_id": str(latest_version.id),
+                "version_no": latest_version.version_no,
+                "mode": "update",
+            },
+        )
         return latest_version
 
     next_version_no = (
@@ -88,6 +100,17 @@ def save_draft_document_version(
             "updated_by_user",
             "updated_at",
         ]
+    )
+    create_audit_event(
+        event_type="DOCUMENT_DRAFT_SAVED",
+        actor_user_id=updated_by_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        metadata={
+            "medical_document_version_id": str(created_version.id),
+            "version_no": created_version.version_no,
+            "mode": "create",
+        },
     )
     return created_version
 
@@ -198,6 +221,17 @@ def publish_document_version(
                 "publish_request_id": str(publish_request_id),
             },
             "status": OutboxStatus.PENDING,
+        },
+    )
+    create_audit_event(
+        event_type="DOCUMENT_PUBLISHED",
+        actor_user_id=published_by_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        metadata={
+            "medical_document_version_id": str(draft_version.id),
+            "version_no": draft_version.version_no,
+            "publish_request_id": str(publish_request_id),
         },
     )
     return draft_version

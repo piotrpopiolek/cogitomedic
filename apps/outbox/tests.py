@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
 from apps.reception.models import (
@@ -116,6 +117,13 @@ class OutboxProcessingTests(TestCase):
             OutboxEvent.objects.filter(medical_document_version=self.version, status=OutboxStatus.PROCESSED).count(),
             3,
         )
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="OUTBOX_EVENT_PROCESSED",
+                medical_document_id=self.medical_document.id,
+            ).count(),
+            3,
+        )
 
     def test_process_outbox_events_moves_to_dead_letter_after_retries(self) -> None:
         event = OutboxEvent.objects.get(
@@ -131,3 +139,9 @@ class OutboxProcessingTests(TestCase):
 
         self.assertEqual(result.dead_lettered, 1)
         self.assertEqual(event.status, OutboxStatus.DEAD_LETTER)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="OUTBOX_EVENT_DEAD_LETTERED",
+                outbox_event_id=event.id,
+            ).exists()
+        )

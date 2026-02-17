@@ -18,6 +18,7 @@ from apps.intake.services import (
     IntakeSessionValidationError,
     submit_patient_intake_form,
 )
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -125,6 +126,12 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertIsNotNone(submitted.submitted_at)
         self.assertIsNotNone(self.session.consumed_at)
         self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="INTAKE_SUBMITTED",
+                patient_id=self.queue_entry.patient_id,
+            ).exists()
+        )
 
     def test_submit_patient_intake_form_raises_when_required_consent_missing(self) -> None:
         with self.assertRaises(RequiredConsentMissingError):

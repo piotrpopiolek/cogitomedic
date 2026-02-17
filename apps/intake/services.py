@@ -14,6 +14,7 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
+from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
 
 
@@ -58,6 +59,7 @@ def submit_patient_intake_form(
     *,
     intake_form_id: uuid.UUID,
     submitted_at: datetime | None = None,
+    submitted_by_user_id: uuid.UUID | None = None,
 ) -> PatientIntakeForm:
     """
     Submit intake form with required consent/anamnesis validation.
@@ -126,5 +128,16 @@ def submit_patient_intake_form(
 
     queue_entry.entry_status = QueueEntryStatus.PATIENT_COMPLETED
     queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+    create_audit_event(
+        event_type="INTAKE_SUBMITTED",
+        actor_user_id=submitted_by_user_id,
+        patient_id=queue_entry.patient_id,
+        metadata={
+            "intake_form_id": str(intake_form.id),
+            "queue_entry_id": str(queue_entry.id),
+            "session_id": str(session.id),
+        },
+    )
 
     return intake_form

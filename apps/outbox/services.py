@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.medical.models import MedicalDocumentVersion, PdfStatus
+from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 
@@ -111,6 +112,16 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
                     "updated_at",
                 ]
             )
+            create_audit_event(
+                event_type="OUTBOX_EVENT_PROCESSED",
+                patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
+                medical_document_id=event.medical_document_version.medical_document_id,
+                outbox_event_id=event.id,
+                metadata={
+                    "event_type": event.event_type,
+                    "retry_count": event.retry_count,
+                },
+            )
             processed += 1
         except Exception as exc:
             event.retry_count += 1
@@ -133,6 +144,21 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
                     "available_at",
                     "updated_at",
                 ]
+            )
+            create_audit_event(
+                event_type=(
+                    "OUTBOX_EVENT_DEAD_LETTERED"
+                    if event.status == OutboxStatus.DEAD_LETTER
+                    else "OUTBOX_EVENT_FAILED"
+                ),
+                patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
+                medical_document_id=event.medical_document_version.medical_document_id,
+                outbox_event_id=event.id,
+                metadata={
+                    "event_type": event.event_type,
+                    "retry_count": event.retry_count,
+                    "error_message": event.error_message or "",
+                },
             )
 
     return OutboxProcessingResult(
