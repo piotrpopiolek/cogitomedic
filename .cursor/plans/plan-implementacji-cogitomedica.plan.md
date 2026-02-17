@@ -26,6 +26,15 @@ todos:
   - id: hardening-release
     content: Wykonać hardening bezpieczeństwa, testy E2E i checklistę gotowości produkcyjnej.
     status: pending
+  - id: doctor-templates-us019
+    content: Zaimplementować US-019 (szablony lekarza DE/EN): CRUD, aktywacja/dezaktywacja, uprawnienia globalne/prywatne i integracja z generate-text.
+    status: pending
+  - id: auth-session-hardening
+    content: Domknąć wymagania US-001: timeout sesji, polityki wygasania i testy bezpieczeństwa auth/session.
+    status: pending
+  - id: domain-audit-trail
+    content: Dodać pełny audit trail zdarzeń domenowych (edycja tekstu, publikacja/republikacja, retencja) i włączyć go do DoD.
+    status: pending
 isProject: false
 ---
 
@@ -116,6 +125,10 @@ flowchart LR
 - Zaimplementuj dokument medyczny i wersjonowanie:
   - `save_draft_document_version()`,
   - `publish_document_version()` z `transaction.atomic` + `select_for_update` + idempotencja (`publish_request_id` i/lub in-progress guard).
+- Zaimplementuj US-019 (szablony lekarza DE/EN):
+  - CRUD szablonów lekarza (`create/update/activate/deactivate`),
+  - rozróżnienie uprawnień dla szablonów globalnych (klinika) i prywatnych (per lekarz),
+  - użycie szablonu bazowego w endpointach `generate-text` i zapis `generated_text`/`edited_text`.
 - Wprowadź kontrakt `medical_payload` v1 (global + lesions, `generated_text`/`edited_text`, template context).
 - Dodaj logikę republish (edycja opublikowanego dokumentu -> nowa wersja, ta sama ścieżka HiDrive, opcjonalny SMS).
 - Pokryj testami scenariusze wyścigów (podwójne kliknięcie publish, retry publish).
@@ -138,10 +151,16 @@ flowchart LR
   - dokumenty (publish->hidrive/sms delay).
 - Przygotuj dashboardy (recepcja i utrzymanie) i reguły alertów z progami PRD.
 - Dla outbox/import/integracji dodaj runbooki operacyjne do repo.
+- Dodaj audit trail zdarzeń domenowych i operacyjnych jako obowiązkowy kontrakt:
+  - `MEDICAL_TEXT_EDITED`, `DOCUMENT_PUBLISHED`, `DOCUMENT_REPUBLISHED`, `RETENTION_FILE_DELETED`,
+  - spójne metadane (`actor`, `timestamp`, `entity_id`, `reason`) i testy integralności logowania.
 
 ## Etap 7: Hardening i gotowość produkcyjna
 
 - Security hardening: env-only secrets, secure cookies/HTTPS/HSTS (prod), minimalizacja PII w logach.
+- Auth/session hardening (US-001):
+  - timeout sesji po bezczynności, rotacja/odświeżanie sesji i właściwe ustawienia cookie (`Secure`, `HttpOnly`, `SameSite`),
+  - testy negatywne dla wygasłych sesji i niedozwolonego dostępu między rolami.
 - Testy E2E krytycznych flow:
   - manual intake -> publish -> outbox complete,
   - republish,
