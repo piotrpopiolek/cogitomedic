@@ -149,12 +149,15 @@ SECURE_HSTS_PRELOAD = ENVIRONMENT == "prod"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# django-cron setup
-CRON_CLASSES = [
-    "apps.outbox.cron.OutboxCronJob",
-    "apps.outbox.cron.RetentionCronJob",
-    "apps.reception.cron.DailyImportCronJob",
-]
+TASKS = {
+    "default": {
+        "BACKEND": os.environ.get(
+            "TASKS_BACKEND",
+            "django.tasks.backends.immediate.ImmediateBackend",
+        ),
+        "QUEUES": [],
+    }
+}
 OUTBOX_BATCH_SIZE = int(os.environ.get("OUTBOX_BATCH_SIZE", "10"))
 OUTBOX_MAX_RETRIES = int(os.environ.get("OUTBOX_MAX_RETRIES", "10"))
 OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", "30"))
