@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Project Description](#project-description)
+- [API Documentation](#api-documentation)
 - [Tech Stack](#tech-stack)
 - [Getting Started Locally](#getting-started-locally)
 - [Docker Quick Start](#docker-quick-start)
@@ -31,6 +32,13 @@
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
 
 The user interface is available in **English** and **German**.
+
+---
+
+## API Documentation
+
+- Polish version: [`.ai/api-plan-pl.md`](.ai/api-plan-pl.md)
+- English version: [`.ai/api-plan.md`](.ai/api-plan.md)
 
 ---
 
