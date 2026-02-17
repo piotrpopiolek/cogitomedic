@@ -46,14 +46,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='outboxevent',
-            constraint=models.CheckConstraint(check=models.Q(('retry_count__gte', 0), ('max_retries__gt', 0), ('retry_count__lte', models.F('max_retries'))), name='outbox_event_retry_bounds'),
+            constraint=models.CheckConstraint(condition=models.Q(('retry_count__gte', 0), ('max_retries__gt', 0), ('retry_count__lte', models.F('max_retries'))), name='outbox_event_retry_bounds'),
         ),
         migrations.AddConstraint(
             model_name='outboxevent',
-            constraint=models.CheckConstraint(check=models.Q(('aggregate_type', 'MEDICAL_DOCUMENT_VERSION')), name='outbox_event_aggregate_type_guard'),
+            constraint=models.CheckConstraint(condition=models.Q(('aggregate_type', 'MEDICAL_DOCUMENT_VERSION')), name='outbox_event_aggregate_type_guard'),
         ),
         migrations.AddConstraint(
             model_name='outboxevent',
-            constraint=models.CheckConstraint(check=models.Q(('aggregate_id', models.F('medical_document_version_id'))), name='outbox_event_aggregate_id_guard'),
+            constraint=models.CheckConstraint(condition=models.Q(('aggregate_id', models.F('medical_document_version_id'))), name='outbox_event_aggregate_id_guard'),
         ),
     ]

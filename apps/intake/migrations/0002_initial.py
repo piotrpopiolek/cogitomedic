@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='consentdefinition',
-            constraint=models.CheckConstraint(check=models.Q(('effective_to__isnull', True), ('effective_to__gte', models.F('effective_from')), _connector='OR'), name='consent_effective_to_after_from'),
+            constraint=models.CheckConstraint(condition=models.Q(('effective_to__isnull', True), ('effective_to__gte', models.F('effective_from')), _connector='OR'), name='consent_effective_to_after_from'),
         ),
         migrations.AddIndex(
             model_name='anamnesisquestiondefinition',
@@ -57,7 +57,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='anamnesisquestiondefinition',
-            constraint=models.CheckConstraint(check=models.Q(('effective_to__isnull', True), ('effective_to__gte', models.F('effective_from')), _connector='OR'), name='anamnesis_question_effective_to_after_from'),
+            constraint=models.CheckConstraint(condition=models.Q(('effective_to__isnull', True), ('effective_to__gte', models.F('effective_from')), _connector='OR'), name='anamnesis_question_effective_to_after_from'),
         ),
         migrations.AddField(
             model_name='anamnesisoptiondefinition',
@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patientintakeform',
-            constraint=models.CheckConstraint(check=models.Q(('form_status', 'IN_PROGRESS'), models.Q(('submitted_at__isnull', False), ('signature_file_path__isnull', False)), _connector='OR'), name='intake_submitted_requires_signature'),
+            constraint=models.CheckConstraint(condition=models.Q(('form_status', 'IN_PROGRESS'), models.Q(('submitted_at__isnull', False), ('signature_file_path__isnull', False)), _connector='OR'), name='intake_submitted_requires_signature'),
         ),
         migrations.AddIndex(
             model_name='patientintakeconsent',
@@ -90,7 +90,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patientintakeconsent',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('accepted', True), ('accepted_at__isnull', False)), models.Q(('accepted', False), ('accepted_at__isnull', True)), _connector='OR'), name='intake_consent_accepted_time'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('accepted', True), ('accepted_at__isnull', False)), models.Q(('accepted', False), ('accepted_at__isnull', True)), _connector='OR'), name='intake_consent_accepted_time'),
         ),
         migrations.AddIndex(
             model_name='anamnesisoptiondefinition',

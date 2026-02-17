@@ -83,19 +83,19 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patient',
-            constraint=models.CheckConstraint(check=models.Q(('phone__regex', '^[0-9+() -]{7,20}$')), name='patient_phone_format'),
+            constraint=models.CheckConstraint(condition=models.Q(('phone__regex', '^[0-9+() -]{7,20}$')), name='patient_phone_format'),
         ),
         migrations.AddConstraint(
             model_name='patient',
-            constraint=models.CheckConstraint(check=models.Q(('identity_status__in', ['CONFIRMED', 'TEMPORARY'])), name='patient_identity_status_valid'),
+            constraint=models.CheckConstraint(condition=models.Q(('identity_status__in', ['CONFIRMED', 'TEMPORARY'])), name='patient_identity_status_valid'),
         ),
         migrations.AddConstraint(
             model_name='patient',
-            constraint=models.CheckConstraint(check=models.Q(('doctolib_patient_id__isnull', False), models.Q(('identity_alert_created_at__isnull', False), ('identity_resolution_due_at__isnull', False)), _connector='OR'), name='patient_temp_identity_requires_alert'),
+            constraint=models.CheckConstraint(condition=models.Q(('doctolib_patient_id__isnull', False), models.Q(('identity_alert_created_at__isnull', False), ('identity_resolution_due_at__isnull', False)), _connector='OR'), name='patient_temp_identity_requires_alert'),
         ),
         migrations.AddConstraint(
             model_name='patient',
-            constraint=models.CheckConstraint(check=models.Q(('identity_resolution_due_at__isnull', True), ('identity_alert_created_at__isnull', True), ('identity_resolution_due_at__gte', models.F('identity_alert_created_at')), _connector='OR'), name='patient_identity_due_after_alert'),
+            constraint=models.CheckConstraint(condition=models.Q(('identity_resolution_due_at__isnull', True), ('identity_alert_created_at__isnull', True), ('identity_resolution_due_at__gte', models.F('identity_alert_created_at')), _connector='OR'), name='patient_identity_due_after_alert'),
         ),
         migrations.AddField(
             model_name='dailyqueue',
@@ -143,7 +143,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patientimporterror',
-            constraint=models.CheckConstraint(check=models.Q(('row_number__gt', 0)), name='import_error_row_positive'),
+            constraint=models.CheckConstraint(condition=models.Q(('row_number__gt', 0)), name='import_error_row_positive'),
         ),
         migrations.AddIndex(
             model_name='patientimportbatch',
@@ -155,7 +155,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patientimportbatch',
-            constraint=models.CheckConstraint(check=models.Q(('total_rows__gte', 0), ('inserted_rows__gte', 0), ('error_rows__gte', 0)), name='import_batch_non_negative_counts'),
+            constraint=models.CheckConstraint(condition=models.Q(('total_rows__gte', 0), ('inserted_rows__gte', 0), ('error_rows__gte', 0)), name='import_batch_non_negative_counts'),
         ),
         migrations.AddIndex(
             model_name='patientformsession',
@@ -175,15 +175,15 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='patientformsession',
-            constraint=models.CheckConstraint(check=models.Q(('expires_at__gt', models.F('created_at'))), name='session_expiry_after_create'),
+            constraint=models.CheckConstraint(condition=models.Q(('expires_at__gt', models.F('created_at'))), name='session_expiry_after_create'),
         ),
         migrations.AddConstraint(
             model_name='patientformsession',
-            constraint=models.CheckConstraint(check=models.Q(('form_locale__regex', '^(de|en)(-[A-Z]{2})?$')), name='session_locale_format'),
+            constraint=models.CheckConstraint(condition=models.Q(('form_locale__regex', '^(de|en)(-[A-Z]{2})?$')), name='session_locale_format'),
         ),
         migrations.AddConstraint(
             model_name='patientformsession',
-            constraint=models.CheckConstraint(check=models.Q(('consumed_at__isnull', True), ('consumed_at__lte', models.F('expires_at')), _connector='OR'), name='session_consumed_before_expiry'),
+            constraint=models.CheckConstraint(condition=models.Q(('consumed_at__isnull', True), ('consumed_at__lte', models.F('expires_at')), _connector='OR'), name='session_consumed_before_expiry'),
         ),
         migrations.AddIndex(
             model_name='dailyqueue',

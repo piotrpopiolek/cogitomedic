@@ -6,7 +6,6 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.postgres.fields import CIEmailField
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.db.models import F, Q
@@ -71,7 +70,7 @@ class Patient(models.Model):
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField()
     phone = models.CharField(max_length=20)
-    email = CIEmailField()
+    email = models.EmailField()
     doctolib_patient_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
     identity_status = models.CharField(
         max_length=20,
@@ -105,11 +104,11 @@ class Patient(models.Model):
                 name="patient_external_unique",
             ),
             models.CheckConstraint(
-                check=Q(phone__regex=r"^[0-9+() -]{7,20}$"),
+                condition=Q(phone__regex=r"^[0-9+() -]{7,20}$"),
                 name="patient_phone_format",
             ),
             models.CheckConstraint(
-                check=Q(
+                condition=Q(
                     identity_status__in=[
                         PatientIdentityStatus.CONFIRMED,
                         PatientIdentityStatus.TEMPORARY,
@@ -118,7 +117,7 @@ class Patient(models.Model):
                 name="patient_identity_status_valid",
             ),
             models.CheckConstraint(
-                check=Q(doctolib_patient_id__isnull=False)
+                condition=Q(doctolib_patient_id__isnull=False)
                 | (
                     Q(identity_alert_created_at__isnull=False)
                     & Q(identity_resolution_due_at__isnull=False)
@@ -126,7 +125,7 @@ class Patient(models.Model):
                 name="patient_temp_identity_requires_alert",
             ),
             models.CheckConstraint(
-                check=Q(identity_resolution_due_at__isnull=True)
+                condition=Q(identity_resolution_due_at__isnull=True)
                 | Q(identity_alert_created_at__isnull=True)
                 | Q(identity_resolution_due_at__gte=F("identity_alert_created_at")),
                 name="patient_identity_due_after_alert",
@@ -146,7 +145,7 @@ class PatientContactHistory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="contact_history")
     phone = models.CharField(max_length=20, blank=True, null=True)
-    email = CIEmailField(blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
     changed_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -321,15 +320,15 @@ class PatientFormSession(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=Q(expires_at__gt=F("created_at")),
+                condition=Q(expires_at__gt=F("created_at")),
                 name="session_expiry_after_create",
             ),
             models.CheckConstraint(
-                check=Q(form_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
+                condition=Q(form_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
                 name="session_locale_format",
             ),
             models.CheckConstraint(
-                check=Q(consumed_at__isnull=True) | Q(consumed_at__lte=F("expires_at")),
+                condition=Q(consumed_at__isnull=True) | Q(consumed_at__lte=F("expires_at")),
                 name="session_consumed_before_expiry",
             ),
         ]
@@ -381,7 +380,7 @@ class PatientImportBatch(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=Q(total_rows__gte=0)
+                condition=Q(total_rows__gte=0)
                 & Q(inserted_rows__gte=0)
                 & Q(error_rows__gte=0),
                 name="import_batch_non_negative_counts",
@@ -403,5 +402,5 @@ class PatientImportError(models.Model):
     class Meta:
         db_table = "patient_import_error"
         constraints = [
-            models.CheckConstraint(check=Q(row_number__gt=0), name="import_error_row_positive")
+            models.CheckConstraint(condition=Q(row_number__gt=0), name="import_error_row_positive")
         ]
