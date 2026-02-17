@@ -141,3 +141,24 @@ def submit_patient_intake_form(
     )
 
     return intake_form
+
+
+@transaction.atomic
+def save_intake_anamnesis_payload(
+    *,
+    intake_form_id: uuid.UUID,
+    anamnesis_schema_version: int,
+    answers_payload: list[dict],
+) -> PatientIntakeForm:
+    """Persist validated anamnesis payload for in-progress intake form."""
+    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+        raise StateTransitionError("Anamnesis can be edited only for IN_PROGRESS intake form.")
+
+    intake_form.anamnesis_schema_version = anamnesis_schema_version
+    intake_form.anamnesis_payload = {
+        "schema_version": anamnesis_schema_version,
+        "answers": answers_payload,
+    }
+    intake_form.save(update_fields=["anamnesis_schema_version", "anamnesis_payload", "updated_at"])
+    return intake_form

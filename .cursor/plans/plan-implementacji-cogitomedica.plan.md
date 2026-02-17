@@ -9,14 +9,17 @@ todos:
     content: Zaimplementować modele i migracje zgodnie z .ai/db-plan.md wraz z indeksami i constraintami.
     status: completed
   - id: phase1-reception-tablet
-    content: "Dowieźć flow Fazy 1: recepcja, token latest-wins, intake z walidacją zgód i anamnezy."
-    status: pending
+    content: ""
+    status: in_progress
   - id: phase2-medical-publish
-    content: "Dowieźć flow Fazy 2: dokument medyczny, wersjonowanie i idempotentna publikacja."
-    status: pending
+    content: ""
+    status: in_progress
   - id: outbox-integrations
     content: Uruchomić pipeline outbox + Django Tasks + PDF + HiDrive/SMS + retencję 30 dni.
-    status: pending
+    status: in_progress
+  - id: api-contracts-priority
+    content: ""
+    status: in_progress
   - id: phase3-import-hidrive-api
     content: Dowieźć import dzienny i awaryjny oraz integrację API HiDrive (Faza 3).
     status: pending
@@ -27,14 +30,14 @@ todos:
     content: Wykonać hardening bezpieczeństwa, testy E2E i checklistę gotowości produkcyjnej.
     status: pending
   - id: doctor-templates-us019
-    content: Zaimplementować US-019 (szablony lekarza DE/EN): CRUD, aktywacja/dezaktywacja, uprawnienia globalne/prywatne i integracja z generate-text.
+    content: "Zaimplementować US-019 (szablony lekarza DE/EN): CRUD, aktywacja/dezaktywacja, uprawnienia globalne/prywatne i integracja z generate-text."
     status: pending
   - id: auth-session-hardening
-    content: Domknąć wymagania US-001: timeout sesji, polityki wygasania i testy bezpieczeństwa auth/session.
+    content: "Domknąć wymagania US-001: timeout sesji, polityki wygasania i testy bezpieczeństwa auth/session."
     status: pending
   - id: domain-audit-trail
     content: Dodać pełny audit trail zdarzeń domenowych (edycja tekstu, publikacja/republikacja, retencja) i włączyć go do DoD.
-    status: pending
+    status: in_progress
 isProject: false
 ---
 
@@ -52,6 +55,8 @@ isProject: false
 - Runtime backendu podniesiony do Django 6.0.x, a mechanizm zadań tła ujednolicony do jednego rozwiązania: **Django Tasks + Transactional Outbox**.
 - Dokumentacje projektowe (`README.md`, `.ai/prd.md`, `.ai/db-plan.md`, `.ai/api-plan.md`, `.ai/api-plan-pl.md`) zaktualizowane pod Django 6 i `django.tasks`.
 - Zredukowano dług w zależnościach: aktualizacje krytycznych bibliotek HTTP/TLS, usunięcie duplikatu `dotenv`, usunięcie nieużywanych `django-select2`, `reportlab`, `PyPDF2`, dodanie `requirements-dev.txt` (pytest + QA), przejście na `psycopg`.
+- Zaimplementowano kluczowe serwisy domenowe i testy: Faza 1 (`reception` + `intake`), Faza 2 (`medical`), pipeline outbox oraz bazowy audit trail.
+- Decyzja wykonawcza: **API jest aktualnie najwyższym priorytetem**, a walidacja payloadów JSON ma być realizowana przez **Pydantic v2**.
 
 ## Docelowa architektura modułów
 
@@ -108,8 +113,11 @@ flowchart LR
 - Wydziel migracje na paczki tematyczne (identity/queue/intake/medical/outbox/import), aby uprościć rollback i review.
 - Dodaj testy integralności DB (constraint tests) dla: statusów, idempotency key, retencji i tokenów.
 
-## Etap 3: Faza 1 PRD (Recepcja + Tablet)
+## Etap 3: Faza 1 PRD (Recepcja + Tablet, API-first)
 
+- Priorytet realizacji w tym etapie:
+  - najpierw endpointy API (DRF) oparte o istniejące serwisy domenowe,
+  - następnie domknięcie walidacji kontraktów i testów E2E.
 - Zaimplementuj serwisy domenowe:
   - `create_or_update_patient_manual()` z `TEMPORARY` + alert admin przy braku `doctolib_patient_id`.
   - `create_queue_entry()` z dopuszczeniem wielu wizyt/dzień.
@@ -118,6 +126,7 @@ flowchart LR
 - Zaimplementuj API i walidację payloadów:
   - intake (`anamnesis_payload`, `body_map_data`, podpis),
   - locale-aware słowniki pytań/zgód (DE/EN, neutralne kody w DB).
+  - walidacja kontraktów JSON przez **Pydantic v2** (`schema_version` obowiązkowe).
 - Dodaj testy przejść stanu `queue_entry` i `patient_intake_form` (pozytywne + negatywne).
 
 ## Etap 4: Faza 2 PRD (Panel lekarza + publikacja)
@@ -130,6 +139,7 @@ flowchart LR
   - rozróżnienie uprawnień dla szablonów globalnych (klinika) i prywatnych (per lekarz),
   - użycie szablonu bazowego w endpointach `generate-text` i zapis `generated_text`/`edited_text`.
 - Wprowadź kontrakt `medical_payload` v1 (global + lesions, `generated_text`/`edited_text`, template context).
+- Wdroż walidację `medical_payload` przez **Pydantic v2** (wersjonowanie schematu + kompatybilność wsteczna).
 - Dodaj logikę republish (edycja opublikowanego dokumentu -> nowa wersja, ta sama ścieżka HiDrive, opcjonalny SMS).
 - Pokryj testami scenariusze wyścigów (podwójne kliknięcie publish, retry publish).
 
@@ -184,7 +194,7 @@ flowchart LR
   - `[/.ai/prd.md](C:/Users/piotr/Programming/cogitomedica/.ai/prd.md)`
   - `[/.ai/db-plan.md](C:/Users/piotr/Programming/cogitomedica/.ai/db-plan.md)`
 - Nowe moduły aplikacyjne (do utworzenia):
-  - `apps/users/*`, `apps/reception/*`, `apps/intake/*`, `apps/medical/*`, `apps/outbox/*`, `apps/integrations/*`, `apps/operations/*`.
+  - `apps/users/`*, `apps/reception/`*, `apps/intake/*`, `apps/medical/*`, `apps/outbox/*`, `apps/integrations/*`, `apps/operations/*`.
 
 ## Proponowana kolejność realizacji (sprintowo)
 
