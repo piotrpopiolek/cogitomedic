@@ -28,7 +28,7 @@
 - **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, generate one-time links for tablet forms
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
-- **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed by cron workers via Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
+- **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
 
 The user interface is available in **English** and **German**.
 
@@ -38,10 +38,10 @@ The user interface is available in **English** and **German**.
 
 | Layer | Technologies |
 |-------|--------------|
-| **Backend** | Python, Django 4.2 |
+| **Backend** | Python, Django 6.0.2 |
 | **Database** | PostgreSQL |
 | **PDF** | WeasyPrint (HTML/CSS → PDF; Unicode, embed images as base64). PyPDF2 for merging if needed. |
-| **Scheduling** | django-cron (Outbox: 30s interval, batch up to 10 events, exponential backoff, circuit breaker for HiDrive) |
+| **Scheduling** | Django 6 Tasks (`django.tasks`) with command-driven enqueueing (`manage.py enqueue_tasks`) |
 | **SMS** | smsapi-client |
 | **Monitoring** | Sentry |
 | **Config** | python-dotenv |
@@ -216,9 +216,9 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py test` | Run the test suite (Django `TestCase`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |
-| `python manage.py runcrons` | Run cron jobs (e.g. retention/cleaner) |
+| `python manage.py enqueue_tasks` | Enqueue background tasks (outbox, retention, import) |
 
-Scheduled tasks (e.g. retention and Outbox processing) are configured via `django-cron` and `CRON_CLASSES` in `cogitomedica/settings.py`. Outbox processing runs every 30 seconds, handles up to 10 events per run, uses `SELECT ... FOR UPDATE SKIP LOCKED`, exponential backoff for retries (cap 1 h), and a circuit breaker for HiDrive (see `.ai/risk-mitigation-plan.md`).
+Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks`. The default backend in this repository is `ImmediateBackend` for deterministic local development; production should use a worker-capable backend.
 
 Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
 
@@ -259,7 +259,7 @@ The product is developed in **three phases**:
 | **2** | Doctor panel for medical data and document approval; automated archive upload and SMS |
 | **3** | Improved daily import process for files exported from Doctolib + HiDrive API (archiving) |
 
-Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and django-cron (e.g. retention). Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
+Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and Django 6 Tasks for background job contracts. Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
 
 ---
 

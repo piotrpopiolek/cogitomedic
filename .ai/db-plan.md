@@ -480,7 +480,7 @@
 - Włączenie rozszerzeń:
   - `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
   - `CREATE EXTENSION IF NOT EXISTS citext;`
-- Rekomendowany poziom izolacji dla publikacji + outbox: transakcja ACID (`READ COMMITTED` + blokady wierszy `FOR UPDATE SKIP LOCKED` przy workerze cron).
+- Rekomendowany poziom izolacji dla publikacji + outbox: transakcja ACID (`READ COMMITTED` + blokady wierszy `FOR UPDATE SKIP LOCKED` przy workerze zasilanym przez Django Tasks).
 
 ## 5. Wszelkie dodatkowe uwagi lub wyjaśnienia dotyczące decyzji projektowych
 
@@ -500,6 +500,7 @@
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
+- Runtime backendu: Django 6 + natywne `django.tasks`; tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu asynchronicznego.
 - **Języki portalu:** interfejs jest dostępny w języku angielskim i niemieckim. Pole `staff_user.preferred_locale` (np. `en-GB`, `de-DE`) określa preferowany język panelu personelu; dla tabletu pacjenta język może być przekazany w linku lub wybrany w aplikacji.
 
 ### 5.1. Kontrakt `anamnesis_payload` v1 (Anamnesebogen Q1–Q11)

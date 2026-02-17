@@ -2,6 +2,8 @@
 
 ## 0. Założenia
 - Bazowa ścieżka API to `/api/v1`.
+- Bazowy runtime backendu to **Django 6.0.x**.
+- Zadania tła są definiowane przez **Django Tasks** (`django.tasks`) i orkiestrację przez Transactional Outbox.
 - **Języki portalu:** interfejs użytkownika (panel personelu i tablet pacjenta) jest dostępny w języku **angielskim** i **niemieckim**. Użytkownik personelu ma pole `preferred_locale` (np. `en-GB`, `de-DE`); dla tabletu pacjenta język może wynikać z parametru w linku, nagłówka Accept-Language lub domyślnego ustawienia placówki.
 - Komunikacja tylko przez HTTPS.
 - Domyślny format payloadu to JSON (`application/json`), z wyjątkiem endpointów uploadu plików (`multipart/form-data`).

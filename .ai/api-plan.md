@@ -2,6 +2,8 @@
 
 ## 0. Assumptions
 - API base path is `/api/v1`.
+- Backend runtime baseline is **Django 6.0.x**.
+- Background jobs are defined with **Django Tasks** (`django.tasks`) and orchestrated with Transactional Outbox.
 - **Portal languages:** The user interface (staff panel and patient tablet) is available in **English** and **German**. Staff users have a `preferred_locale` field (e.g. `en-GB`, `de-DE`); for the patient tablet the language may be provided via link parameter, Accept-Language header, or clinic default.
 - Transport is HTTPS only.
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
