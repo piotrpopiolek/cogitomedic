@@ -3,7 +3,13 @@ from __future__ import annotations
 from django.urls import path
 
 from apps.intake.api_views import intake_form_anamnesis_view, intake_form_submit_view
-from apps.medical.api_views import medical_document_draft_view, medical_document_publish_view, medical_documents_view
+from apps.medical.api_views import (
+    doctor_text_template_detail_view,
+    doctor_text_templates_view,
+    medical_document_draft_view,
+    medical_document_publish_view,
+    medical_documents_view,
+)
 from apps.outbox.api_views import (
     operations_outbox_process_view,
     operations_retention_run_view,
@@ -14,6 +20,16 @@ from apps.reception.api_views import queue_entry_sessions_view
 
 
 urlpatterns = [
+    path(
+        "doctor-text-templates",
+        doctor_text_templates_view,
+        name="doctor-text-templates",
+    ),
+    path(
+        "doctor-text-templates/<uuid:template_id>",
+        doctor_text_template_detail_view,
+        name="doctor-text-template-detail",
+    ),
     path(
         "outbox-events",
         outbox_events_view,
