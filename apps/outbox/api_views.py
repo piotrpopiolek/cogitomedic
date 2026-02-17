@@ -9,9 +9,14 @@ from pydantic import ValidationError
 
 from apps.core.api_utils import json_error
 from apps.core.exceptions import DomainError
-from apps.outbox.api_schemas import OutboxEventsQueryParams, ProcessOutboxRequest, RetryOutboxEventRequest
+from apps.outbox.api_schemas import (
+    OutboxEventsQueryParams,
+    ProcessOutboxRequest,
+    RetentionRunRequest,
+    RetryOutboxEventRequest,
+)
 from apps.outbox.models import OutboxEvent
-from apps.outbox.services import process_outbox_events, retry_outbox_event
+from apps.outbox.services import process_outbox_events, retry_outbox_event, run_retention_cleanup
 
 
 def _read_json_body(request: HttpRequest) -> dict:
@@ -109,4 +114,34 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
             "retry_count": retried.retry_count,
         },
         status=200,
+    )
+
+
+@csrf_exempt
+def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = RetentionRunRequest.model_validate(_read_json_body(request))
+    except json.JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        result = run_retention_cleanup(
+            older_than_days=body.older_than_days,
+            dry_run=body.dry_run,
+        )
+    except DomainError as exc:
+        return json_error(str(exc), status=400)
+
+    return JsonResponse(
+        {
+            "candidates": result.candidates,
+            "deleted": result.deleted,
+            "skipped_not_safe": result.skipped_not_safe,
+        },
+        status=202,
     )

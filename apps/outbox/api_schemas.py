@@ -24,3 +24,10 @@ class RetryOutboxEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str = Field(min_length=1, max_length=500)
+
+
+class RetentionRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dry_run: bool = True
+    older_than_days: int = Field(default=30, ge=1, le=3650)

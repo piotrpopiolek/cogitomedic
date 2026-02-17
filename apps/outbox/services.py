@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError
-from apps.medical.models import MedicalDocumentVersion, PdfStatus
+from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
@@ -18,6 +19,13 @@ class OutboxProcessingResult:
     processed: int
     failed: int
     dead_lettered: int
+
+
+@dataclass(frozen=True)
+class RetentionCleanupResult:
+    candidates: int
+    deleted: int
+    skipped_not_safe: int
 
 
 class OutboxEventNotRetryableError(DomainError):
@@ -194,3 +202,73 @@ def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
         metadata={"event_type": event.event_type, "reason": reason},
     )
     return event
+
+
+def _try_delete_file(path_value: str | None) -> None:
+    if not path_value:
+        return
+    path = Path(path_value)
+    if path.exists() and path.is_file():
+        path.unlink()
+
+
+@transaction.atomic
+def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) -> RetentionCleanupResult:
+    """Delete local PDFs for safe, old published versions."""
+    if older_than_days <= 0:
+        raise DomainError("older_than_days must be positive.")
+
+    threshold = timezone.now() - timedelta(days=older_than_days)
+    candidates = list(
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            version_status=DocVersionStatus.PUBLISHED,
+            published_at__isnull=False,
+            published_at__lte=threshold,
+            local_pdf_deleted_at__isnull=True,
+        )
+        .order_by("published_at")
+    )
+
+    deleted = 0
+    skipped_not_safe = 0
+    now = timezone.now()
+
+    for version in candidates:
+        if not (version.hidrive_sent and version.sms_sent):
+            skipped_not_safe += 1
+            create_audit_event(
+                event_type="RETENTION_FILE_SKIPPED",
+                patient_id=version.medical_document.queue_entry.patient_id,
+                medical_document_id=version.medical_document_id,
+                metadata={
+                    "medical_document_version_id": str(version.id),
+                    "reason": "NOT_SAFE_FOR_DELETION",
+                },
+            )
+            continue
+
+        if dry_run:
+            continue
+
+        _try_delete_file(version.pdf_local_path)
+        version.local_pdf_deleted_at = now
+        version.pdf_local_path = None
+        version.save(update_fields=["local_pdf_deleted_at", "pdf_local_path"])
+        deleted += 1
+
+        create_audit_event(
+            event_type="RETENTION_FILE_DELETED",
+            patient_id=version.medical_document.queue_entry.patient_id,
+            medical_document_id=version.medical_document_id,
+            metadata={
+                "medical_document_version_id": str(version.id),
+                "older_than_days": older_than_days,
+            },
+        )
+
+    return RetentionCleanupResult(
+        candidates=len(candidates),
+        deleted=deleted,
+        skipped_not_safe=skipped_not_safe,
+    )
