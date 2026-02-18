@@ -11,7 +11,14 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import (
+    json_error,
+    parse_bool_query,
+    parse_positive_int,
+    read_json_body,
+    require_authenticated_user,
+    require_user_role,
+)
 from apps.core.exceptions import DomainError
 from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
 from apps.users.models import StaffUser
@@ -46,26 +53,6 @@ def _serialize_staff_user(user: StaffUser) -> dict:
         "created_at": user.created_at.isoformat(),
         "updated_at": user.updated_at.isoformat(),
     }
-
-
-def _parse_bool_query(value: str) -> bool | None:
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "yes", "y"}:
-        return True
-    if normalized in {"0", "false", "no", "n"}:
-        return False
-    return None
-
-
-def _parse_positive_int(value: str, *, default: int, minimum: int = 1, maximum: int = 100) -> int:
-    if not value:
-        return default
-    parsed = int(value)
-    if parsed < minimum:
-        return minimum
-    if parsed > maximum:
-        return maximum
-    return parsed
 
 
 @csrf_exempt
@@ -114,6 +101,13 @@ def auth_me_view(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def staff_users_view(request: HttpRequest) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
+
     if request.method == "GET":
         qs = StaffUser.objects.all().order_by("username")
         role = request.GET.get("role")
@@ -121,7 +115,7 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(role=role)
         is_active_raw = request.GET.get("is_active")
         if is_active_raw is not None:
-            is_active = _parse_bool_query(is_active_raw)
+            is_active = parse_bool_query(is_active_raw)
             if is_active is None:
                 return json_error("Invalid is_active query parameter.", status=400)
             qs = qs.filter(is_active=is_active)
@@ -129,8 +123,8 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
         try:
-            page = _parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
-            page_size = _parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
+            page = parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
+            page_size = parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
         except ValueError:
             return json_error("Invalid pagination parameters.", status=400)
         total = qs.count()
@@ -170,6 +164,13 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
+
     if request.method not in ("GET", "PATCH", "DELETE"):
         return json_error("Method not allowed.", status=405)
     try:

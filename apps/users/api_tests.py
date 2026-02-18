@@ -59,6 +59,7 @@ class StaffUsersApiTests(TestCase):
             role=StaffRole.ADMIN,
             is_staff=True,
         )
+        self.client.force_login(self.user)
 
     def test_get_staff_users_returns_paginated_items(self) -> None:
         response = self.client.get("/api/v1/staff-users?page=1&page_size=20")
@@ -139,3 +140,21 @@ class StaffUsersApiTests(TestCase):
 
         response = self.client.get(f"/api/v1/staff-users/{uuid4()}")
         self.assertEqual(response.status_code, 404)
+
+    def test_staff_users_requires_authentication(self) -> None:
+        self.client.logout()
+        response = self.client.get("/api/v1/staff-users")
+        self.assertEqual(response.status_code, 401)
+
+    def test_staff_users_requires_admin_role(self) -> None:
+        self.client.logout()
+        doctor = StaffUser.objects.create_user(
+            username="doctor-non-admin",
+            email="doctor.non.admin@example.com",
+            password="safe-password",
+            role=StaffRole.DOCTOR,
+            is_staff=True,
+        )
+        self.client.force_login(doctor)
+        response = self.client.get("/api/v1/staff-users")
+        self.assertEqual(response.status_code, 403)

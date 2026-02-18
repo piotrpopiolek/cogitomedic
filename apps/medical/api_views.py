@@ -8,7 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_authenticated_user, require_user_role
 from apps.core.exceptions import DomainError
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -29,6 +29,12 @@ from apps.medical.template_services import (
 
 @csrf_exempt
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:
@@ -37,6 +43,8 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    if body.created_by_user_id != request.user.id:
+        return json_error("Actor mismatch.", status=403)
 
     try:
         document = create_or_get_medical_document(
@@ -58,6 +66,12 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "PUT":
         return json_error("Method not allowed.", status=405)
     try:
@@ -66,6 +80,8 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    if body.updated_by_user_id != request.user.id:
+        return json_error("Actor mismatch.", status=403)
 
     if body.medical_payload.get("schema_version") != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
@@ -96,6 +112,12 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
 
 @csrf_exempt
 def medical_document_publish_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:
@@ -104,6 +126,8 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    if body.published_by_user_id != request.user.id:
+        return json_error("Actor mismatch.", status=403)
 
     try:
         version = publish_document_version(
@@ -129,6 +153,12 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
 
 @csrf_exempt
 def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method == "GET":
         try:
             query = DoctorTemplateListQuery.model_validate(
@@ -140,6 +170,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             )
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        if query.actor_user_id != request.user.id:
+            return json_error("Actor mismatch.", status=403)
 
         try:
             templates = list_templates(
@@ -179,6 +211,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             return json_error("Invalid JSON payload.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        if body.actor_user_id != request.user.id:
+            return json_error("Actor mismatch.", status=403)
 
         try:
             template = create_template(
@@ -210,6 +244,12 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) -> JsonResponse:
+    auth_error = require_authenticated_user(request)
+    if auth_error:
+        return auth_error
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "PATCH":
         return json_error("Method not allowed.", status=405)
 
@@ -219,6 +259,8 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    if body.actor_user_id != request.user.id:
+        return json_error("Actor mismatch.", status=403)
 
     try:
         template = update_template(
