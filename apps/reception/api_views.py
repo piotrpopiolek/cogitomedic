@@ -21,6 +21,7 @@ from apps.reception.api_schemas import (
     CreateQueueEntrySessionRequest,
     CreateTabletDeviceRequest,
     CreatePatientRequest,
+    MergePatientRequest,
     UpdateClinicSiteRequest,
     UpdateConsultingRoomRequest,
     UpdateDailyQueueRequest,
@@ -42,6 +43,7 @@ from apps.reception.services import (
     create_daily_queue,
     create_queue_entry,
     issue_tablet_session_token_latest_wins,
+    merge_temporary_patient_into_confirmed,
     update_daily_queue_status,
     update_queue_entry,
 )
@@ -374,6 +376,50 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
     end = start + page_size
     items = [_serialize_contact_history(item) for item in qs[start:end]]
     return JsonResponse({"items": items})
+
+
+@csrf_exempt
+def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+
+    try:
+        body = MergePatientRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        result = merge_temporary_patient_into_confirmed(
+            source_patient_id=patient_id,
+            target_patient_id=body.target_patient_id,
+            source_action=body.source_action,
+            reason=body.reason,
+            actor_user_id=body.actor_user_id,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Patient not found.", status=404)
+    except StateTransitionError as exc:
+        return json_error(str(exc), status=409)
+    except DomainError as exc:
+        if str(exc) in {"SOURCE_NOT_TEMPORARY", "TARGET_NOT_CONFIRMED"}:
+            return json_error(str(exc), status=422)
+        return json_error(str(exc), status=400)
+
+    return JsonResponse(
+        {
+            "merged": result.merged,
+            "source_patient_id": str(result.source_patient_id),
+            "target_patient_id": str(result.target_patient_id),
+            "moved_entities": {
+                "queue_entries": result.moved_queue_entries,
+                "intake_forms": result.moved_intake_forms,
+                "medical_documents": result.moved_medical_documents,
+            },
+            "identity_alert_closed": result.identity_alert_closed,
+        }
+    )
 
 
 @csrf_exempt

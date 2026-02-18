@@ -135,3 +135,12 @@ class UpdatePatientRequest(BaseModel):
     is_active: bool | None = None
     changed_by_user_id: UUID | None = None
     change_reason: str | None = Field(default=None, max_length=100)
+
+
+class MergePatientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_patient_id: UUID
+    source_action: str = Field(default="ARCHIVE", pattern="^(ARCHIVE|KEEP_ACTIVE)$")
+    reason: str | None = Field(default=None, max_length=250)
+    actor_user_id: UUID | None = None
