@@ -19,7 +19,10 @@ def read_json_body(request: HttpRequest) -> dict:
     return json.loads(request.body.decode("utf-8") or "{}")
 
 
-def parse_bool_query(value: str) -> bool | None:
+def parse_bool_query(value: str | None) -> bool | None:
+    """Parse query param to bool. Returns None if value is None or not a recognized boolean string."""
+    if value is None:
+        return None
     normalized = value.strip().lower()
     if normalized in {"1", "true", "yes", "y"}:
         return True

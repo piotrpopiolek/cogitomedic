@@ -3,6 +3,7 @@ from __future__ import annotations
 from json import JSONDecodeError
 from uuid import UUID
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
@@ -105,7 +106,7 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
 
     try:
         event = OutboxEvent.objects.get(id=outbox_event_id)
-    except OutboxEvent.DoesNotExist:
+    except ObjectDoesNotExist:
         return json_error("Outbox event not found.", status=404)
 
     try:
