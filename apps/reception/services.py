@@ -11,7 +11,19 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
-from apps.reception.models import DailyQueue, Patient, PatientFormSession, QueueEntry, QueueStatus, TabletDevice
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    PatientFormSession,
+    QueueEntry,
+    QueueEntryStatus,
+    QueueShift,
+    QueueSource,
+    QueueStatus,
+    TabletDevice,
+)
 
 
 class InvalidLocaleError(DomainError):
@@ -80,6 +92,80 @@ def create_or_update_patient_manual(
 
     patient.save()
     return patient
+
+
+@transaction.atomic
+def create_daily_queue(
+    *,
+    queue_date: timezone.datetime.date,
+    clinic_site_id: uuid.UUID,
+    consulting_room_id: uuid.UUID,
+    shift_code: str,
+    created_by_user_id: uuid.UUID,
+    source: str = QueueSource.MANUAL,
+) -> DailyQueue:
+    """Create a daily queue for date/site/room/shift. Raises StateTransitionError if slot exists."""
+    ClinicSite.objects.get(id=clinic_site_id)
+    room = ConsultingRoom.objects.get(id=consulting_room_id)
+    if str(room.clinic_site_id) != str(clinic_site_id):
+        raise DomainError("Consulting room does not belong to the given clinic site.")
+    if shift_code not in [c[0] for c in QueueShift.choices]:
+        raise DomainError(f"Invalid shift_code: {shift_code}.")
+    if source not in [c[0] for c in QueueSource.choices]:
+        raise DomainError(f"Invalid source: {source}.")
+    if DailyQueue.objects.filter(
+        queue_date=queue_date,
+        clinic_site_id=clinic_site_id,
+        consulting_room_id=consulting_room_id,
+        shift_code=shift_code,
+    ).exists():
+        raise StateTransitionError("Duplicate queue for this date/site/room/shift.")
+    return DailyQueue.objects.create(
+        queue_date=queue_date,
+        clinic_site_id=clinic_site_id,
+        consulting_room_id=consulting_room_id,
+        shift_code=shift_code,
+        source=source,
+        status=QueueStatus.OPEN,
+        created_by_user_id=created_by_user_id,
+    )
+
+
+@transaction.atomic
+def update_daily_queue_status(
+    daily_queue_id: uuid.UUID,
+    *,
+    status: str,
+) -> DailyQueue:
+    """Update queue status (OPEN/CLOSED)."""
+    if status not in [c[0] for c in QueueStatus.choices]:
+        raise DomainError(f"Invalid status: {status}.")
+    queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
+    queue.status = status
+    queue.save(update_fields=["status", "updated_at"])
+    return queue
+
+
+@transaction.atomic
+def update_queue_entry(
+    queue_entry_id: uuid.UUID,
+    *,
+    entry_status: str | None = None,
+    notes: str | None = None,
+) -> QueueEntry:
+    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED."""
+    if entry_status is not None and entry_status not in [c[0] for c in QueueEntryStatus.choices]:
+        raise DomainError(f"Invalid entry_status: {entry_status}.")
+    entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
+    update_fields: list[str] = ["updated_at"]
+    if entry_status is not None:
+        entry.entry_status = entry_status
+        update_fields.append("entry_status")
+    if notes is not None:
+        entry.notes = notes
+        update_fields.append("notes")
+    entry.save(update_fields=update_fields)
+    return entry
 
 
 @transaction.atomic

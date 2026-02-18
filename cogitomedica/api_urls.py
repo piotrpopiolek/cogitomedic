@@ -17,7 +17,13 @@ from apps.outbox.api_views import (
     outbox_events_view,
 )
 from apps.operations.api_views import observability_health_view, observability_metrics_view
-from apps.reception.api_views import queue_entry_sessions_view
+from apps.reception.api_views import (
+    daily_queue_detail_view,
+    daily_queue_entries_view,
+    daily_queues_view,
+    queue_entry_detail_view,
+    queue_entry_sessions_view,
+)
 from apps.users.api_views import auth_login_view, auth_logout_view, auth_me_view
 
 
@@ -91,6 +97,26 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/publish",
         medical_document_publish_view,
         name="medical-document-publish",
+    ),
+    path(
+        "daily-queues",
+        daily_queues_view,
+        name="daily-queues",
+    ),
+    path(
+        "daily-queues/<uuid:daily_queue_id>",
+        daily_queue_detail_view,
+        name="daily-queue-detail",
+    ),
+    path(
+        "daily-queues/<uuid:daily_queue_id>/entries",
+        daily_queue_entries_view,
+        name="daily-queue-entries",
+    ),
+    path(
+        "queue-entries/<uuid:queue_entry_id>",
+        queue_entry_detail_view,
+        name="queue-entry-detail",
     ),
     path(
         "queue-entries/<uuid:queue_entry_id>/sessions",
