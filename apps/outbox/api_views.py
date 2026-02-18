@@ -7,7 +7,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError
 from apps.outbox.api_schemas import (
     OutboxEventsQueryParams,
@@ -18,6 +18,7 @@ from apps.outbox.api_schemas import (
 from apps.outbox.models import OutboxEvent
 from apps.outbox.services import process_outbox_events, retry_outbox_event, run_retention_cleanup
 
+@require_auth
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
@@ -65,6 +66,7 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"results": events, "count": len(events)}, status=200)
 
 
+@require_auth
 @csrf_exempt
 def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
@@ -88,6 +90,7 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     )
 
 
+@require_auth
 @csrf_exempt
 def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
     if request.method != "POST":
@@ -120,6 +123,7 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
     )
 
 
+@require_auth
 @csrf_exempt
 def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":

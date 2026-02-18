@@ -9,7 +9,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.reception.api_schemas import (
     CreateDailyQueueRequest,
@@ -59,6 +59,7 @@ def _serialize_entry(e: QueueEntry) -> dict:
     }
 
 
+@require_auth
 @csrf_exempt
 def daily_queues_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
@@ -110,6 +111,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH"):
@@ -135,6 +137,7 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     return JsonResponse(_serialize_queue(queue))
 
 
+@require_auth
 @csrf_exempt
 def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "POST"):
@@ -184,6 +187,7 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     return JsonResponse(_serialize_entry(entry), status=201)
 
 
+@require_auth
 @csrf_exempt
 def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -219,6 +223,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     return JsonResponse(_serialize_entry(entry))
 
 
+@require_auth
 @csrf_exempt
 def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
     if request.method != "POST":

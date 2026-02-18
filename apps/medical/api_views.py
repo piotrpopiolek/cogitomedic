@@ -8,7 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_authenticated_user, require_user_role
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -27,11 +27,9 @@ from apps.medical.template_services import (
     update_template,
 )
 
+@require_auth
 @csrf_exempt
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -64,11 +62,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
     )
 
 
+@require_auth
 @csrf_exempt
 def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -110,11 +106,9 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     )
 
 
+@require_auth
 @csrf_exempt
 def medical_document_publish_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -151,11 +145,9 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
     )
 
 
+@require_auth
 @csrf_exempt
 def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -242,11 +234,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error

@@ -16,6 +16,7 @@ from apps.core.api_utils import (
     parse_bool_query,
     parse_positive_int,
     read_json_body,
+    require_auth,
     require_authenticated_user,
     require_user_role,
 )
@@ -90,20 +91,16 @@ def auth_logout_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"ok": True}, status=200)
 
 
+@require_auth
 def auth_me_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
-    if not request.user.is_authenticated:
-        return json_error("Authentication required.", status=401)
-
     return JsonResponse({"user": _user_payload(request)}, status=200)
 
 
+@require_auth
 @csrf_exempt
 def staff_users_view(request: HttpRequest) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
@@ -162,11 +159,9 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
-    auth_error = require_authenticated_user(request)
-    if auth_error:
-        return auth_error
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import wraps
 
 from django.http import HttpRequest
 from django.http import JsonResponse
@@ -49,3 +50,16 @@ def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonR
     if role not in allowed_roles:
         return json_error("Forbidden.", status=403)
     return None
+
+
+def require_auth(view_func):
+    """Decorator: return 401 JSON when request.user is not authenticated. Use on API views that require login."""
+
+    @wraps(view_func)
+    def wrapper(request: HttpRequest, *args, **kwargs):
+        err = require_authenticated_user(request)
+        if err is not None:
+            return err
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
