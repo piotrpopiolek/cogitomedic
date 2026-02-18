@@ -10,7 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth
+from apps.core.api_utils import json_error, parse_bool_query, parse_list_limit, read_json_body, require_auth
 from apps.core.exceptions import DomainError
 from apps.reception.api_schemas import CreateTabletDeviceRequest, UpdateTabletDeviceRequest
 from apps.reception.models import TabletDevice
@@ -21,7 +21,6 @@ from apps.reception.services import (
     update_tablet_device,
 )
 
-from .common import parse_bool_query, parse_list_limit
 
 
 def _serialize_tablet_device(device: TabletDevice) -> dict:
