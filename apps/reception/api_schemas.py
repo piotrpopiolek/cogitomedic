@@ -97,3 +97,41 @@ class UpdateConsultingRoomRequest(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=20)
     name: str | None = Field(default=None, min_length=1, max_length=120)
     is_active: bool | None = None
+
+
+class CreatePatientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    date_of_birth: date
+    phone: str = Field(..., min_length=7, max_length=20)
+    email: str = Field(..., min_length=3, max_length=254)
+    doctolib_patient_id: str | None = Field(default=None, max_length=64)
+    street: str | None = Field(default=None, max_length=150)
+    city: str | None = Field(default=None, max_length=100)
+    postal_code: str | None = Field(default=None, max_length=20)
+    country_code: str = Field(default="DE", min_length=2, max_length=2)
+    external_source: str | None = Field(default=None, max_length=30)
+    external_source_id: str | None = Field(default=None, max_length=100)
+    created_by_user_id: UUID
+
+
+class UpdatePatientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    date_of_birth: date | None = None
+    phone: str | None = Field(default=None, min_length=7, max_length=20)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
+    doctolib_patient_id: str | None = Field(default=None, max_length=64)
+    street: str | None = Field(default=None, max_length=150)
+    city: str | None = Field(default=None, max_length=100)
+    postal_code: str | None = Field(default=None, max_length=20)
+    country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    external_source: str | None = Field(default=None, max_length=30)
+    external_source_id: str | None = Field(default=None, max_length=100)
+    is_active: bool | None = None
+    changed_by_user_id: UUID | None = None
+    change_reason: str | None = Field(default=None, max_length=100)
