@@ -32,6 +32,18 @@ class InvalidLocaleError(DomainError):
     """Raised when locale for tablet session is unsupported."""
 
 
+class InvalidSourceActionError(DomainError):
+    """Raised when merge source action is unsupported."""
+
+
+class SourceNotTemporaryError(DomainError):
+    """Raised when merge source patient is not temporary."""
+
+
+class TargetNotConfirmedError(DomainError):
+    """Raised when merge target patient is not confirmed."""
+
+
 @dataclass(frozen=True)
 class IssuedSessionToken:
     """Return payload for newly issued plain token + session metadata."""
@@ -194,15 +206,15 @@ def merge_temporary_patient_into_confirmed(
     if source_patient_id == target_patient_id:
         raise StateTransitionError("Source and target patients must differ.")
     if source_action not in {"ARCHIVE", "KEEP_ACTIVE"}:
-        raise DomainError("INVALID_SOURCE_ACTION")
+        raise InvalidSourceActionError("INVALID_SOURCE_ACTION")
 
     source = Patient.objects.select_for_update().get(id=source_patient_id)
     target = Patient.objects.select_for_update().get(id=target_patient_id)
 
     if source.identity_status != "TEMPORARY":
-        raise DomainError("SOURCE_NOT_TEMPORARY")
+        raise SourceNotTemporaryError("SOURCE_NOT_TEMPORARY")
     if target.identity_status != "CONFIRMED":
-        raise DomainError("TARGET_NOT_CONFIRMED")
+        raise TargetNotConfirmedError("TARGET_NOT_CONFIRMED")
 
     queue_entries_qs = QueueEntry.objects.select_for_update().filter(patient_id=source_patient_id)
     queue_entry_ids = list(queue_entries_qs.values_list("id", flat=True))

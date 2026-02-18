@@ -604,6 +604,23 @@ class PatientsApiTests(TestCase):
         payload = response.json()
         self.assertEqual(len(payload["items"]), 1)
         self.assertEqual(payload["items"][0]["email"], "old@example.com")
+        self.assertEqual(payload["pagination"]["total"], 1)
+
+    def test_patch_patient_identity_without_changed_by_user_id_returns_400(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+            doctolib_patient_id="DOC-123",
+        )
+        response = self.client.patch(
+            f"/api/v1/patients/{patient.id}",
+            data=json.dumps({"phone": "+49999000111"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_patient_detail_not_found_returns_404(self) -> None:
         response = self.client.get(f"/api/v1/patients/{uuid4()}")
@@ -728,3 +745,15 @@ class PatientsApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 404)
+
+
+class ListLimitApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+
+    def test_tablet_devices_list_is_limited_to_100_by_default(self) -> None:
+        for idx in range(120):
+            TabletDevice.objects.create(name=f"Tablet {idx}", device_code=f"TAB-{idx}", is_active=True)
+        response = self.client.get("/api/v1/tablet-devices")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["items"]), 100)

@@ -39,6 +39,9 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.services import (
+    InvalidSourceActionError,
+    SourceNotTemporaryError,
+    TargetNotConfirmedError,
     create_or_update_patient_manual,
     create_daily_queue,
     create_queue_entry,
@@ -294,6 +297,16 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     fields_set = body.model_fields_set
     if not fields_set:
         return json_error("Provide at least one field to update.", status=400)
+    identity_or_contact_fields = {
+        "first_name",
+        "last_name",
+        "date_of_birth",
+        "phone",
+        "email",
+        "doctolib_patient_id",
+    }
+    if identity_or_contact_fields.intersection(fields_set) and body.changed_by_user_id is None:
+        return json_error("changed_by_user_id is required for identity/contact updates.", status=400)
 
     old_phone = patient.phone
     old_email = patient.email
@@ -304,6 +317,9 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
             field in fields_set
             for field in ["first_name", "last_name", "date_of_birth", "phone", "email", "doctolib_patient_id"]
         ):
+            actor_user_id = body.changed_by_user_id
+            if actor_user_id is None:
+                return json_error("changed_by_user_id is required for identity/contact updates.", status=400)
             patient = create_or_update_patient_manual(
                 patient_id=patient.id,
                 first_name=body.first_name if "first_name" in fields_set else patient.first_name,
@@ -314,7 +330,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
                 doctolib_patient_id=(
                     body.doctolib_patient_id if "doctolib_patient_id" in fields_set else patient.doctolib_patient_id
                 ),
-                created_or_updated_by_user_id=body.changed_by_user_id or patient.id,
+                created_or_updated_by_user_id=actor_user_id,
             )
         update_fields: list[str] = ["updated_at"]
         if "street" in fields_set:
@@ -372,10 +388,11 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
         return json_error("Invalid pagination parameters.", status=400)
 
     qs = PatientContactHistory.objects.filter(patient_id=patient_id).order_by("-changed_at")
+    total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
     items = [_serialize_contact_history(item) for item in qs[start:end]]
-    return JsonResponse({"items": items})
+    return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
 
 
 @csrf_exempt
@@ -402,9 +419,11 @@ def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         return json_error("Patient not found.", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=409)
+    except (SourceNotTemporaryError, TargetNotConfirmedError) as exc:
+        return json_error(str(exc), status=422)
+    except InvalidSourceActionError as exc:
+        return json_error(str(exc), status=400)
     except DomainError as exc:
-        if str(exc) in {"SOURCE_NOT_TEMPORARY", "TARGET_NOT_CONFIRMED"}:
-            return json_error(str(exc), status=422)
         return json_error(str(exc), status=400)
 
     return JsonResponse(
@@ -435,7 +454,11 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs]})
+        try:
+            limit = _parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+        except ValueError:
+            return json_error("Invalid limit parameter.", status=400)
+        return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs[:limit]]})
 
     if request.method == "POST":
         try:
@@ -518,7 +541,11 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs]})
+        try:
+            limit = _parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+        except ValueError:
+            return json_error("Invalid limit parameter.", status=400)
+        return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs[:limit]]})
 
     if request.method == "POST":
         try:
@@ -615,7 +642,11 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         status = request.GET.get("status")
         if status:
             qs = qs.filter(status=status)
-        items = [_serialize_queue(q) for q in qs]
+        try:
+            limit = _parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+        except ValueError:
+            return json_error("Invalid limit parameter.", status=400)
+        items = [_serialize_queue(q) for q in qs[:limit]]
         return JsonResponse({"items": items})
     if request.method == "POST":
         try:
@@ -688,7 +719,11 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         ordering = request.GET.get("ordering", "position_no")
         if ordering.lstrip("-") == "position_no":
             qs = qs.order_by(ordering)
-        items = [_serialize_entry(e) for e in qs]
+        try:
+            limit = _parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+        except ValueError:
+            return json_error("Invalid limit parameter.", status=400)
+        items = [_serialize_entry(e) for e in qs[:limit]]
         return JsonResponse({"items": items})
     # POST
     try:
@@ -768,7 +803,11 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(device_code__icontains=search))
-        return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs]})
+        try:
+            limit = _parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+        except ValueError:
+            return json_error("Invalid limit parameter.", status=400)
+        return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs[:limit]]})
 
     if request.method == "POST":
         try:
