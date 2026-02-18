@@ -117,3 +117,22 @@ class ObservabilityHealthApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["checks"]["db"], "ok")
         self.assertEqual(payload["checks"]["outbox_tasks"], "ok")
+
+    def test_metrics_endpoint_returns_prometheus_payload(self) -> None:
+        response = self.client.get("/api/v1/observability/metrics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/plain", response["Content-Type"])
+        content = response.content.decode("utf-8")
+        self.assertIn("cogitomedica_outbox_pending_count", content)
+        self.assertIn("cogitomedica_outbox_failed_count", content)
+        self.assertIn("cogitomedica_outbox_dead_letter_count", content)
+        self.assertIn("cogitomedica_outbox_oldest_pending_age_seconds", content)
+
+    def test_health_and_metrics_return_json_error_for_method_not_allowed(self) -> None:
+        health = self.client.post("/api/v1/observability/health", data="{}", content_type="application/json")
+        metrics = self.client.post("/api/v1/observability/metrics", data="{}", content_type="application/json")
+
+        self.assertEqual(health.status_code, 405)
+        self.assertEqual(metrics.status_code, 405)
+        self.assertEqual(health.json()["error"], "Method not allowed.")
+        self.assertEqual(metrics.json()["error"], "Method not allowed.")

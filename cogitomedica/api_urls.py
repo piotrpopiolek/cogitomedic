@@ -16,7 +16,7 @@ from apps.outbox.api_views import (
     outbox_event_retry_view,
     outbox_events_view,
 )
-from apps.operations.api_views import observability_health_view
+from apps.operations.api_views import observability_health_view, observability_metrics_view
 from apps.reception.api_views import queue_entry_sessions_view
 from apps.users.api_views import auth_login_view, auth_logout_view, auth_me_view
 
@@ -26,6 +26,11 @@ urlpatterns = [
         "observability/health",
         observability_health_view,
         name="observability-health",
+    ),
+    path(
+        "observability/metrics",
+        observability_metrics_view,
+        name="observability-metrics",
     ),
     path(
         "auth/login",

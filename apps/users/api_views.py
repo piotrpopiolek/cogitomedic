@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import json
+from json import JSONDecodeError
 
 from django.contrib.auth import authenticate, login, logout
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error
+from apps.core.api_utils import json_error, read_json_body
 from apps.users.api_schemas import AuthLoginRequest
-
-
-def _read_json_body(request: HttpRequest) -> dict:
-    return json.loads(request.body.decode("utf-8") or "{}")
 
 
 def _user_payload(request: HttpRequest) -> dict:
@@ -33,8 +29,8 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
         return json_error("Method not allowed.", status=405)
 
     try:
-        body = AuthLoginRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = AuthLoginRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)

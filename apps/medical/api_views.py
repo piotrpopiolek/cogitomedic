@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import json
+from json import JSONDecodeError
 from uuid import UUID
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error
+from apps.core.api_utils import json_error, read_json_body
 from apps.core.exceptions import DomainError
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -26,27 +27,25 @@ from apps.medical.template_services import (
     update_template,
 )
 
-
-def _read_json_body(request: HttpRequest) -> dict:
-    return json.loads(request.body.decode("utf-8") or "{}")
-
-
 @csrf_exempt
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:
-        body = CreateMedicalDocumentRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
-    document = create_or_get_medical_document(
-        queue_entry_id=body.queue_entry_id,
-        intake_form_id=body.intake_form_id,
-        created_by_user_id=body.created_by_user_id,
-    )
+    try:
+        document = create_or_get_medical_document(
+            queue_entry_id=body.queue_entry_id,
+            intake_form_id=body.intake_form_id,
+            created_by_user_id=body.created_by_user_id,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Queue entry or intake form not found.", status=404)
     return JsonResponse(
         {
             "medical_document_id": str(document.id),
@@ -62,8 +61,8 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     if request.method != "PUT":
         return json_error("Method not allowed.", status=405)
     try:
-        body = SaveDraftMedicalDocumentRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = SaveDraftMedicalDocumentRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -80,6 +79,8 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
             diagnosis_code=body.diagnosis_code,
             procedure_code=body.procedure_code,
         )
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
     except DomainError as exc:
         return json_error(str(exc), status=400)
 
@@ -98,8 +99,8 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:
-        body = PublishMedicalDocumentRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -110,6 +111,8 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             publish_request_id=body.publish_request_id,
             published_by_user_id=body.published_by_user_id,
         )
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
     except DomainError as exc:
         return json_error(str(exc), status=400)
 
@@ -146,6 +149,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                     include_inactive=query.include_inactive,
                 )
             )
+        except ObjectDoesNotExist:
+            return json_error("Actor user not found.", status=404)
         except DomainError as exc:
             return json_error(str(exc), status=400)
 
@@ -169,8 +174,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 
     if request.method == "POST":
         try:
-            body = DoctorTemplateCreateRequest.model_validate(_read_json_body(request))
-        except json.JSONDecodeError:
+            body = DoctorTemplateCreateRequest.model_validate(read_json_body(request))
+        except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -184,6 +189,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 is_global=body.is_global,
                 is_active=body.is_active,
             )
+        except ObjectDoesNotExist:
+            return json_error("Actor user not found.", status=404)
         except DomainError as exc:
             return json_error(str(exc), status=403)
 
@@ -207,8 +214,8 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         return json_error("Method not allowed.", status=405)
 
     try:
-        body = DoctorTemplateUpdateRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = DoctorTemplateUpdateRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -222,6 +229,8 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             template_body=body.template_body,
             is_active=body.is_active,
         )
+    except ObjectDoesNotExist:
+        return json_error("Actor user not found.", status=404)
     except TemplateNotFoundError as exc:
         return json_error(str(exc), status=404)
     except DomainError as exc:

@@ -46,7 +46,7 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 
 # Domyślnie w dev: localhost + * (dostęp z tabletu/innych urządzeń w sieci po IP)
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*").split(",") if h.strip()]
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

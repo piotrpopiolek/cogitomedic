@@ -8,9 +8,11 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.exceptions import IdempotencyConflictError, StateTransitionError
+from apps.intake.models import PatientIntakeForm
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+from apps.reception.models import QueueEntry
 
 
 def create_or_get_medical_document(
@@ -20,6 +22,8 @@ def create_or_get_medical_document(
     created_by_user_id: uuid.UUID,
 ) -> MedicalDocument:
     """Create medical document for queue entry if not existing."""
+    QueueEntry.objects.get(id=queue_entry_id)
+    PatientIntakeForm.objects.get(id=intake_form_id)
     medical_document, _ = MedicalDocument.objects.get_or_create(
         queue_entry_id=queue_entry_id,
         defaults={
