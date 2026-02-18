@@ -10,7 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth
+from apps.core.api_utils import json_error, parse_bool_query, parse_positive_int, read_json_body, require_auth
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.reception.api_schemas import CreatePatientRequest, MergePatientRequest, UpdatePatientRequest
 from apps.reception.models import Patient, PatientContactHistory
@@ -22,7 +22,6 @@ from apps.reception.services import (
     merge_temporary_patient_into_confirmed,
 )
 
-from .common import parse_bool_query, parse_positive_int
 
 
 def _serialize_patient(patient: Patient) -> dict:
