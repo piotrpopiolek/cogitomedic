@@ -143,6 +143,47 @@ class MedicalApiTests(TestCase):
         self.assertEqual(version.version_status, "PUBLISHED")
         self.assertEqual(version.medical_document.status, MedicalDocStatus.PUBLISHED)
 
+    def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
+        missing_doc_id = uuid4()
+
+        create_missing_dependencies = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(uuid4()),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_missing_dependencies.status_code, 404)
+
+        draft_missing_doc = self.client.put(
+            f"/api/v1/medical-documents/{missing_doc_id}/draft",
+            data=json.dumps(
+                {
+                    "updated_by_user_id": str(self.doctor_user.id),
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {"schema_version": 1},
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(draft_missing_doc.status_code, 404)
+
+        publish_missing_doc = self.client.post(
+            f"/api/v1/medical-documents/{missing_doc_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "published_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(publish_missing_doc.status_code, 404)
+
 
 class DoctorTemplatesApiTests(TestCase):
     def setUp(self) -> None:

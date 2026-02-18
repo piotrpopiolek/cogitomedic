@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import json
+from json import JSONDecodeError
 from uuid import UUID
 
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error
+from apps.core.api_utils import json_error, read_json_body
 from apps.core.exceptions import DomainError
 from apps.outbox.api_schemas import (
     OutboxEventsQueryParams,
@@ -18,22 +18,25 @@ from apps.outbox.api_schemas import (
 from apps.outbox.models import OutboxEvent
 from apps.outbox.services import process_outbox_events, retry_outbox_event, run_retention_cleanup
 
-
-def _read_json_body(request: HttpRequest) -> dict:
-    return json.loads(request.body.decode("utf-8") or "{}")
-
-
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
+
+    raw_retry_count_gte = request.GET.get("retry_count_gte")
+    raw_limit = request.GET.get("limit")
+    try:
+        retry_count_gte = int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
+        limit = int(raw_limit) if raw_limit not in (None, "") else 50
+    except ValueError:
+        return json_error("retry_count_gte and limit must be integers.", status=400)
 
     try:
         body = OutboxEventsQueryParams.model_validate(
             {
                 "status": request.GET.get("status"),
                 "event_type": request.GET.get("event_type"),
-                "retry_count_gte": request.GET.get("retry_count_gte", 0),
-                "limit": request.GET.get("limit", 50),
+                "retry_count_gte": retry_count_gte,
+                "limit": limit,
             }
         )
     except ValidationError as exc:
@@ -68,8 +71,8 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
         return json_error("Method not allowed.", status=405)
 
     try:
-        body = ProcessOutboxRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = ProcessOutboxRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -91,8 +94,8 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
         return json_error("Method not allowed.", status=405)
 
     try:
-        body = RetryOutboxEventRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = RetryOutboxEventRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
@@ -123,8 +126,8 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
         return json_error("Method not allowed.", status=405)
 
     try:
-        body = RetentionRunRequest.model_validate(_read_json_body(request))
-    except json.JSONDecodeError:
+        body = RetentionRunRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)

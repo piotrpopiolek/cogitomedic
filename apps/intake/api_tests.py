@@ -107,6 +107,20 @@ class IntakeApiTests(TestCase):
         self.assertIn("token", payload)
         self.assertIn("session_id", payload)
 
+    def test_create_queue_entry_session_returns_404_for_missing_queue_entry(self) -> None:
+        response = self.client.post(
+            f"/api/v1/queue-entries/{uuid4()}/sessions",
+            data=json.dumps(
+                {
+                    "created_by_user_id": str(self.reception_user.id),
+                    "form_locale": "en-GB",
+                    "expires_in_minutes": 10,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_update_anamnesis_validation_error_without_schema_version(self) -> None:
         response = self.client.put(
             f"/api/v1/intake-forms/{self.intake_form.id}/anamnesis",
@@ -154,3 +168,24 @@ class IntakeApiTests(TestCase):
         self.queue_entry.refresh_from_db()
         self.assertEqual(self.intake_form.form_status, IntakeStatus.SUBMITTED)
         self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+
+    def test_intake_endpoints_return_404_for_missing_intake_form(self) -> None:
+        missing_intake_id = uuid4()
+        anamnesis_response = self.client.put(
+            f"/api/v1/intake-forms/{missing_intake_id}/anamnesis",
+            data=json.dumps(
+                {
+                    "anamnesis_schema_version": 1,
+                    "answers": [],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(anamnesis_response.status_code, 404)
+
+        submit_response = self.client.post(
+            f"/api/v1/intake-forms/{missing_intake_id}/submit",
+            data=json.dumps({"submitted_by_user_id": str(self.reception_user.id)}),
+            content_type="application/json",
+        )
+        self.assertEqual(submit_response.status_code, 404)
