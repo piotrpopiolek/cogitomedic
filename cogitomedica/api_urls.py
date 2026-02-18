@@ -18,11 +18,18 @@ from apps.outbox.api_views import (
 )
 from apps.operations.api_views import observability_health_view, observability_metrics_view
 from apps.reception.api_views import (
+    clinic_site_detail_view,
+    clinic_sites_view,
+    consulting_room_detail_view,
+    consulting_rooms_view,
     daily_queue_detail_view,
     daily_queue_entries_view,
     daily_queues_view,
     queue_entry_detail_view,
     queue_entry_sessions_view,
+    tablet_device_detail_view,
+    tablet_device_heartbeat_view,
+    tablet_devices_view,
 )
 from apps.users.api_views import auth_login_view, auth_logout_view, auth_me_view
 
@@ -99,6 +106,26 @@ urlpatterns = [
         name="medical-document-publish",
     ),
     path(
+        "clinic-sites",
+        clinic_sites_view,
+        name="clinic-sites",
+    ),
+    path(
+        "clinic-sites/<uuid:clinic_site_id>",
+        clinic_site_detail_view,
+        name="clinic-site-detail",
+    ),
+    path(
+        "consulting-rooms",
+        consulting_rooms_view,
+        name="consulting-rooms",
+    ),
+    path(
+        "consulting-rooms/<uuid:consulting_room_id>",
+        consulting_room_detail_view,
+        name="consulting-room-detail",
+    ),
+    path(
         "daily-queues",
         daily_queues_view,
         name="daily-queues",
@@ -122,6 +149,21 @@ urlpatterns = [
         "queue-entries/<uuid:queue_entry_id>/sessions",
         queue_entry_sessions_view,
         name="queue-entry-sessions",
+    ),
+    path(
+        "tablet-devices",
+        tablet_devices_view,
+        name="tablet-devices",
+    ),
+    path(
+        "tablet-devices/<uuid:tablet_device_id>",
+        tablet_device_detail_view,
+        name="tablet-device-detail",
+    ),
+    path(
+        "tablet-devices/<uuid:tablet_device_id>/heartbeat",
+        tablet_device_heartbeat_view,
+        name="tablet-device-heartbeat",
     ),
     path(
         "intake-forms/<uuid:intake_form_id>/anamnesis",

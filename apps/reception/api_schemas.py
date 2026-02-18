@@ -47,3 +47,53 @@ class UpdateQueueEntryRequest(BaseModel):
 
     entry_status: str | None = None
     notes: str | None = None
+
+
+class CreateTabletDeviceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=50)
+    device_code: str = Field(..., min_length=1, max_length=50)
+    is_active: bool = True
+
+
+class UpdateTabletDeviceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    device_code: str | None = Field(default=None, min_length=1, max_length=50)
+    is_active: bool | None = None
+
+
+class CreateClinicSiteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=1, max_length=20)
+    name: str = Field(..., min_length=1, max_length=120)
+    is_active: bool = True
+
+
+class UpdateClinicSiteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str | None = Field(default=None, min_length=1, max_length=20)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    is_active: bool | None = None
+
+
+class CreateConsultingRoomRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clinic_site_id: UUID
+    code: str = Field(..., min_length=1, max_length=20)
+    name: str = Field(..., min_length=1, max_length=120)
+    is_active: bool = True
+
+
+class UpdateConsultingRoomRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clinic_site_id: UUID | None = None
+    code: str | None = Field(default=None, min_length=1, max_length=20)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    is_active: bool | None = None
