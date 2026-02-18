@@ -8,12 +8,13 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
 from apps.intake.services import save_intake_anamnesis_payload, submit_patient_intake_form
 
 
+@require_auth
 @csrf_exempt
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     if request.method != "PUT":
@@ -47,6 +48,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
     )
 
 
+@require_auth
 @csrf_exempt
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     if request.method != "POST":

@@ -10,7 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.reception.api_schemas import CreatePatientRequest, MergePatientRequest, UpdatePatientRequest
 from apps.reception.models import Patient, PatientContactHistory
@@ -64,6 +64,7 @@ def _serialize_contact_history(item: PatientContactHistory) -> dict:
     }
 
 
+@require_auth
 @csrf_exempt
 def patients_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
@@ -159,6 +160,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH"):
@@ -251,6 +253,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     return JsonResponse(_serialize_patient(patient))
 
 
+@require_auth
 @csrf_exempt
 def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if request.method != "GET":
@@ -272,6 +275,7 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
     return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
 
 
+@require_auth
 @csrf_exempt
 def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if request.method != "POST":

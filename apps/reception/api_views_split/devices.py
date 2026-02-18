@@ -10,7 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError
 from apps.reception.api_schemas import CreateTabletDeviceRequest, UpdateTabletDeviceRequest
 from apps.reception.models import TabletDevice
@@ -35,6 +35,7 @@ def _serialize_tablet_device(device: TabletDevice) -> dict:
     }
 
 
+@require_auth
 @csrf_exempt
 def tablet_devices_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
@@ -70,6 +71,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -109,6 +111,7 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     return JsonResponse(_serialize_tablet_device(device))
 
 
+@require_auth
 @csrf_exempt
 def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
     if request.method != "POST":

@@ -10,7 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import json_error, read_json_body, require_auth
 from apps.core.exceptions import DomainError
 from apps.reception.api_schemas import (
     CreateClinicSiteRequest,
@@ -52,6 +52,7 @@ def _serialize_consulting_room(room: ConsultingRoom) -> dict:
     }
 
 
+@require_auth
 @csrf_exempt
 def clinic_sites_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
@@ -87,6 +88,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -127,6 +129,7 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
     return JsonResponse(_serialize_clinic_site(site))
 
 
+@require_auth
 @csrf_exempt
 def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
@@ -172,6 +175,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
     return json_error("Method not allowed.", status=405)
 
 
+@require_auth
 @csrf_exempt
 def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH", "DELETE"):
