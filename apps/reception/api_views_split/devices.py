@@ -21,7 +21,7 @@ from apps.reception.services import (
     update_tablet_device,
 )
 
-from .common import parse_bool_query, parse_positive_int
+from .common import parse_bool_query, parse_list_limit
 
 
 def _serialize_tablet_device(device: TabletDevice) -> dict:
@@ -49,7 +49,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(device_code__icontains=search))
         try:
-            limit = parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+            limit = parse_list_limit(request.GET.get("limit"))
         except ValueError:
             return json_error("Invalid limit parameter.", status=400)
         return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs[:limit]]})

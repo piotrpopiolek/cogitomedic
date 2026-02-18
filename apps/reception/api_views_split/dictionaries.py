@@ -28,7 +28,7 @@ from apps.reception.services import (
     update_consulting_room,
 )
 
-from .common import parse_bool_query, parse_positive_int
+from .common import parse_bool_query, parse_list_limit, parse_positive_int
 
 
 def _serialize_clinic_site(site: ClinicSite) -> dict:
@@ -66,7 +66,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
         try:
-            limit = parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+            limit = parse_list_limit(request.GET.get("limit"))
         except ValueError:
             return json_error("Invalid limit parameter.", status=400)
         return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs[:limit]]})
@@ -144,7 +144,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
         try:
-            limit = parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+            limit = parse_list_limit(request.GET.get("limit"))
         except ValueError:
             return json_error("Invalid limit parameter.", status=400)
         return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs[:limit]]})

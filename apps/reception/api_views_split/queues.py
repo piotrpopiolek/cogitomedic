@@ -27,7 +27,7 @@ from apps.reception.services import (
     update_queue_entry,
 )
 
-from .common import parse_positive_int
+from .common import parse_list_limit, parse_positive_int
 
 
 def _serialize_queue(q: DailyQueue) -> dict:
@@ -79,7 +79,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         if status:
             qs = qs.filter(status=status)
         try:
-            limit = parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+            limit = parse_list_limit(request.GET.get("limit"))
         except ValueError:
             return json_error("Invalid limit parameter.", status=400)
         items = [_serialize_queue(q) for q in qs[:limit]]
@@ -155,7 +155,7 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         if ordering.lstrip("-") == "position_no":
             qs = qs.order_by(ordering)
         try:
-            limit = parse_positive_int(request.GET.get("limit", "100"), default=100, maximum=100)
+            limit = parse_list_limit(request.GET.get("limit"))
         except ValueError:
             return json_error("Invalid limit parameter.", status=400)
         items = [_serialize_entry(e) for e in qs[:limit]]

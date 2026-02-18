@@ -58,6 +58,7 @@ isProject: false
 - Zaimplementowano kluczowe serwisy domenowe i testy: Faza 1 (`reception` + `intake`), Faza 2 (`medical`), pipeline outbox oraz bazowy audit trail.
 - Decyzja wykonawcza: **API jest aktualnie najwyższym priorytetem**, a walidacja payloadów JSON ma być realizowana przez **Pydantic v2**.
 - Dowieziono kolejną paczkę endpointów API v1 w `apps/reception`: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`) wraz z walidacją Pydantic i testami API.
+- Dowieziono brakujący kontrakt API v1 dla `staff-users` (list/create/detail/update/deactivate) w `apps/users`, z paginacją listy i testami endpointów.
 - Zweryfikowano uruchamianie testów w środowisku Docker (`docker compose exec web ...`): testy modułowe i dedykowane testy API recepcji przechodzą poprawnie.
 - Następny krok implementacyjny: endpointy `patients` (list/search, create manual, detail/update, contact-history) oraz testy kontraktowe dla tych ścieżek.
 
