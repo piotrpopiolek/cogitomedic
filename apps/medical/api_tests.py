@@ -82,6 +82,7 @@ class MedicalApiTests(TestCase):
             submitted_at=timezone.now(),
             anamnesis_payload={"schema_version": 1, "answers": []},
         )
+        self.client.force_login(self.doctor_user)
 
     def test_medical_document_create_draft_publish_flow(self) -> None:
         create_response = self.client.post(
@@ -184,6 +185,21 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(publish_missing_doc.status_code, 404)
 
+    def test_medical_endpoints_require_authentication(self) -> None:
+        self.client.logout()
+        response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+
 
 class DoctorTemplatesApiTests(TestCase):
     def setUp(self) -> None:
@@ -212,6 +228,7 @@ class DoctorTemplatesApiTests(TestCase):
 
     def test_doctor_templates_create_list_patch_permissions(self) -> None:
         # Doctor can create private template
+        self.client.force_login(self.doctor_user)
         create_private = self.client.post(
             "/api/v1/doctor-text-templates",
             data=json.dumps(
@@ -245,6 +262,7 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertEqual(create_global_forbidden.status_code, 403)
 
         # Admin can create global template
+        self.client.force_login(self.admin_user)
         create_global = self.client.post(
             "/api/v1/doctor-text-templates",
             data=json.dumps(
@@ -261,6 +279,7 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertEqual(create_global.status_code, 201)
 
         # Doctor sees own + global templates
+        self.client.force_login(self.doctor_user)
         doctor_list = self.client.get(
             f"/api/v1/doctor-text-templates?actor_user_id={self.doctor_user.id}&include_inactive=true"
         )
@@ -268,6 +287,7 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertGreaterEqual(len(doctor_list.json()["results"]), 2)
 
         # Other doctor cannot patch someone else's private template
+        self.client.force_login(self.other_doctor_user)
         patch_forbidden = self.client.patch(
             f"/api/v1/doctor-text-templates/{template_id}",
             data=json.dumps(
@@ -281,6 +301,7 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertEqual(patch_forbidden.status_code, 403)
 
         # Owner can patch own private template
+        self.client.force_login(self.doctor_user)
         patch_owner = self.client.patch(
             f"/api/v1/doctor-text-templates/{template_id}",
             data=json.dumps(
