@@ -47,3 +47,95 @@ class UsersAuthApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 401)
+
+
+class StaffUsersApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.user = StaffUser.objects.create_user(
+            username="admin-user",
+            email="admin.user@example.com",
+            password="safe-password",
+            role=StaffRole.ADMIN,
+            is_staff=True,
+        )
+
+    def test_get_staff_users_returns_paginated_items(self) -> None:
+        response = self.client.get("/api/v1/staff-users?page=1&page_size=20")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("items", payload)
+        self.assertIn("pagination", payload)
+        self.assertGreaterEqual(payload["pagination"]["total"], 1)
+
+    def test_post_staff_user_creates_user(self) -> None:
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "reception2",
+                    "email": "r2@example.com",
+                    "first_name": "Maria",
+                    "last_name": "Klein",
+                    "phone_number": "+49123456789",
+                    "role": "RECEPTION",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["username"], "reception2")
+        self.assertEqual(payload["role"], "RECEPTION")
+
+    def test_post_staff_user_duplicate_returns_409(self) -> None:
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "admin-user",
+                    "email": "admin.user@example.com",
+                    "first_name": "Admin",
+                    "last_name": "Dup",
+                    "role": "ADMIN",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_get_staff_user_detail(self) -> None:
+        response = self.client.get(f"/api/v1/staff-users/{self.user.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["username"], "admin-user")
+
+    def test_patch_staff_user_updates_fields(self) -> None:
+        response = self.client.patch(
+            f"/api/v1/staff-users/{self.user.id}",
+            data=json.dumps({"first_name": "Updated", "role": "DOCTOR"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["first_name"], "Updated")
+        self.assertEqual(payload["role"], "DOCTOR")
+
+    def test_delete_staff_user_soft_deactivates(self) -> None:
+        response = self.client.delete(f"/api/v1/staff-users/{self.user.id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["message"], "User deactivated")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_staff_user_detail_not_found_returns_404(self) -> None:
+        from uuid import uuid4
+
+        response = self.client.get(f"/api/v1/staff-users/{uuid4()}")
+        self.assertEqual(response.status_code, 404)

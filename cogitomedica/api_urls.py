@@ -35,7 +35,13 @@ from apps.reception.api_views import (
     tablet_device_heartbeat_view,
     tablet_devices_view,
 )
-from apps.users.api_views import auth_login_view, auth_logout_view, auth_me_view
+from apps.users.api_views import (
+    auth_login_view,
+    auth_logout_view,
+    auth_me_view,
+    staff_user_detail_view,
+    staff_users_view,
+)
 
 
 urlpatterns = [
@@ -63,6 +69,16 @@ urlpatterns = [
         "auth/me",
         auth_me_view,
         name="auth-me",
+    ),
+    path(
+        "staff-users",
+        staff_users_view,
+        name="staff-users",
+    ),
+    path(
+        "staff-users/<uuid:staff_user_id>",
+        staff_user_detail_view,
+        name="staff-user-detail",
     ),
     path(
         "doctor-text-templates",

@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 from json import JSONDecodeError
+from uuid import UUID
 
 from django.contrib.auth import authenticate, login, logout
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import IntegrityError
+from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body
-from apps.users.api_schemas import AuthLoginRequest
+from apps.core.exceptions import DomainError
+from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
+from apps.users.models import StaffUser
+from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
 
 
 def _user_payload(request: HttpRequest) -> dict:
@@ -21,6 +28,44 @@ def _user_payload(request: HttpRequest) -> dict:
         "preferred_locale": getattr(user, "preferred_locale", None),
         "is_authenticated": bool(user.is_authenticated),
     }
+
+
+def _serialize_staff_user(user: StaffUser) -> dict:
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone_number": user.phone_number,
+        "role": user.role,
+        "preferred_locale": user.preferred_locale,
+        "is_staff": user.is_staff,
+        "is_active": user.is_active,
+        "date_joined": user.date_joined.isoformat(),
+        "created_at": user.created_at.isoformat(),
+        "updated_at": user.updated_at.isoformat(),
+    }
+
+
+def _parse_bool_query(value: str) -> bool | None:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "y"}:
+        return True
+    if normalized in {"0", "false", "no", "n"}:
+        return False
+    return None
+
+
+def _parse_positive_int(value: str, *, default: int, minimum: int = 1, maximum: int = 100) -> int:
+    if not value:
+        return default
+    parsed = int(value)
+    if parsed < minimum:
+        return minimum
+    if parsed > maximum:
+        return maximum
+    return parsed
 
 
 @csrf_exempt
@@ -65,3 +110,106 @@ def auth_me_view(request: HttpRequest) -> JsonResponse:
         return json_error("Authentication required.", status=401)
 
     return JsonResponse({"user": _user_payload(request)}, status=200)
+
+
+@csrf_exempt
+def staff_users_view(request: HttpRequest) -> JsonResponse:
+    if request.method == "GET":
+        qs = StaffUser.objects.all().order_by("username")
+        role = request.GET.get("role")
+        if role:
+            qs = qs.filter(role=role)
+        is_active_raw = request.GET.get("is_active")
+        if is_active_raw is not None:
+            is_active = _parse_bool_query(is_active_raw)
+            if is_active is None:
+                return json_error("Invalid is_active query parameter.", status=400)
+            qs = qs.filter(is_active=is_active)
+        search = request.GET.get("search")
+        if search:
+            qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
+        try:
+            page = _parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
+            page_size = _parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
+        except ValueError:
+            return json_error("Invalid pagination parameters.", status=400)
+        total = qs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = [_serialize_staff_user(user) for user in qs[start:end]]
+        return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
+
+    if request.method == "POST":
+        try:
+            body = CreateStaffUserRequest.model_validate(read_json_body(request))
+        except JSONDecodeError:
+            return json_error("Invalid JSON payload.", status=400)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        try:
+            user = create_staff_user(
+                username=body.username,
+                email=body.email,
+                first_name=body.first_name,
+                last_name=body.last_name,
+                phone_number=body.phone_number,
+                role=body.role,
+                preferred_locale=body.preferred_locale,
+                is_staff=body.is_staff,
+                is_active=body.is_active,
+                password=body.password,
+            )
+        except IntegrityError:
+            return json_error("Username or email already exists.", status=409)
+        except DomainError as exc:
+            return json_error(str(exc), status=400)
+        return JsonResponse(_serialize_staff_user(user), status=201)
+
+    return json_error("Method not allowed.", status=405)
+
+
+@csrf_exempt
+def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
+    if request.method not in ("GET", "PATCH", "DELETE"):
+        return json_error("Method not allowed.", status=405)
+    try:
+        user = StaffUser.objects.get(id=staff_user_id)
+    except ObjectDoesNotExist:
+        return json_error("Staff user not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse(_serialize_staff_user(user))
+    if request.method == "DELETE":
+        try:
+            user = deactivate_staff_user(staff_user_id=staff_user_id)
+        except ObjectDoesNotExist:
+            return json_error("Staff user not found.", status=404)
+        return JsonResponse({"message": "User deactivated", "user": _serialize_staff_user(user)}, status=200)
+
+    try:
+        body = UpdateStaffUserRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        user = update_staff_user(
+            staff_user_id=staff_user_id,
+            email=body.email,
+            first_name=body.first_name,
+            last_name=body.last_name,
+            phone_number=body.phone_number,
+            role=body.role,
+            preferred_locale=body.preferred_locale,
+            is_staff=body.is_staff,
+            is_active=body.is_active,
+            password=body.password,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Staff user not found.", status=404)
+    except IntegrityError:
+        return json_error("Username or email already exists.", status=409)
+    except DomainError as exc:
+        return json_error(str(exc), status=400)
+    return JsonResponse(_serialize_staff_user(user), status=200)
