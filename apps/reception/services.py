@@ -64,6 +64,158 @@ class MergedPatientsResult:
     identity_alert_closed: bool
 
 
+@transaction.atomic
+def create_clinic_site(*, code: str, name: str, is_active: bool = True) -> ClinicSite:
+    """Create a clinic site."""
+    return ClinicSite.objects.create(code=code, name=name, is_active=is_active)
+
+
+@transaction.atomic
+def update_clinic_site(
+    *,
+    clinic_site_id: uuid.UUID,
+    code: str | None = None,
+    name: str | None = None,
+    is_active: bool | None = None,
+) -> ClinicSite:
+    """Update mutable clinic site fields."""
+    site = ClinicSite.objects.select_for_update().get(id=clinic_site_id)
+    update_fields: list[str] = []
+    if code is not None:
+        site.code = code
+        update_fields.append("code")
+    if name is not None:
+        site.name = name
+        update_fields.append("name")
+    if is_active is not None:
+        site.is_active = is_active
+        update_fields.append("is_active")
+    if not update_fields:
+        raise DomainError("Provide at least one field to update.")
+    site.save(update_fields=update_fields)
+    return site
+
+
+@transaction.atomic
+def deactivate_clinic_site(*, clinic_site_id: uuid.UUID) -> ClinicSite:
+    """Soft-deactivate clinic site."""
+    site = ClinicSite.objects.select_for_update().get(id=clinic_site_id)
+    if site.is_active:
+        site.is_active = False
+        site.save(update_fields=["is_active"])
+    return site
+
+
+@transaction.atomic
+def create_consulting_room(
+    *,
+    clinic_site_id: uuid.UUID,
+    code: str,
+    name: str,
+    is_active: bool = True,
+) -> ConsultingRoom:
+    """Create consulting room for a clinic site."""
+    ClinicSite.objects.get(id=clinic_site_id)
+    return ConsultingRoom.objects.create(
+        clinic_site_id=clinic_site_id,
+        code=code,
+        name=name,
+        is_active=is_active,
+    )
+
+
+@transaction.atomic
+def update_consulting_room(
+    *,
+    consulting_room_id: uuid.UUID,
+    clinic_site_id: uuid.UUID | None = None,
+    code: str | None = None,
+    name: str | None = None,
+    is_active: bool | None = None,
+) -> ConsultingRoom:
+    """Update mutable consulting room fields."""
+    room = ConsultingRoom.objects.select_for_update().get(id=consulting_room_id)
+    update_fields: list[str] = []
+    if clinic_site_id is not None:
+        ClinicSite.objects.get(id=clinic_site_id)
+        room.clinic_site_id = clinic_site_id
+        update_fields.append("clinic_site")
+    if code is not None:
+        room.code = code
+        update_fields.append("code")
+    if name is not None:
+        room.name = name
+        update_fields.append("name")
+    if is_active is not None:
+        room.is_active = is_active
+        update_fields.append("is_active")
+    if not update_fields:
+        raise DomainError("Provide at least one field to update.")
+    room.save(update_fields=update_fields)
+    return room
+
+
+@transaction.atomic
+def deactivate_consulting_room(*, consulting_room_id: uuid.UUID) -> ConsultingRoom:
+    """Soft-deactivate consulting room."""
+    room = ConsultingRoom.objects.select_for_update().get(id=consulting_room_id)
+    if room.is_active:
+        room.is_active = False
+        room.save(update_fields=["is_active"])
+    return room
+
+
+@transaction.atomic
+def create_tablet_device(*, name: str, device_code: str, is_active: bool = True) -> TabletDevice:
+    """Create a tablet device."""
+    return TabletDevice.objects.create(name=name, device_code=device_code, is_active=is_active)
+
+
+@transaction.atomic
+def update_tablet_device(
+    *,
+    tablet_device_id: uuid.UUID,
+    name: str | None = None,
+    device_code: str | None = None,
+    is_active: bool | None = None,
+) -> TabletDevice:
+    """Update mutable tablet fields."""
+    device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
+    update_fields: list[str] = []
+    if name is not None:
+        device.name = name
+        update_fields.append("name")
+    if device_code is not None:
+        device.device_code = device_code
+        update_fields.append("device_code")
+    if is_active is not None:
+        device.is_active = is_active
+        update_fields.append("is_active")
+    if not update_fields:
+        raise DomainError("Provide at least one field to update.")
+    device.save(update_fields=update_fields)
+    return device
+
+
+@transaction.atomic
+def deactivate_tablet_device(*, tablet_device_id: uuid.UUID) -> TabletDevice:
+    """Soft-deactivate tablet device."""
+    device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
+    if device.is_active:
+        device.is_active = False
+        device.save(update_fields=["is_active"])
+    return device
+
+
+@transaction.atomic
+def mark_tablet_heartbeat(*, tablet_device_id: uuid.UUID) -> TabletDevice:
+    """Update tablet last_seen_at timestamp."""
+    device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
+    device.last_seen_at = timezone.now()
+    device.save(update_fields=["last_seen_at"])
+    return device
+
+
 def _is_supported_locale(locale: str) -> bool:
     normalized = locale.strip().lower()
     return normalized in {"de", "de-de", "en", "en-gb", "en-us"}
