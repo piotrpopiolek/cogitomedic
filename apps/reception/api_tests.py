@@ -12,6 +12,7 @@ from apps.reception.models import (
     ConsultingRoom,
     DailyQueue,
     Patient,
+    PatientContactHistory,
     QueueEntry,
     QueueEntryStatus,
     QueueShift,
@@ -485,4 +486,125 @@ class ClinicSitesAndRoomsApiTests(TestCase):
             ),
             content_type="application/json",
         )
+        self.assertEqual(response.status_code, 404)
+
+
+class PatientsApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="patients-api-user",
+            email="patients-api@example.com",
+            password="safe-password",
+            role=StaffRole.RECEPTION,
+            is_staff=True,
+        )
+
+    def test_get_patients_empty(self) -> None:
+        response = self.client.get("/api/v1/patients")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["pagination"]["total"], 0)
+
+    def test_post_patient_creates_temporary_identity(self) -> None:
+        response = self.client.post(
+            "/api/v1/patients",
+            data=json.dumps(
+                {
+                    "first_name": "Jan",
+                    "last_name": "Kowalski",
+                    "date_of_birth": "1980-01-01",
+                    "phone": "+49111111111",
+                    "email": "jan@example.com",
+                    "doctolib_patient_id": None,
+                    "street": "Main 1",
+                    "city": "Berlin",
+                    "postal_code": "10115",
+                    "country_code": "DE",
+                    "external_source": "OTHER",
+                    "external_source_id": "frontdesk-001",
+                    "created_by_user_id": str(self.reception_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["patient"]["identity_status"], "TEMPORARY")
+        self.assertTrue(payload["identity_alert"]["created"])
+        self.assertIsNotNone(payload["identity_alert"]["due_at"])
+
+    def test_get_patient_detail_returns_200(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+            doctolib_patient_id="DOC-123",
+        )
+        response = self.client.get(f"/api/v1/patients/{patient.id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], str(patient.id))
+        self.assertEqual(payload["identity_status"], "CONFIRMED")
+
+    def test_patch_patient_updates_contact_and_creates_history(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+            doctolib_patient_id="DOC-123",
+        )
+        response = self.client.patch(
+            f"/api/v1/patients/{patient.id}",
+            data=json.dumps(
+                {
+                    "phone": "+49999888777",
+                    "email": "anna.new@example.com",
+                    "changed_by_user_id": str(self.reception_user.id),
+                    "change_reason": "manual correction",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["phone"], "+49999888777")
+        self.assertEqual(payload["email"], "anna.new@example.com")
+
+        history_items = PatientContactHistory.objects.filter(patient=patient)
+        self.assertEqual(history_items.count(), 1)
+        history = history_items.first()
+        self.assertEqual(history.phone, "+49123456789")
+        self.assertEqual(history.email, "anna@example.com")
+        self.assertEqual(history.reason, "manual correction")
+
+    def test_get_patient_contact_history_returns_items(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+            doctolib_patient_id="DOC-123",
+        )
+        PatientContactHistory.objects.create(
+            patient=patient,
+            phone="+49111111111",
+            email="old@example.com",
+            changed_by_user=self.reception_user,
+            reason="manual correction",
+        )
+        response = self.client.get(f"/api/v1/patients/{patient.id}/contact-history")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["email"], "old@example.com")
+
+    def test_patient_detail_not_found_returns_404(self) -> None:
+        response = self.client.get(f"/api/v1/patients/{uuid4()}")
         self.assertEqual(response.status_code, 404)

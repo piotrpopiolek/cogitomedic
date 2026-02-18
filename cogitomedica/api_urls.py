@@ -25,6 +25,9 @@ from apps.reception.api_views import (
     daily_queue_detail_view,
     daily_queue_entries_view,
     daily_queues_view,
+    patient_contact_history_view,
+    patient_detail_view,
+    patients_view,
     queue_entry_detail_view,
     queue_entry_sessions_view,
     tablet_device_detail_view,
@@ -124,6 +127,21 @@ urlpatterns = [
         "consulting-rooms/<uuid:consulting_room_id>",
         consulting_room_detail_view,
         name="consulting-room-detail",
+    ),
+    path(
+        "patients",
+        patients_view,
+        name="patients",
+    ),
+    path(
+        "patients/<uuid:patient_id>",
+        patient_detail_view,
+        name="patient-detail",
+    ),
+    path(
+        "patients/<uuid:patient_id>/contact-history",
+        patient_contact_history_view,
+        name="patient-contact-history",
     ),
     path(
         "daily-queues",
