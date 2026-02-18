@@ -11,11 +11,13 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
+from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
     DailyQueue,
     Patient,
+    PatientContactHistory,
     PatientFormSession,
     QueueEntry,
     QueueEntryStatus,
@@ -37,6 +39,17 @@ class IssuedSessionToken:
     token_plain: str
     session_id: uuid.UUID
     expires_at: timezone.datetime
+
+
+@dataclass(frozen=True)
+class MergedPatientsResult:
+    merged: bool
+    source_patient_id: uuid.UUID
+    target_patient_id: uuid.UUID
+    moved_queue_entries: int
+    moved_intake_forms: int
+    moved_medical_documents: int
+    identity_alert_closed: bool
 
 
 def _is_supported_locale(locale: str) -> bool:
@@ -166,6 +179,82 @@ def update_queue_entry(
         update_fields.append("notes")
     entry.save(update_fields=update_fields)
     return entry
+
+
+@transaction.atomic
+def merge_temporary_patient_into_confirmed(
+    *,
+    source_patient_id: uuid.UUID,
+    target_patient_id: uuid.UUID,
+    source_action: str,
+    reason: str | None,
+    actor_user_id: uuid.UUID | None = None,
+) -> MergedPatientsResult:
+    """Merge source temporary patient into target confirmed patient."""
+    if source_patient_id == target_patient_id:
+        raise StateTransitionError("Source and target patients must differ.")
+    if source_action not in {"ARCHIVE", "KEEP_ACTIVE"}:
+        raise DomainError("INVALID_SOURCE_ACTION")
+
+    source = Patient.objects.select_for_update().get(id=source_patient_id)
+    target = Patient.objects.select_for_update().get(id=target_patient_id)
+
+    if source.identity_status != "TEMPORARY":
+        raise DomainError("SOURCE_NOT_TEMPORARY")
+    if target.identity_status != "CONFIRMED":
+        raise DomainError("TARGET_NOT_CONFIRMED")
+
+    queue_entries_qs = QueueEntry.objects.select_for_update().filter(patient_id=source_patient_id)
+    queue_entry_ids = list(queue_entries_qs.values_list("id", flat=True))
+    moved_queue_entries = len(queue_entry_ids)
+
+    # Lazy imports avoid coupling at import time between app modules.
+    from apps.intake.models import PatientIntakeForm
+    from apps.medical.models import MedicalDocument
+
+    moved_intake_forms = PatientIntakeForm.objects.filter(queue_entry_id__in=queue_entry_ids).count()
+    moved_medical_documents = MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids).count()
+
+    now = timezone.now()
+    if moved_queue_entries:
+        queue_entries_qs.update(patient_id=target_patient_id, updated_at=now)
+
+    PatientContactHistory.objects.filter(patient_id=source_patient_id).update(patient_id=target_patient_id)
+
+    identity_alert_closed = False
+    if source_action == "ARCHIVE":
+        source.is_active = False
+        source.identity_resolution_due_at = now
+        source.save(update_fields=["is_active", "identity_resolution_due_at", "updated_at"])
+        identity_alert_closed = True
+
+    create_audit_event(
+        event_type="PATIENT_MERGED",
+        actor_user_id=actor_user_id,
+        patient_id=target.id,
+        metadata={
+            "source_patient_id": str(source.id),
+            "target_patient_id": str(target.id),
+            "source_action": source_action,
+            "reason": reason,
+            "moved_entities": {
+                "queue_entries": moved_queue_entries,
+                "intake_forms": moved_intake_forms,
+                "medical_documents": moved_medical_documents,
+            },
+            "identity_alert_closed": identity_alert_closed,
+        },
+    )
+
+    return MergedPatientsResult(
+        merged=True,
+        source_patient_id=source.id,
+        target_patient_id=target.id,
+        moved_queue_entries=moved_queue_entries,
+        moved_intake_forms=moved_intake_forms,
+        moved_medical_documents=moved_medical_documents,
+        identity_alert_closed=identity_alert_closed,
+    )
 
 
 @transaction.atomic
