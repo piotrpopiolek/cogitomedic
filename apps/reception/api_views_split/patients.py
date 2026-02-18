@@ -91,11 +91,10 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         doctolib_patient_id = request.GET.get("doctolib_patient_id")
         if doctolib_patient_id:
             qs = qs.filter(doctolib_patient_id=doctolib_patient_id)
-        is_active_raw = request.GET.get("is_active")
-        if is_active_raw is not None:
-            is_active = parse_bool_query(is_active_raw)
-            if is_active is None:
-                return json_error("Invalid is_active query parameter.", status=400)
+        is_active = parse_bool_query(request.GET.get("is_active"))
+        if request.GET.get("is_active") is not None and is_active is None:
+            return json_error("Invalid is_active query parameter.", status=400)
+        if is_active is not None:
             qs = qs.filter(is_active=is_active)
         try:
             page = parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)

@@ -56,11 +56,10 @@ def _serialize_consulting_room(room: ConsultingRoom) -> dict:
 def clinic_sites_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
         qs = ClinicSite.objects.all().order_by("code")
-        is_active_raw = request.GET.get("is_active")
-        if is_active_raw is not None:
-            is_active = parse_bool_query(is_active_raw)
-            if is_active is None:
-                return json_error("Invalid is_active query parameter.", status=400)
+        is_active = parse_bool_query(request.GET.get("is_active"))
+        if request.GET.get("is_active") is not None and is_active is None:
+            return json_error("Invalid is_active query parameter.", status=400)
+        if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
         if search:
@@ -136,11 +135,10 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:
             qs = qs.filter(clinic_site_id=clinic_site_id)
-        is_active_raw = request.GET.get("is_active")
-        if is_active_raw is not None:
-            is_active = parse_bool_query(is_active_raw)
-            if is_active is None:
-                return json_error("Invalid is_active query parameter.", status=400)
+        is_active = parse_bool_query(request.GET.get("is_active"))
+        if request.GET.get("is_active") is not None and is_active is None:
+            return json_error("Invalid is_active query parameter.", status=400)
+        if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
         if search:

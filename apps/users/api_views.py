@@ -110,11 +110,10 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         role = request.GET.get("role")
         if role:
             qs = qs.filter(role=role)
-        is_active_raw = request.GET.get("is_active")
-        if is_active_raw is not None:
-            is_active = parse_bool_query(is_active_raw)
-            if is_active is None:
-                return json_error("Invalid is_active query parameter.", status=400)
+        is_active = parse_bool_query(request.GET.get("is_active"))
+        if request.GET.get("is_active") is not None and is_active is None:
+            return json_error("Invalid is_active query parameter.", status=400)
+        if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
         if search:

@@ -218,7 +218,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         except ObjectDoesNotExist:
             return json_error("Actor user not found.", status=404)
         except DomainError as exc:
-            return json_error(str(exc), status=403)
+            return json_error(str(exc), status=400)
 
         return JsonResponse(
             {
@@ -266,7 +266,7 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
     except TemplateNotFoundError as exc:
         return json_error(str(exc), status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=403)
+        return json_error(str(exc), status=400)
 
     return JsonResponse(
         {
