@@ -9,6 +9,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -56,6 +57,7 @@ def _serialize_staff_user(user: StaffUser) -> dict:
     }
 
 
+@ratelimit(key="ip", rate="5/m", method="POST", block=True)
 @csrf_exempt
 def auth_login_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
