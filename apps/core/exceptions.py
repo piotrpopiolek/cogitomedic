@@ -8,3 +8,7 @@ class StateTransitionError(DomainError):
 
 class IdempotencyConflictError(DomainError):
     """Raised when request idempotency input is invalid."""
+
+
+class InvalidRequestBodyEncoding(Exception):
+    """Raised when request body cannot be decoded as UTF-8."""

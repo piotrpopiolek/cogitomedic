@@ -9,8 +9,8 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_list_limit, parse_positive_int, read_json_body, require_auth
-from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.reception.api_schemas import (
     CreateDailyQueueRequest,
     CreateQueueEntryRequest,
@@ -78,10 +78,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         status = request.GET.get("status")
         if status:
             qs = qs.filter(status=status)
-        try:
-            limit = parse_list_limit(request.GET.get("limit"))
-        except ValueError:
-            return json_error("Invalid limit parameter.", status=400)
+        limit = parse_list_limit(request.GET.get("limit"))
         items = [_serialize_queue(q) for q in qs[:limit]]
         return JsonResponse({"items": items})
     if request.method == "POST":
@@ -89,6 +86,8 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             body = CreateDailyQueueRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -125,6 +124,8 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
         body = UpdateDailyQueueRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -156,16 +157,15 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         ordering = request.GET.get("ordering", "position_no")
         if ordering.lstrip("-") == "position_no":
             qs = qs.order_by(ordering)
-        try:
-            limit = parse_list_limit(request.GET.get("limit"))
-        except ValueError:
-            return json_error("Invalid limit parameter.", status=400)
+        limit = parse_list_limit(request.GET.get("limit"))
         items = [_serialize_entry(e) for e in qs[:limit]]
         return JsonResponse({"items": items})
     try:
         body = CreateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -209,6 +209,8 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         body = UpdateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     if body.entry_status is None and body.notes is None:
@@ -231,6 +233,8 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
         body = CreateQueueEntrySessionRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:

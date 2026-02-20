@@ -14,13 +14,13 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     json_error,
     parse_bool_query,
-    parse_positive_int,
     read_json_body,
     require_auth,
     require_authenticated_user,
     require_user_role,
+    safe_parse_positive_int,
 )
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
 from apps.users.models import StaffUser
 from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
@@ -65,6 +65,8 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
         body = AuthLoginRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -118,11 +120,8 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
-        try:
-            page = parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
-            page_size = parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
-        except ValueError:
-            return json_error("Invalid pagination parameters.", status=400)
+        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size
@@ -134,6 +133,8 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
             body = CreateStaffUserRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -185,6 +186,8 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
         body = UpdateStaffUserRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.outbox.api_schemas import (
     OutboxEventsQueryParams,
     ProcessOutboxRequest,
@@ -80,6 +80,8 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
         body = ProcessOutboxRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -104,6 +106,8 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
         body = RetryOutboxEventRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -140,6 +144,8 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
         body = RetentionRunRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

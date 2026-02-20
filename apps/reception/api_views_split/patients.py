@@ -10,8 +10,8 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_bool_query, parse_positive_int, read_json_body, require_auth
-from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.api_utils import json_error, parse_bool_query, read_json_body, require_auth, safe_parse_positive_int
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.reception.api_schemas import CreatePatientRequest, MergePatientRequest, UpdatePatientRequest
 from apps.reception.models import Patient, PatientContactHistory
 from apps.reception.services import (
@@ -96,11 +96,8 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             return json_error("Invalid is_active query parameter.", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
-        try:
-            page = parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
-            page_size = parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
-        except ValueError:
-            return json_error("Invalid pagination parameters.", status=400)
+        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size
@@ -112,6 +109,8 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             body = CreatePatientRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -175,6 +174,8 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         body = UpdatePatientRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -255,11 +256,8 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
         Patient.objects.get(id=patient_id)
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)
-    try:
-        page = parse_positive_int(request.GET.get("page", "1"), default=1, maximum=10_000)
-        page_size = parse_positive_int(request.GET.get("page_size", "20"), default=20, maximum=200)
-    except ValueError:
-        return json_error("Invalid pagination parameters.", status=400)
+    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
     qs = PatientContactHistory.objects.filter(patient_id=patient_id).order_by("-changed_at")
     total = qs.count()
     start = (page - 1) * page_size
@@ -277,6 +275,8 @@ def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         body = MergePatientRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:

@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth
-from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
 from apps.intake.services import save_intake_anamnesis_payload, submit_patient_intake_form
 
@@ -24,6 +24,8 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
         body = UpdateAnamnesisPayloadRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -58,6 +60,8 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         body = SubmitIntakeFormRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
