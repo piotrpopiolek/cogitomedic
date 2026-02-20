@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, parse_bool_query, parse_list_limit, read_json_body, require_auth
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import CreateTabletDeviceRequest, UpdateTabletDeviceRequest
 from apps.reception.models import TabletDevice
 from apps.reception.services import (
@@ -47,10 +47,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(device_code__icontains=search))
-        try:
-            limit = parse_list_limit(request.GET.get("limit"))
-        except ValueError:
-            return json_error("Invalid limit parameter.", status=400)
+        limit = parse_list_limit(request.GET.get("limit"))
         return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs[:limit]]})
 
     if request.method == "POST":
@@ -58,6 +55,8 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
             body = CreateTabletDeviceRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -91,6 +90,8 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
         body = UpdateTabletDeviceRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:

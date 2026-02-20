@@ -8,8 +8,8 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
-from apps.core.exceptions import DomainError
+from apps.core.api_utils import json_error, read_json_body, require_actor_match, require_auth, require_user_role
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
     DoctorTemplateCreateRequest,
@@ -40,10 +40,13 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    if body.created_by_user_id != request.user.id:
-        return json_error("Actor mismatch.", status=403)
+    actor_error = require_actor_match(request, body.created_by_user_id)
+    if actor_error:
+        return actor_error
 
     try:
         document = create_or_get_medical_document(
@@ -75,10 +78,13 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         body = SaveDraftMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    if body.updated_by_user_id != request.user.id:
-        return json_error("Actor mismatch.", status=403)
+    actor_error = require_actor_match(request, body.updated_by_user_id)
+    if actor_error:
+        return actor_error
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
@@ -119,10 +125,13 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    if body.published_by_user_id != request.user.id:
-        return json_error("Actor mismatch.", status=403)
+    actor_error = require_actor_match(request, body.published_by_user_id)
+    if actor_error:
+        return actor_error
 
     try:
         version = publish_document_version(
@@ -163,8 +172,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             )
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-        if query.actor_user_id != request.user.id:
-            return json_error("Actor mismatch.", status=403)
+        actor_error = require_actor_match(request, query.actor_user_id)
+        if actor_error:
+            return actor_error
 
         try:
             templates = list_templates(
@@ -202,10 +212,13 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             body = DoctorTemplateCreateRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-        if body.actor_user_id != request.user.id:
-            return json_error("Actor mismatch.", status=403)
+        actor_error = require_actor_match(request, body.actor_user_id)
+        if actor_error:
+            return actor_error
 
         try:
             template = create_template(
@@ -250,10 +263,13 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         body = DoctorTemplateUpdateRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    if body.actor_user_id != request.user.id:
-        return json_error("Actor mismatch.", status=403)
+    actor_error = require_actor_match(request, body.actor_user_id)
+    if actor_error:
+        return actor_error
 
     try:
         template = update_template(

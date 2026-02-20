@@ -10,8 +10,8 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_bool_query, parse_list_limit, parse_positive_int, read_json_body, require_auth
-from apps.core.exceptions import DomainError
+from apps.core.api_utils import json_error, parse_bool_query, parse_list_limit, read_json_body, require_auth
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import (
     CreateClinicSiteRequest,
     CreateConsultingRoomRequest,
@@ -64,10 +64,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        try:
-            limit = parse_list_limit(request.GET.get("limit"))
-        except ValueError:
-            return json_error("Invalid limit parameter.", status=400)
+        limit = parse_list_limit(request.GET.get("limit"))
         return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs[:limit]]})
 
     if request.method == "POST":
@@ -75,6 +72,8 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
             body = CreateClinicSiteRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -109,6 +108,8 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
         body = UpdateClinicSiteRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -143,10 +144,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        try:
-            limit = parse_list_limit(request.GET.get("limit"))
-        except ValueError:
-            return json_error("Invalid limit parameter.", status=400)
+        limit = parse_list_limit(request.GET.get("limit"))
         return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs[:limit]]})
 
     if request.method == "POST":
@@ -154,6 +152,8 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
             body = CreateConsultingRoomRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -194,6 +194,8 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
         body = UpdateConsultingRoomRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:

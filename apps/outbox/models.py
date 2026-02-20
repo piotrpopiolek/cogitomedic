@@ -74,6 +74,12 @@ class OutboxEvent(models.Model):
                 name="outbox_pend_fail_idx",
                 condition=Q(status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED]),
             ),
+            # Worker query: ORDER BY available_at, created_at; index scan in exact order, no extra sort.
+            models.Index(
+                fields=["available_at", "created_at"],
+                name="outbox_pend_fail_order_idx",
+                condition=Q(status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED]),
+            ),
             GinIndex(
                 fields=["payload"],
                 name="outbox_payload_gin_idx",
