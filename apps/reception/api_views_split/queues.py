@@ -97,7 +97,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
                 clinic_site_id=body.clinic_site_id,
                 consulting_room_id=body.consulting_room_id,
                 shift_code=body.shift_code,
-                created_by_user_id=body.created_by_user_id,
+                created_by_user_id=request.user.id,
                 source=body.source,
             )
         except ObjectDoesNotExist:
@@ -172,7 +172,7 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         entry = create_queue_entry(
             daily_queue_id=daily_queue_id,
             patient_id=body.patient_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=request.user.id,
             appointment_time=body.appointment_time,
             visit_external_id=body.visit_external_id,
             notes=body.notes,
@@ -236,7 +236,7 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
     try:
         issued = issue_tablet_session_token_latest_wins(
             queue_entry_id=queue_entry_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=request.user.id,
             form_locale=body.form_locale,
             expires_in_minutes=body.expires_in_minutes,
             tablet_device_id=body.tablet_device_id,

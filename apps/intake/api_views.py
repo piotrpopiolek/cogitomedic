@@ -64,7 +64,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
     try:
         intake_form = submit_patient_intake_form(
             intake_form_id=intake_form_id,
-            submitted_by_user_id=body.submitted_by_user_id,
+            submitted_by_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("Intake form not found.", status=404)

@@ -122,7 +122,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
                 phone=body.phone,
                 email=body.email,
                 doctolib_patient_id=body.doctolib_patient_id,
-                created_or_updated_by_user_id=body.created_by_user_id,
+                created_or_updated_by_user_id=request.user.id,
             )
             update_fields = ["updated_at"]
             patient.street = body.street
@@ -189,16 +189,11 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         "email",
         "doctolib_patient_id",
     }
-    if identity_or_contact_fields.intersection(fields_set) and body.changed_by_user_id is None:
-        return json_error("changed_by_user_id is required for identity/contact updates.", status=400)
 
     old_phone = patient.phone
     old_email = patient.email
     try:
         if identity_or_contact_fields.intersection(fields_set):
-            actor_user_id = body.changed_by_user_id
-            if actor_user_id is None:
-                return json_error("changed_by_user_id is required for identity/contact updates.", status=400)
             patient = create_or_update_patient_manual(
                 patient_id=patient.id,
                 first_name=body.first_name if "first_name" in fields_set else patient.first_name,
@@ -209,7 +204,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
                 doctolib_patient_id=(
                     body.doctolib_patient_id if "doctolib_patient_id" in fields_set else patient.doctolib_patient_id
                 ),
-                created_or_updated_by_user_id=actor_user_id,
+                created_or_updated_by_user_id=request.user.id,
             )
         update_fields: list[str] = ["updated_at"]
         if "street" in fields_set:
@@ -245,7 +240,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
             patient=patient,
             phone=old_phone,
             email=old_email,
-            changed_by_user_id=body.changed_by_user_id,
+            changed_by_user_id=request.user.id,
             reason=body.change_reason,
         )
     return JsonResponse(_serialize_patient(patient))
@@ -290,7 +285,7 @@ def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
             target_patient_id=body.target_patient_id,
             source_action=body.source_action,
             reason=body.reason,
-            actor_user_id=body.actor_user_id,
+            actor_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)

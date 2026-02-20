@@ -39,6 +39,7 @@ class DailyQueuesApiTests(TestCase):
             code="R1",
             name="Room 1",
         )
+        self.client.login(username="reception-api", password="safe-password")
 
     def test_get_daily_queues_empty(self) -> None:
         response = self.client.get("/api/v1/daily-queues")
@@ -298,6 +299,14 @@ class DailyQueuesApiTests(TestCase):
 class TabletDevicesApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="tablet-api",
+            email="tablet-api@example.com",
+            password="safe-password",
+            role=StaffRole.RECEPTION,
+            is_staff=True,
+        )
+        self.client.login(username="tablet-api", password="safe-password")
 
     def test_get_tablet_devices_empty(self) -> None:
         response = self.client.get("/api/v1/tablet-devices")
@@ -387,6 +396,14 @@ class TabletDevicesApiTests(TestCase):
 class ClinicSitesAndRoomsApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="clinic-api",
+            email="clinic-api@example.com",
+            password="safe-password",
+            role=StaffRole.RECEPTION,
+            is_staff=True,
+        )
+        self.client.login(username="clinic-api", password="safe-password")
 
     def test_clinic_sites_create_list_patch_delete(self) -> None:
         create_response = self.client.post(
@@ -499,6 +516,7 @@ class PatientsApiTests(TestCase):
             role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        self.client.login(username="patients-api-user", password="safe-password")
 
     def test_get_patients_empty(self) -> None:
         response = self.client.get("/api/v1/patients")
@@ -606,7 +624,8 @@ class PatientsApiTests(TestCase):
         self.assertEqual(payload["items"][0]["email"], "old@example.com")
         self.assertEqual(payload["pagination"]["total"], 1)
 
-    def test_patch_patient_identity_without_changed_by_user_id_returns_400(self) -> None:
+    def test_patch_patient_identity_uses_session_user_as_actor(self) -> None:
+        """PATCH with identity/contact fields uses request.user.id as actor (body changed_by_user_id ignored)."""
         patient = Patient.objects.create(
             first_name="Anna",
             last_name="Nowak",
@@ -620,7 +639,9 @@ class PatientsApiTests(TestCase):
             data=json.dumps({"phone": "+49999000111"}),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        patient.refresh_from_db()
+        self.assertEqual(patient.phone, "+49999000111")
 
     def test_patient_detail_not_found_returns_404(self) -> None:
         response = self.client.get(f"/api/v1/patients/{uuid4()}")
@@ -750,10 +771,19 @@ class PatientsApiTests(TestCase):
 class ListLimitApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="listlimit-api",
+            email="listlimit-api@example.com",
+            password="safe-password",
+            role=StaffRole.RECEPTION,
+            is_staff=True,
+        )
+        self.client.login(username="listlimit-api", password="safe-password")
 
-    def test_tablet_devices_list_is_limited_to_100_by_default(self) -> None:
+    def test_tablet_devices_list_uses_default_limit(self) -> None:
+        """Without limit param, list returns DEFAULT_LIST_LIMIT (20) items."""
         for idx in range(120):
             TabletDevice.objects.create(name=f"Tablet {idx}", device_code=f"TAB-{idx}", is_active=True)
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["items"]), 100)
+        self.assertEqual(len(response.json()["items"]), 20)
