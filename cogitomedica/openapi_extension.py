@@ -1,0 +1,333 @@
+"""
+OpenAPI schema for Cogitomedica API v1.
+
+API uses Django view functions (not DRF), so drf-spectacular does not auto-discover them.
+We serve the full schema from cogito_openapi_schema_view so /api/docs works without DRF views.
+"""
+from __future__ import annotations
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+
+PREFIX = "/api/v1"
+
+# Minimal OpenAPI 3 path definitions: method -> operation dict (summary, tags, responses).
+# Path parameters use {param} and are documented via parameters when needed.
+COGITO_PATHS = {
+    f"{PREFIX}/observability/health": {
+        "get": {
+            "summary": "Health check",
+            "description": "Returns service and dependency status (DB, outbox). No auth.",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "OK or degraded"}, "503": {"description": "Service unavailable"}},
+        },
+    },
+    f"{PREFIX}/observability/metrics": {
+        "get": {
+            "summary": "Prometheus metrics",
+            "description": "Plain text metrics for Prometheus. No auth.",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Metrics text"}},
+        },
+    },
+    f"{PREFIX}/auth/login": {
+        "post": {
+            "summary": "Log in",
+            "description": "Authenticate with username and password. Sets session cookie.",
+            "tags": ["Auth"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"username": {"type": "string"}, "password": {"type": "string"}}, "required": ["username", "password"]}}}},
+            "responses": {"200": {"description": "User and session expiry"}, "401": {"description": "Invalid credentials"}},
+        },
+    },
+    f"{PREFIX}/auth/logout": {
+        "post": {
+            "summary": "Log out",
+            "description": "Invalidate session.",
+            "tags": ["Auth"],
+            "responses": {"200": {"description": "OK"}},
+        },
+    },
+    f"{PREFIX}/auth/me": {
+        "get": {
+            "summary": "Current user",
+            "description": "Returns authenticated user. Requires session.",
+            "tags": ["Auth"],
+            "responses": {"200": {"description": "User payload"}, "401": {"description": "Authentication required"}},
+        },
+    },
+    f"{PREFIX}/staff-users": {
+        "get": {
+            "summary": "List staff users",
+            "description": "Paginated list. Admin only.",
+            "tags": ["Staff users"],
+            "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}, {"name": "role", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}],
+            "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
+        },
+        "post": {
+            "summary": "Create staff user",
+            "description": "Admin only.",
+            "tags": ["Staff users"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"201": {"description": "Created"}, "400": {"description": "Validation error"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "409": {"description": "Username or email exists"}},
+        },
+    },
+    f"{PREFIX}/staff-users/{{staff_user_id}}": {
+        "get": {"summary": "Get staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+        },
+        "delete": {"summary": "Deactivate staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "Deactivated"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/doctor-text-templates": {
+        "get": {
+            "summary": "List doctor text templates",
+            "tags": ["Doctor templates"],
+            "parameters": [{"name": "actor_user_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "template_locale", "in": "query", "schema": {"type": "string"}}, {"name": "include_inactive", "in": "query", "schema": {"type": "boolean"}}],
+            "responses": {"200": {"description": "Results"}},
+        },
+        "post": {
+            "summary": "Create doctor text template",
+            "tags": ["Doctor templates"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"201": {"description": "Created"}, "400": {"description": "Validation error"}},
+        },
+    },
+    f"{PREFIX}/doctor-text-templates/{{template_id}}": {
+        "patch": {
+            "summary": "Update doctor text template",
+            "tags": ["Doctor templates"],
+            "parameters": [{"name": "template_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/outbox-events": {
+        "get": {
+            "summary": "List outbox events",
+            "tags": ["Outbox"],
+            "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "event_type", "in": "query", "schema": {"type": "string"}}, {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}],
+            "responses": {"200": {"description": "Results and count"}},
+        },
+    },
+    f"{PREFIX}/outbox-events/{{outbox_event_id}}/retry": {
+        "post": {
+            "summary": "Retry outbox event",
+            "tags": ["Outbox"],
+            "parameters": [{"name": "outbox_event_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}},
+            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+        },
+    },
+    f"{PREFIX}/operations/outbox/process": {
+        "post": {
+            "summary": "Process outbox batch",
+            "tags": ["Operations"],
+            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"limit": {"type": "integer"}}}}}},
+            "responses": {"202": {"description": "Accepted (processed, failed, dead_lettered)"}},
+        },
+    },
+    f"{PREFIX}/operations/retention/run": {
+        "post": {
+            "summary": "Run retention cleanup",
+            "tags": ["Operations"],
+            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"older_than_days": {"type": "integer"}, "dry_run": {"type": "boolean"}}}}}},
+            "responses": {"202": {"description": "Candidates, deleted, skipped"}},
+        },
+    },
+    f"{PREFIX}/medical-documents": {
+        "post": {
+            "summary": "Create medical document",
+            "description": "Doctor or Admin. Links queue entry and intake form.",
+            "tags": ["Medical"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"queue_entry_id": {"type": "string", "format": "uuid"}, "intake_form_id": {"type": "string", "format": "uuid"}, "created_by_user_id": {"type": "string", "format": "uuid"}}}}}},
+            "responses": {"201": {"description": "Created"}, "404": {"description": "Queue entry or intake form not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/draft": {
+        "put": {
+            "summary": "Save draft",
+            "tags": ["Medical"],
+            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "Version"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/publish": {
+        "post": {
+            "summary": "Publish document",
+            "tags": ["Medical"],
+            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "Version"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/clinic-sites": {
+        "get": {"summary": "List clinic sites", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        },
+        "post": {"summary": "Create clinic site", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/clinic-sites/{{clinic_site_id}}": {
+        "get": {"summary": "Get clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "delete": {"summary": "Deactivate clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/consulting-rooms": {
+        "get": {"summary": "List consulting rooms", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        },
+        "post": {"summary": "Create consulting room", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/consulting-rooms/{{consulting_room_id}}": {
+        "get": {"summary": "Get consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "delete": {"summary": "Deactivate consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/patients": {
+        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "identity_status", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items and pagination"}},
+        },
+        "post": {"summary": "Create or update patient (manual)", "tags": ["Reception – Patients"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "Patient"}, "201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/patients/{{patient_id}}": {
+        "get": {"summary": "Get patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "delete": {"summary": "Deactivate patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/patients/{{patient_id}}/contact-history": {
+        "get": {
+            "summary": "Patient contact history",
+            "tags": ["Reception – Patients"],
+            "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}],
+            "responses": {"200": {"description": "Items and pagination"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/patients/{{patient_id}}/merge": {
+        "post": {
+            "summary": "Merge temporary patient into confirmed",
+            "tags": ["Reception – Patients"],
+            "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"target_patient_id": {"type": "string", "format": "uuid"}, "source_action": {"type": "string"}, "reason": {"type": "string"}, "actor_user_id": {"type": "string", "format": "uuid"}}}}}},
+            "responses": {"200": {"description": "Merge result"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}, "422": {"description": "Unprocessable"}},
+        },
+    },
+    f"{PREFIX}/daily-queues": {
+        "get": {"summary": "List daily queues", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "consulting_room_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "shift_code", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        },
+        "post": {"summary": "Create daily queue", "tags": ["Reception – Queues"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/daily-queues/{{daily_queue_id}}": {
+        "get": {"summary": "Get daily queue", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update daily queue", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/daily-queues/{{daily_queue_id}}/entries": {
+        "get": {"summary": "List queue entries", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
+        },
+        "post": {"summary": "Create queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/queue-entries/{{queue_entry_id}}": {
+        "get": {"summary": "Get queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/queue-entries/{{queue_entry_id}}/sessions": {
+        "post": {
+            "summary": "Issue tablet session token",
+            "description": "Creates a one-time session for the intake form on a tablet.",
+            "tags": ["Reception – Queues"],
+            "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"tablet_device_id": {"type": "string", "format": "uuid"}, "form_locale": {"type": "string"}, "expires_minutes": {"type": "integer"}}}}}},
+            "responses": {"201": {"description": "Session and token URL"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/tablet-devices": {
+        "get": {"summary": "List tablet devices", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        },
+        "post": {"summary": "Create tablet device", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/tablet-devices/{{tablet_device_id}}": {
+        "get": {"summary": "Get tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "patch": {"summary": "Update tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+        "delete": {"summary": "Deactivate tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/tablet-devices/{{tablet_device_id}}/heartbeat": {
+        "post": {
+            "summary": "Tablet heartbeat",
+            "tags": ["Reception – Devices"],
+            "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "last_seen_at"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/intake-forms/{{intake_form_id}}/anamnesis": {
+        "put": {
+            "summary": "Update anamnesis payload",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"anamnesis_schema_version": {"type": "integer"}, "answers": {"type": "array"}}}}}},
+            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+        },
+    },
+    f"{PREFIX}/intake-forms/{{intake_form_id}}/submit": {
+        "post": {
+            "summary": "Submit intake form",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"submitted_by_user_id": {"type": "string", "format": "uuid"}}}}}},
+            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "400": {"description": "Validation error"}},
+        },
+    },
+}
+
+
+def cogito_extend_schema(schema, *args, **kwargs):
+    """POSTPROCESSING_HOOK: inject Cogitomedica API v1 paths into the OpenAPI schema."""
+    if schema is None:
+        return build_cogito_openapi_schema()
+    if "paths" not in schema:
+        schema["paths"] = {}
+    for path_key, operations in COGITO_PATHS.items():
+        if path_key not in schema["paths"]:
+            schema["paths"][path_key] = {}
+        for method, spec in operations.items():
+            schema["paths"][path_key][method] = spec
+    return schema
+
+
+def build_cogito_openapi_schema() -> dict:
+    """Build full OpenAPI 3.0 schema for Cogitomedica API."""
+    return {
+        "openapi": "3.0.3",
+        "info": {
+            "title": "Cogitomedica API",
+            "description": "OpenAPI schema for Cogitomedica backend. All API v1 endpoints are documented.",
+            "version": "1.0.0",
+        },
+        "servers": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
+        "paths": dict(COGITO_PATHS),
+    }
+
+
+@require_GET
+def cogito_openapi_schema_view(request):
+    """Serve OpenAPI 3.0 schema as JSON for Swagger UI / ReDoc."""
+    schema = build_cogito_openapi_schema()
+    return JsonResponse(schema, json_dumps_params={"indent": 0})

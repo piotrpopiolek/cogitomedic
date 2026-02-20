@@ -52,6 +52,7 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",
 
 INSTALLED_APPS = [
     # "unfold",
+    "corsheaders",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -73,6 +74,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -202,6 +204,25 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Cogitomedica API",
-    "DESCRIPTION": "OpenAPI schema for Cogitomedica backend.",
+    "DESCRIPTION": "OpenAPI schema for Cogitomedica backend. All API v1 endpoints are documented.",
     "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "POSTPROCESSING_HOOKS": ["cogitomedica.openapi_extension.cogito_extend_schema"],
+    "SERVERS": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
 }
+
+# CORS: dozwolone origins dla requestów z przeglądarki (np. frontend na innym porcie).
+# W dev domyślnie localhost; w prod ustaw CORS_ALLOWED_ORIGINS w .env (np. https://app.example.com).
+_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+if _origins_env:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()]
+elif ENVIRONMENT == "dev" or DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = []
+CORS_ALLOW_CREDENTIALS = True
