@@ -37,8 +37,8 @@ The user interface is available in **English** and **German**.
 
 ## API Documentation
 
-- Polish version: [`.ai/api-plan-pl.md`](.ai/api-plan-pl.md)
-- English version: [`.ai/api-plan.md`](.ai/api-plan.md)
+- **Interactive docs (OpenAPI/Swagger):** [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/) (Swagger UI) and [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/) (ReDoc). Schema: `/api/schema/`.
+- **Written plans:** Polish [`.ai/api-plan-pl.md`](.ai/api-plan-pl.md), English [`.ai/api-plan.md`](.ai/api-plan.md).
 
 ---
 

@@ -1,5 +1,7 @@
 # REST API Plan
 
+**Live OpenAPI docs:** When the app is running, interactive documentation is available at [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/) (Swagger UI) and [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/) (ReDoc). The schema is exposed at `/api/schema/`.
+
 ## 0. Assumptions
 - API base path is `/api/v1`.
 - Backend runtime baseline is **Django 6.0.x**.

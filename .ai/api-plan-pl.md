@@ -1,5 +1,7 @@
 # Plan REST API
 
+**Dokumentacja OpenAPI na żywo:** Przy uruchomionej aplikacji interaktywna dokumentacja jest dostępna pod [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/) (Swagger UI) oraz [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/) (ReDoc). Schemat: `/api/schema/`.
+
 ## 0. Założenia
 - Bazowa ścieżka API to `/api/v1`.
 - Bazowy runtime backendu to **Django 6.0.x**.
