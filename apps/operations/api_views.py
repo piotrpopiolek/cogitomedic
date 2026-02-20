@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from django.http import HttpResponse
 from django.db import connection
 from django.db.utils import Error as DatabaseError
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 
-from apps.core.api_utils import json_error
+from apps.core.api_utils import json_error, require_auth, require_user_role
 from apps.operations.metrics import build_metrics_payload
 from apps.outbox.models import OutboxEvent, OutboxStatus
 
@@ -41,9 +40,13 @@ def observability_health_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(payload, status=http_status)
 
 
+@require_auth
 def observability_metrics_view(request: HttpRequest) -> HttpResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
 
     payload = build_metrics_payload()
     return HttpResponse(payload, content_type="text/plain; version=0.0.4; charset=utf-8")

@@ -40,6 +40,14 @@ class ObservabilityHealthApiTests(TestCase):
             role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        self.admin_user = StaffUser.objects.create_user(
+            username="health-admin",
+            email="health.admin@example.com",
+            password="safe-password",
+            role=StaffRole.ADMIN,
+            is_staff=True,
+        )
+        self.client.login(username="health-admin", password="safe-password")
         clinic = ClinicSite.objects.create(code="HEA", name="Health")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="H1", name="H1")
         queue = DailyQueue.objects.create(

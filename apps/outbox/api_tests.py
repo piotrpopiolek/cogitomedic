@@ -42,6 +42,14 @@ class OutboxApiTests(TestCase):
             role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        self.admin_user = StaffUser.objects.create_user(
+            username="api-admin-outbox",
+            email="api.admin.outbox@example.com",
+            password="safe-password",
+            role=StaffRole.ADMIN,
+            is_staff=True,
+        )
+        self.client.login(username="api-admin-outbox", password="safe-password")
         clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="O1", name="O1")
         queue = DailyQueue.objects.create(
