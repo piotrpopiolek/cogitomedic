@@ -26,3 +26,4 @@ tzdata==2025.3
 uritemplate==4.2.0
 urllib3==2.6.3
 weasyprint==68.1
+django-unfold

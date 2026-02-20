@@ -7,6 +7,8 @@ from pathlib import Path
 
 import sentry_sdk
 from dotenv import load_dotenv
+from django.templatetags.static import static
+from django.urls import reverse_lazy
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -49,6 +51,7 @@ DEBUG = os.environ.get("DEBUG", "1") == "1"
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 INSTALLED_APPS = [
+    # "unfold",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -80,6 +83,30 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "cogitomedica.urls"
+
+ # UNFOLD = {
+ #   "SITE_TITLE": "Cogitomedica Admin",
+ #   "SITE_HEADER": "Cogitomedica Digital Consents",
+ #   "SITE_SUBHEADER": "Panel zarządzania",
+ #   "ENVIRONMENT": "cogitomedica.admin_callbacks.environment_callback",
+ #   "DASHBOARD_CALLBACK": "cogitomedica.admin_callbacks.dashboard_callback",
+ #   "SIDEBAR": {
+ #       "navigation": [
+ #           {
+ #                 "title": "Poczekalnia",
+ #                   "items": [
+ #                   {"title": "Dashboard", "icon": "dashboard", "link": lambda r: reverse_lazy("admin:index")},
+ #                   # ... linki do modeli
+ #               ],
+ #           },
+ #       ],
+ #   },
+    #"LOGIN": {
+    #    "image": lambda request: static("login-bg.jpg"),
+    #    "redirect_after": lambda request: reverse_lazy("admin:index"),
+    #    # "form": "twoja_app.forms.CustomLoginForm",  # opcjonalnie – usuń albo wskaż prawdziwą ścieżkę
+    #},
+#}
 
 TEMPLATES = [
     {
