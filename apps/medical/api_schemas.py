@@ -20,13 +20,13 @@ class CreateMedicalDocumentRequest(BaseModel):
 
     queue_entry_id: UUID
     intake_form_id: UUID
-    created_by_user_id: UUID
+    created_by_user_id: UUID | None = None  # ignored; session user is used
 
 
 class SaveDraftMedicalDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    updated_by_user_id: UUID
+    updated_by_user_id: UUID | None = None  # ignored; session user is used
     medical_payload_schema_version: int = Field(ge=1)
     medical_payload: MedicalPayloadMinimal
     diagnosis_code: str | None = None
@@ -37,13 +37,13 @@ class PublishMedicalDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     publish_request_id: UUID
-    published_by_user_id: UUID
+    published_by_user_id: UUID | None = None  # ignored; session user is used
 
 
 class DoctorTemplateListQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    actor_user_id: UUID
+    actor_user_id: UUID | None = None  # ignored; session user is used for filter
     template_locale: str | None = None
     include_inactive: bool = False
 
@@ -51,7 +51,7 @@ class DoctorTemplateListQuery(BaseModel):
 class DoctorTemplateCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    actor_user_id: UUID
+    actor_user_id: UUID | None = None  # ignored; session user is used
     name: str = Field(min_length=1, max_length=120)
     template_locale: str = Field(min_length=2, max_length=10)
     template_body: str = Field(min_length=1)
@@ -62,7 +62,7 @@ class DoctorTemplateCreateRequest(BaseModel):
 class DoctorTemplateUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    actor_user_id: UUID
+    actor_user_id: UUID | None = None  # ignored; session user is used
     name: str | None = Field(default=None, min_length=1, max_length=120)
     template_locale: str | None = Field(default=None, min_length=2, max_length=10)
     template_body: str | None = Field(default=None, min_length=1)

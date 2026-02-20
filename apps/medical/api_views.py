@@ -8,7 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_actor_match, require_auth, require_user_role
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -44,15 +44,12 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    actor_error = require_actor_match(request, body.created_by_user_id)
-    if actor_error:
-        return actor_error
 
     try:
         document = create_or_get_medical_document(
             queue_entry_id=body.queue_entry_id,
             intake_form_id=body.intake_form_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("Queue entry or intake form not found.", status=404)
@@ -82,9 +79,6 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    actor_error = require_actor_match(request, body.updated_by_user_id)
-    if actor_error:
-        return actor_error
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
@@ -92,7 +86,7 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     try:
         version = save_draft_document_version(
             medical_document_id=medical_document_id,
-            updated_by_user_id=body.updated_by_user_id,
+            updated_by_user_id=request.user.id,
             medical_payload_schema_version=body.medical_payload_schema_version,
             medical_payload=body.medical_payload.model_dump(),
             diagnosis_code=body.diagnosis_code,
@@ -129,15 +123,12 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    actor_error = require_actor_match(request, body.published_by_user_id)
-    if actor_error:
-        return actor_error
 
     try:
         version = publish_document_version(
             medical_document_id=medical_document_id,
             publish_request_id=body.publish_request_id,
-            published_by_user_id=body.published_by_user_id,
+            published_by_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
@@ -165,21 +156,17 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         try:
             query = DoctorTemplateListQuery.model_validate(
                 {
-                    "actor_user_id": request.GET.get("actor_user_id"),
                     "template_locale": request.GET.get("template_locale"),
                     "include_inactive": request.GET.get("include_inactive", "false").lower() == "true",
                 }
             )
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-        actor_error = require_actor_match(request, query.actor_user_id)
-        if actor_error:
-            return actor_error
 
         try:
             templates = list_templates(
                 filters=TemplateListFilters(
-                    actor_user_id=query.actor_user_id,
+                    actor_user_id=request.user.id,
                     template_locale=query.template_locale,
                     include_inactive=query.include_inactive,
                 )
@@ -216,13 +203,10 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-        actor_error = require_actor_match(request, body.actor_user_id)
-        if actor_error:
-            return actor_error
 
         try:
             template = create_template(
-                actor_user_id=body.actor_user_id,
+                actor_user_id=request.user.id,
                 name=body.name,
                 template_locale=body.template_locale,
                 template_body=body.template_body,
@@ -267,14 +251,11 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-    actor_error = require_actor_match(request, body.actor_user_id)
-    if actor_error:
-        return actor_error
 
     try:
         template = update_template(
             template_id=template_id,
-            actor_user_id=body.actor_user_id,
+            actor_user_id=request.user.id,
             name=body.name,
             template_locale=body.template_locale,
             template_body=body.template_body,
