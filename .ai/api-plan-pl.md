@@ -156,7 +156,7 @@
 
 - **GET** `/patients`
   - Opis: Wyszukiwanie/listowanie pacjentów.
-  - Parametry zapytania: `search`, `last_name`, `date_of_birth`, `phone`, `identity_status`, `doctolib_patient_id`, `is_active`.
+  - Parametry zapytania: `search`, `last_name`, `date_of_birth`, `phone`, `identity_status`, `doctolib_patient_id`, `is_active`. Parametr `date_of_birth` musi być w formacie ISO `YYYY-MM-DD`; nieprawidłowy format zwraca `400 VALIDATION_ERROR`.
   - Request JSON: brak.
   - Response JSON:
     ```json
@@ -179,10 +179,10 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `403 FORBIDDEN`.
+  - Kody błędów: `400 VALIDATION_ERROR` (np. nieprawidłowy format `date_of_birth`), `403 FORBIDDEN`.
 
 - **POST** `/patients`
-  - Opis: Tworzy pacjenta (ścieżka manualna wspiera tożsamość tymczasową).
+  - Opis: Tworzy pacjenta (ścieżka manualna wspiera tożsamość tymczasową). Użytkownik tworzący jest pobierany z uwierzytelnionej sesji; brak pola w body żądania dla aktora.
   - Parametry zapytania: brak.
   - Request JSON:
     ```json
@@ -209,7 +209,7 @@
     }
     ```
   - Kody sukcesu: `201 CREATED`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `409 DUPLICATE_EXTERNAL_SOURCE`, `422 INVALID_BUSINESS_STATE`.
+  - Kody błędów: `400 VALIDATION_ERROR` (np. nieprawidłowy format telefonu: `^[0-9+() -]{7,20}$`), `409 DUPLICATE_EXTERNAL_SOURCE`, `422 INVALID_BUSINESS_STATE`.
 
 - **GET** `/patients/{id}`
 - **PATCH** `/patients/{id}`

@@ -156,7 +156,7 @@
 
 - **GET** `/patients`
   - Description: Search/list patients.
-  - Query params: `search`, `last_name`, `date_of_birth`, `phone`, `identity_status`, `doctolib_patient_id`, `is_active`.
+  - Query params: `search`, `last_name`, `date_of_birth`, `phone`, `identity_status`, `doctolib_patient_id`, `is_active`. The `date_of_birth` must be in ISO format `YYYY-MM-DD`; invalid format returns `400 VALIDATION_ERROR`.
   - Request JSON: none.
   - Response JSON:
     ```json
@@ -179,10 +179,10 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `403 FORBIDDEN`.
+  - Errors: `400 VALIDATION_ERROR` (e.g. invalid `date_of_birth` format), `403 FORBIDDEN`.
 
 - **POST** `/patients`
-  - Description: Create patient (manual path supports temporary identity).
+  - Description: Create patient (manual path supports temporary identity). The creating user is taken from the authenticated session; no request body field for actor.
   - Query params: none.
   - Request JSON:
     ```json
@@ -209,7 +209,7 @@
     }
     ```
   - Success: `201 CREATED`.
-  - Errors: `400 VALIDATION_ERROR`, `409 DUPLICATE_EXTERNAL_SOURCE`, `422 INVALID_BUSINESS_STATE`.
+  - Errors: `400 VALIDATION_ERROR` (e.g. invalid phone format: must match `^[0-9+() -]{7,20}$`), `409 DUPLICATE_EXTERNAL_SOURCE`, `422 INVALID_BUSINESS_STATE`.
 
 - **GET** `/patients/{id}`
 - **PATCH** `/patients/{id}`
