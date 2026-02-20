@@ -12,7 +12,12 @@ from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, parse_bool_query, read_json_body, require_auth, safe_parse_positive_int
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
-from apps.reception.api_schemas import CreatePatientRequest, MergePatientRequest, UpdatePatientRequest
+from apps.reception.api_schemas import (
+    CreatePatientRequest,
+    MergePatientRequest,
+    PatientsListQuery,
+    UpdatePatientRequest,
+)
 from apps.reception.models import Patient, PatientContactHistory
 from apps.reception.services import (
     InvalidSourceActionError,
@@ -67,6 +72,14 @@ def _serialize_contact_history(item: PatientContactHistory) -> dict:
 @csrf_exempt
 def patients_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
+        try:
+            list_query = PatientsListQuery.model_validate(
+                {"date_of_birth": request.GET.get("date_of_birth")}
+            )
+        except ValidationError as exc:
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         qs = Patient.objects.all().order_by("-created_at")
         search = request.GET.get("search")
         if search:
@@ -79,9 +92,8 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         last_name = request.GET.get("last_name")
         if last_name:
             qs = qs.filter(last_name__icontains=last_name)
-        date_of_birth = request.GET.get("date_of_birth")
-        if date_of_birth:
-            qs = qs.filter(date_of_birth=date_of_birth)
+        if list_query.date_of_birth is not None:
+            qs = qs.filter(date_of_birth=list_query.date_of_birth)
         phone = request.GET.get("phone")
         if phone:
             qs = qs.filter(phone__icontains=phone)
