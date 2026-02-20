@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Must match Patient model CheckConstraint patient_phone_format
+PHONE_PATTERN = re.compile(r"^[0-9+() -]{7,20}$")
 
 
 class CreateQueueEntrySessionRequest(BaseModel):
@@ -99,6 +103,14 @@ class UpdateConsultingRoomRequest(BaseModel):
     is_active: bool | None = None
 
 
+def _validate_phone_format(v: str | None) -> str | None:
+    if v is None:
+        return v
+    if not PHONE_PATTERN.fullmatch(v):
+        raise ValueError("Phone must match format: digits, +, (), space, hyphen; 7-20 characters.")
+    return v
+
+
 class CreatePatientRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -114,7 +126,11 @@ class CreatePatientRequest(BaseModel):
     country_code: str = Field(default="DE", min_length=2, max_length=2)
     external_source: str | None = Field(default=None, max_length=30)
     external_source_id: str | None = Field(default=None, max_length=100)
-    created_by_user_id: UUID
+
+    @field_validator("phone", mode="after")
+    @classmethod
+    def phone_format(cls, v: str) -> str:
+        return _validate_phone_format(v) or v
 
 
 class UpdatePatientRequest(BaseModel):
@@ -136,6 +152,11 @@ class UpdatePatientRequest(BaseModel):
     changed_by_user_id: UUID | None = None
     change_reason: str | None = Field(default=None, max_length=100)
 
+    @field_validator("phone", mode="after")
+    @classmethod
+    def phone_format(cls, v: str | None) -> str | None:
+        return _validate_phone_format(v)
+
 
 class MergePatientRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -144,3 +165,23 @@ class MergePatientRequest(BaseModel):
     source_action: str = Field(default="ARCHIVE", pattern="^(ARCHIVE|KEEP_ACTIVE)$")
     reason: str | None = Field(default=None, max_length=250)
     actor_user_id: UUID | None = None
+
+
+class PatientsListQuery(BaseModel):
+    """Query params for GET /api/v1/patients. Validates date_of_birth format (YYYY-MM-DD)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date_of_birth: date | None = None
+
+    @field_validator("date_of_birth", mode="before")
+    @classmethod
+    def parse_date_of_birth(cls, v: str | date | None) -> date | None:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        if isinstance(v, date):
+            return v
+        try:
+            return date.fromisoformat(v.strip())
+        except ValueError:
+            raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.")

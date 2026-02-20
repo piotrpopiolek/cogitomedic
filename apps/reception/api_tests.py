@@ -542,7 +542,6 @@ class PatientsApiTests(TestCase):
                     "country_code": "DE",
                     "external_source": "OTHER",
                     "external_source_id": "frontdesk-001",
-                    "created_by_user_id": str(self.reception_user.id),
                 }
             ),
             content_type="application/json",
