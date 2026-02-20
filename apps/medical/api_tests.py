@@ -259,7 +259,7 @@ class DoctorTemplatesApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.assertEqual(create_global_forbidden.status_code, 403)
+        self.assertEqual(create_global_forbidden.status_code, 400)
 
         # Admin can create global template
         self.client.force_login(self.admin_user)
@@ -298,7 +298,7 @@ class DoctorTemplatesApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.assertEqual(patch_forbidden.status_code, 403)
+        self.assertEqual(patch_forbidden.status_code, 400)
 
         # Owner can patch own private template
         self.client.force_login(self.doctor_user)

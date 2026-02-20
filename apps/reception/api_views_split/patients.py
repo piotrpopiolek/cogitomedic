@@ -10,7 +10,14 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_bool_query, read_json_body, require_auth, safe_parse_positive_int
+from apps.core.api_utils import (
+    json_error,
+    parse_bool_query,
+    read_json_body,
+    require_auth,
+    require_user_role,
+    safe_parse_positive_int,
+)
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.reception.api_schemas import (
     CreatePatientRequest,
@@ -71,6 +78,9 @@ def _serialize_contact_history(item: PatientContactHistory) -> dict:
 @require_auth
 @csrf_exempt
 def patients_view(request: HttpRequest) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method == "GET":
         try:
             list_query = PatientsListQuery.model_validate(
@@ -172,6 +182,9 @@ def patients_view(request: HttpRequest) -> JsonResponse:
 @require_auth
 @csrf_exempt
 def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method not in ("GET", "PATCH"):
         return json_error("Method not allowed.", status=405)
     try:
@@ -262,6 +275,9 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
 @require_auth
 @csrf_exempt
 def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
     try:
@@ -281,6 +297,9 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
 @require_auth
 @csrf_exempt
 def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:
