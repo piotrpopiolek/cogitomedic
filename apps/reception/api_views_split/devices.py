@@ -10,7 +10,14 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_bool_query, parse_list_limit, read_json_body, require_auth
+from apps.core.api_utils import (
+    json_error,
+    parse_bool_query,
+    parse_list_limit,
+    read_json_body,
+    require_auth,
+    require_user_role,
+)
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import CreateTabletDeviceRequest, UpdateTabletDeviceRequest
 from apps.reception.models import TabletDevice
@@ -37,6 +44,9 @@ def _serialize_tablet_device(device: TabletDevice) -> dict:
 @require_auth
 @csrf_exempt
 def tablet_devices_view(request: HttpRequest) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method == "GET":
         qs = TabletDevice.objects.all().order_by("name")
         is_active = parse_bool_query(request.GET.get("is_active"))
@@ -71,6 +81,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
 @require_auth
 @csrf_exempt
 def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
         return json_error("Method not allowed.", status=405)
     try:
@@ -113,6 +126,9 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
 @require_auth
 @csrf_exempt
 def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
     try:

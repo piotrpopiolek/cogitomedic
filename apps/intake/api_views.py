@@ -8,7 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
 from apps.intake.services import save_intake_anamnesis_payload, submit_patient_intake_form
@@ -17,6 +17,9 @@ from apps.intake.services import save_intake_anamnesis_payload, submit_patient_i
 @require_auth
 @csrf_exempt
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "PUT":
         return json_error("Method not allowed.", status=405)
 
@@ -53,6 +56,9 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
 @require_auth
 @csrf_exempt
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    if role_error:
+        return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
 
