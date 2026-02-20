@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.contrib import admin
+from django.utils import timezone
 
 from apps.reception.models import (
     ClinicSite,
@@ -16,6 +19,24 @@ from apps.reception.models import (
 )
 
 
+def _ensure_patient_temp_identity_alert(patient: Patient) -> None:
+    """Set identity alert window when doctolib_patient_id is empty (constraint patient_temp_identity_requires_alert)."""
+    if patient.doctolib_patient_id:
+        return
+    if patient.identity_alert_created_at is None and patient.identity_resolution_due_at is None:
+        now = timezone.now()
+        patient.identity_alert_created_at = now
+        patient.identity_resolution_due_at = now + timedelta(hours=24)
+    elif patient.identity_alert_created_at is None:
+        patient.identity_alert_created_at = (
+            patient.identity_resolution_due_at - timedelta(hours=24)
+            if patient.identity_resolution_due_at
+            else timezone.now()
+        )
+    elif patient.identity_resolution_due_at is None:
+        patient.identity_resolution_due_at = patient.identity_alert_created_at + timedelta(hours=24)
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
     list_display = ("last_name", "first_name", "date_of_birth", "identity_status", "is_active", "created_at")
@@ -23,6 +44,10 @@ class PatientAdmin(admin.ModelAdmin):
     search_fields = ("first_name", "last_name", "email", "phone", "doctolib_patient_id")
     readonly_fields = ("id", "created_at", "updated_at")
     date_hierarchy = "created_at"
+
+    def save_model(self, request, obj, form, change):
+        _ensure_patient_temp_identity_alert(obj)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(PatientContactHistory)
