@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import sentry_sdk
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from django.templatetags.static import static
 from django.urls import reverse_lazy
@@ -43,11 +44,15 @@ if SENTRY_DSN:
         before_send=before_send_filter,
     )
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
+if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
+    raise ImproperlyConfigured("SECRET_KEY must be set in production (set the SECRET_KEY environment variable).")
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 
-# Domyślnie w dev: localhost + * (dostęp z tabletu/innych urządzeń w sieci po IP)
+# Hosty dozwolone w nagłówku Host. W prod MUSI być ustawione ALLOWED_HOSTS (np. twojadomena.com).
+# Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 INSTALLED_APPS = [

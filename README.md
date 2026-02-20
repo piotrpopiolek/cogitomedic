@@ -111,12 +111,13 @@ The user interface is available in **English** and **German**.
 
    | Variable | Description |
    |----------|-------------|
-   | `SECRET_KEY` | Django secret key |
+   | `SECRET_KEY` | Django secret key (sessions, CSRF). **Mandatory in production** – app will not start without it when `ENVIRONMENT=prod`. |
    | `DB_NAME` | PostgreSQL database name |
    | `DB_USER` | PostgreSQL user |
    | `DB_PASSWORD` | PostgreSQL password |
    | `DB_HOST` | Database host (e.g. `localhost`) |
    | `DB_PORT` | Database port (e.g. `5432`) |
+   | `ALLOWED_HOSTS` | Comma-separated list of allowed `Host` header values. **Mandatory in production** – if empty, Django rejects all requests. In dev, set e.g. `localhost,127.0.0.1`. |
    | `SENTRY_DSN` | (Optional) Sentry DSN for error tracking |
 
    Example (replace with your values):
@@ -128,9 +129,10 @@ The user interface is available in **English** and **German**.
    DB_PASSWORD=your-password
    DB_HOST=localhost
    DB_PORT=5432
+   ALLOWED_HOSTS=localhost,127.0.0.1
    ```
 
-   For local development you may need to set `DEBUG=True` and adjust `ALLOWED_HOSTS` in `cogitomedica/settings.py` (do not use `DEBUG=True` in production).
+   For local development you may set `DEBUG=1` and `ALLOWED_HOSTS=localhost,127.0.0.1`. Do not use `DEBUG=1` in production.
 
 5. **Create the database and run migrations**
 
@@ -209,6 +211,7 @@ make superuser
 
 - Keep secrets in `.env` (do not commit real credentials).
 - In Docker, `DB_HOST` is overridden to `db` automatically by `docker-compose.yml`.
+- For production: set `ENVIRONMENT=prod`, and **must** set `SECRET_KEY` and `ALLOWED_HOSTS` (app will not start in prod without `SECRET_KEY`).
 - For a clean database state:
 
   ```bash
