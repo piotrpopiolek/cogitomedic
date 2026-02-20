@@ -48,6 +48,22 @@ class UsersAuthApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_login_rate_limit_returns_429(self) -> None:
+        """After 5 POSTs to login per IP per minute, the 6th returns 429."""
+        for _ in range(5):
+            self.client.post(
+                "/api/v1/auth/login",
+                data=json.dumps({"username": "auth-user", "password": "wrong"}),
+                content_type="application/json",
+            )
+        response = self.client.post(
+            "/api/v1/auth/login",
+            data=json.dumps({"username": "auth-user", "password": "wrong"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json().get("error"), "Too many requests. Try again later.")
+
 
 class StaffUsersApiTests(TestCase):
     def setUp(self) -> None:

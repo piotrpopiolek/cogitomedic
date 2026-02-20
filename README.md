@@ -212,6 +212,7 @@ make superuser
 - Keep secrets in `.env` (do not commit real credentials).
 - In Docker, `DB_HOST` is overridden to `db` automatically by `docker-compose.yml`.
 - For production: set `ENVIRONMENT=prod`, and **must** set `SECRET_KEY` and `ALLOWED_HOSTS` (app will not start in prod without `SECRET_KEY`).
+- Login is rate-limited (5 POSTs per IP per minute); 429 is returned when exceeded. For multi-worker production, configure a shared cache (e.g. Redis) in `CACHES` so the limit applies across processes.
 - For a clean database state:
 
   ```bash

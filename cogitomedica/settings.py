@@ -87,7 +87,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
 ]
+
+# Rate limit: 429 response when exceeded. View must return JsonResponse (API style).
+RATELIMIT_VIEW = "apps.core.views.ratelimited_view"
 
 ROOT_URLCONF = "cogitomedica.urls"
 
