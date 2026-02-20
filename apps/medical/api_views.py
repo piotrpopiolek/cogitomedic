@@ -22,6 +22,7 @@ from apps.medical.services import create_or_get_medical_document, publish_docume
 from apps.medical.template_services import (
     TemplateListFilters,
     TemplateNotFoundError,
+    TemplatePermissionError,
     create_template,
     list_templates,
     update_template,
@@ -79,7 +80,7 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     if body.updated_by_user_id != request.user.id:
         return json_error("Actor mismatch.", status=403)
 
-    if body.medical_payload.get("schema_version") != body.medical_payload_schema_version:
+    if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
 
     try:
@@ -87,7 +88,7 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
             medical_document_id=medical_document_id,
             updated_by_user_id=body.updated_by_user_id,
             medical_payload_schema_version=body.medical_payload_schema_version,
-            medical_payload=body.medical_payload,
+            medical_payload=body.medical_payload.model_dump(),
             diagnosis_code=body.diagnosis_code,
             procedure_code=body.procedure_code,
         )
@@ -217,6 +218,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             )
         except ObjectDoesNotExist:
             return json_error("Actor user not found.", status=404)
+        except TemplatePermissionError as exc:
+            return json_error(str(exc), status=403)
         except DomainError as exc:
             return json_error(str(exc), status=400)
 
@@ -265,6 +268,8 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         return json_error("Actor user not found.", status=404)
     except TemplateNotFoundError as exc:
         return json_error(str(exc), status=404)
+    except TemplatePermissionError as exc:
+        return json_error(str(exc), status=403)
     except DomainError as exc:
         return json_error(str(exc), status=400)
 

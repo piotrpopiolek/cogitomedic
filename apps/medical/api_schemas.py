@@ -5,6 +5,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class MedicalPayloadMinimal(BaseModel):
+    """
+    Minimal contract for medical_payload stored in DB (§6: must have schema_version).
+    Full v1 shape (authoring_locale, lesions, etc.) is in api-plan; this enforces versioning.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    schema_version: int = Field(ge=1)
+
+
 class CreateMedicalDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -18,7 +28,7 @@ class SaveDraftMedicalDocumentRequest(BaseModel):
 
     updated_by_user_id: UUID
     medical_payload_schema_version: int = Field(ge=1)
-    medical_payload: dict
+    medical_payload: MedicalPayloadMinimal
     diagnosis_code: str | None = None
     procedure_code: str | None = None
 

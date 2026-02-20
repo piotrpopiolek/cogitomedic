@@ -89,6 +89,7 @@ class IntakeApiTests(TestCase):
             is_required=True,
             is_active=True,
         )
+        self.client.force_login(self.reception_user)
 
     def test_create_queue_entry_session_endpoint(self) -> None:
         response = self.client.post(
