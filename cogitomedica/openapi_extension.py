@@ -14,7 +14,11 @@ from copy import deepcopy
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
-from cogitomedica.openapi_schemas import get_components_schemas, get_request_body_schema_for
+from cogitomedica.openapi_schemas import (
+    get_components_schemas,
+    get_request_body_schema_for,
+    get_response_schema_for,
+)
 
 PREFIX = "/api/v1"
 
@@ -306,7 +310,7 @@ COGITO_PATHS = {
 
 
 def _paths_with_pydantic_refs() -> dict:
-    """Build paths from COGITO_PATHS, injecting $ref request body schemas from Pydantic where registered."""
+    """Build paths from COGITO_PATHS, injecting $ref request/response schemas from Pydantic where registered."""
     paths = {}
     for path_key, operations in COGITO_PATHS.items():
         paths[path_key] = {}
@@ -315,6 +319,9 @@ def _paths_with_pydantic_refs() -> dict:
             body_schema = get_request_body_schema_for(path_key, method)
             if body_schema is not None and "requestBody" in op and "content" in op["requestBody"]:
                 op["requestBody"]["content"]["application/json"] = {"schema": body_schema}
+            response_schema = get_response_schema_for(path_key, method, "200")
+            if response_schema is not None and "responses" in op and "200" in op["responses"]:
+                op["responses"]["200"]["content"] = {"application/json": {"schema": response_schema}}
             paths[path_key][method] = op
     return paths
 

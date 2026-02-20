@@ -10,6 +10,42 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# --- Response models (documentation only; §2 consistent output contracts) ---
+
+
+class AnamnesisUpdateResponse(BaseModel):
+    """Response for PUT /intake-forms/{id}/anamnesis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intake_form_id: str
+    anamnesis_schema_version: int
+    answer_count: int
+
+
+class MedicalDocumentVersionResponse(BaseModel):
+    """Response for PUT .../draft and POST .../publish (version info)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    medical_document_version_id: str
+    version_no: int
+    version_status: str
+
+
+class PublishDocumentVersionResponse(BaseModel):
+    """Response for POST .../publish (includes publish_request_id for idempotency)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    medical_document_version_id: str
+    version_no: int
+    version_status: str
+    publish_request_id: str | None = None
+
 # Ref prefix used in the final OpenAPI document
 COMPONENTS_REF_PREFIX = "#/components/schemas/"
 PYDANTIC_DEFS_PREFIX = "#/$defs/"
@@ -117,6 +153,7 @@ def _get_request_model_registry() -> list[type]:
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        MedicalPayloadMinimal,
         PublishMedicalDocumentRequest,
         SaveDraftMedicalDocumentRequest,
     )
@@ -160,7 +197,8 @@ def _get_request_model_registry() -> list[type]:
         ProcessOutboxRequest,
         RetryOutboxEventRequest,
         RetentionRunRequest,
-        # Medical
+        # Medical (MedicalPayloadMinimal is nested in SaveDraftMedicalDocumentRequest; §6 schema_version)
+        MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
@@ -183,6 +221,10 @@ def _get_request_model_registry() -> list[type]:
         CreatePatientRequest,
         UpdatePatientRequest,
         MergePatientRequest,
+        # Response models (documentation; §2)
+        AnamnesisUpdateResponse,
+        MedicalDocumentVersionResponse,
+        PublishDocumentVersionResponse,
     ]
 
 
@@ -264,3 +306,22 @@ def get_request_body_schema_for(path: str, method: str) -> dict[str, Any] | None
     """
     m = _request_body_model_map().get((path, method.lower()))
     return get_request_schema_ref(m) if m else None
+
+
+def _response_schema_map() -> dict[tuple[str, str], dict[str, type]]:
+    """(path, method) -> { status: response_model_class } for documented responses (§2)."""
+    P = "/api/v1"
+    return {
+        (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): {"200": AnamnesisUpdateResponse},
+        (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): {"200": MedicalDocumentVersionResponse},
+        (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {"200": PublishDocumentVersionResponse},
+    }
+
+
+def get_response_schema_for(path: str, method: str, status: str) -> dict[str, Any] | None:
+    """Return OpenAPI schema $ref for response body if registered; otherwise None."""
+    by_status = _response_schema_map().get((path, method.lower()))
+    if not by_status:
+        return None
+    model = by_status.get(str(status))
+    return get_request_schema_ref(model) if model else None
