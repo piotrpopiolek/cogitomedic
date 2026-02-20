@@ -138,6 +138,22 @@ class Patient(models.Model):
             if self.doctolib_patient_id
             else PatientIdentityStatus.TEMPORARY
         )
+        # Constraint patient_temp_identity_requires_alert: when doctolib_patient_id is null,
+        # both identity_alert_created_at and identity_resolution_due_at must be set.
+        if not self.doctolib_patient_id and (
+            self.identity_alert_created_at is None or self.identity_resolution_due_at is None
+        ):
+            now = timezone.now()
+            if self.identity_alert_created_at is None and self.identity_resolution_due_at is not None:
+                self.identity_alert_created_at = self.identity_resolution_due_at - timedelta(hours=24)
+            elif self.identity_alert_created_at is None:
+                self.identity_alert_created_at = now
+            if self.identity_resolution_due_at is None:
+                self.identity_resolution_due_at = self.identity_alert_created_at + timedelta(hours=24)
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                extra = {"identity_alert_created_at", "identity_resolution_due_at"}
+                kwargs["update_fields"] = list(update_fields) + [f for f in extra if f not in update_fields]
         super().save(*args, **kwargs)
 
 
