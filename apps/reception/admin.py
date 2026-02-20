@@ -92,6 +92,30 @@ class PatientAdmin(admin.ModelAdmin):
             )
 
 
+def _set_created_by_user(request, obj, change: bool) -> None:
+    """Set created_by_user to session user when adding and field is not set."""
+    if change or not request.user.is_authenticated:
+        return
+    if getattr(obj, "created_by_user_id", None) is None and hasattr(obj, "created_by_user"):
+        obj.created_by_user = request.user
+
+
+def _initial_created_by_user(request, form, change: bool) -> None:
+    """Pre-fill created_by_user with session user on add so the field is not required to be filled."""
+    if change or not request.user.is_authenticated or "created_by_user" not in form.base_fields:
+        return
+    if form.base_fields["created_by_user"].initial is None:
+        form.base_fields["created_by_user"].initial = request.user.pk
+
+
+def _set_changed_by_user(request, obj) -> None:
+    """Set changed_by_user to session user when not set."""
+    if not request.user.is_authenticated or not hasattr(obj, "changed_by_user"):
+        return
+    if getattr(obj, "changed_by_user_id", None) is None:
+        obj.changed_by_user = request.user
+
+
 @admin.register(PatientContactHistory)
 class PatientContactHistoryAdmin(admin.ModelAdmin):
     list_display = ("patient", "phone", "email", "reason", "changed_at", "changed_by_user")
@@ -100,6 +124,10 @@ class PatientContactHistoryAdmin(admin.ModelAdmin):
     readonly_fields = ("id", "changed_at")
     date_hierarchy = "changed_at"
     raw_id_fields = ("patient", "changed_by_user")
+
+    def save_model(self, request, obj, form, change):
+        _set_changed_by_user(request, obj)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(ClinicSite)
@@ -125,6 +153,15 @@ class DailyQueueAdmin(admin.ModelAdmin):
     raw_id_fields = ("clinic_site", "consulting_room", "created_by_user")
     date_hierarchy = "queue_date"
 
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        _initial_created_by_user(request, form, bool(change))
+        return form
+
+    def save_model(self, request, obj, form, change):
+        _set_created_by_user(request, obj, change)
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(QueueEntry)
 class QueueEntryAdmin(admin.ModelAdmin):
@@ -142,6 +179,15 @@ class QueueEntryAdmin(admin.ModelAdmin):
     raw_id_fields = ("daily_queue", "patient", "active_session", "created_by_user")
     date_hierarchy = "created_at"
 
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        _initial_created_by_user(request, form, bool(change))
+        return form
+
+    def save_model(self, request, obj, form, change):
+        _set_created_by_user(request, obj, change)
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(admin.ModelAdmin):
@@ -157,6 +203,15 @@ class PatientFormSessionAdmin(admin.ModelAdmin):
     raw_id_fields = ("queue_entry", "tablet_device", "created_by_user")
     readonly_fields = ("id", "token_hash", "created_at")
     date_hierarchy = "created_at"
+
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        _initial_created_by_user(request, form, bool(change))
+        return form
+
+    def save_model(self, request, obj, form, change):
+        _set_created_by_user(request, obj, change)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(PatientImportBatch)
@@ -176,6 +231,15 @@ class PatientImportBatchAdmin(admin.ModelAdmin):
     raw_id_fields = ("created_by_user",)
     readonly_fields = ("id", "source_file_sha256", "created_at", "finished_at")
     date_hierarchy = "created_at"
+
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        _initial_created_by_user(request, form, bool(change))
+        return form
+
+    def save_model(self, request, obj, form, change):
+        _set_created_by_user(request, obj, change)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(PatientImportError)
