@@ -22,6 +22,16 @@ from cogitomedica.openapi_schemas import (
 
 PREFIX = "/api/v1"
 
+# Operations that do not require authentication (no lock icon in Swagger UI).
+NO_AUTH_OPERATIONS = {
+    (f"{PREFIX}/observability/health", "get"),
+    (f"{PREFIX}/observability/metrics", "get"),
+    (f"{PREFIX}/auth/login", "post"),
+}
+
+# OpenAPI 3 security scheme: session cookie (Django). Used so Swagger UI shows lock icon.
+SECURITY_SCHEME_SESSION = "sessionCookie"
+
 # Minimal OpenAPI 3 path definitions: method -> operation dict (summary, tags, responses).
 # Path parameters use {param} and are documented via parameters when needed.
 COGITO_PATHS = {
@@ -322,6 +332,11 @@ def _paths_with_pydantic_refs() -> dict:
             response_schema = get_response_schema_for(path_key, method, "200")
             if response_schema is not None and "responses" in op and "200" in op["responses"]:
                 op["responses"]["200"]["content"] = {"application/json": {"schema": response_schema}}
+            # Require login for all operations except NO_AUTH_OPERATIONS (Swagger UI shows lock icon).
+            if (path_key, method) in NO_AUTH_OPERATIONS:
+                op["security"] = []
+            else:
+                op["security"] = [{SECURITY_SCHEME_SESSION: []}]
             paths[path_key][method] = op
     return paths
 
@@ -355,7 +370,17 @@ def build_cogito_openapi_schema() -> dict:
         },
         "servers": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
         "paths": _paths_with_pydantic_refs(),
-        "components": {"schemas": get_components_schemas()},
+        "components": {
+            "schemas": get_components_schemas(),
+            "securitySchemes": {
+                SECURITY_SCHEME_SESSION: {
+                    "type": "apiKey",
+                    "in": "cookie",
+                    "name": "sessionid",
+                    "description": "Wymagane logowanie (sesja Django). Zaloguj się przez POST /api/v1/auth/login, aby wywoływać chronione endpointy.",
+                },
+            },
+        },
     }
 
 
