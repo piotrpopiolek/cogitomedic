@@ -8,7 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError
 from apps.outbox.api_schemas import (
     OutboxEventsQueryParams,
@@ -72,6 +72,9 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
 def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
 
     try:
         body = ProcessOutboxRequest.model_validate(read_json_body(request))
@@ -129,6 +132,9 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
 def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
 
     try:
         body = RetentionRunRequest.model_validate(read_json_body(request))
