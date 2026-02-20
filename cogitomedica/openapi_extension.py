@@ -3,11 +3,18 @@ OpenAPI schema for Cogitomedica API v1.
 
 API uses Django view functions (not DRF), so drf-spectacular does not auto-discover them.
 We serve the full schema from cogito_openapi_schema_view so /api/docs works without DRF views.
+
+Request/response body schemas are generated from Pydantic models (openapi_schemas) so the
+documentation stays in sync with api_schemas in each app.
 """
 from __future__ import annotations
 
+from copy import deepcopy
+
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
+
+from cogitomedica.openapi_schemas import get_components_schemas, get_request_body_schema_for
 
 PREFIX = "/api/v1"
 
@@ -298,17 +305,35 @@ COGITO_PATHS = {
 }
 
 
+def _paths_with_pydantic_refs() -> dict:
+    """Build paths from COGITO_PATHS, injecting $ref request body schemas from Pydantic where registered."""
+    paths = {}
+    for path_key, operations in COGITO_PATHS.items():
+        paths[path_key] = {}
+        for method, spec in operations.items():
+            op = deepcopy(spec)
+            body_schema = get_request_body_schema_for(path_key, method)
+            if body_schema is not None and "requestBody" in op and "content" in op["requestBody"]:
+                op["requestBody"]["content"]["application/json"] = {"schema": body_schema}
+            paths[path_key][method] = op
+    return paths
+
+
 def cogito_extend_schema(schema, *args, **kwargs):
     """POSTPROCESSING_HOOK: inject Cogitomedica API v1 paths into the OpenAPI schema."""
     if schema is None:
         return build_cogito_openapi_schema()
     if "paths" not in schema:
         schema["paths"] = {}
-    for path_key, operations in COGITO_PATHS.items():
+    paths = _paths_with_pydantic_refs()
+    for path_key, operations in paths.items():
         if path_key not in schema["paths"]:
             schema["paths"][path_key] = {}
         for method, spec in operations.items():
             schema["paths"][path_key][method] = spec
+    if "components" not in schema:
+        schema["components"] = {}
+    schema["components"].setdefault("schemas", {}).update(get_components_schemas())
     return schema
 
 
@@ -322,7 +347,8 @@ def build_cogito_openapi_schema() -> dict:
             "version": "1.0.0",
         },
         "servers": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
-        "paths": dict(COGITO_PATHS),
+        "paths": _paths_with_pydantic_refs(),
+        "components": {"schemas": get_components_schemas()},
     }
 
 
