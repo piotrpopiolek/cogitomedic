@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django import forms
 from django.contrib import admin
 from django.utils import timezone
 
+from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -37,8 +39,30 @@ def _ensure_patient_temp_identity_alert(patient: Patient) -> None:
         patient.identity_resolution_due_at = patient.identity_alert_created_at + timedelta(hours=24)
 
 
+class PatientAdminForm(forms.ModelForm):
+    """Ensure temp-identity alert fields are set before save (constraint patient_temp_identity_requires_alert)."""
+
+    class Meta:
+        model = Patient
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("doctolib_patient_id"):
+            return cleaned
+        now = timezone.now()
+        if not cleaned.get("identity_alert_created_at"):
+            cleaned["identity_alert_created_at"] = now
+        if not cleaned.get("identity_resolution_due_at"):
+            cleaned["identity_resolution_due_at"] = cleaned.get("identity_alert_created_at") or now + timedelta(
+                hours=24
+            )
+        return cleaned
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
+    form = PatientAdminForm
     list_display = ("last_name", "first_name", "date_of_birth", "identity_status", "is_active", "created_at")
     list_filter = ("identity_status", "is_active", "external_source")
     search_fields = ("first_name", "last_name", "email", "phone", "doctolib_patient_id")
@@ -48,6 +72,24 @@ class PatientAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         _ensure_patient_temp_identity_alert(obj)
         super().save_model(request, obj, form, change)
+        # Audit: when a new patient is created with temporary identity (alert set), log for audit list.
+        if (
+            not change
+            and not obj.doctolib_patient_id
+            and obj.identity_alert_created_at
+            and obj.identity_resolution_due_at
+        ):
+            actor_id = getattr(request.user, "id", None) if request.user.is_authenticated else None
+            create_audit_event(
+                event_type="PATIENT_IDENTITY_ALERT_SET",
+                actor_user_id=actor_id,
+                patient_id=obj.pk,
+                metadata={
+                    "identity_alert_created_at": obj.identity_alert_created_at.isoformat(),
+                    "identity_resolution_due_at": obj.identity_resolution_due_at.isoformat(),
+                    "source": "admin",
+                },
+            )
 
 
 @admin.register(PatientContactHistory)
