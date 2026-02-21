@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -18,6 +19,14 @@
     .error { color: #b02a37; margin: 0.5rem 0; }
     .success { color: #0a0; margin: 0.5rem 0; }
     .field { margin: 0.5rem 0; }
+    .consent-block { margin: 1.25rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
+    .consent-block h3 { font-size: 1rem; margin: 0 0 0.5rem 0; }
+    .consent-content { white-space: pre-line; font-size: 0.95rem; line-height: 1.45; max-height: 18rem; overflow-y: auto; padding: 0.75rem; background: #fff; border-radius: 4px; margin-bottom: 0.75rem; }
+    .consent-check { margin-top: 0.5rem; }
+    #body-map-section .body-map-wrap { position: relative; max-width: 100%; margin: 0.5rem 0; }
+    #body-map-section .body-map-wrap img { width: 100%; height: auto; display: block; cursor: crosshair; }
+    #body-map-markers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+    #body-map-section .body-map-marker { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #0d6efd; border: 2px solid #fff; border-radius: 50%; }
   </style>
 </head>
 <body>
@@ -36,13 +45,29 @@
     <h2>Zgody</h2>
     <div id="consents-msg" class="error" style="display:none;"></div>
     {% for c in consents %}
-    <label>
-      <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
-      {{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}
-    </label>
+    <div class="consent-block">
+      <h3>{{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
+      <div class="consent-content">{{ c.content_de }}</div>
+      <label class="consent-check">
+        <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
+        Ich bestätige / Zgadzam się
+      </label>
+    </div>
     {% endfor %}
     <button type="button" id="save-consents">Zapisz zgody</button>
   </section>
+
+  <section id="body-map-section">
+    <h2>Schemat ciała</h2>
+    <p style="font-size:0.9rem; color:#666;">Kliknij na rysunku, aby zaznaczyć lokalizację zmian (np. znamion). Lewa połowa – przód, prawa – tył.</p>
+    <div id="body-map-msg" class="error" style="display:none;"></div>
+    <div class="body-map-wrap" id="body-map-wrap">
+      <img src="{% static 'tablet/body.jpg' %}" alt="Schemat ciała – przód i tył" id="body-map-img" />
+      <div id="body-map-markers"></div>
+    </div>
+    <button type="button" id="save-body-map">Zapisz schemat</button>
+  </section>
+  {{ body_map_data|json_script:"body-map-initial" }}
 
   <section id="anamnesis-section">
     <h2>Anamneza</h2>
@@ -84,6 +109,8 @@
       const formId = "{{ intake_form_id|escapejs }}";
       const apiBase = "/api/v1";
       const schemaVersion = {{ anamnesis_schema_version }};
+      const bodyMapSchemaVersion = {{ body_map_schema_version }};
+      const initialBodyMapData = JSON.parse(document.getElementById('body-map-initial').textContent || '[]');
 
       function getCsrfToken() {
         const el = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -103,6 +130,44 @@
         el.className = isError ? 'error' : 'success';
         el.style.display = text ? 'block' : 'none';
       }
+
+      // Body map
+      let bodyMapPoints = Array.isArray(initialBodyMapData) ? initialBodyMapData.slice() : [];
+      const bodyMapWrap = document.getElementById('body-map-wrap');
+      const bodyMapImg = document.getElementById('body-map-img');
+      const bodyMapMarkersEl = document.getElementById('body-map-markers');
+
+      function renderBodyMapMarkers() {
+        bodyMapMarkersEl.innerHTML = '';
+        bodyMapPoints.forEach(function(p) {
+          const div = document.createElement('div');
+          div.className = 'body-map-marker';
+          div.style.left = (p.x * 100) + '%';
+          div.style.top = (p.y * 100) + '%';
+          bodyMapMarkersEl.appendChild(div);
+        });
+      }
+
+      bodyMapImg.addEventListener('click', function(e) {
+        const rect = bodyMapImg.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        const side = x < 0.5 ? 'front' : 'back';
+        bodyMapPoints.push({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, side: side });
+        renderBodyMapMarkers();
+      });
+
+      document.getElementById('save-body-map').addEventListener('click', function() {
+        api('PATCH', '/intake-forms/' + formId, {
+          body_map_schema_version: bodyMapSchemaVersion,
+          body_map_data: bodyMapPoints
+        }).then(function(r) {
+          if (r.ok) showMsg('body-map-msg', 'Schemat zapisany.', false);
+          else r.json().then(function(d) { showMsg('body-map-msg', d.error || 'Błąd zapisu.', true); });
+        }).catch(function() { showMsg('body-map-msg', 'Błąd połączenia.', true); });
+      });
+
+      renderBodyMapMarkers();
 
       // Consents
       document.getElementById('save-consents').addEventListener('click', function() {

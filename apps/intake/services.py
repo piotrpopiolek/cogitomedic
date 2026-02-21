@@ -125,6 +125,7 @@ def get_intake_form_context(
             "consent_definition_id": str(cd_id),
             "code": cd["code"],
             "title_de": cd["title_de"],
+            "content_de": cd["content_de"] or "",
             "is_required": cd["is_required"],
             "accepted": pic.accepted if pic else False,
             "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
@@ -187,6 +188,33 @@ def get_intake_form_context(
         "patient": patient_payload,
         "has_signature": bool(intake_form.signature_file_path),
     }
+
+
+@transaction.atomic
+def save_intake_body_map(
+    *,
+    intake_form_id: uuid.UUID,
+    body_map_schema_version: int,
+    body_map_data: list[dict],
+) -> PatientIntakeForm:
+    """
+    Update body map data for an in-progress intake form.
+
+    body_map_data: list of {x, y, side, label?} with x,y in [0,1], side in ('front','back').
+    """
+    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+        raise StateTransitionError("Body map can be edited only for IN_PROGRESS intake form.")
+    raw = []
+    for p in body_map_data:
+        pt = {"x": float(p["x"]), "y": float(p["y"]), "side": str(p["side"])}
+        if p.get("label"):
+            pt["label"] = str(p["label"])
+        raw.append(pt)
+    intake_form.body_map_schema_version = body_map_schema_version
+    intake_form.body_map_data = raw
+    intake_form.save(update_fields=["body_map_schema_version", "body_map_data", "updated_at"])
+    return intake_form
 
 
 @transaction.atomic
