@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formularz intake – {{ patient.last_name }}</title>
+  <style>
+    body { font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 1rem; }
+    section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    h2 { font-size: 1.1rem; margin-top: 0; }
+    label { display: block; margin: 0.5rem 0; }
+    input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+    input[type="text"], textarea { width: 100%; padding: 0.5rem; box-sizing: border-box; font-size: 1rem; }
+    button, .btn { padding: 0.75rem 1rem; font-size: 1rem; cursor: pointer; background: #0d6efd; color: #fff; border: none; border-radius: 6px; margin: 0.25rem 0.25rem 0 0; }
+    button:disabled { background: #999; cursor: not-allowed; }
+    .btn.secondary { background: #6c757d; text-decoration: none; display: inline-block; }
+    #signatureCanvas { border: 1px solid #000; touch-action: none; display: block; width: 100%; max-width: 400px; height: 180px; }
+    .error { color: #b02a37; margin: 0.5rem 0; }
+    .success { color: #0a0; margin: 0.5rem 0; }
+    .field { margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <p style="font-size:0.9rem; color:#666;"><a href="{% url 'tablet:home' %}" class="btn secondary">← Poczekalnia</a></p>
+
+  <section>
+    <h2>Dane pacjenta (do weryfikacji)</h2>
+    <div class="field"><strong>{{ patient.last_name }} {{ patient.first_name }}</strong></div>
+    <div class="field">Data urodzenia: {{ patient.date_of_birth }}</div>
+    <div class="field">Telefon: {{ patient.phone }}</div>
+    <div class="field">E-mail: {{ patient.email }}</div>
+  </section>
+
+  <section id="consents-section">
+    <h2>Zgody</h2>
+    <div id="consents-msg" class="error" style="display:none;"></div>
+    {% for c in consents %}
+    <label>
+      <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
+      {{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}
+    </label>
+    {% endfor %}
+    <button type="button" id="save-consents">Zapisz zgody</button>
+  </section>
+
+  <section id="anamnesis-section">
+    <h2>Anamneza</h2>
+    <div id="anamnesis-msg" class="error" style="display:none;"></div>
+    {% for q in anamnesis_questions %}
+    <div class="field" data-question-code="{{ q.question_code }}" data-required="{{ q.is_required|yesno:'true,false' }}">
+      <strong>{{ q.question_text }}{% if q.is_required %} *{% endif %}</strong>
+      {% if q.answer_type == "BOOLEAN" or q.answer_type == "SINGLE_CHOICE" %}
+        {% for opt in q.options %}
+        <label><input type="radio" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
+        {% endfor %}
+      {% elif q.answer_type == "MULTI_CHOICE" %}
+        {% for opt in q.options %}
+        <label><input type="checkbox" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
+        {% endfor %}
+      {% endif %}
+      <label>Uwagi: <input type="text" name="q-text-{{ q.question_code }}" placeholder="Opcjonalnie" value="{{ q.answer.free_text|default:'' }}"></label>
+    </div>
+    {% endfor %}
+    <button type="button" id="save-anamnesis">Zapisz anamnezę</button>
+  </section>
+
+  <section id="signature-section">
+    <h2>Podpis</h2>
+    <div id="signature-msg" class="error" style="display:none;"></div>
+    <canvas id="signatureCanvas"></canvas>
+    <button type="button" id="clear-signature">Wyczyść</button>
+    <button type="button" id="save-signature">Zapisz podpis</button>
+    <span id="signature-saved" class="success" style="display:none;">Podpis zapisany.</span>
+  </section>
+
+  <section>
+    <div id="submit-msg" class="error" style="display:none;"></div>
+    <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>Zatwierdź i wyślij formularz</button>
+  </section>
+
+  <script>
+    (function() {
+      const formId = "{{ intake_form_id|escapejs }}";
+      const apiBase = "/api/v1";
+      const schemaVersion = {{ anamnesis_schema_version }};
+
+      function getCsrfToken() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+      }
+
+      function api(method, path, body) {
+        const opts = { method, credentials: 'same-origin', headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        return fetch(apiBase + path, opts);
+      }
+
+      function showMsg(id, text, isError) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text;
+        el.className = isError ? 'error' : 'success';
+        el.style.display = text ? 'block' : 'none';
+      }
+
+      // Consents
+      document.getElementById('save-consents').addEventListener('click', function() {
+        const consents = [];
+        document.querySelectorAll('input[name="consent"]').forEach(function(cb) {
+          consents.push({ consent_definition_id: cb.dataset.id, accepted: cb.checked });
+        });
+        api('PUT', '/intake-forms/' + formId + '/consents', { consents }).then(function(r) {
+          if (r.ok) showMsg('consents-msg', 'Zgody zapisane.', false);
+          else r.json().then(function(d) { showMsg('consents-msg', d.error || 'Błąd zapisu.', true); });
+        }).catch(function() { showMsg('consents-msg', 'Błąd połączenia.', true); });
+      });
+
+      // Anamnesis
+      document.getElementById('save-anamnesis').addEventListener('click', function() {
+        const answers = [];
+        document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
+          const code = block.dataset.questionCode;
+          const radios = block.querySelectorAll('input[type="radio"]:checked');
+          const checks = block.querySelectorAll('input[type="checkbox"]:checked');
+          const textInput = block.querySelector('input[type="text"]');
+          const selected_option_codes = [];
+          radios.forEach(function(r) { selected_option_codes.push(r.value); });
+          checks.forEach(function(c) { selected_option_codes.push(c.value); });
+          const free_text = textInput ? textInput.value.trim() : null;
+          answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
+        });
+        api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
+          if (r.ok) showMsg('anamnesis-msg', 'Anamneza zapisana.', false);
+          else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || 'Błąd zapisu.', true); });
+        }).catch(function() { showMsg('anamnesis-msg', 'Błąd połączenia.', true); });
+      });
+
+      // Signature canvas
+      const canvas = document.getElementById('signatureCanvas');
+      const ctx = canvas.getContext('2d');
+      let drawing = false;
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width && rect.height) {
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2;
+        }
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+      }
+      canvas.addEventListener('mousedown', function(e) { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+      canvas.addEventListener('mousemove', function(e) { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+      canvas.addEventListener('mouseup', function() { drawing = false; });
+      canvas.addEventListener('mouseleave', function() { drawing = false; });
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
+      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, { passive: false });
+      canvas.addEventListener('touchend', function() { drawing = false; });
+
+      document.getElementById('clear-signature').addEventListener('click', function() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        resize();
+      });
+
+      document.getElementById('save-signature').addEventListener('click', function() {
+        const dataUrl = canvas.toDataURL('image/png');
+        api('POST', '/intake-forms/' + formId + '/signature', { signature_base64: dataUrl }).then(function(r) {
+          if (r.ok) {
+            document.getElementById('signature-saved').style.display = 'inline';
+            document.getElementById('submit-form').disabled = false;
+            showMsg('signature-msg', '', false);
+          } else {
+            r.json().then(function(d) { showMsg('signature-msg', d.error || 'Błąd zapisu podpisu.', true); });
+          }
+        }).catch(function() { showMsg('signature-msg', 'Błąd połączenia.', true); });
+      });
+
+      // Submit
+      document.getElementById('submit-form').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+        api('POST', '/intake-forms/' + formId + '/submit', {}).then(function(r) {
+          if (r.ok) {
+            window.location.href = "/tablet/form/" + formId + "/";
+          } else {
+            r.json().then(function(d) { showMsg('submit-msg', d.error || 'Błąd wysyłki.', true); btn.disabled = false; });
+          }
+        }).catch(function() { showMsg('submit-msg', 'Błąd połączenia.', true); btn.disabled = false; });
+      });
+    })();
+  </script>
+</body>
+</html>
