@@ -14,14 +14,14 @@ Tablety są na wyposażeniu rejestracji. Tablet jest **zalogowany na stałe** na
 ## 1. Założenia
 
 
-| Aspekt                | Decyzja                                                                                                                                                                                                               |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tablet**            | Urządzenie rejestracji, stale zalogowane (sesja/cookie). Na recepcji np. 2–4 tablety. **Recepcja na tablecie ma możliwość wyboru kolejki** – nie ma twardego przypisania tabletu do kolejki w panelu recepcji.  |
-| **Rola tabletu**      | Dedykowana rola (np. `TABLET` lub `WAITING_ROOM`) z dostępem **tylko** do: wybór kolejki, lista pacjentów w wybranej kolejce, formularz intake (z walidacją na końcu: wszystkie pola + podpis). Tablet nie potrzebuje więcej uprawnień. |
-| **Widok poczekalnia** | Rejestracja **wybiera kolejkę** na tablecie (np. lista dzisiejszych kolejek), potem lista pacjentów tej kolejki; po wyborze pacjenta – ekran z danymi pacjenta do weryfikacji, potem formularz intake.        |
-| **Aktor wyboru**      | Rejestracja wybiera pacjenta na tablecie z listy; przekazuje tablet pacjentowi; pacjent **sprawdza poprawność swoich danych**, potem wypełnia ankietę (zgody, anamneza, podpis) i wysyła.                             |
-| **Uwierzytelnianie**  | Sesja (cookie) lub Bearer – ten sam użytkownik tabletu. **Brak** tokenów jednorazowych w URL. Sesja tabletu: **kilka godzin** (na tabletach nie edytuje się danych pacjenta – korekty tylko z kont RECEPTION).        |
-| **TabletDevice**      | Każdy tablet ma **własne konto** (rola TABLET). Model `TabletDevice`: **tylko `android_id`** (unikalny identyfikator urządzenia) – migracja usuwa pola `name` i `device_code`. Przy pierwszym logowaniu tabletu z nieznanym `android_id` tworzony jest wpis TabletDevice (auto-dopisanie).                             |
+| Aspekt                | Decyzja                                                                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Tablet**            | Urządzenie rejestracji, stale zalogowane (sesja/cookie). Na recepcji np. 2–4 tablety. **Recepcja na tablecie ma możliwość wyboru kolejki** – nie ma twardego przypisania tabletu do kolejki w panelu recepcji.                                                                             |
+| **Rola tabletu**      | Dedykowana rola (np. `TABLET` lub `WAITING_ROOM`) z dostępem **tylko** do: wybór kolejki, lista pacjentów w wybranej kolejce, formularz intake (z walidacją na końcu: wszystkie pola + podpis). Tablet nie potrzebuje więcej uprawnień.                                                    |
+| **Widok poczekalnia** | Rejestracja **wybiera kolejkę** na tablecie (np. lista dzisiejszych kolejek), potem lista pacjentów tej kolejki; po wyborze pacjenta – ekran z danymi pacjenta do weryfikacji, potem formularz intake.                                                                                     |
+| **Aktor wyboru**      | Rejestracja wybiera pacjenta na tablecie z listy; przekazuje tablet pacjentowi; pacjent **sprawdza poprawność swoich danych**, potem wypełnia ankietę (zgody, anamneza, podpis) i wysyła.                                                                                                  |
+| **Uwierzytelnianie**  | Sesja (cookie) lub Bearer – ten sam użytkownik tabletu. **Brak** tokenów jednorazowych w URL. Sesja tabletu: **kilka godzin** (na tabletach nie edytuje się danych pacjenta – korekty tylko z kont RECEPTION).                                                                             |
+| **TabletDevice**      | Każdy tablet ma **własne konto** (rola TABLET). Model `TabletDevice`: **tylko `android_id`** (unikalny identyfikator urządzenia) – migracja usuwa pola `name` i `device_code`. Przy pierwszym logowaniu tabletu z nieznanym `android_id` tworzony jest wpis TabletDevice (auto-dopisanie). |
 
 
 ---
@@ -35,7 +35,7 @@ Tablety są na wyposażeniu rejestracji. Tablet jest **zalogowany na stałe** na
 | **Kradzież / przejęcie sesji**                                         | Rejestracja ma nadzór nad tabletem; **wystarczy blokada ekranu** (np. po wyjściu z aplikacji / po czasie bezczynności).                                         |
 | **Brak izolacji „pacjent vs personel”**                                | **Podpis pacjenta – tego nikt nie podrobi.** Identyfikacja tabletu (`android_id`, `Build.SERIAL`) pozwala powiązać wypełnienie z konkretnym urządzeniem.        |
 | **Pacjent wypełnił w domu**                                            | Nie dotyczy: **pacjent wypełnia tylko w poczekalni na tablecie** od rejestracji; nie ma dostępu z zewnątrz.                                                     |
-| **Brak dostępu z zewnątrz = zero elastyczności**                      | **Świadoma decyzja.**                                                                                                                                             |
+| **Brak dostępu z zewnątrz = zero elastyczności**                       | **Świadoma decyzja.**                                                                                                                                           |
 | **Wiele placówek / wiele tabletów**                                    | **Początkowa wersja systemu obsługuje tylko jedną przychodnię.**                                                                                                |
 
 
@@ -43,10 +43,12 @@ Tablety są na wyposażeniu rejestracji. Tablet jest **zalogowany na stałe** na
 
 ## 1c. Decyzje techniczne (token, TabletDevice)
 
-| Aspekt | Decyzja |
-|--------|--------|
-| **Sesja bez tokenu** | **Wycofanie tokenu z modeli i z pozostałej dokumentacji.** Obecnie `PatientFormSession` ma obligatoryjne `token_hash` – w nowym flow tablet nie używa tokenu; autoryzacja to „request.user.role == TABLET + intake_form w wybranej kolejce”. Wykonujemy **migracje bazy**, które usuwają pole tokenu (np. `token_hash`) z modelu i zależną logikę. Po migracji nie ma generowania ani walidacji tokenu. |
-| **TabletDevice – tylko android_id** | **Migracja:** usuwamy z modelu `TabletDevice` pola `name` i `device_code`, wprowadzamy **tylko `android_id`** (unikalny identyfikator urządzenia). Auto-dopisanie: przy pierwszym logowaniu tabletu z danym `android_id` tworzony jest wpis w TabletDevice. |
+
+| Aspekt                              | Decyzja                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sesja bez tokenu**                | **Wycofanie tokenu z modeli i z pozostałej dokumentacji.** Obecnie `PatientFormSession` ma obligatoryjne `token_hash` – w nowym flow tablet nie używa tokenu; autoryzacja to „request.user.role == TABLET + intake_form w wybranej kolejce”. Wykonujemy **migracje bazy**, które usuwają pole tokenu (np. `token_hash`) z modelu i zależną logikę. Po migracji nie ma generowania ani walidacji tokenu. |
+| **TabletDevice – tylko android_id** | **Migracja:** usuwamy z modelu `TabletDevice` pola `name` i `device_code`, wprowadzamy **tylko `android_id`** (unikalny identyfikator urządzenia). Auto-dopisanie: przy pierwszym logowaniu tabletu z danym `android_id` tworzony jest wpis w TabletDevice.                                                                                                                                             |
+
 
 ---
 
@@ -61,24 +63,24 @@ Wykonywane na stanowisku recepcji (panel staff), nie na tablecie:
 
 ### 2.2 Tablet: zalogowany użytkownik z rolą „poczekalnia”
 
-3. **Logowanie tabletu** (jednorazowo lub po wygaśnięciu sesji)
+1. **Logowanie tabletu** (jednorazowo lub po wygaśnięciu sesji)
   Konto typu „tablet poczekalni” (np. użytkownik z rolą `TABLET`). Po zalogowaniu tablet ma dostęp **tylko** do:
   - **wyboru kolejki** (np. lista dzisiejszych kolejek),
   - **listy pacjentów w wybranej kolejce**,
   - oraz po wyborze pacjenta – **ekranu weryfikacji danych pacjenta**, a potem **formularza intake** (zgody, anamneza, podpis, submit).
-4. **Widok poczekalnia na tablecie**
+2. **Widok poczekalnia na tablecie**
   - Rejestracja **wybiera kolejkę** (np. `GET /api/v1/daily-queues?queue_date=today`, potem wybór jednej z list).  
   - Tablet wywołuje API zwracające **listę pacjentów w wybranej kolejce** (np. `GET /api/v1/daily-queues/{id}/entries`).  
   - Na ekranie: lista (imię, nazwisko, pozycja, status); rejestracja **wybiera jednego pacjenta** (tap).
 
 ### 2.3 Wybór pacjenta → weryfikacja danych → formularz
 
-5. **Wybór pacjenta = rozpoczęcie sesji formularza**
+1. **Wybór pacjenta = rozpoczęcie sesji formularza**
   - Po tapnięciu pacjenta tablet wywołuje **POST /api/v1/queue-entries/{queue_entry_id}/sessions** (z opcjonalnym `form_locale`, `tablet_device_id` / `android_id`). **Bez tokenu** – sesja tworzona dla zalogowanego użytkownika tabletu.  
-  - Backend tworzy/aktualizuje sesję (bez pola token), tworzy lub wiąże formularz intake, zwraca **`intake_form_id`**.  
+  - Backend tworzy/aktualizuje sesję (bez pola token), tworzy lub wiąże formularz intake, zwraca `**intake_form_id`**.  
   - Tablet **zaciąga dane pacjenta** i pokazuje **ekran weryfikacji**: pacjent sprawdza, czy wszystkie jego dane są poprawne. Na tej podstawie łączy się formularz X z pacjentem (znane id).  
   - Następnie tablet przechodzi do **widoku formularza** dla tego `intake_form_id`.
-6. **Przekazanie tabletu pacjentowi**
+2. **Przekazanie tabletu pacjentowi**
   - Pacjent ma przed sobą (po weryfikacji danych) formularz intake. Wypełnia ankietę (zgody, anamneza, podpis) i wysyła.
 
 ### 2.4 Wypełnienie ankiety i submit (na tablecie)

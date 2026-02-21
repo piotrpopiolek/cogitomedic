@@ -9,7 +9,7 @@ todos:
     content: Zaimplementować modele i migracje zgodnie z .ai/db-plan.md wraz z indeksami i constraintami.
     status: completed
   - id: phase1-reception-tablet
-    content: API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E. Do uzupełnienia: rola TABLET, wycofanie tokenu (migracja patient_form_session), TabletDevice tylko android_id (migracja), endpointy poczekalni (wybór kolejki, lista wpisów, POST sessions bez tokenu) – zob. .ai/proces-poczekalni.md.
+    content: "API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E. Do uzupełnienia: rola TABLET, wycofanie tokenu (migracja patient_form_session), TabletDevice tylko android_id (migracja), endpointy poczekalni (wybór kolejki, lista wpisów, POST sessions bez tokenu) – zob. .ai/proces-poczekalni.md."
     status: in_progress
   - id: phase2-medical-publish
     content: API medical (draft, publish, szablony) + pipeline outbox – wdrożone; GET lista dokumentów medycznych do dodania dla panelu lekarza.
@@ -33,10 +33,10 @@ todos:
     content: Wykonać hardening bezpieczeństwa, testy E2E i checklistę gotowości produkcyjnej.
     status: pending
   - id: doctor-templates-us019
-    content: "Zaimplementować US-019 (szablony lekarza DE/EN): CRUD, aktywacja/dezaktywacja, uprawnienia globalne/prywatne i integracja z generate-text."
+    content: ""
     status: pending
   - id: auth-session-hardening
-    content: "Domknąć wymagania US-001: timeout sesji, polityki wygasania i testy bezpieczeństwa auth/session."
+    content: ""
     status: pending
   - id: domain-audit-trail
     content: Dodać pełny audit trail zdarzeń domenowych (edycja tekstu, publikacja/republikacja, retencja) i włączyć go do DoD.
@@ -134,7 +134,7 @@ flowchart LR
 - Zaimplementuj serwisy domenowe:
   - `create_or_update_patient_manual()` z `TEMPORARY` + alert admin przy braku `doctolib_patient_id`.
   - `create_queue_entry()` z dopuszczeniem wielu wizyt/dzień.
-  - Tworzenie sesji formularza (latest-wins) **bez tokenu** – `issue_tablet_session_*` zwraca `intake_form_id`; autoryzacja tabletu: rola TABLET + zakres kolejki. Migracja usuwa `token_hash` z `patient_form_session`.
+  - Tworzenie sesji formularza (latest-wins) **bez tokenu** – `issue_tablet_session_`* zwraca `intake_form_id`; autoryzacja tabletu: rola TABLET + zakres kolejki. Migracja usuwa `token_hash` z `patient_form_session`.
   - `submit_patient_intake_form()` z walidacją wymaganych zgód i pytań anamnestycznych.
 - Zaimplementuj API i walidację payloadów:
   - intake (`anamnesis_payload`, `body_map_data`, podpis),
