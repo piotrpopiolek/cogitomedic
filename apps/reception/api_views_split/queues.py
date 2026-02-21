@@ -61,7 +61,8 @@ def _serialize_entry(e: QueueEntry) -> dict:
 @require_auth
 @csrf_exempt
 def daily_queues_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method == "GET":
@@ -146,7 +147,8 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
 @require_auth
 @csrf_exempt
 def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method not in ("GET", "POST"):
