@@ -15,6 +15,7 @@ from apps.intake.api_schemas import (
     SignatureUploadRequest,
     SubmitIntakeFormRequest,
     UpdateAnamnesisPayloadRequest,
+    UpdateBodyMapRequest,
     UpdateConsentsRequest,
 )
 from apps.intake.services import (
@@ -22,31 +23,63 @@ from apps.intake.services import (
     InvalidSignatureError,
     get_intake_form_context,
     save_intake_anamnesis_payload,
+    save_intake_body_map,
     save_intake_consents,
     save_intake_signature,
     submit_patient_intake_form,
 )
 
 
+def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> JsonResponse:
+    """Build and return GET intake form context (shared by view and PATCH response)."""
+    is_tablet = getattr(request.user, "role", None) == "TABLET"
+    form_locale = request.GET.get("form_locale", "de-DE")[:10]
+    context = get_intake_form_context(
+        intake_form_id=intake_form_id,
+        form_locale=form_locale,
+        tablet_restrict_to_today=is_tablet,
+    )
+    return JsonResponse(context)
+
+
 @require_auth
 @csrf_exempt
-@require_http_methods(["GET"])
-def intake_form_context_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
-    """GET intake form context for tablet (patient, consents, anamnesis questions, status)."""
+def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    """GET intake form context; PATCH body_map_data."""
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
         return role_error
-    try:
-        is_tablet = getattr(request.user, "role", None) == "TABLET"
-        form_locale = request.GET.get("form_locale", "de-DE")[:10]
-        context = get_intake_form_context(
-            intake_form_id=intake_form_id,
-            form_locale=form_locale,
-            tablet_restrict_to_today=is_tablet,
-        )
-        return JsonResponse(context)
-    except ObjectDoesNotExist:
-        return json_error("Intake form not found.", status=404)
+    if request.method == "GET":
+        try:
+            return _intake_form_context_json(intake_form_id, request)
+        except ObjectDoesNotExist:
+            return json_error("Intake form not found.", status=404)
+    if request.method == "PATCH":
+        try:
+            body = UpdateBodyMapRequest.model_validate(read_json_body(request))
+        except JSONDecodeError:
+            return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        try:
+            body_map_data = [p.model_dump() for p in body.body_map_data]
+            intake_form = save_intake_body_map(
+                intake_form_id=intake_form_id,
+                body_map_schema_version=body.body_map_schema_version,
+                body_map_data=body_map_data,
+            )
+        except ObjectDoesNotExist:
+            return json_error("Intake form not found.", status=404)
+        except StateTransitionError as exc:
+            return json_error(str(exc), status=409)
+        return JsonResponse({
+            "intake_form_id": str(intake_form.id),
+            "body_map_schema_version": intake_form.body_map_schema_version,
+            "body_map_data": intake_form.body_map_data,
+        })
+    return json_error("Method not allowed.", status=405)
 
 
 @require_auth

@@ -45,3 +45,19 @@ class SubmitIntakeFormRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     submitted_by_user_id: UUID | None = None
+
+
+class BodyMapPointPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    side: str = Field(..., pattern="^(front|back)$")
+    label: str | None = None
+
+
+class UpdateBodyMapRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body_map_schema_version: int = Field(ge=1)
+    body_map_data: list[BodyMapPointPayload] = Field(default_factory=list)
