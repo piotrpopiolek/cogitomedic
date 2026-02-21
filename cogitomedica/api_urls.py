@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from django.urls import path
 
-from apps.intake.api_views import intake_form_anamnesis_view, intake_form_submit_view
+from apps.intake.api_views import (
+    intake_form_anamnesis_view,
+    intake_form_consents_view,
+    intake_form_context_view,
+    intake_form_signature_view,
+    intake_form_submit_view,
+)
 from apps.medical.api_views import (
     doctor_text_template_detail_view,
     doctor_text_templates_view,
@@ -214,5 +220,20 @@ urlpatterns = [
         "intake-forms/<uuid:intake_form_id>/submit",
         intake_form_submit_view,
         name="intake-form-submit",
+    ),
+    path(
+        "intake-forms/<uuid:intake_form_id>/consents",
+        intake_form_consents_view,
+        name="intake-form-consents",
+    ),
+    path(
+        "intake-forms/<uuid:intake_form_id>/signature",
+        intake_form_signature_view,
+        name="intake-form-signature",
+    ),
+    path(
+        "intake-forms/<uuid:intake_form_id>",
+        intake_form_context_view,
+        name="intake-form-context",
     ),
 ]

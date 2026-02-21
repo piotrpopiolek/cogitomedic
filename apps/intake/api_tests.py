@@ -95,6 +95,7 @@ class IntakeApiTests(TestCase):
             f"/api/v1/queue-entries/{self.queue_entry.id}/sessions",
             data=json.dumps(
                 {
+                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -114,6 +115,7 @@ class IntakeApiTests(TestCase):
             f"/api/v1/queue-entries/{uuid4()}/sessions",
             data=json.dumps(
                 {
+                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -265,3 +267,52 @@ class IntakeApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(submit_response.status_code, 404)
+
+    def test_get_intake_form_context_returns_patient_and_consents(self) -> None:
+        response = self.client.get(f"/api/v1/intake-forms/{self.intake_form.id}")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["intake_form_id"], str(self.intake_form.id))
+        self.assertEqual(data["queue_entry_id"], str(self.queue_entry.id))
+        self.assertEqual(data["form_status"], "IN_PROGRESS")
+        self.assertIn("patient", data)
+        self.assertEqual(data["patient"]["first_name"], "Api")
+        self.assertIn("consents", data)
+        self.assertIn("anamnesis_questions", data)
+        self.assertIn("has_signature", data)
+        self.assertTrue(data["has_signature"])
+
+    def test_put_consents_updates_acceptance(self) -> None:
+        response = self.client.put(
+            f"/api/v1/intake-forms/{self.intake_form.id}/consents",
+            data=json.dumps({
+                "consents": [
+                    {"consent_definition_id": str(self.required_consent.id), "accepted": True},
+                ],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["consents"]), 1)
+        self.assertTrue(data["consents"][0]["accepted"])
+        self.assertIsNotNone(data["consents"][0]["accepted_at"])
+
+    def test_post_signature_saves_and_returns_path(self) -> None:
+        self.intake_form.signature_file_path = None
+        self.intake_form.signature_sha256 = None
+        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256"])
+        # Minimal PNG 1x1 base64
+        tiny_png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        response = self.client.post(
+            f"/api/v1/intake-forms/{self.intake_form.id}/signature",
+            data=json.dumps({"signature_base64": f"data:image/png;base64,{tiny_png_b64}"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("signatures/", data["signature_file_path"])
+        self.assertEqual(len(data["signature_sha256"]), 64)
+        self.intake_form.refresh_from_db()
+        self.assertIsNotNone(self.intake_form.signature_file_path)
+        self.assertIsNotNone(self.intake_form.signature_sha256)
