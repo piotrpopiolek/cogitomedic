@@ -1,0 +1,12 @@
+{% extends "tablet/base.html" %}
+{% block title %}Formularz otwarty{% endblock %}
+{% block content %}
+  <h1>Formularz przygotowany</h1>
+  <p>Pacjent: <strong>{{ entry.patient.last_name }} {{ entry.patient.first_name }}</strong></p>
+  <p>Przekaż tablet pacjentowi do wypełnienia ankiety (zgody, anamneza, podpis).</p>
+  <p><strong>ID formularza:</strong> {{ intake_form_id }}</p>
+  <p>Formularz można wypełnić przez API (np. Swagger <code>/api/docs/</code>):<br>
+     GET <code>/api/v1/intake-forms/{{ intake_form_id }}</code> → kontekst,<br>
+     PUT consents, PUT anamnesis, POST signature, POST submit.</p>
+  <p><a class="btn secondary" href="{% url 'tablet:queue_entries' entry.daily_queue_id %}">← Wróć do listy pacjentów</a></p>
+{% endblock %}

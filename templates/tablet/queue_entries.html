@@ -1,0 +1,20 @@
+{% extends "tablet/base.html" %}
+{% block title %}Pacjenci w kolejce{% endblock %}
+{% block content %}
+  <p class="back"><a class="btn secondary" href="{% url 'tablet:home' %}">← Wróć do listy kolejek</a></p>
+  <h1>{{ queue.clinic_site.name }} – {{ queue.consulting_room.name }}</h1>
+  <p>Data: {{ queue.queue_date }}</p>
+  {% if entries %}
+    <ul>
+      {% for e in entries %}
+        <li>
+          <a class="btn" href="{% url 'tablet:entry_start' e.id %}">
+            {{ e.position_no }}. {{ e.patient.last_name }} {{ e.patient.first_name }} ({{ e.get_entry_status_display }})
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Brak pacjentów w tej kolejce.</p>
+  {% endif %}
+{% endblock %}

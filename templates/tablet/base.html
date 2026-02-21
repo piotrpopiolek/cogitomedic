@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Tablet – Poczekalnia{% endblock %}</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.25rem; }
+    a.btn { display: block; padding: 1rem; margin: 0.5rem 0; background: #0d6efd; color: #fff; text-align: center; text-decoration: none; border-radius: 6px; font-size: 1rem; }
+    a.btn.secondary { background: #6c757d; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { margin: 0.25rem 0; }
+    .back { margin-bottom: 1rem; }
+    .user { font-size: 0.875rem; color: #666; }
+  </style>
+</head>
+<body>
+  <p class="user">Zalogowany: {{ request.user.username }} ({{ request.user.role }}) · <a href="{% url 'tablet:logout' %}">Wyloguj</a></p>
+  {% block content %}{% endblock %}
+</body>
+</html>
