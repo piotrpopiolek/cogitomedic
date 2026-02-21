@@ -14,6 +14,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import issue_tablet_session_latest_wins
 
@@ -109,3 +110,23 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
         except ObjectDoesNotExist:
             return render(request, "tablet/error.html", {"message": "Nie można utworzyć sesji."}, status=404)
     return render(request, "tablet/entry_start.html", {"entry": entry})
+
+
+@login_required(login_url="tablet:login")
+def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse:
+    """Widok formularza intake dla pacjenta (zgody, anamneza, podpis, submit)."""
+    if not _tablet_role_ok(request):
+        return redirect("tablet:login")
+    try:
+        is_tablet = getattr(request.user, "role", None) == "TABLET"
+        context = get_intake_form_context(
+            intake_form_id=intake_form_id,
+            form_locale="de-DE",
+            tablet_restrict_to_today=is_tablet,
+        )
+    except ObjectDoesNotExist:
+        return render(request, "tablet/error.html", {"message": "Formularz nie istnieje lub brak dostępu."}, status=404)
+    if context["form_status"] == "SUBMITTED":
+        return render(request, "tablet/form_submitted.html", {"intake_form_id": intake_form_id})
+    context["intake_form_id"] = str(intake_form_id)
+    return render(request, "tablet/form.html", context)

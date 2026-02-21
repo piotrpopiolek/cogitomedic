@@ -2,6 +2,7 @@ from django.urls import path
 
 from cogitomedica.tablet_views import (
     tablet_entry_start_view,
+    tablet_form_view,
     tablet_home_view,
     tablet_login_view,
     tablet_logout_view,
@@ -16,4 +17,5 @@ urlpatterns = [
     path("", tablet_home_view, name="home"),
     path("queue/<uuid:daily_queue_id>/", tablet_queue_entries_view, name="queue_entries"),
     path("entry/<uuid:queue_entry_id>/", tablet_entry_start_view, name="entry_start"),
+    path("form/<uuid:intake_form_id>/", tablet_form_view, name="form"),
 ]
