@@ -78,6 +78,8 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         )
     except ObjectDoesNotExist:
         return json_error("Intake form not found.", status=404)
+    except StateTransitionError as exc:
+        return json_error(str(exc), status=400)
     except DomainError as exc:
         return json_error(str(exc), status=400)
 

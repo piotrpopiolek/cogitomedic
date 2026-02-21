@@ -15,7 +15,7 @@ class CreateQueueEntrySessionRequest(BaseModel):
 
     created_by_user_id: UUID
     form_locale: str = "de-DE"
-    expires_in_minutes: int = Field(default=20, ge=1, le=240)
+    expires_in_minutes: int = Field(default=120, ge=1, le=480)
     tablet_device_id: UUID | None = None
 
 
@@ -56,16 +56,14 @@ class UpdateQueueEntryRequest(BaseModel):
 class CreateTabletDeviceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(..., min_length=1, max_length=50)
-    device_code: str = Field(..., min_length=1, max_length=50)
+    android_id: str = Field(..., min_length=1, max_length=128)
     is_active: bool = True
 
 
 class UpdateTabletDeviceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=50)
-    device_code: str | None = Field(default=None, min_length=1, max_length=50)
+    android_id: str | None = Field(default=None, min_length=1, max_length=128)
     is_active: bool | None = None
 
 

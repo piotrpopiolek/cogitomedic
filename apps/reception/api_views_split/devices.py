@@ -33,8 +33,7 @@ from apps.reception.services import (
 def _serialize_tablet_device(device: TabletDevice) -> dict:
     return {
         "id": str(device.id),
-        "name": device.name,
-        "device_code": device.device_code,
+        "android_id": device.android_id,
         "is_active": device.is_active,
         "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
         "created_at": device.created_at.isoformat(),
@@ -48,7 +47,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method == "GET":
-        qs = TabletDevice.objects.all().order_by("name")
+        qs = TabletDevice.objects.all().order_by("android_id")
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
             return json_error("Invalid is_active query parameter.", status=400)
@@ -56,7 +55,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
         if search:
-            qs = qs.filter(Q(name__icontains=search) | Q(device_code__icontains=search))
+            qs = qs.filter(android_id__icontains=search)
         limit = parse_list_limit(request.GET.get("limit"))
         return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs[:limit]]})
 
@@ -70,9 +69,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
-            device = create_tablet_device(name=body.name, device_code=body.device_code, is_active=body.is_active)
+            device = create_tablet_device(android_id=body.android_id, is_active=body.is_active)
         except IntegrityError:
-            return json_error("Tablet device with this name or code already exists.", status=409)
+            return json_error("Tablet device with this android_id already exists.", status=409)
         return JsonResponse(_serialize_tablet_device(device), status=201)
 
     return json_error("Method not allowed.", status=405)
@@ -110,8 +109,7 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     try:
         device = update_tablet_device(
             tablet_device_id=tablet_device_id,
-            name=body.name,
-            device_code=body.device_code,
+            android_id=body.android_id,
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
@@ -119,7 +117,7 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     except DomainError as exc:
         return json_error(str(exc), status=400)
     except IntegrityError:
-        return json_error("Tablet device with this name or code already exists.", status=409)
+        return json_error("Tablet device with this android_id already exists.", status=409)
     return JsonResponse(_serialize_tablet_device(device))
 
 

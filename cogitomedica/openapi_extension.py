@@ -268,24 +268,24 @@ COGITO_PATHS = {
     },
     f"{PREFIX}/queue-entries/{{queue_entry_id}}/sessions": {
         "post": {
-            "summary": "Issue tablet session token",
-            "description": "Creates a one-time session for the intake form on a tablet.",
+            "summary": "Create tablet session",
+            "description": "Creates a session for the intake form on a tablet. No token; tablet uses session cookie. Allowed role: TABLET (or RECEPTION, ADMIN). Request: created_by_user_id, form_locale, expires_in_minutes (default 120, max 480), optional tablet_device_id.",
             "tags": ["Reception – Queues"],
             "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"tablet_device_id": {"type": "string", "format": "uuid"}, "form_locale": {"type": "string"}, "expires_minutes": {"type": "integer"}}}}}},
-            "responses": {"201": {"description": "Session and token URL"}, "404": {"description": "Not found"}},
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"201": {"description": "Session created. Body: session_id, expires_at (ISO), intake_form_id. No token."}, "404": {"description": "Not found"}},
         },
     },
     f"{PREFIX}/tablet-devices": {
-        "get": {"summary": "List tablet devices", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at. Query: is_active, search (by android_id), limit.", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
         },
-        "post": {"summary": "Create tablet device", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        "post": {"summary": "Create tablet device", "description": "Body: android_id (required), is_active (default true). No name or device_code.", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created (id, android_id, is_active)"}},
         },
     },
     f"{PREFIX}/tablet-devices/{{tablet_device_id}}": {
-        "get": {"summary": "Get tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {"summary": "Get tablet device", "description": "Returns id, android_id, is_active, last_seen_at.", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
-        "patch": {"summary": "Update tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {"summary": "Update tablet device", "description": "Body: optional android_id, optional is_active.", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
         "delete": {"summary": "Deactivate tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
@@ -329,9 +329,10 @@ def _paths_with_pydantic_refs() -> dict:
             body_schema = get_request_body_schema_for(path_key, method)
             if body_schema is not None and "requestBody" in op and "content" in op["requestBody"]:
                 op["requestBody"]["content"]["application/json"] = {"schema": body_schema}
-            response_schema = get_response_schema_for(path_key, method, "200")
-            if response_schema is not None and "responses" in op and "200" in op["responses"]:
-                op["responses"]["200"]["content"] = {"application/json": {"schema": response_schema}}
+            for status in ("200", "201"):
+                response_schema = get_response_schema_for(path_key, method, status)
+                if response_schema is not None and "responses" in op and status in op["responses"]:
+                    op["responses"][status]["content"] = {"application/json": {"schema": response_schema}}
             # Require login for all operations except NO_AUTH_OPERATIONS (Swagger UI shows lock icon).
             if (path_key, method) in NO_AUTH_OPERATIONS:
                 op["security"] = []

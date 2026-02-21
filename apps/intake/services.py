@@ -65,10 +65,10 @@ def submit_patient_intake_form(
     Submit intake form with required consent/anamnesis validation.
 
     Transition is done atomically:
-    - validates latest-wins active session token state;
+    - validates latest-wins active session state;
     - validates required active consents/anamnesis;
     - sets intake form to SUBMITTED;
-    - consumes the active session token;
+    - marks the active session as consumed;
     - updates queue entry state to PATIENT_COMPLETED.
     """
     intake_form = (
@@ -90,9 +90,9 @@ def submit_patient_intake_form(
     if queue_entry.active_session_id != session.id:
         raise IntakeSessionValidationError("Session is not active for this queue entry.")
     if session.consumed_at is not None:
-        raise IntakeSessionValidationError("Session token has already been consumed.")
+        raise IntakeSessionValidationError("Session has already been consumed.")
     if session.expires_at <= now:
-        raise IntakeSessionValidationError("Session token has expired.")
+        raise IntakeSessionValidationError("Session has expired.")
 
     required_consent_ids = set(
         ConsentDefinition.objects.filter(is_active=True, is_required=True).values_list("id", flat=True)

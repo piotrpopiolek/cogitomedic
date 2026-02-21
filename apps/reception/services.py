@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -11,6 +9,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
+from apps.intake.models import PatientIntakeForm
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
@@ -45,12 +44,12 @@ class TargetNotConfirmedError(DomainError):
 
 
 @dataclass(frozen=True)
-class IssuedSessionToken:
-    """Return payload for newly issued plain token + session metadata."""
+class IssuedSessionResult:
+    """Return payload for newly created session (no token)."""
 
-    token_plain: str
     session_id: uuid.UUID
     expires_at: timezone.datetime
+    intake_form_id: uuid.UUID
 
 
 @dataclass(frozen=True)
@@ -166,28 +165,33 @@ def deactivate_consulting_room(*, consulting_room_id: uuid.UUID) -> ConsultingRo
 
 
 @transaction.atomic
-def create_tablet_device(*, name: str, device_code: str, is_active: bool = True) -> TabletDevice:
-    """Create a tablet device."""
-    return TabletDevice.objects.create(name=name, device_code=device_code, is_active=is_active)
+def create_tablet_device(*, android_id: str, is_active: bool = True) -> TabletDevice:
+    """Create a tablet device (identified by android_id only)."""
+    return TabletDevice.objects.create(android_id=android_id, is_active=is_active)
+
+
+def get_or_create_tablet_device_by_android_id(*, android_id: str) -> tuple[TabletDevice, bool]:
+    """Get or create a tablet device by android_id (auto-registration). Returns (device, created)."""
+    device, created = TabletDevice.objects.get_or_create(
+        android_id=android_id,
+        defaults={"is_active": True},
+    )
+    return device, created
 
 
 @transaction.atomic
 def update_tablet_device(
     *,
     tablet_device_id: uuid.UUID,
-    name: str | None = None,
-    device_code: str | None = None,
+    android_id: str | None = None,
     is_active: bool | None = None,
 ) -> TabletDevice:
     """Update mutable tablet fields."""
     device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
     update_fields: list[str] = []
-    if name is not None:
-        device.name = name
-        update_fields.append("name")
-    if device_code is not None:
-        device.device_code = device_code
-        update_fields.append("device_code")
+    if android_id is not None:
+        device.android_id = android_id
+        update_fields.append("android_id")
     if is_active is not None:
         device.is_active = is_active
         update_fields.append("is_active")
@@ -456,16 +460,16 @@ def create_queue_entry(
 
 
 @transaction.atomic
-def issue_tablet_session_token_latest_wins(
+def issue_tablet_session_latest_wins(
     *,
     queue_entry_id: uuid.UUID,
     created_by_user_id: uuid.UUID,
     form_locale: str = "de-DE",
-    expires_in_minutes: int = 20,
+    expires_in_minutes: int = 120,
     tablet_device_id: uuid.UUID | None = None,
-) -> IssuedSessionToken:
+) -> IssuedSessionResult:
     """
-    Issue a fresh tablet token in latest-wins mode.
+    Create or update form session in latest-wins mode (no token).
 
     Previous sessions stay in history; `queue_entry.active_session_id` is switched
     atomically to the newly created session.
@@ -477,9 +481,6 @@ def issue_tablet_session_token_latest_wins(
 
     queue_entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
 
-    token_plain = secrets.token_urlsafe(48)
-    token_hash = hashlib.sha256(token_plain.encode("utf-8")).hexdigest()
-
     tablet_device: TabletDevice | None = None
     if tablet_device_id:
         tablet_device = TabletDevice.objects.get(id=tablet_device_id, is_active=True)
@@ -487,7 +488,6 @@ def issue_tablet_session_token_latest_wins(
     session = PatientFormSession.objects.create(
         queue_entry=queue_entry,
         tablet_device=tablet_device,
-        token_hash=token_hash,
         form_locale=form_locale,
         expires_at=timezone.now() + timedelta(minutes=expires_in_minutes),
         created_by_user_id=created_by_user_id,
@@ -496,8 +496,16 @@ def issue_tablet_session_token_latest_wins(
     queue_entry.active_session = session
     queue_entry.save(update_fields=["active_session", "updated_at"])
 
-    return IssuedSessionToken(
-        token_plain=token_plain,
+    intake_form, created = PatientIntakeForm.objects.get_or_create(
+        queue_entry_id=queue_entry.id,
+        defaults={"session": session},
+    )
+    if not created:
+        intake_form.session = session
+        intake_form.save(update_fields=["session", "updated_at"])
+
+    return IssuedSessionResult(
         session_id=session.id,
         expires_at=session.expires_at,
+        intake_form_id=intake_form.id,
     )

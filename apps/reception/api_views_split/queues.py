@@ -22,7 +22,7 @@ from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import (
     create_daily_queue,
     create_queue_entry,
-    issue_tablet_session_token_latest_wins,
+    issue_tablet_session_latest_wins,
     update_daily_queue_status,
     update_queue_entry,
 )
@@ -239,7 +239,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
 @require_auth
 @csrf_exempt
 def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
         return role_error
     if request.method != "POST":
@@ -253,7 +253,7 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
-        issued = issue_tablet_session_token_latest_wins(
+        issued = issue_tablet_session_latest_wins(
             queue_entry_id=queue_entry_id,
             created_by_user_id=request.user.id,
             form_locale=body.form_locale,
@@ -265,6 +265,10 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
     except DomainError as exc:
         return json_error(str(exc), status=400)
     return JsonResponse(
-        {"token": issued.token_plain, "session_id": str(issued.session_id), "expires_at": issued.expires_at.isoformat()},
+        {
+            "session_id": str(issued.session_id),
+            "expires_at": issued.expires_at.isoformat(),
+            "intake_form_id": str(issued.intake_form_id),
+        },
         status=201,
     )
