@@ -55,10 +55,6 @@ DEBUG = os.environ.get("DEBUG", "1") == "1"
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://sentimentless-lourie-predesirously.ngrok-free.dev",
-]
-
 INSTALLED_APPS = [
     # "unfold",
     "corsheaders",
@@ -239,3 +235,7 @@ elif ENVIRONMENT == "dev" or DEBUG:
 else:
     CORS_ALLOWED_ORIGINS = []
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://sentimentless-lourie-predesirously.ngrok-free.dev",
+]
