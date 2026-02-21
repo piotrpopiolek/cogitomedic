@@ -10,7 +10,7 @@
 - **Portal languages:** The user interface (staff panel and patient tablet) is available in **English** and **German**. Staff users have a `preferred_locale` field (e.g. `en-GB`, `de-DE`); for the patient tablet the language may be provided via link parameter, Accept-Language header, or clinic default.
 - Transport is HTTPS only.
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
-- Authentication is session-based for staff web UI (Django auth cookie + CSRF) and bearer token for tablet/patient links.
+- Authentication is session-based for staff web UI (Django auth cookie + CSRF). Tablet (poczekalnia) uses the same session auth with role **TABLET**; there are **no one-time tokens or patient links**.
 - Time format is ISO 8601 UTC.
 - All list endpoints support pagination/filtering/sorting with common parameters:
   - `page` (default `1`)
@@ -28,7 +28,7 @@
 - `daily-queues` -> `daily_queue`
 - `queue-entries` -> `queue_entry`
 - `tablet-devices` -> `tablet_device`
-- `patient-sessions` -> `patient_form_session` (one-time token lifecycle, latest-wins)
+- `patient-sessions` -> `patient_form_session` (session lifecycle without token; tablet flow: TABLET role selects queue and patient, backend creates/updates session and returns `intake_form_id`; latest-wins)
 - `consent-definitions` -> `consent_definition`
 - `anamnesis-definitions` -> `anamnesis_question_definition`, `anamnesis_option_definition`
 - `intake-forms` -> `patient_intake_form`
@@ -397,19 +397,19 @@
 ### 2.6 Tablet devices
 
 - **GET** `/tablet-devices`, **POST** `/tablet-devices`, **GET/PATCH/DELETE** `/tablet-devices/{id}`
-  - Description: Manage dedicated tablets.
+  - Description: Manage dedicated tablets. Model uses **only `android_id`** (unique device identifier); fields `name` and `device_code` have been removed (migration).
   - Query params: `is_active`, `search`.
-  - Request JSON:
+  - Request JSON (create):
     ```json
     {
-      "name": "Tablet-1",
-      "device_code": "TAB001",
+      "android_id": "device-android-id-string",
       "is_active": true
     }
     ```
-  - Response JSON: tablet object.
+  - Response JSON: tablet object (`id`, `android_id`, `is_active`, `last_seen_at`, `created_at`).
+  - **Auto-registration:** If a tablet logs in (role TABLET) with an `android_id` not yet in the system, the backend may create a `TabletDevice` record automatically.
   - Success: `200 OK`, `201 CREATED`.
-  - Errors: `400 VALIDATION_ERROR`, `409 DUPLICATE_DEVICE`.
+  - Errors: `400 VALIDATION_ERROR`, `409 DUPLICATE_ANDROID_ID`.
 
 - **POST** `/tablet-devices/{id}/heartbeat`
   - Description: Update device `last_seen_at`.
@@ -418,57 +418,31 @@
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
 
-### 2.7 Patient sessions and token flow (latest-wins)
+### 2.7 Patient sessions (no token; tablet flow, latest-wins)
 
 - **POST** `/queue-entries/{id}/sessions`
-  - Description: Generate one-time patient link/token and set as active session (US-004).
+  - Description: Create or update form session for the selected queue entry (US-004). Used by **tablet** (role TABLET) or reception (RECEPTION/ADMIN). **No one-time token** – authorization is session-based (TABLET + intake_form in selected queue).
   - Query params: none.
   - Request JSON:
     ```json
     {
       "tablet_device_id": "uuid",
-      "ttl_minutes": 30,
-      "form_locale": "de-DE"
+      "form_locale": "de-DE",
+      "expires_in_minutes": 120
     }
     ```
   - Response JSON:
     ```json
     {
       "session_id": "uuid",
-      "launch_url": "https://app.example.com/patient/form?token=opaque-token",
-      "expires_at": "2026-02-16T10:30:00Z"
+      "intake_form_id": "uuid",
+      "expires_at": "2026-02-16T12:00:00Z"
     }
     ```
   - Success: `201 CREATED`.
-  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 ENTRY_NOT_ELIGIBLE`, `422 TOKEN_GENERATION_FAILED`.
+  - Errors: `404 QUEUE_ENTRY_OR_DEVICE_NOT_FOUND`, `400 VALIDATION_ERROR`. Allowed roles: **TABLET**, RECEPTION, ADMIN.
 
-- **POST** `/patient-sessions/validate`
-  - Description: Validate token before tablet form access.
-  - Query params: none.
-  - Request JSON:
-    ```json
-    {
-      "token": "opaque-token"
-    }
-    ```
-  - Response JSON:
-    ```json
-    {
-      "valid": true,
-      "session_id": "uuid",
-      "queue_entry_id": "uuid",
-      "form_locale": "de-DE",
-      "patient_snapshot": {
-        "first_name": "Jan",
-        "last_name": "Kowalski",
-        "date_of_birth": "1980-01-01",
-        "phone": "+49111111111",
-        "email": "jan@example.com"
-      }
-    }
-    ```
-  - Success: `200 OK`.
-  - Errors: `401 TOKEN_INVALID_OR_EXPIRED`, `409 TOKEN_NOT_ACTIVE_SESSION`, `410 TOKEN_CONSUMED`.
+- **No** `/patient-sessions/validate` – token flow has been removed. Tablet accesses intake form by authenticated session (role TABLET) and `intake_form_id` returned from POST sessions.
 
 ### 2.8 Consent definitions (Admin dictionary)
 
@@ -536,8 +510,9 @@
 
 ### 2.9 Intake forms and consents (Tablet flow)
 
-- **GET** `/intake-forms/by-session/{session_id}`
-  - Description: Fetch or initialize intake form context for patient tablet.
+- **GET** `/intake-forms/by-session/{session_id}` (optional, for backward compatibility)
+- **GET** `/intake-forms/{id}` (or equivalent context endpoint)
+  - Description: Fetch intake form context for tablet. **Tablet (role TABLET)** is authenticated by session; no token. Access allowed if the intake form belongs to a queue entry in a queue the user (TABLET) is allowed to access. Used for: patient data verification screen and form (consents, anamnesis, signature, submit).
   - Query params: none.
   - Request JSON: none.
   - Response JSON:
@@ -575,7 +550,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `401 TOKEN_INVALID_OR_EXPIRED`, `404 SESSION_NOT_FOUND`.
+  - Errors: `403 FORBIDDEN` (e.g. TABLET cannot access this form), `404 NOT_FOUND`.
 
 - **PATCH** `/intake-forms/{id}`
   - Description: Save in-progress body map data and optional signature draft.
@@ -667,13 +642,11 @@
   - Errors: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409 FORM_ALREADY_SUBMITTED`.
 
 - **POST** `/intake-forms/{id}/submit`
-  - Description: Finalize form and consume token in one transaction (US-005/006/007).
+  - Description: Finalize form in one transaction (US-005/006/007). **No token** – caller is authenticated (TABLET or RECEPTION/ADMIN). Session is marked consumed / completed as needed; queue entry status set to PATIENT_COMPLETED.
   - Query params: none.
   - Request JSON:
     ```json
-    {
-      "session_token": "opaque-token"
-    }
+    {}
     ```
   - Response JSON:
     ```json
@@ -685,7 +658,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409 FORM_ALREADY_SUBMITTED`.
 
 ### 2.10 Medical documents and doctor workflow
 
@@ -1056,22 +1029,18 @@
 
 - Authentication:
   - Staff API: Django authenticated session cookie, secure/httponly/samesite settings, CSRF protection for state-changing requests.
-  - Patient tablet flow: signed opaque one-time token validated against `patient_form_session.token_hash`.
-  - Token validity requires all conditions:
-    - token hash matches active session;
-    - `session.id == queue_entry.active_session_id`;
-    - `consumed_at IS NULL`;
-    - `expires_at > now()`.
+  - **Tablet (poczekalnia):** Same session auth with role **TABLET**. No one-time token; tablet selects queue and patient, POST sessions returns `intake_form_id`; form access and submit are authorized by `request.user.role == TABLET` and intake form in allowed scope (e.g. queue). See [.ai/proces-poczekalni.md](.ai/proces-poczekalni.md).
 
 - Authorization (RBAC by `staff_user.role`):
-  - `RECEPTION`: queues, queue entries, patient create/update, token generation, import operations read/write.
+  - **TABLET**: only: list today's queues (choice), list queue entries for a queue, POST queue-entries/{id}/sessions, GET intake form context, PUT anamnesis/consents, signature upload, POST intake submit. No patient search, no queue CRUD, no user management.
+  - `RECEPTION`: queues, queue entries, patient create/update, session generation (POST sessions), import operations read/write.
   - `DOCTOR`: medical document read/write, publish/republish, version view.
   - `ADMIN`: user management, consent dictionary, merge patients, operational controls, full audit/outbox visibility.
   - Endpoint guards implemented via Django permission classes + object-level checks.
 
 - Session/security controls:
-  - Idle timeout enforced server-side.
-  - Brute-force protection on `/auth/login` and token validation endpoint.
+  - Idle timeout enforced server-side (tablet session may be several hours; no patient data editing on tablet).
+  - Brute-force protection on `/auth/login`.
   - Strict transport security (HSTS) and HTTPS redirect.
   - Passwords stored with Django password hashers only.
   - No secrets in code; environment-based config only.
@@ -1079,8 +1048,7 @@
 - API hardening:
   - Rate limits (example policy):
     - `/auth/login`: 5 req/min/IP + username bucket.
-    - `/patient-sessions/validate`: 30 req/min/IP.
-    - write endpoints default: 60 req/min/user.
+  - write endpoints default: 60 req/min/user.
     - admin operations: 10 req/min/user.
   - Request size limits for signatures/uploads.
   - Input sanitization and allowlists for ordering/filter fields.
@@ -1091,7 +1059,7 @@
 ### 4.1 Resource validation rules
 
 - `staff_user`
-  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN`.
+  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN|TABLET`.
   - `phone_number` regex: `^[0-9+() -]{7,20}$`.
 
 - `patient`
@@ -1115,7 +1083,7 @@
   - Status must follow allowed state machine.
 
 - `patient_form_session`
-  - `token_hash` unique.
+  - **No token** – `token_hash` has been removed (migration). Session is identified by id; authorization for tablet flow is by role TABLET and queue/intake scope.
   - `expires_at > created_at`.
   - `consumed_at <= expires_at` if set.
 
@@ -1171,14 +1139,14 @@
 - Idempotent import:
   - Use external identifiers (`doctolib_patient_id`, visit external keys) to avoid duplicate patient/visit creation.
 
-- Latest-wins token model:
-  - Session generation creates a new `patient_form_session` and atomically switches `queue_entry.active_session_id`.
-  - Old tokens become invalid automatically.
+- Latest-wins session model (no token):
+  - Session generation creates a new `patient_form_session` (no token field) and atomically switches `queue_entry.active_session_id`.
+  - Tablet (TABLET) or reception calls POST sessions; backend returns `intake_form_id`. No token validation endpoint.
 
 - Intake submit transaction:
   - Verifies required active consents are accepted.
   - Verifies signature presence.
-  - Marks form `SUBMITTED`, stamps `submitted_at`, consumes token (`consumed_at`), and updates queue status in one transaction.
+  - Marks form `SUBMITTED`, stamps `submitted_at`, marks session consumed (`consumed_at`) if applicable, and updates queue status in one transaction. Caller is authenticated (TABLET or RECEPTION/ADMIN); no token in request.
 
 - Doctor workflow:
   - Draft save updates/creates latest draft version.

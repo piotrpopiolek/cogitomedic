@@ -35,7 +35,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - System umożliwia ręczne dodawanie pacjenta do listy dziennej (Poczekalni).
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
 - W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
-- Generowanie unikalnego linku z jednorazowym tokenem dla pacjenta w celu uruchomienia formularza na tablecie.
+- **Proces poczekalni (tablet):** Tablety są na wyposażeniu rejestracji. Na tablecie recepcja wybiera kolejkę (z listy dzisiejszych kolejek), potem pacjenta z listy; przekazuje tablet pacjentowi do wypełnienia ankiety. **Brak linków z tokenem** – tablet zalogowany na rolę TABLET (sesja); sesja formularza tworzona bez tokenu. Pacjent wypełnia ankietę wyłącznie w poczekalni na tablecie (brak dostępu z zewnątrz).
 - Dopuszczony jest tryb tymczasowy rekordu pacjenta bez `Doctolib Patient ID` wyłącznie dla ręcznego dodania; system musi automatycznie wygenerować alert dla administratora o konieczności pilnego uzupełnienia identyfikatora.
 - System dopuszcza więcej niż jedną wizytę tego samego pacjenta tego samego dnia w tym samym gabinecie (osobne wpisy kolejki/wizyty).
 
@@ -132,14 +132,14 @@ Kryteria akceptacji:
 - Zaimportowani pacjenci są widoczni w Poczekalni.
 
 ID: US-004
-Tytuł: Uruchomienie formularza na tablecie
-Opis: Jako recepcjonista, chcę wygenerować i otworzyć unikalny link dla pacjenta na tablecie, aby mógł on rozpocząć proces podpisywania.
+Tytuł: Uruchomienie formularza na tablecie (poczekalnia)
+Opis: Jako recepcjonista, chcę na tablecie wybrać kolejkę i pacjenta z listy, a następnie przekazać tablet pacjentowi do wypełnienia ankiety, bez generowania linków z tokenem.
 Kryteria akceptacji:
-- Kliknięcie przycisku przy pacjencie generuje unikalny URL z tokenem.
-- Link otwiera formularz w trybie pacjenta (bez menu nawigacyjnego personelu).
-- System działa w modelu `latest-wins`: wygenerowanie nowego linku dla tego samego wpisu kolejki unieważnia poprzedni link.
-- Token jest akceptowany tylko gdy jednocześnie: jest aktywną sesją wpisu kolejki, nie został zużyty (`consumed_at IS NULL`) i nie wygasł (`expires_at > now()`).
-- Po pierwszym skutecznym zapisie formularza token traci ważność.
+- Tablet jest zalogowany na rolę TABLET (sesja); recepcja na tablecie wybiera kolejkę z listy dzisiejszych kolejek (brak twardego przypisania tabletu do kolejki w panelu recepcji).
+- Po wyborze kolejki recepcja widzi listę pacjentów tej kolejki i wybiera jednego pacjenta (tap).
+- Wybór pacjenta wywołuje utworzenie/aktualizację sesji formularza (bez tokenu); backend zwraca `intake_form_id`. Tablet pokazuje ekran weryfikacji danych pacjenta, potem formularz intake.
+- Pacjent wypełnia ankietę wyłącznie w poczekalni na tablecie (brak dostępu z zewnątrz). Po submit formularz przechodzi w stan SUBMITTED, wpis kolejki na PATIENT_COMPLETED.
+- Model sesji: latest-wins (ponowne wybranie innego pacjenta dla tego samego wpisu aktualizuje sesję). Autoryzacja: `request.user.role == TABLET` oraz intake_form w wybranej kolejce.
 
 ### Proces Pacjenta (Tablet)
 ID: US-005
@@ -164,7 +164,7 @@ Opis: Jako pacjent, chcę złożyć odręczny podpis na ekranie tabletu, aby aut
 Kryteria akceptacji:
 - Pole podpisu obsługuje wprowadzanie dotykowe (rysik/palec).
 - Wymagane jest złożenie podpisu przed finalizacją.
-- Po zatwierdzeniu formularz jest zapisywany, a token traci ważność (nie można cofnąć się do edycji).
+- Po zatwierdzeniu formularz jest zapisywany (stan SUBMITTED); nie można cofnąć się do edycji.
 
 ### Proces Lekarza
 ID: US-008

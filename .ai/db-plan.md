@@ -23,7 +23,7 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
-  - `CHECK (role IN ('RECEPTION','DOCTOR','ADMIN'))`
+  - `CHECK (role IN ('RECEPTION','DOCTOR','ADMIN','TABLET'))`
   - `CHECK (phone_number IS NULL OR phone_number ~ '^[0-9+() -]{7,20}$')`
 
 ### 1.2. Pozostałe tabele wymagane przez PRD
@@ -121,17 +121,16 @@
 
 #### `tablet_device`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
-- `name` `varchar(50)` NOT NULL UNIQUE
-- `device_code` `varchar(50)` NOT NULL UNIQUE
+- `android_id` `varchar(128)` NOT NULL UNIQUE
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `last_seen_at` `timestamptz` NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Uwaga: Pola `name` i `device_code` zostały usunięte (migracja). Identyfikacja urządzenia tylko przez `android_id`. Auto-dopisanie: przy pierwszym logowaniu tabletu z nieznanym `android_id` tworzony jest wpis.
 
 #### `patient_form_session`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `queue_entry_id` `uuid` NOT NULL FK -> `queue_entry(id)` ON DELETE CASCADE
 - `tablet_device_id` `uuid` NULL FK -> `tablet_device(id)` ON DELETE SET NULL
-- `token_hash` `char(64)` NOT NULL UNIQUE
 - `form_locale` `varchar(10)` NOT NULL DEFAULT `'de-DE'`
 - `expires_at` `timestamptz` NOT NULL
 - `consumed_at` `timestamptz` NULL
@@ -142,6 +141,7 @@
   - `CHECK (form_locale ~ '^(de|en)(-[A-Z]{2})?$')`
   - `CHECK (expires_at > created_at)`
   - `CHECK (consumed_at IS NULL OR consumed_at <= expires_at)`
+- Uwaga: Pole `token_hash` zostało usunięte (migracja). Sesja bez tokenu; autoryzacja tabletu: rola TABLET + zakres kolejki/intake.
 
 #### `consent_definition`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -356,7 +356,7 @@
 - `consulting_room` 1:N `daily_queue` (gabinet ma wiele list dziennych w czasie).
 - `daily_queue` 1:N `queue_entry` (lista dzienna zawiera wiele wpisów pacjentów).
 - `patient` 1:N `queue_entry` (pacjent może mieć wiele wizyt/wpisów).
-- `queue_entry` 1:N `patient_form_session` (historia regeneracji sesji/tokenów).
+- `queue_entry` 1:N `patient_form_session` (historia sesji, model latest-wins bez tokenu).
 - `queue_entry.active_session_id` wskazuje aktualnie obowiązującą sesję w modelu `latest-wins`.
 - `queue_entry` 1:1 `patient_intake_form` (jeden formularz pacjenta na wpis kolejki).
 - `patient_intake_form` N:M `consent_definition` przez `patient_intake_consent`.
@@ -370,7 +370,8 @@
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
-  - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i tokenami.
+  - `staff_user.role='TABLET'`: dostęp tylko do wyboru kolejki, listy wpisów kolejki, POST sessions (bez tokenu), formularza intake (GET/PUT/POST).
+  - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i sesjami formularza (POST sessions).
   - `staff_user.role='DOCTOR'` edytuje `medical_document` i publikuje `medical_document_version`.
   - `staff_user.role='DOCTOR'` może zarządzać własnymi `doctor_text_template`.
   - `staff_user.role='ADMIN'` zarządza słownikami (`consent_definition`) i użytkownikami.
@@ -386,7 +387,6 @@
 - `queue_entry(daily_queue_id, entry_status, position_no)`
 - `queue_entry(patient_id, created_at DESC)`
 - `queue_entry(active_session_id)`
-- `patient_form_session(token_hash)` UNIQUE
 - `patient_form_session(queue_entry_id, consumed_at)`
 - `patient_form_session(queue_entry_id, created_at DESC)`
 - `patient_form_session(form_locale, created_at DESC)`
@@ -427,7 +427,7 @@
 ## 4. Zasady PostgreSQL (jeśli dotyczy)
 
 ### 4.1. Typy ENUM
-- `staff_role_enum`: `RECEPTION`, `DOCTOR`, `ADMIN`
+- `staff_role_enum`: `RECEPTION`, `DOCTOR`, `ADMIN`, `TABLET`
 - `patient_identity_status_enum`: `CONFIRMED`, `TEMPORARY`
 - `queue_shift_enum`: `FULL_DAY`, `MORNING`, `AFTERNOON`, `EVENING`
 - `queue_source_enum`: `MANUAL`, `IMPORT`
@@ -449,11 +449,11 @@
   - ręczne dodanie bez `Doctolib Patient ID` skutkuje `identity_status='TEMPORARY'` (status wyliczany automatycznie z obecności ID),
   - w tej samej transakcji tworzony jest alert administracyjny (kanał operacyjny) i ustawiane są `identity_alert_created_at` oraz `identity_resolution_due_at`,
   - po uzupełnieniu `Doctolib Patient ID` rekord automatycznie przechodzi na `identity_status='CONFIRMED'`, a alert jest zamykany.
-- Model sesji `latest-wins` (bez ograniczenia do jednej sesji historycznej):
-  - nowe wygenerowanie tokenu zawsze tworzy nowy rekord `patient_form_session`,
+- Model sesji `latest-wins` (bez tokenu):
+  - utworzenie sesji (POST queue-entries/{id}/sessions) zawsze tworzy nowy rekord `patient_form_session` (bez pola token),
   - w tej samej transakcji `queue_entry.active_session_id` jest przestawiane na nową sesję,
-  - walidacja tokenu wymaga jednocześnie: `session.id == queue_entry.active_session_id`, `consumed_at IS NULL`, `expires_at > now()`,
-  - starsze sesje pozostają w historii audytowej i są automatycznie odrzucane przez walidację (bez zależności od zadania cleanup).
+  - autoryzacja tabletu: rola TABLET oraz intake_form w dozwolonym zakresie (np. kolejka); brak walidacji tokenu,
+  - starsze sesje pozostają w historii audytowej; aktualna sesja wskazywana przez `queue_entry.active_session_id`.
 - Walidacja wymaganych zgód przed `SUBMITTED`:
   - wykonywana w serwisie domenowym `submit_patient_intake_form()` wewnątrz transakcji,
   - brak przejścia stanu, jeśli niezaakceptowano wszystkich aktywnych zgód wymaganych.
@@ -475,7 +475,7 @@
 ### 4.3. Zasady integralności i bezpieczeństwa
 - `ON DELETE RESTRICT` dla bytów medycznych wysokiego poziomu (`queue_entry`, `patient_intake_form`, `medical_document`) w celu ochrony historii klinicznej.
 - `ON DELETE CASCADE` dopuszczalne dla bytów technicznych ściśle podrzędnych (`medical_document_version`, `outbox_event`), które nie mają samodzielnego znaczenia biznesowego bez rekordu nadrzędnego.
-- `token_hash` przechowywany wyłącznie jako hash SHA-256 (brak jawnego tokenu w DB).
+- Token jednorazowy został wycofany: w `patient_form_session` nie ma pola `token_hash`; sesja identyfikowana po id, autoryzacja tabletu po roli TABLET i zakresie kolejki.
 - `Doctolib Patient ID` jest obowiązkowym kluczem tożsamości dla danych importowanych; rekordy ręczne bez tego ID są formalnie tymczasowe i wymagają pilnego domknięcia alertu administracyjnego.
 - Włączenie rozszerzeń:
   - `CREATE EXTENSION IF NOT EXISTS pgcrypto;`

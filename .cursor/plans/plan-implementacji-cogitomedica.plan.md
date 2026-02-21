@@ -9,7 +9,7 @@ todos:
     content: Zaimplementować modele i migracje zgodnie z .ai/db-plan.md wraz z indeksami i constraintami.
     status: completed
   - id: phase1-reception-tablet
-    content: API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E.
+    content: API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E. Do uzupełnienia: rola TABLET, wycofanie tokenu (migracja patient_form_session), TabletDevice tylko android_id (migracja), endpointy poczekalni (wybór kolejki, lista wpisów, POST sessions bez tokenu) – zob. .ai/proces-poczekalni.md.
     status: in_progress
   - id: phase2-medical-publish
     content: API medical (draft, publish, szablony) + pipeline outbox – wdrożone; GET lista dokumentów medycznych do dodania dla panelu lekarza.
@@ -63,13 +63,13 @@ isProject: false
 - Dowieziono endpointy API v1: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`), `**patients`** (list/search, create, detail/PATCH, contact-history, merge), `staff-users` (list/create/detail/update/deactivate) – z walidacją Pydantic i testami API.
 - **Ostatnie zmiany (backend + docs):**
   - **Pacjenci:** walidacja Pydantic dla `phone` (regex zgodny z DB), walidacja `date_of_birth` w GET (PatientsListQuery, format YYYY-MM-DD); usunięcie `created_by_user_id` z body tworzenia pacjenta (aktor wyłącznie z sesji).
-  - **RBAC:** endpointy recepcji i intake wymagają ról **RECEPTION** lub **ADMIN** (`require_user_role`); medical – DOCTOR/ADMIN bez zmian.
+  - **RBAC:** endpointy recepcji i intake przyjmują także rolę **TABLET** tam, gdzie przewidziano w planie poczekalni (lista kolejek, lista wpisów, POST sessions, formularz intake – tylko odczyt danych pacjenta + anamneza/zgody/podpis/submit); RECEPTION/ADMIN bez zmian; medical – DOCTOR/ADMIN.
   - **Medical:** błędy domenowe szablonów (TemplatePermissionError) zwracane jako **400** zamiast 403 (ujednolicenie z code-review).
   - **OpenAPI/Swagger:** dodane `components.securitySchemes` (session cookie) oraz `security` na operacjach – w dokumentacji widoczna **ikona kłódki** przy endpointach wymagających logowania; wyjątki: health, metrics, auth/login.
   - `.ai/api-plan.md` i `.ai/api-plan-pl.md` zaktualizowane (date_of_birth GET, POST patients bez created_by_user_id, błędy walidacji).
 - Zweryfikowano uruchamianie testów w środowisku Docker; testy modułowe i API recepcji/medical przechodzą.
 - **Następny krok (propozycja poniżej):** zamrożenie kontraktu API dla panelu staff i/lub uzupełnienie luk (np. GET lista dokumentów medycznych) przed frontem Django Staff (Unfold).
-- **Proces poczekalni (uproszczony):** tablet na wyposażeniu rejestracji, zalogowany na rolę z dostępem tylko do widoku „poczekalnia” (lista pacjentów na dziś → wybór pacjenta → formularz intake); bez linków z tokenem – **[.ai/proces-poczekalni.md](../../.ai/proces-poczekalni.md)**.
+- **Proces poczekalni (uproszczony):** tablet na wyposażeniu rejestracji, zalogowany na rolę **TABLET**. Recepcja na tablecie **wybiera kolejkę** z listy dzisiejszych kolejek (brak twardego przypisania w panelu), potem pacjenta z listy → ekran weryfikacji danych → formularz intake. **Bez tokenu** – sesja formularza bez pola token; migracje: usunięcie `token_hash` z `patient_form_session`, zastąpienie w `tablet_device` pól `name`/`device_code` przez **tylko `android_id`**. Szczegóły: **[.ai/proces-poczekalni.md](../../.ai/proces-poczekalni.md)**.
 
 ## Docelowa architektura modułów
 
@@ -123,8 +123,8 @@ flowchart LR
 - Zaimplementuj modele i migracje 1:1 wg `[/.ai/db-plan.md](C:/Users/piotr/Programming/cogitomedica/.ai/db-plan.md)`:
   - ENUM-y, constraints, unique keys, partial indexes, GIN indexes, `citext`, `pgcrypto`.
   - Priorytet tabel krytycznych: `staff_user`, `patient`, `daily_queue`, `queue_entry`, `patient_form_session`, `patient_intake_form`, `medical_document`, `medical_document_version`, `outbox_event`, `patient_import_*`.
-- Wydziel migracje na paczki tematyczne (identity/queue/intake/medical/outbox/import), aby uprościć rollback i review.
-- Dodaj testy integralności DB (constraint tests) dla: statusów, idempotency key, retencji i tokenów.
+- Wydziel migracje na paczki tematyczne (identity/queue/intake/medical/outbox/import), aby uprościć rollback i review. **Proces poczekalni:** migracje wycofania tokenu (usunięcie `token_hash` z `patient_form_session`) oraz TabletDevice (usunięcie `name`/`device_code`, wprowadzenie tylko `android_id`).
+- Dodaj testy integralności DB (constraint tests) dla: statusów, idempotency key, retencji; sesja bez tokenu.
 
 ## Etap 3: Faza 1 PRD (Recepcja + Tablet, API-first)
 
@@ -134,7 +134,7 @@ flowchart LR
 - Zaimplementuj serwisy domenowe:
   - `create_or_update_patient_manual()` z `TEMPORARY` + alert admin przy braku `doctolib_patient_id`.
   - `create_queue_entry()` z dopuszczeniem wielu wizyt/dzień.
-  - `issue_tablet_session_token_latest_wins()` (`active_session_id`, hash tokenu, expiry).
+  - Tworzenie sesji formularza (latest-wins) **bez tokenu** – `issue_tablet_session_*` zwraca `intake_form_id`; autoryzacja tabletu: rola TABLET + zakres kolejki. Migracja usuwa `token_hash` z `patient_form_session`.
   - `submit_patient_intake_form()` z walidacją wymaganych zgód i pytań anamnestycznych.
 - Zaimplementuj API i walidację payloadów:
   - intake (`anamnesis_payload`, `body_map_data`, podpis),
@@ -188,7 +188,7 @@ flowchart LR
   - manual intake -> publish -> outbox complete,
   - republish,
   - import z błędnymi wierszami,
-  - token latest-wins.
+  - sesja formularza (latest-wins, bez tokenu).
 - Performance sanity:
   - p95 ładowania formularza,
   - p95 czasu ścieżki publish->HiDrive->SMS.
