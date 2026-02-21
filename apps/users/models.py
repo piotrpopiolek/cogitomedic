@@ -10,6 +10,7 @@ class StaffRole(models.TextChoices):
     RECEPTION = "RECEPTION", "Reception"
     DOCTOR = "DOCTOR", "Doctor"
     ADMIN = "ADMIN", "Admin"
+    TABLET = "TABLET", "Tablet (waiting room)"
 
 
 class StaffUser(AbstractUser):

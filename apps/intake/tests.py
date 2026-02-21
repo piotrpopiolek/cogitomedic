@@ -67,7 +67,6 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
         self.session = PatientFormSession.objects.create(
             queue_entry=self.queue_entry,
-            token_hash="a" * 64,
             form_locale="de-DE",
             expires_at=timezone.now() + timedelta(minutes=30),
             created_by_user=self.reception_user,
@@ -159,7 +158,6 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
         newer_session = PatientFormSession.objects.create(
             queue_entry=self.queue_entry,
-            token_hash="c" * 64,
             form_locale="de-DE",
             expires_at=timezone.now() + timedelta(minutes=30),
             created_by_user=self.reception_user,

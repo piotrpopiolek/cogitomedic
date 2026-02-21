@@ -191,9 +191,9 @@ class QueueEntryAdmin(admin.ModelAdmin):
 
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(admin.ModelAdmin):
-    list_display = ("name", "device_code", "is_active", "last_seen_at", "created_at")
+    list_display = ("android_id", "is_active", "last_seen_at", "created_at")
     list_filter = ("is_active",)
-    search_fields = ("name", "device_code")
+    search_fields = ("android_id",)
 
 
 @admin.register(PatientFormSession)
@@ -201,7 +201,7 @@ class PatientFormSessionAdmin(admin.ModelAdmin):
     list_display = ("id", "queue_entry", "tablet_device", "form_locale", "expires_at", "consumed_at", "created_at")
     list_filter = ("form_locale",)
     raw_id_fields = ("queue_entry", "tablet_device", "created_by_user")
-    readonly_fields = ("id", "token_hash", "created_at")
+    readonly_fields = ("id", "created_at")
     date_hierarchy = "created_at"
 
     def get_form(self, request, obj=None, change=None, **kwargs):

@@ -5,6 +5,7 @@ from datetime import date
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.intake.models import PatientIntakeForm
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -16,7 +17,7 @@ from apps.reception.models import (
 from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
-    issue_tablet_session_token_latest_wins,
+    issue_tablet_session_latest_wins,
 )
 from apps.users.models import StaffRole, StaffUser
 
@@ -119,7 +120,7 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(first.position_no, 1)
         self.assertEqual(second.position_no, 2)
 
-    def test_issue_tablet_session_token_latest_wins_switches_active_session(self) -> None:
+    def test_issue_tablet_session_latest_wins_switches_active_session(self) -> None:
         patient = Patient.objects.create(
             first_name="Tablet",
             last_name="Patient",
@@ -134,22 +135,25 @@ class ReceptionServicesTests(TestCase):
             created_by_user_id=self.reception_user.id,
         )
 
-        first_token = issue_tablet_session_token_latest_wins(
+        first_result = issue_tablet_session_latest_wins(
             queue_entry_id=queue_entry.id,
             created_by_user_id=self.reception_user.id,
             form_locale="de-DE",
         )
-        second_token = issue_tablet_session_token_latest_wins(
+        second_result = issue_tablet_session_latest_wins(
             queue_entry_id=queue_entry.id,
             created_by_user_id=self.reception_user.id,
             form_locale="en-GB",
         )
 
         queue_entry.refresh_from_db()
-        self.assertEqual(queue_entry.active_session_id, second_token.session_id)
-        self.assertNotEqual(first_token.session_id, second_token.session_id)
+        self.assertEqual(queue_entry.active_session_id, second_result.session_id)
+        self.assertNotEqual(first_result.session_id, second_result.session_id)
 
         self.assertEqual(
             PatientFormSession.objects.filter(queue_entry=queue_entry).count(),
             2,
         )
+        self.assertEqual(first_result.intake_form_id, second_result.intake_form_id)
+        intake_form = PatientIntakeForm.objects.get(queue_entry=queue_entry)
+        self.assertEqual(intake_form.session_id, second_result.session_id)

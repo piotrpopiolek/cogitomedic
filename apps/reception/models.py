@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import secrets
 import uuid
 from datetime import timedelta
 
@@ -289,8 +287,7 @@ class QueueEntry(models.Model):
 
 class TabletDevice(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=50, unique=True)
-    device_code = models.CharField(max_length=50, unique=True)
+    android_id = models.CharField(max_length=128, unique=True)
     is_active = models.BooleanField(default=True)
     last_seen_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -311,7 +308,6 @@ class PatientFormSession(models.Model):
         null=True,
         related_name="sessions",
     )
-    token_hash = models.CharField(max_length=64, unique=True)
     form_locale = models.CharField(max_length=10, default="de-DE")
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(blank=True, null=True)
@@ -350,18 +346,23 @@ class PatientFormSession(models.Model):
         ]
 
     @classmethod
-    def issue_token(cls, queue_entry: QueueEntry, created_by_user_id: str, minutes: int = 20) -> str:
-        token_plain = secrets.token_urlsafe(48)
-        token_hash = hashlib.sha256(token_plain.encode("utf-8")).hexdigest()
+    def create_session(
+        cls,
+        queue_entry: QueueEntry,
+        created_by_user_id: uuid.UUID,
+        minutes: int = 120,
+        tablet_device_id: uuid.UUID | None = None,
+        form_locale: str = "de-DE",
+    ) -> PatientFormSession:
+        """Create a form session (no token). Latest-wins: caller must set queue_entry.active_session."""
         session = cls.objects.create(
             queue_entry=queue_entry,
-            token_hash=token_hash,
+            tablet_device_id=tablet_device_id,
+            form_locale=form_locale,
             expires_at=timezone.now() + timedelta(minutes=minutes),
             created_by_user_id=created_by_user_id,
         )
-        queue_entry.active_session = session
-        queue_entry.save(update_fields=["active_session", "updated_at"])
-        return token_plain
+        return session
 
 
 class PatientImportBatch(models.Model):

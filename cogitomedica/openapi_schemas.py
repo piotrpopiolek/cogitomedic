@@ -46,6 +46,17 @@ class PublishDocumentVersionResponse(BaseModel):
     version_status: str
     publish_request_id: str | None = None
 
+
+class CreateQueueEntrySessionResponse(BaseModel):
+    """Response for POST /queue-entries/{id}/sessions. No token; tablet uses session cookie."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    expires_at: str
+    intake_form_id: str
+
+
 # Ref prefix used in the final OpenAPI document
 COMPONENTS_REF_PREFIX = "#/components/schemas/"
 PYDANTIC_DEFS_PREFIX = "#/$defs/"
@@ -225,6 +236,7 @@ def _get_request_model_registry() -> list[type]:
         AnamnesisUpdateResponse,
         MedicalDocumentVersionResponse,
         PublishDocumentVersionResponse,
+        CreateQueueEntrySessionResponse,
     ]
 
 
@@ -315,6 +327,7 @@ def _response_schema_map() -> dict[tuple[str, str], dict[str, type]]:
         (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): {"200": AnamnesisUpdateResponse},
         (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): {"200": MedicalDocumentVersionResponse},
         (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {"200": PublishDocumentVersionResponse},
+        (f"{P}/queue-entries/{{queue_entry_id}}/sessions", "post"): {"201": CreateQueueEntrySessionResponse},
     }
 
 

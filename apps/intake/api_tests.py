@@ -57,7 +57,6 @@ class IntakeApiTests(TestCase):
         )
         self.session = PatientFormSession.objects.create(
             queue_entry=self.queue_entry,
-            token_hash="a" * 64,
             form_locale="de-DE",
             expires_at=timezone.now() + timedelta(minutes=30),
             created_by_user=self.reception_user,
@@ -96,7 +95,6 @@ class IntakeApiTests(TestCase):
             f"/api/v1/queue-entries/{self.queue_entry.id}/sessions",
             data=json.dumps(
                 {
-                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -105,15 +103,17 @@ class IntakeApiTests(TestCase):
         )
         payload = response.json()
         self.assertEqual(response.status_code, 201)
-        self.assertIn("token", payload)
         self.assertIn("session_id", payload)
+        self.assertIn("intake_form_id", payload)
+        intake_form = PatientIntakeForm.objects.get(id=payload["intake_form_id"])
+        self.assertEqual(str(intake_form.session_id), payload["session_id"])
+        self.assertEqual(intake_form.queue_entry_id, self.queue_entry.id)
 
     def test_create_queue_entry_session_returns_404_for_missing_queue_entry(self) -> None:
         response = self.client.post(
             f"/api/v1/queue-entries/{uuid4()}/sessions",
             data=json.dumps(
                 {
-                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -169,6 +169,81 @@ class IntakeApiTests(TestCase):
         self.queue_entry.refresh_from_db()
         self.assertEqual(self.intake_form.form_status, IntakeStatus.SUBMITTED)
         self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+
+    def test_submit_returns_400_when_signature_missing(self) -> None:
+        self.intake_form.signature_file_path = None
+        self.intake_form.signature_sha256 = None
+        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256"])
+        PatientIntakeConsent.objects.create(
+            intake_form=self.intake_form,
+            consent_definition=self.required_consent,
+            accepted=True,
+            accepted_at=timezone.now(),
+        )
+        self.intake_form.anamnesis_payload = {
+            "schema_version": 1,
+            "answers": [{"question_code": "Q1_REQUIRED", "selected_option_codes": ["YES"]}],
+        }
+        self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
+
+        response = self.client.post(
+            f"/api/v1/intake-forms/{self.intake_form.id}/submit",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Signature", response.json().get("error", ""))
+
+    def test_e2e_waiting_room_issue_session_then_anamnesis_and_submit(self) -> None:
+        """E2E: queue → entry → POST sessions (get intake_form_id) → anamnesis → submit."""
+        response = self.client.post(
+            f"/api/v1/queue-entries/{self.queue_entry.id}/sessions",
+            data=json.dumps(
+                {
+                    "created_by_user_id": str(self.reception_user.id),
+                    "form_locale": "de-DE",
+                    "expires_in_minutes": 20,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        intake_form_id = payload["intake_form_id"]
+
+        PatientIntakeConsent.objects.create(
+            intake_form_id=intake_form_id,
+            consent_definition=self.required_consent,
+            accepted=True,
+            accepted_at=timezone.now(),
+        )
+        PatientIntakeForm.objects.filter(id=intake_form_id).update(
+            signature_file_path="/tmp/e2e-signature.png",
+            signature_sha256="e2e" * 21,
+        )
+
+        anamnesis_response = self.client.put(
+            f"/api/v1/intake-forms/{intake_form_id}/anamnesis",
+            data=json.dumps(
+                {
+                    "anamnesis_schema_version": 1,
+                    "answers": [{"question_code": "Q1_REQUIRED", "selected_option_codes": ["YES"]}],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(anamnesis_response.status_code, 200)
+
+        submit_response = self.client.post(
+            f"/api/v1/intake-forms/{intake_form_id}/submit",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(submit_response.status_code, 200)
+        self.queue_entry.refresh_from_db()
+        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+        form = PatientIntakeForm.objects.get(id=intake_form_id)
+        self.assertEqual(form.form_status, IntakeStatus.SUBMITTED)
 
     def test_intake_endpoints_return_404_for_missing_intake_form(self) -> None:
         missing_intake_id = uuid4()

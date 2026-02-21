@@ -316,57 +316,56 @@ class TabletDevicesApiTests(TestCase):
     def test_post_tablet_device_creates(self) -> None:
         response = self.client.post(
             "/api/v1/tablet-devices",
-            data=json.dumps({"name": "Tablet 1", "device_code": "TAB-001", "is_active": True}),
+            data=json.dumps({"android_id": "device-TAB-001", "is_active": True}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 201)
         payload = response.json()
-        self.assertEqual(payload["name"], "Tablet 1")
-        self.assertEqual(payload["device_code"], "TAB-001")
+        self.assertEqual(payload["android_id"], "device-TAB-001")
         self.assertTrue(payload["is_active"])
 
     def test_post_tablet_device_duplicate_returns_409(self) -> None:
-        TabletDevice.objects.create(name="Tablet 1", device_code="TAB-001", is_active=True)
+        TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
         response = self.client.post(
             "/api/v1/tablet-devices",
-            data=json.dumps({"name": "Tablet 1", "device_code": "TAB-001", "is_active": True}),
+            data=json.dumps({"android_id": "device-TAB-001", "is_active": True}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 409)
 
     def test_get_tablet_devices_filter_and_search(self) -> None:
-        TabletDevice.objects.create(name="Tablet Active", device_code="TAB-ACT", is_active=True)
-        TabletDevice.objects.create(name="Tablet Offline", device_code="TAB-OFF", is_active=False)
-        response = self.client.get("/api/v1/tablet-devices?is_active=true&search=act")
+        TabletDevice.objects.create(android_id="device-TAB-ACT", is_active=True)
+        TabletDevice.objects.create(android_id="device-TAB-OFF", is_active=False)
+        response = self.client.get("/api/v1/tablet-devices?is_active=true&search=TAB-ACT")
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]
         self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["device_code"], "TAB-ACT")
+        self.assertEqual(items[0]["android_id"], "device-TAB-ACT")
 
     def test_get_tablet_devices_invalid_is_active_returns_400(self) -> None:
         response = self.client.get("/api/v1/tablet-devices?is_active=maybe")
         self.assertEqual(response.status_code, 400)
 
     def test_get_tablet_device_detail(self) -> None:
-        device = TabletDevice.objects.create(name="Tablet 1", device_code="TAB-001", is_active=True)
+        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
         response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(device.id))
 
     def test_patch_tablet_device(self) -> None:
-        device = TabletDevice.objects.create(name="Tablet 1", device_code="TAB-001", is_active=True)
+        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
         response = self.client.patch(
             f"/api/v1/tablet-devices/{device.id}",
-            data=json.dumps({"name": "Tablet 1A", "is_active": False}),
+            data=json.dumps({"android_id": "device-TAB-001A", "is_active": False}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["name"], "Tablet 1A")
+        self.assertEqual(payload["android_id"], "device-TAB-001A")
         self.assertFalse(payload["is_active"])
 
     def test_delete_tablet_device_soft_deactivates(self) -> None:
-        device = TabletDevice.objects.create(name="Tablet 1", device_code="TAB-001", is_active=True)
+        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
         response = self.client.delete(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -375,7 +374,7 @@ class TabletDevicesApiTests(TestCase):
         self.assertFalse(device.is_active)
 
     def test_post_tablet_heartbeat_updates_last_seen_at(self) -> None:
-        device = TabletDevice.objects.create(name="Tablet 1", device_code="TAB-001", is_active=True)
+        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
         self.assertIsNone(device.last_seen_at)
         response = self.client.post(
             f"/api/v1/tablet-devices/{device.id}/heartbeat",
@@ -782,7 +781,7 @@ class ListLimitApiTests(TestCase):
     def test_tablet_devices_list_uses_default_limit(self) -> None:
         """Without limit param, list returns DEFAULT_LIST_LIMIT (20) items."""
         for idx in range(120):
-            TabletDevice.objects.create(name=f"Tablet {idx}", device_code=f"TAB-{idx}", is_active=True)
+            TabletDevice.objects.create(android_id=f"device-TAB-{idx}", is_active=True)
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 20)
