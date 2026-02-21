@@ -1,0 +1,19 @@
+{% extends "tablet/base.html" %}
+{% block title %}Wybierz kolejkę – {{ today }}{% endblock %}
+{% block content %}
+  <h1>Poczekalnia – wybór kolejki</h1>
+  <p>Data: <strong>{{ today }}</strong></p>
+  {% if queues %}
+    <ul>
+      {% for q in queues %}
+        <li>
+          <a class="btn" href="{% url 'tablet:queue_entries' q.id %}">
+            {{ q.clinic_site.name }} – {{ q.consulting_room.name }} ({{ q.get_shift_code_display }})
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Brak kolejek na dziś. Utwórz kolejkę w panelu recepcji.</p>
+  {% endif %}
+{% endblock %}
