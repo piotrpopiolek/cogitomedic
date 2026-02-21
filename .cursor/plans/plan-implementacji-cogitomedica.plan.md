@@ -9,17 +9,20 @@ todos:
     content: Zaimplementować modele i migracje zgodnie z .ai/db-plan.md wraz z indeksami i constraintami.
     status: completed
   - id: phase1-reception-tablet
-    content: ""
+    content: API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E.
     status: in_progress
   - id: phase2-medical-publish
-    content: ""
+    content: API medical (draft, publish, szablony) + pipeline outbox – wdrożone; GET lista dokumentów medycznych do dodania dla panelu lekarza.
     status: in_progress
   - id: outbox-integrations
     content: Uruchomić pipeline outbox + Django Tasks + PDF + HiDrive/SMS + retencję 30 dni.
     status: in_progress
   - id: api-contracts-priority
-    content: ""
+    content: Zamrożenie kontraktu API dla panelu staff (dokument .ai/staff-api-contract.md), RBAC operations (ADMIN), GET medical-documents.
     status: in_progress
+  - id: staff-api-contract
+    content: Spisać kontrakt endpointów staff (recepcja/lekarz/ops) i uzupełnić luki przed frontem Unfold – rekomendowany następny krok.
+    status: pending
   - id: phase3-import-hidrive-api
     content: Dowieźć import dzienny i awaryjny oraz integrację API HiDrive (Faza 3).
     status: pending
@@ -57,10 +60,16 @@ isProject: false
 - Zredukowano dług w zależnościach: aktualizacje krytycznych bibliotek HTTP/TLS, usunięcie duplikatu `dotenv`, usunięcie nieużywanych `django-select2`, `reportlab`, `PyPDF2`, dodanie `requirements-dev.txt` (pytest + QA), przejście na `psycopg`.
 - Zaimplementowano kluczowe serwisy domenowe i testy: Faza 1 (`reception` + `intake`), Faza 2 (`medical`), pipeline outbox oraz bazowy audit trail.
 - Decyzja wykonawcza: **API jest aktualnie najwyższym priorytetem**, a walidacja payloadów JSON ma być realizowana przez **Pydantic v2**.
-- Dowieziono kolejną paczkę endpointów API v1 w `apps/reception`: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`) wraz z walidacją Pydantic i testami API.
-- Dowieziono brakujący kontrakt API v1 dla `staff-users` (list/create/detail/update/deactivate) w `apps/users`, z paginacją listy i testami endpointów.
-- Zweryfikowano uruchamianie testów w środowisku Docker (`docker compose exec web ...`): testy modułowe i dedykowane testy API recepcji przechodzą poprawnie.
-- Następny krok implementacyjny: endpointy `patients` (list/search, create manual, detail/update, contact-history) oraz testy kontraktowe dla tych ścieżek.
+- Dowieziono endpointy API v1: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`), `**patients`** (list/search, create, detail/PATCH, contact-history, merge), `staff-users` (list/create/detail/update/deactivate) – z walidacją Pydantic i testami API.
+- **Ostatnie zmiany (backend + docs):**
+  - **Pacjenci:** walidacja Pydantic dla `phone` (regex zgodny z DB), walidacja `date_of_birth` w GET (PatientsListQuery, format YYYY-MM-DD); usunięcie `created_by_user_id` z body tworzenia pacjenta (aktor wyłącznie z sesji).
+  - **RBAC:** endpointy recepcji i intake wymagają ról **RECEPTION** lub **ADMIN** (`require_user_role`); medical – DOCTOR/ADMIN bez zmian.
+  - **Medical:** błędy domenowe szablonów (TemplatePermissionError) zwracane jako **400** zamiast 403 (ujednolicenie z code-review).
+  - **OpenAPI/Swagger:** dodane `components.securitySchemes` (session cookie) oraz `security` na operacjach – w dokumentacji widoczna **ikona kłódki** przy endpointach wymagających logowania; wyjątki: health, metrics, auth/login.
+  - `.ai/api-plan.md` i `.ai/api-plan-pl.md` zaktualizowane (date_of_birth GET, POST patients bez created_by_user_id, błędy walidacji).
+- Zweryfikowano uruchamianie testów w środowisku Docker; testy modułowe i API recepcji/medical przechodzą.
+- **Następny krok (propozycja poniżej):** zamrożenie kontraktu API dla panelu staff i/lub uzupełnienie luk (np. GET lista dokumentów medycznych) przed frontem Django Staff (Unfold).
+- **Proces poczekalni (uproszczony):** tablet na wyposażeniu rejestracji, zalogowany na rolę z dostępem tylko do widoku „poczekalnia” (lista pacjentów na dziś → wybór pacjenta → formularz intake); bez linków z tokenem – **[.ai/proces-poczekalni.md](../../.ai/proces-poczekalni.md)**.
 
 ## Docelowa architektura modułów
 
@@ -199,6 +208,22 @@ flowchart LR
   - `[/.ai/db-plan.md](C:/Users/piotr/Programming/cogitomedica/.ai/db-plan.md)`
 - Nowe moduły aplikacyjne (do utworzenia):
   - `apps/users/`*, `apps/reception/`*, `apps/intake/*`, `apps/medical/*`, `apps/outbox/*`, `apps/integrations/*`, `apps/operations/*`.
+
+## Proponowany kolejny krok
+
+**Zamrożenie kontraktu API dla panelu staff + ewentualne uzupełnienie luk (przed frontem Django Staff).**
+
+1. **Staff API contract (zalecane jako pierwsze)**
+  Spisać w jednym miejscu (np. `.ai/staff-api-contract.md`) listę endpointów używanych przez panel staff (recepcja, lekarz, admin/ops), z metodami, payloadami i kodami błędów – na podstawie **obecnej implementacji** w kodzie (source of truth). To pozwoli budować front bez rozjazdów z backendem.
+2. **Luki do rozstrzygnięcia przed lub równolegle z frontem**
+  - **GET lista dokumentów medycznych:** w `.ai/api-plan.md` jest `GET /medical-documents` z filtrami (status, queue_date, doctor_view, patient_search), w kodzie jest tylko **POST** (tworzenie). Panel lekarza potrzebuje listy pracy – dodać endpoint GET z paginacją i filtrami albo uzgodnić alternatywną ścieżkę (np. lista po queue_entry / dacie).  
+  - **Operacje admin/ops:** endpointy `operations/outbox/process` i `operations/retention/run` są obecnie dostępne dla dowolnego zalogowanego użytkownika. Przed produkcją dodać `require_user_role(..., allowed_roles={"ADMIN"})` (lub osobną rolę ops), zgodnie z planem frontu staff.
+3. **Alternatywa / równolegle**
+  Po (lub zamiast) punktu 1 można od razu przejść do **planu frontu staff** (`.cursor/plans/plan_django_staff_frontend.plan.md`): integracja Django Unfold, shell SSR pod `/staff/`, recepcja MVP, lekarz MVP, ops MVP. Kontrakt z punktu 1 można uzupełniać w trakcie.
+
+**Rekomendacja:** wykonać punkt 1 (dokument kontraktu staff), rozstrzygnąć GET medical-documents i RBAC dla operations, a następnie uruchomić fazę Unfold + shell staff.
+
+---
 
 ## Proponowana kolejność realizacji (sprintowo)
 
