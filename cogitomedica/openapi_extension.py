@@ -298,6 +298,15 @@ COGITO_PATHS = {
             "responses": {"200": {"description": "last_seen_at"}, "404": {"description": "Not found"}},
         },
     },
+    f"{PREFIX}/intake-forms/{{intake_form_id}}": {
+        "get": {
+            "summary": "Get intake form context",
+            "description": "Context for tablet: patient (read-only), consents, anamnesis questions with options and current answer, body_map, form status. TABLET restricted to today's queues.",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "form_locale", "in": "query", "schema": {"type": "string"}}],
+            "responses": {"200": {"description": "Context (patient, consents, anamnesis_questions, body_map_data, form_status, has_signature)"}, "404": {"description": "Not found"}},
+        },
+    },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/anamnesis": {
         "put": {
             "summary": "Update anamnesis payload",
@@ -305,6 +314,26 @@ COGITO_PATHS = {
             "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"anamnesis_schema_version": {"type": "integer"}, "answers": {"type": "array"}}}}}},
             "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+        },
+    },
+    f"{PREFIX}/intake-forms/{{intake_form_id}}/consents": {
+        "put": {
+            "summary": "Update intake form consents",
+            "description": "Replace consent acceptance set. Body: consents[] with consent_definition_id, accepted.",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "intake_form_id, consents"}, "404": {"description": "Not found"}, "409": {"description": "Form not IN_PROGRESS or consent not active"}},
+        },
+    },
+    f"{PREFIX}/intake-forms/{{intake_form_id}}/signature": {
+        "post": {
+            "summary": "Upload signature",
+            "description": "Base64-encoded image (e.g. data:image/png;base64,...). Max 2MB.",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "signature_file_path, signature_sha256"}, "400": {"description": "Invalid signature"}, "404": {"description": "Not found"}, "409": {"description": "Form already submitted"}, "413": {"description": "Payload too large"}},
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/submit": {

@@ -6,18 +6,133 @@ from uuid import UUID
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
-from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
-from apps.intake.services import save_intake_anamnesis_payload, submit_patient_intake_form
+from apps.intake.api_schemas import (
+    SignatureUploadRequest,
+    SubmitIntakeFormRequest,
+    UpdateAnamnesisPayloadRequest,
+    UpdateConsentsRequest,
+)
+from apps.intake.services import (
+    ConsentNotActiveError,
+    InvalidSignatureError,
+    get_intake_form_context,
+    save_intake_anamnesis_payload,
+    save_intake_consents,
+    save_intake_signature,
+    submit_patient_intake_form,
+)
+
+
+@require_auth
+@csrf_exempt
+@require_http_methods(["GET"])
+def intake_form_context_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    """GET intake form context for tablet (patient, consents, anamnesis questions, status)."""
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
+    if role_error:
+        return role_error
+    try:
+        is_tablet = getattr(request.user, "role", None) == "TABLET"
+        form_locale = request.GET.get("form_locale", "de-DE")[:10]
+        context = get_intake_form_context(
+            intake_form_id=intake_form_id,
+            form_locale=form_locale,
+            tablet_restrict_to_today=is_tablet,
+        )
+        return JsonResponse(context)
+    except ObjectDoesNotExist:
+        return json_error("Intake form not found.", status=404)
+
+
+@require_auth
+@csrf_exempt
+@require_http_methods(["PUT"])
+def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    """PUT intake form consents (acceptance set)."""
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
+    if role_error:
+        return role_error
+    try:
+        body = UpdateConsentsRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    try:
+        intake_form = save_intake_consents(
+            intake_form_id=intake_form_id,
+            consents_payload=[c.model_dump() for c in body.consents],
+        )
+    except ObjectDoesNotExist:
+        return json_error("Intake form not found.", status=404)
+    except StateTransitionError as exc:
+        return json_error(str(exc), status=409)
+    except ConsentNotActiveError as exc:
+        return json_error(str(exc), status=409)
+    # Return updated consents (accepted + accepted_at for accepted ones)
+    from apps.intake.models import PatientIntakeConsent
+
+    updated = list(
+        PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id).values(
+            "consent_definition_id", "accepted", "accepted_at"
+        )
+    )
+    consents_response = [
+        {
+            "consent_definition_id": str(u["consent_definition_id"]),
+            "accepted": u["accepted"],
+            "accepted_at": u["accepted_at"].isoformat() if u["accepted_at"] else None,
+        }
+        for u in updated
+    ]
+    return JsonResponse({"intake_form_id": str(intake_form.id), "consents": consents_response})
+
+
+@require_auth
+@csrf_exempt
+@require_http_methods(["POST"])
+def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
+    """POST upload signature (base64 image)."""
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
+    if role_error:
+        return role_error
+    try:
+        body = SignatureUploadRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    try:
+        intake_form = save_intake_signature(
+            intake_form_id=intake_form_id,
+            signature_base64=body.signature_base64,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Intake form not found.", status=404)
+    except StateTransitionError as exc:
+        return json_error(str(exc), status=409)
+    except InvalidSignatureError as exc:
+        status = 413 if "exceeds max size" in str(exc).lower() else 400
+        return json_error(str(exc), status=status)
+    return JsonResponse({
+        "signature_file_path": intake_form.signature_file_path,
+        "signature_sha256": intake_form.signature_sha256,
+    })
 
 
 @require_auth
 @csrf_exempt
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
         return role_error
     if request.method != "PUT":
@@ -56,7 +171,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
 @require_auth
 @csrf_exempt
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
         return role_error
     if request.method != "POST":

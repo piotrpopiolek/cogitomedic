@@ -157,8 +157,11 @@ def _get_request_model_registry() -> list[type]:
     """All Pydantic models used as API request/query bodies (for components.schemas)."""
     from apps.intake.api_schemas import (
         AnamnesisAnswerPayload,
+        ConsentAcceptanceItem,
+        SignatureUploadRequest,
         SubmitIntakeFormRequest,
         UpdateAnamnesisPayloadRequest,
+        UpdateConsentsRequest,
     )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
@@ -215,7 +218,10 @@ def _get_request_model_registry() -> list[type]:
         PublishMedicalDocumentRequest,
         # Intake (AnamnesisAnswerPayload is nested in UpdateAnamnesisPayloadRequest)
         AnamnesisAnswerPayload,
+        ConsentAcceptanceItem,
         UpdateAnamnesisPayloadRequest,
+        UpdateConsentsRequest,
+        SignatureUploadRequest,
         SubmitIntakeFormRequest,
         # Reception
         CreateQueueEntrySessionRequest,
@@ -252,7 +258,12 @@ def get_components_schemas() -> dict[str, dict[str, Any]]:
 # Map (path, method) -> Pydantic model for requestBody. Paths must match COGITO_PATHS keys.
 def _request_body_model_map() -> dict[tuple[str, str], type]:
     """(path, method) -> request body model class. Used to inject $ref into paths."""
-    from apps.intake.api_schemas import SubmitIntakeFormRequest, UpdateAnamnesisPayloadRequest
+    from apps.intake.api_schemas import (
+        SignatureUploadRequest,
+        SubmitIntakeFormRequest,
+        UpdateAnamnesisPayloadRequest,
+        UpdateConsentsRequest,
+    )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
@@ -307,6 +318,8 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/tablet-devices", "post"): CreateTabletDeviceRequest,
         (f"{P}/tablet-devices/{{tablet_device_id}}", "patch"): UpdateTabletDeviceRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): UpdateAnamnesisPayloadRequest,
+        (f"{P}/intake-forms/{{intake_form_id}}/consents", "put"): UpdateConsentsRequest,
+        (f"{P}/intake-forms/{{intake_form_id}}/signature", "post"): SignatureUploadRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/submit", "post"): SubmitIntakeFormRequest,
     }
 
