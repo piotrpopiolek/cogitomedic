@@ -234,6 +234,7 @@ def save_intake_consents(
 SIGNATURE_MAX_SIZE = 2 * 1024 * 1024
 
 
+@transaction.atomic
 def save_intake_signature(
     *,
     intake_form_id: uuid.UUID,
