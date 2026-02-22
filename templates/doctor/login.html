@@ -10,7 +10,7 @@
   <div class="container py-5">
     <div class="row justify-content-center">
       <div class="col-md-5">
-        <p class="text-end small">{% if ui %}<a href="?lang=de">DE</a> | <a href="?lang=pl">PL</a>{% endif %}</p>
+        <p class="text-end small">{% if ui %}<a href="?lang=de">{{ ui.lang_de }}</a> | <a href="?lang=en">{{ ui.lang_en }}</a> | <a href="?lang=pl">{{ ui.lang_pl }}</a>{% endif %}</p>
         <h1 class="h3 mb-4">{% if ui %}{{ ui.login_title }}{% else %}Arztbereich – Anmelden{% endif %}</h1>
         {% if error %}
         <div class="alert alert-danger">{{ error }}</div>

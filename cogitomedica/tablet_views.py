@@ -144,8 +144,10 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
         return render(request, "tablet/error.html", {"message": "Formularz nie istnieje lub brak dostępu."}, status=404)
     session = intake_form.session
     locale_param = request.GET.get("locale", "").strip().lower()
-    if locale_param in ("de", "en"):
-        session.form_locale = "en-GB" if locale_param == "en" else "de-DE"
+    if locale_param in ("de", "en", "pl"):
+        session.form_locale = (
+            "en-GB" if locale_param == "en" else "pl-PL" if locale_param == "pl" else "de-DE"
+        )
         session.save(update_fields=["form_locale"])
     form_locale = session.form_locale or "de-DE"
     is_tablet = getattr(request.user, "role", None) == "TABLET"
@@ -159,7 +161,7 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
         return render(request, "tablet/error.html", {"message": "Formularz nie istnieje lub brak dostępu."}, status=404)
     if context["form_status"] == "SUBMITTED":
         ui = get_form_ui_strings(form_locale)
-        locale_param = "en" if form_locale.startswith("en") else "de"
+        locale_param = "en" if form_locale.startswith("en") else "pl" if form_locale.startswith("pl") else "de"
         return render(
             request,
             "tablet/form_submitted.html",
@@ -168,5 +170,5 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
     context["intake_form_id"] = str(intake_form_id)
     context["ui"] = get_form_ui_strings(form_locale)
     context["form_locale"] = form_locale
-    context["locale_param"] = "en" if form_locale.startswith("en") else "de"
+    context["locale_param"] = "en" if form_locale.startswith("en") else "pl" if form_locale.startswith("pl") else "de"
     return render(request, "tablet/form.html", context)

@@ -406,16 +406,18 @@ def get_medical_document_context(
         form_locale=form_locale,
         tablet_restrict_to_today=False,
     )
+    anamnesis_questions = intake_context.get("anamnesis_questions", [])
     intake_summary = {
         "consents": intake_context.get("consents", []),
         "body_map_data": intake_context.get("body_map_data", []),
+        "anamnesis_questions": anamnesis_questions,
         "anamnesis_answers": [
             {
                 "question_code": q.get("question_code"),
                 "selected_option_codes": (q.get("answer") or {}).get("selected_option_codes") or [],
                 "free_text": (q.get("answer") or {}).get("free_text"),
             }
-            for q in intake_context.get("anamnesis_questions", [])
+            for q in anamnesis_questions
         ],
         "patient": intake_context.get("patient"),
     }

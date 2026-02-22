@@ -82,6 +82,90 @@ DOCTOR_UI_DE = {
     "btn_publish": "Zatwierdź i wyślij",
     "resend_sms": "SMS erneut senden",
     "lang_de": "DE",
+    "lang_en": "EN",
+    "lang_pl": "PL",
+}
+
+DOCTOR_UI_EN = {
+    "area_name": "Doctor area",
+    "logout": "Log out",
+    "login_title": "Doctor area – Sign in",
+    "username": "Username",
+    "password": "Password",
+    "login_submit": "Sign in",
+    "login_footer": "For authorised users (doctor/admin) only.",
+    "list_title": "Medical documents (work queue)",
+    "filter_status": "Status",
+    "filter_all": "– all –",
+    "filter_draft": "Draft",
+    "filter_published": "Published",
+    "filter_date": "Date",
+    "filter_patient": "Patient (name)",
+    "filter_search_placeholder": "Search…",
+    "filter_submit": "Filter",
+    "table_patient": "Patient",
+    "table_date": "Date",
+    "table_status": "Status",
+    "table_pdf": "PDF",
+    "table_hidrive": "HiDrive",
+    "table_sms": "SMS",
+    "open": "Open",
+    "no_documents": "No documents.",
+    "pagination_page": "Page",
+    "pagination_total": "entries total.",
+    "back_to_list": "← Back to list",
+    "intake_header": "Anamnesis / Intake",
+    "patient_label": "Patient",
+    "consents_label": "Consents",
+    "body_map_title": "Body map (marked by patient)",
+    "body_map_hint": "Front and back view with markings set by the patient.",
+    "section_1": "1. Scope of examination (multiple choice)",
+    "section_2": "2. Skin type (Fitzpatrick)",
+    "section_3": "3. Overall image assessment",
+    "section_4": "4. Lesion selection",
+    "section_5": "5. Dermatoscopic features (multiple choice)",
+    "section_6": "6. Clinical-dermatoscopic assessment",
+    "section_7": "7. Malignancy risk assessment",
+    "section_8": "8. Text (generated / edited)",
+    "section_9": "9. Summary Befund (editable)",
+    "section_10": "10. Medical recommendations (multiple choice)",
+    "section_11": "11. Final medical assessment",
+    "examination_intimate": "Intimate area not examined",
+    "examination_oral": "Oral mucosa not examined",
+    "overall_no_control": "No skin changes requiring control",
+    "overall_control": "Skin changes requiring control present",
+    "lesion_no": "Lesion no.",
+    "lesion_header": "Features and assessment",
+    "feature_asymmetry": "Asymmetry",
+    "feature_irregular_border": "Irregular border",
+    "feature_inhomogeneous": "Inhomogeneous pigmentation",
+    "feature_multicolor": "Multicolor",
+    "feature_atypical_network": "Atypical pigment network",
+    "feature_irregular_globules": "Irregular globules",
+    "feature_irregular_dots": "Irregular dots",
+    "feature_structureless": "Structureless areas",
+    "feature_vascular": "Atypical vascular structures",
+    "feature_regression": "Regression areas",
+    "clinical_unremarkable": "Unremarkable lesion",
+    "clinical_slight": "Slightly atypical lesion",
+    "clinical_control": "Lesion requiring control",
+    "clinical_suspicious": "Suspicious lesion",
+    "malignancy_none": "No malignancy suspicion",
+    "malignancy_low": "Low malignancy suspicion",
+    "malignancy_cannot_exclude": "Malignancy cannot be excluded",
+    "text_placeholder": "Content will appear here after „Generate text” (editable).",
+    "rec_followup_3": "Dermatological follow-up in 3 months recommended",
+    "rec_followup_6": "Dermatological follow-up in 6 months recommended",
+    "rec_prompt_visit": "Prompt dermatology visit if clinical change",
+    "rec_no_short": "No short-term follow-up required at present",
+    "final_no_suspicion": "No high-grade malignancy suspicion at present",
+    "final_high_grade": "High-grade malignancy cannot be excluded",
+    "btn_generate": "Generate text",
+    "btn_save_draft": "Save draft",
+    "btn_publish": "Approve and send",
+    "resend_sms": "Resend SMS",
+    "lang_de": "DE",
+    "lang_en": "EN",
     "lang_pl": "PL",
 }
 
@@ -164,6 +248,7 @@ DOCTOR_UI_PL = {
     "btn_publish": "Zatwierdź i wyślij",
     "resend_sms": "Wyślij SMS ponownie",
     "lang_de": "DE",
+    "lang_en": "EN",
     "lang_pl": "PL",
 }
 
@@ -189,14 +274,31 @@ FITZPATRICK_PL = [
     ("UNDETERMINED", "Typ skóry nie do jednoznacznego określenia"),
 ]
 
+FITZPATRICK_EN = [
+    ("TYPE_I", "Fitzpatrick skin type I"),
+    ("TYPE_II", "Fitzpatrick skin type II"),
+    ("TYPE_III", "Fitzpatrick skin type III"),
+    ("TYPE_IV", "Fitzpatrick skin type IV"),
+    ("TYPE_V", "Fitzpatrick skin type V"),
+    ("TYPE_VI", "Fitzpatrick skin type VI"),
+    ("TYPE_II_III", "Fitzpatrick skin type II–III"),
+    ("UNDETERMINED", "Skin type not clearly determinable"),
+]
+
 
 def get_doctor_ui(lang: str) -> dict[str, str]:
-    """Zwraca słownik stringów UI dla panelu lekarza. lang: 'de' lub 'pl'."""
+    """Zwraca słownik stringów UI dla panelu lekarza. lang: 'de', 'en' lub 'pl'."""
     if lang == "pl":
         return dict(DOCTOR_UI_PL)
+    if lang == "en":
+        return dict(DOCTOR_UI_EN)
     return dict(DOCTOR_UI_DE)
 
 
 def get_fitzpatrick_choices(lang: str) -> list[tuple[str, str]]:
     """Zwraca listę (value, label) dla Fitzpatrick w zadanym języku."""
-    return FITZPATRICK_PL if lang == "pl" else FITZPATRICK_DE
+    if lang == "pl":
+        return FITZPATRICK_PL
+    if lang == "en":
+        return FITZPATRICK_EN
+    return FITZPATRICK_DE

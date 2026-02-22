@@ -39,7 +39,7 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None and user.is_active and _doctor_role_ok_request(user):
             login(request, user)
-            if request.POST.get("lang") in ("de", "pl") or request.GET.get("lang") in ("de", "pl"):
+            if request.POST.get("lang") in ("de", "en", "pl") or request.GET.get("lang") in ("de", "en", "pl"):
                 request.session["doctor_lang"] = request.POST.get("lang") or request.GET.get("lang")
             return redirect(request.POST.get("next") or request.GET.get("next") or "doctor-list")
         return render(request, "doctor/login.html", {"error": "Ungültige Anmeldung oder keine Berechtigung.", "ui": ui, "lang": lang})
@@ -67,13 +67,13 @@ def _doctor_role_ok(request: HttpRequest) -> bool:
 def _get_doctor_lang(request: HttpRequest) -> str:
     """Język panelu: z GET ?lang= lub sesji, domyślnie 'de'."""
     lang = request.GET.get("lang") or request.session.get("doctor_lang", "de")
-    return "pl" if lang == "pl" else "de"
+    return "en" if lang == "en" else "pl" if lang == "pl" else "de"
 
 
 def _apply_doctor_lang(request: HttpRequest) -> str:
     """Ustaw język z GET w sesji (jeśli podany) i zwróć aktualny lang."""
     lang = _get_doctor_lang(request)
-    if request.GET.get("lang") in ("de", "pl"):
+    if request.GET.get("lang") in ("de", "en", "pl"):
         request.session["doctor_lang"] = request.GET.get("lang")
     return lang
 
@@ -134,12 +134,12 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
     try:
         entry = QueueEntry.objects.select_related("intake_form").get(id=queue_entry_id)
     except QueueEntry.DoesNotExist:
-        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
+        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
     if not getattr(entry, "intake_form", None):
-        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "Brak ankiety dla tego wpisu.", "ui": ui, "lang": lang}, status=404)
+        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "No questionnaire for this entry." if lang == "en" else "Brak ankiety dla tego wpisu.", "ui": ui, "lang": lang}, status=404)
     intake_form = entry.intake_form
     if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
-        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Ankieta nie została jeszcze zakończona.", "ui": ui, "lang": lang}, status=400)
+        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Questionnaire not yet completed." if lang == "en" else "Ankieta nie została jeszcze zakończona.", "ui": ui, "lang": lang}, status=400)
     doc = create_or_get_medical_document(
         queue_entry_id=entry.id,
         intake_form_id=intake_form.id,
@@ -159,10 +159,12 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
     try:
         context = get_medical_document_context(
             medical_document_id=medical_document_id,
-            form_locale=request.GET.get("form_locale") or ("pl-PL" if lang == "pl" else "de-DE"),
+            form_locale=request.GET.get("form_locale") or (
+                "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
+            ),
         )
     except Exception:
-        return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
+        return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     panel_data = {
         "documentId": str(medical_document_id),
