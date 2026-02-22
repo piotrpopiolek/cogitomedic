@@ -488,6 +488,35 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(publish_response.status_code, 200)
 
+    def test_publish_without_draft_returns_400(self) -> None:
+        """Publish without prior 'Zapisz szkic' returns 400; full validation via draft is required."""
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        # Do NOT save draft; publish directly
+        publish_response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "published_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(publish_response.status_code, 400)
+        self.assertIn("No draft version available", publish_response.json().get("error", ""))
+
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
         missing_doc_id = uuid4()
 
