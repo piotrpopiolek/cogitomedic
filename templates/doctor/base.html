@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{% if lang == 'pl' %}pl{% else %}de{% endif %}">
+<html lang="{% if lang == 'pl' %}pl{% elif lang == 'en' %}en{% else %}de{% endif %}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -20,6 +20,7 @@
       <div class="navbar-nav ms-auto">
         <span class="nav-link">{{ user.username }} ({{ user.role }})</span>
         <a class="nav-link" href="{% url 'doctor-list' %}?lang=de">{% if ui %}{{ ui.lang_de }}{% else %}DE{% endif %}</a>
+        <a class="nav-link" href="{% url 'doctor-list' %}?lang=en">{% if ui %}{{ ui.lang_en }}{% else %}EN{% endif %}</a>
         <a class="nav-link" href="{% url 'doctor-list' %}?lang=pl">{% if ui %}{{ ui.lang_pl }}{% else %}PL{% endif %}</a>
         <form method="post" action="{% url 'doctor-logout' %}" class="d-inline">{% csrf_token %}<button type="submit" class="btn btn-outline-light btn-sm ms-2">{% if ui %}{{ ui.logout }}{% else %}Abmelden{% endif %}</button></form>
       </div>

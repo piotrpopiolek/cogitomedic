@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% if locale_param == 'en' %}Intake form – {{ patient.last_name }}{% else %}Formularz intake – {{ patient.last_name }}{% endif %}</title>
+  <title>{% if locale_param == 'en' %}Intake form – {{ patient.last_name }}{% elif locale_param == 'pl' %}Formularz intake – {{ patient.last_name }}{% else %}Formularz intake – {{ patient.last_name }}{% endif %}</title>
   <style>
     body { font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 1rem; }
     section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
@@ -38,7 +38,11 @@
   {% csrf_token %}
   <p style="font-size:0.9rem; color:#666;">
     <a href="{% url 'tablet:home' %}" class="btn secondary">{{ ui.back_to_waiting }}</a>
-    <span style="margin-left:0.5rem;">{% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong>{% else %}<strong>{{ ui.lang_de }}</strong> | <a href="?locale=en">{{ ui.lang_en }}</a>{% endif %}</span>
+    <span style="margin-left:0.5rem;">
+      {% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong> | <a href="?locale=pl">{{ ui.lang_pl }}</a>
+      {% elif locale_param == 'pl' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <a href="?locale=en">{{ ui.lang_en }}</a> | <strong>{{ ui.lang_pl }}</strong>
+      {% else %}<strong>{{ ui.lang_de }}</strong> | <a href="?locale=en">{{ ui.lang_en }}</a> | <a href="?locale=pl">{{ ui.lang_pl }}</a>{% endif %}
+    </span>
   </p>
 
   <section>

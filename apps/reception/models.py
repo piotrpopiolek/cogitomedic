@@ -336,7 +336,7 @@ class PatientFormSession(models.Model):
                 name="session_expiry_after_create",
             ),
             models.CheckConstraint(
-                condition=Q(form_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
+                condition=Q(form_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
                 name="session_locale_format",
             ),
             models.CheckConstraint(

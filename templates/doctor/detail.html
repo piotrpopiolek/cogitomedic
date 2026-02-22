@@ -165,14 +165,25 @@
     return fetch(url, opts).then(r => r.json().then(j => ({ ok: r.ok, status: r.status, json: j })));
   }
 
-  // Intake summary
+  // Intake summary: patient + anamnesis (survey answers)
   if (CTX && CTX.intake_summary) {
     const p = CTX.intake_summary.patient;
     if (p) {
       el("patient-name").textContent = (p.last_name || '') + ', ' + (p.first_name || '');
       let html = '<p><strong>Patient</strong> ' + (p.last_name || '') + ', ' + (p.first_name || '') + ' · ' + (p.date_of_birth || '') + '</p>';
-      if (CTX.intake_summary.consents && CTX.intake_summary.consents.length) {
-        html += '<p><strong>Zgody</strong> ' + CTX.intake_summary.consents.map(c => c.code + (c.accepted ? ' ✓' : '')).join(', ') + '</p>';
+      const questions = CTX.intake_summary.anamnesis_questions || [];
+      if (questions.length) {
+        html += '<p class="mb-2 mt-2"><strong>Ankieta (wywiad)</strong></p>';
+        questions.forEach(function(q) {
+          const answer = q.answer || {};
+          const selected = answer.selected_option_codes || [];
+          const optionsByCode = {};
+          (q.options || []).forEach(function(opt) { optionsByCode[opt.option_code] = opt.label || opt.option_code; });
+          const labels = selected.map(function(code) { return optionsByCode[code] || code; });
+          let answerText = labels.join(', ');
+          if (answer.free_text) answerText = (answerText ? answerText + ' — ' : '') + answer.free_text;
+          html += '<p class="small mb-1"><strong>' + (q.question_text || q.question_code) + '</strong><br/><span class="text-muted">' + (answerText || '—') + '</span></p>';
+        });
       }
       el("intake-summary").innerHTML = html;
     }

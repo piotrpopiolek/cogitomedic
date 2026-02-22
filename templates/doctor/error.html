@@ -1,5 +1,5 @@
 {% extends "doctor/base.html" %}
-{% block title %}{% if lang == 'pl' %}Błąd{% else %}Fehler{% endif %}{% endblock %}
+{% block title %}{% if lang == 'pl' %}Błąd{% elif lang == 'en' %}Error{% else %}Fehler{% endif %}{% endblock %}
 {% block content %}
 <div class="alert alert-danger">{{ message }}</div>
 <a href="{% url 'doctor-list' %}" class="btn btn-primary">{% if ui %}{{ ui.back_to_list }}{% else %}Zurück zur Liste{% endif %}</a>
