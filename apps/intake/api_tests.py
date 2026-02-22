@@ -76,7 +76,9 @@ class IntakeApiTests(TestCase):
             code="CONSENT_REQUIRED",
             version=1,
             title_de="Einwilligung",
+            title_en="Consent",
             content_de="Treść",
+            content_en="Content",
             is_required=True,
             is_active=True,
         )

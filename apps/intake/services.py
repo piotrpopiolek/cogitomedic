@@ -109,7 +109,7 @@ def get_intake_form_context(
     consent_defs = (
         ConsentDefinition.objects.filter(_effective_consent_filter(today))
         .order_by("display_order", "code")
-        .values("id", "code", "title_de", "content_de", "is_required")
+        .values("id", "code", "title_de", "title_en", "content_de", "content_en", "is_required")
     )
     consent_by_def_id = {
         c.consent_definition_id: c
@@ -117,15 +117,22 @@ def get_intake_form_context(
             "consent_definition"
         )
     }
+    use_en = form_locale.startswith("en")
     consents_payload = []
     for cd in consent_defs:
         cd_id = cd["id"]
         pic = consent_by_def_id.get(cd_id)
+        if use_en and (cd.get("title_en") or "").strip():
+            title = cd["title_en"]
+            content = (cd.get("content_en") or "").strip() or (cd["content_de"] or "")
+        else:
+            title = cd["title_de"]
+            content = (cd["content_de"] or "")
         consents_payload.append({
             "consent_definition_id": str(cd_id),
             "code": cd["code"],
-            "title_de": cd["title_de"],
-            "content_de": cd["content_de"] or "",
+            "title": title,
+            "content": content,
             "is_required": cd["is_required"],
             "accepted": pic.accepted if pic else False,
             "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
