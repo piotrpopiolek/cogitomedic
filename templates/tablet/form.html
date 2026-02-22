@@ -13,14 +13,23 @@
     <span class="tablet-form-connection-error-text"></span>
     <button type="button" id="tablet-form-retry-btn" class="retry-btn">{{ ui.msg_try_again }}</button>
   </div>
-  <p class="form-nav-lang" style="font-size:0.9rem; color:#666;">
-    <a href="{% url 'tablet:home' %}" class="btn secondary form-nav-back">{{ ui.back_to_waiting }}</a>
-    <span style="margin-left:0.5rem;">
-      {% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong> | <a href="?locale=pl">{{ ui.lang_pl }}</a>
-      {% elif locale_param == 'pl' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <a href="?locale=en">{{ ui.lang_en }}</a> | <strong>{{ ui.lang_pl }}</strong>
-      {% else %}<strong>{{ ui.lang_de }}</strong> | <a href="?locale=en">{{ ui.lang_en }}</a> | <a href="?locale=pl">{{ ui.lang_pl }}</a>{% endif %}
-    </span>
-  </p>
+  <div class="form-nav-lang-wrap">
+    <nav class="form-nav-lang" aria-label="Wybierz język">
+      {% if locale_param == 'en' %}
+        <a href="?locale=de" title="{{ ui.lang_de }}"><span class="form-lang-flag" aria-hidden="true">🇩🇪</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_en }}">🇬🇧</span>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}"><span class="form-lang-flag" aria-hidden="true">🇵🇱</span></a>
+      {% elif locale_param == 'pl' %}
+        <a href="?locale=de" title="{{ ui.lang_de }}"><span class="form-lang-flag" aria-hidden="true">🇩🇪</span></a>
+        <a href="?locale=en" title="{{ ui.lang_en }}"><span class="form-lang-flag" aria-hidden="true">🇬🇧</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_pl }}">🇵🇱</span>
+      {% else %}
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_de }}">🇩🇪</span>
+        <a href="?locale=en" title="{{ ui.lang_en }}"><span class="form-lang-flag" aria-hidden="true">🇬🇧</span></a>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}"><span class="form-lang-flag" aria-hidden="true">🇵🇱</span></a>
+      {% endif %}
+    </nav>
+  </div>
 
   <section>
     <h2>{{ ui.patient_data_title }}</h2>
@@ -124,7 +133,8 @@
       formId: "{{ intake_form_id|escapejs }}",
       apiBase: "/api/v1",
       schemaVersion: {{ anamnesis_schema_version }},
-      bodyMapSchemaVersion: {{ body_map_schema_version }}
+      bodyMapSchemaVersion: {{ body_map_schema_version }},
+      hasSignature: {% if has_signature %}true{% else %}false{% endif %}
     };
   </script>
   <script src="{% static 'tablet/js/form.js' %}"></script>
