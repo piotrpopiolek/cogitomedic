@@ -662,6 +662,8 @@
 
 ### 2.10 Dokumenty medyczne i workflow lekarza
 
+**Flow lekarza (Wideodermatoskop):** Numery zmian i zdjęcia pochodzą z Wideodermatoskopu. (1) Lekarz wpisuje numery zmian z urządzenia (np. 2, 3, 12, 13, 22, 25, 56). (2) Dla każdej **grupy** numerów lekarz podaje listę numerów w `lesion_numbers` (np. `[2, 13, 56]`), wypełnia **jeden wspólny opis** (cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości) oraz korzysta z tekstu generowanego i ewentualnie go edytuje (`generated_text` / `edited_text`). (3) Przykład: grupa 1 `lesion_numbers: [2, 13, 56]` → jeden opis; grupa 2 `lesion_numbers: [3, 12, 22, 25]` → drugi opis. (4) Reszta Befundu bez zmian: zakres badania, Fitzpatrick, ocena globalna, rekomendacje, ocena końcowa, zapis szkicu / publikacja. Schemat ciała nie jest używany w formularzu Befund. Do PDF trafia tekst końcowy (`edited_text` lub `generated_text`) per grupa.
+
 - **GET** `/medical-documents`
   - Opis: Lista robocza lekarza.
   - Parametry zapytania: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`.
@@ -729,12 +731,12 @@
         "overall_image_assessment": "CONTROL_NEEDED",
         "lesions": [
           {
-            "lesion_no": 8,
+            "lesion_numbers": [2, 3],
             "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
             "clinical_assessment": "CONTROL_NEEDED",
             "malignancy_risk": "NO_SUSPICION",
-            "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-            "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+            "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
+            "edited_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
           }
         ],
         "recommendations": ["FOLLOWUP_3_MONTHS"],
@@ -771,7 +773,7 @@
         "fitzpatrick_type": "TYPE_III",
         "lesions": [
           {
-            "lesion_no": 8,
+            "lesion_numbers": [2, 3],
             "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
             "clinical_assessment": "CONTROL_NEEDED",
             "malignancy_risk": "NO_SUSPICION"
@@ -789,8 +791,8 @@
       "edited_text_preserved": true,
       "lesions": [
         {
-          "lesion_no": 8,
-          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
+          "lesion_numbers": [2, 3],
+          "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
           "edited_text_unchanged": true
         }
       ],
@@ -1222,14 +1224,32 @@ Mapowanie kodów opcji dla Q1–Q11:
 
 ### 4.4 Kontrakt `medical_payload` v1 (Befund)
 
+- Wersja schematu: `medical_payload_schema_version: 1`.
 - `medical_payload` przechowuje dane ustrukturyzowane i teksty:
   - dane globalne (`fitzpatrick_type`, `overall_image_assessment`, `recommendations`, `final_assessment`),
-  - dane per zmiana (`lesions[]`),
-  - teksty wygenerowane i końcowe (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`).
+  - grupy zmian (`lesions[]`) – każda grupa ma listę numerów z Wideodermatoskopu i wspólny opis,
+  - teksty wygenerowane i końcowe (`generated_text`, `edited_text` per grupa; `summary_generated_text`, `summary_edited_text`).
 - Zapis tekstów odbywa się niezależnie od języka UI; `authoring_locale` wskazuje język roboczy lekarza.
 - Pola narracyjne są plain text i podlegają limitom długości oraz sanityzacji po stronie backendu.
 
-Minimalny przykład:
+**Struktura `lesions[]`** – każdy element:
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `lesion_numbers` | array of integer | tak | Numery zmian z Wideodermatoskopu w tej grupie opisu |
+| `dermatoscopic_features` | array of string | nie | Kody cech dermatoskopowych |
+| `clinical_assessment` | string | tak | Kod oceny kliniczno-dermatoskopowej |
+| `malignancy_risk` | string | tak | Kod ryzyka złośliwości |
+| `generated_text` | string | nie | Tekst wygenerowany przez system |
+| `edited_text` | string | nie | Tekst po edycji przez lekarza |
+
+**Walidacja `lesion_numbers`:**
+- Nie może być puste: `lesion_numbers.length >= 1`.
+- Brak duplikatów w jednej tablicy: po usunięciu duplikatów długość tablicy musi być taka sama (np. `[2, 3, 2]` → błąd).
+
+**Reguły walidacyjne (do implementacji):** Dla każdego elementu `lesions[]`: `lesion_numbers` niepuste i bez duplikatów; `clinical_assessment` i `malignancy_risk` z zdefiniowanych zestawów. Opcjonalnie: każdy numer z Wideodermatoskopu tylko w jednej grupie w obrębie całego `lesions` (unikalność globalna) – do decyzji produktu.
+
+Przykład:
 
 ```json
 {
@@ -1240,12 +1260,12 @@ Minimalny przykład:
     "overall_image_assessment": "CONTROL_NEEDED",
     "lesions": [
       {
-        "lesion_no": 8,
+        "lesion_numbers": [2, 3],
         "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
         "clinical_assessment": "CONTROL_NEEDED",
         "malignancy_risk": "NO_SUSPICION",
-        "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-        "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+        "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
+        "edited_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
       }
     ],
     "recommendations": ["FOLLOWUP_3_MONTHS"],

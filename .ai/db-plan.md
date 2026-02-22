@@ -567,26 +567,28 @@ Przykład:
 
 ### 5.2. Kontrakt `medical_payload` v1 (Befund lekarza)
 
+**Kontekst (Wideodermatoskop):** Numery zmian i zdjęcia pochodzą z Wideodermatoskopu. Lekarz wpisuje numery z urządzenia i grupuje je: jedna **grupa** = jedna lista `lesion_numbers` + jeden wspólny opis (cechy, ocena, ryzyko, tekst). Schemat ciała nie jest używany w formularzu Befund (służył pacjentowi do zaznaczania obszarów).
+
 #### Struktura logiczna
-- `schema_version`
+- `schema_version` (medical_payload_schema_version: 1)
 - `authoring_locale` (`de-DE`/`en-*`)
 - `examination_scope[]` (np. `INTIMATE_AREA_NOT_EXAMINED`, `ORAL_MUCOSA_NOT_EXAMINED`)
 - `fitzpatrick_type` (np. `TYPE_I`, `TYPE_II`, ..., `TYPE_VI`, `TYPE_II_III`, `UNDETERMINED`)
 - `overall_image_assessment` (`NO_CONTROL_NEEDED` | `CONTROL_NEEDED`)
-- `lesions[]` (lista zmian 1..N)
+- `lesions[]` (lista **grup** zmian – każda grupa ma wiele numerów z Wideodermatoskopu i jeden opis)
 - `recommendations[]`
 - `final_assessment`
 - `summary_generated_text`, `summary_edited_text`
 - `template_context` (np. `template_id`, `template_name`, `template_locale`)
 
 #### Struktura `lesions[]`
-Każdy element:
-- `lesion_no` (int)
-- `dermatoscopic_features[]` (np. `ASYMMETRY`, `IRREGULAR_BORDER`, `MULTICOLOR`)
-- `clinical_assessment` (`UNREMARKABLE`, `SLIGHTLY_ATYPICAL`, `CONTROL_NEEDED`, `SUSPICIOUS`)
-- `malignancy_risk` (`NO_SUSPICION`, `LOW_SUSPICION`, `CANNOT_EXCLUDE`)
-- `generated_text`
-- `edited_text`
+Każdy element (jedna grupa opisu):
+- `lesion_numbers` (array of int) — numery zmian z Wideodermatoskopu w tej grupie; **wymagane**, niepuste, bez duplikatów w tablicy
+- `dermatoscopic_features[]` (np. `ASYMMETRY`, `IRREGULAR_BORDER`, `MULTICOLOR`) — opcjonalne
+- `clinical_assessment` (`UNREMARKABLE`, `SLIGHTLY_ATYPICAL`, `CONTROL_NEEDED`, `SUSPICIOUS`) — **wymagane**
+- `malignancy_risk` (`NO_SUSPICION`, `LOW_SUSPICION`, `CANNOT_EXCLUDE`) — **wymagane**
+- `generated_text` — opcjonalne
+- `edited_text` — opcjonalne
 
 #### Pełna tabela kodów enum (Befund v1)
 
@@ -652,12 +654,12 @@ Przykład:
   "overall_image_assessment": "CONTROL_NEEDED",
   "lesions": [
     {
-      "lesion_no": 8,
+      "lesion_numbers": [2, 3],
       "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
       "clinical_assessment": "CONTROL_NEEDED",
       "malignancy_risk": "NO_SUSPICION",
-      "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-      "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+      "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
+      "edited_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
     }
   ],
   "recommendations": ["FOLLOWUP_3_MONTHS"],
@@ -674,6 +676,10 @@ Przykład:
 
 #### Reguły walidacyjne v1
 - `lesions[]` może być puste tylko gdy `overall_image_assessment=NO_CONTROL_NEEDED`.
-- Dla każdej zmiany wymagane są: `lesion_no`, `clinical_assessment`, `malignancy_risk`.
+- Dla każdego elementu `lesions[]` wymagane są: `lesion_numbers` (niepuste, `length >= 1`), `clinical_assessment`, `malignancy_risk`.
+- **`lesion_numbers`:** nie może być puste; w jednej tablicy brak duplikatów (po usunięciu duplikatów długość musi być taka sama; np. `[2, 3, 2]` → błąd).
+- **`clinical_assessment`:** dozwolone wartości: `UNREMARKABLE`, `SLIGHTLY_ATYPICAL`, `CONTROL_NEEDED`, `SUSPICIOUS`.
+- **`malignancy_risk`:** dozwolone wartości: `NO_SUSPICION`, `LOW_SUSPICION`, `CANNOT_EXCLUDE`.
+- Opcjonalnie (do decyzji produktu): każdy numer z Wideodermatoskopu tylko w jednej grupie w obrębie całego `lesions` (unikalność globalna).
 - `summary_edited_text` jest opcjonalne, ale jeśli puste, do PDF trafia `summary_generated_text`.
-- Do PDF trafia zawsze tekst końcowy (`edited_text` jeśli istnieje, inaczej `generated_text`).
+- Do PDF trafia zawsze tekst końcowy per grupa (`edited_text` jeśli istnieje, inaczej `generated_text`).

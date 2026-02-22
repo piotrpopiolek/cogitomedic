@@ -662,6 +662,8 @@
 
 ### 2.10 Medical documents and doctor workflow
 
+**Doctor flow (Wideodermatoskop):** Lesion numbers and images come from the Wideodermatoskop device. (1) The doctor enters lesion numbers from the device (e.g. 2, 3, 12, 13, 22, 25, 56). (2) For each **group** of numbers the doctor provides the list in `lesion_numbers` (e.g. `[2, 13, 56]`), fills in **one shared description** (dermatoscopic features, clinical assessment, malignancy risk) and uses generated text, optionally editing it (`generated_text` / `edited_text`). (3) Example: group 1 `lesion_numbers: [2, 13, 56]` → one description; group 2 `lesion_numbers: [3, 12, 22, 25]` → second description. (4) Rest of Befund unchanged: examination scope, Fitzpatrick, global assessment, recommendations, final assessment, draft save / publish. Body schema is not used in the Befund form. The final text (`edited_text` or `generated_text`) per group goes to PDF.
+
 - **GET** `/medical-documents`
   - Description: List doctor work queue.
   - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`.
@@ -729,12 +731,12 @@
         "overall_image_assessment": "CONTROL_NEEDED",
         "lesions": [
           {
-            "lesion_no": 8,
+            "lesion_numbers": [2, 3],
             "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
             "clinical_assessment": "CONTROL_NEEDED",
             "malignancy_risk": "NO_SUSPICION",
-            "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-            "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+            "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
+            "edited_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
           }
         ],
         "recommendations": ["FOLLOWUP_3_MONTHS"],
@@ -767,7 +769,7 @@
         "fitzpatrick_type": "TYPE_III",
         "lesions": [
           {
-            "lesion_no": 8,
+            "lesion_numbers": [2, 3],
             "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
             "clinical_assessment": "CONTROL_NEEDED",
             "malignancy_risk": "NO_SUSPICION"
@@ -784,8 +786,8 @@
       "generated": true,
       "lesions": [
         {
-          "lesion_no": 8,
-          "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+          "lesion_numbers": [2, 3],
+          "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
         }
       ],
       "summary_generated_text": "Bei der Analyse der digitalen dermatoskopischen Aufnahmen ..."
@@ -1203,13 +1205,31 @@ Option code mapping for Q1–Q11:
 
 ### 4.4 `medical_payload` v1 contract (Doctor Befund)
 
+- Schema version: `medical_payload_schema_version: 1`.
 - `medical_payload` stores both structured and narrative outputs:
   - global selections (`fitzpatrick_type`, `overall_image_assessment`, `recommendations`, `final_assessment`),
-  - per-lesion selections (`lesions[]`),
-  - generated and final text (`generated_text`, `edited_text`, `summary_generated_text`, `summary_edited_text`).
+  - lesion groups (`lesions[]`) – each group has a list of Wideodermatoskop numbers and one shared description,
+  - generated and final text (`generated_text`, `edited_text` per group; `summary_generated_text`, `summary_edited_text`).
 - Text persistence is language-agnostic; `authoring_locale` records the doctor's working language.
 
-Minimal example:
+**`lesions[]` element structure:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lesion_numbers` | array of integer | yes | Lesion numbers from Wideodermatoskop in this description group |
+| `dermatoscopic_features` | array of string | no | Dermatoscopic feature codes |
+| `clinical_assessment` | string | yes | Clinical-dermatoscopic assessment code |
+| `malignancy_risk` | string | yes | Malignancy risk code |
+| `generated_text` | string | no | System-generated text |
+| `edited_text` | string | no | Text after doctor edit |
+
+**`lesion_numbers` validation:**
+- Must not be empty: `lesion_numbers.length >= 1`.
+- No duplicates within the array: after removing duplicates the array length must be unchanged (e.g. `[2, 3, 2]` → error).
+
+**Validation rules (for implementation):** For each `lesions[]` element: `lesion_numbers` non-empty and no duplicates; `clinical_assessment` and `malignancy_risk` from defined value sets. Optionally: each Wideodermatoskop number appears in only one group across the whole `lesions` array (global uniqueness) – product decision.
+
+Example:
 
 ```json
 {
@@ -1220,12 +1240,12 @@ Minimal example:
     "overall_image_assessment": "CONTROL_NEEDED",
     "lesions": [
       {
-        "lesion_no": 8,
+        "lesion_numbers": [2, 3],
         "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
         "clinical_assessment": "CONTROL_NEEDED",
         "malignancy_risk": "NO_SUSPICION",
-        "generated_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ...",
-        "edited_text": "Läsion Nr. 8 zeigt dermatoskopisch Asymmetrie ..."
+        "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ...",
+        "edited_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
       }
     ],
     "recommendations": ["FOLLOWUP_3_MONTHS"],
