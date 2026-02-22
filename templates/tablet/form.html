@@ -14,7 +14,7 @@
     <button type="button" id="tablet-form-retry-btn" class="retry-btn">{{ ui.msg_try_again }}</button>
   </div>
   <p class="form-nav-lang" style="font-size:0.9rem; color:#666;">
-    <a href="{% url 'tablet:home' %}" class="btn secondary">{{ ui.back_to_waiting }}</a>
+    <a href="{% url 'tablet:home' %}" class="btn secondary form-nav-back">{{ ui.back_to_waiting }}</a>
     <span style="margin-left:0.5rem;">
       {% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong> | <a href="?locale=pl">{{ ui.lang_pl }}</a>
       {% elif locale_param == 'pl' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <a href="?locale=en">{{ ui.lang_en }}</a> | <strong>{{ ui.lang_pl }}</strong>
@@ -69,6 +69,7 @@
       <img src="{% static 'tablet/body.jpg' %}" alt="{{ ui.body_map_alt }}" id="body-map-img" />
       <div id="body-map-markers"></div>
     </div>
+    <button type="button" id="body-map-undo-last" class="btn secondary">{{ ui.body_map_undo_last }}</button>
     <button type="button" id="save-body-map">{{ ui.save_body_map }}</button>
     </section>
     <section id="anamnesis-section">
