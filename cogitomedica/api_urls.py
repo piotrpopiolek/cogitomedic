@@ -12,6 +12,7 @@ from apps.intake.api_views import (
 from apps.medical.api_views import (
     doctor_text_template_detail_view,
     doctor_text_templates_view,
+    medical_document_detail_view,
     medical_document_draft_view,
     medical_document_publish_view,
     medical_documents_view,
@@ -120,6 +121,11 @@ urlpatterns = [
         "medical-documents",
         medical_documents_view,
         name="medical-documents",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>",
+        medical_document_detail_view,
+        name="medical-document-detail",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/draft",

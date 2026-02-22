@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from json import JSONDecodeError
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -18,15 +19,48 @@ from apps.medical.api_schemas import (
     PublishMedicalDocumentRequest,
     SaveDraftMedicalDocumentRequest,
 )
-from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.medical.services import (
+    create_or_get_medical_document,
+    get_medical_document_context,
+    list_medical_documents,
+    publish_document_version,
+    save_draft_document_version,
+)
 from apps.medical.template_services import (
     TemplateListFilters,
     TemplateNotFoundError,
     TemplatePermissionError,
     create_template,
+    get_template,
     list_templates,
     update_template,
 )
+
+
+def _serialize_medical_document_list_item(doc) -> dict:
+    """Serialize one medical document for list response; doc has prefetched versions (ordered -version_no)."""
+    versions = list(doc.versions.all())
+    latest = versions[0] if versions else None
+    patient = doc.queue_entry.patient
+    queue = doc.queue_entry.daily_queue
+    return {
+        "id": str(doc.id),
+        "queue_entry_id": str(doc.queue_entry_id),
+        "status": doc.status,
+        "current_version_no": doc.current_version_no,
+        "last_published_at": doc.last_published_at.isoformat() if doc.last_published_at else None,
+        "queue_date": queue.queue_date.isoformat(),
+        "patient": {
+            "id": str(patient.id),
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "date_of_birth": patient.date_of_birth.isoformat(),
+        },
+        "pdf_generation_status": latest.pdf_generation_status if latest else None,
+        "hidrive_sent": latest.hidrive_sent if latest else False,
+        "sms_sent": latest.sms_sent if latest else False,
+    }
+
 
 @require_auth
 @csrf_exempt
@@ -34,33 +68,78 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
-    if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
-    try:
-        body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
-    except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
-    except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    if request.method == "GET":
+        status = request.GET.get("status") or None
+        queue_date = None
+        if request.GET.get("queue_date"):
+            try:
+                queue_date = datetime.strptime(request.GET.get("queue_date", ""), "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        patient_search = request.GET.get("patient_search") or None
+        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+        items, total = list_medical_documents(
+            status=status,
+            queue_date=queue_date,
+            patient_search=patient_search,
+            page=page,
+            page_size=page_size,
+        )
+        return JsonResponse(
+            {
+                "items": [_serialize_medical_document_list_item(d) for d in items],
+                "pagination": {"page": page, "page_size": page_size, "total": total},
+            },
+            status=200,
+        )
+    if request.method == "POST":
+        try:
+            body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
+        except JSONDecodeError:
+            return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
+        try:
+            document = create_or_get_medical_document(
+                queue_entry_id=body.queue_entry_id,
+                intake_form_id=body.intake_form_id,
+                created_by_user_id=request.user.id,
+            )
+        except ObjectDoesNotExist:
+            return json_error("Queue entry or intake form not found.", status=404)
+        return JsonResponse(
+            {
+                "medical_document_id": str(document.id),
+                "queue_entry_id": str(document.queue_entry_id),
+                "status": document.status,
+            },
+            status=201,
+        )
+    return json_error("Method not allowed.", status=405)
+
+
+@require_auth
+@csrf_exempt
+def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    """GET full document context: intake summary + current version (for doctor panel)."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+    form_locale = (request.GET.get("form_locale") or "de-DE")[:10]
     try:
-        document = create_or_get_medical_document(
-            queue_entry_id=body.queue_entry_id,
-            intake_form_id=body.intake_form_id,
-            created_by_user_id=request.user.id,
+        context = get_medical_document_context(
+            medical_document_id=medical_document_id,
+            form_locale=form_locale,
         )
     except ObjectDoesNotExist:
-        return json_error("Queue entry or intake form not found.", status=404)
-    return JsonResponse(
-        {
-            "medical_document_id": str(document.id),
-            "queue_entry_id": str(document.queue_entry_id),
-            "status": document.status,
-        },
-        status=201,
-    )
+        return json_error("Medical document not found.", status=404)
+    return JsonResponse(context, status=200)
 
 
 @require_auth
@@ -240,6 +319,23 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
+    if request.method == "GET":
+        try:
+            template = get_template(template_id=template_id, actor_user_id=request.user.id)
+        except TemplateNotFoundError:
+            return json_error("Template not found.", status=404)
+        return JsonResponse(
+            {
+                "id": str(template.id),
+                "name": template.name,
+                "template_locale": template.template_locale,
+                "template_body": template.template_body,
+                "is_global": template.is_global,
+                "is_active": template.is_active,
+                "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
+            },
+            status=200,
+        )
     if request.method != "PATCH":
         return json_error("Method not allowed.", status=405)
 

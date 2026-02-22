@@ -41,6 +41,20 @@ def list_templates(*, filters: TemplateListFilters) -> list[DoctorTextTemplate]:
     return list(queryset)
 
 
+def get_template(*, template_id: uuid.UUID, actor_user_id: uuid.UUID) -> DoctorTextTemplate:
+    """Return a single template by id if it exists and actor is allowed to see it. Raises TemplateNotFoundError."""
+    actor = _get_actor(actor_user_id)
+    try:
+        template = DoctorTextTemplate.objects.get(id=template_id)
+    except DoctorTextTemplate.DoesNotExist as exc:
+        raise TemplateNotFoundError("Template not found.") from exc
+
+    if actor.role != StaffRole.ADMIN:
+        if not template.is_global and template.owner_user_id != actor.id:
+            raise TemplateNotFoundError("Template not found.")
+    return template
+
+
 def create_template(
     *,
     actor_user_id: uuid.UUID,

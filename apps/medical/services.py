@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
 from apps.core.exceptions import IdempotencyConflictError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
+from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -249,3 +251,119 @@ def publish_document_version(
         },
     )
     return draft_version
+
+
+def list_medical_documents(
+    *,
+    status: str | None = None,
+    queue_date: date | None = None,
+    patient_search: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[MedicalDocument], int]:
+    """
+    List medical documents for doctor work queue.
+    Returns (list of documents with prefetched latest version, total count).
+    """
+    qs = (
+        MedicalDocument.objects.select_related(
+            "queue_entry",
+            "queue_entry__patient",
+            "queue_entry__daily_queue",
+        )
+        .prefetch_related(
+            Prefetch(
+                "versions",
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+            )
+        )
+        .order_by("-updated_at")
+    )
+    if status:
+        qs = qs.filter(status=status)
+    if queue_date is not None:
+        qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
+    if patient_search and patient_search.strip():
+        term = patient_search.strip()
+        qs = qs.filter(
+            Q(queue_entry__patient__last_name__icontains=term)
+            | Q(queue_entry__patient__first_name__icontains=term)
+        )
+    total = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    items = list(qs[start:end])
+    return items, total
+
+
+def get_medical_document_context(
+    *,
+    medical_document_id: uuid.UUID,
+    form_locale: str = "de-DE",
+) -> dict[str, Any]:
+    """
+    Build full context for doctor view: document, intake summary, current (latest) version.
+    Raises ObjectDoesNotExist if document not found.
+    """
+    doc = (
+        MedicalDocument.objects.select_related(
+            "queue_entry",
+            "queue_entry__patient",
+            "queue_entry__daily_queue",
+            "intake_form",
+        )
+        .prefetch_related(
+            Prefetch(
+                "versions",
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+            )
+        )
+        .get(id=medical_document_id)
+    )
+    latest_version = doc.versions.all()[:1]
+    current_version = latest_version[0] if latest_version else None
+
+    intake_context = get_intake_form_context(
+        intake_form_id=doc.intake_form_id,
+        form_locale=form_locale,
+        tablet_restrict_to_today=False,
+    )
+    intake_summary = {
+        "consents": intake_context.get("consents", []),
+        "body_map_data": intake_context.get("body_map_data", []),
+        "anamnesis_answers": [
+            {
+                "question_code": q.get("question_code"),
+                "selected_option_codes": (q.get("answer") or {}).get("selected_option_codes") or [],
+                "free_text": (q.get("answer") or {}).get("free_text"),
+            }
+            for q in intake_context.get("anamnesis_questions", [])
+        ],
+        "patient": intake_context.get("patient"),
+    }
+
+    current_version_payload: dict[str, Any] | None = None
+    if current_version:
+        current_version_payload = {
+            "version_no": current_version.version_no,
+            "version_status": current_version.version_status,
+            "medical_payload_schema_version": current_version.medical_payload_schema_version,
+            "medical_payload": current_version.medical_payload,
+            "diagnosis_code": current_version.diagnosis_code,
+            "procedure_code": current_version.procedure_code,
+            "pdf_generation_status": current_version.pdf_generation_status,
+            "hidrive_sent": current_version.hidrive_sent,
+            "sms_sent": current_version.sms_sent,
+            "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
+        }
+
+    return {
+        "id": str(doc.id),
+        "queue_entry_id": str(doc.queue_entry_id),
+        "intake_form_id": str(doc.intake_form_id),
+        "status": doc.status,
+        "current_version_no": doc.current_version_no,
+        "last_published_at": doc.last_published_at.isoformat() if doc.last_published_at else None,
+        "intake_summary": intake_summary,
+        "current_version": current_version_payload,
+    }
