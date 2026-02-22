@@ -222,7 +222,7 @@ def mark_tablet_heartbeat(*, tablet_device_id: uuid.UUID) -> TabletDevice:
 
 def _is_supported_locale(locale: str) -> bool:
     normalized = locale.strip().lower()
-    return normalized in {"de", "de-de", "en", "en-gb", "en-us"}
+    return normalized in {"de", "de-de", "en", "en-gb", "en-us", "pl", "pl-pl"}
 
 
 def _build_patient_identity_alert_window() -> tuple[timezone.datetime, timezone.datetime]:

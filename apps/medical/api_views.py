@@ -6,7 +6,6 @@ from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
@@ -67,7 +66,6 @@ def _serialize_medical_document_list_item(doc) -> dict:
 
 
 @require_auth
-@csrf_exempt
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -115,6 +113,8 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             )
         except ObjectDoesNotExist:
             return json_error("Queue entry or intake form not found.", status=404)
+        except DomainError as exc:
+            return json_error(str(exc), status=400)
         return JsonResponse(
             {
                 "medical_document_id": str(document.id),
@@ -127,7 +127,6 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     """GET full document context: intake summary + current version (for doctor panel)."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
@@ -147,7 +146,6 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
 
 
 @require_auth
-@csrf_exempt
 def medical_document_generate_text_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     """POST: generate Befund text from medical_payload (per lesion + summary). Does not save to DB."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
@@ -207,7 +205,6 @@ def medical_document_generate_text_view(request: HttpRequest, medical_document_i
 
 
 @require_auth
-@csrf_exempt
 def medical_document_versions_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     """GET: list versions of a medical document."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
@@ -249,7 +246,6 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
 
 
 @require_auth
-@csrf_exempt
 def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -301,7 +297,6 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
 
 
 @require_auth
-@csrf_exempt
 def medical_document_publish_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -341,7 +336,6 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
 
 
 @require_auth
-@csrf_exempt
 def medical_document_version_detail_view(request: HttpRequest, version_id: UUID) -> JsonResponse:
     """GET: single medical document version by id (MedicalDocumentVersion.id)."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
@@ -377,7 +371,6 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
 
 
 @require_auth
-@csrf_exempt
 def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -465,7 +458,6 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:

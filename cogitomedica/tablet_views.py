@@ -12,6 +12,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.intake.models import PatientIntakeForm
@@ -41,7 +42,10 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
             android_id = (request.POST.get("android_id") or "").strip()
             if android_id:
                 get_or_create_tablet_device_by_android_id(android_id=android_id)
-            return redirect(request.GET.get("next") or "tablet:home")
+            next_url = (request.GET.get("next") or "").strip()
+            if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
+                next_url = ""
+            return redirect(next_url or "tablet:home")
         return render(request, "tablet/login.html", {"error": "Nieprawidłowy login lub brak uprawnień tabletu."})
     return render(request, "tablet/login.html", {})
 

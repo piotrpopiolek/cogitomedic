@@ -7,7 +7,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -41,7 +40,6 @@ def _serialize_tablet_device(device: TabletDevice) -> dict:
 
 
 @require_auth
-@csrf_exempt
 def tablet_devices_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -78,7 +76,6 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -122,7 +119,6 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
 
 
 @require_auth
-@csrf_exempt
 def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
