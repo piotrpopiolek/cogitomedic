@@ -33,14 +33,24 @@ FinalAssessmentCode = Literal["NO_HIGH_GRADE_SUSPICION", "HIGH_GRADE_CANNOT_BE_E
 
 
 class MedicalPayloadLesionV1(BaseModel):
+    """
+    One lesion group: lesion_numbers from Wideodermatoskop + one shared description.
+    lesion_numbers must be non-empty and contain no duplicates.
+    """
     model_config = ConfigDict(extra="allow")
 
-    lesion_no: int = Field(..., ge=1)
+    lesion_numbers: list[int] = Field(..., min_length=1, description="Wideodermatoskop lesion numbers in this group")
     dermatoscopic_features: list[DermatoscopicFeatureCode] = Field(default_factory=list)
     clinical_assessment: ClinicalAssessmentCode
     malignancy_risk: MalignancyRiskCode
     generated_text: str | None = None
     edited_text: str | None = None
+
+    @model_validator(mode="after")
+    def no_duplicate_lesion_numbers(self) -> "MedicalPayloadLesionV1":
+        if len(self.lesion_numbers) != len(set(self.lesion_numbers)):
+            raise ValueError("lesion_numbers must not contain duplicates")
+        return self
 
 
 class MedicalPayloadTemplateContextV1(BaseModel):
