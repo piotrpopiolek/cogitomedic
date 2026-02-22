@@ -13,10 +13,15 @@ from apps.intake.models import (
 
 @admin.register(ConsentDefinition)
 class ConsentDefinitionAdmin(admin.ModelAdmin):
-    list_display = ("code", "version", "title_de", "is_required", "is_active", "display_order", "effective_from", "created_at")
+    list_display = ("code", "version", "title_de", "title_en", "is_required", "is_active", "display_order", "effective_from", "created_at")
     list_filter = ("is_required", "is_active")
-    search_fields = ("code", "title_de")
+    search_fields = ("code", "title_de", "title_en")
     ordering = ("code", "version")
+    fieldsets = (
+        (None, {"fields": ("code", "version", "is_required", "is_active", "display_order", "effective_from", "effective_to")}),
+        ("Deutsch", {"fields": ("title_de", "content_de")}),
+        ("English", {"fields": ("title_en", "content_en")}),
+    )
 
 
 @admin.register(AnamnesisQuestionDefinition)

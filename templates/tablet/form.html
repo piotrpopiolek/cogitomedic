@@ -56,8 +56,8 @@
       <div id="consents-msg" class="error" style="display:none;"></div>
       {% for c in consents %}
       <div class="consent-block">
-        <h3>{{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
-        <div class="consent-content">{{ c.content_de }}</div>
+        <h3>{{ c.title }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
+        <div class="consent-content">{{ c.content }}</div>
         <label class="consent-check">
           <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" data-required="{{ c.is_required|yesno:'true,false' }}" {% if c.accepted %}checked{% endif %}>
           {{ ui.consent_confirm }}
