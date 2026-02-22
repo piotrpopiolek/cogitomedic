@@ -67,3 +67,13 @@ class DoctorTemplateUpdateRequest(BaseModel):
     template_locale: str | None = Field(default=None, min_length=2, max_length=10)
     template_body: str | None = Field(default=None, min_length=1)
     is_active: bool | None = None
+
+
+class GenerateTextRequest(BaseModel):
+    """Request for POST /medical-documents/{id}/generate-text. Payload with lesions and options."""
+    model_config = ConfigDict(extra="allow")
+
+    medical_payload_schema_version: int = Field(ge=1)
+    authoring_locale: str = Field(default="de-DE", min_length=2, max_length=10)
+    template_id: UUID | None = None
+    medical_payload: dict = Field(default_factory=dict)
