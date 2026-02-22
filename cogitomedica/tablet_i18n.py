@@ -42,6 +42,8 @@ FORM_UI_DE = {
     "step_next": "Weiter",
     "step_back": "Zurück",
     "step_save_and_next": "Speichern und weiter",
+    "validation_consents_required": "Bitte akzeptieren Sie alle erforderlichen Einwilligungen (mit * markiert).",
+    "validation_anamnesis_required": "Bitte beantworten Sie alle Pflichtfragen (mit * markiert).",
 }
 
 FORM_UI_EN = {
@@ -83,6 +85,8 @@ FORM_UI_EN = {
     "step_next": "Next",
     "step_back": "Back",
     "step_save_and_next": "Save and continue",
+    "validation_consents_required": "Please accept all required consents (marked with *).",
+    "validation_anamnesis_required": "Please answer all required questions (marked with *).",
 }
 
 

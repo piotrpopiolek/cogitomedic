@@ -59,7 +59,7 @@
         <h3>{{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
         <div class="consent-content">{{ c.content_de }}</div>
         <label class="consent-check">
-          <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
+          <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" data-required="{{ c.is_required|yesno:'true,false' }}" {% if c.accepted %}checked{% endif %}>
           {{ ui.consent_confirm }}
         </label>
       </div>
@@ -204,8 +204,16 @@
 
       renderBodyMapMarkers();
 
-      // Step 1: Consents – Speichern und weiter
+      // Step 1: Consents – walidacja wymaganych, potem Speichern und weiter
       document.getElementById('btn-step1-next').addEventListener('click', function() {
+        const requiredConsents = document.querySelectorAll('#consents-section input[name="consent"][data-required="true"]');
+        let allChecked = true;
+        requiredConsents.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+        if (!allChecked) {
+          showMsg('consents-msg', formUi.validation_consents_required || 'Bitte alle Pflichtfelder ausfüllen.', true);
+          return;
+        }
+        showMsg('consents-msg', '', false);
         const consents = [];
         document.querySelectorAll('input[name="consent"]').forEach(function(cb) {
           consents.push({ consent_definition_id: cb.dataset.id, accepted: cb.checked });
@@ -223,10 +231,24 @@
       document.getElementById('btn-step2-back').addEventListener('click', function() { goToStep(1); });
       document.getElementById('btn-step3-back').addEventListener('click', function() { goToStep(2); });
 
-      // Step 2: Body map + Anamnesis – Speichern und weiter
+      // Step 2: Body map + Anamnesis – walidacja wymaganych pytań, potem Speichern und weiter
+      function isAnamnesisRequiredAnswered(block) {
+        const radios = block.querySelectorAll('input[type="radio"]:checked');
+        const checks = block.querySelectorAll('input[type="checkbox"]:checked');
+        return radios.length > 0 || checks.length > 0;
+      }
       document.getElementById('btn-step2-next').addEventListener('click', function() {
         showMsg('body-map-msg', '', false);
         showMsg('anamnesis-msg', '', false);
+        const requiredQuestions = document.querySelectorAll('#anamnesis-section .field[data-required="true"]');
+        let allAnswered = true;
+        requiredQuestions.forEach(function(block) {
+          if (!isAnamnesisRequiredAnswered(block)) allAnswered = false;
+        });
+        if (!allAnswered) {
+          showMsg('anamnesis-msg', formUi.validation_anamnesis_required || 'Bitte alle Pflichtfragen beantworten.', true);
+          return;
+        }
         const bodyMapPromise = api('PATCH', '/intake-forms/' + formId, {
           body_map_schema_version: bodyMapSchemaVersion,
           body_map_data: bodyMapPoints
