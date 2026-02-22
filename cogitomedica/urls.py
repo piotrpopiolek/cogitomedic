@@ -24,6 +24,7 @@ from cogitomedica.openapi_extension import cogito_openapi_schema_view
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
+    path("doctor/", include("cogitomedica.doctor_urls")),
     path("api/schema/", cogito_openapi_schema_view, name="api-schema"),
     path("api/docs/", lambda request: redirect("api-swagger", permanent=False)),
     path("api/docs/swagger/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-swagger"),

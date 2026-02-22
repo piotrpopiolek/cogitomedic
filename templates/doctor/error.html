@@ -1,0 +1,6 @@
+{% extends "doctor/base.html" %}
+{% block title %}Fehler{% endblock %}
+{% block content %}
+<div class="alert alert-danger">{{ message }}</div>
+<a href="{% url 'doctor-list' %}" class="btn btn-primary">Zurück zur Liste</a>
+{% endblock %}

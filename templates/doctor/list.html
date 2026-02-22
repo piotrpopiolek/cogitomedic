@@ -1,0 +1,62 @@
+{% extends "doctor/base.html" %}
+{% block title %}Dokumente – Work Queue{% endblock %}
+{% block content %}
+<h1 class="h4 mb-4">Medizinische Dokumente (Work Queue)</h1>
+
+<form method="get" class="row g-3 mb-4">
+  <div class="col-auto">
+    <label class="form-label">Status</label>
+    <select name="status" class="form-select form-select-sm">
+      <option value="">– alle –</option>
+      <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>Entwurf</option>
+      <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>Veröffentlicht</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Datum</label>
+    <input type="date" name="queue_date" class="form-control form-control-sm" value="{{ filters.queue_date }}" />
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Patient (Name)</label>
+    <input type="text" name="patient_search" class="form-control form-control-sm" placeholder="Suche…" value="{{ filters.patient_search }}" />
+  </div>
+  <div class="col-auto d-flex align-items-end">
+    <button type="submit" class="btn btn-primary btn-sm">Filtern</button>
+  </div>
+</form>
+
+<table class="table table-sm table-hover">
+  <thead>
+    <tr>
+      <th>Patient</th>
+      <th>Datum</th>
+      <th>Status</th>
+      <th>PDF</th>
+      <th>HiDrive</th>
+      <th>SMS</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.patient.last_name }}, {{ item.patient.first_name }}</td>
+      <td>{{ item.queue_date }}</td>
+      <td><span class="badge status-badge {% if item.status == 'PUBLISHED' %}bg-success{% else %}bg-secondary{% endif %}">{{ item.status }}</span></td>
+      <td>{% if item.pdf_generation_status %}<span class="badge status-badge {% if item.pdf_generation_status == 'COMPLETED' %}bg-success{% elif item.pdf_generation_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
+      <td>{% if item.hidrive_sent %}✓{% else %}–{% endif %}</td>
+      <td>{% if item.sms_sent %}✓{% else %}–{% endif %}</td>
+      <td><a href="{% url 'doctor-document-detail' item.id %}" class="btn btn-outline-primary btn-sm">Öffnen</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="text-muted">Keine Dokumente.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if pagination.total > 0 %}
+<nav>
+  <p class="small text-muted">Seite {{ pagination.page }}, {{ pagination.total }} Einträge gesamt.</p>
+</nav>
+{% endif %}
+{% endblock %}
