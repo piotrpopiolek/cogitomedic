@@ -1,10 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="{{ locale_param|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Formularz intake – {{ patient.last_name }}</title>
+  <title>{% if locale_param == 'en' %}Intake form – {{ patient.last_name }}{% else %}Formularz intake – {{ patient.last_name }}{% endif %}</title>
   <style>
     body { font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 1rem; }
     section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
@@ -31,18 +31,21 @@
 </head>
 <body>
   {% csrf_token %}
-  <p style="font-size:0.9rem; color:#666;"><a href="{% url 'tablet:home' %}" class="btn secondary">← Poczekalnia</a></p>
+  <p style="font-size:0.9rem; color:#666;">
+    <a href="{% url 'tablet:home' %}" class="btn secondary">{{ ui.back_to_waiting }}</a>
+    <span style="margin-left:0.5rem;">{% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong>{% else %}<strong>{{ ui.lang_de }}</strong> | <a href="?locale=en">{{ ui.lang_en }}</a>{% endif %}</span>
+  </p>
 
   <section>
-    <h2>Dane pacjenta (do weryfikacji)</h2>
+    <h2>{{ ui.patient_data_title }}</h2>
     <div class="field"><strong>{{ patient.last_name }} {{ patient.first_name }}</strong></div>
-    <div class="field">Data urodzenia: {{ patient.date_of_birth }}</div>
-    <div class="field">Telefon: {{ patient.phone }}</div>
-    <div class="field">E-mail: {{ patient.email }}</div>
+    <div class="field">{{ ui.date_of_birth }} {{ patient.date_of_birth }}</div>
+    <div class="field">{{ ui.phone }} {{ patient.phone }}</div>
+    <div class="field">{{ ui.email }} {{ patient.email }}</div>
   </section>
 
   <section id="consents-section">
-    <h2>Zgody</h2>
+    <h2>{{ ui.consents_title }}</h2>
     <div id="consents-msg" class="error" style="display:none;"></div>
     {% for c in consents %}
     <div class="consent-block">
@@ -50,27 +53,28 @@
       <div class="consent-content">{{ c.content_de }}</div>
       <label class="consent-check">
         <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
-        Ich bestätige / Zgadzam się
+        {{ ui.consent_confirm }}
       </label>
     </div>
     {% endfor %}
-    <button type="button" id="save-consents">Zapisz zgody</button>
+    <button type="button" id="save-consents">{{ ui.save_consents }}</button>
   </section>
 
   <section id="body-map-section">
-    <h2>Schemat ciała</h2>
-    <p style="font-size:0.9rem; color:#666;">Kliknij na rysunku, aby zaznaczyć lokalizację zmian (np. znamion). Lewa połowa – przód, prawa – tył.</p>
+    <h2>{{ ui.body_map_title }}</h2>
+    <p style="font-size:0.9rem; color:#666;">{{ ui.body_map_hint }}</p>
     <div id="body-map-msg" class="error" style="display:none;"></div>
     <div class="body-map-wrap" id="body-map-wrap">
-      <img src="{% static 'tablet/body.jpg' %}" alt="Schemat ciała – przód i tył" id="body-map-img" />
+      <img src="{% static 'tablet/body.jpg' %}" alt="{{ ui.body_map_alt }}" id="body-map-img" />
       <div id="body-map-markers"></div>
     </div>
-    <button type="button" id="save-body-map">Zapisz schemat</button>
+    <button type="button" id="save-body-map">{{ ui.save_body_map }}</button>
   </section>
   {{ body_map_data|json_script:"body-map-initial" }}
+  {{ ui|json_script:"form-ui" }}
 
   <section id="anamnesis-section">
-    <h2>Anamneza</h2>
+    <h2>{{ ui.anamnesis_title }}</h2>
     <div id="anamnesis-msg" class="error" style="display:none;"></div>
     {% for q in anamnesis_questions %}
     <div class="field" data-question-code="{{ q.question_code }}" data-required="{{ q.is_required|yesno:'true,false' }}">
@@ -84,24 +88,24 @@
         <label><input type="checkbox" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
         {% endfor %}
       {% endif %}
-      <label>Uwagi: <input type="text" name="q-text-{{ q.question_code }}" placeholder="Opcjonalnie" value="{{ q.answer.free_text|default:'' }}"></label>
+      <label>{{ ui.notes }} <input type="text" name="q-text-{{ q.question_code }}" placeholder="{{ ui.notes_placeholder }}" value="{{ q.answer.free_text|default:'' }}"></label>
     </div>
     {% endfor %}
-    <button type="button" id="save-anamnesis">Zapisz anamnezę</button>
+    <button type="button" id="save-anamnesis">{{ ui.save_anamnesis }}</button>
   </section>
 
   <section id="signature-section">
-    <h2>Podpis</h2>
+    <h2>{{ ui.signature_title }}</h2>
     <div id="signature-msg" class="error" style="display:none;"></div>
     <canvas id="signatureCanvas"></canvas>
-    <button type="button" id="clear-signature">Wyczyść</button>
-    <button type="button" id="save-signature">Zapisz podpis</button>
-    <span id="signature-saved" class="success" style="display:none;">Podpis zapisany.</span>
+    <button type="button" id="clear-signature">{{ ui.clear }}</button>
+    <button type="button" id="save-signature">{{ ui.save_signature }}</button>
+    <span id="signature-saved" class="success" style="display:none;">{{ ui.signature_saved }}</span>
   </section>
 
   <section>
     <div id="submit-msg" class="error" style="display:none;"></div>
-    <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>Zatwierdź i wyślij formularz</button>
+    <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>{{ ui.submit_form }}</button>
   </section>
 
   <script>
@@ -111,6 +115,7 @@
       const schemaVersion = {{ anamnesis_schema_version }};
       const bodyMapSchemaVersion = {{ body_map_schema_version }};
       const initialBodyMapData = JSON.parse(document.getElementById('body-map-initial').textContent || '[]');
+      const formUi = JSON.parse(document.getElementById('form-ui').textContent || '{}');
 
       function getCsrfToken() {
         const el = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -162,9 +167,9 @@
           body_map_schema_version: bodyMapSchemaVersion,
           body_map_data: bodyMapPoints
         }).then(function(r) {
-          if (r.ok) showMsg('body-map-msg', 'Schemat zapisany.', false);
-          else r.json().then(function(d) { showMsg('body-map-msg', d.error || 'Błąd zapisu.', true); });
-        }).catch(function() { showMsg('body-map-msg', 'Błąd połączenia.', true); });
+          if (r.ok) showMsg('body-map-msg', formUi.msg_body_map_saved || '', false);
+          else r.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
+        }).catch(function() { showMsg('body-map-msg', formUi.msg_connection_error || '', true); });
       });
 
       renderBodyMapMarkers();
@@ -176,9 +181,9 @@
           consents.push({ consent_definition_id: cb.dataset.id, accepted: cb.checked });
         });
         api('PUT', '/intake-forms/' + formId + '/consents', { consents }).then(function(r) {
-          if (r.ok) showMsg('consents-msg', 'Zgody zapisane.', false);
-          else r.json().then(function(d) { showMsg('consents-msg', d.error || 'Błąd zapisu.', true); });
-        }).catch(function() { showMsg('consents-msg', 'Błąd połączenia.', true); });
+          if (r.ok) showMsg('consents-msg', formUi.msg_consents_saved || '', false);
+          else r.json().then(function(d) { showMsg('consents-msg', d.error || formUi.msg_save_error || '', true); });
+        }).catch(function() { showMsg('consents-msg', formUi.msg_connection_error || '', true); });
       });
 
       // Anamnesis
@@ -196,9 +201,9 @@
           answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
         });
         api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
-          if (r.ok) showMsg('anamnesis-msg', 'Anamneza zapisana.', false);
-          else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || 'Błąd zapisu.', true); });
-        }).catch(function() { showMsg('anamnesis-msg', 'Błąd połączenia.', true); });
+          if (r.ok) showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
+          else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
+        }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
       });
 
       // Signature canvas
@@ -243,9 +248,9 @@
             document.getElementById('submit-form').disabled = false;
             showMsg('signature-msg', '', false);
           } else {
-            r.json().then(function(d) { showMsg('signature-msg', d.error || 'Błąd zapisu podpisu.', true); });
+            r.json().then(function(d) { showMsg('signature-msg', d.error || formUi.msg_signature_error || '', true); });
           }
-        }).catch(function() { showMsg('signature-msg', 'Błąd połączenia.', true); });
+        }).catch(function() { showMsg('signature-msg', formUi.msg_connection_error || '', true); });
       });
 
       // Submit
@@ -256,9 +261,9 @@
           if (r.ok) {
             window.location.href = "/tablet/form/" + formId + "/";
           } else {
-            r.json().then(function(d) { showMsg('submit-msg', d.error || 'Błąd wysyłki.', true); btn.disabled = false; });
+            r.json().then(function(d) { showMsg('submit-msg', d.error || formUi.msg_submit_error || '', true); btn.disabled = false; });
           }
-        }).catch(function() { showMsg('submit-msg', 'Błąd połączenia.', true); btn.disabled = false; });
+        }).catch(function() { showMsg('submit-msg', formUi.msg_connection_error || '', true); btn.disabled = false; });
       });
     })();
   </script>

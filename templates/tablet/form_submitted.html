@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="{{ locale_param|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Formularz wysłany</title>
+  <title>{% if locale_param == 'en' %}Form submitted{% else %}Formular abgesendet{% endif %}</title>
   <style>
     body { font-family: sans-serif; max-width: 480px; margin: 2rem auto; padding: 1rem; }
     .ok { color: #0a0; font-weight: bold; }
@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <p class="ok">Formularz został już wysłany.</p>
-  <a class="btn" href="{% url 'tablet:home' %}">Wróć do listy kolejek</a>
+  <p class="ok">{% if ui.form_submitted_title %}{{ ui.form_submitted_title }}{% else %}Formular wurde abgesendet.{% endif %}</p>
+  <a class="btn" href="{% url 'tablet:home' %}">{% if ui.back_to_queues %}{{ ui.back_to_queues }}{% else %}Zurück zur Warteliste{% endif %}</a>
 </body>
 </html>
