@@ -362,8 +362,11 @@ def submit_patient_intake_form(
     if session.expires_at <= now:
         raise IntakeSessionValidationError("Session has expired.")
 
+    today = now.date()
     required_consent_ids = set(
-        ConsentDefinition.objects.filter(is_active=True, is_required=True).values_list("id", flat=True)
+        ConsentDefinition.objects.filter(
+            _effective_consent_filter(today), is_required=True
+        ).values_list("id", flat=True)
     )
     accepted_required_consent_ids = set(
         PatientIntakeConsent.objects.filter(
@@ -378,8 +381,7 @@ def submit_patient_intake_form(
 
     required_question_codes = set(
         AnamnesisQuestionDefinition.objects.filter(
-            is_active=True,
-            is_required=True,
+            _effective_question_filter(today), is_required=True
         ).values_list("code", flat=True)
     )
     answered_question_codes = _extract_answered_question_codes(intake_form.anamnesis_payload)

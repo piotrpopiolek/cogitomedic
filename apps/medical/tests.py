@@ -66,7 +66,6 @@ class MedicalServicesTests(TestCase):
         )
         self.session = PatientFormSession.objects.create(
             queue_entry=self.queue_entry,
-            token_hash="f" * 64,
             form_locale="de-DE",
             expires_at=timezone.now() + timedelta(minutes=30),
             consumed_at=timezone.now(),

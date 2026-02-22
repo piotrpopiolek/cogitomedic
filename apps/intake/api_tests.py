@@ -7,7 +7,14 @@ from uuid import uuid4
 from django.test import Client, TestCase
 from django.utils import timezone
 
-from apps.intake.models import AnamnesisQuestionDefinition, ConsentDefinition, IntakeStatus, PatientIntakeConsent, PatientIntakeForm
+from apps.intake.models import (
+    AnamnesisQuestionDefinition,
+    ConsentDefinition,
+    IntakeStatus,
+    PatientIntakeConsent,
+    PatientIntakeForm,
+)
+from apps.intake.services import _effective_consent_filter, _effective_question_filter
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -92,12 +99,44 @@ class IntakeApiTests(TestCase):
         )
         self.client.force_login(self.reception_user)
 
+    def _accept_all_required_consents_effective_today(self, intake_form: PatientIntakeForm) -> None:
+        today = timezone.now().date()
+        for cdef in ConsentDefinition.objects.filter(
+            _effective_consent_filter(today), is_required=True
+        ):
+            PatientIntakeConsent.objects.get_or_create(
+                intake_form=intake_form,
+                consent_definition=cdef,
+                defaults={"accepted": True, "accepted_at": timezone.now()},
+            )
+
+    def _build_answers_for_all_required_questions_today(self) -> list[dict]:
+        today = timezone.now().date()
+        required = AnamnesisQuestionDefinition.objects.filter(
+            _effective_question_filter(today), is_required=True
+        ).prefetch_related("options")
+        answers = []
+        for q in required:
+            first_option = next(iter(q.options.order_by("display_order")), None)
+            if first_option:
+                answers.append({
+                    "question_code": q.code,
+                    "selected_option_codes": [first_option.code],
+                    "free_text": None,
+                })
+            else:
+                answers.append({
+                    "question_code": q.code,
+                    "selected_option_codes": [],
+                    "free_text": "–",
+                })
+        return answers
+
     def test_create_queue_entry_session_endpoint(self) -> None:
         response = self.client.post(
             f"/api/v1/queue-entries/{self.queue_entry.id}/sessions",
             data=json.dumps(
                 {
-                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -117,7 +156,6 @@ class IntakeApiTests(TestCase):
             f"/api/v1/queue-entries/{uuid4()}/sessions",
             data=json.dumps(
                 {
-                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "en-GB",
                     "expires_in_minutes": 10,
                 }
@@ -151,15 +189,10 @@ class IntakeApiTests(TestCase):
         self.assertEqual(self.intake_form.anamnesis_payload.get("schema_version"), 1)
 
     def test_submit_intake_success(self) -> None:
-        PatientIntakeConsent.objects.create(
-            intake_form=self.intake_form,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
-        )
+        self._accept_all_required_consents_effective_today(self.intake_form)
         self.intake_form.anamnesis_payload = {
             "schema_version": 1,
-            "answers": [{"question_code": "Q1_REQUIRED", "selected_option_codes": ["YES"]}],
+            "answers": self._build_answers_for_all_required_questions_today(),
         }
         self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
 
@@ -178,15 +211,10 @@ class IntakeApiTests(TestCase):
         self.intake_form.signature_file_path = None
         self.intake_form.signature_sha256 = None
         self.intake_form.save(update_fields=["signature_file_path", "signature_sha256"])
-        PatientIntakeConsent.objects.create(
-            intake_form=self.intake_form,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
-        )
+        self._accept_all_required_consents_effective_today(self.intake_form)
         self.intake_form.anamnesis_payload = {
             "schema_version": 1,
-            "answers": [{"question_code": "Q1_REQUIRED", "selected_option_codes": ["YES"]}],
+            "answers": self._build_answers_for_all_required_questions_today(),
         }
         self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
 
@@ -204,7 +232,6 @@ class IntakeApiTests(TestCase):
             f"/api/v1/queue-entries/{self.queue_entry.id}/sessions",
             data=json.dumps(
                 {
-                    "created_by_user_id": str(self.reception_user.id),
                     "form_locale": "de-DE",
                     "expires_in_minutes": 20,
                 }
@@ -214,13 +241,9 @@ class IntakeApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         payload = response.json()
         intake_form_id = payload["intake_form_id"]
+        e2e_intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
 
-        PatientIntakeConsent.objects.create(
-            intake_form_id=intake_form_id,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
-        )
+        self._accept_all_required_consents_effective_today(e2e_intake_form)
         PatientIntakeForm.objects.filter(id=intake_form_id).update(
             signature_file_path="/tmp/e2e-signature.png",
             signature_sha256="e2e" * 21,
@@ -231,7 +254,7 @@ class IntakeApiTests(TestCase):
             data=json.dumps(
                 {
                     "anamnesis_schema_version": 1,
-                    "answers": [{"question_code": "Q1_REQUIRED", "selected_option_codes": ["YES"]}],
+                    "answers": self._build_answers_for_all_required_questions_today(),
                 }
             ),
             content_type="application/json",

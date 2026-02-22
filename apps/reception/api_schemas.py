@@ -13,10 +13,10 @@ PHONE_PATTERN = re.compile(r"^[0-9+() -]{7,20}$")
 class CreateQueueEntrySessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    created_by_user_id: UUID
     form_locale: str = "de-DE"
     expires_in_minutes: int = Field(default=120, ge=1, le=480)
     tablet_device_id: UUID | None = None
+    android_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class CreateDailyQueueRequest(BaseModel):

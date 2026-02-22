@@ -6,6 +6,7 @@ from uuid import UUID
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.http import HttpRequest, JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
@@ -22,6 +23,7 @@ from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import (
     create_daily_queue,
     create_queue_entry,
+    get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
     update_daily_queue_status,
     update_queue_entry,
@@ -68,6 +70,12 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
         qs = DailyQueue.objects.all().order_by("-queue_date", "clinic_site_id", "consulting_room_id")
         queue_date = request.GET.get("queue_date")
+        is_tablet = getattr(request.user, "role", None) == "TABLET"
+        if is_tablet:
+            today = timezone.now().date()
+            if queue_date and queue_date != today.isoformat():
+                return json_error("TABLET role can only access queues for today.", status=403)
+            queue_date = today.isoformat()
         if queue_date:
             qs = qs.filter(queue_date=queue_date)
         clinic_site_id = request.GET.get("clinic_site_id")
@@ -154,9 +162,11 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     if request.method not in ("GET", "POST"):
         return json_error("Method not allowed.", status=405)
     try:
-        DailyQueue.objects.get(id=daily_queue_id)
+        queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
+    if getattr(request.user, "role", None) == "TABLET" and queue.queue_date != timezone.now().date():
+        return json_error("TABLET role can only access entries of today's queues.", status=403)
     if request.method == "GET":
         qs = QueueEntry.objects.filter(daily_queue_id=daily_queue_id).select_related("patient").order_by("position_no")
         entry_status = request.GET.get("entry_status")
@@ -254,13 +264,17 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    tablet_device_id = body.tablet_device_id
+    if tablet_device_id is None and body.android_id:
+        device, _ = get_or_create_tablet_device_by_android_id(android_id=body.android_id)
+        tablet_device_id = device.id
     try:
         issued = issue_tablet_session_latest_wins(
             queue_entry_id=queue_entry_id,
             created_by_user_id=request.user.id,
             form_locale=body.form_locale,
             expires_in_minutes=body.expires_in_minutes,
-            tablet_device_id=body.tablet_device_id,
+            tablet_device_id=tablet_device_id,
         )
     except ObjectDoesNotExist:
         return json_error("Queue entry or tablet device not found.", status=404)
