@@ -202,6 +202,114 @@ class MedicalApiTests(TestCase):
         missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
         self.assertEqual(missing.status_code, 404)
 
+    def test_medical_document_generate_text(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        gen = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "authoring_locale": "de-DE",
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "lesions": [
+                            {
+                                "lesion_no": 8,
+                                "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
+                                "clinical_assessment": "CONTROL_NEEDED",
+                                "malignancy_risk": "NO_SUSPICION",
+                            }
+                        ],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(gen.status_code, 200)
+        data = gen.json()
+        self.assertTrue(data["generated"])
+        self.assertEqual(len(data["lesions"]), 1)
+        self.assertEqual(data["lesions"][0]["lesion_no"], 8)
+        self.assertIn("Läsion Nr. 8", data["lesions"][0]["generated_text"])
+        self.assertIn("kontrollbedürftig", data["lesions"][0]["generated_text"])
+        self.assertIn("summary_generated_text", data)
+        self.assertIn("Bei der Analyse", data["summary_generated_text"])
+
+        missing = self.client.post(
+            f"/api/v1/medical-documents/{uuid4()}/generate-text",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {"schema_version": 1, "lesions": []},
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(missing.status_code, 404)
+
+    def test_medical_document_versions_and_version_detail(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        versions_list = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        self.assertEqual(versions_list.status_code, 200)
+        self.assertEqual(versions_list.json()["items"], [])
+
+        self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "updated_by_user_id": str(self.doctor_user.id),
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                }
+            ),
+            content_type="application/json",
+        )
+        versions_list2 = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        self.assertEqual(versions_list2.status_code, 200)
+        items = versions_list2.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["version_no"], 1)
+        self.assertEqual(items[0]["version_status"], "DRAFT")
+        version_id = items[0]["id"]
+
+        version_detail = self.client.get(f"/api/v1/medical-document-versions/{version_id}")
+        self.assertEqual(version_detail.status_code, 200)
+        v = version_detail.json()
+        self.assertEqual(v["medical_document_id"], medical_document_id)
+        self.assertEqual(v["version_no"], 1)
+        self.assertEqual(v["medical_payload_schema_version"], 1)
+        self.assertIn("lesions", v["medical_payload"])
+
+        self.assertEqual(self.client.get(f"/api/v1/medical-document-versions/{uuid4()}").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/v1/medical-documents/{uuid4()}/versions").status_code, 404)
+
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
         missing_doc_id = uuid4()
 

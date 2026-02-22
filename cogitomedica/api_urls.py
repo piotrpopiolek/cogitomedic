@@ -14,7 +14,10 @@ from apps.medical.api_views import (
     doctor_text_templates_view,
     medical_document_detail_view,
     medical_document_draft_view,
+    medical_document_generate_text_view,
     medical_document_publish_view,
+    medical_document_version_detail_view,
+    medical_document_versions_view,
     medical_documents_view,
 )
 from apps.outbox.api_views import (
@@ -128,6 +131,16 @@ urlpatterns = [
         name="medical-document-detail",
     ),
     path(
+        "medical-documents/<uuid:medical_document_id>/generate-text",
+        medical_document_generate_text_view,
+        name="medical-document-generate-text",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/versions",
+        medical_document_versions_view,
+        name="medical-document-versions",
+    ),
+    path(
         "medical-documents/<uuid:medical_document_id>/draft",
         medical_document_draft_view,
         name="medical-document-draft",
@@ -136,6 +149,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/publish",
         medical_document_publish_view,
         name="medical-document-publish",
+    ),
+    path(
+        "medical-document-versions/<uuid:version_id>",
+        medical_document_version_detail_view,
+        name="medical-document-version-detail",
     ),
     path(
         "clinic-sites",

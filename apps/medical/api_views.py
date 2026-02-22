@@ -16,9 +16,12 @@ from apps.medical.api_schemas import (
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
+    GenerateTextRequest,
     PublishMedicalDocumentRequest,
     SaveDraftMedicalDocumentRequest,
 )
+from apps.medical.befund_text import generate_befund_text
+from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.medical.services import (
     create_or_get_medical_document,
     get_medical_document_context,
@@ -144,6 +147,83 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
 
 @require_auth
 @csrf_exempt
+def medical_document_generate_text_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    """POST: generate Befund text from medical_payload (per lesion + summary). Does not save to DB."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+    try:
+        body = GenerateTextRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("Invalid JSON payload.", status=400)
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    if not MedicalDocument.objects.filter(id=medical_document_id).exists():
+        return json_error("Medical document not found.", status=404)
+
+    payload = body.medical_payload or {}
+    if payload.get("schema_version") != body.medical_payload_schema_version:
+        payload = {**payload, "schema_version": body.medical_payload_schema_version}
+    result = generate_befund_text(payload, authoring_locale=body.authoring_locale)
+    return JsonResponse(
+        {
+            "generated": True,
+            "lesions": result["lesions"],
+            "summary_generated_text": result["summary_generated_text"],
+        },
+        status=200,
+    )
+
+
+@require_auth
+@csrf_exempt
+def medical_document_versions_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    """GET: list versions of a medical document."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+    try:
+        MedicalDocument.objects.get(id=medical_document_id)
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+
+    versions = (
+        MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
+        .order_by("-version_no")
+        .values(
+            "id",
+            "version_no",
+            "version_status",
+            "pdf_generation_status",
+            "published_at",
+            "hidrive_sent",
+            "sms_sent",
+        )
+    )
+    items = [
+        {
+            "id": str(v["id"]),
+            "version_no": v["version_no"],
+            "version_status": v["version_status"],
+            "pdf_generation_status": v["pdf_generation_status"],
+            "published_at": v["published_at"].isoformat() if v["published_at"] else None,
+            "hidrive_sent": v["hidrive_sent"],
+            "sms_sent": v["sms_sent"],
+        }
+        for v in versions
+    ]
+    return JsonResponse({"items": items}, status=200)
+
+
+@require_auth
+@csrf_exempt
 def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -220,6 +300,42 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             "version_no": version.version_no,
             "version_status": version.version_status,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+        },
+        status=200,
+    )
+
+
+@require_auth
+@csrf_exempt
+def medical_document_version_detail_view(request: HttpRequest, version_id: UUID) -> JsonResponse:
+    """GET: single medical document version by id (MedicalDocumentVersion.id)."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+    try:
+        version = MedicalDocumentVersion.objects.select_related("medical_document").get(id=version_id)
+    except ObjectDoesNotExist:
+        return json_error("Medical document version not found.", status=404)
+    return JsonResponse(
+        {
+            "id": str(version.id),
+            "medical_document_id": str(version.medical_document_id),
+            "version_no": version.version_no,
+            "version_status": version.version_status,
+            "medical_payload_schema_version": version.medical_payload_schema_version,
+            "medical_payload": version.medical_payload,
+            "diagnosis_code": version.diagnosis_code,
+            "procedure_code": version.procedure_code,
+            "pdf_generation_status": version.pdf_generation_status,
+            "hidrive_sent": version.hidrive_sent,
+            "hidrive_sent_at": version.hidrive_sent_at.isoformat() if version.hidrive_sent_at else None,
+            "sms_sent": version.sms_sent,
+            "sms_sent_at": version.sms_sent_at.isoformat() if version.sms_sent_at else None,
+            "published_at": version.published_at.isoformat() if version.published_at else None,
+            "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+            "created_at": version.created_at.isoformat(),
         },
         status=200,
     )
