@@ -15,7 +15,7 @@
     button, .btn { padding: 0.75rem 1rem; font-size: 1rem; cursor: pointer; background: #0d6efd; color: #fff; border: none; border-radius: 6px; margin: 0.25rem 0.25rem 0 0; }
     button:disabled { background: #999; cursor: not-allowed; }
     .btn.secondary { background: #6c757d; text-decoration: none; display: inline-block; }
-    #signatureCanvas { border: 1px solid #000; touch-action: none; display: block; width: 100%; max-width: 400px; height: 180px; }
+    #signatureCanvas { border: 1px solid #000; touch-action: none; display: block; width: 100%; max-width: 400px; height: 180px; min-height: 120px; cursor: crosshair; user-select: none; -webkit-user-select: none; }
     .error { color: #b02a37; margin: 0.5rem 0; }
     .success { color: #0a0; margin: 0.5rem 0; }
     .field { margin: 0.5rem 0; }
@@ -27,8 +27,9 @@
     #body-map-section .body-map-wrap img { width: 100%; height: auto; display: block; cursor: crosshair; }
     #body-map-markers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
     #body-map-section .body-map-marker { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #0d6efd; border: 2px solid #fff; border-radius: 50%; }
-    .form-step { display: none; }
-    .form-step.active { display: block; }
+    .form-steps-wrapper { position: relative; }
+    .form-step { position: absolute; top: 0; left: 0; width: 100%; visibility: hidden; pointer-events: none; }
+    .form-step.active { position: relative; visibility: visible; pointer-events: auto; }
     .step-header { font-size: 0.95rem; color: #666; margin-bottom: 1rem; }
     .step-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
   </style>
@@ -50,6 +51,7 @@
 
   <p class="step-header" id="step-indicator">{{ ui.step_1_title }}</p>
 
+  <div class="form-steps-wrapper">
   <div class="form-step active" id="step-1">
     <section id="consents-section">
       <h2>{{ ui.consents_title }}</h2>
@@ -123,6 +125,7 @@
       </div>
     </section>
   </div>
+  </div>
 
   {{ body_map_data|json_script:"body-map-initial" }}
   {{ ui|json_script:"form-ui" }}
@@ -162,7 +165,9 @@
         if (stepEl) stepEl.classList.add('active');
         const ind = document.getElementById('step-indicator');
         if (ind && stepTitles[stepNum - 1]) ind.textContent = stepTitles[stepNum - 1];
-        if (stepNum === 3 && typeof resize === 'function') setTimeout(resize, 100);
+        if (stepNum === 3 && typeof initCanvas === 'function') {
+          requestAnimationFrame(function() { initCanvas(); });
+        }
         window.scrollTo(0, 0);
       }
 
@@ -300,38 +305,63 @@
         }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
       });
 
-      // Signature canvas
+      // Signature canvas – stałe wymiary wewnętrzne, żeby rysowanie działało nawet gdy krok był ukryty
       const canvas = document.getElementById('signatureCanvas');
       const ctx = canvas.getContext('2d');
+      const CANVAS_W = 400;
+      const CANVAS_H = 180;
       let drawing = false;
-      function resize() {
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width && rect.height) {
-          canvas.width = rect.width;
-          canvas.height = rect.height;
+
+      function initCanvas() {
+        if (canvas.width !== CANVAS_W || canvas.height !== CANVAS_H) {
+          canvas.width = CANVAS_W;
+          canvas.height = CANVAS_H;
           ctx.strokeStyle = '#000';
           ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
         }
       }
-      resize();
-      window.addEventListener('resize', resize);
+      initCanvas();
+      window.addEventListener('resize', initCanvas);
 
       function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const touch = e.touches ? e.touches[0] : e;
-        return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        const dx = touch.clientX - rect.left;
+        const dy = touch.clientY - rect.top;
+        const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+        const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+        return { x: dx * scaleX, y: dy * scaleY };
       }
-      canvas.addEventListener('mousedown', function(e) { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-      canvas.addEventListener('mousemove', function(e) { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
-      canvas.addEventListener('mouseup', function() { drawing = false; });
-      canvas.addEventListener('mouseleave', function() { drawing = false; });
-      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
-      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, { passive: false });
-      canvas.addEventListener('touchend', function() { drawing = false; });
+
+      function onPointerDown(e) {
+        e.preventDefault();
+        drawing = true;
+        const p = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      }
+      function onPointerMove(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const p = getPos(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+      function onPointerUp() { drawing = false; }
+
+      canvas.addEventListener('mousedown', onPointerDown);
+      canvas.addEventListener('mousemove', onPointerMove);
+      canvas.addEventListener('mouseup', onPointerUp);
+      canvas.addEventListener('mouseleave', onPointerUp);
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); onPointerDown(e); }, { passive: false });
+      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); onPointerMove(e); }, { passive: false });
+      canvas.addEventListener('touchend', onPointerUp);
+      canvas.addEventListener('touchcancel', onPointerUp);
 
       document.getElementById('clear-signature').addEventListener('click', function() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        resize();
       });
 
       document.getElementById('save-signature').addEventListener('click', function() {
