@@ -1,0 +1,81 @@
+"""
+Tłumaczenia interfejsu formularza tabletu: niemiecki (de-DE) i angielski (en-GB).
+"""
+from __future__ import annotations
+
+FORM_UI_DE = {
+    "back_to_waiting": "← Wartezimmer",
+    "patient_data_title": "Patientendaten (zur Überprüfung)",
+    "date_of_birth": "Geburtsdatum:",
+    "phone": "Telefon:",
+    "email": "E-Mail:",
+    "consents_title": "Einwilligungen",
+    "consent_confirm": "Ich bestätige",
+    "save_consents": "Einwilligungen speichern",
+    "body_map_title": "Körperschema",
+    "body_map_hint": "Tippen Sie auf die Abbildung, um die Lage von Hautveränderungen (z. B. Muttermale) zu markieren. Links: Vorderansicht, rechts: Rückansicht.",
+    "body_map_alt": "Körperschema – Vorder- und Rückansicht",
+    "save_body_map": "Schema speichern",
+    "anamnesis_title": "Anamnese",
+    "notes": "Anmerkungen:",
+    "notes_placeholder": "Optional",
+    "save_anamnesis": "Anamnese speichern",
+    "signature_title": "Unterschrift",
+    "clear": "Löschen",
+    "save_signature": "Unterschrift speichern",
+    "signature_saved": "Unterschrift gespeichert.",
+    "submit_form": "Formular absenden",
+    "msg_consents_saved": "Einwilligungen gespeichert.",
+    "msg_save_error": "Fehler beim Speichern.",
+    "msg_connection_error": "Verbindungsfehler.",
+    "msg_body_map_saved": "Schema gespeichert.",
+    "msg_anamnesis_saved": "Anamnese gespeichert.",
+    "msg_signature_error": "Fehler beim Speichern der Unterschrift.",
+    "msg_submit_error": "Fehler beim Absenden.",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "form_submitted_title": "Formular wurde abgesendet.",
+    "back_to_queues": "Zurück zur Warteliste",
+}
+
+FORM_UI_EN = {
+    "back_to_waiting": "← Waiting room",
+    "patient_data_title": "Patient data (for verification)",
+    "date_of_birth": "Date of birth:",
+    "phone": "Phone:",
+    "email": "E-mail:",
+    "consents_title": "Consents",
+    "consent_confirm": "I agree",
+    "save_consents": "Save consents",
+    "body_map_title": "Body map",
+    "body_map_hint": "Tap on the figure to mark the location of skin changes (e.g. moles). Left: front, right: back.",
+    "body_map_alt": "Body map – front and back",
+    "save_body_map": "Save map",
+    "anamnesis_title": "Anamnesis",
+    "notes": "Notes:",
+    "notes_placeholder": "Optional",
+    "save_anamnesis": "Save anamnesis",
+    "signature_title": "Signature",
+    "clear": "Clear",
+    "save_signature": "Save signature",
+    "signature_saved": "Signature saved.",
+    "submit_form": "Submit form",
+    "msg_consents_saved": "Consents saved.",
+    "msg_save_error": "Error saving.",
+    "msg_connection_error": "Connection error.",
+    "msg_body_map_saved": "Map saved.",
+    "msg_anamnesis_saved": "Anamnesis saved.",
+    "msg_signature_error": "Error saving signature.",
+    "msg_submit_error": "Error submitting.",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "form_submitted_title": "Form has been submitted.",
+    "back_to_queues": "Back to queue list",
+}
+
+
+def get_form_ui_strings(form_locale: str) -> dict[str, str]:
+    """Return UI strings for tablet form. form_locale e.g. 'de-DE' or 'en-GB'."""
+    if form_locale.startswith("en"):
+        return dict(FORM_UI_EN)
+    return dict(FORM_UI_DE)
