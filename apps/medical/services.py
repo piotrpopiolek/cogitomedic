@@ -372,6 +372,9 @@ def list_doctor_work_queue(
             "sms_sent": latest.sms_sent if latest else False,
         })
     return list_items, total
+
+
+def get_medical_document_context(
     *,
     medical_document_id: uuid.UUID,
     form_locale: str = "de-DE",
