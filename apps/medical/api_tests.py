@@ -245,7 +245,7 @@ class MedicalApiTests(TestCase):
         self.assertEqual(len(data["lesions"]), 1)
         self.assertEqual(data["lesions"][0]["lesion_no"], 8)
         self.assertIn("Läsion Nr. 8", data["lesions"][0]["generated_text"])
-        self.assertIn("kontrollbedürftig", data["lesions"][0]["generated_text"])
+        self.assertIn("Kontrollbedürftig", data["lesions"][0]["generated_text"])
         self.assertIn("summary_generated_text", data)
         self.assertIn("Bei der Analyse", data["summary_generated_text"])
 
