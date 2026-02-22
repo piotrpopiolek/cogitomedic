@@ -46,7 +46,7 @@ def _doctor_role_ok_request(user) -> bool:
     return role in ("DOCTOR", "ADMIN")
 
 
-@login_required
+@login_required(login_url="doctor-login")
 @require_http_methods(["POST"])
 @csrf_protect
 def doctor_logout_view(request: HttpRequest) -> HttpResponse:
@@ -59,7 +59,7 @@ def _doctor_role_ok(request: HttpRequest) -> bool:
     return role in ("DOCTOR", "ADMIN")
 
 
-@login_required
+@login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_list_view(request: HttpRequest) -> HttpResponse:
     """List medical documents (work queue) with optional filters."""
@@ -97,7 +97,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> HttpResponse:
     """Create or get medical document for queue entry (with submitted intake) and redirect to detail."""
@@ -122,7 +122,7 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
     return redirect("doctor-document-detail", medical_document_id=doc.id)
 
 
-@login_required
+@login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID) -> HttpResponse:
     """Document detail with intake summary and Befund form (data for client-side API calls)."""

@@ -13,30 +13,31 @@ from apps.intake.models import (
 
 @admin.register(ConsentDefinition)
 class ConsentDefinitionAdmin(admin.ModelAdmin):
-    list_display = ("code", "version", "title_de", "title_en", "is_required", "is_active", "display_order", "effective_from", "created_at")
+    list_display = ("code", "version", "title_de", "title_en", "title_pl", "is_required", "is_active", "display_order", "effective_from", "created_at")
     list_filter = ("is_required", "is_active")
-    search_fields = ("code", "title_de", "title_en")
+    search_fields = ("code", "title_de", "title_en", "title_pl")
     ordering = ("code", "version")
     fieldsets = (
         (None, {"fields": ("code", "version", "is_required", "is_active", "display_order", "effective_to")}),
         ("Deutsch", {"fields": ("title_de", "content_de")}),
         ("English", {"fields": ("title_en", "content_en")}),
+        ("Polski", {"fields": ("title_pl", "content_pl")}),
     )
 
 
 @admin.register(AnamnesisQuestionDefinition)
 class AnamnesisQuestionDefinitionAdmin(admin.ModelAdmin):
-    list_display = ("code", "version", "answer_type", "question_text_de", "is_required", "is_active", "display_order", "created_at")
+    list_display = ("code", "version", "answer_type", "question_text_de", "question_text_pl", "is_required", "is_active", "display_order", "created_at")
     list_filter = ("answer_type", "is_required", "is_active")
-    search_fields = ("code", "question_text_de", "question_text_en")
+    search_fields = ("code", "question_text_de", "question_text_en", "question_text_pl")
     ordering = ("code", "version")
 
 
 @admin.register(AnamnesisOptionDefinition)
 class AnamnesisOptionDefinitionAdmin(admin.ModelAdmin):
-    list_display = ("question", "code", "option_text_de", "display_order", "is_active", "created_at")
+    list_display = ("question", "code", "option_text_de", "option_text_pl", "display_order", "is_active", "created_at")
     list_filter = ("is_active",)
-    search_fields = ("code", "option_text_de", "option_text_en")
+    search_fields = ("code", "option_text_de", "option_text_en", "option_text_pl")
     raw_id_fields = ("question",)
 
 
