@@ -89,9 +89,54 @@ FORM_UI_EN = {
     "validation_anamnesis_required": "Please answer all required questions (marked with *).",
 }
 
+FORM_UI_PL = {
+    "back_to_waiting": "← Poczekalnia",
+    "patient_data_title": "Dane pacjenta (do weryfikacji)",
+    "date_of_birth": "Data urodzenia:",
+    "phone": "Telefon:",
+    "email": "E-mail:",
+    "consents_title": "Zgody",
+    "consent_confirm": "Akceptuję",
+    "save_consents": "Zapisz zgody",
+    "body_map_title": "Schemat ciała",
+    "body_map_hint": "Dotknij rysunku, aby zaznaczyć lokalizację zmian skórnych (np. znamion). Lewy: przód, prawy: tył.",
+    "body_map_alt": "Schemat ciała – przód i tył",
+    "save_body_map": "Zapisz schemat",
+    "anamnesis_title": "Wywiad",
+    "notes": "Uwagi:",
+    "notes_placeholder": "Opcjonalnie",
+    "save_anamnesis": "Zapisz wywiad",
+    "signature_title": "Podpis",
+    "clear": "Wyczyść",
+    "save_signature": "Zapisz podpis",
+    "signature_saved": "Podpis zapisany.",
+    "submit_form": "Wyślij formularz",
+    "msg_consents_saved": "Zgody zapisane.",
+    "msg_save_error": "Błąd zapisu.",
+    "msg_connection_error": "Błąd połączenia.",
+    "msg_body_map_saved": "Schemat zapisany.",
+    "msg_anamnesis_saved": "Wywiad zapisany.",
+    "msg_signature_error": "Błąd zapisu podpisu.",
+    "msg_submit_error": "Błąd wysyłania.",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "form_submitted_title": "Formularz został wysłany.",
+    "back_to_queues": "Wróć do listy kolejek",
+    "step_1_title": "Część 1: Zgody",
+    "step_2_title": "Część 2: Wywiad",
+    "step_3_title": "Część 3: Podpis",
+    "step_next": "Dalej",
+    "step_back": "Wstecz",
+    "step_save_and_next": "Zapisz i kontynuuj",
+    "validation_consents_required": "Proszę zaakceptować wszystkie wymagane zgody (oznaczone *).",
+    "validation_anamnesis_required": "Proszę odpowiedzieć na wszystkie pytania obowiązkowe (oznaczone *).",
+}
+
 
 def get_form_ui_strings(form_locale: str) -> dict[str, str]:
-    """Return UI strings for tablet form. form_locale e.g. 'de-DE' or 'en-GB'."""
+    """Return UI strings for tablet form. form_locale e.g. 'de-DE', 'en-GB', 'pl-PL'."""
     if form_locale.startswith("en"):
         return dict(FORM_UI_EN)
+    if form_locale.startswith("pl"):
+        return dict(FORM_UI_PL)
     return dict(FORM_UI_DE)
