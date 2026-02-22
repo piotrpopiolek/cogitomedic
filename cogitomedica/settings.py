@@ -195,6 +195,9 @@ SECURE_HSTS_PRELOAD = ENVIRONMENT == "prod"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Redirect unauthenticated users to doctor panel login (panel lekarza)
+LOGIN_URL = "/doctor/login/"
+
 TASKS = {
     "default": {
         "BACKEND": os.environ.get(
