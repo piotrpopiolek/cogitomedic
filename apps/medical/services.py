@@ -195,7 +195,9 @@ def publish_document_version(
         .first()
     )
     if not draft_version:
-        raise StateTransitionError("No draft version available for publication.")
+        raise DomainError(
+            "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing."
+        )
 
     draft_version.version_status = DocVersionStatus.PUBLISHED
     draft_version.publish_request_id = publish_request_id

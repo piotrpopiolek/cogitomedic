@@ -317,11 +317,23 @@
   });
 
   el("btn-publish").addEventListener('click', function() {
+    const payload = buildPayload();
     const resendSms = el("resend_sms").checked;
     this.disabled = true;
     const publishId = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random()*16|0).toString(16));
-    apiFetch(API + '/medical-documents/' + DOC_ID + '/publish', { method: 'POST', body: JSON.stringify({ publish_request_id: publishId, resend_sms: resendSms }) })
+    // "Zatwierdź i wyślij" = zapisz szkic (pełna walidacja) + publish
+    apiFetch(API + '/medical-documents/' + DOC_ID + '/draft', { method: 'PUT', body: JSON.stringify({ medical_payload_schema_version: 1, medical_payload: payload }) })
       .then(({ ok, status, json }) => {
+        if (!ok) {
+          this.disabled = false;
+          alertMsg('danger', (json && json.error) || 'Fehler ' + status);
+          return;
+        }
+        return apiFetch(API + '/medical-documents/' + DOC_ID + '/publish', { method: 'POST', body: JSON.stringify({ publish_request_id: publishId, resend_sms: resendSms }) });
+      })
+      .then((res) => {
+        if (!res) return;
+        const { ok, status, json } = res;
         this.disabled = false;
         if (ok) alertMsg('success', 'Veröffentlicht. PDF wird erstellt; ggf. „Publikation in Bearbeitung“ bei erneutem Klick.');
         else alertMsg('danger', (json && json.error) || 'Fehler ' + status);
