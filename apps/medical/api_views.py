@@ -174,7 +174,8 @@ def medical_document_generate_text_view(request: HttpRequest, medical_document_i
         try:
             payload = validate_medical_payload_v1(payload)
         except ValidationError as exc:
-            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": exc.errors()}, status=400)
+            details = [{"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")} for e in exc.errors()]
+            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": details}, status=400)
 
     template_context = None
     template_body = None
@@ -272,7 +273,8 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         try:
             payload_dict = validate_medical_payload_v1(payload_dict)
         except ValidationError as exc:
-            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": exc.errors()}, status=400)
+            details = [{"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")} for e in exc.errors()]
+            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": details}, status=400)
 
     try:
         version = save_draft_document_version(
