@@ -7,7 +7,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -59,7 +58,6 @@ def _serialize_consulting_room(room: ConsultingRoom) -> dict:
 
 
 @require_auth
-@csrf_exempt
 def clinic_sites_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -96,7 +94,6 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -142,7 +139,6 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
 
 
 @require_auth
-@csrf_exempt
 def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -189,7 +185,6 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:

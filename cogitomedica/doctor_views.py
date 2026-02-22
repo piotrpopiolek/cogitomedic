@@ -2,6 +2,9 @@
 Doctor panel: list of medical documents and document detail with Befund form.
 Requires authenticated user with role DOCTOR or ADMIN.
 Staff login (HTML) shares Django session with API auth.
+
+Komunikaty błędów w szablonach są w trzech wersjach językowych (DE/EN/PL) zgodnie z lang;
+przy dodawaniu nowych komunikatów uzupełnij wszystkie trzy warianty.
 """
 
 from __future__ import annotations
@@ -11,18 +14,30 @@ from uuid import UUID
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.core.api_utils import safe_parse_positive_int
 from apps.intake.models import IntakeStatus
 from apps.medical.services import (
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
 )
+from apps.reception.models import QueueEntry
 from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
+
+
+def _safe_redirect_next(request: HttpRequest, default_view_name: str):
+    """Return redirect URL from next param if safe (same host), else default view name."""
+    next_url = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
+        next_url = ""
+    return redirect(next_url or default_view_name)
 
 
 @require_http_methods(["GET", "POST"])
@@ -30,7 +45,10 @@ from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
 def doctor_login_view(request: HttpRequest) -> HttpResponse:
     """Staff login (DOCTOR/ADMIN). Same session as API. Redirects to /doctor/ or next."""
     if request.user.is_authenticated and _doctor_role_ok(request):
-        return redirect(request.GET.get("next") or "doctor-list")
+        next_url = (request.GET.get("next") or "").strip()
+        if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
+            next_url = ""
+        return redirect(next_url or "doctor-list")
     lang = _get_doctor_lang(request)
     ui = get_doctor_ui(lang)
     if request.method == "POST":
@@ -41,9 +59,12 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
             login(request, user)
             if request.POST.get("lang") in ("de", "en", "pl") or request.GET.get("lang") in ("de", "en", "pl"):
                 request.session["doctor_lang"] = request.POST.get("lang") or request.GET.get("lang")
-            return redirect(request.POST.get("next") or request.GET.get("next") or "doctor-list")
+            return _safe_redirect_next(request, "doctor-list")
         return render(request, "doctor/login.html", {"error": "Ungültige Anmeldung oder keine Berechtigung.", "ui": ui, "lang": lang})
-    return render(request, "doctor/login.html", {"next": request.GET.get("next") or "", "ui": ui, "lang": lang})
+    next_val = (request.GET.get("next") or "").strip()
+    if next_val and not url_has_allowed_host_and_scheme(next_val, request.get_host()):
+        next_val = ""
+    return render(request, "doctor/login.html", {"next": next_val, "ui": ui, "lang": lang})
 
 
 def _doctor_role_ok_request(user) -> bool:
@@ -92,8 +113,8 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         except ValueError:
             pass
     patient_search = request.GET.get("patient_search") or None
-    page = max(1, min(10_000, int(request.GET.get("page") or 1)))
-    page_size = max(1, min(200, int(request.GET.get("page_size") or 20)))
+    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
     list_items, total = list_doctor_work_queue(
         status=status,
         queue_date=queue_date,
@@ -127,13 +148,11 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
     """Create or get medical document for queue entry (with submitted intake) and redirect to detail."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
-    from apps.reception.models import QueueEntry
-
     lang = _get_doctor_lang(request)
     ui = get_doctor_ui(lang)
     try:
         entry = QueueEntry.objects.select_related("intake_form").get(id=queue_entry_id)
-    except QueueEntry.DoesNotExist:
+    except ObjectDoesNotExist:
         return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
     if not getattr(entry, "intake_form", None):
         return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "No questionnaire for this entry." if lang == "en" else "Brak ankiety dla tego wpisu.", "ui": ui, "lang": lang}, status=404)
@@ -163,7 +182,7 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
                 "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
             ),
         )
-    except Exception:
+    except ObjectDoesNotExist:
         return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     panel_data = {

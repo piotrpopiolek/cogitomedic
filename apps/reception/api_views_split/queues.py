@@ -7,7 +7,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth, require_user_role
@@ -61,7 +60,6 @@ def _serialize_entry(e: QueueEntry) -> dict:
 
 
 @require_auth
-@csrf_exempt
 def daily_queues_view(request: HttpRequest) -> JsonResponse:
     allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
@@ -122,7 +120,6 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -153,7 +150,6 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
 
 
 @require_auth
-@csrf_exempt
 def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
     allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
@@ -208,7 +204,6 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
 
 
 @require_auth
-@csrf_exempt
 def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -249,7 +244,6 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
 
 
 @require_auth
-@csrf_exempt
 def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:

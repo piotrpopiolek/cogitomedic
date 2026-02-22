@@ -5,7 +5,6 @@ from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from pydantic import ValidationError
 
@@ -43,7 +42,6 @@ def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> Jso
 
 
 @require_auth
-@csrf_exempt
 def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """GET intake form context; PATCH body_map_data."""
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
@@ -83,7 +81,6 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
 
 
 @require_auth
-@csrf_exempt
 @require_http_methods(["PUT"])
 def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """PUT intake form consents (acceptance set)."""
@@ -129,7 +126,6 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
 
 
 @require_auth
-@csrf_exempt
 @require_http_methods(["POST"])
 def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """POST upload signature (base64 image)."""
@@ -163,7 +159,6 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
 
 
 @require_auth
-@csrf_exempt
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
@@ -202,7 +197,6 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
 
 
 @require_auth
-@csrf_exempt
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:

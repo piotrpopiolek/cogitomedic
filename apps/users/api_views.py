@@ -8,7 +8,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
@@ -58,7 +57,6 @@ def _serialize_staff_user(user: StaffUser) -> dict:
 
 
 @ratelimit(key="ip", rate="5/m", method="POST", block=True)
-@csrf_exempt
 def auth_login_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
@@ -86,7 +84,6 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
     )
 
 
-@csrf_exempt
 def auth_logout_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
@@ -103,7 +100,6 @@ def auth_me_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def staff_users_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
@@ -162,7 +158,6 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:

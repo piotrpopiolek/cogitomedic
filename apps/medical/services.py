@@ -8,7 +8,7 @@ from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
-from apps.core.exceptions import IdempotencyConflictError, StateTransitionError
+from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
@@ -25,7 +25,9 @@ def create_or_get_medical_document(
 ) -> MedicalDocument:
     """Create medical document for queue entry if not existing."""
     QueueEntry.objects.get(id=queue_entry_id)
-    PatientIntakeForm.objects.get(id=intake_form_id)
+    intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
+    if intake_form.queue_entry_id != queue_entry_id:
+        raise DomainError("Intake form does not belong to this queue entry.")
     medical_document, _ = MedicalDocument.objects.get_or_create(
         queue_entry_id=queue_entry_id,
         defaults={

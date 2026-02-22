@@ -5,7 +5,6 @@ from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
@@ -68,7 +67,6 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
@@ -97,7 +95,6 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
@@ -132,7 +129,6 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
 
 
 @require_auth
-@csrf_exempt
 def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)

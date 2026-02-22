@@ -7,7 +7,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -76,7 +75,6 @@ def _serialize_contact_history(item: PatientContactHistory) -> dict:
 
 
 @require_auth
-@csrf_exempt
 def patients_view(request: HttpRequest) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -180,7 +178,6 @@ def patients_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -273,7 +270,6 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
 
 
 @require_auth
-@csrf_exempt
 def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
@@ -295,7 +291,6 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
 
 
 @require_auth
-@csrf_exempt
 def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
