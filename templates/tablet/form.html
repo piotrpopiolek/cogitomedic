@@ -285,25 +285,28 @@
         });
       });
 
-      // Anamnesis
-      document.getElementById('save-anamnesis').addEventListener('click', function() {
-        const answers = [];
-        document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
-          const code = block.dataset.questionCode;
-          const radios = block.querySelectorAll('input[type="radio"]:checked');
-          const checks = block.querySelectorAll('input[type="checkbox"]:checked');
-          const textInput = block.querySelector('input[type="text"]');
-          const selected_option_codes = [];
-          radios.forEach(function(r) { selected_option_codes.push(r.value); });
-          checks.forEach(function(c) { selected_option_codes.push(c.value); });
-          const free_text = textInput ? textInput.value.trim() : null;
-          answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
+      // Anamnesis (opcjonalny przycisk „Zapisz” – w kroku 2 jest tylko „Speichern und weiter”)
+      const saveAnamnesisEl = document.getElementById('save-anamnesis');
+      if (saveAnamnesisEl) {
+        saveAnamnesisEl.addEventListener('click', function() {
+          const answers = [];
+          document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
+            const code = block.dataset.questionCode;
+            const radios = block.querySelectorAll('input[type="radio"]:checked');
+            const checks = block.querySelectorAll('input[type="checkbox"]:checked');
+            const textInput = block.querySelector('input[type="text"]');
+            const selected_option_codes = [];
+            radios.forEach(function(r) { selected_option_codes.push(r.value); });
+            checks.forEach(function(c) { selected_option_codes.push(c.value); });
+            const free_text = textInput ? textInput.value.trim() : null;
+            answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
+          });
+          api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
+            if (r.ok) showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
+            else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
+          }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
         });
-        api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
-          if (r.ok) showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
-          else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
-        }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
-      });
+      }
 
       // Signature canvas – stałe wymiary wewnętrzne, żeby rysowanie działało nawet gdy krok był ukryty
       const canvas = document.getElementById('signatureCanvas');
@@ -327,9 +330,10 @@
 
       function getPos(e) {
         const rect = canvas.getBoundingClientRect();
-        const touch = e.touches ? e.touches[0] : e;
-        const dx = touch.clientX - rect.left;
-        const dy = touch.clientY - rect.top;
+        const x = (e.clientX != null) ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const y = (e.clientY != null) ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+        const dx = x - rect.left;
+        const dy = y - rect.top;
         const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
         const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
         return { x: dx * scaleX, y: dy * scaleY };
@@ -338,6 +342,7 @@
       function onPointerDown(e) {
         e.preventDefault();
         drawing = true;
+        canvas.setPointerCapture(e.pointerId);
         const p = getPos(e);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -349,16 +354,17 @@
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
       }
-      function onPointerUp() { drawing = false; }
+      function onPointerUp(e) {
+        e.preventDefault();
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        drawing = false;
+      }
 
-      canvas.addEventListener('mousedown', onPointerDown);
-      canvas.addEventListener('mousemove', onPointerMove);
-      canvas.addEventListener('mouseup', onPointerUp);
-      canvas.addEventListener('mouseleave', onPointerUp);
-      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); onPointerDown(e); }, { passive: false });
-      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); onPointerMove(e); }, { passive: false });
-      canvas.addEventListener('touchend', onPointerUp);
-      canvas.addEventListener('touchcancel', onPointerUp);
+      canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+      canvas.addEventListener('pointermove', onPointerMove, { passive: false });
+      canvas.addEventListener('pointerup', onPointerUp, { passive: false });
+      canvas.addEventListener('pointerleave', onPointerUp, { passive: false });
+      canvas.addEventListener('pointercancel', onPointerUp, { passive: false });
 
       document.getElementById('clear-signature').addEventListener('click', function() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
