@@ -38,6 +38,7 @@ class PublishMedicalDocumentRequest(BaseModel):
 
     publish_request_id: UUID
     published_by_user_id: UUID | None = None  # ignored; session user is used
+    resend_sms: bool = False  # US-010: when republishing, send SMS again to patient
 
 
 class DoctorTemplateListQuery(BaseModel):

@@ -21,6 +21,7 @@ from apps.medical.api_schemas import (
     SaveDraftMedicalDocumentRequest,
 )
 from apps.medical.befund_text import generate_befund_text
+from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.medical.services import (
     create_or_get_medical_document,
@@ -169,15 +170,39 @@ def medical_document_generate_text_view(request: HttpRequest, medical_document_i
     payload = body.medical_payload or {}
     if payload.get("schema_version") != body.medical_payload_schema_version:
         payload = {**payload, "schema_version": body.medical_payload_schema_version}
-    result = generate_befund_text(payload, authoring_locale=body.authoring_locale)
-    return JsonResponse(
-        {
-            "generated": True,
-            "lesions": result["lesions"],
-            "summary_generated_text": result["summary_generated_text"],
-        },
-        status=200,
+    if body.medical_payload_schema_version == 1:
+        try:
+            payload = validate_medical_payload_v1(payload)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": exc.errors()}, status=400)
+
+    template_context = None
+    template_body = None
+    if body.template_id:
+        try:
+            template = get_template(template_id=body.template_id, actor_user_id=request.user.id)
+            template_context = {
+                "template_id": str(template.id),
+                "template_name": template.name,
+                "template_locale": template.template_locale,
+            }
+            template_body = template.template_body
+        except TemplateNotFoundError:
+            return json_error("Template not found.", status=404)
+
+    result = generate_befund_text(
+        payload,
+        authoring_locale=body.authoring_locale,
+        template_body=template_body,
     )
+    response_data = {
+        "generated": True,
+        "lesions": result["lesions"],
+        "summary_generated_text": result["summary_generated_text"],
+    }
+    if template_context:
+        response_data["template_context"] = template_context
+    return JsonResponse(response_data, status=200)
 
 
 @require_auth
@@ -242,12 +267,19 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
 
+    payload_dict = body.medical_payload.model_dump()
+    if body.medical_payload_schema_version == 1:
+        try:
+            payload_dict = validate_medical_payload_v1(payload_dict)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": exc.errors()}, status=400)
+
     try:
         version = save_draft_document_version(
             medical_document_id=medical_document_id,
             updated_by_user_id=request.user.id,
             medical_payload_schema_version=body.medical_payload_schema_version,
-            medical_payload=body.medical_payload.model_dump(),
+            medical_payload=payload_dict,
             diagnosis_code=body.diagnosis_code,
             procedure_code=body.procedure_code,
         )
@@ -288,6 +320,7 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             medical_document_id=medical_document_id,
             publish_request_id=body.publish_request_id,
             published_by_user_id=request.user.id,
+            resend_sms=body.resend_sms,
         )
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
