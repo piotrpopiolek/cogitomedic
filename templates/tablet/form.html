@@ -27,6 +27,10 @@
     #body-map-section .body-map-wrap img { width: 100%; height: auto; display: block; cursor: crosshair; }
     #body-map-markers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
     #body-map-section .body-map-marker { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #0d6efd; border: 2px solid #fff; border-radius: 50%; }
+    .form-step { display: none; }
+    .form-step.active { display: block; }
+    .step-header { font-size: 0.95rem; color: #666; margin-bottom: 1rem; }
+    .step-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
   </style>
 </head>
 <body>
@@ -44,23 +48,30 @@
     <div class="field">{{ ui.email }} {{ patient.email }}</div>
   </section>
 
-  <section id="consents-section">
-    <h2>{{ ui.consents_title }}</h2>
-    <div id="consents-msg" class="error" style="display:none;"></div>
-    {% for c in consents %}
-    <div class="consent-block">
-      <h3>{{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
-      <div class="consent-content">{{ c.content_de }}</div>
-      <label class="consent-check">
-        <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
-        {{ ui.consent_confirm }}
-      </label>
-    </div>
-    {% endfor %}
-    <button type="button" id="save-consents">{{ ui.save_consents }}</button>
-  </section>
+  <p class="step-header" id="step-indicator">{{ ui.step_1_title }}</p>
 
-  <section id="body-map-section">
+  <div class="form-step active" id="step-1">
+    <section id="consents-section">
+      <h2>{{ ui.consents_title }}</h2>
+      <div id="consents-msg" class="error" style="display:none;"></div>
+      {% for c in consents %}
+      <div class="consent-block">
+        <h3>{{ c.title_de }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
+        <div class="consent-content">{{ c.content_de }}</div>
+        <label class="consent-check">
+          <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" {% if c.accepted %}checked{% endif %}>
+          {{ ui.consent_confirm }}
+        </label>
+      </div>
+      {% endfor %}
+    </section>
+    <div class="step-actions">
+      <button type="button" id="btn-step1-next">{{ ui.step_save_and_next }}</button>
+    </div>
+  </div>
+
+  <div class="form-step" id="step-2">
+    <section id="body-map-section">
     <h2>{{ ui.body_map_title }}</h2>
     <p style="font-size:0.9rem; color:#666;">{{ ui.body_map_hint }}</p>
     <div id="body-map-msg" class="error" style="display:none;"></div>
@@ -69,11 +80,8 @@
       <div id="body-map-markers"></div>
     </div>
     <button type="button" id="save-body-map">{{ ui.save_body_map }}</button>
-  </section>
-  {{ body_map_data|json_script:"body-map-initial" }}
-  {{ ui|json_script:"form-ui" }}
-
-  <section id="anamnesis-section">
+    </section>
+    <section id="anamnesis-section">
     <h2>{{ ui.anamnesis_title }}</h2>
     <div id="anamnesis-msg" class="error" style="display:none;"></div>
     {% for q in anamnesis_questions %}
@@ -91,22 +99,33 @@
       <label>{{ ui.notes }} <input type="text" name="q-text-{{ q.question_code }}" placeholder="{{ ui.notes_placeholder }}" value="{{ q.answer.free_text|default:'' }}"></label>
     </div>
     {% endfor %}
-    <button type="button" id="save-anamnesis">{{ ui.save_anamnesis }}</button>
-  </section>
+    </section>
+    <div class="step-actions">
+      <button type="button" id="btn-step2-back" class="btn secondary">{{ ui.step_back }}</button>
+      <button type="button" id="btn-step2-next">{{ ui.step_save_and_next }}</button>
+    </div>
+  </div>
 
-  <section id="signature-section">
+  <div class="form-step" id="step-3">
+    <section id="signature-section">
     <h2>{{ ui.signature_title }}</h2>
     <div id="signature-msg" class="error" style="display:none;"></div>
     <canvas id="signatureCanvas"></canvas>
     <button type="button" id="clear-signature">{{ ui.clear }}</button>
     <button type="button" id="save-signature">{{ ui.save_signature }}</button>
     <span id="signature-saved" class="success" style="display:none;">{{ ui.signature_saved }}</span>
-  </section>
+    </section>
+    <section>
+      <div id="submit-msg" class="error" style="display:none;"></div>
+      <div class="step-actions">
+        <button type="button" id="btn-step3-back" class="btn secondary">{{ ui.step_back }}</button>
+        <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>{{ ui.submit_form }}</button>
+      </div>
+    </section>
+  </div>
 
-  <section>
-    <div id="submit-msg" class="error" style="display:none;"></div>
-    <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>{{ ui.submit_form }}</button>
-  </section>
+  {{ body_map_data|json_script:"body-map-initial" }}
+  {{ ui|json_script:"form-ui" }}
 
   <script>
     (function() {
@@ -134,6 +153,17 @@
         el.textContent = text;
         el.className = isError ? 'error' : 'success';
         el.style.display = text ? 'block' : 'none';
+      }
+
+      const stepTitles = [formUi.step_1_title, formUi.step_2_title, formUi.step_3_title];
+      function goToStep(stepNum) {
+        document.querySelectorAll('.form-step').forEach(function(el) { el.classList.remove('active'); });
+        const stepEl = document.getElementById('step-' + stepNum);
+        if (stepEl) stepEl.classList.add('active');
+        const ind = document.getElementById('step-indicator');
+        if (ind && stepTitles[stepNum - 1]) ind.textContent = stepTitles[stepNum - 1];
+        if (stepNum === 3 && typeof resize === 'function') setTimeout(resize, 100);
+        window.scrollTo(0, 0);
       }
 
       // Body map
@@ -174,16 +204,58 @@
 
       renderBodyMapMarkers();
 
-      // Consents
-      document.getElementById('save-consents').addEventListener('click', function() {
+      // Step 1: Consents – Speichern und weiter
+      document.getElementById('btn-step1-next').addEventListener('click', function() {
         const consents = [];
         document.querySelectorAll('input[name="consent"]').forEach(function(cb) {
           consents.push({ consent_definition_id: cb.dataset.id, accepted: cb.checked });
         });
         api('PUT', '/intake-forms/' + formId + '/consents', { consents }).then(function(r) {
-          if (r.ok) showMsg('consents-msg', formUi.msg_consents_saved || '', false);
-          else r.json().then(function(d) { showMsg('consents-msg', d.error || formUi.msg_save_error || '', true); });
+          if (r.ok) {
+            showMsg('consents-msg', formUi.msg_consents_saved || '', false);
+            goToStep(2);
+          } else {
+            r.json().then(function(d) { showMsg('consents-msg', d.error || formUi.msg_save_error || '', true); });
+          }
         }).catch(function() { showMsg('consents-msg', formUi.msg_connection_error || '', true); });
+      });
+
+      document.getElementById('btn-step2-back').addEventListener('click', function() { goToStep(1); });
+      document.getElementById('btn-step3-back').addEventListener('click', function() { goToStep(2); });
+
+      // Step 2: Body map + Anamnesis – Speichern und weiter
+      document.getElementById('btn-step2-next').addEventListener('click', function() {
+        showMsg('body-map-msg', '', false);
+        showMsg('anamnesis-msg', '', false);
+        const bodyMapPromise = api('PATCH', '/intake-forms/' + formId, {
+          body_map_schema_version: bodyMapSchemaVersion,
+          body_map_data: bodyMapPoints
+        });
+        const answers = [];
+        document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
+          const code = block.dataset.questionCode;
+          const radios = block.querySelectorAll('input[type="radio"]:checked');
+          const checks = block.querySelectorAll('input[type="checkbox"]:checked');
+          const textInput = block.querySelector('input[type="text"]');
+          const selected_option_codes = [];
+          radios.forEach(function(r) { selected_option_codes.push(r.value); });
+          checks.forEach(function(c) { selected_option_codes.push(c.value); });
+          const free_text = textInput ? textInput.value.trim() : null;
+          answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
+        });
+        const anamnesisPromise = api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers });
+        Promise.all([bodyMapPromise, anamnesisPromise]).then(function(results) {
+          const r1 = results[0], r2 = results[1];
+          if (r1.ok && r2.ok) {
+            showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
+            goToStep(3);
+          } else {
+            if (!r1.ok) r1.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
+            if (!r2.ok) r2.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
+          }
+        }).catch(function() {
+          showMsg('anamnesis-msg', formUi.msg_connection_error || '', true);
+        });
       });
 
       // Anamnesis

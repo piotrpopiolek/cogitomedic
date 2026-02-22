@@ -36,6 +36,12 @@ FORM_UI_DE = {
     "lang_en": "English",
     "form_submitted_title": "Formular wurde abgesendet.",
     "back_to_queues": "Zurück zur Warteliste",
+    "step_1_title": "Teil 1: Einwilligungen",
+    "step_2_title": "Teil 2: Anamnese",
+    "step_3_title": "Teil 3: Unterschrift",
+    "step_next": "Weiter",
+    "step_back": "Zurück",
+    "step_save_and_next": "Speichern und weiter",
 }
 
 FORM_UI_EN = {
@@ -71,6 +77,12 @@ FORM_UI_EN = {
     "lang_en": "English",
     "form_submitted_title": "Form has been submitted.",
     "back_to_queues": "Back to queue list",
+    "step_1_title": "Part 1: Consents",
+    "step_2_title": "Part 2: Anamnesis",
+    "step_3_title": "Part 3: Signature",
+    "step_next": "Next",
+    "step_back": "Back",
+    "step_save_and_next": "Save and continue",
 }
 
 
