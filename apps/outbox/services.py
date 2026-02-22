@@ -47,13 +47,14 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
         version.pdf_local_path = f"/tmp/pdfs/{version.id}.pdf"
         version.pdf_checksum_sha256 = "a" * 64
         version.save(update_fields=["pdf_generation_status", "pdf_local_path", "pdf_checksum_sha256"])
+        next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
             medical_document_version=version,
             event_type=OutboxEventType.HIDRIVE_UPLOAD,
             defaults={
                 "aggregate_id": version.id,
                 "payload_schema_version": 1,
-                "payload": {"medical_document_version_id": str(version.id)},
+                "payload": next_payload,
                 "status": OutboxStatus.PENDING,
             },
         )
@@ -64,19 +65,30 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
+        next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
             medical_document_version=version,
             event_type=OutboxEventType.SMS_SEND,
             defaults={
                 "aggregate_id": version.id,
                 "payload_schema_version": 1,
-                "payload": {"medical_document_version_id": str(version.id)},
+                "payload": next_payload,
                 "status": OutboxStatus.PENDING,
             },
         )
         return
 
     if event.event_type == OutboxEventType.SMS_SEND:
+        resend_sms = event.payload.get("resend_sms") is True
+        if not resend_sms:
+            other_version_sent = MedicalDocumentVersion.objects.filter(
+                medical_document_id=version.medical_document_id,
+                sms_sent=True,
+            ).exclude(id=version.id).exists()
+            if other_version_sent:
+                version.sms_sent = False
+                version.save(update_fields=["sms_sent"])
+                return
         version.sms_sent = True
         version.sms_sent_at = now
         version.save(update_fields=["sms_sent", "sms_sent_at"])

@@ -158,12 +158,16 @@ def _summary_sentence(
     return text
 
 
-def generate_befund_text(medical_payload: dict[str, Any], authoring_locale: str = "de-DE") -> dict[str, Any]:
+def generate_befund_text(
+    medical_payload: dict[str, Any],
+    authoring_locale: str = "de-DE",
+    template_body: str | None = None,
+) -> dict[str, Any]:
     """
     From medical_payload v1 (with lesions[].lesion_no, dermatoscopic_features, clinical_assessment, malignancy_risk)
     and optional overall final_assessment, produce:
     - lesions: list of { lesion_no, generated_text }
-    - summary_generated_text: string
+    - summary_generated_text: string (optionally prefixed with template_body when provided)
     Does not modify the input dict.
     """
     locale_de = _locale_is_de(authoring_locale)
@@ -194,6 +198,8 @@ def generate_befund_text(medical_payload: dict[str, Any], authoring_locale: str 
         lesions_for_summary.append((lesion_no, clinical))
 
     summary_text = _summary_sentence(lesions_for_summary, final_assessment, locale_de)
+    if template_body and template_body.strip():
+        summary_text = template_body.strip() + "\n\n" + summary_text
 
     return {
         "lesions": result_lesions,

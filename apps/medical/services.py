@@ -137,6 +137,7 @@ def publish_document_version(
     medical_document_id: uuid.UUID,
     publish_request_id: uuid.UUID,
     published_by_user_id: uuid.UUID,
+    resend_sms: bool = False,
     now: datetime | None = None,
 ) -> MedicalDocumentVersion:
     """
@@ -235,6 +236,7 @@ def publish_document_version(
                 "medical_document_id": str(medical_document.id),
                 "medical_document_version_id": str(draft_version.id),
                 "publish_request_id": str(publish_request_id),
+                "resend_sms": resend_sms,
             },
             "status": OutboxStatus.PENDING,
         },
