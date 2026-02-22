@@ -5,38 +5,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% if locale_param == 'en' %}Intake form – {{ patient.last_name }}{% elif locale_param == 'pl' %}Formularz intake – {{ patient.last_name }}{% else %}Formularz intake – {{ patient.last_name }}{% endif %}</title>
-  <style>
-    body { font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 1rem; }
-    section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
-    h2 { font-size: 1.1rem; margin-top: 0; }
-    label { display: block; margin: 0.5rem 0; }
-    input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
-    input[type="text"], textarea { width: 100%; padding: 0.5rem; box-sizing: border-box; font-size: 1rem; }
-    button, .btn { padding: 0.75rem 1rem; font-size: 1rem; cursor: pointer; background: #0d6efd; color: #fff; border: none; border-radius: 6px; margin: 0.25rem 0.25rem 0 0; }
-    button:disabled { background: #999; cursor: not-allowed; }
-    .btn.secondary { background: #6c757d; text-decoration: none; display: inline-block; }
-    #signatureCanvas { border: 1px solid #000; touch-action: none; display: block; width: 100%; max-width: 400px; height: 180px; min-height: 120px; cursor: crosshair; user-select: none; -webkit-user-select: none; }
-    .error { color: #b02a37; margin: 0.5rem 0; }
-    .success { color: #0a0; margin: 0.5rem 0; }
-    .field { margin: 0.5rem 0; }
-    .consent-block { margin: 1.25rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
-    .consent-block h3 { font-size: 1rem; margin: 0 0 0.5rem 0; }
-    .consent-content { white-space: pre-line; font-size: 0.95rem; line-height: 1.45; max-height: 18rem; overflow-y: auto; padding: 0.75rem; background: #fff; border-radius: 4px; margin-bottom: 0.75rem; }
-    .consent-check { margin-top: 0.5rem; }
-    #body-map-section .body-map-wrap { position: relative; max-width: 100%; margin: 0.5rem 0; }
-    #body-map-section .body-map-wrap img { width: 100%; height: auto; display: block; cursor: crosshair; }
-    #body-map-markers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
-    #body-map-section .body-map-marker { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #0d6efd; border: 2px solid #fff; border-radius: 50%; }
-    .form-steps-wrapper { position: relative; }
-    .form-step { position: absolute; top: 0; left: 0; width: 100%; visibility: hidden; pointer-events: none; }
-    .form-step.active { position: relative; visibility: visible; pointer-events: auto; }
-    .step-header { font-size: 0.95rem; color: #666; margin-bottom: 1rem; }
-    .step-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-  </style>
+  <link rel="stylesheet" href="{% static 'tablet/css/form.css' %}" />
 </head>
 <body>
   {% csrf_token %}
-  <p style="font-size:0.9rem; color:#666;">
+  <div id="tablet-form-connection-error" class="tablet-form-connection-error" role="alert" aria-live="assertive">
+    <span class="tablet-form-connection-error-text"></span>
+    <button type="button" id="tablet-form-retry-btn" class="retry-btn">{{ ui.msg_try_again }}</button>
+  </div>
+  <p class="form-nav-lang" style="font-size:0.9rem; color:#666;">
     <a href="{% url 'tablet:home' %}" class="btn secondary">{{ ui.back_to_waiting }}</a>
     <span style="margin-left:0.5rem;">
       {% if locale_param == 'en' %}<a href="?locale=de">{{ ui.lang_de }}</a> | <strong>{{ ui.lang_en }}</strong> | <a href="?locale=pl">{{ ui.lang_pl }}</a>
@@ -53,10 +30,17 @@
     <div class="field">{{ ui.email }} {{ patient.email }}</div>
   </section>
 
+  <nav class="tablet-form-stepper" aria-label="{{ ui.step_1_title }}">
+    <span class="stepper-dot current" id="stepper-dot-1" aria-current="step">1</span>
+    <span class="stepper-line" aria-hidden="true"></span>
+    <span class="stepper-dot" id="stepper-dot-2">2</span>
+    <span class="stepper-line" aria-hidden="true"></span>
+    <span class="stepper-dot" id="stepper-dot-3">3</span>
+  </nav>
   <p class="step-header" id="step-indicator">{{ ui.step_1_title }}</p>
 
-  <div class="form-steps-wrapper">
-  <div class="form-step active" id="step-1">
+  <div class="form-steps-wrapper" role="region" aria-labelledby="step-indicator">
+  <div class="form-step active" id="step-1" role="group" aria-labelledby="step-indicator" aria-hidden="false">
     <section id="consents-section">
       <h2>{{ ui.consents_title }}</h2>
       <div id="consents-msg" class="error" style="display:none;"></div>
@@ -76,7 +60,7 @@
     </div>
   </div>
 
-  <div class="form-step" id="step-2">
+  <div class="form-step" id="step-2" role="group" aria-labelledby="step-indicator" aria-hidden="true">
     <section id="body-map-section">
     <h2>{{ ui.body_map_title }}</h2>
     <p style="font-size:0.9rem; color:#666;">{{ ui.body_map_hint }}</p>
@@ -112,7 +96,7 @@
     </div>
   </div>
 
-  <div class="form-step" id="step-3">
+  <div class="form-step" id="step-3" role="group" aria-labelledby="step-indicator" aria-hidden="true">
     <section id="signature-section">
     <h2>{{ ui.signature_title }}</h2>
     <div id="signature-msg" class="error" style="display:none;"></div>
@@ -135,271 +119,14 @@
   {{ ui|json_script:"form-ui" }}
 
   <script>
-    (function() {
-      const formId = "{{ intake_form_id|escapejs }}";
-      const apiBase = "/api/v1";
-      const schemaVersion = {{ anamnesis_schema_version }};
-      const bodyMapSchemaVersion = {{ body_map_schema_version }};
-      const initialBodyMapData = JSON.parse(document.getElementById('body-map-initial').textContent || '[]');
-      const formUi = JSON.parse(document.getElementById('form-ui').textContent || '{}');
-
-      function getCsrfToken() {
-        const el = document.querySelector('[name=csrfmiddlewaretoken]');
-        return el ? el.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-      }
-
-      function api(method, path, body) {
-        const opts = { method, credentials: 'same-origin', headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' } };
-        if (body) opts.body = JSON.stringify(body);
-        return fetch(apiBase + path, opts);
-      }
-
-      function showMsg(id, text, isError) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = text;
-        el.className = isError ? 'error' : 'success';
-        el.style.display = text ? 'block' : 'none';
-      }
-
-      const stepTitles = [formUi.step_1_title, formUi.step_2_title, formUi.step_3_title];
-      function goToStep(stepNum) {
-        document.querySelectorAll('.form-step').forEach(function(el) { el.classList.remove('active'); });
-        const stepEl = document.getElementById('step-' + stepNum);
-        if (stepEl) stepEl.classList.add('active');
-        const ind = document.getElementById('step-indicator');
-        if (ind && stepTitles[stepNum - 1]) ind.textContent = stepTitles[stepNum - 1];
-        if (stepNum === 3 && typeof initCanvas === 'function') {
-          requestAnimationFrame(function() { initCanvas(); });
-        }
-        window.scrollTo(0, 0);
-      }
-
-      // Body map
-      let bodyMapPoints = Array.isArray(initialBodyMapData) ? initialBodyMapData.slice() : [];
-      const bodyMapWrap = document.getElementById('body-map-wrap');
-      const bodyMapImg = document.getElementById('body-map-img');
-      const bodyMapMarkersEl = document.getElementById('body-map-markers');
-
-      function renderBodyMapMarkers() {
-        bodyMapMarkersEl.innerHTML = '';
-        bodyMapPoints.forEach(function(p) {
-          const div = document.createElement('div');
-          div.className = 'body-map-marker';
-          div.style.left = (p.x * 100) + '%';
-          div.style.top = (p.y * 100) + '%';
-          bodyMapMarkersEl.appendChild(div);
-        });
-      }
-
-      bodyMapImg.addEventListener('click', function(e) {
-        const rect = bodyMapImg.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
-        const side = x < 0.5 ? 'front' : 'back';
-        bodyMapPoints.push({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, side: side });
-        renderBodyMapMarkers();
-      });
-
-      document.getElementById('save-body-map').addEventListener('click', function() {
-        api('PATCH', '/intake-forms/' + formId, {
-          body_map_schema_version: bodyMapSchemaVersion,
-          body_map_data: bodyMapPoints
-        }).then(function(r) {
-          if (r.ok) showMsg('body-map-msg', formUi.msg_body_map_saved || '', false);
-          else r.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
-        }).catch(function() { showMsg('body-map-msg', formUi.msg_connection_error || '', true); });
-      });
-
-      renderBodyMapMarkers();
-
-      // Step 1: Consents – walidacja wymaganych, potem Speichern und weiter
-      document.getElementById('btn-step1-next').addEventListener('click', function() {
-        const requiredConsents = document.querySelectorAll('#consents-section input[name="consent"][data-required="true"]');
-        let allChecked = true;
-        requiredConsents.forEach(function(cb) { if (!cb.checked) allChecked = false; });
-        if (!allChecked) {
-          showMsg('consents-msg', formUi.validation_consents_required || 'Bitte alle Pflichtfelder ausfüllen.', true);
-          return;
-        }
-        showMsg('consents-msg', '', false);
-        const consents = [];
-        document.querySelectorAll('input[name="consent"]').forEach(function(cb) {
-          consents.push({ consent_definition_id: cb.dataset.id, accepted: cb.checked });
-        });
-        api('PUT', '/intake-forms/' + formId + '/consents', { consents }).then(function(r) {
-          if (r.ok) {
-            showMsg('consents-msg', formUi.msg_consents_saved || '', false);
-            goToStep(2);
-          } else {
-            r.json().then(function(d) { showMsg('consents-msg', d.error || formUi.msg_save_error || '', true); });
-          }
-        }).catch(function() { showMsg('consents-msg', formUi.msg_connection_error || '', true); });
-      });
-
-      document.getElementById('btn-step2-back').addEventListener('click', function() { goToStep(1); });
-      document.getElementById('btn-step3-back').addEventListener('click', function() { goToStep(2); });
-
-      // Step 2: Body map + Anamnesis – walidacja wymaganych pytań, potem Speichern und weiter
-      function isAnamnesisRequiredAnswered(block) {
-        const radios = block.querySelectorAll('input[type="radio"]:checked');
-        const checks = block.querySelectorAll('input[type="checkbox"]:checked');
-        return radios.length > 0 || checks.length > 0;
-      }
-      document.getElementById('btn-step2-next').addEventListener('click', function() {
-        showMsg('body-map-msg', '', false);
-        showMsg('anamnesis-msg', '', false);
-        const requiredQuestions = document.querySelectorAll('#anamnesis-section .field[data-required="true"]');
-        let allAnswered = true;
-        requiredQuestions.forEach(function(block) {
-          if (!isAnamnesisRequiredAnswered(block)) allAnswered = false;
-        });
-        if (!allAnswered) {
-          showMsg('anamnesis-msg', formUi.validation_anamnesis_required || 'Bitte alle Pflichtfragen beantworten.', true);
-          return;
-        }
-        const bodyMapPromise = api('PATCH', '/intake-forms/' + formId, {
-          body_map_schema_version: bodyMapSchemaVersion,
-          body_map_data: bodyMapPoints
-        });
-        const answers = [];
-        document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
-          const code = block.dataset.questionCode;
-          const radios = block.querySelectorAll('input[type="radio"]:checked');
-          const checks = block.querySelectorAll('input[type="checkbox"]:checked');
-          const textInput = block.querySelector('input[type="text"]');
-          const selected_option_codes = [];
-          radios.forEach(function(r) { selected_option_codes.push(r.value); });
-          checks.forEach(function(c) { selected_option_codes.push(c.value); });
-          const free_text = textInput ? textInput.value.trim() : null;
-          answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
-        });
-        const anamnesisPromise = api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers });
-        Promise.all([bodyMapPromise, anamnesisPromise]).then(function(results) {
-          const r1 = results[0], r2 = results[1];
-          if (r1.ok && r2.ok) {
-            showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
-            goToStep(3);
-          } else {
-            if (!r1.ok) r1.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
-            if (!r2.ok) r2.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
-          }
-        }).catch(function() {
-          showMsg('anamnesis-msg', formUi.msg_connection_error || '', true);
-        });
-      });
-
-      // Anamnesis (opcjonalny przycisk „Zapisz” – w kroku 2 jest tylko „Speichern und weiter”)
-      const saveAnamnesisEl = document.getElementById('save-anamnesis');
-      if (saveAnamnesisEl) {
-        saveAnamnesisEl.addEventListener('click', function() {
-          const answers = [];
-          document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
-            const code = block.dataset.questionCode;
-            const radios = block.querySelectorAll('input[type="radio"]:checked');
-            const checks = block.querySelectorAll('input[type="checkbox"]:checked');
-            const textInput = block.querySelector('input[type="text"]');
-            const selected_option_codes = [];
-            radios.forEach(function(r) { selected_option_codes.push(r.value); });
-            checks.forEach(function(c) { selected_option_codes.push(c.value); });
-            const free_text = textInput ? textInput.value.trim() : null;
-            answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
-          });
-          api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
-            if (r.ok) showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
-            else r.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
-          }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
-        });
-      }
-
-      // Signature canvas – stałe wymiary wewnętrzne, żeby rysowanie działało nawet gdy krok był ukryty
-      const canvas = document.getElementById('signatureCanvas');
-      const ctx = canvas.getContext('2d');
-      const CANVAS_W = 400;
-      const CANVAS_H = 180;
-      let drawing = false;
-
-      function initCanvas() {
-        if (canvas.width !== CANVAS_W || canvas.height !== CANVAS_H) {
-          canvas.width = CANVAS_W;
-          canvas.height = CANVAS_H;
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 2;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-        }
-      }
-      initCanvas();
-      window.addEventListener('resize', initCanvas);
-
-      function getPos(e) {
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX != null) ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-        const y = (e.clientY != null) ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-        const dx = x - rect.left;
-        const dy = y - rect.top;
-        const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
-        const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
-        return { x: dx * scaleX, y: dy * scaleY };
-      }
-
-      function onPointerDown(e) {
-        e.preventDefault();
-        drawing = true;
-        canvas.setPointerCapture(e.pointerId);
-        const p = getPos(e);
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-      }
-      function onPointerMove(e) {
-        if (!drawing) return;
-        e.preventDefault();
-        const p = getPos(e);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-      }
-      function onPointerUp(e) {
-        e.preventDefault();
-        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
-        drawing = false;
-      }
-
-      canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
-      canvas.addEventListener('pointermove', onPointerMove, { passive: false });
-      canvas.addEventListener('pointerup', onPointerUp, { passive: false });
-      canvas.addEventListener('pointerleave', onPointerUp, { passive: false });
-      canvas.addEventListener('pointercancel', onPointerUp, { passive: false });
-
-      document.getElementById('clear-signature').addEventListener('click', function() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      });
-
-      document.getElementById('save-signature').addEventListener('click', function() {
-        const dataUrl = canvas.toDataURL('image/png');
-        api('POST', '/intake-forms/' + formId + '/signature', { signature_base64: dataUrl }).then(function(r) {
-          if (r.ok) {
-            document.getElementById('signature-saved').style.display = 'inline';
-            document.getElementById('submit-form').disabled = false;
-            showMsg('signature-msg', '', false);
-          } else {
-            r.json().then(function(d) { showMsg('signature-msg', d.error || formUi.msg_signature_error || '', true); });
-          }
-        }).catch(function() { showMsg('signature-msg', formUi.msg_connection_error || '', true); });
-      });
-
-      // Submit
-      document.getElementById('submit-form').addEventListener('click', function() {
-        const btn = this;
-        btn.disabled = true;
-        api('POST', '/intake-forms/' + formId + '/submit', {}).then(function(r) {
-          if (r.ok) {
-            window.location.href = "/tablet/form/" + formId + "/";
-          } else {
-            r.json().then(function(d) { showMsg('submit-msg', d.error || formUi.msg_submit_error || '', true); btn.disabled = false; });
-          }
-        }).catch(function() { showMsg('submit-msg', formUi.msg_connection_error || '', true); btn.disabled = false; });
-      });
-    })();
+    window.__TABLET_FORM_CONFIG__ = {
+      formId: "{{ intake_form_id|escapejs }}",
+      apiBase: "/api/v1",
+      schemaVersion: {{ anamnesis_schema_version }},
+      bodyMapSchemaVersion: {{ body_map_schema_version }}
+    };
   </script>
+  <script src="{% static 'tablet/js/form.js' %}"></script>
+
 </body>
 </html>

@@ -1,8 +1,8 @@
 {% extends "tablet/base.html" %}
-{% block title %}Wybierz kolejkę – {{ today }}{% endblock %}
+{% block title %}{{ staff_ui.home_title|default:"Poczekalnia" }} – {{ today }}{% endblock %}
 {% block content %}
-  <h1>Poczekalnia – wybór kolejki</h1>
-  <p>Data: <strong>{{ today }}</strong></p>
+  <h1>{{ staff_ui.home_title }}</h1>
+  <p>{{ staff_ui.date }} <strong>{{ today }}</strong></p>
   {% if queues %}
     <ul>
       {% for q in queues %}
@@ -14,6 +14,6 @@
       {% endfor %}
     </ul>
   {% else %}
-    <p>Brak kolejek na dziś. Utwórz kolejkę w panelu recepcji.</p>
+    <p>{{ staff_ui.no_queues_today }}</p>
   {% endif %}
 {% endblock %}
