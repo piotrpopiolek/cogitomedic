@@ -23,10 +23,6 @@
     .consent-block h3 { font-size: 1rem; margin: 0 0 0.5rem 0; }
     .consent-content { white-space: pre-line; font-size: 0.95rem; line-height: 1.45; max-height: 18rem; overflow-y: auto; padding: 0.75rem; background: #fff; border-radius: 4px; margin-bottom: 0.75rem; }
     .consent-check { margin-top: 0.5rem; }
-    #body-map-section .body-map-wrap { position: relative; max-width: 100%; margin: 0.5rem 0; }
-    #body-map-section .body-map-wrap img { width: 100%; height: auto; display: block; cursor: crosshair; }
-    #body-map-markers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
-    #body-map-section .body-map-marker { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #0d6efd; border: 2px solid #fff; border-radius: 50%; }
     .form-steps-wrapper { position: relative; }
     .form-step { position: absolute; top: 0; left: 0; width: 100%; visibility: hidden; pointer-events: none; }
     .form-step.active { position: relative; visibility: visible; pointer-events: auto; }
@@ -77,16 +73,6 @@
   </div>
 
   <div class="form-step" id="step-2">
-    <section id="body-map-section">
-    <h2>{{ ui.body_map_title }}</h2>
-    <p style="font-size:0.9rem; color:#666;">{{ ui.body_map_hint }}</p>
-    <div id="body-map-msg" class="error" style="display:none;"></div>
-    <div class="body-map-wrap" id="body-map-wrap">
-      <img src="{% static 'tablet/body.jpg' %}" alt="{{ ui.body_map_alt }}" id="body-map-img" />
-      <div id="body-map-markers"></div>
-    </div>
-    <button type="button" id="save-body-map">{{ ui.save_body_map }}</button>
-    </section>
     <section id="anamnesis-section">
     <h2>{{ ui.anamnesis_title }}</h2>
     <div id="anamnesis-msg" class="error" style="display:none;"></div>
@@ -131,7 +117,6 @@
   </div>
   </div>
 
-  {{ body_map_data|json_script:"body-map-initial" }}
   {{ ui|json_script:"form-ui" }}
 
   <script>
@@ -139,8 +124,6 @@
       const formId = "{{ intake_form_id|escapejs }}";
       const apiBase = "/api/v1";
       const schemaVersion = {{ anamnesis_schema_version }};
-      const bodyMapSchemaVersion = {{ body_map_schema_version }};
-      const initialBodyMapData = JSON.parse(document.getElementById('body-map-initial').textContent || '[]');
       const formUi = JSON.parse(document.getElementById('form-ui').textContent || '{}');
 
       function getCsrfToken() {
@@ -175,44 +158,6 @@
         window.scrollTo(0, 0);
       }
 
-      // Body map
-      let bodyMapPoints = Array.isArray(initialBodyMapData) ? initialBodyMapData.slice() : [];
-      const bodyMapWrap = document.getElementById('body-map-wrap');
-      const bodyMapImg = document.getElementById('body-map-img');
-      const bodyMapMarkersEl = document.getElementById('body-map-markers');
-
-      function renderBodyMapMarkers() {
-        bodyMapMarkersEl.innerHTML = '';
-        bodyMapPoints.forEach(function(p) {
-          const div = document.createElement('div');
-          div.className = 'body-map-marker';
-          div.style.left = (p.x * 100) + '%';
-          div.style.top = (p.y * 100) + '%';
-          bodyMapMarkersEl.appendChild(div);
-        });
-      }
-
-      bodyMapImg.addEventListener('click', function(e) {
-        const rect = bodyMapImg.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
-        const side = x < 0.5 ? 'front' : 'back';
-        bodyMapPoints.push({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, side: side });
-        renderBodyMapMarkers();
-      });
-
-      document.getElementById('save-body-map').addEventListener('click', function() {
-        api('PATCH', '/intake-forms/' + formId, {
-          body_map_schema_version: bodyMapSchemaVersion,
-          body_map_data: bodyMapPoints
-        }).then(function(r) {
-          if (r.ok) showMsg('body-map-msg', formUi.msg_body_map_saved || '', false);
-          else r.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
-        }).catch(function() { showMsg('body-map-msg', formUi.msg_connection_error || '', true); });
-      });
-
-      renderBodyMapMarkers();
-
       // Step 1: Consents – walidacja wymaganych, potem Speichern und weiter
       document.getElementById('btn-step1-next').addEventListener('click', function() {
         const requiredConsents = document.querySelectorAll('#consents-section input[name="consent"][data-required="true"]');
@@ -240,14 +185,13 @@
       document.getElementById('btn-step2-back').addEventListener('click', function() { goToStep(1); });
       document.getElementById('btn-step3-back').addEventListener('click', function() { goToStep(2); });
 
-      // Step 2: Body map + Anamnesis – walidacja wymaganych pytań, potem Speichern und weiter
+      // Step 2: Anamnesis – walidacja wymaganych pytań, potem Speichern und weiter
       function isAnamnesisRequiredAnswered(block) {
         const radios = block.querySelectorAll('input[type="radio"]:checked');
         const checks = block.querySelectorAll('input[type="checkbox"]:checked');
         return radios.length > 0 || checks.length > 0;
       }
       document.getElementById('btn-step2-next').addEventListener('click', function() {
-        showMsg('body-map-msg', '', false);
         showMsg('anamnesis-msg', '', false);
         const requiredQuestions = document.querySelectorAll('#anamnesis-section .field[data-required="true"]');
         let allAnswered = true;
@@ -258,10 +202,6 @@
           showMsg('anamnesis-msg', formUi.validation_anamnesis_required || 'Bitte alle Pflichtfragen beantworten.', true);
           return;
         }
-        const bodyMapPromise = api('PATCH', '/intake-forms/' + formId, {
-          body_map_schema_version: bodyMapSchemaVersion,
-          body_map_data: bodyMapPoints
-        });
         const answers = [];
         document.querySelectorAll('#anamnesis-section [data-question-code]').forEach(function(block) {
           const code = block.dataset.questionCode;
@@ -274,19 +214,14 @@
           const free_text = textInput ? textInput.value.trim() : null;
           answers.push({ question_code: code, selected_option_codes, free_text: free_text || null });
         });
-        const anamnesisPromise = api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers });
-        Promise.all([bodyMapPromise, anamnesisPromise]).then(function(results) {
-          const r1 = results[0], r2 = results[1];
-          if (r1.ok && r2.ok) {
+        api('PUT', '/intake-forms/' + formId + '/anamnesis', { anamnesis_schema_version: schemaVersion, answers }).then(function(r) {
+          if (r.ok) {
             showMsg('anamnesis-msg', formUi.msg_anamnesis_saved || '', false);
             goToStep(3);
           } else {
-            if (!r1.ok) r1.json().then(function(d) { showMsg('body-map-msg', d.error || formUi.msg_save_error || '', true); });
-            if (!r2.ok) r2.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
+            r.json().then(function(d) { showMsg('anamnesis-msg', d.error || formUi.msg_save_error || '', true); });
           }
-        }).catch(function() {
-          showMsg('anamnesis-msg', formUi.msg_connection_error || '', true);
-        });
+        }).catch(function() { showMsg('anamnesis-msg', formUi.msg_connection_error || '', true); });
       });
 
       // Anamnesis (opcjonalny przycisk „Zapisz” – w kroku 2 jest tylko „Speichern und weiter”)

@@ -227,7 +227,7 @@ class MedicalApiTests(TestCase):
                         "schema_version": 1,
                         "lesions": [
                             {
-                                "lesion_no": 8,
+                                "lesion_numbers": [8],
                                 "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
                                 "clinical_assessment": "CONTROL_NEEDED",
                                 "malignancy_risk": "NO_SUSPICION",
@@ -243,11 +243,39 @@ class MedicalApiTests(TestCase):
         data = gen.json()
         self.assertTrue(data["generated"])
         self.assertEqual(len(data["lesions"]), 1)
-        self.assertEqual(data["lesions"][0]["lesion_no"], 8)
+        self.assertEqual(data["lesions"][0]["lesion_numbers"], [8])
         self.assertIn("Läsion Nr. 8", data["lesions"][0]["generated_text"])
         self.assertIn("Kontrollbedürftig", data["lesions"][0]["generated_text"])
         self.assertIn("summary_generated_text", data)
         self.assertIn("Bei der Analyse", data["summary_generated_text"])
+
+        # Generate text for a group with multiple lesion numbers (Wideodermatoskop)
+        gen2 = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "authoring_locale": "de-DE",
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "lesions": [
+                            {
+                                "lesion_numbers": [2, 3, 13],
+                                "dermatoscopic_features": ["ASYMMETRY"],
+                                "clinical_assessment": "CONTROL_NEEDED",
+                                "malignancy_risk": "NO_SUSPICION",
+                            }
+                        ],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(gen2.status_code, 200)
+        data2 = gen2.json()
+        self.assertEqual(data2["lesions"][0]["lesion_numbers"], [2, 3, 13])
+        self.assertIn("Läsion Nr. 2, 3, 13", data2["lesions"][0]["generated_text"])
 
         missing = self.client.post(
             f"/api/v1/medical-documents/{uuid4()}/generate-text",
@@ -355,6 +383,42 @@ class MedicalApiTests(TestCase):
 
         self.assertEqual(self.client.get(f"/api/v1/medical-document-versions/{uuid4()}").status_code, 404)
         self.assertEqual(self.client.get(f"/api/v1/medical-documents/{uuid4()}/versions").status_code, 404)
+
+    def test_medical_document_draft_v1_validation_rejects_duplicate_lesion_numbers(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        r = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "lesions": [
+                            {
+                                "lesion_numbers": [2, 3, 2],
+                                "clinical_assessment": "CONTROL_NEEDED",
+                                "malignancy_risk": "NO_SUSPICION",
+                            }
+                        ],
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("details", r.json())
 
     def test_medical_document_draft_v1_validation_rejects_control_needed_without_lesions(self) -> None:
         create_response = self.client.post(

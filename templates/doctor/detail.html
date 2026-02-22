@@ -21,7 +21,7 @@
 </section>
 
 <!-- Befund form -->
-<form id="befund-form" class="mb-4">
+<form id="befund-form" class="mb-4">{% csrf_token %}
   <input type="hidden" name="schema_version" value="1" />
   <input type="hidden" name="authoring_locale" value="de-DE" />
 
@@ -64,45 +64,56 @@
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_4 }}{% else %}4. Auswahl der Läsion(en){% endif %}</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>{% if ui %}{{ ui.section_4 }}{% else %}4. Läsionen (Wideodermatoskop – Gruppierung){% endif %}</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-lesion-group">{% if ui %}{{ ui.add_group|default:"+ Gruppe hinzufügen" }}{% else %}+ Gruppe hinzufügen{% endif %}</button>
+    </div>
     <div class="card-body">
-      {% for n in "1234567890" %}
-      <div class="form-check d-inline-block me-3"><input class="form-check-input lesion-check" type="checkbox" data-lesion-no="{{ forloop.counter }}" id="lesion_sel_{{ forloop.counter }}" /><label class="form-check-label" for="lesion_sel_{{ forloop.counter }}">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} {{ forloop.counter }}</label></div>
-      {% endfor %}
+      <p class="small text-muted">Numery zmian z urządzenia wpisuj w pole „Numery w grupie” (np. 2, 3, 13). Jedna grupa = jeden wspólny opis.</p>
+      <div id="lesion-groups-container"></div>
     </div>
   </section>
 
-  {% for n in "1234567890" %}
-  <section class="card mb-3 lesion-panel" id="lesion-panel-{{ forloop.counter }}" style="display:none;" data-lesion-no="{{ forloop.counter }}">
-    <div class="card-header">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} {{ forloop.counter }} – {% if ui %}{{ ui.lesion_header }}{% else %}Merkmale und Einschätzung{% endif %}</div>
-    <div class="card-body">
-      <p class="small text-muted">5. Dermatoskopische Merkmale (Mehrfachauswahl)</p>
-      <div class="row small">
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="ASYMMETRY" /> Asymmetrie</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="IRREGULAR_BORDER" /> Unregelmäßige Begrenzung</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="INHOMOGENEOUS_PIGMENTATION" /> Inhomogene Pigmentierung</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="MULTICOLOR" /> Mehrfarbigkeit</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="ATYPICAL_PIGMENT_NETWORK" /> Atypisches Pigmentnetz</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="IRREGULAR_GLOBULES" /> Unregelmäßige Globuli</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="IRREGULAR_DOTS" /> Unregelmäßige Punkte</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="STRUCTURELESS_AREAS" /> Strukturlose Areale</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="ATYPICAL_VASCULAR_STRUCTURES" /> Atypische Gefäßstrukturen</div></div>
-        <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="lesion_{{ forloop.counter }}_features" value="REGRESSION_AREAS" /> Regressionsareale</div></div>
+  <template id="lesion-group-tpl">
+    <section class="card mb-3 lesion-group" data-group-index="">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="lesion-group-title">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} – {% if ui %}{{ ui.lesion_header }}{% else %}Merkmale und Einschätzung{% endif %}</span>
+        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-group">{% if ui %}{{ ui.remove_group|default:"Gruppe entfernen" }}{% else %}Gruppe entfernen{% endif %}</button>
       </div>
-      <p class="small text-muted mt-2">6. Klinisch-dermatoskopische Einschätzung</p>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_clinical" value="UNREMARKABLE" id="l{{ forloop.counter }}_c1" /><label class="form-check-label" for="l{{ forloop.counter }}_c1">Unauffällige Läsion</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_clinical" value="SLIGHTLY_ATYPICAL" id="l{{ forloop.counter }}_c2" /><label class="form-check-label" for="l{{ forloop.counter }}_c2">Leicht atypische Läsion</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_clinical" value="CONTROL_NEEDED" id="l{{ forloop.counter }}_c3" /><label class="form-check-label" for="l{{ forloop.counter }}_c3">Kontrollbedürftige Läsion</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_clinical" value="SUSPICIOUS" id="l{{ forloop.counter }}_c4" /><label class="form-check-label" for="l{{ forloop.counter }}_c4">Suspekte Läsion</label></div>
-      <p class="small text-muted mt-2">7. Einschätzung des Malignitätsrisikos</p>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_malignancy" value="NO_SUSPICION" id="l{{ forloop.counter }}_m1" /><label class="form-check-label" for="l{{ forloop.counter }}_m1">Kein Malignitätsverdacht</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_malignancy" value="LOW_SUSPICION" id="l{{ forloop.counter }}_m2" /><label class="form-check-label" for="l{{ forloop.counter }}_m2">Niedriger Malignitätsverdacht</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_malignancy" value="CANNOT_EXCLUDE" id="l{{ forloop.counter }}_m3" /><label class="form-check-label" for="l{{ forloop.counter }}_m3">Malignitätsverdacht kann nicht ausgeschlossen werden</label></div>
-      <label class="form-label small mt-2">8. Text (generiert / bearbeitet)</label>
-      <textarea class="form-control form-control-sm lesion-text" name="lesion_{{ forloop.counter }}_text" rows="3" data-lesion-no="{{ forloop.counter }}" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
-    </div>
-  </section>
-  {% endfor %}
+      <div class="card-body">
+        <label class="form-label small">Numery w grupie (z Wideodermatoskopu, np. 2, 3, 13)</label>
+        <input type="text" class="form-control form-control-sm lesion-numbers-input mb-2" placeholder="2, 3, 13" />
+        <p class="small text-muted mb-1">5. Dermatoskopische Merkmale (Mehrfachauswahl)</p>
+        <div class="row small lesion-features-row">
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ASYMMETRY" /> Asymmetrie</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_BORDER" /> Unregelmäßige Begrenzung</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="INHOMOGENEOUS_PIGMENTATION" /> Inhomogene Pigmentierung</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="MULTICOLOR" /> Mehrfarbigkeit</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ATYPICAL_PIGMENT_NETWORK" /> Atypisches Pigmentnetz</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_GLOBULES" /> Unregelmäßige Globuli</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_DOTS" /> Unregelmäßige Punkte</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="STRUCTURELESS_AREAS" /> Strukturlose Areale</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ATYPICAL_VASCULAR_STRUCTURES" /> Atypische Gefäßstrukturen</div></div>
+          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="REGRESSION_AREAS" /> Regressionsareale</div></div>
+        </div>
+        <p class="small text-muted mt-2">6. Klinisch-dermatoskopische Einschätzung</p>
+        <div class="lesion-clinical-row">
+          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="UNREMARKABLE" name="_grp_clinical_" /><label class="form-check-label">Unauffällige Läsion</label></div>
+          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="SLIGHTLY_ATYPICAL" name="_grp_clinical_" /><label class="form-check-label">Leicht atypische Läsion</label></div>
+          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="CONTROL_NEEDED" name="_grp_clinical_" /><label class="form-check-label">Kontrollbedürftige Läsion</label></div>
+          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="SUSPICIOUS" name="_grp_clinical_" /><label class="form-check-label">Suspekte Läsion</label></div>
+        </div>
+        <p class="small text-muted mt-2">7. Einschätzung des Malignitätsrisikos</p>
+        <div class="lesion-malignancy-row">
+          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="NO_SUSPICION" name="_grp_malignancy_" checked /><label class="form-check-label">Kein Malignitätsverdacht</label></div>
+          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="LOW_SUSPICION" name="_grp_malignancy_" /><label class="form-check-label">Niedriger Malignitätsverdacht</label></div>
+          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="CANNOT_EXCLUDE" name="_grp_malignancy_" /><label class="form-check-label">Malignitätsverdacht kann nicht ausgeschlossen werden</label></div>
+        </div>
+        <label class="form-label small mt-2">8. Text (generiert / bearbeitet)</label>
+        <textarea class="form-control form-control-sm lesion-text" rows="3" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
+      </div>
+    </section>
+  </template>
 
   <section class="card mb-3">
     <div class="card-header">{% if ui %}{{ ui.section_9 }}{% else %}9. Zusammenfassung Gesamtbefund (editierbar){% endif %}</div>
@@ -156,12 +167,18 @@
     const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
     return v ? v[2] : null;
   }
+  function getCsrfToken() {
+    const el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : (getCookie('csrftoken') || '').trim();
+  }
   function apiFetch(url, opts) {
     opts = opts || {};
     opts.credentials = 'same-origin';
     opts.headers = opts.headers || {};
     if (opts.body && typeof opts.body === 'string' && !opts.headers['Content-Type']) opts.headers['Content-Type'] = 'application/json';
     opts.headers['Accept'] = 'application/json';
+    const method = (opts.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method) !== -1) opts.headers['X-CSRFToken'] = getCsrfToken();
     return fetch(url, opts).then(r => r.json().then(j => ({ ok: r.ok, status: r.status, json: j })));
   }
 
@@ -218,6 +235,45 @@
     }
   }
 
+  // Lesion groups: add from template, reindex, remove
+  let lesionGroupIndex = 0;
+  const container = el("lesion-groups-container");
+  const tpl = document.getElementById("lesion-group-tpl");
+  function addLesionGroup(initialData) {
+    const frag = tpl.content.cloneNode(true);
+    const section = frag.querySelector(".lesion-group");
+    section.setAttribute("data-group-index", String(lesionGroupIndex));
+    section.querySelector(".lesion-group-title").textContent = "Gruppe " + (lesionGroupIndex + 1) + " – " + (PANEL.ui && PANEL.ui.lesion_header ? PANEL.ui.lesion_header : "Merkmale und Einschätzung");
+    const clinicalRadios = section.querySelectorAll(".lesion-clinical");
+    const malignancyRadios = section.querySelectorAll(".lesion-malignancy");
+    clinicalRadios.forEach(r => { r.name = "lesion_grp_" + lesionGroupIndex + "_clinical"; });
+    malignancyRadios.forEach(r => { r.name = "lesion_grp_" + lesionGroupIndex + "_malignancy"; });
+    if (initialData) {
+      const nums = (initialData.lesion_numbers || (initialData.lesion_no != null ? [initialData.lesion_no] : [])).slice();
+      section.querySelector(".lesion-numbers-input").value = nums.join(", ");
+      (initialData.dermatoscopic_features || []).forEach(f => {
+        const c = section.querySelector('.lesion-feature[value="' + f + '"]'); if (c) c.checked = true;
+      });
+      const cr = section.querySelector('.lesion-clinical[value="' + (initialData.clinical_assessment || "UNREMARKABLE") + '"]'); if (cr) cr.checked = true;
+      const mr = section.querySelector('.lesion-malignancy[value="' + (initialData.malignancy_risk || "NO_SUSPICION") + '"]'); if (mr) mr.checked = true;
+      const ta = section.querySelector(".lesion-text"); if (ta && (initialData.edited_text || initialData.generated_text)) ta.value = initialData.edited_text || initialData.generated_text || "";
+    }
+    section.querySelector(".btn-remove-group").addEventListener("click", function() { section.remove(); reindexLesionGroups(); });
+    container.appendChild(frag);
+    lesionGroupIndex++;
+  }
+  function reindexLesionGroups() {
+    const groups = container.querySelectorAll(".lesion-group");
+    groups.forEach((section, i) => {
+      section.setAttribute("data-group-index", String(i));
+      section.querySelector(".lesion-group-title").textContent = "Gruppe " + (i + 1) + " – " + (PANEL.ui && PANEL.ui.lesion_header ? PANEL.ui.lesion_header : "Merkmale und Einschätzung");
+      section.querySelectorAll(".lesion-clinical").forEach(r => { r.name = "lesion_grp_" + i + "_clinical"; });
+      section.querySelectorAll(".lesion-malignancy").forEach(r => { r.name = "lesion_grp_" + i + "_malignancy"; });
+    });
+    lesionGroupIndex = groups.length;
+  }
+  el("btn-add-lesion-group").addEventListener("click", function() { addLesionGroup(null); });
+
   // Prefill from current_version
   if (CTX && CTX.current_version && CTX.current_version.medical_payload) {
     const pl = CTX.current_version.medical_payload;
@@ -227,26 +283,17 @@
     (pl.recommendations || []).forEach(v => { const c = document.querySelector('input[name="recommendations"][value="' + v + '"]'); if (c) c.checked = true; });
     const fa = document.querySelector('input[name="final_assessment"][value="' + (pl.final_assessment || 'NO_HIGH_GRADE_SUSPICION') + '"]'); if (fa) fa.checked = true;
     if (pl.summary_edited_text) el("summary_text").value = pl.summary_edited_text; else if (pl.summary_generated_text) el("summary_text").value = pl.summary_generated_text;
-    (pl.lesions || []).forEach(l => {
-      const no = l.lesion_no;
-      const panel = el("lesion-panel-" + no);
-      const check = document.querySelector('.lesion-check[data-lesion-no="' + no + '"]');
-      if (panel && check) { check.checked = true; panel.style.display = 'block'; }
-      (l.dermatoscopic_features || []).forEach(f => { const c = document.querySelector('input[name="lesion_' + no + '_features"][value="' + f + '"]'); if (c) c.checked = true; });
-      const cr = document.querySelector('input[name="lesion_' + no + '_clinical"][value="' + (l.clinical_assessment || '') + '"]'); if (cr) cr.checked = true;
-      const mr = document.querySelector('input[name="lesion_' + no + '_malignancy"][value="' + (l.malignancy_risk || '') + '"]'); if (mr) mr.checked = true;
-      const ta = document.querySelector('.lesion-text[data-lesion-no="' + no + '"]'); if (ta && (l.edited_text || l.generated_text)) ta.value = l.edited_text || l.generated_text || '';
-    });
+    const lesions = pl.lesions || [];
+    if (lesions.length === 0) addLesionGroup(null);
+    else lesions.forEach(l => addLesionGroup(l));
+  } else {
+    addLesionGroup(null);
   }
 
-  // Toggle lesion panels
-  document.querySelectorAll('.lesion-check').forEach(cb => {
-    cb.addEventListener('change', function() {
-      const no = this.getAttribute('data-lesion-no');
-      const panel = el("lesion-panel-" + no);
-      if (panel) panel.style.display = this.checked ? 'block' : 'none';
-    });
-  });
+  function parseLesionNumbers(str) {
+    if (!str || typeof str !== 'string') return [];
+    return str.split(/[\s,]+/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 1);
+  }
 
   function buildPayload() {
     const payload = { schema_version: 1, authoring_locale: 'de-DE', examination_scope: [], lesions: [], recommendations: [], final_assessment: 'NO_HIGH_GRADE_SUSPICION' };
@@ -255,12 +302,14 @@
     const oa = document.querySelector('input[name="overall_image_assessment"]:checked'); if (oa) payload.overall_image_assessment = oa.value; else payload.overall_image_assessment = 'NO_CONTROL_NEEDED';
     document.querySelectorAll('input[name="final_assessment"]:checked').forEach(c => { payload.final_assessment = c.value; });
     document.querySelectorAll('input[name="recommendations"]:checked').forEach(c => payload.recommendations.push(c.value));
-    document.querySelectorAll('.lesion-check:checked').forEach(cb => {
-      const no = parseInt(cb.getAttribute('data-lesion-no'), 10);
-      const features = []; document.querySelectorAll('input[name="lesion_' + no + '_features"]:checked').forEach(c => features.push(c.value));
-      const clinical = document.querySelector('input[name="lesion_' + no + '_clinical"]:checked'); const malignancy = document.querySelector('input[name="lesion_' + no + '_malignancy"]:checked');
-      const textEl = document.querySelector('.lesion-text[data-lesion-no="' + no + '"]');
-      const lesion = { lesion_no: no, dermatoscopic_features: features, clinical_assessment: clinical ? clinical.value : 'UNREMARKABLE', malignancy_risk: malignancy ? malignancy.value : 'NO_SUSPICION' };
+    container.querySelectorAll(".lesion-group").forEach((section, i) => {
+      const numsStr = section.querySelector(".lesion-numbers-input").value;
+      const lesion_numbers = parseLesionNumbers(numsStr);
+      if (lesion_numbers.length === 0) return;
+      const features = []; section.querySelectorAll(".lesion-feature:checked").forEach(c => features.push(c.value));
+      const clinical = section.querySelector(".lesion-clinical:checked"); const malignancy = section.querySelector(".lesion-malignancy:checked");
+      const textEl = section.querySelector(".lesion-text");
+      const lesion = { lesion_numbers: lesion_numbers, dermatoscopic_features: features, clinical_assessment: clinical ? clinical.value : 'UNREMARKABLE', malignancy_risk: malignancy ? malignancy.value : 'NO_SUSPICION' };
       if (textEl && textEl.value) lesion.edited_text = textEl.value;
       payload.lesions.push(lesion);
     });
@@ -269,9 +318,8 @@
   }
 
   function collectGeneratedIntoPayload(payload, genResp) {
-    (genResp.lesions || []).forEach(l => {
-      const ex = payload.lesions.find(x => x.lesion_no === l.lesion_no);
-      if (ex) ex.generated_text = l.generated_text;
+    (genResp.lesions || []).forEach((l, i) => {
+      if (payload.lesions[i]) payload.lesions[i].generated_text = l.generated_text;
     });
     if (genResp.summary_generated_text) payload.summary_generated_text = genResp.summary_generated_text;
     return payload;
@@ -284,9 +332,13 @@
       .then(({ ok, json }) => {
         this.disabled = false;
         if (!ok) { alertMsg('danger', json.error || 'Fehler'); return; }
-        (json.lesions || []).forEach(l => {
-          const ta = document.querySelector('.lesion-text[data-lesion-no="' + l.lesion_no + '"]');
-          if (ta && !ta.value) ta.value = l.generated_text || '';
+        const groups = container.querySelectorAll(".lesion-group");
+        (json.lesions || []).forEach((l, i) => {
+          const group = groups[i];
+          if (group) {
+            const ta = group.querySelector(".lesion-text");
+            if (ta && !ta.value && l.generated_text) ta.value = l.generated_text;
+          }
         });
         if (json.summary_generated_text && !el("summary_text").value) el("summary_text").value = json.summary_generated_text;
         alertMsg('success', 'Text generiert.');
