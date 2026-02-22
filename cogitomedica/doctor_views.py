@@ -22,6 +22,7 @@ from apps.medical.services import (
     get_medical_document_context,
     list_doctor_work_queue,
 )
+from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
 
 
 @require_http_methods(["GET", "POST"])
@@ -30,15 +31,19 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
     """Staff login (DOCTOR/ADMIN). Same session as API. Redirects to /doctor/ or next."""
     if request.user.is_authenticated and _doctor_role_ok(request):
         return redirect(request.GET.get("next") or "doctor-list")
+    lang = _get_doctor_lang(request)
+    ui = get_doctor_ui(lang)
     if request.method == "POST":
         username = (request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
         user = authenticate(request, username=username, password=password)
         if user is not None and user.is_active and _doctor_role_ok_request(user):
             login(request, user)
+            if request.POST.get("lang") in ("de", "pl") or request.GET.get("lang") in ("de", "pl"):
+                request.session["doctor_lang"] = request.POST.get("lang") or request.GET.get("lang")
             return redirect(request.POST.get("next") or request.GET.get("next") or "doctor-list")
-        return render(request, "doctor/login.html", {"error": "Ungültige Anmeldung oder keine Berechtigung."})
-    return render(request, "doctor/login.html", {"next": request.GET.get("next") or ""})
+        return render(request, "doctor/login.html", {"error": "Ungültige Anmeldung oder keine Berechtigung.", "ui": ui, "lang": lang})
+    return render(request, "doctor/login.html", {"next": request.GET.get("next") or "", "ui": ui, "lang": lang})
 
 
 def _doctor_role_ok_request(user) -> bool:
@@ -57,6 +62,20 @@ def doctor_logout_view(request: HttpRequest) -> HttpResponse:
 def _doctor_role_ok(request: HttpRequest) -> bool:
     role = getattr(request.user, "role", None)
     return role in ("DOCTOR", "ADMIN")
+
+
+def _get_doctor_lang(request: HttpRequest) -> str:
+    """Język panelu: z GET ?lang= lub sesji, domyślnie 'de'."""
+    lang = request.GET.get("lang") or request.session.get("doctor_lang", "de")
+    return "pl" if lang == "pl" else "de"
+
+
+def _apply_doctor_lang(request: HttpRequest) -> str:
+    """Ustaw język z GET w sesji (jeśli podany) i zwróć aktualny lang."""
+    lang = _get_doctor_lang(request)
+    if request.GET.get("lang") in ("de", "pl"):
+        request.session["doctor_lang"] = request.GET.get("lang")
+    return lang
 
 
 @login_required(login_url="doctor-login")
@@ -82,6 +101,9 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         page=page,
         page_size=page_size,
     )
+    lang = _apply_doctor_lang(request)
+    if request.GET.get("lang"):
+        return redirect("doctor-list")
     return render(
         request,
         "doctor/list.html",
@@ -93,6 +115,8 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "queue_date": request.GET.get("queue_date") or "",
                 "patient_search": patient_search or "",
             },
+            "ui": get_doctor_ui(lang),
+            "lang": lang,
         },
     )
 
@@ -105,15 +129,17 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
         return redirect("doctor-login")
     from apps.reception.models import QueueEntry
 
+    lang = _get_doctor_lang(request)
+    ui = get_doctor_ui(lang)
     try:
         entry = QueueEntry.objects.select_related("intake_form").get(id=queue_entry_id)
     except QueueEntry.DoesNotExist:
-        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden."}, status=404)
+        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
     if not getattr(entry, "intake_form", None):
-        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag."}, status=404)
+        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "Brak ankiety dla tego wpisu.", "ui": ui, "lang": lang}, status=404)
     intake_form = entry.intake_form
     if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
-        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen."}, status=400)
+        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Ankieta nie została jeszcze zakończona.", "ui": ui, "lang": lang}, status=400)
     doc = create_or_get_medical_document(
         queue_entry_id=entry.id,
         intake_form_id=intake_form.id,
@@ -128,23 +154,16 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
     """Document detail with intake summary and Befund form (data for client-side API calls)."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
+    lang = _get_doctor_lang(request)
+    ui = get_doctor_ui(lang)
     try:
         context = get_medical_document_context(
             medical_document_id=medical_document_id,
-            form_locale=request.GET.get("form_locale") or "de-DE",
+            form_locale=request.GET.get("form_locale") or ("pl-PL" if lang == "pl" else "de-DE"),
         )
     except Exception:
-        return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden."}, status=404)
-    fitzpatrick_choices = [
-        ("TYPE_I", "Hauttyp I nach Fitzpatrick"),
-        ("TYPE_II", "Hauttyp II nach Fitzpatrick"),
-        ("TYPE_III", "Hauttyp III nach Fitzpatrick"),
-        ("TYPE_IV", "Hauttyp IV nach Fitzpatrick"),
-        ("TYPE_V", "Hauttyp V nach Fitzpatrick"),
-        ("TYPE_VI", "Hauttyp VI nach Fitzpatrick"),
-        ("TYPE_II_III", "Hauttyp II–III nach Fitzpatrick"),
-        ("UNDETERMINED", "Hauttyp nicht eindeutig bestimmbar"),
-    ]
+        return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
+    fitzpatrick_choices = get_fitzpatrick_choices(lang)
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
@@ -158,5 +177,7 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
             "panel_data": panel_data,
             "api_base": "/api/v1",
             "fitzpatrick_choices": fitzpatrick_choices,
+            "ui": ui,
+            "lang": lang,
         },
     )

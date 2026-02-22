@@ -1,39 +1,39 @@
 {% extends "doctor/base.html" %}
-{% block title %}Dokumente – Work Queue{% endblock %}
+{% block title %}{% if ui %}{{ ui.list_title }}{% else %}Dokumente – Work Queue{% endif %}{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Medizinische Dokumente (Work Queue)</h1>
+<h1 class="h4 mb-4">{% if ui %}{{ ui.list_title }}{% else %}Medizinische Dokumente (Work Queue){% endif %}</h1>
 
 <form method="get" class="row g-3 mb-4">
   <div class="col-auto">
-    <label class="form-label">Status</label>
+    <label class="form-label">{% if ui %}{{ ui.filter_status }}{% else %}Status{% endif %}</label>
     <select name="status" class="form-select form-select-sm">
-      <option value="">– alle –</option>
-      <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>Entwurf</option>
-      <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>Veröffentlicht</option>
+      <option value="">{% if ui %}{{ ui.filter_all }}{% else %}– alle –{% endif %}</option>
+      <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>{% if ui %}{{ ui.filter_draft }}{% else %}Entwurf{% endif %}</option>
+      <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>{% if ui %}{{ ui.filter_published }}{% else %}Veröffentlicht{% endif %}</option>
     </select>
   </div>
   <div class="col-auto">
-    <label class="form-label">Datum</label>
+    <label class="form-label">{% if ui %}{{ ui.filter_date }}{% else %}Datum{% endif %}</label>
     <input type="date" name="queue_date" class="form-control form-control-sm" value="{{ filters.queue_date }}" />
   </div>
   <div class="col-auto">
-    <label class="form-label">Patient (Name)</label>
-    <input type="text" name="patient_search" class="form-control form-control-sm" placeholder="Suche…" value="{{ filters.patient_search }}" />
+    <label class="form-label">{% if ui %}{{ ui.filter_patient }}{% else %}Patient (Name){% endif %}</label>
+    <input type="text" name="patient_search" class="form-control form-control-sm" placeholder="{% if ui %}{{ ui.filter_search_placeholder }}{% else %}Suche…{% endif %}" value="{{ filters.patient_search }}" />
   </div>
   <div class="col-auto d-flex align-items-end">
-    <button type="submit" class="btn btn-primary btn-sm">Filtern</button>
+    <button type="submit" class="btn btn-primary btn-sm">{% if ui %}{{ ui.filter_submit }}{% else %}Filtern{% endif %}</button>
   </div>
 </form>
 
 <table class="table table-sm table-hover">
   <thead>
     <tr>
-      <th>Patient</th>
-      <th>Datum</th>
-      <th>Status</th>
-      <th>PDF</th>
-      <th>HiDrive</th>
-      <th>SMS</th>
+      <th>{% if ui %}{{ ui.table_patient }}{% else %}Patient{% endif %}</th>
+      <th>{% if ui %}{{ ui.table_date }}{% else %}Datum{% endif %}</th>
+      <th>{% if ui %}{{ ui.table_status }}{% else %}Status{% endif %}</th>
+      <th>{% if ui %}{{ ui.table_pdf }}{% else %}PDF{% endif %}</th>
+      <th>{% if ui %}{{ ui.table_hidrive }}{% else %}HiDrive{% endif %}</th>
+      <th>{% if ui %}{{ ui.table_sms }}{% else %}SMS{% endif %}</th>
       <th></th>
     </tr>
   </thead>
@@ -46,17 +46,17 @@
       <td>{% if item.pdf_generation_status %}<span class="badge status-badge {% if item.pdf_generation_status == 'COMPLETED' %}bg-success{% elif item.pdf_generation_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
       <td>{% if item.hidrive_sent %}✓{% else %}–{% endif %}</td>
       <td>{% if item.sms_sent %}✓{% else %}–{% endif %}</td>
-      <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}" class="btn btn-outline-primary btn-sm">Öffnen</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}" class="btn btn-outline-primary btn-sm">Öffnen</a>{% endif %}</td>
+      <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="text-muted">Keine Dokumente.</td></tr>
+    <tr><td colspan="7" class="text-muted">{% if ui %}{{ ui.no_documents }}{% else %}Keine Dokumente.{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
 {% if pagination.total > 0 %}
 <nav>
-  <p class="small text-muted">Seite {{ pagination.page }}, {{ pagination.total }} Einträge gesamt.</p>
+  <p class="small text-muted">{% if ui %}{{ ui.pagination_page }}{% else %}Seite{% endif %} {{ pagination.page }}, {{ pagination.total }} {% if ui %}{{ ui.pagination_total }}{% else %}Einträge gesamt.{% endif %}</p>
 </nav>
 {% endif %}
 {% endblock %}

@@ -6,15 +6,15 @@
 {% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h4 mb-0">Befund – Patient: <span id="patient-name"></span></h1>
-  <a href="{% url 'doctor-list' %}" class="btn btn-outline-secondary btn-sm">← Zurück zur Liste</a>
+  <h1 class="h4 mb-0">Befund – {% if ui %}{{ ui.patient_label }}{% else %}Patient{% endif %}: <span id="patient-name"></span></h1>
+  <a href="{% url 'doctor-list' %}" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.back_to_list }}{% else %}← Zurück zur Liste{% endif %}</a>
 </div>
 
 <div id="alert-placeholder"></div>
 
 <!-- Intake summary (read-only) -->
 <section class="card mb-4">
-  <div class="card-header">Anamnese / Intake</div>
+  <div class="card-header">{% if ui %}{{ ui.intake_header }}{% else %}Anamnese / Intake{% endif %}</div>
   <div class="card-body small">
     <div id="intake-summary"></div>
   </div>
@@ -26,15 +26,15 @@
   <input type="hidden" name="authoring_locale" value="de-DE" />
 
   <section class="card mb-3">
-    <div class="card-header">1. Untersuchungsumfang (Mehrfachauswahl)</div>
+    <div class="card-header">{% if ui %}{{ ui.section_1 }}{% else %}1. Untersuchungsumfang (Mehrfachauswahl){% endif %}</div>
     <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="INTIMATE_AREA_NOT_EXAMINED" id="ex1" /><label class="form-check-label" for="ex1">Intimbereich nicht untersucht</label></div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="ORAL_MUCOSA_NOT_EXAMINED" id="ex2" /><label class="form-check-label" for="ex2">Mundschleimhaut nicht untersucht</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="INTIMATE_AREA_NOT_EXAMINED" id="ex1" /><label class="form-check-label" for="ex1">{% if ui %}{{ ui.examination_intimate }}{% else %}Intimbereich nicht untersucht{% endif %}</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="ORAL_MUCOSA_NOT_EXAMINED" id="ex2" /><label class="form-check-label" for="ex2">{% if ui %}{{ ui.examination_oral }}{% else %}Mundschleimhaut nicht untersucht{% endif %}</label></div>
     </div>
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">2. Hauttyp nach Fitzpatrick</div>
+    <div class="card-header">{% if ui %}{{ ui.section_2 }}{% else %}2. Hauttyp nach Fitzpatrick{% endif %}</div>
     <div class="card-body">
       {% for val, label in fitzpatrick_choices %}
       <div class="form-check"><input class="form-check-input" type="radio" name="fitzpatrick_type" value="{{ val }}" id="fp_{{ val }}" /><label class="form-check-label" for="fp_{{ val }}">{{ label }}</label></div>
@@ -43,18 +43,18 @@
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">3. Gesamtbeurteilung der Bildanalyse</div>
+    <div class="card-header">{% if ui %}{{ ui.section_3 }}{% else %}3. Gesamtbeurteilung der Bildanalyse{% endif %}</div>
     <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="form-check-label" for="oa1">Keine kontrollbedürftigen Hautveränderungen erkennbar</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="form-check-label" for="oa2">Kontrollbedürftige Hautveränderungen erkennbar</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="form-check-label" for="oa1">{% if ui %}{{ ui.overall_no_control }}{% else %}Keine kontrollbedürftigen Hautveränderungen erkennbar{% endif %}</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="form-check-label" for="oa2">{% if ui %}{{ ui.overall_control }}{% else %}Kontrollbedürftige Hautveränderungen erkennbar{% endif %}</label></div>
     </div>
   </section>
 
   <section class="card mb-3">
     <div class="card-body">
       <div id="body-map-preview-wrap" style="display:none;">
-        <h6 class="text-muted mb-2">Körperschema (vom Patient markiert)</h6>
-        <p class="small text-muted mb-2">Vorder- und Rückansicht mit den vom Patient gesetzten Markierungen.</p>
+        <h6 class="text-muted mb-2">{% if ui %}{{ ui.body_map_title }}{% else %}Körperschema (vom Patient markiert){% endif %}</h6>
+        <p class="small text-muted mb-2">{% if ui %}{{ ui.body_map_hint }}{% else %}Vorder- und Rückansicht mit den vom Patient gesetzten Markierungen.{% endif %}</p>
         <div class="body-map-preview-container" style="position:relative; max-width:280px;">
           <img id="body-map-preview-img" src="{% static 'tablet/body.jpg' %}" alt="Körperschema" style="width:100%; height:auto; display:block;" />
           <div id="body-map-preview-markers" style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none;"></div>
@@ -64,17 +64,17 @@
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">4. Auswahl der Läsion(en)</div>
+    <div class="card-header">{% if ui %}{{ ui.section_4 }}{% else %}4. Auswahl der Läsion(en){% endif %}</div>
     <div class="card-body">
       {% for n in "1234567890" %}
-      <div class="form-check d-inline-block me-3"><input class="form-check-input lesion-check" type="checkbox" data-lesion-no="{{ forloop.counter }}" id="lesion_sel_{{ forloop.counter }}" /><label class="form-check-label" for="lesion_sel_{{ forloop.counter }}">Läsion Nr. {{ forloop.counter }}</label></div>
+      <div class="form-check d-inline-block me-3"><input class="form-check-input lesion-check" type="checkbox" data-lesion-no="{{ forloop.counter }}" id="lesion_sel_{{ forloop.counter }}" /><label class="form-check-label" for="lesion_sel_{{ forloop.counter }}">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} {{ forloop.counter }}</label></div>
       {% endfor %}
     </div>
   </section>
 
   {% for n in "1234567890" %}
   <section class="card mb-3 lesion-panel" id="lesion-panel-{{ forloop.counter }}" style="display:none;" data-lesion-no="{{ forloop.counter }}">
-    <div class="card-header">Läsion Nr. {{ forloop.counter }} – Merkmale und Einschätzung</div>
+    <div class="card-header">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} {{ forloop.counter }} – {% if ui %}{{ ui.lesion_header }}{% else %}Merkmale und Einschätzung{% endif %}</div>
     <div class="card-body">
       <p class="small text-muted">5. Dermatoskopische Merkmale (Mehrfachauswahl)</p>
       <div class="row small">
@@ -99,41 +99,41 @@
       <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_malignancy" value="LOW_SUSPICION" id="l{{ forloop.counter }}_m2" /><label class="form-check-label" for="l{{ forloop.counter }}_m2">Niedriger Malignitätsverdacht</label></div>
       <div class="form-check"><input class="form-check-input" type="radio" name="lesion_{{ forloop.counter }}_malignancy" value="CANNOT_EXCLUDE" id="l{{ forloop.counter }}_m3" /><label class="form-check-label" for="l{{ forloop.counter }}_m3">Malignitätsverdacht kann nicht ausgeschlossen werden</label></div>
       <label class="form-label small mt-2">8. Text (generiert / bearbeitet)</label>
-      <textarea class="form-control form-control-sm lesion-text" name="lesion_{{ forloop.counter }}_text" rows="3" data-lesion-no="{{ forloop.counter }}" placeholder="Nach „Generuj tekst“ hier anzeigen und bearbeiten"></textarea>
+      <textarea class="form-control form-control-sm lesion-text" name="lesion_{{ forloop.counter }}_text" rows="3" data-lesion-no="{{ forloop.counter }}" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
     </div>
   </section>
   {% endfor %}
 
   <section class="card mb-3">
-    <div class="card-header">9. Zusammenfassung Gesamtbefund (editierbar)</div>
+    <div class="card-header">{% if ui %}{{ ui.section_9 }}{% else %}9. Zusammenfassung Gesamtbefund (editierbar){% endif %}</div>
     <div class="card-body">
-      <textarea class="form-control" id="summary_text" name="summary_text" rows="4" placeholder="Nach „Generuj tekst“ hier anzeigen und bearbeiten"></textarea>
+      <textarea class="form-control" id="summary_text" name="summary_text" rows="4" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
     </div>
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">10. Ärztliche Empfehlung (Mehrfachauswahl)</div>
+    <div class="card-header">{% if ui %}{{ ui.section_10 }}{% else %}10. Ärztliche Empfehlung (Mehrfachauswahl){% endif %}</div>
     <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_3_MONTHS" /> Dermatologische Verlaufskontrolle in 3 Monaten empfohlen</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_6_MONTHS" /> Dermatologische Verlaufskontrolle in 6 Monaten empfohlen</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="PROMPT_VISIT_ON_CHANGE" /> Bei klinischer Veränderung zeitnahe persönliche dermatologische Vorstellung empfohlen</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="NO_SHORT_TERM_FOLLOWUP_REQUIRED" /> Aktuell keine kurzfristige Kontrolle erforderlich</div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_3_MONTHS" /> {% if ui %}{{ ui.rec_followup_3 }}{% else %}Dermatologische Verlaufskontrolle in 3 Monaten empfohlen{% endif %}</div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_6_MONTHS" /> {% if ui %}{{ ui.rec_followup_6 }}{% else %}Dermatologische Verlaufskontrolle in 6 Monaten empfohlen{% endif %}</div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="PROMPT_VISIT_ON_CHANGE" /> {% if ui %}{{ ui.rec_prompt_visit }}{% else %}Bei klinischer Veränderung zeitnahe persönliche dermatologische Vorstellung empfohlen{% endif %}</div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="NO_SHORT_TERM_FOLLOWUP_REQUIRED" /> {% if ui %}{{ ui.rec_no_short }}{% else %}Aktuell keine kurzfristige Kontrolle erforderlich{% endif %}</div>
     </div>
   </section>
 
   <section class="card mb-3">
-    <div class="card-header">11. Ärztliche Gesamteinschätzung</div>
+    <div class="card-header">{% if ui %}{{ ui.section_11 }}{% else %}11. Ärztliche Gesamteinschätzung{% endif %}</div>
     <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="NO_HIGH_GRADE_SUSPICION" id="fa1" checked /><label class="form-check-label" for="fa1">Aktuell kein höhergradiger Malignitätsverdacht</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="HIGH_GRADE_CANNOT_BE_EXCLUDED" id="fa2" /><label class="form-check-label" for="fa2">Ein höhergradiger Malignitätsverdacht kann nicht sicher ausgeschlossen werden</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="NO_HIGH_GRADE_SUSPICION" id="fa1" checked /><label class="form-check-label" for="fa1">{% if ui %}{{ ui.final_no_suspicion }}{% else %}Aktuell kein höhergradiger Malignitätsverdacht{% endif %}</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="HIGH_GRADE_CANNOT_BE_EXCLUDED" id="fa2" /><label class="form-check-label" for="fa2">{% if ui %}{{ ui.final_high_grade }}{% else %}Ein höhergradiger Malignitätsverdacht kann nicht sicher ausgeschlossen werden{% endif %}</label></div>
     </div>
   </section>
 
   <div class="d-flex gap-2 flex-wrap">
-    <button type="button" class="btn btn-outline-primary" id="btn-generate-text">Generuj tekst</button>
-    <button type="button" class="btn btn-secondary" id="btn-save-draft">Zapisz szkic</button>
-    <button type="button" class="btn btn-success" id="btn-publish">Zatwierdź i wyślij</button>
-    <label class="align-middle ms-2"><input type="checkbox" id="resend_sms" /> SMS erneut senden</label>
+    <button type="button" class="btn btn-outline-primary" id="btn-generate-text">{% if ui %}{{ ui.btn_generate }}{% else %}Generuj tekst{% endif %}</button>
+    <button type="button" class="btn btn-secondary" id="btn-save-draft">{% if ui %}{{ ui.btn_save_draft }}{% else %}Zapisz szkic{% endif %}</button>
+    <button type="button" class="btn btn-success" id="btn-publish">{% if ui %}{{ ui.btn_publish }}{% else %}Zatwierdź i wyślij{% endif %}</button>
+    <label class="align-middle ms-2"><input type="checkbox" id="resend_sms" /> {% if ui %}{{ ui.resend_sms }}{% else %}SMS erneut senden{% endif %}</label>
   </div>
 </form>
 {% endblock %}
