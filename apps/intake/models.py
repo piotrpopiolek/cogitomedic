@@ -18,8 +18,10 @@ class ConsentDefinition(models.Model):
     version = models.IntegerField()
     title_de = models.CharField(max_length=200)
     title_en = models.CharField(max_length=200, blank=True, default="")
+    title_pl = models.CharField(max_length=200, blank=True, default="")
     content_de = models.TextField()
     content_en = models.TextField(blank=True, default="")
+    content_pl = models.TextField(blank=True, default="")
     is_required = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     display_order = models.SmallIntegerField(default=0)
@@ -53,6 +55,7 @@ class AnamnesisQuestionDefinition(models.Model):
     version = models.IntegerField(default=1)
     question_text_de = models.TextField()
     question_text_en = models.TextField()
+    question_text_pl = models.TextField(blank=True, default="")
     answer_type = models.CharField(
         max_length=30,
         choices=AnswerType.choices,
@@ -92,6 +95,7 @@ class AnamnesisOptionDefinition(models.Model):
     code = models.CharField(max_length=80)
     option_text_de = models.TextField()
     option_text_en = models.TextField()
+    option_text_pl = models.TextField(blank=True, default="")
     display_order = models.SmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

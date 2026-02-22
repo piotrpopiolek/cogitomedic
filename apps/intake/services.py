@@ -109,7 +109,7 @@ def get_intake_form_context(
     consent_defs = (
         ConsentDefinition.objects.filter(_effective_consent_filter(today))
         .order_by("display_order", "code")
-        .values("id", "code", "title_de", "title_en", "content_de", "content_en", "is_required")
+        .values("id", "code", "title_de", "title_en", "title_pl", "content_de", "content_en", "content_pl", "is_required")
     )
     consent_by_def_id = {
         c.consent_definition_id: c
@@ -118,6 +118,7 @@ def get_intake_form_context(
         )
     }
     use_en = form_locale.startswith("en")
+    use_pl = form_locale.startswith("pl")
     consents_payload = []
     for cd in consent_defs:
         cd_id = cd["id"]
@@ -125,6 +126,9 @@ def get_intake_form_context(
         if use_en and (cd.get("title_en") or "").strip():
             title = cd["title_en"]
             content = (cd.get("content_en") or "").strip() or (cd["content_de"] or "")
+        elif use_pl and (cd.get("title_pl") or "").strip():
+            title = cd["title_pl"]
+            content = (cd.get("content_pl") or "").strip() or (cd["content_de"] or "")
         else:
             title = cd["title_de"]
             content = (cd["content_de"] or "")
@@ -148,10 +152,18 @@ def get_intake_form_context(
     answer_by_code = {a.get("question_code"): a for a in answers_raw if isinstance(a, dict) and a.get("question_code")}
 
     def option_label(opt: AnamnesisOptionDefinition) -> str:
-        return opt.option_text_de if form_locale.startswith("de") else opt.option_text_en
+        if form_locale.startswith("de"):
+            return opt.option_text_de
+        if form_locale.startswith("pl") and (opt.option_text_pl or "").strip():
+            return opt.option_text_pl
+        return opt.option_text_en
 
     def question_text(q: AnamnesisQuestionDefinition) -> str:
-        return q.question_text_de if form_locale.startswith("de") else q.question_text_en
+        if form_locale.startswith("de"):
+            return q.question_text_de
+        if form_locale.startswith("pl") and (q.question_text_pl or "").strip():
+            return q.question_text_pl
+        return q.question_text_en
 
     anamnesis_questions_payload = []
     for q in question_defs:
