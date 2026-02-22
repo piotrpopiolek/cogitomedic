@@ -20,9 +20,21 @@ from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import get_or_create_tablet_device_by_android_id, issue_tablet_session_latest_wins
 
-from cogitomedica.tablet_i18n import get_form_ui_strings
+from cogitomedica.tablet_i18n import get_form_ui_strings, get_staff_ui_strings
 
 TABLET_ALLOWED_ROLES = {"TABLET", "RECEPTION", "ADMIN"}
+
+
+def _staff_context(request: HttpRequest) -> dict:
+    """Return staff_locale and staff_ui for waiting room templates. Persists ?locale= in session."""
+    locale = (request.GET.get("locale") or "").strip().lower() or request.session.get(
+        "tablet_staff_locale", "pl"
+    )
+    if locale not in ("de", "en", "pl"):
+        locale = "pl"
+    if request.GET.get("locale"):
+        request.session["tablet_staff_locale"] = locale
+    return {"staff_locale": locale, "staff_ui": get_staff_ui_strings(locale)}
 
 
 def _tablet_role_ok(request: HttpRequest) -> bool:
@@ -46,8 +58,10 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
             if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
                 next_url = ""
             return redirect(next_url or "tablet:home")
-        return render(request, "tablet/login.html", {"error": "Nieprawidłowy login lub brak uprawnień tabletu."})
-    return render(request, "tablet/login.html", {})
+        ctx = _staff_context(request)
+        ctx["error"] = ctx["staff_ui"]["login_error"]
+        return render(request, "tablet/login.html", ctx)
+    return render(request, "tablet/login.html", _staff_context(request))
 
 
 @require_http_methods(["GET", "POST"])
@@ -64,7 +78,8 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
     queues = DailyQueue.objects.filter(queue_date=today).select_related(
         "clinic_site", "consulting_room"
     ).order_by("clinic_site__name", "consulting_room__name")
-    return render(request, "tablet/home.html", {"queues": queues, "today": today})
+    ctx = {**_staff_context(request), "queues": queues, "today": today}
+    return render(request, "tablet/home.html", ctx)
 
 
 @login_required(login_url="tablet:login")
@@ -76,17 +91,15 @@ def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Htt
             id=daily_queue_id
         )
     except ObjectDoesNotExist:
-        return render(request, "tablet/error.html", {"message": "Kolejka nie istnieje."}, status=404)
+        ctx = {**_staff_context(request), "message": "Kolejka nie istnieje."}
+        return render(request, "tablet/error.html", ctx, status=404)
     entries = (
         QueueEntry.objects.filter(daily_queue_id=daily_queue_id)
         .select_related("patient")
         .order_by("position_no")
     )
-    return render(
-        request,
-        "tablet/queue_entries.html",
-        {"queue": queue, "entries": entries},
-    )
+    ctx = {**_staff_context(request), "queue": queue, "entries": entries}
+    return render(request, "tablet/queue_entries.html", ctx)
 
 
 @require_http_methods(["GET", "POST"])
@@ -99,7 +112,8 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
             id=queue_entry_id
         )
     except ObjectDoesNotExist:
-        return render(request, "tablet/error.html", {"message": "Wpis kolejki nie istnieje."}, status=404)
+        ctx = {**_staff_context(request), "message": "Wpis kolejki nie istnieje."}
+        return render(request, "tablet/error.html", ctx, status=404)
     if request.method == "POST":
         tablet_device_id = None
         tablet_device_id_raw = (request.POST.get("tablet_device_id") or "").strip()
@@ -120,18 +134,18 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
                 expires_in_minutes=120,
                 tablet_device_id=tablet_device_id,
             )
-            return render(
-                request,
-                "tablet/entry_started.html",
-                {
-                    "entry": entry,
-                    "intake_form_id": result.intake_form_id,
-                    "session_id": result.session_id,
-                },
-            )
+            ctx = {
+                **_staff_context(request),
+                "entry": entry,
+                "intake_form_id": result.intake_form_id,
+                "session_id": result.session_id,
+            }
+            return render(request, "tablet/entry_started.html", ctx)
         except ObjectDoesNotExist:
-            return render(request, "tablet/error.html", {"message": "Nie można utworzyć sesji."}, status=404)
-    return render(request, "tablet/entry_start.html", {"entry": entry})
+            ctx = {**_staff_context(request), "message": "Nie można utworzyć sesji."}
+            return render(request, "tablet/error.html", ctx, status=404)
+    ctx = {**_staff_context(request), "entry": entry}
+    return render(request, "tablet/entry_start.html", ctx)
 
 
 @login_required(login_url="tablet:login")
@@ -145,7 +159,8 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             .get(id=intake_form_id)
         )
     except ObjectDoesNotExist:
-        return render(request, "tablet/error.html", {"message": "Formularz nie istnieje lub brak dostępu."}, status=404)
+        ctx = {**_staff_context(request), "message": "Formularz nie istnieje lub brak dostępu."}
+        return render(request, "tablet/error.html", ctx, status=404)
     session = intake_form.session
     locale_param = request.GET.get("locale", "").strip().lower()
     if locale_param in ("de", "en", "pl"):
@@ -162,7 +177,8 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             tablet_restrict_to_today=is_tablet,
         )
     except ObjectDoesNotExist:
-        return render(request, "tablet/error.html", {"message": "Formularz nie istnieje lub brak dostępu."}, status=404)
+        ctx = {**_staff_context(request), "message": "Formularz nie istnieje lub brak dostępu."}
+        return render(request, "tablet/error.html", ctx, status=404)
     if context["form_status"] == "SUBMITTED":
         ui = get_form_ui_strings(form_locale)
         locale_param = "en" if form_locale.startswith("en") else "pl" if form_locale.startswith("pl") else "de"

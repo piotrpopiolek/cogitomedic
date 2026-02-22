@@ -45,6 +45,7 @@ FORM_UI_DE = {
     "step_save_and_next": "Speichern und weiter",
     "validation_consents_required": "Bitte akzeptieren Sie alle erforderlichen Einwilligungen (mit * markiert).",
     "validation_anamnesis_required": "Bitte beantworten Sie alle Pflichtfragen (mit * markiert).",
+    "msg_try_again": "Erneut versuchen",
 }
 
 FORM_UI_EN = {
@@ -89,6 +90,7 @@ FORM_UI_EN = {
     "step_save_and_next": "Save and continue",
     "validation_consents_required": "Please accept all required consents (marked with *).",
     "validation_anamnesis_required": "Please answer all required questions (marked with *).",
+    "msg_try_again": "Try again",
 }
 
 FORM_UI_PL = {
@@ -133,6 +135,7 @@ FORM_UI_PL = {
     "step_save_and_next": "Zapisz i kontynuuj",
     "validation_consents_required": "Proszę zaakceptować wszystkie wymagane zgody (oznaczone *).",
     "validation_anamnesis_required": "Proszę odpowiedzieć na wszystkie pytania obowiązkowe (oznaczone *).",
+    "msg_try_again": "Spróbuj ponownie",
 }
 
 
@@ -143,3 +146,102 @@ def get_form_ui_strings(form_locale: str) -> dict[str, str]:
     if form_locale.startswith("pl"):
         return dict(FORM_UI_PL)
     return dict(FORM_UI_DE)
+
+
+# Staff/waiting room UI (home, queue list, entry start, entry started) – locale: de, en, pl
+STAFF_UI_DE = {
+    "page_title": "Tablet – Wartezimmer",
+    "logged_in_as": "Angemeldet:",
+    "logout": "Abmelden",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "lang_pl": "Polski",
+    "home_title": "Wartezimmer – Warteschlange wählen",
+    "date": "Datum:",
+    "no_queues_today": "Keine Warteschlangen für heute. Erstellen Sie eine in der Rezeption.",
+    "back_to_queues": "← Zurück zur Warteschlangenliste",
+    "queue_entries_title": "Patienten in der Warteschlange",
+    "no_patients": "Keine Patienten in dieser Warteschlange.",
+    "back_to_patients": "← Zurück zur Patientenliste",
+    "entry_start_title": "Formular starten",
+    "patient_label": "Patient:",
+    "position_label": "Position",
+    "status_label": "Status:",
+    "open_form_btn": "Intake-Formular öffnen",
+    "entry_started_title": "Formular vorbereitet",
+    "hand_tablet_msg": "Tablet dem Patienten zum Ausfüllen der Anamnese (Einwilligungen, Anamnese, Unterschrift) übergeben.",
+    "cta_fill_form": "Tablet dem Patienten übergeben – Formular ausfüllen",
+    "error_title": "Fehler",
+    "error_home_link": "Tablet-Startseite",
+    "login_title": "Wartezimmer – Anmeldung",
+    "login_btn": "Anmelden",
+    "login_error": "Ungültige Anmeldung oder keine Tablet-Berechtigung.",
+}
+
+STAFF_UI_EN = {
+    "page_title": "Tablet – Waiting room",
+    "logged_in_as": "Logged in:",
+    "logout": "Log out",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "lang_pl": "Polski",
+    "home_title": "Waiting room – Choose queue",
+    "date": "Date:",
+    "no_queues_today": "No queues for today. Create one in reception.",
+    "back_to_queues": "← Back to queue list",
+    "queue_entries_title": "Patients in queue",
+    "no_patients": "No patients in this queue.",
+    "back_to_patients": "← Back to patient list",
+    "entry_start_title": "Start form",
+    "patient_label": "Patient:",
+    "position_label": "Position",
+    "status_label": "Status:",
+    "open_form_btn": "Open intake form",
+    "entry_started_title": "Form ready",
+    "hand_tablet_msg": "Hand the tablet to the patient to fill in the questionnaire (consents, anamnesis, signature).",
+    "cta_fill_form": "Hand tablet to patient – Fill form",
+    "error_title": "Error",
+    "error_home_link": "Tablet home",
+    "login_title": "Waiting room – Log in",
+    "login_btn": "Log in",
+    "login_error": "Invalid login or no tablet permission.",
+}
+
+STAFF_UI_PL = {
+    "page_title": "Tablet – Poczekalnia",
+    "logged_in_as": "Zalogowany:",
+    "logout": "Wyloguj",
+    "lang_de": "Deutsch",
+    "lang_en": "English",
+    "lang_pl": "Polski",
+    "home_title": "Poczekalnia – wybór kolejki",
+    "date": "Data:",
+    "no_queues_today": "Brak kolejek na dziś. Utwórz kolejkę w panelu recepcji.",
+    "back_to_queues": "← Wróć do listy kolejek",
+    "queue_entries_title": "Pacjenci w kolejce",
+    "no_patients": "Brak pacjentów w tej kolejce.",
+    "back_to_patients": "← Wróć do listy pacjentów",
+    "entry_start_title": "Start formularza",
+    "patient_label": "Pacjent:",
+    "position_label": "Pozycja",
+    "status_label": "Status:",
+    "open_form_btn": "Otwórz formularz intake",
+    "entry_started_title": "Formularz przygotowany",
+    "hand_tablet_msg": "Przekaż tablet pacjentowi do wypełnienia ankiety (zgody, anamneza, podpis).",
+    "cta_fill_form": "Przekaż tablet pacjentowi – wypełnij formularz",
+    "error_title": "Błąd",
+    "error_home_link": "Strona główna tabletu",
+    "login_title": "Poczekalnia – logowanie",
+    "login_btn": "Zaloguj",
+    "login_error": "Nieprawidłowy login lub brak uprawnień tabletu.",
+}
+
+
+def get_staff_ui_strings(locale: str) -> dict[str, str]:
+    """Return UI strings for tablet staff/waiting room. locale: 'de', 'en', 'pl'."""
+    locale = (locale or "pl").lower()
+    if locale == "de":
+        return dict(STAFF_UI_DE)
+    if locale == "en":
+        return dict(STAFF_UI_EN)
+    return dict(STAFF_UI_PL)
