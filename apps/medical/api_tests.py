@@ -8,7 +8,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import MedicalDocStatus, MedicalDocumentVersion
+from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -142,6 +142,65 @@ class MedicalApiTests(TestCase):
         version = MedicalDocumentVersion.objects.get(id=version_id)
         self.assertEqual(version.version_status, "PUBLISHED")
         self.assertEqual(version.medical_document.status, MedicalDocStatus.PUBLISHED)
+
+    def test_medical_documents_list_get(self) -> None:
+        list_empty = self.client.get("/api/v1/medical-documents")
+        self.assertEqual(list_empty.status_code, 200)
+        data = list_empty.json()
+        self.assertIn("items", data)
+        self.assertIn("pagination", data)
+        self.assertEqual(data["pagination"]["total"], 0)
+        self.assertEqual(len(data["items"]), 0)
+
+        self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        list_one = self.client.get("/api/v1/medical-documents")
+        self.assertEqual(list_one.status_code, 200)
+        data = list_one.json()
+        self.assertEqual(data["pagination"]["total"], 1)
+        self.assertEqual(len(data["items"]), 1)
+        item = data["items"][0]
+        self.assertEqual(item["status"], MedicalDocStatus.DRAFT)
+        self.assertIn("queue_date", item)
+        self.assertIn("patient", item)
+        self.assertEqual(item["patient"]["last_name"], "Api")
+
+    def test_medical_document_detail_get(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 200)
+        data = detail.json()
+        self.assertEqual(data["id"], medical_document_id)
+        self.assertEqual(data["queue_entry_id"], str(self.queue_entry.id))
+        self.assertIn("intake_summary", data)
+        self.assertIn("patient", data["intake_summary"])
+        self.assertIn("current_version", data)
+        self.assertIsNone(data["current_version"])  # no version yet before first draft
+
+        missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
+        self.assertEqual(missing.status_code, 404)
 
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
         missing_doc_id = uuid4()
