@@ -17,7 +17,7 @@ from django.views.decorators.http import require_http_methods
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry
-from apps.reception.services import issue_tablet_session_latest_wins
+from apps.reception.services import get_or_create_tablet_device_by_android_id, issue_tablet_session_latest_wins
 
 from cogitomedica.tablet_i18n import get_form_ui_strings
 
@@ -94,12 +94,24 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
     except ObjectDoesNotExist:
         return render(request, "tablet/error.html", {"message": "Wpis kolejki nie istnieje."}, status=404)
     if request.method == "POST":
+        tablet_device_id = None
+        tablet_device_id_raw = (request.POST.get("tablet_device_id") or "").strip()
+        android_id = (request.POST.get("android_id") or "").strip()
+        if tablet_device_id_raw:
+            try:
+                tablet_device_id = UUID(tablet_device_id_raw)
+            except (ValueError, TypeError):
+                pass
+        if tablet_device_id is None and android_id:
+            device, _ = get_or_create_tablet_device_by_android_id(android_id=android_id)
+            tablet_device_id = device.id
         try:
             result = issue_tablet_session_latest_wins(
                 queue_entry_id=queue_entry_id,
                 created_by_user_id=request.user.id,
                 form_locale="de-DE",
                 expires_in_minutes=120,
+                tablet_device_id=tablet_device_id,
             )
             return render(
                 request,

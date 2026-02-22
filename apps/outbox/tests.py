@@ -66,7 +66,6 @@ class OutboxProcessingTests(TestCase):
         )
         session = PatientFormSession.objects.create(
             queue_entry=queue_entry,
-            token_hash="d" * 64,
             form_locale="de-DE",
             expires_at=timezone.now() + timedelta(minutes=30),
             consumed_at=timezone.now(),

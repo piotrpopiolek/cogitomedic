@@ -16,6 +16,8 @@ from apps.intake.services import (
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
     IntakeSessionValidationError,
+    _effective_consent_filter,
+    _effective_question_filter,
     submit_patient_intake_form,
 )
 from apps.operations.models import AuditEvent
@@ -109,13 +111,48 @@ class SubmitPatientIntakeFormTests(TestCase):
             is_active=True,
         )
 
-    def test_submit_patient_intake_form_success(self) -> None:
-        PatientIntakeConsent.objects.create(
-            intake_form=self.intake_form,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
+    def _accept_all_required_consents_effective_today(self) -> None:
+        today = timezone.now().date()
+        for cdef in ConsentDefinition.objects.filter(
+            _effective_consent_filter(today), is_required=True
+        ):
+            PatientIntakeConsent.objects.get_or_create(
+                intake_form=self.intake_form,
+                consent_definition=cdef,
+                defaults={"accepted": True, "accepted_at": timezone.now()},
+            )
+
+    def _ensure_all_required_questions_answered_today(self) -> None:
+        today = timezone.now().date()
+        required = list(
+            AnamnesisQuestionDefinition.objects.filter(
+                _effective_question_filter(today), is_required=True
+            ).prefetch_related("options")
         )
+        answers = list(self.intake_form.anamnesis_payload.get("answers", []))
+        answered_codes = {a.get("question_code") for a in answers if a.get("question_code")}
+        for q in required:
+            if q.code in answered_codes:
+                continue
+            first_option = next(iter(q.options.order_by("display_order")), None)
+            if first_option:
+                answers.append({
+                    "question_code": q.code,
+                    "selected_option_codes": [first_option.code],
+                    "free_text": None,
+                })
+            else:
+                answers.append({
+                    "question_code": q.code,
+                    "selected_option_codes": [],
+                    "free_text": "–",
+                })
+        self.intake_form.anamnesis_payload = {"schema_version": 1, "answers": answers}
+        self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
+
+    def test_submit_patient_intake_form_success(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
 
         submitted = submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
@@ -139,25 +176,15 @@ class SubmitPatientIntakeFormTests(TestCase):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
     def test_submit_patient_intake_form_raises_when_required_anamnesis_missing(self) -> None:
-        PatientIntakeConsent.objects.create(
-            intake_form=self.intake_form,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
-        )
-        self.intake_form.anamnesis_payload = {"answers": []}
+        self._accept_all_required_consents_effective_today()
+        self.intake_form.anamnesis_payload = {"schema_version": 1, "answers": []}
         self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
 
         with self.assertRaises(RequiredAnamnesisMissingError):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
     def test_submit_patient_intake_form_raises_when_session_is_not_active(self) -> None:
-        PatientIntakeConsent.objects.create(
-            intake_form=self.intake_form,
-            consent_definition=self.required_consent,
-            accepted=True,
-            accepted_at=timezone.now(),
-        )
+        self._accept_all_required_consents_effective_today()
         newer_session = PatientFormSession.objects.create(
             queue_entry=self.queue_entry,
             form_locale="de-DE",

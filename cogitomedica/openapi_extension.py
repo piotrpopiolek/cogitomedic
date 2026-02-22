@@ -269,7 +269,7 @@ COGITO_PATHS = {
     f"{PREFIX}/queue-entries/{{queue_entry_id}}/sessions": {
         "post": {
             "summary": "Create tablet session",
-            "description": "Creates a session for the intake form on a tablet. No token; tablet uses session cookie. Allowed role: TABLET (or RECEPTION, ADMIN). Request: created_by_user_id, form_locale, expires_in_minutes (default 120, max 480), optional tablet_device_id.",
+            "description": "Creates a session for the intake form on a tablet. No token; tablet uses session cookie. Creator is the authenticated user. Allowed role: TABLET (or RECEPTION, ADMIN). Request body: form_locale (default de-DE), expires_in_minutes (default 120, max 480), optional tablet_device_id, optional android_id (for auto-registering the device).",
             "tags": ["Reception – Queues"],
             "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},

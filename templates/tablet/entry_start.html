@@ -6,6 +6,19 @@
   <p>Pozycja {{ entry.position_no }}, status: {{ entry.get_entry_status_display }}</p>
   <form method="post" action="">
     {% csrf_token %}
+    {% comment %}Optional: set android_id or tablet_device_id via JS from cookie/localStorage for audit.{% endcomment %}
+    <input type="hidden" name="android_id" id="tablet-android-id" value="">
+    <input type="hidden" name="tablet_device_id" id="tablet-device-id" value="">
     <button type="submit" class="btn" style="display:block; width:100%; padding:1rem; margin-top:0.5rem; font-size:1rem; cursor:pointer; background:#0d6efd; color:#fff; border:none; border-radius:6px;">Otwórz formularz intake</button>
   </form>
+  <script>
+    (function() {
+      try {
+        var androidId = localStorage.getItem('tablet_android_id') || document.cookie.replace(/(?:(?:^|.*;\s*)tablet_android_id\s*=\s*([^;]*).*$)|^.*$/, '$1');
+        var deviceId = localStorage.getItem('tablet_device_id') || document.cookie.replace(/(?:(?:^|.*;\s*)tablet_device_id\s*=\s*([^;]*).*$)|^.*$/, '$1');
+        if (androidId) document.getElementById('tablet-android-id').value = androidId;
+        if (deviceId) document.getElementById('tablet-device-id').value = deviceId;
+      } catch (e) {}
+    })();
+  </script>
 {% endblock %}
