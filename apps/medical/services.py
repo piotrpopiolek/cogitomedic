@@ -9,7 +9,7 @@ from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
 from apps.core.exceptions import IdempotencyConflictError, StateTransitionError
-from apps.intake.models import PatientIntakeForm
+from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
@@ -298,7 +298,80 @@ def list_medical_documents(
     return items, total
 
 
-def get_medical_document_context(
+def list_doctor_work_queue(
+    *,
+    status: str | None = None,
+    queue_date: date | None = None,
+    patient_search: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
+    """
+    List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
+    Each item may or may not have an existing MedicalDocument.
+    Returns (list of item dicts, total count). Item dict: document_id (or None), queue_entry_id,
+    intake_form_id, patient, queue_date, status, pdf_generation_status, hidrive_sent, sms_sent.
+    """
+    qs = (
+        PatientIntakeForm.objects.filter(form_status=IntakeStatus.SUBMITTED)
+        .select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
+    )
+    if status:
+        qs = qs.filter(
+            queue_entry_id__in=MedicalDocument.objects.filter(status=status).values_list("queue_entry_id", flat=True)
+        )
+    if queue_date is not None:
+        qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
+    if patient_search and patient_search.strip():
+        term = patient_search.strip()
+        qs = qs.filter(
+            Q(queue_entry__patient__last_name__icontains=term)
+            | Q(queue_entry__patient__first_name__icontains=term)
+        )
+    qs = qs.order_by("-queue_entry__daily_queue__queue_date", "-submitted_at")
+    total = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    intake_forms = list(qs[start:end])
+    if not intake_forms:
+        return [], total
+    queue_entry_ids = [f.queue_entry_id for f in intake_forms]
+    docs = (
+        MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids)
+        .select_related("queue_entry")
+        .prefetch_related(
+            Prefetch(
+                "versions",
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+            )
+        )
+    )
+    doc_by_entry: dict[uuid.UUID, MedicalDocument] = {d.queue_entry_id: d for d in docs}
+    list_items = []
+    for intake_form in intake_forms:
+        entry = intake_form.queue_entry
+        doc = doc_by_entry.get(entry.id)
+        patient = entry.patient
+        queue = entry.daily_queue
+        versions = list(doc.versions.all())[:1] if doc else []
+        latest = versions[0] if versions else None
+        list_items.append({
+            "document_id": str(doc.id) if doc else None,
+            "queue_entry_id": str(entry.id),
+            "intake_form_id": str(intake_form.id),
+            "patient": {
+                "id": str(patient.id),
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "date_of_birth": patient.date_of_birth.isoformat(),
+            },
+            "queue_date": queue.queue_date.isoformat(),
+            "status": doc.status if doc else "—",
+            "pdf_generation_status": latest.pdf_generation_status if latest else None,
+            "hidrive_sent": latest.hidrive_sent if latest else False,
+            "sms_sent": latest.sms_sent if latest else False,
+        })
+    return list_items, total
     *,
     medical_document_id: uuid.UUID,
     form_locale: str = "de-DE",

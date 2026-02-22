@@ -16,7 +16,12 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from apps.medical.services import get_medical_document_context, list_medical_documents
+from apps.intake.models import IntakeStatus
+from apps.medical.services import (
+    create_or_get_medical_document,
+    get_medical_document_context,
+    list_doctor_work_queue,
+)
 
 
 @require_http_methods(["GET", "POST"])
@@ -70,37 +75,13 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     patient_search = request.GET.get("patient_search") or None
     page = max(1, min(10_000, int(request.GET.get("page") or 1)))
     page_size = max(1, min(200, int(request.GET.get("page_size") or 20)))
-    items, total = list_medical_documents(
+    list_items, total = list_doctor_work_queue(
         status=status,
         queue_date=queue_date,
         patient_search=patient_search,
         page=page,
         page_size=page_size,
     )
-    # Serialize for template (same shape as API list)
-    list_items = []
-    for doc in items:
-        versions = list(doc.versions.all())
-        latest = versions[0] if versions else None
-        patient = doc.queue_entry.patient
-        queue = doc.queue_entry.daily_queue
-        list_items.append({
-            "id": str(doc.id),
-            "queue_entry_id": str(doc.queue_entry_id),
-            "status": doc.status,
-            "current_version_no": doc.current_version_no,
-            "last_published_at": doc.last_published_at.isoformat() if doc.last_published_at else None,
-            "queue_date": queue.queue_date.isoformat(),
-            "patient": {
-                "id": str(patient.id),
-                "first_name": patient.first_name,
-                "last_name": patient.last_name,
-                "date_of_birth": patient.date_of_birth.isoformat(),
-            },
-            "pdf_generation_status": latest.pdf_generation_status if latest else None,
-            "hidrive_sent": latest.hidrive_sent if latest else False,
-            "sms_sent": latest.sms_sent if latest else False,
-        })
     return render(
         request,
         "doctor/list.html",
@@ -114,6 +95,31 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             },
         },
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> HttpResponse:
+    """Create or get medical document for queue entry (with submitted intake) and redirect to detail."""
+    if not _doctor_role_ok(request):
+        return redirect("doctor-login")
+    from apps.reception.models import QueueEntry
+
+    try:
+        entry = QueueEntry.objects.select_related("intake_form").get(id=queue_entry_id)
+    except QueueEntry.DoesNotExist:
+        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden."}, status=404)
+    if not getattr(entry, "intake_form", None):
+        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag."}, status=404)
+    intake_form = entry.intake_form
+    if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
+        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen."}, status=400)
+    doc = create_or_get_medical_document(
+        queue_entry_id=entry.id,
+        intake_form_id=intake_form.id,
+        created_by_user_id=request.user.id,
+    )
+    return redirect("doctor-document-detail", medical_document_id=doc.id)
 
 
 @login_required

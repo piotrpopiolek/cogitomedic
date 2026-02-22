@@ -42,11 +42,11 @@
     <tr>
       <td>{{ item.patient.last_name }}, {{ item.patient.first_name }}</td>
       <td>{{ item.queue_date }}</td>
-      <td><span class="badge status-badge {% if item.status == 'PUBLISHED' %}bg-success{% else %}bg-secondary{% endif %}">{{ item.status }}</span></td>
+      <td><span class="badge status-badge {% if item.status == 'PUBLISHED' %}bg-success{% elif item.status == 'DRAFT' %}bg-secondary{% else %}bg-light text-dark{% endif %}">{{ item.status }}</span></td>
       <td>{% if item.pdf_generation_status %}<span class="badge status-badge {% if item.pdf_generation_status == 'COMPLETED' %}bg-success{% elif item.pdf_generation_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
       <td>{% if item.hidrive_sent %}✓{% else %}–{% endif %}</td>
       <td>{% if item.sms_sent %}✓{% else %}–{% endif %}</td>
-      <td><a href="{% url 'doctor-document-detail' item.id %}" class="btn btn-outline-primary btn-sm">Öffnen</a></td>
+      <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}" class="btn btn-outline-primary btn-sm">Öffnen</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}" class="btn btn-outline-primary btn-sm">Öffnen</a>{% endif %}</td>
     </tr>
     {% empty %}
     <tr><td colspan="7" class="text-muted">Keine Dokumente.</td></tr>
