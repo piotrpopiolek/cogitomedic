@@ -38,6 +38,9 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None and getattr(user, "role", None) in TABLET_ALLOWED_ROLES:
             login(request, user)
+            android_id = (request.POST.get("android_id") or "").strip()
+            if android_id:
+                get_or_create_tablet_device_by_android_id(android_id=android_id)
             return redirect(request.GET.get("next") or "tablet:home")
         return render(request, "tablet/login.html", {"error": "Nieprawidłowy login lub brak uprawnień tabletu."})
     return render(request, "tablet/login.html", {})

@@ -15,13 +15,28 @@
 <body>
   <h1>Poczekalnia – logowanie</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <form method="post" action="">
+  <form method="post" action="" id="tablet-login-form">
     {% csrf_token %}
+    <input type="hidden" name="android_id" id="tablet-login-android-id" value="" />
     <label for="username">Login</label>
     <input id="username" name="username" type="text" required autocomplete="username" />
     <label for="password">Hasło</label>
     <input id="password" name="password" type="password" required autocomplete="current-password" />
     <button type="submit">Zaloguj</button>
   </form>
+  <script>
+    (function() {
+      try {
+        var key = 'tablet_android_id';
+        var id = localStorage.getItem(key);
+        if (!id) {
+          id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+          localStorage.setItem(key, id);
+        }
+        var el = document.getElementById('tablet-login-android-id');
+        if (el) el.value = id;
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>
