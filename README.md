@@ -234,9 +234,10 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py test` | Run the test suite (Django `TestCase`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |
-| `python manage.py enqueue_tasks` | Enqueue background tasks (outbox, retention, import) |
+| `python manage.py enqueue_tasks` | Enqueue background tasks once (outbox, retention, import) |
+| `python manage.py run_periodic_tasks --interval-seconds 300` | Run periodic enqueue loop (every 5 minutes) |
 
-Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks`. In this project we use one background-work contract: **Django Tasks + Transactional Outbox**. The default backend in this repository is `ImmediateBackend` for deterministic local development.
+Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks` (one-shot) or `python manage.py run_periodic_tasks` (loop). In this project we use one background-work contract: **Django Tasks + Transactional Outbox**. The default backend in this repository is `ImmediateBackend` for deterministic local development.
 
 Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
 
