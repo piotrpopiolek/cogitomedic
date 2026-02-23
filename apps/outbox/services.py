@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError
+from apps.medical.pdf_builder import generate_befund_pdf
 from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -43,9 +44,13 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
         raise RuntimeError("Simulated outbox processing failure.")
 
     if event.event_type == OutboxEventType.GENERATE_PDF:
+        version.pdf_generation_status = PdfStatus.PROCESSING
+        version.save(update_fields=["pdf_generation_status"])
+
+        pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
         version.pdf_generation_status = PdfStatus.COMPLETED
-        version.pdf_local_path = f"/tmp/pdfs/{version.id}.pdf"
-        version.pdf_checksum_sha256 = "a" * 64
+        version.pdf_local_path = pdf_local_path
+        version.pdf_checksum_sha256 = pdf_checksum_sha256
         version.save(update_fields=["pdf_generation_status", "pdf_local_path", "pdf_checksum_sha256"])
         next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
@@ -149,6 +154,10 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
             )
             processed += 1
         except Exception as exc:
+            if event.event_type == OutboxEventType.GENERATE_PDF:
+                MedicalDocumentVersion.objects.filter(id=event.medical_document_version_id).update(
+                    pdf_generation_status=PdfStatus.FAILED
+                )
             event.retry_count += 1
             event.locked_at = None
             event.error_message = str(exc)
@@ -220,6 +229,8 @@ def _try_delete_file(path_value: str | None) -> None:
     if not path_value:
         return
     path = Path(path_value)
+    if not path.is_absolute():
+        path = Path(settings.MEDIA_ROOT) / path
     if path.exists() and path.is_file():
         path.unlink()
 
