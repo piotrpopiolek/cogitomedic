@@ -134,6 +134,12 @@ class ObservabilityHealthApiTests(TestCase):
         self.assertIn("cogitomedica_outbox_failed_count", content)
         self.assertIn("cogitomedica_outbox_dead_letter_count", content)
         self.assertIn("cogitomedica_outbox_oldest_pending_age_seconds", content)
+        self.assertIn("cogitomedica_pdf_success_ratio_1h", content)
+        self.assertIn("cogitomedica_hidrive_success_ratio_1h", content)
+        self.assertIn("cogitomedica_sms_success_ratio_1h", content)
+        self.assertIn("cogitomedica_publish_to_pdf_latency_p95_seconds", content)
+        self.assertIn("cogitomedica_publish_to_hidrive_latency_p95_seconds", content)
+        self.assertIn("cogitomedica_publish_to_sms_latency_p95_seconds", content)
 
     def test_health_and_metrics_return_json_error_for_method_not_allowed(self) -> None:
         health = self.client.post("/api/v1/observability/health", data="{}", content_type="application/json")

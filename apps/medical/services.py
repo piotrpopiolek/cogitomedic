@@ -16,12 +16,53 @@ from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+from apps.outbox.services import retry_outbox_event
 from apps.reception.models import QueueEntry
 
 
 def _doctor_consulting_room_id(user: Any) -> uuid.UUID | None:
     """Return consulting_room_id if doctor is restricted to one cabinet, else None (can see all)."""
     return getattr(user, "consulting_room_id", None)
+
+
+def _event_status_to_stage_status(event: OutboxEvent | None, completed: bool) -> str:
+    if completed:
+        return "COMPLETED"
+    if event is None:
+        return "PENDING"
+    if event.status in [OutboxStatus.PENDING, OutboxStatus.PROCESSING]:
+        return event.status
+    if event.status == OutboxStatus.PROCESSED:
+        return "COMPLETED"
+    return "FAILED"
+
+
+def _latest_retryable_event(version: MedicalDocumentVersion) -> OutboxEvent | None:
+    """Return retryable event (FAILED/DEAD_LETTER) for version if no stage is currently running."""
+    events_by_type = {e.event_type: e for e in version.outbox_events.all()}
+    if any(
+        e.status in [OutboxStatus.PENDING, OutboxStatus.PROCESSING]
+        for e in events_by_type.values()
+    ):
+        return None
+    for event_type in [
+        OutboxEventType.SMS_SEND,
+        OutboxEventType.HIDRIVE_UPLOAD,
+        OutboxEventType.GENERATE_PDF,
+    ]:
+        event = events_by_type.get(event_type)
+        if event and event.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]:
+            return event
+    return None
+
+
+def _latest_error_message(version: MedicalDocumentVersion) -> str | None:
+    events = list(version.outbox_events.all())
+    failed = [e for e in events if e.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER] and (e.error_message or "").strip()]
+    if not failed:
+        return None
+    failed.sort(key=lambda e: e.updated_at, reverse=True)
+    return failed[0].error_message
 
 
 def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
@@ -341,7 +382,9 @@ def list_medical_documents(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
+                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                ),
             )
         )
         .order_by("-updated_at")
@@ -412,7 +455,9 @@ def list_doctor_work_queue(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
+                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                ),
             )
         )
     )
@@ -425,6 +470,18 @@ def list_doctor_work_queue(
         queue = entry.daily_queue
         versions = list(doc.versions.all())[:1] if doc else []
         latest = versions[0] if versions else None
+        events_by_type = {}
+        if latest:
+            events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
+        hidrive_status = _event_status_to_stage_status(
+            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            completed=bool(latest and latest.hidrive_sent),
+        ) if latest else None
+        sms_status = _event_status_to_stage_status(
+            events_by_type.get(OutboxEventType.SMS_SEND),
+            completed=bool(latest and latest.sms_sent),
+        ) if latest else None
+        retryable_event = _latest_retryable_event(latest) if latest else None
         list_items.append({
             "document_id": str(doc.id) if doc else None,
             "queue_entry_id": str(entry.id),
@@ -440,6 +497,11 @@ def list_doctor_work_queue(
             "pdf_generation_status": latest.pdf_generation_status if latest else None,
             "hidrive_sent": latest.hidrive_sent if latest else False,
             "sms_sent": latest.sms_sent if latest else False,
+            "hidrive_status": hidrive_status,
+            "sms_status": sms_status,
+            "processing_error_message": _latest_error_message(latest) if latest else None,
+            "can_retry_processing": retryable_event is not None,
+            "retry_event_status": retryable_event.status if retryable_event else None,
         })
     return list_items, total
 
@@ -465,7 +527,9 @@ def get_medical_document_context(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no"),
+                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
+                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                ),
             )
         )
         .get(id=medical_document_id)
@@ -498,6 +562,8 @@ def get_medical_document_context(
 
     current_version_payload: dict[str, Any] | None = None
     if current_version:
+        events_by_type = {e.event_type: e for e in current_version.outbox_events.all()}
+        retryable_event = _latest_retryable_event(current_version)
         current_version_payload = {
             "version_no": current_version.version_no,
             "version_status": current_version.version_status,
@@ -508,6 +574,16 @@ def get_medical_document_context(
             "pdf_generation_status": current_version.pdf_generation_status,
             "hidrive_sent": current_version.hidrive_sent,
             "sms_sent": current_version.sms_sent,
+            "hidrive_status": _event_status_to_stage_status(
+                events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                completed=current_version.hidrive_sent,
+            ),
+            "sms_status": _event_status_to_stage_status(
+                events_by_type.get(OutboxEventType.SMS_SEND),
+                completed=current_version.sms_sent,
+            ),
+            "processing_error_message": _latest_error_message(current_version),
+            "can_retry_processing": retryable_event is not None and getattr(user, "role", None) in {"ADMIN", "RECEPTION"},
             "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
         }
 
@@ -521,3 +597,44 @@ def get_medical_document_context(
         "intake_summary": intake_summary,
         "current_version": current_version_payload,
     }
+
+
+@transaction.atomic
+def retry_latest_document_processing(
+    *,
+    medical_document_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    actor_role: str | None,
+    reason: str,
+) -> OutboxEvent:
+    if actor_role not in {"ADMIN", "RECEPTION"}:
+        raise DomainError("Only ADMIN or RECEPTION can retry processing.")
+    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    latest_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(medical_document_id=medical_document_id)
+        .order_by("-version_no")
+        .prefetch_related(
+            Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+        )
+        .first()
+    )
+    if latest_version is None:
+        raise DomainError("No document version found.")
+    retryable = _latest_retryable_event(latest_version)
+    if retryable is None:
+        raise DomainError("No retryable processing step found for latest version.")
+    retried = retry_outbox_event(event=retryable, reason=reason)
+    create_audit_event(
+        event_type="DOCUMENT_PROCESSING_RETRY_REQUESTED",
+        actor_user_id=actor_user_id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        outbox_event_id=retried.id,
+        metadata={
+            "medical_document_version_id": str(latest_version.id),
+            "event_type": retried.event_type,
+            "reason": reason,
+        },
+    )
+    return retried

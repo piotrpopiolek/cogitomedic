@@ -16,6 +16,7 @@ from apps.medical.api_schemas import (
     DoctorTemplateUpdateRequest,
     GenerateTextRequest,
     PublishMedicalDocumentRequest,
+    RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
 )
 from apps.medical.befund_text import generate_befund_text
@@ -23,6 +24,9 @@ from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    _event_status_to_stage_status,
+    _latest_error_message,
+    _latest_retryable_event,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
@@ -32,6 +36,7 @@ from apps.medical.services import (
     publish_document_version,
     save_draft_document_version,
     _doctor_consulting_room_id,
+    retry_latest_document_processing,
 )
 from apps.medical.template_services import (
     TemplateListFilters,
@@ -48,6 +53,7 @@ def _serialize_medical_document_list_item(doc) -> dict:
     """Serialize one medical document for list response; doc has prefetched versions (ordered -version_no)."""
     versions = list(doc.versions.all())
     latest = versions[0] if versions else None
+    events_by_type = {e.event_type: e for e in latest.outbox_events.all()} if latest else {}
     patient = doc.queue_entry.patient
     queue = doc.queue_entry.daily_queue
     return {
@@ -66,6 +72,20 @@ def _serialize_medical_document_list_item(doc) -> dict:
         "pdf_generation_status": latest.pdf_generation_status if latest else None,
         "hidrive_sent": latest.hidrive_sent if latest else False,
         "sms_sent": latest.sms_sent if latest else False,
+        "hidrive_status": _event_status_to_stage_status(
+            events_by_type.get("HIDRIVE_UPLOAD"),
+            completed=bool(latest and latest.hidrive_sent),
+        )
+        if latest
+        else None,
+        "sms_status": _event_status_to_stage_status(
+            events_by_type.get("SMS_SEND"),
+            completed=bool(latest and latest.sms_sent),
+        )
+        if latest
+        else None,
+        "processing_error_message": _latest_error_message(latest) if latest else None,
+        "can_retry_processing": _latest_retryable_event(latest) is not None if latest else False,
     }
 
 
@@ -384,6 +404,47 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
             "published_at": version.published_at.isoformat() if version.published_at else None,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
             "created_at": version.created_at.isoformat(),
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_document_retry_processing_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+    try:
+        body = RetryProcessingRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        body = RetryProcessingRequest()
+    except InvalidRequestBodyEncoding:
+        return json_error("Invalid request encoding.", status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+        retried = retry_latest_document_processing(
+            medical_document_id=medical_document_id,
+            actor_user_id=request.user.id,
+            actor_role=getattr(request.user, "role", None),
+            reason=body.reason,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+    except DomainError as exc:
+        return json_error(str(exc), status=409)
+
+    return JsonResponse(
+        {
+            "retried": True,
+            "outbox_event_id": str(retried.id),
+            "event_type": retried.event_type,
+            "status": retried.status,
         },
         status=200,
     )
