@@ -1,0 +1,70 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto;">
+  <h1 style="margin-bottom: 1rem;">Kolejki dzienne - master/detail</h1>
+
+  <form method="get" style="display: flex; gap: 0.5rem; align-items: end; margin-bottom: 1rem;">
+    <div>
+      <label for="id_queue_date" style="display: block; font-size: 0.9rem;">Data</label>
+      <input id="id_queue_date" type="date" name="queue_date" value="{{ queue_date }}" />
+    </div>
+    <button type="submit">Filtruj</button>
+    {% if queue_date %}
+      <a href="." style="margin-left: 0.5rem;">Wyczyść</a>
+    {% endif %}
+  </form>
+
+  {% if queues %}
+    {% for queue in queues %}
+      <details style="border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.75rem; background: #fff;">
+        <summary style="cursor: pointer; padding: 0.75rem 1rem; font-weight: 600;">
+          {{ queue.queue_date }} - {{ queue.clinic_site.name }} / {{ queue.consulting_room.name }}
+          <span style="font-weight: 400; color: #666;">(zmiana: {{ queue.shift_code }}, status: {{ queue.status }})</span>
+        </summary>
+
+        <div style="padding: 0.75rem 1rem 1rem;">
+          <div style="margin-bottom: 0.5rem;">
+            <a href="{% url 'admin:reception_dailyqueue_change' queue.id %}">Edytuj kolejkę</a>
+            |
+            <a href="{% url 'admin:reception_queueentry_changelist' %}?daily_queue__id__exact={{ queue.id }}">Wszystkie wpisy tej kolejki</a>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align: left; border-bottom: 1px solid #eee; padding: 0.4rem;">Pozycja</th>
+                <th style="text-align: left; border-bottom: 1px solid #eee; padding: 0.4rem;">Pacjent</th>
+                <th style="text-align: left; border-bottom: 1px solid #eee; padding: 0.4rem;">Status</th>
+                <th style="text-align: left; border-bottom: 1px solid #eee; padding: 0.4rem;">Godzina</th>
+                <th style="text-align: left; border-bottom: 1px solid #eee; padding: 0.4rem;">Akcje</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in queue.entries.all %}
+                <tr>
+                  <td style="border-bottom: 1px solid #f3f3f3; padding: 0.4rem;">{{ entry.position_no }}</td>
+                  <td style="border-bottom: 1px solid #f3f3f3; padding: 0.4rem;">{{ entry.patient.last_name }}, {{ entry.patient.first_name }}</td>
+                  <td style="border-bottom: 1px solid #f3f3f3; padding: 0.4rem;">{{ entry.entry_status }}</td>
+                  <td style="border-bottom: 1px solid #f3f3f3; padding: 0.4rem;">{{ entry.appointment_time|default:"-" }}</td>
+                  <td style="border-bottom: 1px solid #f3f3f3; padding: 0.4rem;">
+                    <a href="{% url 'admin:reception_queueentry_change' entry.id %}">Wpis</a>
+                    |
+                    <a href="{% url 'admin:reception_patient_change' entry.patient.id %}">Pacjent</a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" style="padding: 0.5rem; color: #666;">Brak wpisów w tej kolejce.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% endfor %}
+  {% else %}
+    <p>Brak kolejek dla wybranego filtra.</p>
+  {% endif %}
+</div>
+{% endblock %}
