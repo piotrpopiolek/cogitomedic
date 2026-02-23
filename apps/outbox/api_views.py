@@ -22,7 +22,7 @@ from apps.outbox.services import process_outbox_events, retry_outbox_event, run_
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
-    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
 
@@ -101,7 +101,7 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
-    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
 

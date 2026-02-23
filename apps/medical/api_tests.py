@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentVersion
+from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -37,6 +38,13 @@ class MedicalApiTests(TestCase):
             email="api.reception.medical@example.com",
             password="safe-password",
             role=StaffRole.RECEPTION,
+            is_staff=True,
+        )
+        self.admin_user = StaffUser.objects.create_user(
+            username="api-admin-medical",
+            email="api.admin.medical@example.com",
+            password="safe-password",
+            role=StaffRole.ADMIN,
             is_staff=True,
         )
         clinic = ClinicSite.objects.create(code="API2", name="API Clinic 2")
@@ -557,6 +565,62 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(publish_missing_doc.status_code, 404)
+
+    def test_retry_processing_endpoint_allows_admin_and_rejects_doctor(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                }
+            ),
+            content_type="application/json",
+        )
+        publish_response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps({"publish_request_id": str(uuid4())}),
+            content_type="application/json",
+        )
+        self.assertEqual(publish_response.status_code, 200)
+        version_id = publish_response.json()["medical_document_version_id"]
+        event = OutboxEvent.objects.get(
+            medical_document_version_id=version_id,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.status = OutboxStatus.FAILED
+        event.error_message = "Simulated failure."
+        event.save(update_fields=["status", "error_message", "updated_at"])
+
+        doctor_retry = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/retry-processing",
+            data=json.dumps({"reason": "retry"}),
+            content_type="application/json",
+        )
+        self.assertEqual(doctor_retry.status_code, 403)
+
+        self.client.force_login(self.admin_user)
+        admin_retry = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/retry-processing",
+            data=json.dumps({"reason": "manual retry"}),
+            content_type="application/json",
+        )
+        self.assertEqual(admin_retry.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.PENDING)
 
     def test_medical_endpoints_require_authentication(self) -> None:
         self.client.logout()

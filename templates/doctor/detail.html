@@ -12,6 +12,20 @@
 
 <div id="alert-placeholder"></div>
 
+<section class="card mb-4">
+  <div class="card-header">{% if ui %}{{ ui.table_status }}{% else %}Processing status{% endif %}</div>
+  <div class="card-body small">
+    <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+      <span>PDF:</span><span id="status-pdf" class="badge bg-secondary">—</span>
+      <span>HiDrive:</span><span id="status-hidrive" class="badge bg-secondary">—</span>
+      <span>SMS:</span><span id="status-sms" class="badge bg-secondary">—</span>
+      <button type="button" id="btn-refresh-status" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.btn_refresh_status|default:"Refresh" }}{% else %}Refresh{% endif %}</button>
+      <button type="button" id="btn-retry-processing" class="btn btn-outline-danger btn-sm d-none">{% if ui %}{{ ui.btn_retry_processing|default:"Retry" }}{% else %}Retry{% endif %}</button>
+    </div>
+    <div id="processing-error" class="text-danger d-none"></div>
+  </div>
+</section>
+
 <!-- Intake summary (read-only) -->
 <section class="card mb-4">
   <div class="card-header">{% if ui %}{{ ui.intake_header }}{% else %}Anamnese / Intake{% endif %}</div>

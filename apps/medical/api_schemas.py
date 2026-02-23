@@ -78,3 +78,8 @@ class GenerateTextRequest(BaseModel):
     authoring_locale: str = Field(default="de-DE", min_length=2, max_length=10)
     template_id: UUID | None = None
     medical_payload: dict = Field(default_factory=dict)
+
+
+class RetryProcessingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="manual retry from doctor panel", min_length=3, max_length=200)

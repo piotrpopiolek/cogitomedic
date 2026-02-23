@@ -16,6 +16,7 @@ from apps.medical.api_views import (
     medical_document_draft_view,
     medical_document_generate_text_view,
     medical_document_publish_view,
+    medical_document_retry_processing_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
     medical_documents_view,
@@ -149,6 +150,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/publish",
         medical_document_publish_view,
         name="medical-document-publish",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/retry-processing",
+        medical_document_retry_processing_view,
+        name="medical-document-retry-processing",
     ),
     path(
         "medical-document-versions/<uuid:version_id>",

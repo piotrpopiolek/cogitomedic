@@ -44,10 +44,29 @@
       <td>{{ item.queue_date }}</td>
       <td><span class="badge status-badge {% if item.status == 'PUBLISHED' %}bg-success{% elif item.status == 'DRAFT' %}bg-secondary{% else %}bg-light text-dark{% endif %}">{{ item.status }}</span></td>
       <td>{% if item.pdf_generation_status %}<span class="badge status-badge {% if item.pdf_generation_status == 'COMPLETED' %}bg-success{% elif item.pdf_generation_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
-      <td>{% if item.hidrive_sent %}✓{% else %}–{% endif %}</td>
-      <td>{% if item.sms_sent %}✓{% else %}–{% endif %}</td>
+      <td>
+        {% if item.hidrive_status %}
+          <span class="badge status-badge {% if item.hidrive_status == 'COMPLETED' %}bg-success{% elif item.hidrive_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+            {{ item.hidrive_status }}
+          </span>
+        {% else %}–{% endif %}
+      </td>
+      <td>
+        {% if item.sms_status %}
+          <span class="badge status-badge {% if item.sms_status == 'COMPLETED' %}bg-success{% elif item.sms_status == 'FAILED' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+            {{ item.sms_status }}
+          </span>
+        {% else %}–{% endif %}
+      </td>
       <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% endif %}</td>
     </tr>
+    {% if item.processing_error_message %}
+    <tr>
+      <td colspan="7" class="small text-danger">
+        {{ item.processing_error_message }}
+      </td>
+    </tr>
+    {% endif %}
     {% empty %}
     <tr><td colspan="7" class="text-muted">{% if ui %}{{ ui.no_documents }}{% else %}Keine Dokumente.{% endif %}</td></tr>
     {% endfor %}
