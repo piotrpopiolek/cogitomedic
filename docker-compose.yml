@@ -36,5 +36,21 @@ services:
       db:
         condition: service_healthy
 
+  scheduler:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    command: >
+      sh -c "python manage.py run_periodic_tasks --interval-seconds 300 --skip-import"
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
