@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 from pathlib import Path
 
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
-from django.templatetags.static import static
 from django.urls import reverse_lazy
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,9 +55,16 @@ DEBUG = os.environ.get("DEBUG", "1") == "1"
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
+HAS_UNFOLD = importlib.util.find_spec("unfold") is not None
+
 INSTALLED_APPS = [
-    # "unfold",
     "corsheaders",
+]
+
+if HAS_UNFOLD:
+    INSTALLED_APPS.append("unfold")
+
+INSTALLED_APPS += [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -95,29 +102,198 @@ RATELIMIT_VIEW = "apps.core.views.ratelimited_view"
 
 ROOT_URLCONF = "cogitomedica.urls"
 
- # UNFOLD = {
- #   "SITE_TITLE": "Cogitomedica Admin",
- #   "SITE_HEADER": "Cogitomedica Digital Consents",
- #   "SITE_SUBHEADER": "Panel zarządzania",
- #   "ENVIRONMENT": "cogitomedica.admin_callbacks.environment_callback",
- #   "DASHBOARD_CALLBACK": "cogitomedica.admin_callbacks.dashboard_callback",
- #   "SIDEBAR": {
- #       "navigation": [
- #           {
- #                 "title": "Poczekalnia",
- #                   "items": [
- #                   {"title": "Dashboard", "icon": "dashboard", "link": lambda r: reverse_lazy("admin:index")},
- #                   # ... linki do modeli
- #               ],
- #           },
- #       ],
- #   },
-    #"LOGIN": {
-    #    "image": lambda request: static("login-bg.jpg"),
-    #    "redirect_after": lambda request: reverse_lazy("admin:index"),
-    #    # "form": "twoja_app.forms.CustomLoginForm",  # opcjonalnie – usuń albo wskaż prawdziwą ścieżkę
-    #},
-#}
+
+def _is_admin_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(user and user.is_authenticated and getattr(user, "role", None) == "ADMIN")
+
+
+if HAS_UNFOLD:
+    UNFOLD = {
+        "SITE_TITLE": "Cogitomedica Staff",
+        "SITE_HEADER": "Cogitomedica",
+        "SITE_SUBHEADER": "Panel administracyjny",
+        "SIDEBAR": {
+            "navigation": [
+                {
+                    "title": "Panele",
+                    "separator": True,
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Lekarz",
+                            "icon": "stethoscope",
+                            "link": lambda request: reverse_lazy("doctor-list"),
+                        },
+                        {
+                            "title": "Rejestracja",
+                            "icon": "groups",
+                            "link": lambda request: reverse_lazy("tablet:home"),
+                        },
+                        {
+                            "title": "Admin",
+                            "icon": "admin_panel_settings",
+                            "link": lambda request: reverse_lazy("admin:index"),
+                        },
+                    ],
+                },
+                {
+                    "title": "Użytkownicy i uprawnienia",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Staff users",
+                            "icon": "person",
+                            "link": lambda request: reverse_lazy("admin:users_staffuser_changelist"),
+                        },
+                        {
+                            "title": "Grupy",
+                            "icon": "group_work",
+                            "link": lambda request: reverse_lazy("admin:auth_group_changelist"),
+                        },
+                    ],
+                },
+                {
+                    "title": "Rejestracja",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Pacjenci",
+                            "icon": "person_add",
+                            "link": lambda request: reverse_lazy("admin:reception_patient_changelist"),
+                        },
+                        {
+                            "title": "Historia kontaktu pacjenta",
+                            "icon": "history",
+                            "link": lambda request: reverse_lazy("admin:reception_patientcontacthistory_changelist"),
+                        },
+                        {
+                            "title": "Placówki",
+                            "icon": "local_hospital",
+                            "link": lambda request: reverse_lazy("admin:reception_clinicsite_changelist"),
+                        },
+                        {
+                            "title": "Gabinety",
+                            "icon": "meeting_room",
+                            "link": lambda request: reverse_lazy("admin:reception_consultingroom_changelist"),
+                        },
+                        {
+                            "title": "Kolejki dzienne",
+                            "icon": "today",
+                            "link": lambda request: reverse_lazy("admin:reception_dailyqueue_changelist"),
+                        },
+                        {
+                            "title": "Wpisy kolejki",
+                            "icon": "format_list_numbered",
+                            "link": lambda request: reverse_lazy("admin:reception_queueentry_changelist"),
+                        },
+                        {
+                            "title": "Urządzenia tablet",
+                            "icon": "tablet",
+                            "link": lambda request: reverse_lazy("admin:reception_tabletdevice_changelist"),
+                        },
+                        {
+                            "title": "Sesje formularzy",
+                            "icon": "schedule",
+                            "link": lambda request: reverse_lazy("admin:reception_patientformsession_changelist"),
+                        },
+                        {
+                            "title": "Batch importu pacjentów",
+                            "icon": "upload_file",
+                            "link": lambda request: reverse_lazy("admin:reception_patientimportbatch_changelist"),
+                        },
+                        {
+                            "title": "Błędy importu pacjentów",
+                            "icon": "error",
+                            "link": lambda request: reverse_lazy("admin:reception_patientimporterror_changelist"),
+                        },
+                    ],
+                },
+                {
+                    "title": "Intake",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Definicje zgód",
+                            "icon": "verified_user",
+                            "link": lambda request: reverse_lazy("admin:intake_consentdefinition_changelist"),
+                        },
+                        {
+                            "title": "Pytania anamnezy",
+                            "icon": "quiz",
+                            "link": lambda request: reverse_lazy("admin:intake_anamnesisquestiondefinition_changelist"),
+                        },
+                        {
+                            "title": "Opcje pytań anamnezy",
+                            "icon": "list",
+                            "link": lambda request: reverse_lazy("admin:intake_anamnesisoptiondefinition_changelist"),
+                        },
+                        {
+                            "title": "Formularze intake",
+                            "icon": "assignment",
+                            "link": lambda request: reverse_lazy("admin:intake_patientintakeform_changelist"),
+                        },
+                        {
+                            "title": "Zgody formularzy intake",
+                            "icon": "how_to_reg",
+                            "link": lambda request: reverse_lazy("admin:intake_patientintakeconsent_changelist"),
+                        },
+                    ],
+                },
+                {
+                    "title": "Medical",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Dokumenty medyczne",
+                            "icon": "description",
+                            "link": lambda request: reverse_lazy("admin:medical_medicaldocument_changelist"),
+                        },
+                        {
+                            "title": "Wersje dokumentów",
+                            "icon": "library_books",
+                            "link": lambda request: reverse_lazy("admin:medical_medicaldocumentversion_changelist"),
+                        },
+                        {
+                            "title": "Szablony lekarza",
+                            "icon": "article",
+                            "link": lambda request: reverse_lazy("admin:medical_doctortexttemplate_changelist"),
+                        },
+                    ],
+                },
+                {
+                    "title": "Outbox i operacje",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Outbox events",
+                            "icon": "outbox",
+                            "link": lambda request: reverse_lazy("admin:outbox_outboxevent_changelist"),
+                        },
+                        {
+                            "title": "Audit events",
+                            "icon": "fact_check",
+                            "link": lambda request: reverse_lazy("admin:operations_auditevent_changelist"),
+                        },
+                    ],
+                },
+                {
+                    "title": "API / narzędzia",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
+                        {
+                            "title": "Swagger",
+                            "icon": "description",
+                            "link": lambda request: reverse_lazy("api-swagger"),
+                        },
+                    ],
+                },
+            ],
+        },
+        "LOGIN": {
+            "redirect_after": lambda request: reverse_lazy("admin:index"),
+        },
+    }
 
 TEMPLATES = [
     {
@@ -138,6 +314,10 @@ TEMPLATES = [
 WSGI_APPLICATION = "cogitomedica.wsgi.application"
 
 AUTH_USER_MODEL = "users.StaffUser"
+AUTHENTICATION_BACKENDS = [
+    "apps.users.auth_backends.StaffRoleAdminBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 
 DATABASES = {
