@@ -1,30 +1,16 @@
 {% extends "doctor/base.html" %}
 {% load static %}
 {% block title %}Befund – Dokument {{ document_id|truncatechars:8 }}{% endblock %}
-{% block extrahead %}
+{% block doctor_extrahead %}
 {{ panel_data|json_script:"doctor-panel-data" }}
 {% endblock %}
-{% block content %}
+{% block content_inner %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1 class="h4 mb-0">Befund – {% if ui %}{{ ui.patient_label }}{% else %}Patient{% endif %}: <span id="patient-name"></span></h1>
   <a href="{% url 'doctor-list' %}" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.back_to_list }}{% else %}← Zurück zur Liste{% endif %}</a>
 </div>
 
 <div id="alert-placeholder"></div>
-
-<section class="card mb-4">
-  <div class="card-header">{% if ui %}{{ ui.table_status }}{% else %}Processing status{% endif %}</div>
-  <div class="card-body small">
-    <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
-      <span>PDF:</span><span id="status-pdf" class="badge bg-secondary">—</span>
-      <span>HiDrive:</span><span id="status-hidrive" class="badge bg-secondary">—</span>
-      <span>SMS:</span><span id="status-sms" class="badge bg-secondary">—</span>
-      <button type="button" id="btn-refresh-status" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.btn_refresh_status|default:"Refresh" }}{% else %}Refresh{% endif %}</button>
-      <button type="button" id="btn-retry-processing" class="btn btn-outline-danger btn-sm d-none">{% if ui %}{{ ui.btn_retry_processing|default:"Retry" }}{% else %}Retry{% endif %}</button>
-    </div>
-    <div id="processing-error" class="text-danger d-none"></div>
-  </div>
-</section>
 
 <!-- Intake summary (read-only) -->
 <section class="card mb-4">

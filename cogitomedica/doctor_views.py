@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from django.contrib import admin
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
@@ -32,6 +33,21 @@ from apps.medical.services import (
 )
 from apps.reception.models import QueueEntry
 from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
+
+
+def _render_doctor(
+    request: HttpRequest,
+    template_name: str,
+    context: dict,
+    *,
+    status: int = 200,
+) -> HttpResponse:
+    """Render doctor templates with admin/unfold base context."""
+    merged_context = {
+        **admin.site.each_context(request),
+        **context,
+    }
+    return render(request, template_name, merged_context, status=status)
 
 
 def _safe_redirect_next(request: HttpRequest, default_view_name: str):
@@ -62,11 +78,23 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
             if request.POST.get("lang") in ("de", "en", "pl") or request.GET.get("lang") in ("de", "en", "pl"):
                 request.session["doctor_lang"] = request.POST.get("lang") or request.GET.get("lang")
             return _safe_redirect_next(request, "doctor-list")
-        return render(request, "doctor/login.html", {"error": "Ungültige Anmeldung oder keine Berechtigung.", "ui": ui, "lang": lang})
+        return render(
+            request,
+            "doctor/login.html",
+            {
+                "error": "Ungültige Anmeldung oder keine Berechtigung.",
+                "ui": ui,
+                "lang": lang,
+            },
+        )
     next_val = (request.GET.get("next") or "").strip()
     if next_val and not url_has_allowed_host_and_scheme(next_val, request.get_host()):
         next_val = ""
-    return render(request, "doctor/login.html", {"next": next_val, "ui": ui, "lang": lang})
+    return render(
+        request,
+        "doctor/login.html",
+        {"next": next_val, "ui": ui, "lang": lang},
+    )
 
 
 def _doctor_role_ok_request(user) -> bool:
@@ -119,7 +147,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         query.pop("lang", None)
         url = request.path + ("?" + query.urlencode() if query else "")
         return redirect(url or "doctor-list")
-    return render(
+    return _render_doctor(
         request,
         "doctor/list.html",
         {
@@ -152,12 +180,39 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
         entry = QueueEntry.objects.select_related("intake_form", "daily_queue").get(id=queue_entry_id)
         check_doctor_queue_entry_access(entry, request.user)
     except ObjectDoesNotExist:
-        return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.",
+                "ui": ui,
+                "lang": lang,
+            },
+            status=404,
+        )
     if not getattr(entry, "intake_form", None):
-        return render(request, "doctor/error.html", {"message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "No questionnaire for this entry." if lang == "en" else "Brak ankiety dla tego wpisu.", "ui": ui, "lang": lang}, status=404)
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "No questionnaire for this entry." if lang == "en" else "Brak ankiety dla tego wpisu.",
+                "ui": ui,
+                "lang": lang,
+            },
+            status=404,
+        )
     intake_form = entry.intake_form
     if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
-        return render(request, "doctor/error.html", {"message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Questionnaire not yet completed." if lang == "en" else "Ankieta nie została jeszcze zakończona.", "ui": ui, "lang": lang}, status=400)
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Questionnaire not yet completed." if lang == "en" else "Ankieta nie została jeszcze zakończona.",
+                "ui": ui,
+                "lang": lang,
+            },
+            status=400,
+        )
     doc = create_or_get_medical_document(
         queue_entry_id=entry.id,
         intake_form_id=intake_form.id,
@@ -183,7 +238,16 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
             user=request.user,
         )
     except ObjectDoesNotExist:
-        return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.",
+                "ui": ui,
+                "lang": lang,
+            },
+            status=404,
+        )
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
     if "authoring_locale" not in context:
@@ -194,7 +258,7 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
         "context": context,
         "ui": get_doctor_ui(lang),
     }
-    return render(
+    return _render_doctor(
         request,
         "doctor/detail.html",
         {

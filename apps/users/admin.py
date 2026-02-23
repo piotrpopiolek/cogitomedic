@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.urls import reverse
+from django.utils.html import format_html
 
 from apps.users.models import StaffUser
 
 
 @admin.register(StaffUser)
 class StaffUserAdmin(BaseUserAdmin):
-    list_display = ("username", "email", "first_name", "last_name", "role", "is_staff", "is_active")
+    list_display = ("username", "email", "first_name", "last_name", "role", "is_staff", "is_active", "edit_link")
+    list_display_links = ("username",)
     list_filter = ("role", "is_staff", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
     ordering = ("username",)
@@ -33,6 +36,35 @@ class StaffUserAdmin(BaseUserAdmin):
         ("Role & access", {"fields": ("role", "preferred_locale", "is_staff", "is_active")}),
     )
     readonly_fields = ("date_joined", "last_login", "created_at", "updated_at")
+
+    @staticmethod
+    def _is_admin_role(request) -> bool:
+        return request.user.is_authenticated and getattr(request.user, "role", None) == "ADMIN"
+
+    def has_view_permission(self, request, obj=None):
+        if self._is_admin_role(request):
+            return True
+        return super().has_view_permission(request, obj=obj)
+
+    def has_change_permission(self, request, obj=None):
+        if self._is_admin_role(request):
+            return True
+        return super().has_change_permission(request, obj=obj)
+
+    def has_add_permission(self, request):
+        if self._is_admin_role(request):
+            return True
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        if self._is_admin_role(request):
+            return True
+        return super().has_delete_permission(request, obj=obj)
+
+    @admin.display(description="Edycja")
+    def edit_link(self, obj):
+        url = reverse("admin:users_staffuser_change", args=[obj.pk])
+        return format_html('<a class="button" href="{}">Edytuj</a>', url)
 
     def save_model(self, request, obj, form, change):
         # ADMIN role must always be staff to access Django/Unfold admin.
