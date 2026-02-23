@@ -1,6 +1,6 @@
 {% extends "doctor/base.html" %}
 {% block title %}{% if ui %}{{ ui.list_title }}{% else %}Dokumente – Work Queue{% endif %}{% endblock %}
-{% block content %}
+{% block content_inner %}
 <h1 class="h4 mb-4">{% if ui %}{{ ui.list_title }}{% else %}Medizinische Dokumente (Work Queue){% endif %}</h1>
 
 <form method="get" class="row g-3 mb-4">
