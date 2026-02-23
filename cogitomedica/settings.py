@@ -8,6 +8,7 @@ from pathlib import Path
 
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
+from django.templatetags.static import static
 from dotenv import load_dotenv
 from django.urls import reverse_lazy
 
@@ -183,6 +184,11 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy("admin:reception_dailyqueue_changelist"),
                         },
                         {
+                            "title": "Kolejki master/detail",
+                            "icon": "table_rows",
+                            "link": lambda request: reverse_lazy("admin:reception_dailyqueue_master_detail"),
+                        },
+                        {
                             "title": "Wpisy kolejki",
                             "icon": "format_list_numbered",
                             "link": lambda request: reverse_lazy("admin:reception_queueentry_changelist"),
@@ -293,6 +299,9 @@ if HAS_UNFOLD:
         "LOGIN": {
             "redirect_after": lambda request: reverse_lazy("admin:index"),
         },
+        "SCRIPTS": [
+            lambda request: static("admin/js/unfold-force-light.js"),
+        ],
     }
 
 TEMPLATES = [

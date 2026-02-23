@@ -4,7 +4,14 @@ from datetime import timedelta
 
 from django import forms
 from django.contrib import admin
+from django.db.models import Count
+from django.http import HttpRequest
+from django.template.response import TemplateResponse
+from django.urls import path
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
+from django.utils.http import urlencode
 
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
@@ -147,11 +154,85 @@ class ConsultingRoomAdmin(admin.ModelAdmin):
 
 @admin.register(DailyQueue)
 class DailyQueueAdmin(admin.ModelAdmin):
-    list_display = ("queue_date", "clinic_site", "consulting_room", "shift_code", "status", "source", "created_at")
+    list_display = (
+        "queue_date",
+        "clinic_site",
+        "consulting_room",
+        "shift_code",
+        "status",
+        "source",
+        "entries_count",
+        "patients_count",
+        "view_queue_entries",
+        "view_day_patients",
+        "created_at",
+    )
     list_filter = ("status", "source", "shift_code", "queue_date")
     search_fields = ("clinic_site__code", "consulting_room__code")
     raw_id_fields = ("clinic_site", "consulting_room", "created_by_user")
     date_hierarchy = "queue_date"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "master-detail/",
+                self.admin_site.admin_view(self.master_detail_view),
+                name="reception_dailyqueue_master_detail",
+            ),
+        ]
+        return custom_urls + urls
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(
+            entries_count_annotated=Count("entries", distinct=True),
+            patients_count_annotated=Count("entries__patient", distinct=True),
+        )
+
+    def master_detail_view(self, request: HttpRequest):
+        queue_date = (request.GET.get("queue_date") or "").strip()
+        queues_qs = DailyQueue.objects.select_related(
+            "clinic_site",
+            "consulting_room",
+        ).prefetch_related("entries__patient")
+        if queue_date:
+            queues_qs = queues_qs.filter(queue_date=queue_date)
+        queues = queues_qs.order_by("-queue_date", "clinic_site__name", "consulting_room__name")
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "title": "Kolejki dzienne - master/detail",
+            "queues": queues,
+            "queue_date": queue_date,
+        }
+        return TemplateResponse(
+            request,
+            "admin/reception/dailyqueue/master_detail.html",
+            context,
+        )
+
+    @admin.display(description="Wpisy", ordering="entries_count_annotated")
+    def entries_count(self, obj):
+        return getattr(obj, "entries_count_annotated", 0)
+
+    @admin.display(description="Pacjenci", ordering="patients_count_annotated")
+    def patients_count(self, obj):
+        return getattr(obj, "patients_count_annotated", 0)
+
+    @admin.display(description="Widok wpisów")
+    def view_queue_entries(self, obj):
+        url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode({'daily_queue__id__exact': str(obj.id)})}"
+        return format_html('<a href="{}">Wpisy tej kolejki</a>', url)
+
+    @admin.display(description="Pacjenci dnia")
+    def view_day_patients(self, obj):
+        params = {
+            "daily_queue__queue_date__exact": obj.queue_date.isoformat(),
+        }
+        url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode(params)}"
+        return format_html('<a href="{}">Pacjenci na ten dzień</a>', url)
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
@@ -174,7 +255,7 @@ class QueueEntryAdmin(admin.ModelAdmin):
         "appointment_time",
         "created_at",
     )
-    list_filter = ("entry_status", "daily_queue__queue_date")
+    list_filter = ("entry_status", "daily_queue__queue_date", "daily_queue__clinic_site", "daily_queue__consulting_room")
     search_fields = ("patient__last_name", "patient__first_name", "visit_external_id", "notes")
     raw_id_fields = ("daily_queue", "patient", "active_session", "created_by_user")
     date_hierarchy = "created_at"
