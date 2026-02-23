@@ -21,12 +21,14 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from apps.core.api_utils import safe_parse_positive_int
 from apps.intake.models import IntakeStatus
 from apps.medical.services import (
+    check_doctor_queue_entry_access,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
+    parse_medical_documents_list_params,
+    _doctor_consulting_room_id,
 )
 from apps.reception.models import QueueEntry
 from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
@@ -105,36 +107,32 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     """List medical documents (work queue) with optional filters."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
-    status = request.GET.get("status") or None
-    queue_date = None
-    if request.GET.get("queue_date"):
-        try:
-            queue_date = datetime.strptime(request.GET.get("queue_date", ""), "%Y-%m-%d").date()
-        except ValueError:
-            pass
-    patient_search = request.GET.get("patient_search") or None
-    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+    list_params = parse_medical_documents_list_params(request.GET)
+    consulting_room_id = _doctor_consulting_room_id(request.user)
     list_items, total = list_doctor_work_queue(
-        status=status,
-        queue_date=queue_date,
-        patient_search=patient_search,
-        page=page,
-        page_size=page_size,
+        **list_params,
+        consulting_room_id=consulting_room_id,
     )
     lang = _apply_doctor_lang(request)
     if request.GET.get("lang"):
-        return redirect("doctor-list")
+        query = request.GET.copy()
+        query.pop("lang", None)
+        url = request.path + ("?" + query.urlencode() if query else "")
+        return redirect(url or "doctor-list")
     return render(
         request,
         "doctor/list.html",
         {
             "items": list_items,
-            "pagination": {"page": page, "page_size": page_size, "total": total},
+            "pagination": {
+                "page": list_params["page"],
+                "page_size": list_params["page_size"],
+                "total": total,
+            },
             "filters": {
-                "status": status or "",
+                "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
-                "patient_search": patient_search or "",
+                "patient_search": list_params["patient_search"] or "",
             },
             "ui": get_doctor_ui(lang),
             "lang": lang,
@@ -151,7 +149,8 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
     lang = _get_doctor_lang(request)
     ui = get_doctor_ui(lang)
     try:
-        entry = QueueEntry.objects.select_related("intake_form").get(id=queue_entry_id)
+        entry = QueueEntry.objects.select_related("intake_form", "daily_queue").get(id=queue_entry_id)
+        check_doctor_queue_entry_access(entry, request.user)
     except ObjectDoesNotExist:
         return render(request, "doctor/error.html", {"message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.", "ui": ui, "lang": lang}, status=404)
     if not getattr(entry, "intake_form", None):
@@ -181,14 +180,19 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
             form_locale=request.GET.get("form_locale") or (
                 "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
             ),
+            user=request.user,
         )
     except ObjectDoesNotExist:
         return render(request, "doctor/error.html", {"message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.", "ui": ui, "lang": lang}, status=404)
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
+    authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
+    if "authoring_locale" not in context:
+        context["authoring_locale"] = authoring_locale
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
         "context": context,
+        "ui": get_doctor_ui(lang),
     }
     return render(
         request,

@@ -31,6 +31,13 @@ class StaffUser(AbstractUser):
         default=StaffRole.RECEPTION,
     )
     preferred_locale = models.CharField(max_length=10, default="de-DE")
+    consulting_room = models.ForeignKey(
+        "reception.ConsultingRoom",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="staff_users",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
