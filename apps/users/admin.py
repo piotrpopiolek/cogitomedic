@@ -33,3 +33,9 @@ class StaffUserAdmin(BaseUserAdmin):
         ("Role & access", {"fields": ("role", "preferred_locale", "is_staff", "is_active")}),
     )
     readonly_fields = ("date_joined", "last_login", "created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        # ADMIN role must always be staff to access Django/Unfold admin.
+        if getattr(obj, "role", None) == "ADMIN":
+            obj.is_staff = True
+        super().save_model(request, obj, form, change)
