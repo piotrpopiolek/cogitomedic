@@ -86,6 +86,7 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
 def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
+    today = timezone.now().date()
     try:
         queue = DailyQueue.objects.select_related("clinic_site", "consulting_room").get(
             id=daily_queue_id
@@ -93,6 +94,10 @@ def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Htt
     except ObjectDoesNotExist:
         ctx = {**_staff_context(request), "message": "Kolejka nie istnieje."}
         return render(request, "tablet/error.html", ctx, status=404)
+    if queue.queue_date != today:
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["queue_not_today"]
+        return render(request, "tablet/error.html", ctx, status=400)
     entries = (
         QueueEntry.objects.filter(daily_queue_id=daily_queue_id)
         .select_related("patient")
@@ -107,6 +112,7 @@ def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Htt
 def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
+    today = timezone.now().date()
     try:
         entry = QueueEntry.objects.select_related("daily_queue", "patient").get(
             id=queue_entry_id
@@ -114,6 +120,10 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
     except ObjectDoesNotExist:
         ctx = {**_staff_context(request), "message": "Wpis kolejki nie istnieje."}
         return render(request, "tablet/error.html", ctx, status=404)
+    if entry.daily_queue.queue_date != today:
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["queue_not_today"]
+        return render(request, "tablet/error.html", ctx, status=400)
     if request.method == "POST":
         tablet_device_id = None
         tablet_device_id_raw = (request.POST.get("tablet_device_id") or "").strip()
