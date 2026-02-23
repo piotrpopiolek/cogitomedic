@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { size: A4; margin: 16mm; }
+    body { font-family: Arial, sans-serif; color: #111; font-size: 12px; line-height: 1.35; }
+    h1, h2, h3 { margin: 0 0 8px 0; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 14px; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+    .meta { color: #444; font-size: 11px; margin-bottom: 8px; }
+    .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .row { display: table-row; }
+    .cell { display: table-cell; border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; }
+    .head { background: #f4f6f8; font-weight: 700; width: 36%; }
+    .badge { display: inline-block; padding: 2px 6px; border: 1px solid #bbb; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; }
+    .lesion { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-top: 10px; }
+    .lesion-title { font-weight: 700; margin-bottom: 6px; }
+    .muted { color: #666; }
+    .section-text { white-space: pre-wrap; }
+    ul { margin: 5px 0 0 18px; padding: 0; }
+    li { margin: 2px 0; }
+  </style>
+</head>
+<body>
+  <h1>Befund</h1>
+  <div class="meta">
+    Document ID: {{ document_id }}<br />
+    Version: {{ version_no }}<br />
+    Generated at: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
+    Locale: {{ authoring_locale }}
+  </div>
+
+  <h2>Patient</h2>
+  <div class="grid">
+    <div class="row">
+      <div class="cell head">Name</div>
+      <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Date of birth</div>
+      <div class="cell">{{ patient.date_of_birth }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Phone</div>
+      <div class="cell">{{ patient.phone }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Email</div>
+      <div class="cell">{{ patient.email }}</div>
+    </div>
+  </div>
+
+  <h2>Global Assessment</h2>
+  <div class="grid">
+    <div class="row">
+      <div class="cell head">Fitzpatrick type</div>
+      <div class="cell">{{ befund.fitzpatrick_type }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Overall image assessment</div>
+      <div class="cell">{{ befund.overall_image_assessment }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Final assessment</div>
+      <div class="cell">{{ befund.final_assessment }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Diagnosis code</div>
+      <div class="cell">{{ befund.diagnosis_code }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Procedure code</div>
+      <div class="cell">{{ befund.procedure_code }}</div>
+    </div>
+  </div>
+
+  <h2>Examination Scope</h2>
+  {% if befund.examination_scope %}
+    {% for item in befund.examination_scope %}<span class="badge">{{ item }}</span>{% endfor %}
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
+
+  <h2>Lesions</h2>
+  {% if befund.lesions %}
+    {% for lesion in befund.lesions %}
+      <div class="lesion">
+        <div class="lesion-title">Group {{ lesion.index }} (Numbers: {{ lesion.numbers }})</div>
+        <div><strong>Clinical assessment:</strong> {{ lesion.clinical_assessment }}</div>
+        <div><strong>Malignancy risk:</strong> {{ lesion.malignancy_risk }}</div>
+        <div>
+          <strong>Dermatoscopic features:</strong>
+          {% if lesion.features %}
+            {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </div>
+        <div style="margin-top: 8px;">
+          <strong>Final text:</strong>
+          <div class="section-text">{{ lesion.final_text }}</div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="muted">No lesions listed.</div>
+  {% endif %}
+
+  <h2>Recommendations</h2>
+  {% if befund.recommendations %}
+    <ul>
+      {% for item in befund.recommendations %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
+
+  <h2>Summary</h2>
+  <div class="section-text">{{ befund.summary_text }}</div>
+</body>
+</html>
