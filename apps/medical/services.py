@@ -4,10 +4,12 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
+from apps.core.api_utils import safe_parse_positive_int
 from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
@@ -17,17 +19,46 @@ from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import QueueEntry
 
 
+def _doctor_consulting_room_id(user: Any) -> uuid.UUID | None:
+    """Return consulting_room_id if doctor is restricted to one cabinet, else None (can see all)."""
+    return getattr(user, "consulting_room_id", None)
+
+
+def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
+    """
+    Raise ObjectDoesNotExist if user (doctor) is restricted to a consulting_room and document
+    belongs to a different room. No-op when user.consulting_room_id is None.
+    """
+    room_id = _doctor_consulting_room_id(user)
+    if room_id is None:
+        return
+    doc_room_id = document.queue_entry.daily_queue.consulting_room_id
+    if doc_room_id != room_id:
+        raise ObjectDoesNotExist("Medical document not found.")
+
+
+def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
+    """Raise ObjectDoesNotExist if user is restricted to a consulting_room and entry is from another room."""
+    room_id = _doctor_consulting_room_id(user)
+    if room_id is None:
+        return
+    if queue_entry.daily_queue.consulting_room_id != room_id:
+        raise ObjectDoesNotExist("Queue entry not found.")
+
+
 def create_or_get_medical_document(
     *,
     queue_entry_id: uuid.UUID,
     intake_form_id: uuid.UUID,
     created_by_user_id: uuid.UUID,
 ) -> MedicalDocument:
-    """Create medical document for queue entry if not existing."""
+    """Create medical document for queue entry if not existing. Intake must be SUBMITTED."""
     QueueEntry.objects.get(id=queue_entry_id)
     intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
     if intake_form.queue_entry_id != queue_entry_id:
         raise DomainError("Intake form does not belong to this queue entry.")
+    if intake_form.form_status != IntakeStatus.SUBMITTED:
+        raise DomainError("Intake form must be submitted.")
     medical_document, _ = MedicalDocument.objects.get_or_create(
         queue_entry_id=queue_entry_id,
         defaults={
@@ -259,16 +290,46 @@ def publish_document_version(
     return draft_version
 
 
+def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
+    """
+    Parse GET parameters for medical documents list (work queue).
+    Returns dict with status, queue_date, patient_search, page, page_size.
+    """
+    status = get_params.get("status") or None
+    queue_date = None
+    if get_params.get("queue_date"):
+        try:
+            queue_date = datetime.strptime(
+                get_params.get("queue_date", "") or "", "%Y-%m-%d"
+            ).date()
+        except (ValueError, TypeError):
+            pass
+    patient_search = get_params.get("patient_search") or None
+    page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
+    page_size = safe_parse_positive_int(
+        get_params.get("page_size"), default=20, maximum=200
+    )
+    return {
+        "status": status,
+        "queue_date": queue_date,
+        "patient_search": patient_search,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 def list_medical_documents(
     *,
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    consulting_room_id: uuid.UUID | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[MedicalDocument], int]:
     """
     List medical documents for doctor work queue.
+    When consulting_room_id is set, only documents from that cabinet are returned.
     Returns (list of documents with prefetched latest version, total count).
     """
     qs = (
@@ -285,6 +346,8 @@ def list_medical_documents(
         )
         .order_by("-updated_at")
     )
+    if consulting_room_id is not None:
+        qs = qs.filter(queue_entry__daily_queue__consulting_room_id=consulting_room_id)
     if status:
         qs = qs.filter(status=status)
     if queue_date is not None:
@@ -307,12 +370,13 @@ def list_doctor_work_queue(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    consulting_room_id: uuid.UUID | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict[str, Any]], int]:
     """
     List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
-    Each item may or may not have an existing MedicalDocument.
+    When consulting_room_id is set, only entries from that cabinet are returned.
     Returns (list of item dicts, total count). Item dict: document_id (or None), queue_entry_id,
     intake_form_id, patient, queue_date, status, pdf_generation_status, hidrive_sent, sms_sent.
     """
@@ -320,6 +384,8 @@ def list_doctor_work_queue(
         PatientIntakeForm.objects.filter(form_status=IntakeStatus.SUBMITTED)
         .select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     )
+    if consulting_room_id is not None:
+        qs = qs.filter(queue_entry__daily_queue__consulting_room_id=consulting_room_id)
     if status:
         qs = qs.filter(
             queue_entry_id__in=MedicalDocument.objects.filter(status=status).values_list("queue_entry_id", flat=True)
@@ -382,10 +448,12 @@ def get_medical_document_context(
     *,
     medical_document_id: uuid.UUID,
     form_locale: str = "de-DE",
+    user: Any = None,
 ) -> dict[str, Any]:
     """
     Build full context for doctor view: document, intake summary, current (latest) version.
-    Raises ObjectDoesNotExist if document not found.
+    When user is provided and has consulting_room_id set, raises ObjectDoesNotExist if document
+    is from another cabinet. Raises ObjectDoesNotExist if document not found.
     """
     doc = (
         MedicalDocument.objects.select_related(
@@ -402,6 +470,8 @@ def get_medical_document_context(
         )
         .get(id=medical_document_id)
     )
+    if user is not None:
+        check_doctor_document_access(doc, user)
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 

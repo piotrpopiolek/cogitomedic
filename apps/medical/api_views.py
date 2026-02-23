@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from json import JSONDecodeError
 from uuid import UUID
 
@@ -8,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -22,12 +21,17 @@ from apps.medical.api_schemas import (
 from apps.medical.befund_text import generate_befund_text
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
+from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    check_doctor_document_access,
+    check_doctor_queue_entry_access,
     create_or_get_medical_document,
     get_medical_document_context,
     list_medical_documents,
+    parse_medical_documents_list_params,
     publish_document_version,
     save_draft_document_version,
+    _doctor_consulting_room_id,
 )
 from apps.medical.template_services import (
     TemplateListFilters,
@@ -71,27 +75,20 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method == "GET":
-        status = request.GET.get("status") or None
-        queue_date = None
-        if request.GET.get("queue_date"):
-            try:
-                queue_date = datetime.strptime(request.GET.get("queue_date", ""), "%Y-%m-%d").date()
-            except ValueError:
-                pass
-        patient_search = request.GET.get("patient_search") or None
-        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+        list_params = parse_medical_documents_list_params(request.GET)
+        consulting_room_id = _doctor_consulting_room_id(request.user)
         items, total = list_medical_documents(
-            status=status,
-            queue_date=queue_date,
-            patient_search=patient_search,
-            page=page,
-            page_size=page_size,
+            **list_params,
+            consulting_room_id=consulting_room_id,
         )
         return JsonResponse(
             {
                 "items": [_serialize_medical_document_list_item(d) for d in items],
-                "pagination": {"page": page, "page_size": page_size, "total": total},
+                "pagination": {
+                    "page": list_params["page"],
+                    "page_size": list_params["page_size"],
+                    "total": total,
+                },
             },
             status=200,
         )
@@ -106,6 +103,8 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
         try:
+            entry = QueueEntry.objects.select_related("daily_queue").get(id=body.queue_entry_id)
+            check_doctor_queue_entry_access(entry, request.user)
             document = create_or_get_medical_document(
                 queue_entry_id=body.queue_entry_id,
                 intake_form_id=body.intake_form_id,
@@ -139,6 +138,7 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
         context = get_medical_document_context(
             medical_document_id=medical_document_id,
             form_locale=form_locale,
+            user=request.user,
         )
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
@@ -162,7 +162,10 @@ def medical_document_generate_text_view(request: HttpRequest, medical_document_i
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
-    if not MedicalDocument.objects.filter(id=medical_document_id).exists():
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
 
     payload = body.medical_payload or {}
@@ -213,7 +216,8 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
     try:
-        MedicalDocument.objects.get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
 
@@ -264,6 +268,12 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
 
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+
     payload_dict = body.medical_payload.model_dump()
     if body.medical_payload_schema_version == 1:
         try:
@@ -313,6 +323,12 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+
+    try:
         version = publish_document_version(
             medical_document_id=medical_document_id,
             publish_request_id=body.publish_request_id,
@@ -344,7 +360,10 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
     try:
-        version = MedicalDocumentVersion.objects.select_related("medical_document").get(id=version_id)
+        version = MedicalDocumentVersion.objects.select_related(
+            "medical_document", "medical_document__queue_entry__daily_queue"
+        ).get(id=version_id)
+        check_doctor_document_access(version.medical_document, request.user)
     except ObjectDoesNotExist:
         return json_error("Medical document version not found.", status=404)
     return JsonResponse(
