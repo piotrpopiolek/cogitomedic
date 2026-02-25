@@ -58,7 +58,7 @@
           </span>
         {% else %}–{% endif %}
       </td>
-      <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% endif %}</td>
+      <td>{% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="btn btn-outline-primary btn-sm">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% endif %}</td>
     </tr>
     {% if item.processing_error_message %}
     <tr>

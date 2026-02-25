@@ -18,6 +18,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.http import HttpResponseRedirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
@@ -218,7 +220,8 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
         intake_form_id=intake_form.id,
         created_by_user_id=request.user.id,
     )
-    return redirect("doctor-document-detail", medical_document_id=doc.id)
+    url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
+    return HttpResponseRedirect(url + "?lang=" + lang)
 
 
 @login_required(login_url="doctor-login")

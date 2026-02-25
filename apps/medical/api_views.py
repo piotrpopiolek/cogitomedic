@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
@@ -20,6 +20,7 @@ from apps.medical.api_schemas import (
     SaveDraftMedicalDocumentRequest,
 )
 from apps.medical.befund_text import generate_befund_text
+from apps.medical.pdf_builder import build_befund_pdf_bytes
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import QueueEntry
@@ -163,6 +164,38 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
     return JsonResponse(context, status=200)
+
+
+@require_auth
+def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id: UUID) -> HttpResponse:
+    """GET: return PDF preview from the latest saved version (draft or published). Opens inline in browser."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+
+    version = (
+        MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
+        .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__patient")
+        .order_by("-version_no")
+        .first()
+    )
+    if not version:
+        return json_error("No version to preview. Save a draft first.", status=404)
+
+    pdf_bytes = build_befund_pdf_bytes(version)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="befund-preview.pdf"'
+    response["Cache-Control"] = "no-store, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+    return response
 
 
 @require_auth

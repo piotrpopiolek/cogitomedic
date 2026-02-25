@@ -76,6 +76,16 @@ def _build_render_context(version: MedicalDocumentVersion) -> dict[str, Any]:
     }
 
 
+def build_befund_pdf_bytes(version: MedicalDocumentVersion) -> bytes:
+    """
+    Build Befund PDF for the given version and return PDF bytes (no file write).
+    Used for preview and by generate_befund_pdf.
+    """
+    context = _build_render_context(version)
+    html = render_to_string("pdf/befund_document.html", context)
+    return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
+
+
 def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     """
     Generate and store Befund PDF for medical document version.
@@ -83,9 +93,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     Returns:
         (pdf_local_path_relative_to_media_root, sha256_checksum_hex)
     """
-    context = _build_render_context(version)
-    html = render_to_string("pdf/befund_document.html", context)
-    pdf_bytes = HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
+    pdf_bytes = build_befund_pdf_bytes(version)
 
     now = timezone.now()
     relative_dir = Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs")) / f"{now.year:04d}" / f"{now.month:02d}"
