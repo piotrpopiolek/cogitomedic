@@ -204,8 +204,7 @@ ID: US-019
 Tytuł: Własne szablony tekstu lekarza (DE/EN)
 Opis: Jako lekarz, chcę tworzyć i używać własnych szablonów opisu, aby zachować swój styl dokumentacji.
 Kryteria akceptacji:
-- Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (co najmniej dla języka niemieckiego i angielskiego).
-- Przy generowaniu tekstu z checkboxów lekarz może wskazać szablon bazowy.
+- Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (co najmniej dla języka niemieckiego, angielskiego, polskiego).
 - System zapisuje zarówno tekst wygenerowany automatycznie, jak i tekst końcowy po edycji lekarza.
 - Zmiana szablonu po publikacji nie modyfikuje historycznych wersji dokumentu.
 - Szablony globalne (kliniki) i prywatne (per lekarz) są rozróżnione w uprawnieniach.

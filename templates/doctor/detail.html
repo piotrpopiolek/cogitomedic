@@ -2,9 +2,9 @@
 {% load static %}
 {% block title %}Befund – Dokument {{ document_id|truncatechars:8 }}{% endblock %}
 {% block doctor_extrahead %}
-{{ panel_data|json_script:"doctor-panel-data" }}
 {% endblock %}
 {% block content_inner %}
+{{ panel_data|json_script:"doctor-panel-data" }}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1 class="h4 mb-0">Befund – {% if ui %}{{ ui.patient_label }}{% else %}Patient{% endif %}: <span id="patient-name"></span></h1>
   <a href="{% url 'doctor-list' %}" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.back_to_list }}{% else %}← Zurück zur Liste{% endif %}</a>
@@ -130,6 +130,7 @@
   <div class="d-flex gap-2 flex-wrap">
     <button type="button" class="btn btn-outline-primary" id="btn-generate-text">{% if ui %}{{ ui.btn_generate }}{% else %}Generuj tekst{% endif %}</button>
     <button type="button" class="btn btn-secondary" id="btn-save-draft">{% if ui %}{{ ui.btn_save_draft }}{% else %}Zapisz szkic{% endif %}</button>
+    <a class="btn btn-outline-info" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{% if ui %}{{ ui.btn_preview_pdf }}{% else %}Podgląd PDF{% endif %}</a>
     <button type="button" class="btn btn-success" id="btn-publish">{% if ui %}{{ ui.btn_publish }}{% else %}Zatwierdź i wyślij{% endif %}</button>
     <label class="align-middle ms-2"><input type="checkbox" id="resend_sms" /> {% if ui %}{{ ui.resend_sms }}{% else %}SMS erneut senden{% endif %}</label>
   </div>
