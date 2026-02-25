@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from django.db.models import Q
+
 from apps.core.exceptions import DomainError
 from apps.medical.models import DoctorTextTemplate
 from apps.users.models import StaffRole, StaffUser
@@ -35,7 +37,14 @@ def list_templates(*, filters: TemplateListFilters) -> list[DoctorTextTemplate]:
         queryset = queryset.filter(is_global=True) | queryset.filter(owner_user_id=actor.id)
         queryset = queryset.distinct()
     if filters.template_locale:
-        queryset = queryset.filter(template_locale=filters.template_locale)
+        locale = (filters.template_locale or "").strip()
+        base = locale.split("-")[0] if locale else ""
+        if base:
+            queryset = queryset.filter(
+                Q(template_locale=locale)
+                | Q(template_locale=base)
+                | Q(template_locale__startswith=base + "-")
+            )
     if not filters.include_inactive:
         queryset = queryset.filter(is_active=True)
     return list(queryset)
