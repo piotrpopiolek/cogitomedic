@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.contrib.postgres.indexes import GinIndex
@@ -195,6 +196,15 @@ class DoctorTextTemplate(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        # Normalize global templates to satisfy constraint and avoid admin UX pitfalls.
+        if self.is_global:
+            self.owner_user = None
+            return
+        if self.owner_user_id is None:
+            raise ValidationError({"owner_user": "Private template requires owner_user."})
 
     class Meta:
         db_table = "doctor_text_template"

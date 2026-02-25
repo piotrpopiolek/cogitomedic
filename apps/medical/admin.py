@@ -64,6 +64,12 @@ class DoctorTextTemplateAdmin(admin.ModelAdmin):
     raw_id_fields = ("owner_user",)
     readonly_fields = ("id", "created_at", "updated_at")
 
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        if request.user.is_authenticated:
+            initial.setdefault("owner_user", request.user.pk)
+        return initial
+
     def save_model(self, request, obj, form, change):
         # Keep DB constraint consistent in admin UX:
         # - global template must not have owner_user
