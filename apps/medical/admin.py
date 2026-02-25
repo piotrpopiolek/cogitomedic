@@ -63,3 +63,13 @@ class DoctorTextTemplateAdmin(admin.ModelAdmin):
     search_fields = ("name", "template_body")
     raw_id_fields = ("owner_user",)
     readonly_fields = ("id", "created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        # Keep DB constraint consistent in admin UX:
+        # - global template must not have owner_user
+        # - private template must have owner_user (default to current user)
+        if obj.is_global:
+            obj.owner_user = None
+        elif obj.owner_user_id is None and request.user.is_authenticated:
+            obj.owner_user = request.user
+        super().save_model(request, obj, form, change)

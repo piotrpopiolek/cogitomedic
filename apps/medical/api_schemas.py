@@ -5,6 +5,23 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class FavoriteLesionGroupPreset(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    dermatoscopic_features: list[str] = Field(default_factory=list, max_length=20)
+    clinical_assessment: str = Field(min_length=1, max_length=64)
+    malignancy_risk: str = Field(min_length=1, max_length=64)
+    text: str = Field(min_length=1, max_length=5000)
+
+
+class FavoriteSummaryPreset(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    text: str = Field(min_length=1, max_length=5000)
+
+
 class MedicalPayloadMinimal(BaseModel):
     """
     Minimal contract for medical_payload stored in DB (§6: must have schema_version).
@@ -56,6 +73,8 @@ class DoctorTemplateCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     template_locale: str = Field(min_length=2, max_length=10)
     template_body: str = Field(min_length=1)
+    lesion_group_favorites: list[FavoriteLesionGroupPreset] = Field(default_factory=list)
+    summary_favorites: list[FavoriteSummaryPreset] = Field(default_factory=list)
     is_global: bool = False
     is_active: bool = True
 
@@ -67,6 +86,8 @@ class DoctorTemplateUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     template_locale: str | None = Field(default=None, min_length=2, max_length=10)
     template_body: str | None = Field(default=None, min_length=1)
+    lesion_group_favorites: list[FavoriteLesionGroupPreset] | None = None
+    summary_favorites: list[FavoriteSummaryPreset] | None = None
     is_active: bool | None = None
 
 
