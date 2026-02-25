@@ -61,6 +61,8 @@ def create_template(
     name: str,
     template_locale: str,
     template_body: str,
+    lesion_group_favorites: list[dict] | None = None,
+    summary_favorites: list[dict] | None = None,
     is_global: bool = False,
     is_active: bool = True,
 ) -> DoctorTextTemplate:
@@ -74,6 +76,8 @@ def create_template(
         name=name,
         template_locale=template_locale,
         template_body=template_body,
+        lesion_group_favorites=lesion_group_favorites or [],
+        summary_favorites=summary_favorites or [],
         is_global=is_global,
         is_active=is_active,
     )
@@ -86,6 +90,8 @@ def update_template(
     name: str | None = None,
     template_locale: str | None = None,
     template_body: str | None = None,
+    lesion_group_favorites: list[dict] | None = None,
+    summary_favorites: list[dict] | None = None,
     is_active: bool | None = None,
 ) -> DoctorTextTemplate:
     actor = _get_actor(actor_user_id)
@@ -105,6 +111,10 @@ def update_template(
         template.template_locale = template_locale
     if template_body is not None:
         template.template_body = template_body
+    if lesion_group_favorites is not None:
+        template.lesion_group_favorites = lesion_group_favorites
+    if summary_favorites is not None:
+        template.summary_favorites = summary_favorites
     if is_active is not None:
         template.is_active = is_active
     template.save()

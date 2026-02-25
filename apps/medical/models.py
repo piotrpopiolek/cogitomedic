@@ -189,6 +189,8 @@ class DoctorTextTemplate(models.Model):
     name = models.CharField(max_length=120)
     template_locale = models.CharField(max_length=10, default="de-DE")
     template_body = models.TextField()
+    lesion_group_favorites = models.JSONField(default=list, blank=True)
+    summary_favorites = models.JSONField(default=list, blank=True)
     is_global = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -198,7 +200,7 @@ class DoctorTextTemplate(models.Model):
         db_table = "doctor_text_template"
         constraints = [
             models.CheckConstraint(
-                condition=Q(template_locale__regex=r"^(de|en)(-[A-Z]{2})?$"),
+                condition=Q(template_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
                 name="doctor_template_locale_format",
             ),
             models.CheckConstraint(

@@ -343,6 +343,104 @@ class MedicalApiTests(TestCase):
         self.assertEqual(data["template_context"]["template_name"], "Befund Header")
         self.assertTrue(data["summary_generated_text"].startswith("Befund-Kopfzeile gemäß Praxis."))
 
+    def test_published_version_keeps_template_snapshot_after_template_change(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        template_response = self.client.post(
+            "/api/v1/doctor-text-templates",
+            data=json.dumps(
+                {
+                    "name": "Snapshot Template",
+                    "template_locale": "de-DE",
+                    "template_body": "Version A header.",
+                    "is_global": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(template_response.status_code, 201)
+        template_id = template_response.json()["id"]
+
+        generate_response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "authoring_locale": "de-DE",
+                    "template_id": template_id,
+                    "medical_payload": {"schema_version": 1, "lesions": []},
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(generate_response.status_code, 200)
+        generated = generate_response.json()
+
+        draft_response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "lesions": [],
+                        "summary_generated_text": generated["summary_generated_text"],
+                        "template_context": generated["template_context"],
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(draft_response.status_code, 200)
+
+        publish_response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "published_by_user_id": str(self.doctor_user.id),
+                    "resend_sms": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(publish_response.status_code, 202)
+
+        patch_template = self.client.patch(
+            f"/api/v1/doctor-text-templates/{template_id}",
+            data=json.dumps(
+                {
+                    "name": "Snapshot Template Changed",
+                    "template_body": "Version B header.",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_template.status_code, 200)
+
+        versions = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        self.assertEqual(versions.status_code, 200)
+        published_version = versions.json()["items"][0]
+        version_detail = self.client.get(f"/api/v1/medical-document-versions/{published_version['id']}")
+        self.assertEqual(version_detail.status_code, 200)
+        payload = version_detail.json()["medical_payload"]
+        self.assertIn("Version A header.", payload.get("summary_generated_text", ""))
+        self.assertEqual(payload.get("template_context", {}).get("template_name"), "Snapshot Template")
+
     def test_medical_document_versions_and_version_detail(self) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
@@ -672,15 +770,38 @@ class DoctorTemplatesApiTests(TestCase):
                 {
                     "actor_user_id": str(self.doctor_user.id),
                     "name": "My Template",
-                    "template_locale": "de-DE",
+                    "template_locale": "pl-PL",
                     "template_body": "Text",
+                    "lesion_group_favorites": [
+                        {
+                            "name": "Atypical control",
+                            "dermatoscopic_features": ["ASYMMETRY", "MULTICOLOR"],
+                            "clinical_assessment": "CONTROL_NEEDED",
+                            "malignancy_risk": "LOW_SUSPICION",
+                            "text": "Zmiana kontrolna do obserwacji.",
+                        }
+                    ],
+                    "summary_favorites": [
+                        {
+                            "name": "Summary short",
+                            "text": "Brak cech wysokiego ryzyka.",
+                        }
+                    ],
                     "is_global": False,
                 }
             ),
             content_type="application/json",
         )
         self.assertEqual(create_private.status_code, 201)
+        self.assertEqual(create_private.json()["template_locale"], "pl-PL")
+        self.assertEqual(len(create_private.json()["lesion_group_favorites"]), 1)
+        self.assertEqual(len(create_private.json()["summary_favorites"]), 1)
         template_id = create_private.json()["id"]
+
+        template_detail = self.client.get(f"/api/v1/doctor-text-templates/{template_id}")
+        self.assertEqual(template_detail.status_code, 200)
+        self.assertEqual(template_detail.json()["lesion_group_favorites"][0]["clinical_assessment"], "CONTROL_NEEDED")
+        self.assertEqual(template_detail.json()["summary_favorites"][0]["name"], "Summary short")
 
         # Doctor cannot create global template
         create_global_forbidden = self.client.post(
@@ -744,6 +865,7 @@ class DoctorTemplatesApiTests(TestCase):
             data=json.dumps(
                 {
                     "actor_user_id": str(self.doctor_user.id),
+                    "summary_favorites": [{"name": "Summary changed", "text": "Nowy tekst podsumowania."}],
                     "is_active": False,
                 }
             ),
@@ -751,3 +873,4 @@ class DoctorTemplatesApiTests(TestCase):
         )
         self.assertEqual(patch_owner.status_code, 200)
         self.assertFalse(patch_owner.json()["is_active"])
+        self.assertEqual(patch_owner.json()["summary_favorites"][0]["name"], "Summary changed")
