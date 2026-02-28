@@ -157,18 +157,24 @@ def _get_request_model_registry() -> list[type]:
     """All Pydantic models used as API request/query bodies (for components.schemas)."""
     from apps.intake.api_schemas import (
         AnamnesisAnswerPayload,
+        BodyMapPointPayload,
         ConsentAcceptanceItem,
+        ProcessIntakeOutboxRequest,
+        RetryIntakeOutboxEventRequest,
         SignatureUploadRequest,
         SubmitIntakeFormRequest,
         UpdateAnamnesisPayloadRequest,
+        UpdateBodyMapRequest,
         UpdateConsentsRequest,
     )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        GenerateTextRequest,
         MedicalPayloadMinimal,
         PublishMedicalDocumentRequest,
+        RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
     )
     from apps.outbox.api_schemas import (
@@ -208,18 +214,24 @@ def _get_request_model_registry() -> list[type]:
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
         # Outbox / operations
+        ProcessIntakeOutboxRequest,
         ProcessOutboxRequest,
+        RetryIntakeOutboxEventRequest,
         RetryOutboxEventRequest,
         RetentionRunRequest,
         # Medical (MedicalPayloadMinimal is nested in SaveDraftMedicalDocumentRequest; §6 schema_version)
         MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,
+        GenerateTextRequest,
+        RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
-        # Intake (AnamnesisAnswerPayload is nested in UpdateAnamnesisPayloadRequest)
+        # Intake (AnamnesisAnswerPayload is nested in UpdateAnamnesisPayloadRequest; BodyMapPointPayload in UpdateBodyMapRequest)
         AnamnesisAnswerPayload,
+        BodyMapPointPayload,
         ConsentAcceptanceItem,
         UpdateAnamnesisPayloadRequest,
+        UpdateBodyMapRequest,
         UpdateConsentsRequest,
         SignatureUploadRequest,
         SubmitIntakeFormRequest,
@@ -259,16 +271,21 @@ def get_components_schemas() -> dict[str, dict[str, Any]]:
 def _request_body_model_map() -> dict[tuple[str, str], type]:
     """(path, method) -> request body model class. Used to inject $ref into paths."""
     from apps.intake.api_schemas import (
+        ProcessIntakeOutboxRequest,
+        RetryIntakeOutboxEventRequest,
         SignatureUploadRequest,
         SubmitIntakeFormRequest,
         UpdateAnamnesisPayloadRequest,
+        UpdateBodyMapRequest,
         UpdateConsentsRequest,
     )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        GenerateTextRequest,
         PublishMedicalDocumentRequest,
+        RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
     )
     from apps.outbox.api_schemas import ProcessOutboxRequest, RetentionRunRequest, RetryOutboxEventRequest
@@ -298,7 +315,9 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/doctor-text-templates", "post"): DoctorTemplateCreateRequest,
         (f"{P}/doctor-text-templates/{{template_id}}", "patch"): DoctorTemplateUpdateRequest,
         (f"{P}/outbox-events/{{outbox_event_id}}/retry", "post"): RetryOutboxEventRequest,
+        (f"{P}/intake-outbox-events/{{intake_outbox_event_id}}/retry", "post"): RetryIntakeOutboxEventRequest,
         (f"{P}/operations/outbox/process", "post"): ProcessOutboxRequest,
+        (f"{P}/operations/intake-outbox/process", "post"): ProcessIntakeOutboxRequest,
         (f"{P}/operations/retention/run", "post"): RetentionRunRequest,
         (f"{P}/medical-documents", "post"): CreateMedicalDocumentRequest,
         (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): SaveDraftMedicalDocumentRequest,
@@ -319,8 +338,11 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/tablet-devices/{{tablet_device_id}}", "patch"): UpdateTabletDeviceRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): UpdateAnamnesisPayloadRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/consents", "put"): UpdateConsentsRequest,
+        (f"{P}/intake-forms/{{intake_form_id}}", "patch"): UpdateBodyMapRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/signature", "post"): SignatureUploadRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/submit", "post"): SubmitIntakeFormRequest,
+        (f"{P}/medical-documents/{{medical_document_id}}/generate-text", "post"): GenerateTextRequest,
+        (f"{P}/medical-documents/{{medical_document_id}}/retry-processing", "post"): RetryProcessingRequest,
     }
 
 
