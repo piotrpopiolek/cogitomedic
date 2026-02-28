@@ -60,30 +60,30 @@ Lekarz widzi dane w oparciu o szerszy i bezpieczniejszy model autoryzacji (konce
 
 ### 3.2. Kolejki i wpisy (tylko odczyt)
 
-Lekarz widzi **tylko kolejki ze swoich przypisanych gabinetów**. Musi móc wybrać datę i zobaczyć listę pacjentów (wpisów) ze swojej dziennej kolejki oraz otworzyć/utworzyć dokument medyczny dla wybranego wpisu. Nie zarządza kolejkami ani sesjami. W przypadku braku przypisanych gabinetów listy są puste.
+Lekarz widzi **tylko kolejki przypisane bezpośrednio do niego na dany dzień/zmianę** (`assigned_doctor_id`). Musi móc wybrać datę i zobaczyć listę pacjentów (wpisów) ze swojej dziennej kolejki oraz otworzyć/utworzyć dokument medyczny dla wybranego wpisu. Nie zarządza kolejkami ani sesjami. W przypadku braku przypisanych kolejek listy są puste.
 
 
-| Moduł / Zasób                                            | Dostęp DOCTOR | Uwagi                                                                                                                      |
-| -------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| GET `/daily-queues`                                      | Tak (read)    | Tylko kolejki dla **przypisanych lekarzowi** `consulting_room`.                                                            |
-| GET `/daily-queues/{id}/entries`                         | Tak (read)    | Tylko jeśli `daily_queue` należy do jednego z przypisanych gabinetów. Lista wpisów (np. `entry_status=PATIENT_COMPLETED`). |
-| GET `/queue-entries/{id}`                                | Tak (read)    | Tylko jeśli wpis należy do kolejki przypisanego gabinetu.                                                                  |
-| POST/PATCH/DELETE daily-queues, POST/PATCH queue-entries | Nie           | Zarządzanie kolejką i wpisami należy do RECEPTION.                                                                         |
+| Moduł / Zasób                                            | Dostęp DOCTOR | Uwagi                                                                                                      |
+| -------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------- |
+| GET `/daily-queues`                                      | Tak (read)    | Tylko kolejki, gdzie `assigned_doctor_id == current_user.id`.                                              |
+| GET `/daily-queues/{id}/entries`                         | Tak (read)    | Tylko jeśli `daily_queue` jest przypisana do lekarza. Lista wpisów (np. `entry_status=PATIENT_COMPLETED`). |
+| GET `/queue-entries/{id}`                                | Tak (read)    | Tylko jeśli wpis należy do kolejki przypisanej do lekarza.                                                 |
+| POST/PATCH/DELETE daily-queues, POST/PATCH queue-entries | Nie           | Zarządzanie kolejką i wpisami należy do RECEPTION.                                                         |
 
 
 ---
 
-### 3.3. Pacjenci (tylko odczyt) – pacjenci ze swoich gabinetów
+### 3.3. Pacjenci (tylko odczyt) – historia pacjenta w obrębie kliniki
 
-Lekarz **musi** mieć dostęp do pacjentów, **którzy zapisali się / zostali przyjęci w jego gabinetach**: wyszukiwanie i podgląd pacjentów mających wizyty w kolejkach gabinetów przypisanych do lekarza (powiązanie przez `queue_entry` → `daily_queue` → `consulting_room_id`). 
+Lekarz **musi** mieć dostęp do pacjentów w klinikach, do których jest przypisany (nie tylko z "jego gabinetu"), tak aby nie tworzyć silosów medycznych. Wyszukiwanie i podgląd pacjentów opiera się o relację `patient_clinic_site`.
 
 
-| Moduł / Zasób                                       | Dostęp DOCTOR | Uwagi                                                                                                                                      |
-| --------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET `/patients`                                     | Tak (read)    | Wyszukiwanie pacjentów (np. `search`, `last_name`, `date_of_birth`). Wyniki ograniczone do pacjentów z wizytami w przypisanych gabinetach. |
-| GET `/patients/{id}`                                | Tak (read)    | Szczegóły pacjenta – tylko jeśli pacjent ma w historii wpis w kolejce powiązanej z gabinetem lekarza.                                      |
-| GET `/patients/{id}/contact-history`                | Tak (read)    | Historia kontaktów – tylko dla pacjentów ze swoich gabinetów.                                                                              |
-| POST/PATCH `/patients`, POST `/patients/{id}/merge` | Nie           | Tworzenie/edycja pacjentów i scalanie – RECEPTION/ADMIN.                                                                                   |
+| Moduł / Zasób                                       | Dostęp DOCTOR | Uwagi                                                                                                                       |
+| --------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| GET `/patients`                                     | Tak (read)    | Wyszukiwanie pacjentów (np. `search`, `last_name`, `date_of_birth`). Wyniki ograniczone do pacjentów z przypisanych klinik. |
+| GET `/patients/{id}`                                | Tak (read)    | Szczegóły pacjenta – tylko jeśli pacjent należy do kliniki w zakresie lekarza.                                              |
+| GET `/patients/{id}/contact-history`                | Tak (read)    | Historia kontaktów – tylko dla pacjentów z zakresu klinik lekarza.                                                          |
+| POST/PATCH `/patients`, POST `/patients/{id}/merge` | Nie           | Tworzenie/edycja pacjentów i scalanie – RECEPTION/ADMIN.                                                                    |
 
 
 ---
@@ -192,8 +192,8 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 
 ## 4. Encje w bazie (db-plan) – pod kątem roli DOCTOR
 
-- **Odczyt (bezpośrednio lub przez API), z filtrem object-level (przypisane gabinety):**  
-`staff_user` (własny + przypisanie do `consulting_room` via `staff_user_consulting_room`), `patient` (tylko pacjenci z wizytami w przypisanych gabinetach), `daily_queue` (tylko kolejki przypisanych gabinetów), `queue_entry`, `clinic_site`, `consulting_room`, `patient_intake_form` (w kontekście dokumentu), `patient_intake_consent`, `medical_document`, `medical_document_version`, `doctor_text_template` (własne + globalne), `audit_event` (tylko zdarzenia powiązane z dokumentami w zakresie przypisanych gabinetów).
+- **Odczyt (bezpośrednio lub przez API), z filtrem object-level (klinika + autorstwo + przypisana kolejka):**  
+`staff_user` (własny + przypisanie do klinik via `staff_user_clinic_site`), `patient` (pacjenci przypisani do klinik lekarza via `patient_clinic_site`), `daily_queue` (tylko kolejki przypisane po `assigned_doctor_id`), `queue_entry`, `clinic_site`, `consulting_room`, `patient_intake_form` (w kontekście dokumentu), `patient_intake_consent`, `medical_document`, `medical_document_version`, `doctor_text_template` (własne + klinikowe), `audit_event` (tylko zdarzenia powiązane z dokumentami w zakresie autoryzacji lekarza).
 - **Zapis (przez serwisy aplikacyjne):**  
 `medical_document`, `medical_document_version` (draft, publish), `doctor_text_template` (własne). Outbox jest zapisywany przez serwis publikacji; lekarz nie operuje na tabeli outbox bezpośrednio.
 - **Brak dostępu (nawet odczytu) w normalnym flow:**  
@@ -203,9 +203,9 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 
 ## 4a. TODO przed implementacją
 
-1. **Domknięcie decyzji architektonicznych (jedno źródło prawdy):**
+1. **[W TRAKCIE] Domknięcie decyzji architektonicznych (jedno źródło prawdy):**
   Ujednolicić nazewnictwo i reguły między `plan-dostep-lekarz-moduly.plan.md`, `.ai/prd.md`, `.ai/db-plan.md`, `.ai/api-plan.md`, `.ai/api-plan-pl.md` (szczególnie: autorstwo OR kolejka, zasięg kliniki vs gabinet, audit po `metadata`).
-2. **Finalny kontrakt autoryzacji object-level:**
+2. **[ZROBIONE] Finalny kontrakt autoryzacji object-level:**
   Spisać finalne reguły w formie testowalnych warunków (`ALLOW` / `DENY`) dla: `daily-queues`, `patients`, `medical-documents`, `audit-events`, `doctor-text-templates`.
 3. **Plan migracji danych i rollback:**
   Przygotować migracje DB dla nowych relacji (m.in. przypisania klinik, przypisanie lekarza do zmiany/kolejki, denormalizacja pacjent-klinika, klucze kontekstowe audytu), wraz z planem backfillu i bezpiecznym rollbackiem.
@@ -223,29 +223,58 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 ## 5. Rekomendowana implementacja uprawnień
 
 1. **Endpointy API:**
-  Dla każdego endpointu z sekcji 3.x „Tak” – sprawdzenie `request.user.role in ('DOCTOR', 'ADMIN')` (lub dedykowana permission class) oraz **object-level check zgodnie z polityką widoczności (2a)**: kolejki/wpisy/dokumenty/pacjenci tylko z **przypisanych lekarzowi gabinetów**. Wymóg: model użytkownika połączony z `consulting_room` (tabela N:M `staff_user_consulting_room`). Lekarz bez przypisanego gabinetu otrzymuje pustą listę. ADMIN może pomijać filtry object-level (pełna widoczność operacyjna).
+  Dla każdego endpointu z sekcji 3.x „Tak” – sprawdzenie `request.user.role in ('DOCTOR', 'ADMIN')` (lub dedykowana permission class) oraz **object-level check zgodnie z polityką widoczności (2a)**:  
+  - kolejki/wpisy po `assigned_doctor_id`,  
+  - pacjenci po `patient_clinic_site` i `staff_user_clinic_site`,  
+  - dokumenty po regule `AUTHOR OR ASSIGNED_QUEUE`,  
+  - audit po kluczach kontekstowych w `audit_event.metadata`.  
+  Lekarz bez przypisanej kliniki/kolejki otrzymuje pustą listę. ADMIN może pomijać filtry object-level (pełna widoczność operacyjna).
 2. **Frontend (panel lekarza):**
-  Ukrycie nawigacji i akcji do modułów z sekcji 3.9; menu ograniczone do: work queue (dokumenty), wybór kolejki/daty (read-only), pacjenci (wyszukiwanie z własnych gabinetów), szablony tekstu, audit (dla dokumentów z własnych gabinetów), wylogowanie. Brak linków do: użytkownicy, słowniki zgód/anamnezy, import, outbox, retention, merge pacjentów.
+  Ukrycie nawigacji i akcji do modułów z sekcji 3.9; menu ograniczone do: work queue (dokumenty), wybór kolejki/daty (read-only), pacjenci (wyszukiwanie z przypisanych klinik), szablony tekstu, audit (dla dokumentów w zakresie lekarza), wylogowanie. Brak linków do: użytkownicy, słowniki zgód/anamnezy, import, outbox, retention, merge pacjentów.
 3. **Dashboard (US-014):**
-  Widok „Status dokumentów” oparty o GET `/medical-documents` z `doctor_view=pending_review` / `published` / `failed` (wyniki już ograniczone do zakresu gabinetów lekarza); alerty „wymagające interwencji” = dokumenty z `doctor_view=failed`.
+  Widok „Status dokumentów” oparty o GET `/medical-documents` z `doctor_view=pending_review` / `published` / `failed` (wyniki już ograniczone do zakresu autoryzacji lekarza); alerty „wymagające interwencji” = dokumenty z `doctor_view=failed`.
 4. **Audit:**
-  Lekarz ma dostęp do GET `/audit-events` (z filtrem po dokumentach w swoim zakresie) oraz do GET `/medical-documents/{id}/audit-trail` dla dokumentów ze swoich gabinetów.
+  Lekarz ma dostęp do GET `/audit-events` (z filtrem po dokumentach w swoim zakresie) oraz do GET `/medical-documents/{id}/audit-trail` dla dokumentów w swoim zakresie autoryzacji (AUTHOR OR ASSIGNED_QUEUE).
+
+---
+
+## 5a. Kontrakt autoryzacji object-level (ALLOW / DENY)
+
+1. `**daily-queues`**
+  - `ALLOW`: `daily_queue.assigned_doctor_id == current_user.id`
+  - `DENY`: każdy inny przypadek
+2. `**queue-entries`**
+  - `ALLOW`: `queue_entry.daily_queue.assigned_doctor_id == current_user.id`
+  - `DENY`: każdy inny przypadek
+3. `**patients`**
+  - `ALLOW`: istnieje rekord `patient_clinic_site(patient_id, clinic_site_id)` oraz `clinic_site_id` jest w `staff_user_clinic_site` lekarza
+  - `DENY`: pacjent poza zakresem klinik lekarza
+4. `**medical-documents**`
+  - `ALLOW`: `medical_document.created_by_user_id == current_user.id` **OR** `medical_document.queue_entry.daily_queue.assigned_doctor_id == current_user.id`
+  - `DENY`: brak obu warunków
+5. `**audit-events`**
+  - `ALLOW`: `audit_event.metadata.assigned_doctor_id == current_user.id` **OR** (`audit_event.metadata.actor_user_id == current_user.id` i event dotyczy dokumentu widocznego dla lekarza)
+  - `DENY`: brak obu warunków
+6. `**doctor-text-templates`**
+  - `ALLOW-READ`: `owner_user_id == current_user.id` **OR** `clinic_site_id` w `staff_user_clinic_site` lekarza
+  - `ALLOW-WRITE`: tylko `owner_user_id == current_user.id`
+  - `DENY`: każdy inny przypadek
 
 ---
 
 ## 6. Podsumowanie – moduły z dostępem DOCTOR
 
 
-| Kategoria            | Moduły / zasoby z dostępem (odczyt i/lub zapis)                                                                                                                                                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth                 | login, logout, me                                                                                                                                                                                                     |
-| Kolejki (read-only)  | daily-queues (GET), daily-queues/{id}/entries (GET), queue-entries/{id} (GET) – **tylko ze swoich przypisanych gabinetów (puste listy przy braku gabinetu)**                                                          |
-| Pacjenci (read-only) | patients (GET), patients/{id} (GET), patients/{id}/contact-history (GET) – **tylko pacjenci z wizytami w przypisanych gabinetach**                                                                                    |
-| Lokacje (read-only)  | clinic-sites (GET), consulting-rooms (GET)                                                                                                                                                                            |
-| Dokumenty medyczne   | medical-documents (GET, POST), medical-documents/{id} (GET), draft (PATCH), generate-text (POST), publish (POST), versions (GET); medical-document-versions/{id} (GET) – **tylko dokumenty z przypisanych gabinetów** |
-| Szablony lekarza     | doctor-text-templates (GET, POST, GET/PATCH/DELETE własne)                                                                                                                                                            |
-| Audit (ograniczony)  | audit-events (GET z filtrem po dokumentach w zakresie), medical-documents/{id}/audit-trail (GET) – **dla dokumentów powiązanych ze swoimi gabinetami**                                                                |
-| Observability        | status w ramach medical-documents; opcjonalnie GET /observability/health                                                                                                                                              |
+| Kategoria            | Moduły / zasoby z dostępem (odczyt i/lub zapis)                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                 | login, logout, me                                                                                                                                                                                     |
+| Kolejki (read-only)  | daily-queues (GET), daily-queues/{id}/entries (GET), queue-entries/{id} (GET) – **tylko kolejki przypisane do lekarza (`assigned_doctor_id`)**                                                        |
+| Pacjenci (read-only) | patients (GET), patients/{id} (GET), patients/{id}/contact-history (GET) – **pacjenci z przypisanych klinik lekarza (`patient_clinic_site`)**                                                         |
+| Lokacje (read-only)  | clinic-sites (GET), consulting-rooms (GET)                                                                                                                                                            |
+| Dokumenty medyczne   | medical-documents (GET, POST), medical-documents/{id} (GET), draft (PATCH), generate-text (POST), publish (POST), versions (GET); medical-document-versions/{id} (GET) – **AUTHOR OR ASSIGNED_QUEUE** |
+| Szablony lekarza     | doctor-text-templates (GET, POST, GET/PATCH/DELETE własne)                                                                                                                                            |
+| Audit (ograniczony)  | audit-events (GET z filtrem po dokumentach w zakresie), medical-documents/{id}/audit-trail (GET) – **dla dokumentów w zakresie autoryzacji lekarza**                                                  |
+| Observability        | status w ramach medical-documents; opcjonalnie GET /observability/health                                                                                                                              |
 
 
 Wszystkie pozostałe moduły (staff-users, consent/anamnesis definitions, intake write, sessions, tablet devices, imports, outbox, operations, retention, pełna lista audit bez filtra, merge) – **bez dostępu** dla roli DOCTOR (zarezerwowane dla RECEPTION, ADMIN lub TABLET zgodnie z api-plan i db-plan).
