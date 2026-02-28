@@ -23,74 +23,74 @@
   </style>
 </head>
 <body>
-  <h1>Befund</h1>
+  <h1>{{ labels.befund|default:"Befund" }}</h1>
   <div class="meta">
-    Document ID: {{ document_id }}<br />
-    Version: {{ version_no }}<br />
-    Generated at: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
-    Locale: {{ authoring_locale }}
+    {{ labels.document_id|default:"Document ID" }}: {{ document_id }}<br />
+    {{ labels.version|default:"Version" }}: {{ version_no }}<br />
+    {{ labels.generated_at|default:"Generated at" }}: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
+    {{ labels.locale|default:"Locale" }}: {{ authoring_locale }}
   </div>
 
-  <h2>Patient</h2>
+  <h2>{{ labels.patient|default:"Patient" }}</h2>
   <div class="grid">
     <div class="row">
-      <div class="cell head">Name</div>
+      <div class="cell head">{{ labels.name|default:"Name" }}</div>
       <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Date of birth</div>
+      <div class="cell head">{{ labels.date_of_birth|default:"Date of birth" }}</div>
       <div class="cell">{{ patient.date_of_birth }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Phone</div>
+      <div class="cell head">{{ labels.phone|default:"Phone" }}</div>
       <div class="cell">{{ patient.phone }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Email</div>
+      <div class="cell head">{{ labels.email|default:"Email" }}</div>
       <div class="cell">{{ patient.email }}</div>
     </div>
   </div>
 
-  <h2>Global Assessment</h2>
+  <h2>{{ labels.global_assessment|default:"Global Assessment" }}</h2>
   <div class="grid">
     <div class="row">
-      <div class="cell head">Fitzpatrick type</div>
+      <div class="cell head">{{ labels.fitzpatrick_type|default:"Fitzpatrick type" }}</div>
       <div class="cell">{{ befund.fitzpatrick_type }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Overall image assessment</div>
+      <div class="cell head">{{ labels.overall_image_assessment|default:"Overall image assessment" }}</div>
       <div class="cell">{{ befund.overall_image_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Final assessment</div>
+      <div class="cell head">{{ labels.final_assessment|default:"Final assessment" }}</div>
       <div class="cell">{{ befund.final_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Diagnosis code</div>
+      <div class="cell head">{{ labels.diagnosis_code|default:"Diagnosis code" }}</div>
       <div class="cell">{{ befund.diagnosis_code }}</div>
     </div>
     <div class="row">
-      <div class="cell head">Procedure code</div>
+      <div class="cell head">{{ labels.procedure_code|default:"Procedure code" }}</div>
       <div class="cell">{{ befund.procedure_code }}</div>
     </div>
   </div>
 
-  <h2>Examination Scope</h2>
+  <h2>{{ labels.examination_scope|default:"Examination Scope" }}</h2>
   {% if befund.examination_scope %}
     {% for item in befund.examination_scope %}<span class="badge">{{ item }}</span>{% endfor %}
   {% else %}
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>Lesions</h2>
+  <h2>{{ labels.lesions|default:"Lesions" }}</h2>
   {% if befund.lesions %}
     {% for lesion in befund.lesions %}
       <div class="lesion">
-        <div class="lesion-title">Group {{ lesion.index }} (Numbers: {{ lesion.numbers }})</div>
-        <div><strong>Clinical assessment:</strong> {{ lesion.clinical_assessment }}</div>
-        <div><strong>Malignancy risk:</strong> {{ lesion.malignancy_risk }}</div>
+        <div class="lesion-title">{{ labels.group|default:"Group" }} {{ lesion.index }} ({{ labels.numbers|default:"Numbers" }}: {{ lesion.numbers }})</div>
+        <div><strong>{{ labels.clinical_assessment|default:"Clinical assessment" }}:</strong> {{ lesion.clinical_assessment }}</div>
+        <div><strong>{{ labels.malignancy_risk|default:"Malignancy risk" }}:</strong> {{ lesion.malignancy_risk }}</div>
         <div>
-          <strong>Dermatoscopic features:</strong>
+          <strong>{{ labels.dermatoscopic_features|default:"Dermatoscopic features" }}:</strong>
           {% if lesion.features %}
             {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
           {% else %}
@@ -98,16 +98,16 @@
           {% endif %}
         </div>
         <div style="margin-top: 8px;">
-          <strong>Final text:</strong>
+          <strong>{{ labels.final_text|default:"Final text" }}:</strong>
           <div class="section-text">{{ lesion.final_text }}</div>
         </div>
       </div>
     {% endfor %}
   {% else %}
-    <div class="muted">No lesions listed.</div>
+    <div class="muted">{{ labels.no_lesions|default:"No lesions listed." }}</div>
   {% endif %}
 
-  <h2>Recommendations</h2>
+  <h2>{{ labels.recommendations|default:"Recommendations" }}</h2>
   {% if befund.recommendations %}
     <ul>
       {% for item in befund.recommendations %}
@@ -118,7 +118,7 @@
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>Summary</h2>
+  <h2>{{ labels.summary|default:"Summary" }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
 </body>
 </html>

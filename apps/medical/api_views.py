@@ -189,7 +189,9 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
     if not version:
         return json_error("No version to preview. Save a draft first.", status=404)
 
-    pdf_bytes = build_befund_pdf_bytes(version)
+    form_locale = (request.GET.get("form_locale") or request.GET.get("authoring_locale") or "").strip()[:10]
+    authoring_locale_override = form_locale if form_locale else None
+    pdf_bytes = build_befund_pdf_bytes(version, authoring_locale_override=authoring_locale_override)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="befund-preview.pdf"'
     response["Cache-Control"] = "no-store, max-age=0"
