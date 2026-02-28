@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from weasyprint import HTML
 
+from apps.core.translation_service import get_translation_map
 from apps.medical.models import MedicalDocumentVersion
 from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
 
@@ -148,16 +149,43 @@ PDF_LABELS: dict[str, dict[str, str]] = {
 
 
 def _pdf_labels(locale: str) -> dict[str, str]:
-    """Return PDF labels for the given authoring locale (e.g. de-DE, en-GB, pl-PL)."""
-    if locale in PDF_LABELS:
-        return PDF_LABELS[locale].copy()
-    if locale.startswith("de"):
-        return PDF_LABELS["de-DE"].copy()
-    if locale.startswith("en"):
-        return PDF_LABELS["en-GB"].copy()
-    if locale.startswith("pl"):
-        return PDF_LABELS["pl-PL"].copy()
-    return PDF_LABELS["en-GB"].copy()
+    """Return PDF labels from DB-only translation storage."""
+    lang = _authoring_locale_to_lang(locale)
+    mapping = get_translation_map(category="doctor", language_code=lang)
+    keys = [
+        "befund",
+        "document_id",
+        "version",
+        "generated_at",
+        "locale",
+        "patient",
+        "name",
+        "date_of_birth",
+        "phone",
+        "email",
+        "global_assessment",
+        "fitzpatrick_type",
+        "overall_image_assessment",
+        "final_assessment",
+        "diagnosis_code",
+        "procedure_code",
+        "examination_scope",
+        "lesions",
+        "group",
+        "numbers",
+        "clinical_assessment",
+        "malignancy_risk",
+        "dermatoscopic_features",
+        "final_text",
+        "recommendations",
+        "summary",
+        "no_lesions",
+    ]
+    labels: dict[str, str] = {}
+    for key in keys:
+        full_key = f"doctor.pdf_label.{key}"
+        labels[key] = mapping.get(full_key) or key.replace("_", " ").title()
+    return labels
 
 
 def _authoring_locale_to_lang(authoring_locale: str) -> str:

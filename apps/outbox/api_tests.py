@@ -107,6 +107,7 @@ class OutboxApiTests(TestCase):
             medical_document_id=medical_document.id,
             publish_request_id=uuid4(),
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
 
     def test_outbox_events_list_endpoint(self) -> None:
