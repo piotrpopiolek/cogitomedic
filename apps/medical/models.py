@@ -138,6 +138,10 @@ class MedicalDocumentVersion(models.Model):
                 name="medical_document_published_requires_time",
             ),
             models.CheckConstraint(
+                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(publish_locale__isnull=False),
+                name="medical_document_published_requires_publish_locale",
+            ),
+            models.CheckConstraint(
                 condition=Q(publish_locale__isnull=True)
                 | Q(publish_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
                 name="medical_document_publish_locale_format",
