@@ -20,6 +20,9 @@
     .sig-box { border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-top: 8px; }
     img.signature { max-width: 100%; max-height: 120px; }
     .mono { font-family: Consolas, "Courier New", monospace; font-size: 10px; }
+    .option-row { margin: 4px 0 4px 0; padding-left: 2px; }
+    .option-row .cb { font-size: 14px; margin-right: 6px; }
+    .free-text-box { border: 1px solid #888; border-radius: 4px; padding: 8px 10px; margin-top: 6px; background: #fafafa; min-height: 2em; }
   </style>
 </head>
 <body>
@@ -78,24 +81,30 @@
     {% for answer in anamnesis.answers %}
       <div class="item">
         <div class="item-title">{{ answer.question_text_locale|default:answer.question_text_de|default:answer.question_code }}</div>
-        <div><strong>DE:</strong> {{ answer.question_text_de|default:"-" }}</div>
-        <div><strong>{{ form_locale }}:</strong> {{ answer.question_text_locale|default:answer.question_text_de|default:"-" }}</div>
-        {% if answer.selected_options %}
+        {% if answer.all_options %}
           <div style="margin-top:6px;">
-            <strong>Options:</strong>
-            <ul>
-              {% for option in answer.selected_options %}
-                <li>
-                  DE: {{ option.label_de|default:option.option_code|default:"-" }} | {{ form_locale }}: {{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}
-                </li>
-              {% endfor %}
-            </ul>
+            {% for option in answer.all_options %}
+              <div class="option-row">
+                <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+                <span>{{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% elif answer.selected_options %}
+          <div style="margin-top:6px;">
+            {% for option in answer.selected_options %}
+              <div class="option-row">
+                <span class="cb">☑</span>
+                <span>{{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}</span>
+              </div>
+            {% endfor %}
           </div>
         {% else %}
-          <div class="muted" style="margin-top:6px;">No selected options.</div>
+          <div class="muted" style="margin-top:6px;">No options.</div>
         {% endif %}
         {% if answer.free_text %}
-          <div style="margin-top:6px;"><strong>Free text:</strong> {{ answer.free_text }}</div>
+          <div style="margin-top:8px;"><strong>Eintrag / Wpis:</strong></div>
+          <div class="free-text-box">{{ answer.free_text }}</div>
         {% endif %}
       </div>
     {% endfor %}
