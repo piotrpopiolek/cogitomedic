@@ -7,6 +7,7 @@ from typing import Any
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from weasyprint import HTML
 
 from apps.intake.models import IntakeDocumentVersion
@@ -15,11 +16,18 @@ from apps.intake.models import IntakeDocumentVersion
 def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Provide safe defaults expected by the intake PDF template."""
     patient = snapshot.get("patient") or {}
+    
+    captured_at_str = snapshot.get("captured_at")
+    generated_at = parse_datetime(captured_at_str) if captured_at_str else timezone.now()
+    
+    submitted_at_str = snapshot.get("submitted_at")
+    submitted_at = parse_datetime(submitted_at_str) if submitted_at_str else None
+
     return {
-        "generated_at": timezone.now(),
+        "generated_at": generated_at,
         "base_locale": snapshot.get("base_locale") or "de-DE",
         "form_locale": snapshot.get("form_locale") or "de-DE",
-        "submitted_at": snapshot.get("submitted_at"),
+        "submitted_at": submitted_at,
         "intake_form_id": snapshot.get("intake_form_id"),
         "queue_entry_id": snapshot.get("queue_entry_id"),
         "patient": {
@@ -43,7 +51,7 @@ def build_intake_pdf_bytes(version: IntakeDocumentVersion) -> bytes:
 
 def generate_intake_pdf(version: IntakeDocumentVersion) -> tuple[str, str]:
     pdf_bytes = build_intake_pdf_bytes(version)
-    now = timezone.now()
+    now = version.created_at
     relative_dir = Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs")) / "intake" / f"{now.year:04d}" / f"{now.month:02d}"
     relative_path = relative_dir / f"{version.id}.pdf"
     full_path = Path(settings.MEDIA_ROOT) / relative_path

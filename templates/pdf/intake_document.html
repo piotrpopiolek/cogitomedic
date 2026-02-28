@@ -33,7 +33,7 @@
     Queue entry ID: {{ queue_entry_id }}<br />
     Generated at: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
     Locale: {{ base_locale }} + {{ form_locale }}<br />
-    Submitted at: {{ submitted_at|default:"-" }}
+    Submitted at: {{ submitted_at|date:"Y-m-d H:i:s"|default:"-" }}
   </div>
 
   <h2>Patient / Patient</h2>
