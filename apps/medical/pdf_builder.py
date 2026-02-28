@@ -215,6 +215,7 @@ def _build_render_context(
 
     authoring_locale = (
         (authoring_locale_override or "").strip()
+        or (version.publish_locale or "").strip()
         or payload.get("authoring_locale")
         or "de-DE"
     )

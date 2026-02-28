@@ -140,6 +140,7 @@ class MedicalServicesTests(TestCase):
             medical_document_id=self.medical_document.id,
             publish_request_id=request_id,
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
         self.medical_document.refresh_from_db()
 
@@ -171,11 +172,13 @@ class MedicalServicesTests(TestCase):
             medical_document_id=self.medical_document.id,
             publish_request_id=request_id,
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
         second = publish_document_version(
             medical_document_id=self.medical_document.id,
             publish_request_id=request_id,
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
 
         self.assertEqual(first.id, second.id)
@@ -194,11 +197,13 @@ class MedicalServicesTests(TestCase):
             medical_document_id=self.medical_document.id,
             publish_request_id=uuid4(),
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
         second = publish_document_version(
             medical_document_id=self.medical_document.id,
             publish_request_id=uuid4(),
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
 
         self.assertEqual(first.id, second.id)
