@@ -147,9 +147,25 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
         if not question_code:
             continue
         question = question_by_code.get(question_code)
-        selected_option_codes = answer.get("selected_option_codes") or []
+        selected_option_codes = set(answer.get("selected_option_codes") or [])
         selected_options = []
+        all_options = []
         if question:
+            for opt in question.options.filter(is_active=True).order_by("display_order", "code"):
+                label_locale = _localized_text(
+                    value_de=opt.option_text_de,
+                    value_en=opt.option_text_en,
+                    value_pl=opt.option_text_pl,
+                    locale=locale,
+                )
+                all_options.append(
+                    {
+                        "option_code": opt.code,
+                        "label_de": opt.option_text_de,
+                        "label_locale": label_locale,
+                        "selected": opt.code in selected_option_codes,
+                    }
+                )
             options_by_code = {opt.code: opt for opt in question.options.all()}
             for option_code in selected_option_codes:
                 opt = options_by_code.get(option_code)
@@ -175,6 +191,29 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
                             "label_locale": fallback,
                         }
                     )
+                    if not any(o["option_code"] == option_code for o in all_options):
+                        all_options.append(
+                            {
+                                "option_code": option_code,
+                                "label_de": fallback,
+                                "label_locale": fallback,
+                                "selected": True,
+                            }
+                        )
+        else:
+            for option_code in selected_option_codes:
+                fallback = _humanize_code(option_code)
+                selected_options.append(
+                    {"option_code": option_code, "label_de": fallback, "label_locale": fallback}
+                )
+                all_options.append(
+                    {
+                        "option_code": option_code,
+                        "label_de": fallback,
+                        "label_locale": fallback,
+                        "selected": True,
+                    }
+                )
         question_text_de = question.question_text_de if question else _humanize_code(question_code)
         question_text_locale = (
             _localized_text(
@@ -192,6 +231,7 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
                 "question_text_de": question_text_de,
                 "question_text_locale": question_text_locale,
                 "selected_options": selected_options,
+                "all_options": all_options,
                 "free_text": answer.get("free_text"),
             }
         )
