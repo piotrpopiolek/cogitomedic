@@ -274,7 +274,7 @@ class IntakeDocumentVersion(models.Model):
             models.Index(fields=["hidrive_sent", "-created_at"]),
             GinIndex(
                 fields=["snapshot_payload"],
-                name="intake_snapshot_payload_gin_idx",
+                name="intake_snap_gin_idx",
                 opclasses=["jsonb_path_ops"],
             ),
         ]
@@ -339,7 +339,7 @@ class IntakeOutboxEvent(models.Model):
             ),
             models.Index(
                 fields=["available_at", "created_at"],
-                name="intake_outbox_pend_fail_order_idx",
+                name="intake_outbox_pf_order_idx",
                 condition=Q(status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]),
             ),
             GinIndex(
