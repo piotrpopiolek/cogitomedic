@@ -9,7 +9,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
@@ -133,9 +133,13 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
         for answer in answers_raw
         if isinstance(answer, dict) and isinstance(answer.get("question_code"), str)
     ]
+    active_options_prefetch = Prefetch(
+        "options",
+        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by("display_order", "code")
+    )
     questions = (
         AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(now.date()), code__in=question_codes)
-        .prefetch_related("options")
+        .prefetch_related(active_options_prefetch)
         .order_by("-version")
     )
     question_by_code = {q.code: q for q in questions}
@@ -151,7 +155,7 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
         selected_options = []
         all_options = []
         if question:
-            for opt in question.options.filter(is_active=True).order_by("display_order", "code"):
+            for opt in question.options.all():
                 label_locale = _localized_text(
                     value_de=opt.option_text_de,
                     value_en=opt.option_text_en,
@@ -366,10 +370,14 @@ def get_intake_form_context(
             "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
         })
 
+    active_options_prefetch = Prefetch(
+        "options",
+        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by("display_order", "code")
+    )
     # Anamnesis questions effective today with options; attach current answer from payload
     question_defs = (
         AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(today))
-        .prefetch_related("options")
+        .prefetch_related(active_options_prefetch)
         .order_by("display_order", "code")
     )
     answers_raw = intake_form.anamnesis_payload.get("answers") or []
@@ -393,7 +401,7 @@ def get_intake_form_context(
     for q in question_defs:
         if not q.is_active:
             continue
-        options = [{"option_code": o.code, "label": option_label(o)} for o in q.options.filter(is_active=True).order_by("display_order", "code")]
+        options = [{"option_code": o.code, "label": option_label(o)} for o in q.options.all()]
         current = answer_by_code.get(q.code) or {}
         answer = {
             "selected_option_codes": current.get("selected_option_codes") or [],
@@ -531,6 +539,10 @@ def save_intake_signature(
     data = signature_base64
     if "," in data:
         data = data.split(",", 1)[1]
+        
+    if len(data) > SIGNATURE_MAX_SIZE * 1.4:
+        raise InvalidSignatureError(f"Signature payload exceeds max size before decoding.")
+        
     try:
         raw = base64.b64decode(data, validate=True)
     except Exception:
@@ -543,7 +555,7 @@ def save_intake_signature(
     sha256_hash = hashlib.sha256(raw).hexdigest()
     now = timezone.now()
     year_month = now.strftime("%Y/%m")
-    rel_dir = Path("signatures") / year_month
+    rel_dir = Path(getattr(settings, "SIGNATURES_RELATIVE_DIR", "signatures")) / year_month
     dir_path = Path(settings.MEDIA_ROOT) / rel_dir
     dir_path.mkdir(parents=True, exist_ok=True)
     file_name = f"{intake_form_id}.png"

@@ -104,7 +104,8 @@ def process_intake_outbox_events(
         version = event.intake_document_version
         patient_id = version.intake_form.queue_entry.patient_id
         try:
-            _execute_event(event, now=effective_now)
+            with transaction.atomic():
+                _execute_event(event, now=effective_now)
             event.status = IntakeOutboxStatus.PROCESSED
             event.processed_at = effective_now
             event.locked_at = None
