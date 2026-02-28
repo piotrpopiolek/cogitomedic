@@ -11,7 +11,7 @@ isProject: false
 
 1. **Jedno źródło prawdy: wyłącznie DB**
   Kod nie przechowuje ani nie dostarcza fallbacków tłumaczeń runtime.
-2. **Kategorie biznesowe tłumaczeń**: `doctor`, `reception`, `waiting_room`.
+2. **Kategorie biznesowe tłumaczeń**: `doctor`, `reception`, `waiting_room`, `administration`, `other`.
 3. **Właściciel merytoryczny i decyzyjny**: **Administrator**.
 4. **Wymaganie bezpieczeństwa**: polityka anty-XSS dla tłumaczeń.
 5. **Wymaganie spójności PDF**: język publikowanego PDF musi być trwały i audytowalny per wersja dokumentu.
@@ -44,7 +44,7 @@ Umożliwić administracji edycję tłumaczeń DE/EN/PL przez Django Admin, z zac
 **A. `TranslationKey` (rejestr typowanych kluczy)**
 
 - `key` (unikalny, np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
-- `category` (`doctor` | `reception` | `waiting_room`)
+- `category` (`doctor` | `reception` | `waiting_room` | `administration` | `other` )
 - `description` (opis biznesowy)
 - `is_html_allowed` (bool, default `false`)
 - `allowed_placeholders` (JSON array, np. `["patient_name", "date"]`)
@@ -65,11 +65,13 @@ Umożliwić administracji edycję tłumaczeń DE/EN/PL przez Django Admin, z zac
 
 > Uwaga: `publish_locale` rozwiązuje ryzyko utraty informacji "w jakim języku zlecono publikację", niezależnie od późniejszych zmian tłumaczeń lub kolejnych wersji dokumentu.
 
-### 2) Konwencja kluczy
+### 2) Konwencja kluczy i kategorii
 
-- `doctor.*` dla panelu lekarza i PDF lekarza (np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
+- `doctor.`* dla panelu lekarza i PDF lekarza (np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
 - `reception.*` dla recepcji
 - `waiting_room.*` dla waiting room
+- `administration.*` dla panelu administracyjnego/systemowego
+- `other.*` pozostałe tłumaczenia
 
 Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem".
 
@@ -91,6 +93,12 @@ Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem"
   - Zapis odrzucany, gdy:
     - są placeholdery spoza `allowed_placeholders`,
     - brakuje placeholderów wymaganych przez kontrakt klucza (jeśli oznaczone jako required).
+3. **Formalny standard placeholderów (żeby uniknąć false positives/false negatives)**
+  - Używamy wyłącznie jednego formatu: `{placeholder_name}`.
+  - Regex: `\{[a-z][a-z0-9_]*\}`.
+  - Niedozwolone: `%s`, `%(name)s`, `{{name}}`, zagnieżdżenia i formattery (`{name:.2f}`).
+  - Escaping klamerek wyłącznie jako `{{` i `}}` (interpretowane jako tekst).
+  - Walidator sprawdza placeholdery na poziomie parsera zgodnego z tym standardem.
 3. **Test kontraktowy kluczy**
   - testy sprawdzają, że wszystkie klucze używane przez kod istnieją w `TranslationKey`.
   - testy sprawdzają komplet języków (`de`, `en`, `pl`) dla kluczy aktywnych.
@@ -114,6 +122,28 @@ Lokalna invalidacja w jednym procesie nie wystarczy.
   - wszystkie instancje automatycznie zaczną czytać nową wersję.
 4. **Bezpieczny fallback techniczny**:
   - przy awarii cache czytamy bezpośrednio z DB (nigdy z kodowych słowników).
+5. **Czy Django Tasks wystarczą zamiast Redis?**
+  - Nie jako zamiennik cache współdzielonego. Django Tasks obsługują asynchroniczne joby, ale nie zapewniają globalnego, niskolatencyjnego store do współdzielenia i natychmiastowej invalidacji cache.
+  - Minimalna alternatywa bez Redis: licznik wersji trzymany w Postgres (`TranslationCacheVersion`) + short TTL cache lokalny.
+  - Rekomendacja produkcyjna: Redis/Memcached jako wspólny cache; Django Tasks pozostają tylko do zadań background.
+
+### Warianty wdrożenia cache
+
+**Wariant A (rekomendowany): Redis/Memcached**
+- globalny cache + versioned keys,
+- najniższe opóźnienia i najlepsza skalowalność,
+- dodatkowa infrastruktura (koszt operacyjny).
+
+**Wariant B (bez Redis, Postgres-only)**
+- tabela `TranslationCacheVersion(category, language_code, version, updated_at)`,
+- każdy odczyt tłumaczeń:
+  - czyta wersję z DB,
+  - porównuje z lokalnym cache procesu,
+  - przy różnicy przeładowuje słownik z DB,
+- każdy zapis tłumaczenia:
+  - transakcyjnie inkrementuje `version` dla `(category, language_code)`,
+- zalety: brak nowej infrastruktury,
+- wady: większy ruch do DB i gorsza skalowalność niż Redis.
 
 ---
 
@@ -132,10 +162,11 @@ Lokalna invalidacja w jednym procesie nie wystarczy.
 
 ### Docelowo
 
-1. W `publish_document_version(...)` zapisujemy `publish_locale` na `MedicalDocumentVersion`.
-2. Outbox PDF używa `**version.publish_locale`** jako źródła języka.
-3. `publish_locale` jest immutable po publikacji.
-4. W audit event zapisujemy `publish_locale` + `published_by_user_id`.
+1. Przy zleceniu publikacji (`POST /publish`) klient przekazuje explicite `publish_locale` (np. `de-DE`, `en-GB`, `pl-PL`).
+2. Backend waliduje `publish_locale` względem dozwolonych wartości i zapisuje w `publish_document_version(...)` na `MedicalDocumentVersion.publish_locale`.
+3. Outbox PDF używa `version.publish_locale` jako jedynego źródła języka.
+4. `publish_locale` jest immutable po publikacji.
+5. W audit event zapisujemy `publish_locale` + `published_by_user_id`.
 
 To gwarantuje, że:
 
@@ -157,6 +188,9 @@ To gwarantuje, że:
   - usuwanie atrybutów eventowych i URL-i `javascript:`.
 4. **Walidacja przy zapisie w adminie**
   - jeśli `is_html_allowed=false`, zapis odrzucany przy wykryciu tagów HTML.
+5. **Biblioteka sanitizacji (wymóg implementacyjny)**
+  - dodać dedykowaną bibliotekę do sanitizacji HTML (np. `bleach`) zamiast własnego parsera.
+  - sanitizacja wykonywana i przy zapisie w adminie, i defensywnie przy renderowaniu.
 
 ---
 
