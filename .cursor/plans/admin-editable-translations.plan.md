@@ -68,9 +68,9 @@ Umożliwić administracji edycję tłumaczeń DE/EN/PL przez Django Admin, z zac
 ### 2) Konwencja kluczy i kategorii
 
 - `doctor.`* dla panelu lekarza i PDF lekarza (np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
-- `reception.*` dla recepcji
-- `waiting_room.*` dla waiting room
-- `administration.*` dla panelu administracyjnego/systemowego
+- `reception.`* dla recepcji
+- `waiting_room.`* dla waiting room
+- `administration.`* dla panelu administracyjnego/systemowego
 - `other.*` pozostałe tłumaczenia
 
 Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem".
@@ -99,7 +99,7 @@ Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem"
   - Niedozwolone: `%s`, `%(name)s`, `{{name}}`, zagnieżdżenia i formattery (`{name:.2f}`).
   - Escaping klamerek wyłącznie jako `{{` i `}}` (interpretowane jako tekst).
   - Walidator sprawdza placeholdery na poziomie parsera zgodnego z tym standardem.
-3. **Test kontraktowy kluczy**
+4. **Test kontraktowy kluczy**
   - testy sprawdzają, że wszystkie klucze używane przez kod istnieją w `TranslationKey`.
   - testy sprawdzają komplet języków (`de`, `en`, `pl`) dla kluczy aktywnych.
 
@@ -113,7 +113,9 @@ Lokalna invalidacja w jednym procesie nie wystarczy.
 
 ### Rozwiązanie
 
-1. **Wspólny backend cache** (Redis/Memcached), nie local-memory.
+1. **Wariant docelowy: Postgres-only + versioned keys**
+  - tabela `TranslationCacheVersion(category, language_code, version, updated_at)`,
+  - lokalny cache procesu trzyma dane pod kluczem wersjonowanym.
 2. **Versioned cache keys**:
   - trzymamy globalny licznik wersji per kategoria+język, np. `i18n:v:doctor:pl`.
   - klucz danych zawiera wersję: `i18n:data:doctor:pl:v42`.
@@ -122,28 +124,9 @@ Lokalna invalidacja w jednym procesie nie wystarczy.
   - wszystkie instancje automatycznie zaczną czytać nową wersję.
 4. **Bezpieczny fallback techniczny**:
   - przy awarii cache czytamy bezpośrednio z DB (nigdy z kodowych słowników).
-5. **Czy Django Tasks wystarczą zamiast Redis?**
-  - Nie jako zamiennik cache współdzielonego. Django Tasks obsługują asynchroniczne joby, ale nie zapewniają globalnego, niskolatencyjnego store do współdzielenia i natychmiastowej invalidacji cache.
-  - Minimalna alternatywa bez Redis: licznik wersji trzymany w Postgres (`TranslationCacheVersion`) + short TTL cache lokalny.
-  - Rekomendacja produkcyjna: Redis/Memcached jako wspólny cache; Django Tasks pozostają tylko do zadań background.
-
-### Warianty wdrożenia cache
-
-**Wariant A (rekomendowany): Redis/Memcached**
-- globalny cache + versioned keys,
-- najniższe opóźnienia i najlepsza skalowalność,
-- dodatkowa infrastruktura (koszt operacyjny).
-
-**Wariant B (bez Redis, Postgres-only)**
-- tabela `TranslationCacheVersion(category, language_code, version, updated_at)`,
-- każdy odczyt tłumaczeń:
-  - czyta wersję z DB,
-  - porównuje z lokalnym cache procesu,
-  - przy różnicy przeładowuje słownik z DB,
-- każdy zapis tłumaczenia:
-  - transakcyjnie inkrementuje `version` dla `(category, language_code)`,
-- zalety: brak nowej infrastruktury,
-- wady: większy ruch do DB i gorsza skalowalność niż Redis.
+5. **Czy Django Tasks wystarczą?**
+  - Django Tasks nie rozwiązują problemu współdzielonego cache; służą do asynchronicznych jobów.
+  - W tym planie do spójności cache używamy wyłącznie mechanizmu wersji w Postgres (`TranslationCacheVersion`) + lokalny cache procesu.
 
 ---
 
@@ -219,6 +202,49 @@ Rola odpowiedzialna za poprawność: **Administrator**.
   - walidacja placeholderów,
   - XSS policy,
   - trwałość `publish_locale` i zgodność języka wygenerowanego PDF.
+
+---
+
+## Lista TODO (implementacyjna)
+
+- Utworzyć modele `TranslationKey`, `TranslationValue` oraz `TranslationCacheVersion` + migracje DB.
+- Dodać constraints:
+  - unikalność `TranslationKey.key`,
+  - unikalność `(translation_key, language_code)` w `TranslationValue`,
+  - unikalność `(category, language_code)` w `TranslationCacheVersion`.
+- Dodać `publish_locale` do `MedicalDocumentVersion` (nullable tylko na czas migracji, potem not null dla nowych publikacji).
+- Rozszerzyć API publish:
+  - request musi przyjmować `publish_locale`,
+  - walidacja dozwolonych wartości (`de-DE`, `en-GB`, `pl-PL`),
+  - zapis `publish_locale` przy publikacji,
+  - audit event z `publish_locale`.
+- Przełączyć generator PDF na `version.publish_locale` (bez odczytu języka z payloadu jako źródła prawdy).
+- Zaimplementować loader tłumaczeń DB-only dla kategorii:
+  - `doctor`,
+  - `reception`,
+  - `waiting_room`,
+  - `administration`,
+  - `other`.
+- Zaimplementować standard placeholderów `{placeholder_name}`:
+  - parser placeholderów,
+  - walidator `allowed_placeholders`,
+  - testy negatywne dla `%s`, `%(name)s`, `{name:.2f}`, zagnieżdżeń.
+- Wdrożyć politykę XSS:
+  - dodać bibliotekę sanitizacji HTML,
+  - walidacja `is_html_allowed`,
+  - sanitizacja whitelistą przy zapisie i defensywnie przy renderowaniu.
+- Wdrożyć cache invalidation:
+  - wariant B (Postgres-only),
+  - version bump po każdej zmianie tłumaczenia,
+  - integracyjne testy spójności między workerami.
+- Przygotować i uruchomić jednorazową migrację danych tłumaczeń z kodu do DB.
+- Usunąć runtime dependencies od słowników tłumaczeń w kodzie (`doctor_i18n.py`, `pdf_builder.py`) po zakończeniu migracji.
+- Dodać testy kontraktowe:
+  - kompletność kluczy aktywnych dla `de/en/pl`,
+  - brak nieznanych kluczy używanych przez kod,
+  - poprawność renderowania PDF dla każdego `publish_locale`.
+- Dodać panele Django Admin (`TranslationKeyAdmin`, `TranslationValueAdmin`) z audytem zmian.
+- Dodać runbook operacyjny dla Administratora (procedura edycji, rollback, weryfikacja po zmianie).
 
 ---
 
