@@ -95,6 +95,74 @@ class TranslationServiceTests(TestCase):
         value.full_clean()
         self.assertEqual(value.value, "<b>ok</b>alert(\"x\")")
 
+    def test_value_clean_rejects_percent_s_placeholder_format(self) -> None:
+        placeholder_key = TranslationKey.objects.create(
+            key="doctor.placeholder_text",
+            category=TranslationCategory.DOCTOR,
+            description="placeholder key",
+            is_html_allowed=False,
+            allowed_placeholders=["name"],
+            status=TranslationKeyStatus.ACTIVE,
+        )
+        value = TranslationValue(
+            translation_key=placeholder_key,
+            language_code="de",
+            value="Hallo %s",
+        )
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_value_clean_rejects_percent_named_placeholder_format(self) -> None:
+        placeholder_key = TranslationKey.objects.create(
+            key="doctor.placeholder_text_named",
+            category=TranslationCategory.DOCTOR,
+            description="placeholder key",
+            is_html_allowed=False,
+            allowed_placeholders=["name"],
+            status=TranslationKeyStatus.ACTIVE,
+        )
+        value = TranslationValue(
+            translation_key=placeholder_key,
+            language_code="de",
+            value="Hallo %(name)s",
+        )
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_value_clean_rejects_format_specifier_placeholder(self) -> None:
+        placeholder_key = TranslationKey.objects.create(
+            key="doctor.placeholder_text_spec",
+            category=TranslationCategory.DOCTOR,
+            description="placeholder key",
+            is_html_allowed=False,
+            allowed_placeholders=["amount"],
+            status=TranslationKeyStatus.ACTIVE,
+        )
+        value = TranslationValue(
+            translation_key=placeholder_key,
+            language_code="de",
+            value="Kwota {amount:.2f}",
+        )
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_value_clean_rejects_unknown_placeholder(self) -> None:
+        placeholder_key = TranslationKey.objects.create(
+            key="doctor.placeholder_text_unknown",
+            category=TranslationCategory.DOCTOR,
+            description="placeholder key",
+            is_html_allowed=False,
+            allowed_placeholders=["name"],
+            status=TranslationKeyStatus.ACTIVE,
+        )
+        value = TranslationValue(
+            translation_key=placeholder_key,
+            language_code="de",
+            value="Hallo {surname}",
+        )
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
 
 class TranslationCompletenessCommandTests(TestCase):
     def setUp(self) -> None:
