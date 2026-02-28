@@ -15,7 +15,8 @@
     .head { background: #f4f6f8; font-weight: 700; width: 36%; }
     .badge { display: inline-block; padding: 2px 6px; border: 1px solid #bbb; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; }
     .item { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-top: 10px; }
-    .item-title { font-weight: 700; margin-bottom: 6px; }
+    .item-title { font-weight: 700; margin-bottom: 4px; }
+    .item-subtitle { margin-bottom: 6px; color: #333; }
     .muted { color: #666; }
     .sig-box { border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-top: 8px; }
     img.signature { max-width: 100%; max-height: 120px; }
@@ -60,15 +61,18 @@
     {% for consent in consents %}
       <div class="item">
         <div class="item-title">
-          {{ consent.title_locale|default:consent.title_de|default:consent.code }}
+          {{ consent.title_de|default:consent.code }}
           {% if consent.is_required %}<span class="badge">required</span>{% endif %}
           {% if consent.accepted %}<span class="badge">accepted</span>{% else %}<span class="badge">not accepted</span>{% endif %}
         </div>
+        {% if form_locale and form_locale|slice:":2" != "de" %}
+        <div class="item-subtitle">{{ consent.title_locale|default:consent.title_de|default:"" }}</div>
+        {% endif %}
         <div class="muted">code: {{ consent.code }}</div>
-        <div><strong>DE:</strong> {{ consent.title_de|default:"-" }}</div>
-        <div><strong>{{ form_locale }}:</strong> {{ consent.title_locale|default:consent.title_de|default:"-" }}</div>
         <div style="margin-top:6px;"><strong>DE text:</strong> {{ consent.content_de|default:"-" }}</div>
+        {% if form_locale and form_locale|slice:":2" != "de" %}
         <div style="margin-top:4px;"><strong>{{ form_locale }} text:</strong> {{ consent.content_locale|default:consent.content_de|default:"-" }}</div>
+        {% endif %}
         <div class="muted" style="margin-top:6px;">accepted_at: {{ consent.accepted_at|default:"-" }}</div>
       </div>
     {% endfor %}
@@ -80,13 +84,16 @@
   {% if anamnesis.answers %}
     {% for answer in anamnesis.answers %}
       <div class="item">
-        <div class="item-title">{{ answer.question_text_locale|default:answer.question_text_de|default:answer.question_code }}</div>
+        <div class="item-title">{{ answer.question_text_de|default:answer.question_code }}</div>
+        {% if form_locale and form_locale|slice:":2" != "de" %}
+        <div class="item-subtitle">{{ answer.question_text_locale|default:answer.question_text_de }}</div>
+        {% endif %}
         {% if answer.all_options %}
           <div style="margin-top:6px;">
             {% for option in answer.all_options %}
               <div class="option-row">
                 <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
-                <span>{{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}{% if form_locale and form_locale|slice:":2" != "de" %} / {{ option.label_locale|default:option.label_de|default:"" }}{% endif %}</span>
               </div>
             {% endfor %}
           </div>
@@ -95,7 +102,7 @@
             {% for option in answer.selected_options %}
               <div class="option-row">
                 <span class="cb">☑</span>
-                <span>{{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}{% if form_locale and form_locale|slice:":2" != "de" %} / {{ option.label_locale|default:option.label_de|default:"" }}{% endif %}</span>
               </div>
             {% endfor %}
           </div>
