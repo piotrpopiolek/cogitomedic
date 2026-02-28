@@ -115,6 +115,12 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/doctor-text-templates/{{template_id}}": {
+        "get": {
+            "summary": "Get doctor text template",
+            "tags": ["Doctor templates"],
+            "parameters": [{"name": "template_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "Template (name, template_body, lesion_group_favorites, summary_favorites, etc.)"}, "404": {"description": "Not found"}},
+        },
         "patch": {
             "summary": "Update doctor text template",
             "tags": ["Doctor templates"],
@@ -156,13 +162,121 @@ COGITO_PATHS = {
             "responses": {"202": {"description": "Candidates, deleted, skipped"}},
         },
     },
+    f"{PREFIX}/intake-outbox-events": {
+        "get": {
+            "summary": "List intake outbox events",
+            "description": "Events for intake PDF generation and HiDrive upload (GENERATE_INTAKE_PDF, HIDRIVE_UPLOAD_INTAKE_PDF). ADMIN, RECEPTION.",
+            "tags": ["Intake – Outbox"],
+            "parameters": [
+                {"name": "status", "in": "query", "schema": {"type": "string"}},
+                {"name": "event_type", "in": "query", "schema": {"type": "string"}},
+                {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}},
+                {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+            ],
+            "responses": {"200": {"description": "results, count"}},
+        },
+    },
+    f"{PREFIX}/intake-outbox-events/{{intake_outbox_event_id}}/retry": {
+        "post": {
+            "summary": "Retry intake outbox event",
+            "description": "Move FAILED/DEAD_LETTER event back to PENDING. ADMIN, RECEPTION.",
+            "tags": ["Intake – Outbox"],
+            "parameters": [{"name": "intake_outbox_event_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "id, status, retry_count"}, "404": {"description": "Not found"}, "409": {"description": "Event not retryable"}},
+        },
+    },
+    f"{PREFIX}/operations/intake-outbox/process": {
+        "post": {
+            "summary": "Process intake outbox batch",
+            "description": "Process pending/failed intake outbox events (PDF generation, HiDrive upload). ADMIN only.",
+            "tags": ["Intake – Outbox"],
+            "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"202": {"description": "processed, failed, dead_lettered"}},
+        },
+    },
     f"{PREFIX}/medical-documents": {
+        "get": {
+            "summary": "List medical documents",
+            "description": "Doctor work queue. Filtered by consulting room of the current user. Paginated.",
+            "tags": ["Medical"],
+            "parameters": [
+                {"name": "status", "in": "query", "schema": {"type": "string"}},
+                {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
+                {"name": "page", "in": "query", "schema": {"type": "integer"}},
+                {"name": "page_size", "in": "query", "schema": {"type": "integer"}},
+            ],
+            "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
+        },
         "post": {
             "summary": "Create medical document",
             "description": "Doctor or Admin. Links queue entry and intake form.",
             "tags": ["Medical"],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"queue_entry_id": {"type": "string", "format": "uuid"}, "intake_form_id": {"type": "string", "format": "uuid"}, "created_by_user_id": {"type": "string", "format": "uuid"}}}}}},
             "responses": {"201": {"description": "Created"}, "404": {"description": "Queue entry or intake form not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}": {
+        "get": {
+            "summary": "Get medical document context",
+            "description": "Full document context for doctor panel: intake summary and current version (draft or published).",
+            "tags": ["Medical"],
+            "parameters": [
+                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
+            ],
+            "responses": {"200": {"description": "Context (intake, version, patient, etc.)"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/preview-pdf": {
+        "get": {
+            "summary": "Preview PDF",
+            "description": "Returns PDF of the latest saved version (draft or published). Content-Type: application/pdf.",
+            "tags": ["Medical"],
+            "parameters": [
+                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
+                {"name": "authoring_locale", "in": "query", "schema": {"type": "string"}},
+            ],
+            "responses": {"200": {"description": "PDF file (inline)"}, "404": {"description": "Not found or no version to preview"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/generate-text": {
+        "post": {
+            "summary": "Generate Befund text",
+            "description": "Generates text from medical_payload (per lesion + summary). Does not save to DB.",
+            "tags": ["Medical"],
+            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "generated, lesions, summary_generated_text, optional template_context"}, "400": {"description": "Invalid medical_payload"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/versions": {
+        "get": {
+            "summary": "List document versions",
+            "tags": ["Medical"],
+            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "Items (version_no, version_status, pdf_generation_status, etc.)"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/retry-processing": {
+        "post": {
+            "summary": "Retry document processing",
+            "description": "Retry latest failed outbox step (e.g. PDF generation, HiDrive, SMS). ADMIN or RECEPTION.",
+            "tags": ["Medical"],
+            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}},
+            "responses": {"200": {"description": "retried, outbox_event_id, event_type, status"}, "404": {"description": "Not found"}, "409": {"description": "Nothing to retry"}},
+        },
+    },
+    f"{PREFIX}/medical-document-versions/{{version_id}}": {
+        "get": {
+            "summary": "Get document version",
+            "description": "Single version by id (MedicalDocumentVersion.id) with full medical_payload.",
+            "tags": ["Medical"],
+            "parameters": [{"name": "version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "Version details"}, "404": {"description": "Not found"}},
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/draft": {
@@ -305,6 +419,14 @@ COGITO_PATHS = {
             "tags": ["Intake"],
             "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "form_locale", "in": "query", "schema": {"type": "string"}}],
             "responses": {"200": {"description": "Context (patient, consents, anamnesis_questions, body_map_data, form_status, has_signature)"}, "404": {"description": "Not found"}},
+        },
+        "patch": {
+            "summary": "Update body map",
+            "description": "Update body_map_schema_version and body_map_data (list of points: x, y in [0,1], side front|back, optional label).",
+            "tags": ["Intake"],
+            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "responses": {"200": {"description": "intake_form_id, body_map_schema_version, body_map_data"}, "404": {"description": "Not found"}, "409": {"description": "Form not IN_PROGRESS"}},
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/anamnesis": {

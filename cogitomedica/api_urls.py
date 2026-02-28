@@ -8,6 +8,9 @@ from apps.intake.api_views import (
     intake_form_detail_view,
     intake_form_signature_view,
     intake_form_submit_view,
+    intake_outbox_event_retry_view,
+    intake_outbox_events_view,
+    intake_outbox_process_view,
 )
 from apps.medical.api_views import (
     doctor_text_template_detail_view,
@@ -121,6 +124,21 @@ urlpatterns = [
         "operations/retention/run",
         operations_retention_run_view,
         name="operations-retention-run",
+    ),
+    path(
+        "intake-outbox-events",
+        intake_outbox_events_view,
+        name="intake-outbox-events",
+    ),
+    path(
+        "intake-outbox-events/<uuid:intake_outbox_event_id>/retry",
+        intake_outbox_event_retry_view,
+        name="intake-outbox-event-retry",
+    ),
+    path(
+        "operations/intake-outbox/process",
+        intake_outbox_process_view,
+        name="operations-intake-outbox-process",
     ),
     path(
         "medical-documents",

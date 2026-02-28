@@ -15,8 +15,13 @@ from apps.intake.models import (
     IntakePdfStatus,
 )
 from apps.intake.pdf_builder import generate_intake_pdf
+from apps.core.exceptions import DomainError
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
+
+
+class IntakeOutboxEventNotRetryableError(DomainError):
+    """Raised when manual retry is requested for non-retryable intake outbox event."""
 
 
 @dataclass(frozen=True)
@@ -163,3 +168,38 @@ def process_intake_outbox_events(
         failed=failed,
         dead_lettered=dead_lettered,
     )
+
+
+def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> IntakeOutboxEvent:
+    """Move FAILED/DEAD_LETTER intake outbox event back to PENDING for manual retry."""
+    event = (
+        IntakeOutboxEvent.objects.select_for_update()
+        .select_related(
+            "intake_document_version",
+            "intake_document_version__intake_form",
+            "intake_document_version__intake_form__queue_entry",
+        )
+        .get(id=event.id)
+    )
+    if event.status not in [IntakeOutboxStatus.FAILED, IntakeOutboxStatus.DEAD_LETTER]:
+        raise IntakeOutboxEventNotRetryableError("Event is not retryable in current status.")
+
+    event.status = IntakeOutboxStatus.PENDING
+    event.available_at = timezone.now()
+    event.locked_at = None
+    event.error_message = None
+    event.save(update_fields=["status", "available_at", "locked_at", "error_message", "updated_at"])
+
+    version = event.intake_document_version
+    patient_id = version.intake_form.queue_entry.patient_id
+    create_audit_event(
+        event_type="INTAKE_OUTBOX_EVENT_RETRY_REQUESTED",
+        patient_id=patient_id,
+        metadata={
+            "intake_document_version_id": str(version.id),
+            "intake_outbox_event_id": str(event.id),
+            "event_type": event.event_type,
+            "reason": reason,
+        },
+    )
+    return event
