@@ -76,7 +76,7 @@
   {% if anamnesis.answers %}
     {% for answer in anamnesis.answers %}
       <div class="item">
-        <div class="item-title">{{ answer.question_code }}</div>
+        <div class="item-title">{{ answer.question_text_locale|default:answer.question_text_de|default:answer.question_code }}</div>
         <div><strong>DE:</strong> {{ answer.question_text_de|default:"-" }}</div>
         <div><strong>{{ form_locale }}:</strong> {{ answer.question_text_locale|default:answer.question_text_de|default:"-" }}</div>
         {% if answer.selected_options %}
@@ -85,7 +85,7 @@
             <ul>
               {% for option in answer.selected_options %}
                 <li>
-                  {{ option.option_code }} - DE: {{ option.label_de|default:"-" }} | {{ form_locale }}: {{ option.label_locale|default:option.label_de|default:"-" }}
+                  DE: {{ option.label_de|default:option.option_code|default:"-" }} | {{ form_locale }}: {{ option.label_locale|default:option.label_de|default:option.option_code|default:"-" }}
                 </li>
               {% endfor %}
             </ul>
