@@ -4,25 +4,25 @@ overview: Asynchroniczne generowanie dwujęzycznego PDF z danymi Intake (zgody, 
 todos:
   - id: db-models
     content: "Modele bazy: Dodać tabele IntakeDocumentVersion oraz IntakeOutboxEvent w modelu bazy danych (wraz z migracjami)."
-    status: pending
+    status: completed
   - id: idempotency-lock
     content: "Endpoint Submit: Zabezpieczyć POST /submit warunkiem optimistic locking (idempotencja)."
-    status: pending
+    status: completed
   - id: hard-snapshot
     content: "Hard Snapshot: Zaimplementować tworzenie niezmiennego snapshot_payload z tekstami zgód (DE/Locale) i podpisem base64."
-    status: pending
+    status: completed
   - id: pdf-renderer
     content: "Renderer PDF: Stworzyć dwujęzyczny szablon HTML Intake-PDF oparty w 100% na danych ze snapshotu."
-    status: pending
+    status: completed
   - id: outbox-pipeline
     content: "Outbox Pipeline: Skonfigurować workery GENERATE_INTAKE_PDF i HIDRIVE_UPLOAD_INTAKE_PDF."
-    status: pending
+    status: completed
   - id: hidrive-folders
     content: "HiDrive: Dopasować docelowe ścieżki (foldery) w systemie zewnętrznym, by Intake i Befund trafiały pod to samo ID pacjenta."
-    status: pending
+    status: completed
   - id: tests-and-metrics
     content: "Testy: Zaimplementować scenariusze unit i integracyjne dla ścieżki Intake-PDF (w tym mocki błędów i weryfikacja dwujęzyczności)."
-    status: pending
+    status: completed
 isProject: false
 ---
 
