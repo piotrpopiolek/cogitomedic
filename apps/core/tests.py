@@ -69,6 +69,21 @@ class TranslationServiceTests(TestCase):
         self.assertIn("doctor.test_key", result)
         self.assertNotIn("doctor.legacy_key", result)
 
+    def test_get_translation_map_refreshes_after_value_update(self) -> None:
+        value = TranslationValue.objects.create(
+            translation_key=self.key,
+            language_code="de",
+            value="Old value",
+        )
+        first = get_translation_map("doctor", "de")
+        self.assertEqual(first.get("doctor.test_key"), "Old value")
+
+        value.value = "New value"
+        value.save()
+
+        second = get_translation_map("doctor", "de")
+        self.assertEqual(second.get("doctor.test_key"), "New value")
+
     def test_value_clean_rejects_html_when_not_allowed(self) -> None:
         value = TranslationValue(
             translation_key=self.key,

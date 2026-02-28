@@ -13,17 +13,30 @@ from cogitomedica.doctor_i18n import (
     FITZPATRICK_EN,
     FITZPATRICK_PL,
 )
+from cogitomedica.tablet_i18n import (
+    FORM_UI_DE,
+    FORM_UI_EN,
+    FORM_UI_PL,
+    STAFF_UI_DE,
+    STAFF_UI_EN,
+    STAFF_UI_PL,
+)
 
 
 class Command(BaseCommand):
     help = "Seed DB-only translation tables with current default values."
 
     @staticmethod
-    def _ensure_key(full_key: str, *, description: str = "") -> TranslationKey:
+    def _ensure_key(
+        full_key: str,
+        *,
+        category: str,
+        description: str = "",
+    ) -> TranslationKey:
         key, _ = TranslationKey.objects.get_or_create(
             key=full_key,
             defaults={
-                "category": TranslationCategory.DOCTOR,
+                "category": category,
                 "description": description,
                 "is_html_allowed": False,
                 "allowed_placeholders": [],
@@ -39,7 +52,11 @@ class Command(BaseCommand):
         for lang, mapping in source_ui.items():
             for short_key, text in mapping.items():
                 full_key = f"doctor.{short_key}"
-                key = self._ensure_key(full_key, description="Doctor UI translation")
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.DOCTOR,
+                    description="Doctor UI translation",
+                )
                 obj, created = TranslationValue.objects.get_or_create(
                     translation_key=key,
                     language_code=lang,
@@ -52,7 +69,11 @@ class Command(BaseCommand):
         for lang, rows in source_fitz.items():
             for code, text in rows:
                 full_key = f"doctor.fitzpatrick.{code}"
-                key = self._ensure_key(full_key, description="Fitzpatrick label")
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.DOCTOR,
+                    description="Fitzpatrick label",
+                )
                 obj, created = TranslationValue.objects.get_or_create(
                     translation_key=key,
                     language_code=lang,
@@ -68,7 +89,45 @@ class Command(BaseCommand):
                 continue
             for label_key, text in labels.items():
                 full_key = f"doctor.pdf_label.{label_key}"
-                key = self._ensure_key(full_key, description="Doctor PDF label")
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.DOCTOR,
+                    description="Doctor PDF label",
+                )
+                obj, created = TranslationValue.objects.get_or_create(
+                    translation_key=key,
+                    language_code=lang,
+                    defaults={"value": text},
+                )
+                if created:
+                    created_values += 1
+
+        form_ui_source = {"de": FORM_UI_DE, "en": FORM_UI_EN, "pl": FORM_UI_PL}
+        for lang, mapping in form_ui_source.items():
+            for short_key, text in mapping.items():
+                full_key = f"waiting_room.form.{short_key}"
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.WAITING_ROOM,
+                    description="Waiting room tablet form UI",
+                )
+                obj, created = TranslationValue.objects.get_or_create(
+                    translation_key=key,
+                    language_code=lang,
+                    defaults={"value": text},
+                )
+                if created:
+                    created_values += 1
+
+        staff_ui_source = {"de": STAFF_UI_DE, "en": STAFF_UI_EN, "pl": STAFF_UI_PL}
+        for lang, mapping in staff_ui_source.items():
+            for short_key, text in mapping.items():
+                full_key = f"waiting_room.staff.{short_key}"
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.WAITING_ROOM,
+                    description="Waiting room staff UI",
+                )
                 obj, created = TranslationValue.objects.get_or_create(
                     translation_key=key,
                     language_code=lang,
