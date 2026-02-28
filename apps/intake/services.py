@@ -49,6 +49,17 @@ class InvalidSignatureError(DomainError):
     """Raised when signature payload is invalid or too large."""
 
 
+def _humanize_code(code: str) -> str:
+    mapping = {
+        "YES": "Yes",
+        "NO": "No",
+        "UNKNOWN": "Unknown",
+    }
+    if code in mapping:
+        return mapping[code]
+    return code.replace("_", " ").title()
+
+
 def _localized_text(*, value_de: str, value_en: str, value_pl: str, locale: str) -> str:
     if locale.startswith("pl"):
         return (value_pl or "").strip() or value_de
@@ -122,7 +133,11 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
         for answer in answers_raw
         if isinstance(answer, dict) and isinstance(answer.get("question_code"), str)
     ]
-    questions = AnamnesisQuestionDefinition.objects.filter(code__in=question_codes).prefetch_related("options")
+    questions = (
+        AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(now.date()), code__in=question_codes)
+        .prefetch_related("options")
+        .order_by("-version")
+    )
     question_by_code = {q.code: q for q in questions}
     anamnesis_answers = []
     for answer in answers_raw:
@@ -135,37 +150,47 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
         selected_option_codes = answer.get("selected_option_codes") or []
         selected_options = []
         if question:
-            options_by_code = {opt.code: opt for opt in question.options.filter(is_active=True)}
+            options_by_code = {opt.code: opt for opt in question.options.all()}
             for option_code in selected_option_codes:
                 opt = options_by_code.get(option_code)
-                if not opt:
-                    continue
-                selected_options.append(
-                    {
-                        "option_code": opt.code,
-                        "label_de": opt.option_text_de,
-                        "label_locale": _localized_text(
-                            value_de=opt.option_text_de,
-                            value_en=opt.option_text_en,
-                            value_pl=opt.option_text_pl,
-                            locale=locale,
-                        ),
-                    }
-                )
+                if opt:
+                    selected_options.append(
+                        {
+                            "option_code": opt.code,
+                            "label_de": opt.option_text_de,
+                            "label_locale": _localized_text(
+                                value_de=opt.option_text_de,
+                                value_en=opt.option_text_en,
+                                value_pl=opt.option_text_pl,
+                                locale=locale,
+                            ),
+                        }
+                    )
+                else:
+                    fallback = _humanize_code(option_code)
+                    selected_options.append(
+                        {
+                            "option_code": option_code,
+                            "label_de": fallback,
+                            "label_locale": fallback,
+                        }
+                    )
+        question_text_de = question.question_text_de if question else _humanize_code(question_code)
+        question_text_locale = (
+            _localized_text(
+                value_de=question.question_text_de,
+                value_en=question.question_text_en,
+                value_pl=question.question_text_pl,
+                locale=locale,
+            )
+            if question
+            else _humanize_code(question_code)
+        )
         anamnesis_answers.append(
             {
                 "question_code": question_code,
-                "question_text_de": question.question_text_de if question else "",
-                "question_text_locale": (
-                    _localized_text(
-                        value_de=question.question_text_de,
-                        value_en=question.question_text_en,
-                        value_pl=question.question_text_pl,
-                        locale=locale,
-                    )
-                    if question
-                    else ""
-                ),
+                "question_text_de": question_text_de,
+                "question_text_locale": question_text_locale,
                 "selected_options": selected_options,
                 "free_text": answer.get("free_text"),
             }
