@@ -13,6 +13,9 @@ from django.utils import timezone
 from apps.intake.models import (
     AnamnesisQuestionDefinition,
     ConsentDefinition,
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxEventType,
     IntakeStatus,
     PatientIntakeConsent,
     PatientIntakeForm,
@@ -214,6 +217,37 @@ class IntakeApiTests(TestCase):
         self.queue_entry.refresh_from_db()
         self.assertEqual(self.intake_form.form_status, IntakeStatus.SUBMITTED)
         self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+        self.assertEqual(IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(), 1)
+        version = IntakeDocumentVersion.objects.get(intake_form=self.intake_form)
+        self.assertIn("signature", version.snapshot_payload)
+        self.assertTrue(
+            IntakeOutboxEvent.objects.filter(
+                intake_document_version=version,
+                event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+            ).exists()
+        )
+
+    def test_submit_intake_is_idempotent(self) -> None:
+        self._accept_all_required_consents_effective_today(self.intake_form)
+        self.intake_form.anamnesis_payload = {
+            "schema_version": 1,
+            "answers": self._build_answers_for_all_required_questions_today(),
+        }
+        self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
+
+        first = self.client.post(
+            f"/api/v1/intake-forms/{self.intake_form.id}/submit",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        second = self.client.post(
+            f"/api/v1/intake-forms/{self.intake_form.id}/submit",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(), 1)
 
     def test_submit_returns_400_when_signature_missing(self) -> None:
         self.intake_form.signature_file_path = None
