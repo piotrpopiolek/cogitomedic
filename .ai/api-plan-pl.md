@@ -830,7 +830,7 @@
     ```json
     {
       "publish_request_id": "uuid-or-client-key",
-      "doctor_final_sign_off": true,
+      "publish_locale": "pl-PL",
       "resend_sms": true
     }
     ```
@@ -839,18 +839,17 @@
     {
       "published": true,
       "idempotent_replay": false,
-      "doctor_final_sign_off": true,
-      "doctor_final_sign_off_at": "2026-02-16T10:07:00Z",
       "medical_document_id": "uuid",
       "version_no": 3,
       "version_status": "PUBLISHED",
+      "publish_locale": "pl-PL",
       "outbox": [
         {"event_type": "GENERATE_PDF", "status": "PENDING"}
       ]
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `400 FINAL_SIGN_OFF_REQUIRED`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
 
 ### 2.10a Szablony tekstów lekarskich
 
@@ -1152,11 +1151,11 @@
   - `version_no > 0`.
   - `medical_payload` musi być obiektem JSON.
   - `PUBLISHED` wymaga `publish_request_id` i `published_at`.
+  - `publish_locale` jest wymagane dla `PUBLISHED` i musi pasować do `^(de|en|pl)(-[A-Z]{2})?$`.
   - `pdf_generation_status='COMPLETED'` wymaga `pdf_local_path`.
   - `hidrive_sent=true` wymaga ukończonego PDF, `pdf_local_path` i `hidrive_sent_at`.
   - `sms_sent=true` wymaga `sms_sent_at`.
   - `local_pdf_deleted_at` dozwolone tylko gdy `hidrive_sent=true` i `sms_sent=true`.
-  - Publikacja wymaga jawnego `doctor_final_sign_off=true`.
 
 - `outbox_event`
   - Unikalność `(medical_document_version_id, event_type)`.
@@ -1198,10 +1197,10 @@
   - Regeneracja domyślnie zachowuje istniejące `edited_text` (brak niejawnego nadpisania).
   - Lekarz zapisuje w `medical_payload` zarówno teksty wygenerowane, jak i finalne teksty edytowane (`edited_text`).
   - Każda modyfikacja `edited_text` emituje zdarzenie audytowe (`MEDICAL_TEXT_EDITED`) z aktorem i stemplem czasowym.
+  - Request publikacji musi zawierać `publish_locale`; backend zapisuje je w `medical_document_version` i traktuje jako źródło prawdy dla języka PDF.
   - Publikacja używa locka wiersza na `medical_document` i kontroli idempotencji:
     - ten sam `publish_request_id` zwraca sukces-replay;
     - publikacja już w toku zwraca idempotentny sukces (bez duplikacji łańcucha outbox).
-    - publikacja wymaga jawnego potwierdzenia lekarza dla finalnego tekstu narracyjnego.
 
 - Łańcuch transactional outbox:
   - Transakcja publikacji enqueuje `GENERATE_PDF`.
