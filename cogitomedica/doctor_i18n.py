@@ -3,6 +3,8 @@ Tłumaczenia interfejsu panelu lekarza: niemiecki (de) i polski (pl).
 """
 from __future__ import annotations
 
+from apps.core.translation_service import get_translation_map, normalize_language_code
+
 DOCTOR_UI_DE = {
     "area_name": "Arztbereich",
     "logout": "Abmelden",
@@ -344,18 +346,37 @@ FITZPATRICK_EN = [
 
 
 def get_doctor_ui(lang: str) -> dict[str, str]:
-    """Zwraca słownik stringów UI dla panelu lekarza. lang: 'de', 'en' lub 'pl'."""
-    if lang == "pl":
-        return dict(DOCTOR_UI_PL)
-    if lang == "en":
-        return dict(DOCTOR_UI_EN)
-    return dict(DOCTOR_UI_DE)
+    """Return doctor UI strings from DB-only translation storage."""
+    normalized = normalize_language_code(lang)
+    mapping = get_translation_map(category="doctor", language_code=normalized)
+    ui: dict[str, str] = {}
+    for full_key, value in mapping.items():
+        if not full_key.startswith("doctor."):
+            continue
+        if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith("doctor.pdf_label."):
+            continue
+        short_key = full_key.split(".", 1)[1]
+        ui[short_key] = value
+    return ui
 
 
 def get_fitzpatrick_choices(lang: str) -> list[tuple[str, str]]:
-    """Zwraca listę (value, label) dla Fitzpatrick w zadanym języku."""
-    if lang == "pl":
-        return FITZPATRICK_PL
-    if lang == "en":
-        return FITZPATRICK_EN
-    return FITZPATRICK_DE
+    """Return (value, label) pairs for Fitzpatrick from DB-only translation storage."""
+    normalized = normalize_language_code(lang)
+    mapping = get_translation_map(category="doctor", language_code=normalized)
+    codes = [
+        "TYPE_I",
+        "TYPE_II",
+        "TYPE_III",
+        "TYPE_IV",
+        "TYPE_V",
+        "TYPE_VI",
+        "TYPE_II_III",
+        "UNDETERMINED",
+    ]
+    choices: list[tuple[str, str]] = []
+    for code in codes:
+        key = f"doctor.fitzpatrick.{code}"
+        label = mapping.get(key) or code.replace("_", " ").title()
+        choices.append((code, label))
+    return choices
