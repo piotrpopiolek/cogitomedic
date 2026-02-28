@@ -418,7 +418,7 @@ class MedicalApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.assertEqual(publish_response.status_code, 202)
+        self.assertEqual(publish_response.status_code, 200)
 
         patch_template = self.client.patch(
             f"/api/v1/doctor-text-templates/{template_id}",

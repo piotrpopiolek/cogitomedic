@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 
+import bleach
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -22,6 +23,9 @@ _PLACEHOLDER_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _PLACEHOLDER_TOKEN_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 _FORBIDDEN_PLACEHOLDER_FORMAT_RE = re.compile(r"%\([^)]+\)s|%s|\{[a-z][a-z0-9_]*:[^}]+\}")
 _ANY_BRACE_TOKEN_RE = re.compile(r"\{[^{}]+\}")
+_HTML_ALLOWED_TAGS = ["b", "strong", "i", "em", "br", "ul", "ol", "li", "p", "span"]
+_HTML_ALLOWED_ATTRIBUTES = {"span": ["class"]}
+_HTML_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
 
 
 class TranslationCategory(models.TextChoices):
@@ -130,8 +134,19 @@ class TranslationValue(TimeStampedUUIDModel):
         unknown = sorted(names - allowed)
         if unknown:
             raise ValidationError({"value": f"Unknown placeholders: {unknown}."})
-        if not self.translation_key.is_html_allowed and ("<" in (self.value or "") or ">" in (self.value or "")):
-            raise ValidationError({"value": "HTML is not allowed for this key."})
+        if not self.translation_key.is_html_allowed:
+            if "<" in (self.value or "") or ">" in (self.value or ""):
+                raise ValidationError({"value": "HTML is not allowed for this key."})
+            return
+        sanitized = bleach.clean(
+            self.value or "",
+            tags=_HTML_ALLOWED_TAGS,
+            attributes=_HTML_ALLOWED_ATTRIBUTES,
+            protocols=_HTML_ALLOWED_PROTOCOLS,
+            strip=True,
+        )
+        # Persist sanitized value so render paths do not need custom escape rules.
+        self.value = sanitized
 
     class Meta:
         db_table = "translation_value"
