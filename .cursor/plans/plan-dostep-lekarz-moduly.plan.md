@@ -93,11 +93,11 @@ Lekarz **musi** mieć dostęp do pacjentów, **którzy zapisali się / zostali p
 Potrzebne do kontekstu i filtrów w widoku „kolejka / lista dokumentów”. Lekarz powinien widzieć co najmniej **swoją** klinikę i **swój** gabinet (np. do wyświetlenia w nagłówku lub filtrze).
 
 
-| Moduł / Zasób                                    | Dostęp DOCTOR | Uwagi                                                                                       |
-| ------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------- |
-| GET `/clinic-sites`                              | Tak (read)    | Lista placówek (tylko te kliniki, do których lekarz jest obecnie przypisany).               |
-| GET `/consulting-rooms`                          | Tak (read)    | Lista gabinetów (np. z `clinic_site_id`); dla lekarza – tylko te gabinety z tych klinik.    |
-| POST/PATCH/DELETE clinic-sites, consulting-rooms | Nie           | ADMIN.                                                                                      |
+| Moduł / Zasób                                    | Dostęp DOCTOR | Uwagi                                                                                    |
+| ------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------- |
+| GET `/clinic-sites`                              | Tak (read)    | Lista placówek (tylko te kliniki, do których lekarz jest obecnie przypisany).            |
+| GET `/consulting-rooms`                          | Tak (read)    | Lista gabinetów (np. z `clinic_site_id`); dla lekarza – tylko te gabinety z tych klinik. |
+| POST/PATCH/DELETE clinic-sites, consulting-rooms | Nie           | ADMIN.                                                                                   |
 
 
 ---
@@ -107,16 +107,16 @@ Potrzebne do kontekstu i filtrów w widoku „kolejka / lista dokumentów”. Le
 Pełny flow lekarza (US-008, US-009, US-010): lista dokumentów do opracowania, podgląd intake + szkic, zapis szkicu, generowanie tekstu, publikacja, edycja opublikowanego i ponowna wysyłka.
 
 
-| Moduł / Zasób                                | Dostęp DOCTOR | Uwagi                                                                                                                                             |
-| -------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Moduł / Zasób                                | Dostęp DOCTOR | Uwagi                                                                                                                                                      |
+| -------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET `/medical-documents`                     | Tak           | Lista „work queue” **tylko dla dokumentów z własnych kolejek LUB własnego autorstwa**. Parametry: `status`, `queue_date`, `doctor_view`, `patient_search`. |
-| GET `/medical-documents/{id}`                | Tak           | Tylko jeśli dokument należy do kolejki lekarza LUB lekarz jest jego autorem. Pełny kontekst.                                                      |
-| POST `/medical-documents`                    | Tak           | Utworzenie dokumentu dla `queue_entry_id` – tylko jeśli wpis należy do dzisiejszej kolejki przypisanej do lekarza.                                |
-| PATCH `/medical-documents/{id}/draft`        | Tak           | Zapis szkicu (medical_payload, diagnosis_code, procedure_code) – US-008, US-009.                                                                  |
-| POST `/medical-documents/{id}/generate-text` | Tak           | Generowanie tekstów Befund z wybranych opcji (bez publikacji).                                                                                    |
-| POST `/medical-documents/{id}/publish`       | Tak           | Publikacja z `publish_request_id`, `publish_locale`, opcjonalnie `resend_sms` – US-009, US-010.                                                   |
-| GET `/medical-documents/{id}/versions`       | Tak           | Historia wersji dokumentu – tylko dla dokumentów w zakresie lekarza.                                                                              |
-| GET `/medical-document-versions/{id}`        | Tak           | Szczegóły wersji (status generowania PDF, HiDrive, SMS) – tylko dla wersji dokumentów w zakresie lekarza.                                         |
+| GET `/medical-documents/{id}`                | Tak           | Tylko jeśli dokument należy do kolejki lekarza LUB lekarz jest jego autorem. Pełny kontekst.                                                               |
+| POST `/medical-documents`                    | Tak           | Utworzenie dokumentu dla `queue_entry_id` – tylko jeśli wpis należy do dzisiejszej kolejki przypisanej do lekarza.                                         |
+| PATCH `/medical-documents/{id}/draft`        | Tak           | Zapis szkicu (medical_payload, diagnosis_code, procedure_code) – US-008, US-009.                                                                           |
+| POST `/medical-documents/{id}/generate-text` | Tak           | Generowanie tekstów Befund z wybranych opcji (bez publikacji).                                                                                             |
+| POST `/medical-documents/{id}/publish`       | Tak           | Publikacja z `publish_request_id`, `publish_locale`, opcjonalnie `resend_sms` – US-009, US-010.                                                            |
+| GET `/medical-documents/{id}/versions`       | Tak           | Historia wersji dokumentu – tylko dla dokumentów w zakresie lekarza.                                                                                       |
+| GET `/medical-document-versions/{id}`        | Tak           | Szczegóły wersji (status generowania PDF, HiDrive, SMS) – tylko dla wersji dokumentów w zakresie lekarza.                                                  |
 
 
 Lekarz **nie** wywołuje bezpośrednio endpointów intake (PATCH/PUT/POST na `/intake-forms/...`) – dane intake są tylko do odczytu w `intake_summary` w ramach dokumentu medycznego.
@@ -128,14 +128,14 @@ Lekarz **nie** wywołuje bezpośrednio endpointów intake (PATCH/PUT/POST na `/i
 Lekarz zarządza własnymi szablonami i korzysta z szablonów publicznych w swojej klinice.
 
 
-| Moduł / Zasób                        | Dostęp DOCTOR   | Uwagi                                                                                 |
-| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------- |
+| Moduł / Zasób                        | Dostęp DOCTOR   | Uwagi                                                                                              |
+| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------- |
 | GET `/doctor-text-templates`         | Tak             | Lista szablonów (własne + z przypisanych klinik), filtry: `template_locale`, `scope`, `is_active`. |
-| POST `/doctor-text-templates`        | Tak             | Tworzenie własnego szablonu.                                                          |
-| GET `/doctor-text-templates/{id}`    | Tak             | Odczyt szablonu (własny lub dla przypisanej kliniki).                                 |
-| PATCH `/doctor-text-templates/{id}`  | Tak             | Tylko dla szablonów własnych (`owner_user_id = current_user`).                        |
-| DELETE `/doctor-text-templates/{id}` | Tak             | Tylko dla szablonów własnych (lub soft-deactivate).                                   |
-| Szablony kliniki (`clinic_site_id`)  | Odczyt / użycie | Edycja/usuwanie szablonów kliniki – ADMIN.                                            |
+| POST `/doctor-text-templates`        | Tak             | Tworzenie własnego szablonu.                                                                       |
+| GET `/doctor-text-templates/{id}`    | Tak             | Odczyt szablonu (własny lub dla przypisanej kliniki).                                              |
+| PATCH `/doctor-text-templates/{id}`  | Tak             | Tylko dla szablonów własnych (`owner_user_id = current_user`).                                     |
+| DELETE `/doctor-text-templates/{id}` | Tak             | Tylko dla szablonów własnych (lub soft-deactivate).                                                |
+| Szablony kliniki (`clinic_site_id`)  | Odczyt / użycie | Edycja/usuwanie szablonów kliniki – ADMIN.                                                         |
 
 
 ---
@@ -162,10 +162,10 @@ PRD i api-plan: „prosty dashboard recepcji/lekarza” – status dokumentów i
 Lekarz **musi** mieć dostęp do zdarzeń audytowych dla **dokumentów do których ma dostęp (autorstwo LUB kolejka)**. Umożliwia to weryfikację zdarzeń w obrębie własnej pracy lekarza i jego pacjentów z danego dnia.
 
 
-| Moduł / Zasób                             | Dostęp DOCTOR           | Uwagi                                                                                                                                                                   |
-| ----------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET `/audit-events`                       | Tak (read, ograniczony) | Lista zdarzeń **tylko** dla dokumentów medycznych z zakresu autoryzacji lekarza (szybki odczyt po kluczach `metadata`).                                                 |
-| GET `/medical-documents/{id}/audit-trail` | Tak (read)              | Zdarzenia audytowe powiązane z danym dokumentem – tylko jeśli dokument jest w zakresie dostępu lekarza.                                                                 |
+| Moduł / Zasób                             | Dostęp DOCTOR           | Uwagi                                                                                                                   |
+| ----------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| GET `/audit-events`                       | Tak (read, ograniczony) | Lista zdarzeń **tylko** dla dokumentów medycznych z zakresu autoryzacji lekarza (szybki odczyt po kluczach `metadata`). |
+| GET `/medical-documents/{id}/audit-trail` | Tak (read)              | Zdarzenia audytowe powiązane z danym dokumentem – tylko jeśli dokument jest w zakresie dostępu lekarza.                 |
 
 
 Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaje w module ADMIN.
@@ -198,6 +198,25 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 `medical_document`, `medical_document_version` (draft, publish), `doctor_text_template` (własne). Outbox jest zapisywany przez serwis publikacji; lekarz nie operuje na tabeli outbox bezpośrednio.
 - **Brak dostępu (nawet odczytu) w normalnym flow:**  
 `patient_form_session` (tworzenie/zarządzanie – recepcja/tablet), `consent_definition`, `anamnesis_question_definition`, `anamnesis_option_definition` (słowniki – ADMIN), `outbox_event` (operacyjnie – ADMIN), `patient_import_batch`, `patient_import_error`. Pełna lista `audit_event` bez filtra – ADMIN.
+
+---
+
+## 4a. TODO przed implementacją
+
+1. **Domknięcie decyzji architektonicznych (jedno źródło prawdy):**
+  Ujednolicić nazewnictwo i reguły między `plan-dostep-lekarz-moduly.plan.md`, `.ai/prd.md`, `.ai/db-plan.md`, `.ai/api-plan.md`, `.ai/api-plan-pl.md` (szczególnie: autorstwo OR kolejka, zasięg kliniki vs gabinet, audit po `metadata`).
+2. **Finalny kontrakt autoryzacji object-level:**
+  Spisać finalne reguły w formie testowalnych warunków (`ALLOW` / `DENY`) dla: `daily-queues`, `patients`, `medical-documents`, `audit-events`, `doctor-text-templates`.
+3. **Plan migracji danych i rollback:**
+  Przygotować migracje DB dla nowych relacji (m.in. przypisania klinik, przypisanie lekarza do zmiany/kolejki, denormalizacja pacjent-klinika, klucze kontekstowe audytu), wraz z planem backfillu i bezpiecznym rollbackiem.
+4. **Kontrakty API i kompatybilność FE/BE:**
+  Zamrozić payloady i filtry endpointów (w tym endpointy przypisań klinik oraz zakres szablonów), a następnie potwierdzić wpływ zmian na istniejące widoki frontendu.
+5. **Wydajność i indeksy (przed codingiem funkcji):**
+  Zdefiniować wymagane indeksy i zapytania referencyjne dla `GET /patients`, `GET /medical-documents`, `GET /audit-events`; ustalić progi SLA i plan pomiaru.
+6. **Plan testów autoryzacji i regresji:**
+  Przygotować macierz testów (role + przypadki graniczne), w tym scenariusze: utrata bieżącego przypisania, współdzielenie gabinetu na zmianach, dostęp do historii pacjenta w klinice, odczyt audytu.
+7. **Observability i bezpieczeństwo wdrożenia:**
+  Ustalić minimalny zestaw logów/metryk (audit access denied, czasy endpointów, dead-letter/outbox), feature flag / rollout etapowy oraz kryteria GO/NO-GO.
 
 ---
 
