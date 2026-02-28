@@ -28,13 +28,22 @@
 
 ### 1.2. Pozostałe tabele wymagane przez PRD
 
-#### `staff_user_consulting_room`
+#### `staff_user_clinic_site`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `staff_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE CASCADE
-- `consulting_room_id` `uuid` NOT NULL FK -> `consulting_room(id)` ON DELETE CASCADE
+- `clinic_site_id` `uuid` NOT NULL FK -> `clinic_site(id)` ON DELETE CASCADE
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
-  - `UNIQUE (staff_user_id, consulting_room_id)`
+  - `UNIQUE (staff_user_id, clinic_site_id)`
+
+#### `patient_clinic_site`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `patient_id` `uuid` NOT NULL FK -> `patient(id)` ON DELETE CASCADE
+- `clinic_site_id` `uuid` NOT NULL FK -> `clinic_site(id)` ON DELETE CASCADE
+- `last_visit_at` `timestamptz` NOT NULL DEFAULT `now()`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (patient_id, clinic_site_id)`
 
 #### `patient`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -100,6 +109,7 @@
 - `queue_date` `date` NOT NULL
 - `clinic_site_id` `uuid` NOT NULL FK -> `clinic_site(id)` ON DELETE RESTRICT
 - `consulting_room_id` `uuid` NOT NULL
+- `assigned_doctor_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
 - `shift_code` `queue_shift_enum` NOT NULL DEFAULT `'FULL_DAY'`
 - `source` `queue_source_enum` NOT NULL DEFAULT `'MANUAL'`
 - `status` `queue_status_enum` NOT NULL DEFAULT `'OPEN'`
@@ -285,17 +295,18 @@
 #### `doctor_text_template`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `owner_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE CASCADE
+- `clinic_site_id` `uuid` NULL FK -> `clinic_site(id)` ON DELETE CASCADE
 - `name` `varchar(120)` NOT NULL
 - `template_locale` `varchar(10)` NOT NULL DEFAULT `'de-DE'`
 - `template_body` `text` NOT NULL
-- `is_global` `boolean` NOT NULL DEFAULT `false`
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `CHECK (template_locale ~ '^(de|en|pl)(-[A-Z]{2})?$')`
-  - `CHECK ((is_global = true AND owner_user_id IS NULL) OR (is_global = false AND owner_user_id IS NOT NULL))`
+  - `CHECK ((owner_user_id IS NOT NULL AND clinic_site_id IS NULL) OR (owner_user_id IS NULL AND clinic_site_id IS NOT NULL))`
   - `UNIQUE (owner_user_id, name, template_locale)`
+  - `UNIQUE (clinic_site_id, name, template_locale)`
 
 #### `translation_key`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -396,13 +407,15 @@
 - `patient_id` `uuid` NULL FK -> `patient(id)` ON DELETE SET NULL
 - `medical_document_id` `uuid` NULL FK -> `medical_document(id)` ON DELETE SET NULL
 - `outbox_event_id` `uuid` NULL FK -> `outbox_event(id)` ON DELETE SET NULL
+- `context_clinic_site_id` `uuid` NULL
 - `metadata` `jsonb` NOT NULL DEFAULT '{}'::jsonb
 - Ograniczenia:
   - `CHECK (jsonb_typeof(metadata) = 'object')`
 
 ## 2. Relacje między tabelami
 
-- `staff_user` N:M `consulting_room` przez `staff_user_consulting_room` (przypisanie lekarza do wielu gabinetów; zarządza tym ADMIN).
+- `staff_user` N:M `clinic_site` przez `staff_user_clinic_site` (przypisanie lekarza do klinik; zarządza tym ADMIN).
+- `staff_user` 1:N `daily_queue` (przypisanie lekarza do zmiany/kolejki w gabinecie przez `assigned_doctor_id`).
 - `staff_user` 1:N `daily_queue` (użytkownik tworzy wiele list dziennych).
 - `clinic_site` 1:N `consulting_room` (lokalizacja ma wiele gabinetów).
 - `consulting_room` 1:N `daily_queue` (gabinet ma wiele list dziennych w czasie).
@@ -419,7 +432,7 @@
 - `medical_document_version.publish_locale` przechowuje niezmienny język publikacji PDF per wersja.
 - `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
 - `medical_document_version` 1:N `outbox_event` (relacja egzekwowana FK `outbox_event.medical_document_version_id`; np. `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
-- `staff_user` 1:N `doctor_text_template` (szablony prywatne lekarza); szablony globalne mają `owner_user_id=NULL`.
+- `staff_user` 1:N `doctor_text_template` (szablony prywatne lekarza); szablony publiczne mają `owner_user_id=NULL` i ustawione `clinic_site_id`.
 - `translation_key` 1:N `translation_value`.
 - `translation_cache_version` przechowuje licznik wersji cache tłumaczeń dla pary `category+language_code`.
 - `patient_import_batch` 1:N `patient_import_error`.
@@ -454,17 +467,17 @@
 - `medical_document_version(medical_document_id, version_no DESC)` UNIQUE
 - `medical_document_version(version_status, published_at DESC)`
 - `medical_document_version(hidrive_sent, sms_sent, published_at)` (retencja + monitoring)
+- `patient_clinic_site(patient_id, clinic_site_id)`
 - `doctor_text_template(owner_user_id, template_locale, is_active)`
-- `doctor_text_template(is_global, template_locale, is_active)`
+- `doctor_text_template(clinic_site_id, template_locale, is_active)`
 - `translation_key(category, status, key)`
 - `translation_value(language_code, translation_key_id)`
 - `translation_cache_version(category, language_code)` UNIQUE
 - `outbox_event(status, available_at)`
 - `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(medical_document_version_id, created_at DESC)`
-- `patient_import_batch(status, created_at DESC)`
-- `patient_import_batch(source_system, created_at DESC)`
 - `audit_event(event_time DESC)`
+- `audit_event` -> `GIN (metadata jsonb_path_ops)` (w szczególności po `metadata->>'assigned_doctor_id'`)
 
 ### 3.2. Indeksy częściowe (PostgreSQL partial indexes)
 - `outbox_event(status, available_at)` WHERE `status IN ('PENDING','FAILED')`

@@ -35,7 +35,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
-- `doctor-text-templates` -> `doctor_text_template` (MVP: tylko prywatne)
+- `doctor-text-templates` -> `doctor_text_template`
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
 - `audit-events` -> `audit_event`
@@ -150,6 +150,24 @@
   - Request JSON (`PATCH`): częściowa aktualizacja pól (poza niezmiennymi identyfikatorami).
   - Response JSON: obiekt użytkownika / `{"message":"User deactivated"}`.
   - Kody sukcesu: `200 OK`, opcjonalnie `204 NO_CONTENT` dla delete.
+  - Kody błędów: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
+
+- **GET** `/staff-users/{id}/clinic-sites`
+  - Opis: Lista przypisanych klinik dla użytkownika personelu (np. dla lekarza DOCTOR).
+  - Response JSON: lista obiektów clinic_site.
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `403 FORBIDDEN`, `404 NOT_FOUND`.
+
+- **POST** `/staff-users/{id}/clinic-sites`
+  - Opis: Aktualizacja przypisanych klinik dla użytkownika. Zastępuje obecne przypisania (zarządzane przez ADMIN).
+  - Request JSON:
+    ```json
+    {
+      "clinic_site_ids": ["uuid1", "uuid2"]
+    }
+    ```
+  - Response JSON: zaktualizowana lista obiektów clinic_site.
+  - Kody sukcesu: `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
 
 ### 2.3 Pacjenci
@@ -837,20 +855,21 @@
 ### 2.10a Szablony tekstów lekarskich
 
 - **GET** `/doctor-text-templates`
-  - Opis: Lista prywatnych szablonów tekstu dostępnych dla uwierzytelnionego lekarza (MVP: tylko prywatne).
-  - Parametry zapytania: `template_locale`, `is_active`.
+  - Opis: Lista szablonów tekstu dostępnych dla lekarza (zasięg kliniki + prywatne).
+  - Parametry zapytania: `template_locale`, `scope` (`clinic|private|all`), `is_active`.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
 
 - **POST** `/doctor-text-templates`
 - **GET/PATCH/DELETE** `/doctor-text-templates/{id}`
-  - Opis: CRUD prywatnych szablonów tekstowych lekarza (bez zakresu globalnego).
+  - Opis: CRUD prywatnych i publicznych (klinika) szablonów tekstowych lekarza.
   - Request JSON (create):
     ```json
     {
       "name": "Dr. Meyer Default",
       "template_locale": "de-DE",
       "template_body": "Läsion {{lesion_no}} zeigt ...",
+      "clinic_site_id": null,
       "is_active": true
     }
     ```
@@ -861,11 +880,18 @@
     - Placeholdery są obsługiwane wyłącznie z allowlisty (bez logiki warunkowej, pętli i DSL).
 
 - **GET** `/medical-documents/{id}/versions`
-  - Opis: Historia wersji.
+  - Opis: Historia wersji. Lekarz widzi tylko, jeśli jest autorem dokumentu lub dokument jest w zakresie jego przypisanych klinik/kolejek.
   - Parametry zapytania: paginacja/sortowanie po `-version_no`.
   - Response JSON: lista wersji.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`.
+
+- **GET** `/medical-documents/{id}/audit-trail`
+  - Opis: Zdarzenia audytowe powiązane z danym dokumentem. Lekarz widzi tylko, jeśli jest autorem dokumentu lub dokument jest w zakresie jego przypisanych klinik/kolejek.
+  - Parametry zapytania: paginacja.
+  - Response JSON: lista zdarzeń audytowych.
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 - **GET** `/medical-document-versions/{id}`
   - Opis: Szczegóły wskazanej wersji i stan przetwarzania.

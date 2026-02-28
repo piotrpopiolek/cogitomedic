@@ -152,21 +152,21 @@
   - Success: `200 OK`, `204 NO_CONTENT` (optional for delete).
   - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
 
-- **GET** `/staff-users/{id}/consulting-rooms`
-  - Description: List assigned consulting rooms for a staff user (e.g. for a DOCTOR).
-  - Response JSON: list of consulting room objects.
+- **GET** `/staff-users/{id}/clinic-sites`
+  - Description: List assigned clinic sites for a staff user (e.g. for a DOCTOR).
+  - Response JSON: list of clinic site objects.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`, `404 NOT_FOUND`.
 
-- **POST** `/staff-users/{id}/consulting-rooms`
-  - Description: Update assigned consulting rooms for a staff user. Replaces current assignments (managed by ADMIN).
+- **POST** `/staff-users/{id}/clinic-sites`
+  - Description: Update assigned clinic sites for a staff user. Replaces current assignments (managed by ADMIN).
   - Request JSON:
     ```json
     {
-      "consulting_room_ids": ["uuid1", "uuid2"]
+      "clinic_site_ids": ["uuid1", "uuid2"]
     }
     ```
-  - Response JSON: updated list of consulting room objects.
+  - Response JSON: updated list of clinic site objects.
   - Success: `200 OK`.
   - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
 
@@ -845,8 +845,8 @@
 ### 2.10a Doctor text templates
 
 - **GET** `/doctor-text-templates`
-  - Description: List text templates available to the doctor (global + private).
-  - Query params: `template_locale`, `scope` (`global|private|all`), `is_active`.
+  - Description: List text templates available to the doctor (clinic scope + private).
+  - Query params: `template_locale`, `scope` (`clinic|private|all`), `is_active`.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
@@ -859,7 +859,7 @@
       "name": "Dr. Meyer Default",
       "template_locale": "de-DE",
       "template_body": "Läsion {{lesion_no}} zeigt ...",
-      "is_global": false,
+      "clinic_site_id": null,
       "is_active": true
     }
     ```
@@ -867,14 +867,14 @@
   - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
 
 - **GET** `/medical-documents/{id}/versions`
-  - Description: Version history. Doctor can view only if document is in their assigned consulting rooms.
+  - Description: Version history. Doctor can view only if document is authored by them or in their assigned clinic scope.
   - Query params: pagination/sort by `-version_no`.
   - Response JSON: version list.
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
 
 - **GET** `/medical-documents/{id}/audit-trail`
-  - Description: Audit events related to the given document. Doctor can view only if document is in their assigned consulting rooms.
+  - Description: Audit events related to the given document. Doctor can view only if document is authored by them or in their assigned clinic scope.
   - Query params: pagination.
   - Response JSON: list of audit events.
   - Success: `200 OK`.
