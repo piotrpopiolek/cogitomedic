@@ -5,146 +5,194 @@ todos: []
 isProject: false
 ---
 
-# Plan: Edycja tłumaczeń przez administrację
+# Plan: Edycja tłumaczeń przez administrację (wersja po decyzjach)
+
+## Decyzje architektoniczne (ustalone)
+
+1. **Jedno źródło prawdy: wyłącznie DB**
+  Kod nie przechowuje ani nie dostarcza fallbacków tłumaczeń runtime.
+2. **Kategorie biznesowe tłumaczeń**: `doctor`, `reception`, `waiting_room`.
+3. **Właściciel merytoryczny i decyzyjny**: **Administrator**.
+4. **Wymaganie bezpieczeństwa**: polityka anty-XSS dla tłumaczeń.
+5. **Wymaganie spójności PDF**: język publikowanego PDF musi być trwały i audytowalny per wersja dokumentu.
+
+---
 
 ## Cel
 
-Umożliwić administratorom zmianę tekstów w obsługiwanych językach (DE, EN, PL) bez edycji kodu – przez Django Admin.
+Umożliwić administracji edycję tłumaczeń DE/EN/PL przez Django Admin, z zachowaniem:
 
-## Stan obecny
-
-- **Źródła tłumaczeń** (na stałe w kodzie):
-  - `cogitomedica/doctor_i18n.py`: `DOCTOR_UI_DE/EN/PL` (~100 kluczy), `FITZPATRICK_DE/PL/EN` (8 pozycji na język).
-  - `apps/medical/pdf_builder.py`: `PDF_LABELS` (nagłówki sekcji PDF: de-DE, en-GB, pl-PL).
-  - `cogitomedica/tablet_i18n.py`: stringi formularza tablety (opcjonalnie w kolejnej fazie).
-- **Użycie**: `get_doctor_ui(lang)`, `get_fitzpatrick_choices(lang)` w panelu lekarza i w budowniczym PDF; etykiety PDF w `pdf_builder`.
-
-## Zakres planu
-
-1. Faza 1: **Panel lekarza + PDF** (doctor_i18n + etykiety PDF).
-2. Faza 2 (opcjonalna): rozszerzenie na tablet (tablet_i18n) i ewentualne inne obszary.
+- spójności między workerami,
+- walidacji kluczy i placeholderów,
+- bezpieczeństwa renderowania,
+- pełnej identyfikowalności języka publikacji PDF.
 
 ---
 
-## Architektura (Faza 1)
+## Stan obecny (krótko)
 
-### Zasada: DB z domyślnymi z kodu
-
-- Tłumaczenia przechowywane w **modelu Django**.
-- **Domyślne wartości** pozostają w kodzie (słowniki/słowniki w `doctor_i18n.py` i etykiety w `pdf_builder.py`). Są używane gdy w DB brak wpisu dla danego klucza/języka.
-- Warstwa dostępu: funkcje `get_doctor_ui(lang)` / `get_fitzpatrick_choices(lang)` (oraz etykiety PDF) **najpierw** ładują z DB (z cache), **następnie** uzupełniają brakujące klucze z domyślnych z kodu. Dzięki temu:
-  - nowe klucze dodane w kodzie od razu mają tekst (bez wpisów w adminie),
-  - admin może nadpisać wybrane teksty bez migracji danych dla wszystkich kluczy.
-
-### Model danych
-
-**Opcja A (rekomendowana): jeden model `Translation`**
-
-- Pola: `key` (CharField, np. `"rec_followup_3"`), `language_code` (CharField, max 10, np. `"de"`, `"pl"`, `"en"`), `value` (TextField).
-- Unikalność: `UniqueConstraint` na `(key, language_code)`.
-- Opcjonalnie: `category` (CharField, np. `"doctor_ui"`, `"fitzpatrick"`, `"pdf_label"`) – ułatwia filtrowanie w adminie i ewentualne osobne widoki.
-- Zalety: prosty model, łatwa migracja danych, jeden ekran admina do wszystkich tekstów.
-
-**Opcja B: osobny model dla Fitzpatrick**
-
-- Np. `FitzpatrickLabel(code, language_code, label)` – tylko 8×3 = 24 wiersze. Można traktować jak „słownik Fitzpatrick” z osobnym inline w adminie. Nadal z domyślnymi z kodu.
-
-Rekomendacja: **Opcja A** z polem `category`, aby w adminie filtrować np. tylko „doctor_ui” lub „pdf_label”. Fitzpatrick reprezentowane jako klucze typu `fitzpatrick_TYPE_I`, `fitzpatrick_TYPE_II`, … (spójnie z resztą).
-
-### Konwencja kluczy
-
-- **Doctor UI**: istniejące klucze z `DOCTOR_UI`_* (np. `area_name`, `rec_followup_3`).
-- **Fitzpatrick**: `fitzpatrick_TYPE_I`, `fitzpatrick_TYPE_II`, …, `fitzpatrick_UNDETERMINED`.
-- **PDF labels**: `pdf_label.befund`, `pdf_label.document_id`, `pdf_label.patient`, … (prefiks aby nie kolidować z doctor_ui).
-
-Języki: `de`, `en`, `pl` (spójne z `lang` w panelu). W PDF używane są locale `de-DE`, `en-GB`, `pl-PL` – warstwa dostępu mapuje je na `de`/`en`/`pl` (już tak jest w `_authoring_locale_to_lang`).
+- Tłumaczenia są rozsiane w kodzie (`doctor_i18n.py`, `pdf_builder.py`).
+- PDF przy publikacji bazuje dziś na `medical_payload.authoring_locale` wersji dokumentu.
+- Jest ryzyko dryfu i brak typowanej walidacji kluczy.
 
 ---
 
-## Warstwa dostępu (API dla aplikacji)
+## Architektura docelowa (DB-only)
 
-1. **Cache**
-  - Klucze cache np. `translations:doctor_ui:de`, `translations:doctor_ui:pl`, … (per język i ewentualnie per kategoria).
-  - TTL np. 300 s lub brak TTL z invalidacją przy zapisie w adminie (sygnał `post_save` na `Translation` – czyścimy cache dla danego języka/kategorii).
-2. **get_doctor_ui(lang)**
-  - Pobierz z cache; przy braku: załaduj z DB wszystkie wpisy dla `category="doctor_ui"` (lub bez kategorii jeśli key nie ma prefiksu) i `language_code=lang`.
-  - Połącz: `defaults = DOCTOR_UI_DE/EN/PL[lang]`, potem `defaults.update(db_dict)`. Zwróć `defaults`.
-  - Zapisz wynik w cache.
-3. **get_fitzpatrick_choices(lang)**
-  - Domyślna lista z kodu (FITZPATRICK_DE/PL/EN). Dla każdego (code, _) sprawdź w DB (lub w jednym słowniku z cache) wpis `fitzpatrick_{code}` dla `lang`; jeśli jest, użyj jako label.
-  - Cache: można trzymać „słownik Fitzpatrick” per lang (code → label) i budować listę `[(code, label), ...]`.
-4. **Etykiety PDF**
-  - Obecnie `PDF_LABELS` w `pdf_builder.py` – słownik per locale (de-DE, en-GB, pl-PL).
-  - Nowa funkcja np. `get_pdf_labels(locale: str) -> dict[str, str]`: domyślne z `PDF_LABELS`, nadpisania z DB (klucze `pdf_label.befund`, …), cache per locale. W `_pdf_labels(locale)` wywołać `get_pdf_labels` zamiast tylko słownika z kodu.
+### 1) Model danych
 
----
+**A. `TranslationKey` (rejestr typowanych kluczy)**
 
-## Django Admin
+- `key` (unikalny, np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
+- `category` (`doctor` | `reception` | `waiting_room`)
+- `description` (opis biznesowy)
+- `is_html_allowed` (bool, default `false`)
+- `allowed_placeholders` (JSON array, np. `["patient_name", "date"]`)
+- `status` (`ACTIVE`, `DEPRECATED`)
 
-- **Model**: `Translation` (key, language_code, value, opcjonalnie category).
-- **TranslationAdmin**:
-  - `list_display`: key, language_code, value (skrót, np. 60 znaków), category.
-  - `list_filter`: language_code, category.
-  - `search_fields`: key, value.
-  - `list_editable`: nie dla value (TextField). Można rozważyć `value` w formularzu listy jako krótki TextField (tylko jeśli value są krótkie).
-  - Grupowanie po języku: np. `list_filter` po `language_code` i przeglądanie „wszystkie DE”, „wszystkie PL”.
-- **Eksport/import**: opcjonalnie `django-import-export` lub management command `dump_translations` / `load_translations` (JSON/CSV), żeby administracja mogła edytować w pliku i wgrać zbiorczo.
+**B. `TranslationValue`**
 
----
+- FK do `TranslationKey`
+- `language_code` (`de`, `en`, `pl`)
+- `value` (TextField)
+- unikalność `(translation_key, language_code)`
+- pola audytowe: `updated_by`, `updated_at`
 
-## Migracja danych (zaludnienie DB)
+**C. (PDF) rozszerzenie wersji dokumentu**
 
-- **Management command** (np. `load_default_translations`):
-  - Dla każdego klucza z DOCTOR_UI_DE/EN/PL wstawia `Translation(key=key, language_code=lang, value=...)` tylko jeśli wpis nie istnieje (get_or_create).
-  - To samo dla FITZPATRICK_* jako `fitzpatrick_TYPE_I` itd.
-  - To samo dla PDF_LABELS (klucze `pdf_label.`*).
-- Uruchamiane raz po wdrożeniu; później nowe klucze w kodzie mogą być uzupełniane tym samym commandem (idempotent) lub pozostawać tylko w kodzie jako domyślne.
+- `MedicalDocumentVersion.publish_locale` (CharField, np. `en-GB`)
+- ustawiane **w momencie publikacji** i potem niemutowalne.
+
+> Uwaga: `publish_locale` rozwiązuje ryzyko utraty informacji "w jakim języku zlecono publikację", niezależnie od późniejszych zmian tłumaczeń lub kolejnych wersji dokumentu.
+
+### 2) Konwencja kluczy
+
+- `doctor.*` dla panelu lekarza i PDF lekarza (np. `doctor.rec_followup_3`, `doctor.pdf_label.summary`)
+- `reception.*` dla recepcji
+- `waiting_room.*` dla waiting room
+
+Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem".
 
 ---
 
-## Kroki wdrożenia (Faza 1)
+## Walidacja typów kluczy i placeholderów
 
-1. **Model i migracja**
-  - Dodać app (np. `apps.i18n` lub w istniejącej `apps.core`) model `Translation(key, language_code, value, category=None)`, unique (key, language_code). Migracje.
-2. **Domyślne źródła**
-  - Zachować w `doctor_i18n.py` i `pdf_builder.py` obecne słowniki jako „defaults”; nie usuwać ich.
-3. **Warstwa dostępu**
-  - W `cogitomedica/doctor_i18n.py` (lub w nowym modułach `apps.i18n.loader` / `apps.i18n.doctor`):
-    - Funkcja `get_translations_from_db(lang, category=None)` → dict key→value (z cache).
-    - Zmienić `get_doctor_ui(lang)`: merge domyślnych z kodu z dict z DB; cache.
-    - Zmienić `get_fitzpatrick_choices(lang)`: domyślne z kodu, nadpisania etykiet z DB (fitzpatrick_*); cache.
-  - W `apps/medical/pdf_builder.py`: dodać `get_pdf_labels(locale)` (merge PDF_LABELS z DB), użyć w `_pdf_labels()`.
-4. **Invalidacja cache**
-  - W adminie: w `TranslationAdmin` override `save_model` / sygnał `post_save` na `Translation` – po zapisie usunąć z cache klucze dla danego `language_code` (i ewentualnie category). Prosta funkcja `invalidate_translation_cache(lang=None, category=None)`.
-5. **Admin**
-  - Zarejestrować `Translation` w Django Admin; konfiguracja list_display, list_filter, search_fields.
-6. **Management command**
-  - `load_default_translations`: wypełnienie DB domyślnymi wartościami z kodu (get_or_create), idempotent.
-7. **Testy**
-  - Test że `get_doctor_ui("pl")` zwraca domyślne gdy DB puste; test że po zapisie w DB wartość się zmienia i cache jest invalidowany; test że brak klucza w DB nie powoduje błędu (fallback na kod).
+### Problem
 
----
+`String-key model` bez kontraktu daje literówki i błędy runtime.
 
-## Faza 2 (opcjonalna)
+### Rozwiązanie
 
-- Rozszerzenie na `tablet_i18n`: ten sam model `Translation` z kategorią np. `"tablet_form"`; `get_form_ui_strings(form_locale)` ładuje z DB + domyślne z kodu.
-- Ewentualnie osobna kategoria dla „staff” / recepcja.
+1. **Twardy rejestr kluczy (`TranslationKey`)**
+  - `TranslationValue` nie może istnieć bez klucza z rejestru.
+  - Brak możliwości wpisania „nowego” klucza ad hoc z admina bez jego zdefiniowania.
+2. **Walidator placeholderów przy zapisie**
+  - Parser wyciąga placeholdery z `value` (np. `{name}`, `{date}`).
+  - Zapis odrzucany, gdy:
+    - są placeholdery spoza `allowed_placeholders`,
+    - brakuje placeholderów wymaganych przez kontrakt klucza (jeśli oznaczone jako required).
+3. **Test kontraktowy kluczy**
+  - testy sprawdzają, że wszystkie klucze używane przez kod istnieją w `TranslationKey`.
+  - testy sprawdzają komplet języków (`de`, `en`, `pl`) dla kluczy aktywnych.
 
 ---
 
-## Ryzyka i uwagi
+## Globalna spójność cache (multi-worker / multi-instance)
 
-- **Wydajność**: Odpytywanie DB przy każdym request bez cache byłoby kosztowne – **cache jest konieczny**. Invalidation przy zapisie w adminie wystarczy.
-- **Spójność**: Usunięcie klucza z kodu przy istniejących wpisach w DB – wartość z DB pozostanie (może być „osierocona”). Można okresowo czyścić wpisy bez odpowiadającego klucza w domyślnych (opcjonalny command).
-- **Uprawnienia**: Tylko użytkownicy z uprawnieniami do edycji modelu `Translation` (np. superuser / grupa „Content / Translations”) powinni móc zmieniać tłumaczenia.
+### Problem
+
+Lokalna invalidacja w jednym procesie nie wystarczy.
+
+### Rozwiązanie
+
+1. **Wspólny backend cache** (Redis/Memcached), nie local-memory.
+2. **Versioned cache keys**:
+  - trzymamy globalny licznik wersji per kategoria+język, np. `i18n:v:doctor:pl`.
+  - klucz danych zawiera wersję: `i18n:data:doctor:pl:v42`.
+3. **Po zapisie tłumaczenia**:
+  - transakcyjnie zwiększamy `i18n:v:{category}:{language}`.
+  - wszystkie instancje automatycznie zaczną czytać nową wersję.
+4. **Bezpieczny fallback techniczny**:
+  - przy awarii cache czytamy bezpośrednio z DB (nigdy z kodowych słowników).
 
 ---
 
-## Podsumowanie
+## Spójność języka PDF przy publikacji (analiza + decyzja)
 
-- Jeden model **Translation(key, language_code, value, category)**.
-- Domyślne wartości w kodzie; DB nadpisuje wybrane klucze; cache per język z invalidacją przy zapisie.
-- Admin: listowanie/filtrowanie po języku i kategorii, wyszukiwanie, edycja value.
-- Command do zaludnienia DB domyślnymi z kodu.
-- Po wdrożeniu panel lekarza i PDF korzystają z tych samych tekstów co dziś, z możliwością edycji w Django Admin.
+### Obecnie
+
+- Flow JS robi `PUT /draft` z `authoring_locale`, potem `POST /publish`.
+- Outbox generuje PDF dla opublikowanej wersji.
+- Język jest obecnie pochodną payloadu wersji.
+
+### Ryzyko
+
+- Brak jawnego, dedykowanego pola audytowego `publish_locale`.
+- Przy analizie incydentu trudniej udowodnić „w jakim języku zlecono publikację”.
+
+### Docelowo
+
+1. W `publish_document_version(...)` zapisujemy `publish_locale` na `MedicalDocumentVersion`.
+2. Outbox PDF używa `**version.publish_locale`** jako źródła języka.
+3. `publish_locale` jest immutable po publikacji.
+4. W audit event zapisujemy `publish_locale` + `published_by_user_id`.
+
+To gwarantuje, że:
+
+- lekarz A może opublikować EN, lekarz B DE,
+- język każdej wersji zostaje trwale przypisany i nie ginie.
+
+---
+
+## Polityka bezpieczeństwa XSS dla tłumaczeń
+
+1. **Domyślnie tylko plain text**
+  - `is_html_allowed=false` dla większości kluczy.
+2. **Renderowanie**
+  - backend/templates: standardowe escapowanie (autoescape on),
+  - frontend JS: preferować `textContent` zamiast `innerHTML`.
+3. **Jeśli HTML potrzebny wyjątkowo**
+  - tylko dla kluczy z `is_html_allowed=true`,
+  - sanitizacja whitelistą (np. dopuszczone: `b`, `strong`, `i`, `br`, `ul`, `li`),
+  - usuwanie atrybutów eventowych i URL-i `javascript:`.
+4. **Walidacja przy zapisie w adminie**
+  - jeśli `is_html_allowed=false`, zapis odrzucany przy wykryciu tagów HTML.
+
+---
+
+## Django Admin (operacyjnie)
+
+- `TranslationKeyAdmin`: zarządzanie kontraktem kluczy (kategoria, placeholdery, html policy, status).
+- `TranslationValueAdmin`: edycja wartości per język.
+- Filtry: `category`, `language_code`, `status`.
+- Audyt: kto zmienił i kiedy.
+
+Rola odpowiedzialna za poprawność: **Administrator**.
+
+---
+
+## Plan wdrożenia
+
+1. Dodać modele `TranslationKey`, `TranslationValue` + migracje.
+2. Dodać `publish_locale` do `MedicalDocumentVersion` + migracja.
+3. Napisać jednorazowy skrypt migracyjny: przenieść wszystkie aktualne tłumaczenia z kodu do DB.
+4. Przepiąć runtime:
+  - `get_doctor_ui`, `get_fitzpatrick_choices`, etykiety PDF -> odczyt wyłącznie z DB.
+5. Dodać walidację placeholderów i polityki HTML.
+6. Dodać globalną strategię cache versioning + invalidation.
+7. Dodać testy:
+  - kompletność kluczy/języków,
+  - walidacja placeholderów,
+  - XSS policy,
+  - trwałość `publish_locale` i zgodność języka wygenerowanego PDF.
+
+---
+
+## Kryteria akceptacji
+
+1. Brak odwołań runtime do słowników tłumaczeń w kodzie.
+2. Każdy klucz używany przez UI/PDF istnieje w `TranslationKey`.
+3. Zmiana tłumaczenia jest widoczna na wszystkich instancjach bez restartu.
+4. Każdy opublikowany PDF ma przypisany i audytowalny `publish_locale`.
+5. W testach bezpieczeństwa tłumaczenia nie mogą wstrzyknąć aktywnego HTML/JS tam, gdzie nie jest to dozwolone.
 
