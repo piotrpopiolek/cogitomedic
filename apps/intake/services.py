@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -27,6 +28,8 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
+
+logger = logging.getLogger(__name__)
 
 
 class RequiredConsentMissingError(DomainError):
@@ -525,12 +528,6 @@ def save_intake_signature(
     Raises InvalidSignatureError if payload is invalid or too large.
     Raises StateTransitionError if form is not IN_PROGRESS.
     """
-    import base64
-    import hashlib
-    from pathlib import Path
-
-    from django.conf import settings
-
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
         raise StateTransitionError("Signature can be set only for IN_PROGRESS intake form.")
@@ -694,6 +691,16 @@ def submit_patient_intake_form(
             "intake_document_version_id": str(intake_version.id),
             "queue_entry_id": str(queue_entry.id),
             "session_id": str(session.id),
+        },
+    )
+    logger.info(
+        "intake_submitted",
+        extra={
+            "intake_form_id": str(intake_form.id),
+            "intake_document_version_id": str(intake_version.id),
+            "queue_entry_id": str(queue_entry.id),
+            "patient_id": str(queue_entry.patient_id),
+            "submitted_by_user_id": str(submitted_by_user_id) if submitted_by_user_id else None,
         },
     )
 

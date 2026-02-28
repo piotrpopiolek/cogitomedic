@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -18,6 +19,8 @@ from apps.intake.pdf_builder import generate_intake_pdf
 from apps.core.exceptions import DomainError
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
+
+logger = logging.getLogger(__name__)
 
 
 class IntakeOutboxEventNotRetryableError(DomainError):
@@ -121,6 +124,15 @@ def process_intake_outbox_events(
                     "retry_count": event.retry_count,
                 },
             )
+            logger.info(
+                "intake_outbox_event_processed",
+                extra={
+                    "intake_outbox_event_id": str(event.id),
+                    "intake_document_version_id": str(version.id),
+                    "event_type": event.event_type,
+                    "patient_id": str(patient_id),
+                },
+            )
             processed += 1
         except Exception as exc:
             if event.event_type == IntakeOutboxEventType.GENERATE_INTAKE_PDF:
@@ -163,7 +175,40 @@ def process_intake_outbox_events(
                     "error_message": event.error_message or "",
                 },
             )
+            if event.status == IntakeOutboxStatus.DEAD_LETTER:
+                logger.warning(
+                    "intake_outbox_event_dead_lettered",
+                    extra={
+                        "intake_outbox_event_id": str(event.id),
+                        "intake_document_version_id": str(version.id),
+                        "event_type": event.event_type,
+                        "retry_count": event.retry_count,
+                        "error_message": event.error_message or "",
+                        "patient_id": str(patient_id),
+                    },
+                )
+            else:
+                logger.warning(
+                    "intake_outbox_event_failed",
+                    extra={
+                        "intake_outbox_event_id": str(event.id),
+                        "intake_document_version_id": str(version.id),
+                        "event_type": event.event_type,
+                        "retry_count": event.retry_count,
+                        "error_message": event.error_message or "",
+                        "patient_id": str(patient_id),
+                    },
+                )
 
+    logger.info(
+        "intake_outbox_batch_finished",
+        extra={
+            "processed": processed,
+            "failed": failed,
+            "dead_lettered": dead_lettered,
+            "batch_size": len(events),
+        },
+    )
     return IntakeOutboxProcessingResult(
         processed=processed,
         failed=failed,
@@ -171,6 +216,7 @@ def process_intake_outbox_events(
     )
 
 
+@transaction.atomic
 def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> IntakeOutboxEvent:
     """Move FAILED/DEAD_LETTER intake outbox event back to PENDING for manual retry."""
     event = (
@@ -201,6 +247,16 @@ def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> Intak
             "intake_outbox_event_id": str(event.id),
             "event_type": event.event_type,
             "reason": reason,
+        },
+    )
+    logger.info(
+        "intake_outbox_event_retry_requested",
+        extra={
+            "intake_outbox_event_id": str(event.id),
+            "intake_document_version_id": str(version.id),
+            "event_type": event.event_type,
+            "reason": reason,
+            "patient_id": str(patient_id),
         },
     )
     return event

@@ -350,8 +350,8 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     """
     pdf_bytes = build_befund_pdf_bytes(version)
 
-    now = timezone.now()
-    relative_dir = Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs")) / f"{now.year:04d}" / f"{now.month:02d}"
+    now = version.created_at
+    relative_dir = Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs")) / "befund" / f"{now.year:04d}" / f"{now.month:02d}"
     relative_path = relative_dir / f"{version.id}.pdf"
     full_path = Path(settings.MEDIA_ROOT) / relative_path
     full_path.parent.mkdir(parents=True, exist_ok=True)
