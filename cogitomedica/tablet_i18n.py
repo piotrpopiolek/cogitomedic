@@ -3,6 +3,8 @@ Tłumaczenia interfejsu formularza tabletu: niemiecki (de-DE) i angielski (en-GB
 """
 from __future__ import annotations
 
+from apps.core.translation_service import get_translation_map, normalize_language_code
+
 FORM_UI_DE = {
     "back_to_waiting": "← Wartezimmer",
     "patient_data_title": "Patientendaten (zur Überprüfung)",
@@ -149,12 +151,15 @@ FORM_UI_PL = {
 
 
 def get_form_ui_strings(form_locale: str) -> dict[str, str]:
-    """Return UI strings for tablet form. form_locale e.g. 'de-DE', 'en-GB', 'pl-PL'."""
-    if form_locale.startswith("en"):
-        return dict(FORM_UI_EN)
-    if form_locale.startswith("pl"):
-        return dict(FORM_UI_PL)
-    return dict(FORM_UI_DE)
+    """Return tablet form UI from DB-only translation storage."""
+    lang = normalize_language_code(form_locale)
+    mapping = get_translation_map(category="waiting_room", language_code=lang)
+    ui: dict[str, str] = {}
+    prefix = "waiting_room.form."
+    for full_key, value in mapping.items():
+        if full_key.startswith(prefix):
+            ui[full_key[len(prefix):]] = value
+    return ui
 
 
 # Staff/waiting room UI (home, queue list, entry start, entry started) – locale: de, en, pl
@@ -253,10 +258,12 @@ STAFF_UI_PL = {
 
 
 def get_staff_ui_strings(locale: str) -> dict[str, str]:
-    """Return UI strings for tablet staff/waiting room. locale: 'de', 'en', 'pl'."""
-    locale = (locale or "pl").lower()
-    if locale == "de":
-        return dict(STAFF_UI_DE)
-    if locale == "en":
-        return dict(STAFF_UI_EN)
-    return dict(STAFF_UI_PL)
+    """Return tablet staff/waiting room UI from DB-only translation storage."""
+    lang = normalize_language_code(locale)
+    mapping = get_translation_map(category="waiting_room", language_code=lang)
+    ui: dict[str, str] = {}
+    prefix = "waiting_room.staff."
+    for full_key, value in mapping.items():
+        if full_key.startswith(prefix):
+            ui[full_key[len(prefix):]] = value
+    return ui

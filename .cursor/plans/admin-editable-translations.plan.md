@@ -212,9 +212,9 @@ Rola odpowiedzialna za poprawność: **Administrator**.
   - unikalność `TranslationKey.key`,
   - unikalność `(translation_key, language_code)` w `TranslationValue`,
   - unikalność `(category, language_code)` w `TranslationCacheVersion`.
-- Dodać `publish_locale` do `MedicalDocumentVersion` (nullable tylko na czas migracji, potem not null dla nowych publikacji).
+- Dodać `publish_locale` do `MedicalDocumentVersion` (z backfill + constraint dla wersji `PUBLISHED`).
 - Rozszerzyć API publish:
-  - request musi przyjmować `publish_locale`,
+  - request przyjmuje `publish_locale`,
   - walidacja dozwolonych wartości (`de-DE`, `en-GB`, `pl-PL`),
   - zapis `publish_locale` przy publikacji,
   - audit event z `publish_locale`.
@@ -233,18 +233,18 @@ Rola odpowiedzialna za poprawność: **Administrator**.
   - dodać bibliotekę sanitizacji HTML,
   - walidacja `is_html_allowed`,
   - sanitizacja whitelistą przy zapisie i defensywnie przy renderowaniu.
-- Wdrożyć cache invalidation:
+- [~] Wdrożyć cache invalidation:
   - wariant B (Postgres-only),
   - version bump po każdej zmianie tłumaczenia,
   - integracyjne testy spójności między workerami.
 - Przygotować i uruchomić jednorazową migrację danych tłumaczeń z kodu do DB.
-- Usunąć runtime dependencies od słowników tłumaczeń w kodzie (`doctor_i18n.py`, `pdf_builder.py`) po zakończeniu migracji.
+- Usunąć runtime fallback dependencies od słowników tłumaczeń w kodzie (`doctor_i18n.py`, `pdf_builder.py`).
 - Dodać testy kontraktowe:
   - kompletność kluczy aktywnych dla `de/en/pl`,
-  - brak nieznanych kluczy używanych przez kod,
-  - poprawność renderowania PDF dla każdego `publish_locale`.
+  - brak nieznanych placeholderów/formatów i walidacja kontraktu klucza,
+  - poprawność renderowania PDF dla `publish_locale`.
 - Dodać panele Django Admin (`TranslationKeyAdmin`, `TranslationValueAdmin`) z audytem zmian.
-- Dodać runbook operacyjny dla Administratora (procedura edycji, rollback, weryfikacja po zmianie).
+- Dodać runbook operacyjny dla Administratora (procedura edycji, rollback, weryfikacja po zmianie) — `\.cursor\plans\translations-admin-runbook.md`.
 
 ---
 
