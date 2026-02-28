@@ -1,37 +1,7 @@
 ---
 name: pdf-intake-consents-signature
 overview: Asynchroniczne generowanie PDF intake (zgody + ankieta + podpis) uruchamiane po zapisie pacjenta, bez SMS i bez sekcji lekarskiej Befund.
-todos:
-  - id: 38a2676b-b436-43a2-a731-8449ef93e2ac
-    content: ""
-    status: pending
-  - id: 7368b6ee-eabb-459c-9c4d-67a59025290d
-    content: ""
-    status: pending
-  - id: 5d91f239-241d-4e44-bd7b-541ce91b6036
-    content: ""
-    status: pending
-  - id: 6be729d4-2cb1-4f31-85cb-edc08649b311
-    content: ""
-    status: pending
-  - id: cd8d7bb5-743b-47c4-a972-68f5d60177cb
-    content: ""
-    status: pending
-  - id: 57a23ee8-ac79-475c-9869-9eb0b28adcac
-    content: ""
-    status: pending
-  - id: f4651026-5a6c-49f7-8842-f63bf0639460
-    content: ""
-    status: pending
-  - id: 655484e4-c4fd-4c89-a8da-6b2e488e51d4
-    content: ""
-    status: pending
-  - id: ab33086e-814f-4de0-aedb-48819835bb08
-    content: ""
-    status: pending
-  - id: 9ea7b207-9295-4cf6-aa21-038bc6fd45b0
-    content: ""
-    status: pending
+todos: []
 isProject: true
 ---
 
@@ -45,20 +15,22 @@ isProject: true
   - ankietę medyczną (anamnesis),
   - podpis pacjenta.
 3. Generacja ma być **asynchroniczna** w obecnym wzorcu outbox.
-4. Start procesu ma następować **automatycznie po kliknięciu "zapisz" przez pacjenta**.
+4. Start procesu następuje **wyłącznie**, gdy `PatientIntakeForm.status == SUBMITTED`.
 5. Łańcuch procesu intake-PDF:
   - `GENERATE_PDF -> HIDRIVE_UPLOAD`
   - **bez SMS**.
 6. Dokument intake-PDF jest **bez części lekarskiej Befund**.
 7. Język intake-PDF ma być zgodny z językiem, w którym pacjent wypełniał formularz (`form_locale`).
-8. Dla intake-PDF **nie budujemy opcji podglądu**.
-9. Befund-PDF i intake-PDF to **osobne procesy biznesowe i techniczne**.
+8. Język generowania PDF ma być utrwalony na poziomie `PatientIntakeForm` (niemutowalny po `SUBMITTED`).
+9. Dla intake-PDF **nie budujemy opcji podglądu**.
+10. Befund-PDF i intake-PDF to **osobne procesy biznesowe i techniczne**.
+11. Konsumentem dokumentu są rejestracja i administratorzy (dedykowany moduł listy/pobierania dokumentów intake).
 
 ---
 
 ## 2. Cel funkcjonalny
 
-Po zakończeniu zapisu formularza pacjenta system ma automatycznie wygenerować i zarchiwizować w HiDrive dokument intake-PDF zawierający komplet danych pacjenta z procesu tabletowego:
+Po przejściu formularza pacjenta do stanu `SUBMITTED` system automatycznie generuje i archiwizuje w HiDrive dokument intake-PDF zawierający komplet danych pacjenta z procesu tabletowego:
 
 - zgody,
 - odpowiedzi ankietowe,
@@ -101,24 +73,27 @@ Dokument ma być gotowy niezależnie od późniejszego procesu lekarza i publika
 
 ### 4.2. Outbox / eventy
 
-Rekomendacja:
+Decyzja:
 
-- dodać dedykowane typy eventów:
+- wykorzystujemy **istniejący mechanizm** `OutboxEvent`,
+- dodajemy dedykowane typy eventów:
   - `GENERATE_INTAKE_PDF`,
   - `HIDRIVE_UPLOAD_INTAKE_PDF`.
+- bez zmian w architekturze outbox poza nowymi typami i handlerami.
 
-Powód: jednoznaczność operacyjna i brak mieszania semantyki z procesem Befund.
+### 4.3. Trigger procesu (jednoznaczny)
 
-### 4.3. Trigger procesu
-
-- Trigger enqueue po akcji pacjenta "zapisz" (w praktyce po zapisie końcowym/submit formularza, gdy dostępne są zgody + anamnesis + podpis).
-- W tym samym commit:
+- Trigger enqueue następuje tylko przy zmianie `PatientIntakeForm` na `SUBMITTED`.
+- Brak triggera na częściowy zapis roboczy.
+- W tym samym commit transakcyjnym:
   - utrwalenie danych formularza,
+  - utrwalenie `intake_pdf_locale` na `PatientIntakeForm`,
   - utworzenie wpisu outbox `GENERATE_INTAKE_PDF`.
 
-### 4.4. Język dokumentu
+### 4.4. Język dokumentu (niemutowalny)
 
-- Źródło prawdy: `patient_form_session.form_locale` (lub utrwalony odpowiednik na intake form, jeśli już istnieje).
+- Źródło prawdy: pole na `PatientIntakeForm` (np. `intake_pdf_locale`), ustawiane przy `SUBMITTED`.
+- Po `SUBMITTED` pole jest niemutowalne (walidacja model/service + testy).
 - Renderer PDF ma używać locale pacjenta, nie `publish_locale` lekarza.
 - Obsługa `de/en/pl`.
 
@@ -142,12 +117,21 @@ Minimalny układ:
 
 ### 4.6. Przechowywanie i statusy
 
-- Osobne pola statusowe dla intake-PDF (rekomendowane) albo odseparowany rekord procesu.
+- Brak nowego agregatu procesu; używamy istniejących rekordów i statusów outbox.
+- Metadane pliku intake-PDF zapisujemy w bycie intake (lub dedykowanej relacji 1:1 do intake), bez użycia `medical_document_version`.
 - Rejestrować:
   - status generacji,
   - ścieżkę lokalną,
   - checksum,
   - status uploadu do HiDrive.
+
+### 4.7. Konsumpcja dokumentu bez SMS/preview
+
+- Rejestracja i administratorzy dostają moduł listy dokumentów intake:
+  - filtrowanie po dacie, pacjencie, statusie przetwarzania,
+  - podgląd metadanych i pobranie pliku z HiDrive,
+  - obsługa przypadków błędnych (`FAILED`, `DEAD_LETTER`) z akcją retry.
+- Moduł stanowi operacyjny punkt weryfikacji jakości dokumentu i obsługi reklamacji.
 
 ---
 
@@ -162,7 +146,20 @@ Minimalny układ:
   - walidacja istnienia pliku,
   - walidacja integralności przez `signature_sha256`.
 4. Idempotencja:
-  - ponowny zapis/submit nie tworzy nieograniczonej liczby identycznych eventów.
+  - ponowny submit nie tworzy nieograniczonej liczby identycznych eventów.
+5. Rozszerzenie bezpieczeństwa podpisu (rekomendowane):
+  - dodać `signed_at`, `signed_by_role=TABLET`, `tablet_device_id` i `session_id` do metadanych podpisu,
+  - zapisywać hash kanoniczny materiału dowodowego (podpis + kluczowe pola formularza + locale + timestamp),
+  - logować zdarzenie audytowe podpisu i submitu (kto/system, kiedy, z jakiej sesji/urządzenia),
+  - opcjonalnie dodać serwerowy znacznik czasu (TSA) jako etap 2, jeśli wymagania prawne będą rosły.
+
+### 5.1 Snapshot danych (niemutowalność treści)
+
+- Przy `SUBMITTED` zapisujemy niemutowalny snapshot:
+  - treści zgód zaakceptowanych przez pacjenta,
+  - etykiety pytań/odpowiedzi ankiety w wybranym locale,
+  - mapowanie kod -> label użyte do renderu intake-PDF.
+- PDF jest renderowany z tego snapshotu, nie z żywych słowników runtime.
 
 ---
 
@@ -170,9 +167,10 @@ Minimalny układ:
 
 ### Etap A: kontrakt i model procesu
 
-- Doprecyzować miejsce przechowywania statusów intake-PDF.
+- Dodać pola `intake_pdf_locale` i (jeśli przyjęte) `intake_snapshot` do `PatientIntakeForm`.
+- Doprecyzować miejsce przechowywania statusów/metadanych intake-PDF.
 - Dodać nowe typy eventów outbox i mapping workerów.
-- Ustalić regułę idempotencji dla triggera po zapisie pacjenta.
+- Ustalić regułę idempotencji dla triggera po `SUBMITTED`.
 
 ### Etap B: generacja intake-PDF
 
@@ -185,13 +183,16 @@ Minimalny układ:
 - Worker `GENERATE_INTAKE_PDF`.
 - Worker `HIDRIVE_UPLOAD_INTAKE_PDF`.
 - Retry, backoff, status `FAILED`/`DEAD_LETTER` i audyt.
+- Brak workerów SMS dla intake-PDF.
 
 ### Etap D: testy
 
 - Unit: mapowanie zgód/ankiety/podpisu do kontekstu PDF.
-- Unit: wybór języka z `form_locale`.
-- Integracja: submit pacjenta -> outbox -> PDF -> upload HiDrive.
+- Unit: wybór języka z `intake_pdf_locale`.
+- Integracja: `SUBMITTED` -> outbox -> PDF -> upload HiDrive.
 - Integracja: brak podpisu / uszkodzony plik podpisu -> failure path.
+- Integracja: wielokrotny submit nie tworzy wielu eventów (`idempotency`).
+- Integracja: snapshot treści nie zmienia się po późniejszej zmianie słowników/treści zgód.
 - E2E: pełen przepływ tabletowy bez udziału lekarza.
 
 ### Etap E: rollout
@@ -209,6 +210,33 @@ Minimalny układ:
 - Skuteczność uploadu intake-PDF do HiDrive.
 - Wiek najstarszego oczekującego intake event.
 
+### 7.1. SLO/alerty/ownership (proponowane)
+
+- SLO:
+  - 99% intake-PDF wygenerowanych i wysłanych do HiDrive w <= 5 minut od `SUBMITTED`,
+  - `FAILED + DEAD_LETTER` < 1% dziennie.
+- Alerty:
+  - krytyczny: `oldest_pending_age_seconds > 600` przez 10 minut,
+  - krytyczny: `dead_letter_count > 0` dla `GENERATE_INTAKE_PDF` lub `HIDRIVE_UPLOAD_INTAKE_PDF`,
+  - ostrzegawczy: skuteczność uploadu < 98% w oknie 1h.
+- Ownership:
+  - owner operacyjny: zespół backend/on-call,
+  - owner biznesowy: recepcja + administracja (akceptacja jakości dokumentu w module operacyjnym),
+  - runbook: procedura retry, ręcznej weryfikacji i eskalacji.
+
+### 7.2. Wydajność i pojemność (proponowane)
+
+- Capacity planning:
+  - oszacować max submitów/h i średni rozmiar PDF,
+  - wyliczyć CPU-time na render i I/O na upload.
+- Ochrona systemu:
+  - limit równoległych renderów PDF (worker concurrency),
+  - kolejka priorytetowa lub osobna pula workerów dla intake-PDF,
+  - backpressure przy skokach ruchu (kontrolowane opóźnienie zamiast lawiny błędów).
+- Budżet operacyjny:
+  - dashboard kosztów storage/transfer dla intake-PDF,
+  - polityka retencji zgodna z wymaganiami prawnymi.
+
 ---
 
 ## 8. Kryteria akceptacji
@@ -220,4 +248,34 @@ Minimalny układ:
 5. Proces kończy się na uploadzie do HiDrive (bez SMS).
 6. Brak podglądu intake-PDF.
 7. Proces intake jest logicznie i operacyjnie oddzielony od procesu Befund.
+
+---
+
+## 9. Pytania do domknięcia przed implementacją (rozwinięte)
+
+1. **Czy trigger to wyłącznie submit, a nie każde „zapisz”?**
+  - Decyzja: wyłącznie przejście `PatientIntakeForm -> SUBMITTED`.
+  - Konsekwencja: endpointy zapisu roboczego nie enqueue'ują outbox.
+  - Test: brak eventu dla draft save, obecność eventu dla submit.
+2. **Gdzie zapisujemy niemutowalny snapshot treści?**
+  - Decyzja: snapshot w `PatientIntakeForm` (np. `intake_snapshot_json` + `intake_pdf_locale`).
+  - Zakres snapshotu: zgody, pytania, odpowiedzi, mapowanie kod->label, metadane podpisu.
+  - Test: zmiana słowników po submit nie zmienia kolejnego renderu historycznego dokumentu.
+3. **Jaki jest idempotency key i constrainty DB?**
+  - Decyzja: klucz idempotencji oparty o `intake_form_id` + `event_type`.
+  - Egzekucja: unikalność outbox dla pary (`aggregate_id=intake_form_id`, `event_type=GENERATE_INTAKE_PDF`) lub dedykowany unique index zgodny z aktualnym modelem.
+  - Test: wielokrotny submit nie tworzy duplikatów eventu.
+4. **Jaki model wersjonowania intake-PDF przy korektach po submit?**
+  - Decyzja bazowa: po submit formularz jest zamknięty (brak edycji), brak nowych wersji.
+  - Wariant awaryjny: jeśli biznes dopuści korektę, tworzymy nową wersję intake-PDF z pełnym śladem audytu i wskazaniem wersji aktywnej.
+  - Do domknięcia z biznesem przed implementacją endpointów korekcyjnych.
+5. **Kto konsumuje dokument i jak obsługujemy reklamacje?**
+  - Decyzja: rejestracja i administratorzy przez dedykowany moduł.
+  - Proces: wyszukanie dokumentu, pobranie, sprawdzenie metadanych (locale, podpis, timestamp), retry przy błędach technicznych.
+  - Runbook: klasyfikacja reklamacji (błędny język, brak podpisu, brak uploadu) + ścieżka eskalacji.
+6. **Jakie SLO/alerty i kto jest ownerem on-call?**
+  - Decyzja: SLO/alerty z sekcji 7.1.
+  - Owner techniczny: backend on-call.
+  - Owner operacyjny: rejestracja/admin monitorujący moduł dokumentów intake.
+  - Warunek go-live: dashboard + alerting + runbook aktywne.
 
