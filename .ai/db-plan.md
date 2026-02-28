@@ -138,7 +138,7 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
   - `UNIQUE (id, queue_entry_id)`
-  - `CHECK (form_locale ~ '^(de|en)(-[A-Z]{2})?$')`
+  - `CHECK (form_locale ~ '^(de|en|pl)(-[A-Z]{2})?$')`
   - `CHECK (expires_at > created_at)`
   - `CHECK (consumed_at IS NULL OR consumed_at <= expires_at)`
 - Uwaga: Pole `token_hash` zostało usunięte (migracja). Sesja bez tokenu; autoryzacja tabletu: rola TABLET + zakres kolejki/intake.
@@ -241,6 +241,7 @@
 - `version_no` `integer` NOT NULL
 - `version_status` `doc_version_status_enum` NOT NULL DEFAULT `'DRAFT'`
 - `publish_request_id` `uuid` NULL
+- `publish_locale` `varchar(10)` NULL
 - `pdf_generation_status` `pdf_status_enum` NOT NULL DEFAULT `'PENDING'`
 - `medical_payload_schema_version` `smallint` NOT NULL DEFAULT `1`
 - `medical_payload` `jsonb` NOT NULL DEFAULT '{}'::jsonb
@@ -264,6 +265,8 @@
   - `CHECK (version_no > 0)`
   - `CHECK (jsonb_typeof(medical_payload) = 'object')`
   - `CHECK ((version_status <> 'PUBLISHED') OR (publish_request_id IS NOT NULL))`
+  - `CHECK (publish_locale IS NULL OR publish_locale ~ '^(de|en|pl)(-[A-Z]{2})?$')`
+  - `CHECK ((version_status <> 'PUBLISHED') OR (publish_locale IS NOT NULL))`
   - `CHECK ((version_status <> 'PUBLISHED') OR (published_at IS NOT NULL))`
   - `CHECK ((pdf_generation_status <> 'COMPLETED') OR (pdf_local_path IS NOT NULL))`
   - `CHECK ((hidrive_sent = false) OR (pdf_generation_status = 'COMPLETED' AND pdf_local_path IS NOT NULL))`
@@ -282,9 +285,49 @@
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
-  - `CHECK (template_locale ~ '^(de|en)(-[A-Z]{2})?$')`
+  - `CHECK (template_locale ~ '^(de|en|pl)(-[A-Z]{2})?$')`
   - `CHECK ((is_global = true AND owner_user_id IS NULL) OR (is_global = false AND owner_user_id IS NOT NULL))`
   - `UNIQUE (owner_user_id, name, template_locale)`
+
+#### `translation_key`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `key` `varchar(255)` NOT NULL UNIQUE
+- `category` `varchar(30)` NOT NULL
+- `description` `text` NULL
+- `is_html_allowed` `boolean` NOT NULL DEFAULT `false`
+- `allowed_placeholders` `jsonb` NOT NULL DEFAULT `'[]'::jsonb`
+- `status` `varchar(20)` NOT NULL DEFAULT `'ACTIVE'`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `CHECK (category IN ('doctor','reception','waiting_room','administration','other'))`
+  - `CHECK (status IN ('ACTIVE','DEPRECATED'))`
+  - `CHECK (jsonb_typeof(allowed_placeholders) = 'array')`
+
+#### `translation_value`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `translation_key_id` `uuid` NOT NULL FK -> `translation_key(id)` ON DELETE CASCADE
+- `language_code` `varchar(8)` NOT NULL
+- `value` `text` NOT NULL
+- `updated_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (translation_key_id, language_code)`
+  - `CHECK (language_code IN ('de','en','pl'))`
+
+#### `translation_cache_version`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `category` `varchar(30)` NOT NULL
+- `language_code` `varchar(8)` NOT NULL
+- `version` `bigint` NOT NULL DEFAULT `1`
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (category, language_code)`
+  - `CHECK (category IN ('doctor','reception','waiting_room','administration','other'))`
+  - `CHECK (language_code IN ('de','en','pl'))`
+  - `CHECK (version > 0)`
 
 #### `outbox_event`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -364,9 +407,12 @@
 - `patient_intake_form` przechowuje `anamnesis_payload` (odpowiedzi pacjenta kodami pytań/opcji, niezależnie od języka UI).
 - `queue_entry` 1:1 `medical_document` (jeden dokument medyczny dla jednego przebiegu wizyty).
 - `medical_document` 1:N `medical_document_version` (wersjonowanie szkic/publikacja/republikacja).
+- `medical_document_version.publish_locale` przechowuje niezmienny język publikacji PDF per wersja.
 - `patient_intake_form` 1:1 `medical_document` (jeden dokument medyczny na jeden formularz intake).
 - `medical_document_version` 1:N `outbox_event` (relacja egzekwowana FK `outbox_event.medical_document_version_id`; np. `HIDRIVE_UPLOAD`, potem `SMS_SEND`).
 - `staff_user` 1:N `doctor_text_template` (szablony prywatne lekarza); szablony globalne mają `owner_user_id=NULL`.
+- `translation_key` 1:N `translation_value`.
+- `translation_cache_version` przechowuje licznik wersji cache tłumaczeń dla pary `category+language_code`.
 - `patient_import_batch` 1:N `patient_import_error`.
 - `patient` 1:N `patient_contact_history`.
 - Relacje ról:
@@ -401,6 +447,9 @@
 - `medical_document_version(hidrive_sent, sms_sent, published_at)` (retencja + monitoring)
 - `doctor_text_template(owner_user_id, template_locale, is_active)`
 - `doctor_text_template(is_global, template_locale, is_active)`
+- `translation_key(category, status, key)`
+- `translation_value(language_code, translation_key_id)`
+- `translation_cache_version(category, language_code)` UNIQUE
 - `outbox_event(status, available_at)`
 - `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(medical_document_version_id, created_at DESC)`
@@ -463,7 +512,11 @@
 - Publikacja wersji dokumentu:
   - wykonywana w serwisie `publish_document_version()` (`SELECT ... FOR UPDATE` na `medical_document`),
   - ten sam commit transakcyjny aktualizuje `medical_document` i `medical_document_version`,
+  - `publish_locale` jest wymagane przy publikacji i zapisywane niemutowalnie na wersji,
   - `publish_request_id` (idempotency key) gwarantuje, że wielokrotne kliknięcie "Zatwierdź i wyślij" nie tworzy wielu wersji i wielu łańcuchów outbox.
+- Tłumaczenia runtime:
+  - źródłem prawdy są wyłącznie tabele `translation_key`/`translation_value`,
+  - invalidacja cache między instancjami oparta o `translation_cache_version` (klucze wersjonowane, Postgres-only).
 - Enqueue outbox po publikacji:
   - wpis `GENERATE_PDF` tworzony jawnie przez serwis publikacji w tej samej transakcji,
   - wpis `HIDRIVE_UPLOAD` tworzony przez zadanie Django Tasks po sukcesie generowania PDF,
@@ -501,7 +554,7 @@
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
 - Runtime backendu: Django 6 + natywne `django.tasks`; w projekcie obowiązuje jedno rozwiązanie asynchroniczne (Django Tasks + Outbox), a tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu.
-- **Języki portalu:** interfejs jest dostępny w języku angielskim i niemieckim. Pole `staff_user.preferred_locale` (np. `en-GB`, `de-DE`) określa preferowany język panelu personelu; dla tabletu pacjenta język może być przekazany w linku lub wybrany w aplikacji.
+- **Języki portalu:** interfejs jest dostępny w języku niemieckim, angielskim i polskim. Pole `staff_user.preferred_locale` (np. `de-DE`, `en-GB`, `pl-PL`) określa preferowany język panelu personelu; dla tabletu pacjenta język wybierany jest w kontekście sesji/formularza.
 
 ### 5.1. Kontrakt `anamnesis_payload` v1 (Anamnesebogen Q1–Q11)
 

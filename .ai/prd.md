@@ -9,7 +9,7 @@ Projekt realizowany jest w trzech fazach:
 - Faza 2: Panel lekarza do uzupełniania danych medycznych, zatwierdzanie dokumentów oraz automatyzacja wysyłki (zapis do archiwum i powiadomienie SMS).
 - Faza 3: Usprawnienie procesu codziennego importu plików eksportowanych z Doctolib oraz integracja z API HiDrive (docelowe API archiwizacji).
 
-Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językami interfejsu portalu są angielski i niemiecki (użytkownik może wybrać preferowany język).
+Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językami interfejsu portalu są niemiecki, angielski i polski (użytkownik może wybrać preferowany język).
 
 ### 1.1. Aktualna baza technologiczna backendu
 - Backend jest utrzymywany na **Django 6.0.x**.
@@ -44,7 +44,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Formularz zawiera sekcje: Dane osobowe (tylko do odczytu/weryfikacji), Ankieta anamnestyczna (Anamnesebogen), Zgody (checkboxy), Schemat ciała (interaktywne zaznaczanie), Podpis (canvas).
 - Pacjent może wypełniać ustrukturyzowaną ankietę anamnestyczną (pytania jednokrotnego wyboru i wielokrotnego wyboru, bez swobodnego opisu medycznego).
 - Dla pytania o lokalizację nowych zmian system wspiera warianty: wybór predefiniowanych obszarów ciała, oznaczenie na schemacie ciała oraz opcjonalne pole "Inna lokalizacja".
-- Interfejs dostępny w języku angielskim lub niemieckim (wybór zgodnie z preferencją użytkownika lub ustawieniem sesji/urządzenia).
+- Interfejs dostępny w języku niemieckim, angielskim lub polskim (wybór zgodnie z preferencją użytkownika lub ustawieniem sesji/urządzenia).
 
 ### 3.3. Interfejs Lekarza i Personelu
 - Podgląd uzupełnionych formularzy pacjentów.
@@ -54,6 +54,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - **Flow lekarza (Wideodermatoskop):** Numery zmian i zdjęcia pochodzą z Wideodermatoskopu. Lekarz wpisuje numery zmian z urządzenia (np. 2, 3, 12, 13, 22, 25, 56). Dla każdej **grupy** numerów lekarz podaje listę numerów (`lesion_numbers`), wypełnia **jeden wspólny opis** (cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości) oraz korzysta z tekstu generowanego i ewentualnie go edytuje (`generated_text` / `edited_text`). Jedna grupa = jedna lista numerów + jeden blok opisu. **Schemat ciała** nie jest używany w formularzu Befund (służył do zaznaczania przez pacjenta obszarów do badania). Do PDF/Befund trafia tekst końcowy (`edited_text` lub `generated_text`), w tym z numerami z danej grupy (np. „Läsion Nr. 2, 3 …”).
 - System generuje tekst automatycznie na dwóch poziomach: (1) tekst per grupa zmian, (2) podsumowanie zbiorcze; oba teksty są edytowalne przed publikacją.
 - Możliwość zapisu dokumentu jako Szkic lub Opublikowany.
+- Przy zleceniu publikacji lekarz przekazuje język publikacji (`publish_locale`), który jest trwale zapisany per wersja dokumentu i używany do generacji PDF.
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
 ### 3.4. Przetwarzanie i Archiwizacja (Backend)
@@ -64,6 +65,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Integracja z API HiDrive (Faza 3).
 - Integracja z SMSApi do powiadamiania pacjentów o dostępności dokumentu.
 - Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
+- Tłumaczenia UI/PDF są utrzymywane wyłącznie w bazie danych i edytowalne przez administrację w Django Admin (bez fallbacków runtime w kodzie).
 
 ### 3.5. Observability i gotowość operacyjna (wymaganie obowiązkowe)
 - System musi emitować metryki techniczne i operacyjne (nie tylko logi), minimum:
@@ -91,10 +93,10 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Mock i późniejsza integracja z HiDrive.
 - Powiadomienia SMS (link do pobrania).
 - Logowanie zdarzeń (OpenTelemetry).
-- Języki interfejsu: angielski i niemiecki.
+- Języki interfejsu: niemiecki, angielski i polski.
+- Edycja tłumaczeń DE/EN/PL przez administrację (Django Admin), z walidacją placeholderów i polityką anty-XSS.
 
 ### Poza zakresem (Out-of-Scope)
-- Zaawansowany system wersjonowania treści zgód w panelu administracyjnym (zmiany wymagają ingerencji deweloperskiej/konfiguracyjnej).
 - Swobodny opis medyczny (narracyjny) tworzony przez pacjenta bez struktury pytań.
 - Skomplikowane raportowanie biznesowe (BI).
 - Bezpośrednia integracja API z Doctolib.
@@ -149,7 +151,7 @@ Opis: Jako pacjent, chcę zapoznać się z treścią zgód i zaakceptować je za
 Kryteria akceptacji:
 - Lista zgód jest wyświetlana czytelnie na tablecie.
 - Wymagane zgody są oznaczone i blokują przejście dalej, jeśli nie są zaznaczone.
-- Interfejs jest dostępny w języku angielskim lub niemieckim.
+- Interfejs jest dostępny w języku niemieckim, angielskim lub polskim.
 
 ID: US-006
 Tytuł: Oznaczenie schematu ciała
@@ -201,10 +203,10 @@ Kryteria akceptacji:
 - System pozwala zdecydować, czy ponownie wysłać SMS do pacjenta.
 
 ID: US-019
-Tytuł: Własne szablony tekstu lekarza (DE/EN)
+Tytuł: Własne szablony tekstu lekarza (DE/EN/PL)
 Opis: Jako lekarz, chcę tworzyć i używać własnych szablonów opisu, aby zachować swój styl dokumentacji.
 Kryteria akceptacji:
-- Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (co najmniej dla języka niemieckiego, angielskiego, polskiego).
+- Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (dla języka niemieckiego, angielskiego lub polskiego).
 - System zapisuje zarówno tekst wygenerowany automatycznie, jak i tekst końcowy po edycji lekarza.
 - Zmiana szablonu po publikacji nie modyfikuje historycznych wersji dokumentu.
 - Szablony globalne (kliniki) i prywatne (per lekarz) są rozróżnione w uprawnieniach.

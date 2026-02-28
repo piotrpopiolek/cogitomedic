@@ -7,7 +7,7 @@
 - Backend runtime baseline is **Django 6.0.x**.
 - Background tasks are defined with **Django Tasks** (`django.tasks`) and orchestrated with Transactional Outbox.
 - The project uses one background-processing solution: **Django Tasks + Transactional Outbox**.
-- **Portal languages:** The user interface (staff panel and patient tablet) is available in **English** and **German**. Staff users have a `preferred_locale` field (e.g. `en-GB`, `de-DE`); for the patient tablet the language may be provided via link parameter, Accept-Language header, or clinic default.
+- **Portal languages:** The user interface (staff panel and patient tablet) is available in **German**, **English**, and **Polish**. Staff users have a `preferred_locale` field (e.g. `de-DE`, `en-GB`, `pl-PL`); for the patient tablet the language is resolved from session/form context.
 - Transport is HTTPS only.
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
 - Authentication is session-based for staff web UI (Django auth cookie + CSRF). Tablet (poczekalnia) uses the same session auth with role **TABLET**; there are **no one-time tokens or patient links**.
@@ -803,6 +803,7 @@
     ```json
     {
       "publish_request_id": "uuid-or-client-key",
+      "publish_locale": "pl-PL",
       "resend_sms": true
     }
     ```
@@ -814,6 +815,7 @@
       "medical_document_id": "uuid",
       "version_no": 3,
       "version_status": "PUBLISHED",
+      "publish_locale": "pl-PL",
       "outbox": [
         {"event_type": "GENERATE_PDF", "status": "PENDING"}
       ]
@@ -1111,6 +1113,7 @@
   - `version_no > 0`.
   - `medical_payload` must be JSON object.
   - `PUBLISHED` requires `publish_request_id` and `published_at`.
+  - `publish_locale` is required for `PUBLISHED` and must match `^(de|en|pl)(-[A-Z]{2})?$`.
   - `pdf_generation_status='COMPLETED'` requires `pdf_local_path`.
   - `hidrive_sent=true` requires completed PDF, `pdf_local_path`, and `hidrive_sent_at`.
   - `sms_sent=true` requires `sms_sent_at`.
@@ -1154,6 +1157,7 @@
   - Draft save updates/creates latest draft version.
   - `generate-text` builds base Befund text blocks (`generated_text`) from selected features/assessments and optional doctor template.
   - Doctor persists both generated text and final edited text (`edited_text`) in `medical_payload`.
+  - Publish request must provide `publish_locale`; backend persists it on `medical_document_version` and uses it as the authoritative PDF language for outbox generation.
   - Publish uses row lock on `medical_document` and idempotency checks:
     - same `publish_request_id` returns success replay;
     - publication already in progress returns idempotent success (no duplicate outbox chain).

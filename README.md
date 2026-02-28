@@ -26,12 +26,14 @@
 
 **Main capabilities:**
 
-- **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, generate one-time links for tablet forms
+- **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
 
-The user interface is available in **English** and **German**.
+The user interface and translation layer support **German**, **English**, and **Polish**.
+
+Translations are managed in Django Admin and loaded from the database as the single runtime source of truth (DB-only, no code fallback at runtime).
 
 ---
 
@@ -54,7 +56,7 @@ The user interface is available in **English** and **German**.
 | **Monitoring** | Sentry |
 | **Config** | python-dotenv |
 | **Frontend** | Django templates, HTMX, Alpine.js, SignaturePad.js, Tailwind CSS (per implementation plan) |
-| **Other** | Pillow, pycryptodome, requests |
+| **Other** | Pillow, pycryptodome, requests, bleach |
 
 ---
 
@@ -234,12 +236,15 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py test` | Run the test suite (Django `TestCase`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |
+| `python manage.py load_default_translations` | Seed default translation keys/values to DB |
+| `python manage.py check_translations_completeness` | Validate active translations completeness for `de/en/pl` |
 | `python manage.py enqueue_tasks` | Enqueue background tasks once (outbox, retention, import) |
 | `python manage.py run_periodic_tasks --interval-seconds 300` | Run periodic enqueue loop (every 5 minutes) |
 
 Scheduled work is defined with Django 6 `@task` (`django.tasks`) and enqueued via `python manage.py enqueue_tasks` (one-shot) or `python manage.py run_periodic_tasks` (loop). In this project we use one background-work contract: **Django Tasks + Transactional Outbox**. The default backend in this repository is `ImmediateBackend` for deterministic local development.
 
 Publishing is designed to be idempotent: repeated "publish/send" actions for the same document do not create duplicate asynchronous chains.
+Publishing also persists immutable `publish_locale` per version, so generated PDF language is auditable and stable for that publication.
 
 ---
 
@@ -256,11 +261,10 @@ Publishing is designed to be idempotent: repeated "publish/send" actions for the
 - SMS notifications (link to download document)
 - Logging (e.g. OpenTelemetry as per PRD)
 - Operational dashboards: simplified reception/doctor view + advanced admin/maintenance view
-- UI languages: English and German
+- UI languages: German, English, Polish
 
 ### Out of scope
 
-- Advanced consent content versioning in an admin UI (changes require dev/config)
 - Patients filling the full medical questionnaire
 - Complex business reporting (BI)
 - Direct API integration with Doctolib
