@@ -588,6 +588,7 @@ class MedicalApiTests(TestCase):
                     "publish_request_id": str(uuid4()),
                     "published_by_user_id": str(self.doctor_user.id),
                     "resend_sms": True,
+                    "publish_locale": "de-DE",
                 }
             ),
             content_type="application/json",
@@ -616,12 +617,73 @@ class MedicalApiTests(TestCase):
                 {
                     "publish_request_id": str(uuid4()),
                     "published_by_user_id": str(self.doctor_user.id),
+                    "publish_locale": "de-DE",
                 }
             ),
             content_type="application/json",
         )
         self.assertEqual(publish_response.status_code, 400)
         self.assertIn("No draft version available", publish_response.json().get("error", ""))
+
+    def test_publish_same_request_id_with_different_locale_returns_400(self) -> None:
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        draft_response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "lesions": [],
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(draft_response.status_code, 200)
+
+        request_id = str(uuid4())
+        first_publish = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": request_id,
+                    "published_by_user_id": str(self.doctor_user.id),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(first_publish.status_code, 200)
+
+        second_publish = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": request_id,
+                    "published_by_user_id": str(self.doctor_user.id),
+                    "publish_locale": "en-GB",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(second_publish.status_code, 400)
+        self.assertIn("different publish_locale", second_publish.json().get("error", ""))
 
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
         missing_doc_id = uuid4()

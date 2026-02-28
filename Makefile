@@ -1,4 +1,4 @@
-.PHONY: up down logs ps build rebuild migrate superuser shell
+.PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci
 
 up:
 	docker compose up
@@ -28,3 +28,9 @@ superuser:
 
 shell:
 	docker compose run --rm web python manage.py shell
+
+check-translations:
+	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness"
+
+test-ci:
+	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && python manage.py test apps.core.tests apps.medical.api_tests apps.outbox.tests apps.operations.api_tests"
