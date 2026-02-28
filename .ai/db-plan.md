@@ -28,6 +28,14 @@
 
 ### 1.2. Pozostałe tabele wymagane przez PRD
 
+#### `staff_user_consulting_room`
+- `id` `uuid` PK DEFAULT `gen_random_uuid()`
+- `staff_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE CASCADE
+- `consulting_room_id` `uuid` NOT NULL FK -> `consulting_room(id)` ON DELETE CASCADE
+- `created_at` `timestamptz` NOT NULL DEFAULT `now()`
+- Ograniczenia:
+  - `UNIQUE (staff_user_id, consulting_room_id)`
+
 #### `patient`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `first_name` `varchar(100)` NOT NULL
@@ -394,6 +402,7 @@
 
 ## 2. Relacje między tabelami
 
+- `staff_user` N:M `consulting_room` przez `staff_user_consulting_room` (przypisanie lekarza do wielu gabinetów; zarządza tym ADMIN).
 - `staff_user` 1:N `daily_queue` (użytkownik tworzy wiele list dziennych).
 - `clinic_site` 1:N `consulting_room` (lokalizacja ma wiele gabinetów).
 - `consulting_room` 1:N `daily_queue` (gabinet ma wiele list dziennych w czasie).

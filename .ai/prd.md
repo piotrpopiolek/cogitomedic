@@ -47,6 +47,9 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Interfejs dostępny w języku niemieckim, angielskim lub polskim (wybór zgodnie z preferencją użytkownika lub ustawieniem sesji/urządzenia).
 
 ### 3.3. Interfejs Lekarza i Personelu
+- Administrator zarządza przypisaniami lekarzy do gabinetów (`consulting_room`). Lekarz może pracować w wielu gabinetach.
+- Lekarz widzi tylko pacjentów ze swoich gabinetów, do których pacjenci zapisali się na wizytę, oraz tylko te kolejki i dokumenty, które należą do jego przypisanych gabinetów. W przypadku braku przypisanych gabinetów lekarz widzi puste listy wyników (nie błędy).
+- Lekarz ma dostęp do zdarzeń audytowych (audit events) powiązanych z dokumentami w swoich gabinetach.
 - Podgląd uzupełnionych formularzy pacjentów.
 - Formularz medyczny dla lekarza (sztywna struktura pól w kodzie: checkboxy, listy rozwijane, pola tekstowe).
 - **Opis lekarski (Befund) – zasada „baza, nie klatka”:** To, co system przygotowuje (np. teksty z checkboxów), ma być **bazą wyjściową**, a nie jedynym, sztywnym tekstem. Lekarz musi móc dopasować język i styl opisu do siebie. System działa tak, że lekarz wybiera opcje (np. checkboxy), a system generuje z tego gotowy tekst – **który lekarz może i powinien móc edytować przed zatwierdzeniem**. Lekarz ma swobodę dopisywania własnych tekstów (np. własne szablony, wolne pole). Nie zamykamy lekarzy w jednym, sztywnym tekście.

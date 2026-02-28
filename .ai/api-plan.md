@@ -152,6 +152,24 @@
   - Success: `200 OK`, `204 NO_CONTENT` (optional for delete).
   - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
 
+- **GET** `/staff-users/{id}/consulting-rooms`
+  - Description: List assigned consulting rooms for a staff user (e.g. for a DOCTOR).
+  - Response JSON: list of consulting room objects.
+  - Success: `200 OK`.
+  - Errors: `403 FORBIDDEN`, `404 NOT_FOUND`.
+
+- **POST** `/staff-users/{id}/consulting-rooms`
+  - Description: Update assigned consulting rooms for a staff user. Replaces current assignments (managed by ADMIN).
+  - Request JSON:
+    ```json
+    {
+      "consulting_room_ids": ["uuid1", "uuid2"]
+    }
+    ```
+  - Response JSON: updated list of consulting room objects.
+  - Success: `200 OK`.
+  - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `404 NOT_FOUND`.
+
 ### 2.3 Patients
 
 - **GET** `/patients`
@@ -849,11 +867,18 @@
   - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
 
 - **GET** `/medical-documents/{id}/versions`
-  - Description: Version history.
+  - Description: Version history. Doctor can view only if document is in their assigned consulting rooms.
   - Query params: pagination/sort by `-version_no`.
   - Response JSON: version list.
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
+
+- **GET** `/medical-documents/{id}/audit-trail`
+  - Description: Audit events related to the given document. Doctor can view only if document is in their assigned consulting rooms.
+  - Query params: pagination.
+  - Response JSON: list of audit events.
+  - Success: `200 OK`.
+  - Errors: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 - **GET** `/medical-document-versions/{id}`
   - Description: Retrieve specific version details and processing state.
