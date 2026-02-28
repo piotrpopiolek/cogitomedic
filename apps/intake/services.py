@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import uuid
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -13,6 +17,10 @@ from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
     ConsentDefinition,
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxEventType,
+    IntakeOutboxStatus,
     IntakeStatus,
     PatientIntakeConsent,
     PatientIntakeForm,
@@ -39,6 +47,157 @@ class ConsentNotActiveError(DomainError):
 
 class InvalidSignatureError(DomainError):
     """Raised when signature payload is invalid or too large."""
+
+
+def _localized_text(*, value_de: str, value_en: str, value_pl: str, locale: str) -> str:
+    if locale.startswith("pl"):
+        return (value_pl or "").strip() or value_de
+    if locale.startswith("en"):
+        return (value_en or "").strip() or value_de
+    return value_de
+
+
+def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
+    if not intake_form.signature_file_path:
+        raise InvalidSignatureError("Signature path is missing.")
+    file_path = Path(intake_form.signature_file_path)
+    if not file_path.is_absolute():
+        file_path = Path(settings.MEDIA_ROOT) / file_path
+    if not file_path.exists() or not file_path.is_file():
+        raise InvalidSignatureError("Signature file does not exist.")
+    raw = file_path.read_bytes()
+    if not raw:
+        raise InvalidSignatureError("Signature file is empty.")
+    checksum = hashlib.sha256(raw).hexdigest()
+    if (intake_form.signature_sha256 or "") and intake_form.signature_sha256 != checksum:
+        raise InvalidSignatureError("Signature checksum mismatch.")
+    encoded = base64.b64encode(raw).decode("ascii")
+    suffix = file_path.suffix.lower()
+    mime = "image/jpeg" if suffix in {".jpg", ".jpeg"} else "image/png"
+    return f"data:{mime};base64,{encoded}"
+
+
+def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datetime) -> dict[str, Any]:
+    session = intake_form.session
+    queue_entry = intake_form.queue_entry
+    patient = queue_entry.patient
+    locale = (session.form_locale or "de-DE")[:10]
+
+    consents = []
+    consent_rows = (
+        PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id)
+        .select_related("consent_definition")
+        .order_by("consent_definition__display_order", "consent_definition__code")
+    )
+    for consent in consent_rows:
+        definition = consent.consent_definition
+        consents.append(
+            {
+                "consent_definition_id": str(definition.id),
+                "code": definition.code,
+                "version": definition.version,
+                "is_required": definition.is_required,
+                "accepted": consent.accepted,
+                "accepted_at": consent.accepted_at.isoformat() if consent.accepted_at else None,
+                "title_de": definition.title_de,
+                "title_locale": _localized_text(
+                    value_de=definition.title_de,
+                    value_en=definition.title_en,
+                    value_pl=definition.title_pl,
+                    locale=locale,
+                ),
+                "content_de": definition.content_de,
+                "content_locale": _localized_text(
+                    value_de=definition.content_de,
+                    value_en=definition.content_en,
+                    value_pl=definition.content_pl,
+                    locale=locale,
+                ),
+            }
+        )
+
+    answers_raw = intake_form.anamnesis_payload.get("answers") or []
+    question_codes = [
+        answer.get("question_code")
+        for answer in answers_raw
+        if isinstance(answer, dict) and isinstance(answer.get("question_code"), str)
+    ]
+    questions = AnamnesisQuestionDefinition.objects.filter(code__in=question_codes).prefetch_related("options")
+    question_by_code = {q.code: q for q in questions}
+    anamnesis_answers = []
+    for answer in answers_raw:
+        if not isinstance(answer, dict):
+            continue
+        question_code = answer.get("question_code")
+        if not question_code:
+            continue
+        question = question_by_code.get(question_code)
+        selected_option_codes = answer.get("selected_option_codes") or []
+        selected_options = []
+        if question:
+            options_by_code = {opt.code: opt for opt in question.options.filter(is_active=True)}
+            for option_code in selected_option_codes:
+                opt = options_by_code.get(option_code)
+                if not opt:
+                    continue
+                selected_options.append(
+                    {
+                        "option_code": opt.code,
+                        "label_de": opt.option_text_de,
+                        "label_locale": _localized_text(
+                            value_de=opt.option_text_de,
+                            value_en=opt.option_text_en,
+                            value_pl=opt.option_text_pl,
+                            locale=locale,
+                        ),
+                    }
+                )
+        anamnesis_answers.append(
+            {
+                "question_code": question_code,
+                "question_text_de": question.question_text_de if question else "",
+                "question_text_locale": (
+                    _localized_text(
+                        value_de=question.question_text_de,
+                        value_en=question.question_text_en,
+                        value_pl=question.question_text_pl,
+                        locale=locale,
+                    )
+                    if question
+                    else ""
+                ),
+                "selected_options": selected_options,
+                "free_text": answer.get("free_text"),
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "captured_at": now.isoformat(),
+        "base_locale": "de-DE",
+        "form_locale": locale,
+        "intake_form_id": str(intake_form.id),
+        "queue_entry_id": str(queue_entry.id),
+        "patient": {
+            "id": str(patient.id),
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "date_of_birth": patient.date_of_birth.isoformat(),
+            "phone": patient.phone,
+            "email": patient.email,
+        },
+        "consents": consents,
+        "anamnesis": {
+            "schema_version": intake_form.anamnesis_schema_version,
+            "answers": anamnesis_answers,
+        },
+        "signature": {
+            "data_url": _read_signature_data_url(intake_form),
+            "sha256": intake_form.signature_sha256 or "",
+            "file_path": intake_form.signature_file_path,
+        },
+        "submitted_at": now.isoformat(),
+    }
 
 
 def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
@@ -352,8 +511,7 @@ def submit_patient_intake_form(
     - updates queue entry state to PATIENT_COMPLETED.
     """
     intake_form = (
-        PatientIntakeForm.objects.select_for_update()
-        .select_related("session", "queue_entry")
+        PatientIntakeForm.objects.select_related("session", "queue_entry", "queue_entry__patient")
         .get(id=intake_form_id)
     )
     session = intake_form.session
@@ -401,9 +559,48 @@ def submit_patient_intake_form(
     if missing_question_codes:
         raise RequiredAnamnesisMissingError("Required active anamnesis questions are not answered.")
 
-    intake_form.form_status = IntakeStatus.SUBMITTED
-    intake_form.submitted_at = now
-    intake_form.save(update_fields=["form_status", "submitted_at", "updated_at"])
+    # Optimistic lock style transition: only one concurrent submit wins.
+    updated_rows = PatientIntakeForm.objects.filter(
+        id=intake_form.id,
+        form_status=IntakeStatus.IN_PROGRESS,
+    ).update(
+        form_status=IntakeStatus.SUBMITTED,
+        submitted_at=now,
+        updated_at=now,
+    )
+    if updated_rows == 0:
+        refreshed = PatientIntakeForm.objects.get(id=intake_form.id)
+        if refreshed.form_status == IntakeStatus.SUBMITTED:
+            return refreshed
+        raise StateTransitionError("Only IN_PROGRESS intake form can be submitted.")
+
+    snapshot_payload = _build_intake_snapshot_payload(intake_form=intake_form, now=now)
+    latest_version_no = (
+        IntakeDocumentVersion.objects.filter(intake_form_id=intake_form.id)
+        .order_by("-version_no")
+        .values_list("version_no", flat=True)
+        .first()
+        or 0
+    )
+    intake_version = IntakeDocumentVersion.objects.create(
+        intake_form_id=intake_form.id,
+        version_no=latest_version_no + 1,
+        form_locale=(session.form_locale or "de-DE")[:10],
+        snapshot_payload=snapshot_payload,
+    )
+    IntakeOutboxEvent.objects.get_or_create(
+        intake_document_version=intake_version,
+        event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+        defaults={
+            "aggregate_id": intake_version.id,
+            "payload_schema_version": 1,
+            "payload": {
+                "intake_form_id": str(intake_form.id),
+                "intake_document_version_id": str(intake_version.id),
+            },
+            "status": IntakeOutboxStatus.PENDING,
+        },
+    )
 
     session.consumed_at = now
     session.save(update_fields=["consumed_at"])
@@ -417,12 +614,13 @@ def submit_patient_intake_form(
         patient_id=queue_entry.patient_id,
         metadata={
             "intake_form_id": str(intake_form.id),
+            "intake_document_version_id": str(intake_version.id),
             "queue_entry_id": str(queue_entry.id),
             "session_id": str(session.id),
         },
     )
 
-    return intake_form
+    return PatientIntakeForm.objects.get(id=intake_form.id)
 
 
 @transaction.atomic

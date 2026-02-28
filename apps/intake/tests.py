@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
+from pathlib import Path
 
+from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
 
 from apps.intake.models import (
     AnamnesisQuestionDefinition,
     ConsentDefinition,
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxEventType,
+    IntakeOutboxStatus,
+    IntakePdfStatus,
     IntakeStatus,
     PatientIntakeConsent,
     PatientIntakeForm,
 )
+from apps.intake.outbox_services import process_intake_outbox_events
 from apps.intake.services import (
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
@@ -75,13 +84,18 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
         self.queue_entry.active_session = self.session
         self.queue_entry.save(update_fields=["active_session", "updated_at"])
+        signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
+        signature_dir.mkdir(parents=True, exist_ok=True)
+        signature_path = signature_dir / f"{self.queue_entry.id}.png"
+        signature_bytes = b"fake-png-signature"
+        signature_path.write_bytes(signature_bytes)
 
         self.intake_form = PatientIntakeForm.objects.create(
             queue_entry=self.queue_entry,
             session=self.session,
             form_status=IntakeStatus.IN_PROGRESS,
-            signature_file_path="/tmp/signature.png",
-            signature_sha256="b" * 64,
+            signature_file_path=str(signature_path),
+            signature_sha256=hashlib.sha256(signature_bytes).hexdigest(),
             anamnesis_payload={
                 "answers": [
                     {
@@ -170,6 +184,14 @@ class SubmitPatientIntakeFormTests(TestCase):
                 patient_id=self.queue_entry.patient_id,
             ).exists()
         )
+        intake_version = IntakeDocumentVersion.objects.get(intake_form=self.intake_form)
+        self.assertEqual(intake_version.pdf_generation_status, IntakePdfStatus.PENDING)
+        self.assertIn("signature", intake_version.snapshot_payload)
+        event = IntakeOutboxEvent.objects.get(
+            intake_document_version=intake_version,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+        )
+        self.assertEqual(event.status, IntakeOutboxStatus.PENDING)
 
     def test_submit_patient_intake_form_raises_when_required_consent_missing(self) -> None:
         with self.assertRaises(RequiredConsentMissingError):
@@ -196,3 +218,28 @@ class SubmitPatientIntakeFormTests(TestCase):
 
         with self.assertRaises(IntakeSessionValidationError):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+    def test_process_intake_outbox_events_generates_pdf_and_hidrive_upload(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submitted = submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        self.assertEqual(submitted.form_status, IntakeStatus.SUBMITTED)
+
+        first = process_intake_outbox_events()
+        second = process_intake_outbox_events()
+        self.assertEqual(first.processed, 1)
+        self.assertEqual(second.processed, 1)
+
+        version = IntakeDocumentVersion.objects.get(intake_form=self.intake_form)
+        version.refresh_from_db()
+        self.assertEqual(version.pdf_generation_status, IntakePdfStatus.COMPLETED)
+        self.assertTrue(version.hidrive_sent)
+        self.assertIsNotNone(version.pdf_local_path)
+        self.assertIn("/hidrive/patients/", version.hidrive_path or "")
+
+    def test_submit_is_idempotent_for_already_submitted_form(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        self.assertEqual(IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(), 1)

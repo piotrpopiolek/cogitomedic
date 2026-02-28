@@ -12,6 +12,26 @@ class IntakeStatus(models.TextChoices):
     SUBMITTED = "SUBMITTED", "Submitted"
 
 
+class IntakePdfStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    PROCESSING = "PROCESSING", "Processing"
+    COMPLETED = "COMPLETED", "Completed"
+    FAILED = "FAILED", "Failed"
+
+
+class IntakeOutboxEventType(models.TextChoices):
+    GENERATE_INTAKE_PDF = "GENERATE_INTAKE_PDF", "Generate intake PDF"
+    HIDRIVE_UPLOAD_INTAKE_PDF = "HIDRIVE_UPLOAD_INTAKE_PDF", "HiDrive upload intake PDF"
+
+
+class IntakeOutboxStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    PROCESSING = "PROCESSING", "Processing"
+    PROCESSED = "PROCESSED", "Processed"
+    FAILED = "FAILED", "Failed"
+    DEAD_LETTER = "DEAD_LETTER", "Dead letter"
+
+
 class ConsentDefinition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=60)
@@ -197,4 +217,134 @@ class PatientIntakeConsent(models.Model):
         ]
         indexes = [
             models.Index(fields=["intake_form", "accepted"]),
+        ]
+
+
+class IntakeDocumentVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    intake_form = models.ForeignKey(
+        PatientIntakeForm,
+        on_delete=models.CASCADE,
+        related_name="document_versions",
+    )
+    version_no = models.IntegerField()
+    form_locale = models.CharField(max_length=10)
+    snapshot_payload = models.JSONField(default=dict)
+    pdf_generation_status = models.CharField(
+        max_length=20,
+        choices=IntakePdfStatus.choices,
+        default=IntakePdfStatus.PENDING,
+    )
+    pdf_local_path = models.CharField(max_length=500, blank=True, null=True)
+    pdf_checksum_sha256 = models.CharField(max_length=64, blank=True, null=True)
+    hidrive_path = models.CharField(max_length=500, blank=True, null=True)
+    hidrive_sent = models.BooleanField(default=False)
+    hidrive_sent_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "intake_document_version"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["intake_form", "version_no"],
+                name="intake_document_version_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(version_no__gt=0),
+                name="intake_document_version_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(form_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
+                name="intake_document_locale_format",
+            ),
+            models.CheckConstraint(
+                condition=Q(pdf_generation_status=IntakePdfStatus.COMPLETED, pdf_local_path__isnull=False)
+                | ~Q(pdf_generation_status=IntakePdfStatus.COMPLETED),
+                name="intake_document_pdf_completed_requires_path",
+            ),
+            models.CheckConstraint(
+                condition=Q(hidrive_sent=False)
+                | (Q(hidrive_sent=True) & Q(hidrive_sent_at__isnull=False)),
+                name="intake_document_hidrive_sent_requires_time",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["intake_form", "-version_no"]),
+            models.Index(fields=["pdf_generation_status", "-created_at"]),
+            models.Index(fields=["hidrive_sent", "-created_at"]),
+            GinIndex(
+                fields=["snapshot_payload"],
+                name="intake_snapshot_payload_gin_idx",
+                opclasses=["jsonb_path_ops"],
+            ),
+        ]
+
+
+class IntakeOutboxEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    intake_document_version = models.ForeignKey(
+        IntakeDocumentVersion,
+        on_delete=models.CASCADE,
+        related_name="outbox_events",
+    )
+    aggregate_type = models.CharField(max_length=50, default="INTAKE_DOCUMENT_VERSION")
+    aggregate_id = models.UUIDField()
+    event_type = models.CharField(max_length=40, choices=IntakeOutboxEventType.choices)
+    payload_schema_version = models.SmallIntegerField(default=1)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(
+        max_length=20,
+        choices=IntakeOutboxStatus.choices,
+        default=IntakeOutboxStatus.PENDING,
+    )
+    retry_count = models.SmallIntegerField(default=0)
+    max_retries = models.SmallIntegerField(default=10)
+    available_at = models.DateTimeField(auto_now_add=True)
+    locked_at = models.DateTimeField(blank=True, null=True)
+    processed_at = models.DateTimeField(blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "intake_outbox_event"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["intake_document_version", "event_type"],
+                name="intake_outbox_event_unique_per_type",
+            ),
+            models.CheckConstraint(
+                condition=Q(retry_count__gte=0)
+                & Q(max_retries__gt=0)
+                & Q(retry_count__lte=F("max_retries")),
+                name="intake_outbox_event_retry_bounds",
+            ),
+            models.CheckConstraint(
+                condition=Q(aggregate_type="INTAKE_DOCUMENT_VERSION"),
+                name="intake_outbox_event_aggregate_type_guard",
+            ),
+            models.CheckConstraint(
+                condition=Q(aggregate_id=F("intake_document_version_id")),
+                name="intake_outbox_event_aggregate_id_guard",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "available_at"]),
+            models.Index(fields=["event_type", "status", "retry_count", "available_at", "payload_schema_version"]),
+            models.Index(fields=["intake_document_version", "-created_at"]),
+            models.Index(
+                fields=["status", "available_at"],
+                name="intake_outbox_pend_fail_idx",
+                condition=Q(status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]),
+            ),
+            models.Index(
+                fields=["available_at", "created_at"],
+                name="intake_outbox_pend_fail_order_idx",
+                condition=Q(status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]),
+            ),
+            GinIndex(
+                fields=["payload"],
+                name="intake_outbox_payload_gin_idx",
+                opclasses=["jsonb_path_ops"],
+            ),
         ]

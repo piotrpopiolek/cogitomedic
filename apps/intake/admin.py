@@ -6,6 +6,8 @@ from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
     ConsentDefinition,
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
     PatientIntakeConsent,
     PatientIntakeForm,
 )
@@ -55,3 +57,47 @@ class PatientIntakeConsentAdmin(admin.ModelAdmin):
     list_display = ("intake_form", "consent_definition", "accepted", "accepted_at")
     list_filter = ("accepted",)
     raw_id_fields = ("intake_form", "consent_definition")
+
+
+@admin.register(IntakeDocumentVersion)
+class IntakeDocumentVersionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "intake_form",
+        "version_no",
+        "form_locale",
+        "pdf_generation_status",
+        "hidrive_sent",
+        "created_at",
+    )
+    list_filter = ("pdf_generation_status", "hidrive_sent", "form_locale")
+    raw_id_fields = ("intake_form",)
+    readonly_fields = (
+        "id",
+        "snapshot_payload",
+        "pdf_checksum_sha256",
+        "hidrive_path",
+        "hidrive_sent_at",
+        "created_at",
+    )
+    date_hierarchy = "created_at"
+
+
+@admin.register(IntakeOutboxEvent)
+class IntakeOutboxEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "event_type",
+        "status",
+        "retry_count",
+        "max_retries",
+        "intake_document_version",
+        "available_at",
+        "processed_at",
+        "created_at",
+    )
+    list_filter = ("event_type", "status")
+    search_fields = ("error_message",)
+    raw_id_fields = ("intake_document_version",)
+    readonly_fields = ("id", "aggregate_type", "aggregate_id", "payload", "payload_schema_version", "created_at", "updated_at")
+    date_hierarchy = "created_at"

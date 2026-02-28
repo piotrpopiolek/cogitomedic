@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import date, timedelta
+from pathlib import Path
 from uuid import uuid4
 
+from django.conf import settings
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -70,12 +73,17 @@ class IntakeApiTests(TestCase):
         )
         self.queue_entry.active_session = self.session
         self.queue_entry.save(update_fields=["active_session", "updated_at"])
+        signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
+        signature_dir.mkdir(parents=True, exist_ok=True)
+        signature_path = signature_dir / f"{self.queue_entry.id}.png"
+        signature_bytes = b"fake-png-signature-api"
+        signature_path.write_bytes(signature_bytes)
         self.intake_form = PatientIntakeForm.objects.create(
             queue_entry=self.queue_entry,
             session=self.session,
             form_status=IntakeStatus.IN_PROGRESS,
-            signature_file_path="/tmp/signature.png",
-            signature_sha256="b" * 64,
+            signature_file_path=str(signature_path),
+            signature_sha256=hashlib.sha256(signature_bytes).hexdigest(),
             anamnesis_payload={"schema_version": 1, "answers": []},
         )
 
@@ -244,9 +252,12 @@ class IntakeApiTests(TestCase):
         e2e_intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
 
         self._accept_all_required_consents_effective_today(e2e_intake_form)
+        e2e_signature = Path(settings.MEDIA_ROOT) / "signatures" / "tests" / f"{intake_form_id}-e2e.png"
+        e2e_bytes = b"fake-png-signature-e2e"
+        e2e_signature.write_bytes(e2e_bytes)
         PatientIntakeForm.objects.filter(id=intake_form_id).update(
-            signature_file_path="/tmp/e2e-signature.png",
-            signature_sha256="e2e" * 21,
+            signature_file_path=str(e2e_signature),
+            signature_sha256=hashlib.sha256(e2e_bytes).hexdigest(),
         )
 
         anamnesis_response = self.client.put(
