@@ -5,6 +5,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from apps.intake.tasks import process_intake_outbox_events
 from apps.outbox.tasks import process_outbox_events, run_retention_cleanup
 from apps.reception.tasks import run_daily_import
 
@@ -55,6 +56,9 @@ class Command(BaseCommand):
                 else:
                     process_outbox_events.enqueue()
                     self.stdout.write(f"[{now}] Enqueued: process_outbox_events")
+
+                    process_intake_outbox_events.enqueue()
+                    self.stdout.write(f"[{now}] Enqueued: process_intake_outbox_events")
 
                     run_retention_cleanup.enqueue()
                     self.stdout.write(f"[{now}] Enqueued: run_retention_cleanup")

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { size: A4; margin: 16mm; }
+    body { font-family: Arial, sans-serif; color: #111; font-size: 12px; line-height: 1.35; }
+    h1, h2 { margin: 0 0 8px 0; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 14px; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+    .meta { color: #444; font-size: 11px; margin-bottom: 8px; }
+    .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .row { display: table-row; }
+    .cell { display: table-cell; border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; }
+    .head { background: #f4f6f8; font-weight: 700; width: 36%; }
+    .badge { display: inline-block; padding: 2px 6px; border: 1px solid #bbb; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; }
+    .item { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-top: 10px; }
+    .item-title { font-weight: 700; margin-bottom: 6px; }
+    .muted { color: #666; }
+    .sig-box { border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-top: 8px; }
+    img.signature { max-width: 100%; max-height: 120px; }
+    .mono { font-family: Consolas, "Courier New", monospace; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Intake PDF</h1>
+  <div class="meta">
+    Intake form ID: {{ intake_form_id }}<br />
+    Queue entry ID: {{ queue_entry_id }}<br />
+    Generated at: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
+    Locale: {{ base_locale }} + {{ form_locale }}<br />
+    Submitted at: {{ submitted_at|default:"-" }}
+  </div>
+
+  <h2>Patient / Patient</h2>
+  <div class="grid">
+    <div class="row">
+      <div class="cell head">Name / Name</div>
+      <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Geburtsdatum / Date of birth</div>
+      <div class="cell">{{ patient.date_of_birth }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">Telefon / Phone</div>
+      <div class="cell">{{ patient.phone }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">E-Mail / Email</div>
+      <div class="cell">{{ patient.email }}</div>
+    </div>
+  </div>
+
+  <h2>Einwilligungen / Consents</h2>
+  {% if consents %}
+    {% for consent in consents %}
+      <div class="item">
+        <div class="item-title">
+          {{ consent.code }}
+          {% if consent.is_required %}<span class="badge">required</span>{% endif %}
+          {% if consent.accepted %}<span class="badge">accepted</span>{% else %}<span class="badge">not accepted</span>{% endif %}
+        </div>
+        <div><strong>DE:</strong> {{ consent.title_de|default:"-" }}</div>
+        <div><strong>{{ form_locale }}:</strong> {{ consent.title_locale|default:consent.title_de|default:"-" }}</div>
+        <div style="margin-top:6px;"><strong>DE text:</strong> {{ consent.content_de|default:"-" }}</div>
+        <div style="margin-top:4px;"><strong>{{ form_locale }} text:</strong> {{ consent.content_locale|default:consent.content_de|default:"-" }}</div>
+        <div class="muted" style="margin-top:6px;">accepted_at: {{ consent.accepted_at|default:"-" }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
+
+  <h2>Anamnesis / Anamnese</h2>
+  {% if anamnesis.answers %}
+    {% for answer in anamnesis.answers %}
+      <div class="item">
+        <div class="item-title">{{ answer.question_code }}</div>
+        <div><strong>DE:</strong> {{ answer.question_text_de|default:"-" }}</div>
+        <div><strong>{{ form_locale }}:</strong> {{ answer.question_text_locale|default:answer.question_text_de|default:"-" }}</div>
+        {% if answer.selected_options %}
+          <div style="margin-top:6px;">
+            <strong>Options:</strong>
+            <ul>
+              {% for option in answer.selected_options %}
+                <li>
+                  {{ option.option_code }} - DE: {{ option.label_de|default:"-" }} | {{ form_locale }}: {{ option.label_locale|default:option.label_de|default:"-" }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% else %}
+          <div class="muted" style="margin-top:6px;">No selected options.</div>
+        {% endif %}
+        {% if answer.free_text %}
+          <div style="margin-top:6px;"><strong>Free text:</strong> {{ answer.free_text }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
+
+  <h2>Unterschrift / Signature</h2>
+  <div class="sig-box">
+    {% if signature.data_url %}
+      <img class="signature" src="{{ signature.data_url }}" alt="signature" />
+    {% else %}
+      <div class="muted">No signature image.</div>
+    {% endif %}
+    <div class="mono" style="margin-top:6px;">sha256: {{ signature.sha256|default:"-" }}</div>
+  </div>
+</body>
+</html>

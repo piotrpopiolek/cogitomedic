@@ -12,6 +12,7 @@ from apps.core.exceptions import DomainError
 from apps.medical.pdf_builder import generate_befund_pdf
 from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
+from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 
@@ -31,10 +32,6 @@ class RetentionCleanupResult:
 
 class OutboxEventNotRetryableError(DomainError):
     """Raised when manual retry is requested for non-retryable event."""
-
-
-def _build_hidrive_path(version: MedicalDocumentVersion) -> str:
-    return f"/hidrive/medical/{version.medical_document_id}/{version.id}.pdf"
 
 
 def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
@@ -66,7 +63,7 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.HIDRIVE_UPLOAD:
-        version.hidrive_path = _build_hidrive_path(version)
+        version.hidrive_path = build_befund_hidrive_path(version)
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
