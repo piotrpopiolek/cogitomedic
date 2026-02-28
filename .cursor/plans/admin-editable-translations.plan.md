@@ -71,7 +71,7 @@ Umożliwić administracji edycję tłumaczeń DE/EN/PL przez Django Admin, z zac
 - `reception.`* dla recepcji
 - `waiting_room.`* dla waiting room
 - `administration.`* dla panelu administracyjnego/systemowego
-- `other.*` pozostałe tłumaczenia
+- `other.`* pozostałe tłumaczenia
 
 Wszystkie klucze są zarejestrowane w `TranslationKey`, a nie "wolnym stringiem".
 

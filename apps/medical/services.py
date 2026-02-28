@@ -211,6 +211,7 @@ def publish_document_version(
     medical_document_id: uuid.UUID,
     publish_request_id: uuid.UUID,
     published_by_user_id: uuid.UUID,
+    publish_locale: str,
     resend_sms: bool = False,
     now: datetime | None = None,
 ) -> MedicalDocumentVersion:
@@ -224,6 +225,8 @@ def publish_document_version(
     """
     if not publish_request_id:
         raise IdempotencyConflictError("publish_request_id is required for publish.")
+    if not publish_locale:
+        raise DomainError("publish_locale is required for publish.")
 
     requested_at = now or timezone.now()
     medical_document = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
@@ -237,6 +240,8 @@ def publish_document_version(
         .first()
     )
     if same_request_version:
+        if same_request_version.publish_locale and same_request_version.publish_locale != publish_locale:
+            raise IdempotencyConflictError("publish_request_id already used with different publish_locale.")
         return same_request_version
 
     in_progress_version = (
@@ -274,6 +279,7 @@ def publish_document_version(
     draft_version.version_status = DocVersionStatus.PUBLISHED
     draft_version.publish_request_id = publish_request_id
     draft_version.publish_requested_by_user_id = published_by_user_id
+    draft_version.publish_locale = publish_locale
     draft_version.published_by_user_id = published_by_user_id
     draft_version.published_at = requested_at
     draft_version.pdf_generation_status = PdfStatus.PENDING
@@ -282,6 +288,7 @@ def publish_document_version(
             "version_status",
             "publish_request_id",
             "publish_requested_by_user",
+            "publish_locale",
             "published_by_user",
             "published_at",
             "pdf_generation_status",
@@ -312,6 +319,7 @@ def publish_document_version(
                 "medical_document_id": str(medical_document.id),
                 "medical_document_version_id": str(draft_version.id),
                 "publish_request_id": str(publish_request_id),
+                "publish_locale": publish_locale,
                 "resend_sms": resend_sms,
             },
             "status": OutboxStatus.PENDING,
@@ -326,6 +334,7 @@ def publish_document_version(
             "medical_document_version_id": str(draft_version.id),
             "version_no": draft_version.version_no,
             "publish_request_id": str(publish_request_id),
+            "publish_locale": publish_locale,
         },
     )
     return draft_version
@@ -584,6 +593,7 @@ def get_medical_document_context(
             ),
             "processing_error_message": _latest_error_message(current_version),
             "can_retry_processing": retryable_event is not None and getattr(user, "role", None) in {"ADMIN", "RECEPTION"},
+            "publish_locale": current_version.publish_locale,
             "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
         }
 

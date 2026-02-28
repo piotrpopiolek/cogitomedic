@@ -45,12 +45,13 @@ class MedicalDocumentVersionAdmin(admin.ModelAdmin):
         "medical_document",
         "version_no",
         "version_status",
+        "publish_locale",
         "pdf_generation_status",
         "diagnosis_code",
         "procedure_code",
         "created_at",
     )
-    list_filter = ("version_status", "pdf_generation_status")
+    list_filter = ("version_status", "publish_locale", "pdf_generation_status")
     raw_id_fields = ("medical_document", "publish_requested_by_user", "published_by_user")
     readonly_fields = ("id", "created_at")
     date_hierarchy = "created_at"

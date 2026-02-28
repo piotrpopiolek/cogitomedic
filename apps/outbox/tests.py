@@ -96,6 +96,7 @@ class OutboxProcessingTests(TestCase):
             medical_document_id=self.medical_document.id,
             publish_request_id=uuid4(),
             published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
         )
 
     def test_process_outbox_events_runs_full_chain(self) -> None:

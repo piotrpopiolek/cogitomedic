@@ -106,6 +106,7 @@ class MedicalDocumentVersion(models.Model):
         null=True,
         related_name="requested_medical_publications",
     )
+    publish_locale = models.CharField(max_length=10, blank=True, null=True)
     published_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -135,6 +136,11 @@ class MedicalDocumentVersion(models.Model):
             models.CheckConstraint(
                 condition=Q(version_status=DocVersionStatus.DRAFT) | Q(published_at__isnull=False),
                 name="medical_document_published_requires_time",
+            ),
+            models.CheckConstraint(
+                condition=Q(publish_locale__isnull=True)
+                | Q(publish_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
+                name="medical_document_publish_locale_format",
             ),
             models.CheckConstraint(
                 condition=Q(pdf_generation_status=PdfStatus.COMPLETED, pdf_local_path__isnull=False)

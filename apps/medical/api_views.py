@@ -388,6 +388,7 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             medical_document_id=medical_document_id,
             publish_request_id=body.publish_request_id,
             published_by_user_id=request.user.id,
+            publish_locale=body.publish_locale,
             resend_sms=body.resend_sms,
         )
     except ObjectDoesNotExist:
@@ -401,6 +402,7 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             "version_no": version.version_no,
             "version_status": version.version_status,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+            "publish_locale": version.publish_locale,
         },
         status=200,
     )
@@ -438,6 +440,7 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
             "sms_sent_at": version.sms_sent_at.isoformat() if version.sms_sent_at else None,
             "published_at": version.published_at.isoformat() if version.published_at else None,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+            "publish_locale": version.publish_locale,
             "created_at": version.created_at.isoformat(),
         },
         status=200,
