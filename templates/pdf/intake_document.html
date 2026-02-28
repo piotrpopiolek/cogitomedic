@@ -61,14 +61,12 @@
     {% for consent in consents %}
       <div class="item">
         <div class="item-title">
-          {{ consent.title_de|default:consent.code }}
-          {% if consent.is_required %}<span class="badge">required</span>{% endif %}
-          {% if consent.accepted %}<span class="badge">accepted</span>{% else %}<span class="badge">not accepted</span>{% endif %}
+          {% if consent.is_required %}* {% endif %}{{ consent.title_de|default:"" }}
+          <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
         </div>
         {% if form_locale and form_locale|slice:":2" != "de" %}
         <div class="item-subtitle">{{ consent.title_locale|default:consent.title_de|default:"" }}</div>
         {% endif %}
-        <div class="muted">code: {{ consent.code }}</div>
         <div style="margin-top:6px;"><strong>DE text:</strong> {{ consent.content_de|default:"-" }}</div>
         {% if form_locale and form_locale|slice:":2" != "de" %}
         <div style="margin-top:4px;"><strong>{{ form_locale }} text:</strong> {{ consent.content_locale|default:consent.content_de|default:"-" }}</div>
