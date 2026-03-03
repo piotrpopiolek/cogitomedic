@@ -61,7 +61,7 @@ def _serialize_entry(e: QueueEntry) -> dict:
 
 @require_auth
 def daily_queues_view(request: HttpRequest) -> JsonResponse:
-    allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    allowed = {"RECEPTION", "ADMIN", "TABLET", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
@@ -74,6 +74,10 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             if queue_date and queue_date != today.isoformat():
                 return json_error("TABLET role can only access queues for today.", status=403)
             queue_date = today.isoformat()
+            
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(assigned_doctor_id=request.user.id)
+            
         if queue_date:
             qs = qs.filter(queue_date=queue_date)
         clinic_site_id = request.GET.get("clinic_site_id")
@@ -151,7 +155,7 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
 
 @require_auth
 def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
-    allowed = {"RECEPTION", "ADMIN", "TABLET"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    allowed = {"RECEPTION", "ADMIN", "TABLET", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
@@ -161,8 +165,13 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
+        
     if getattr(request.user, "role", None) == "TABLET" and queue.queue_date != timezone.now().date():
         return json_error("TABLET role can only access entries of today's queues.", status=403)
+        
+    if getattr(request.user, "role", None) == "DOCTOR" and queue.assigned_doctor_id != request.user.id:
+        return json_error("DOCTOR can only access own queues.", status=403)
+        
     if request.method == "GET":
         qs = QueueEntry.objects.filter(daily_queue_id=daily_queue_id).select_related("patient").order_by("position_no")
         entry_status = request.GET.get("entry_status")
@@ -205,15 +214,20 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
 
 @require_auth
 def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
         return json_error("Method not allowed.", status=405)
     try:
-        entry = QueueEntry.objects.get(id=queue_entry_id)
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
     except ObjectDoesNotExist:
         return json_error("Queue entry not found.", status=404)
+        
+    if getattr(request.user, "role", None) == "DOCTOR" and entry.daily_queue.assigned_doctor_id != request.user.id:
+        return json_error("DOCTOR can only access entries from own queues.", status=403)
+        
     if request.method == "GET":
         return JsonResponse(_serialize_entry(entry))
     if request.method == "DELETE":

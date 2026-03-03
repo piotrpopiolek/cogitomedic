@@ -59,11 +59,14 @@ def _serialize_consulting_room(room: ConsultingRoom) -> dict:
 
 @require_auth
 def clinic_sites_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method == "GET":
         qs = ClinicSite.objects.all().order_by("code")
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(id__in=request.user.clinic_sites.all())
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
             return json_error("Invalid is_active query parameter.", status=400)
@@ -140,11 +143,14 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
 
 @require_auth
 def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method == "GET":
         qs = ConsultingRoom.objects.all().order_by("clinic_site_id", "code")
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(clinic_site_id__in=request.user.clinic_sites.all())
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:
             qs = qs.filter(clinic_site_id=clinic_site_id)

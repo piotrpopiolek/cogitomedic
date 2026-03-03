@@ -208,3 +208,57 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
     except DomainError as exc:
         return json_error(str(exc), status=400)
     return JsonResponse(_serialize_staff_user(user), status=200)
+
+
+from pydantic import BaseModel, ConfigDict
+
+class UpdateStaffUserClinicSitesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    clinic_site_ids: list[UUID]
+
+
+@require_auth
+def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
+    try:
+        user = StaffUser.objects.prefetch_related("clinic_sites").get(id=staff_user_id)
+    except ObjectDoesNotExist:
+        return json_error("Staff user not found.", status=404)
+
+    if request.method == "GET":
+        items = [
+            {
+                "id": str(site.id),
+                "code": site.code,
+                "name": site.name,
+                "is_active": site.is_active,
+            }
+            for site in user.clinic_sites.all()
+        ]
+        return JsonResponse({"items": items}, status=200)
+
+    if request.method == "POST":
+        try:
+            body = UpdateStaffUserClinicSitesRequest.model_validate(read_json_body(request))
+        except JSONDecodeError:
+            return json_error("Invalid JSON payload.", status=400)
+        except InvalidRequestBodyEncoding:
+            return json_error("Invalid request encoding.", status=400)
+        except ValidationError as exc:
+            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+        user.clinic_sites.set(body.clinic_site_ids)
+        items = [
+            {
+                "id": str(site.id),
+                "code": site.code,
+                "name": site.name,
+                "is_active": site.is_active,
+            }
+            for site in user.clinic_sites.all()
+        ]
+        return JsonResponse({"items": items}, status=200)
+
+    return json_error("Method not allowed.", status=405)

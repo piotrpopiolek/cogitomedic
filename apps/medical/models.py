@@ -197,6 +197,13 @@ class DoctorTextTemplate(models.Model):
         null=True,
         related_name="doctor_templates",
     )
+    clinic_site = models.ForeignKey(
+        "reception.ClinicSite",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="doctor_templates",
+    )
     name = models.CharField(max_length=120)
     template_locale = models.CharField(max_length=10, default="de-DE")
     template_body = models.TextField()
@@ -213,8 +220,10 @@ class DoctorTextTemplate(models.Model):
         if self.is_global:
             self.owner_user = None
             return
-        if self.owner_user_id is None:
-            raise ValidationError({"owner_user": "Private template requires owner_user."})
+        if self.owner_user_id is None and self.clinic_site_id is None:
+            raise ValidationError("Private or clinic template requires owner_user or clinic_site.")
+        if self.owner_user_id is not None and self.clinic_site_id is not None:
+            raise ValidationError("Template cannot have both owner_user and clinic_site.")
 
     class Meta:
         db_table = "doctor_text_template"
@@ -224,16 +233,26 @@ class DoctorTextTemplate(models.Model):
                 name="doctor_template_locale_format",
             ),
             models.CheckConstraint(
-                condition=(Q(is_global=True) & Q(owner_user__isnull=True))
-                | (Q(is_global=False) & Q(owner_user__isnull=False)),
+                condition=(
+                    (Q(is_global=True) & Q(owner_user__isnull=True)) |
+                    (Q(is_global=False) & (
+                        (Q(owner_user__isnull=False) & Q(clinic_site__isnull=True)) |
+                        (Q(owner_user__isnull=True) & Q(clinic_site__isnull=False))
+                    ))
+                ),
                 name="doctor_template_global_owner_consistency",
             ),
             models.UniqueConstraint(
                 fields=["owner_user", "name", "template_locale"],
                 name="doctor_template_owner_name_locale_unique",
             ),
+            models.UniqueConstraint(
+                fields=["clinic_site", "name", "template_locale"],
+                name="doctor_template_clinic_name_locale_unique",
+            ),
         ]
         indexes = [
             models.Index(fields=["owner_user", "template_locale", "is_active"]),
+            models.Index(fields=["clinic_site", "template_locale", "is_active"]),
             models.Index(fields=["is_global", "template_locale", "is_active"]),
         ]

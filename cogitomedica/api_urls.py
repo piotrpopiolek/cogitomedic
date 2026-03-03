@@ -23,6 +23,7 @@ from apps.medical.api_views import (
     medical_document_retry_processing_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
+    medical_document_audit_trail_view,
     medical_documents_view,
 )
 from apps.outbox.api_views import (
@@ -31,7 +32,11 @@ from apps.outbox.api_views import (
     outbox_event_retry_view,
     outbox_events_view,
 )
-from apps.operations.api_views import observability_health_view, observability_metrics_view
+from apps.operations.api_views import (
+    audit_events_view,
+    observability_health_view,
+    observability_metrics_view,
+)
 from apps.reception.api_views import (
     clinic_site_detail_view,
     clinic_sites_view,
@@ -54,6 +59,7 @@ from apps.users.api_views import (
     auth_login_view,
     auth_logout_view,
     auth_me_view,
+    staff_user_clinic_sites_view,
     staff_user_detail_view,
     staff_users_view,
 )
@@ -96,6 +102,11 @@ urlpatterns = [
         name="staff-user-detail",
     ),
     path(
+        "staff-users/<uuid:staff_user_id>/clinic-sites",
+        staff_user_clinic_sites_view,
+        name="staff-user-clinic-sites",
+    ),
+    path(
         "doctor-text-templates",
         doctor_text_templates_view,
         name="doctor-text-templates",
@@ -104,6 +115,11 @@ urlpatterns = [
         "doctor-text-templates/<uuid:template_id>",
         doctor_text_template_detail_view,
         name="doctor-text-template-detail",
+    ),
+    path(
+        "audit-events",
+        audit_events_view,
+        name="audit-events",
     ),
     path(
         "outbox-events",
@@ -164,6 +180,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/versions",
         medical_document_versions_view,
         name="medical-document-versions",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/audit-trail",
+        medical_document_audit_trail_view,
+        name="medical-document-audit-trail",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/draft",

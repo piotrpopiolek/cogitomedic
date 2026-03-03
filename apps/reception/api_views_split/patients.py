@@ -76,7 +76,7 @@ def _serialize_contact_history(item: PatientContactHistory) -> dict:
 
 @require_auth
 def patients_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method == "GET":
@@ -89,6 +89,9 @@ def patients_view(request: HttpRequest) -> JsonResponse:
                 {"error": "Validation error.", "details": exc.errors()}, status=400
             )
         qs = Patient.objects.all().order_by("-created_at")
+
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
         search = request.GET.get("search")
         if search:
             qs = qs.filter(
@@ -179,13 +182,20 @@ def patients_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH"):
         return json_error("Method not allowed.", status=405)
+    
+    if request.method == "PATCH" and getattr(request.user, "role", None) == "DOCTOR":
+        return json_error("Method not allowed for this role.", status=403)
+
     try:
-        patient = Patient.objects.get(id=patient_id)
+        qs = Patient.objects.all()
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        patient = qs.get(id=patient_id)
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)
 
@@ -271,13 +281,16 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
 
 @require_auth
 def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
     try:
-        Patient.objects.get(id=patient_id)
+        qs = Patient.objects.all()
+        if getattr(request.user, "role", None) == "DOCTOR":
+            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        qs.get(id=patient_id)
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)
     page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)

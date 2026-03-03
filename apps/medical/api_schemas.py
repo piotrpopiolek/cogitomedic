@@ -77,6 +77,7 @@ class DoctorTemplateCreateRequest(BaseModel):
     lesion_group_favorites: list[FavoriteLesionGroupPreset] = Field(default_factory=list)
     summary_favorites: list[FavoriteSummaryPreset] = Field(default_factory=list)
     is_global: bool = False
+    clinic_site_id: UUID | None = None
     is_active: bool = True
 
 

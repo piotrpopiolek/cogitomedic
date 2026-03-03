@@ -48,6 +48,7 @@ from apps.medical.template_services import (
     list_templates,
     update_template,
 )
+from apps.operations.models import AuditEvent
 
 
 def _serialize_medical_document_list_item(doc) -> dict:
@@ -97,10 +98,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         return role_error
     if request.method == "GET":
         list_params = parse_medical_documents_list_params(request.GET)
-        consulting_room_id = _doctor_consulting_room_id(request.user)
         items, total = list_medical_documents(
             **list_params,
-            consulting_room_id=consulting_room_id,
+            user=request.user,
         )
         return JsonResponse(
             {
@@ -528,6 +528,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                         "lesion_group_favorites": template.lesion_group_favorites or [],
                         "summary_favorites": template.summary_favorites or [],
                         "is_global": template.is_global,
+                        "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                         "is_active": template.is_active,
                         "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
                     }
@@ -556,6 +557,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 lesion_group_favorites=[p.model_dump(mode="json") for p in body.lesion_group_favorites],
                 summary_favorites=[p.model_dump(mode="json") for p in body.summary_favorites],
                 is_global=body.is_global,
+                clinic_site_id=body.clinic_site_id,
                 is_active=body.is_active,
             )
         except ObjectDoesNotExist:
@@ -574,6 +576,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 "lesion_group_favorites": template.lesion_group_favorites or [],
                 "summary_favorites": template.summary_favorites or [],
                 "is_global": template.is_global,
+                "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                 "is_active": template.is_active,
             },
             status=201,
@@ -601,6 +604,7 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
                 "lesion_group_favorites": template.lesion_group_favorites or [],
                 "summary_favorites": template.summary_favorites or [],
                 "is_global": template.is_global,
+                "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                 "is_active": template.is_active,
                 "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
             },
@@ -655,3 +659,30 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         },
         status=200,
     )
+
+
+@require_auth
+def medical_document_audit_trail_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("Method not allowed.", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+
+    events = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by("-event_time")
+    
+    items = []
+    for event in events:
+        items.append({
+            "id": str(event.id),
+            "event_time": event.event_time.isoformat(),
+            "event_type": event.event_type,
+            "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
+            "metadata": event.metadata,
+        })
+    return JsonResponse({"items": items}, status=200)
