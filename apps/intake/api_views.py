@@ -119,7 +119,11 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
 
     updated = list(
         PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id).values(
-            "consent_definition_id", "accepted", "accepted_at"
+            "consent_definition_id",
+            "accepted",
+            "accepted_at",
+            "selected_option_code",
+            "selected_option_codes",
         )
     )
     consents_response = [
@@ -127,6 +131,8 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
             "consent_definition_id": str(u["consent_definition_id"]),
             "accepted": u["accepted"],
             "accepted_at": u["accepted_at"].isoformat() if u["accepted_at"] else None,
+            "selected_option_code": u.get("selected_option_code") or "",
+            "selected_option_codes": u.get("selected_option_codes") or [],
         }
         for u in updated
     ]

@@ -201,6 +201,8 @@ class PatientIntakeConsent(models.Model):
     )
     accepted = models.BooleanField()
     accepted_at = models.DateTimeField(blank=True, null=True)
+    selected_option_code = models.CharField(max_length=20, blank=True, default="")
+    selected_option_codes = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "patient_intake_consent"
