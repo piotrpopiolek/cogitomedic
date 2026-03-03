@@ -28,6 +28,7 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
+from cogitomedica.tablet_i18n import get_form_ui_strings
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +355,8 @@ def get_intake_form_context(
     use_en = form_locale.startswith("en")
     use_pl = form_locale.startswith("pl")
     consents_payload = []
+    ui = get_form_ui_strings(form_locale)
+    
     for cd in consent_defs:
         cd_id = cd["id"]
         pic = consent_by_def_id.get(cd_id)
@@ -372,6 +375,24 @@ def get_intake_form_context(
         else:
             title = cd["title_de"]
             content = (cd["content_de"] or "")
+            
+        options = []
+        confirm_label = ""
+        is_multi = False
+        
+        if cd["code"] == CONTACT_METHOD_CONSENT_CODE:
+            is_multi = True
+            options = [
+                {"code": "EMAIL", "label": "E-Mail"},
+                {"code": "SMS", "label": "SMS"},
+                {"code": "PHONE", "label": ui.get("contact_method_phone", "Telefon")},
+            ]
+        elif cd["code"] == "PRAEVENTIONS_ERINNERUNGEN_EINWILLIGUNG":
+            confirm_label = ui.get(
+                "consent_contact_agree", 
+                "Ja, ich bin mit einer Kontaktaufnahme einverstanden."
+            )
+
         consents_payload.append({
             "consent_definition_id": str(cd_id),
             "code": cd["code"],
@@ -382,6 +403,9 @@ def get_intake_form_context(
             "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
             "selected_option_codes": selected_option_codes,
             "selected_option_code": selected_option_codes[0] if selected_option_codes else "",
+            "is_multi": is_multi,
+            "options": options,
+            "confirm_label": confirm_label,
         })
 
     active_options_prefetch = Prefetch(
