@@ -51,6 +51,8 @@ FORM_UI_DE = {
     "validation_consents_required": "Bitte akzeptieren Sie alle erforderlichen Einwilligungen (mit * markiert).",
     "validation_anamnesis_required": "Bitte beantworten Sie alle Pflichtfragen (mit * markiert).",
     "msg_try_again": "Erneut versuchen",
+    "contact_method_phone": "Telefon",
+    "consent_contact_agree": "Ja, ich bin mit einer Kontaktaufnahme einverstanden.",
 }
 
 FORM_UI_EN = {
@@ -99,6 +101,8 @@ FORM_UI_EN = {
     "validation_consents_required": "Please accept all required consents (marked with *).",
     "validation_anamnesis_required": "Please answer all required questions (marked with *).",
     "msg_try_again": "Try again",
+    "contact_method_phone": "Phone",
+    "consent_contact_agree": "Yes, I agree to be contacted.",
 }
 
 FORM_UI_PL = {
@@ -147,6 +151,8 @@ FORM_UI_PL = {
     "validation_consents_required": "Proszę zaakceptować wszystkie wymagane zgody (oznaczone *).",
     "validation_anamnesis_required": "Proszę odpowiedzieć na wszystkie pytania obowiązkowe (oznaczone *).",
     "msg_try_again": "Spróbuj ponownie",
+    "contact_method_phone": "Telefon",
+    "consent_contact_agree": "Tak, wyrażam zgodę na kontakt.",
 }
 
 
