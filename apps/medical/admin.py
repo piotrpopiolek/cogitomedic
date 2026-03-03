@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from django.contrib import admin
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 from apps.medical.models import DoctorTextTemplate, MedicalDocument, MedicalDocumentVersion
 
 
@@ -19,7 +24,7 @@ def _set_medical_document_users(request, obj, change: bool) -> None:
 
 
 @admin.register(MedicalDocument)
-class MedicalDocumentAdmin(admin.ModelAdmin):
+class MedicalDocumentAdmin(UnfoldModelAdmin):
     list_display = ("id", "queue_entry", "intake_form", "status", "current_version_no", "last_published_at", "created_by_user", "created_at")
     list_filter = ("status",)
     raw_id_fields = ("queue_entry", "intake_form", "created_by_user", "updated_by_user")
@@ -39,7 +44,7 @@ class MedicalDocumentAdmin(admin.ModelAdmin):
 
 
 @admin.register(MedicalDocumentVersion)
-class MedicalDocumentVersionAdmin(admin.ModelAdmin):
+class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
     list_display = (
         "id",
         "medical_document",
@@ -58,7 +63,7 @@ class MedicalDocumentVersionAdmin(admin.ModelAdmin):
 
 
 @admin.register(DoctorTextTemplate)
-class DoctorTextTemplateAdmin(admin.ModelAdmin):
+class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "is_active", "created_at", "updated_at")
     list_filter = ("template_locale", "is_global", "is_active")
     search_fields = ("name", "template_body")

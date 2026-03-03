@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from django.contrib import admin
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 from apps.core.models import TranslationCacheVersion, TranslationKey, TranslationValue
 
 
 @admin.register(TranslationKey)
-class TranslationKeyAdmin(admin.ModelAdmin):
+class TranslationKeyAdmin(UnfoldModelAdmin):
     list_display = ("key", "category", "status", "is_html_allowed", "updated_at")
     list_filter = ("category", "status", "is_html_allowed")
     search_fields = ("key", "description")
@@ -14,7 +19,7 @@ class TranslationKeyAdmin(admin.ModelAdmin):
 
 
 @admin.register(TranslationValue)
-class TranslationValueAdmin(admin.ModelAdmin):
+class TranslationValueAdmin(UnfoldModelAdmin):
     list_display = ("translation_key", "language_code", "updated_by", "updated_at")
     list_filter = ("language_code", "translation_key__category")
     search_fields = ("translation_key__key", "value")
@@ -28,7 +33,7 @@ class TranslationValueAdmin(admin.ModelAdmin):
 
 
 @admin.register(TranslationCacheVersion)
-class TranslationCacheVersionAdmin(admin.ModelAdmin):
+class TranslationCacheVersionAdmin(UnfoldModelAdmin):
     list_display = ("category", "language_code", "version", "updated_at")
     list_filter = ("category", "language_code")
     readonly_fields = ("id", "created_at", "updated_at")
