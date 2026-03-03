@@ -13,6 +13,11 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.http import urlencode
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
@@ -68,7 +73,7 @@ class PatientAdminForm(forms.ModelForm):
 
 
 @admin.register(Patient)
-class PatientAdmin(admin.ModelAdmin):
+class PatientAdmin(UnfoldModelAdmin):
     form = PatientAdminForm
     list_display = ("last_name", "first_name", "date_of_birth", "identity_status", "is_active", "created_at")
     list_filter = ("identity_status", "is_active", "external_source")
@@ -149,7 +154,7 @@ def _set_changed_by_user(request, obj) -> None:
 
 
 @admin.register(PatientContactHistory)
-class PatientContactHistoryAdmin(admin.ModelAdmin):
+class PatientContactHistoryAdmin(UnfoldModelAdmin):
     list_display = ("patient", "phone", "email", "reason", "changed_at", "changed_by_user")
     list_filter = ("reason",)
     search_fields = ("patient__last_name", "patient__first_name", "phone", "email")
@@ -185,7 +190,7 @@ class PatientContactHistoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(ClinicSite)
-class ClinicSiteAdmin(admin.ModelAdmin):
+class ClinicSiteAdmin(UnfoldModelAdmin):
     list_display = ("code", "name", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("code", "name")
@@ -214,7 +219,7 @@ class ClinicSiteAdmin(admin.ModelAdmin):
 
 
 @admin.register(ConsultingRoom)
-class ConsultingRoomAdmin(admin.ModelAdmin):
+class ConsultingRoomAdmin(UnfoldModelAdmin):
     list_display = ("code", "name", "clinic_site", "is_active", "created_at")
     list_filter = ("is_active", "clinic_site")
     search_fields = ("code", "name")
@@ -244,7 +249,7 @@ class ConsultingRoomAdmin(admin.ModelAdmin):
 
 
 @admin.register(DailyQueue)
-class DailyQueueAdmin(admin.ModelAdmin):
+class DailyQueueAdmin(UnfoldModelAdmin):
     list_display = (
         "queue_date",
         "clinic_site",
@@ -336,7 +341,7 @@ class DailyQueueAdmin(admin.ModelAdmin):
 
 
 @admin.register(QueueEntry)
-class QueueEntryAdmin(admin.ModelAdmin):
+class QueueEntryAdmin(UnfoldModelAdmin):
     list_display = (
         "position_no",
         "daily_queue",
@@ -362,14 +367,14 @@ class QueueEntryAdmin(admin.ModelAdmin):
 
 
 @admin.register(TabletDevice)
-class TabletDeviceAdmin(admin.ModelAdmin):
+class TabletDeviceAdmin(UnfoldModelAdmin):
     list_display = ("android_id", "is_active", "last_seen_at", "created_at")
     list_filter = ("is_active",)
     search_fields = ("android_id",)
 
 
 @admin.register(PatientFormSession)
-class PatientFormSessionAdmin(admin.ModelAdmin):
+class PatientFormSessionAdmin(UnfoldModelAdmin):
     list_display = ("id", "queue_entry", "tablet_device", "form_locale", "expires_at", "consumed_at", "created_at")
     list_filter = ("form_locale",)
     raw_id_fields = ("queue_entry", "tablet_device", "created_by_user")
@@ -387,7 +392,7 @@ class PatientFormSessionAdmin(admin.ModelAdmin):
 
 
 @admin.register(PatientImportBatch)
-class PatientImportBatchAdmin(admin.ModelAdmin):
+class PatientImportBatchAdmin(UnfoldModelAdmin):
     list_display = (
         "id",
         "source_file_name",
@@ -415,7 +420,7 @@ class PatientImportBatchAdmin(admin.ModelAdmin):
 
 
 @admin.register(PatientImportError)
-class PatientImportErrorAdmin(admin.ModelAdmin):
+class PatientImportErrorAdmin(UnfoldModelAdmin):
     list_display = ("batch", "row_number", "error_code", "error_message", "created_at")
     list_filter = ("error_code",)
     search_fields = ("error_message", "error_code")

@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from django.contrib import admin
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 from apps.outbox.models import OutboxEvent
 
 
 @admin.register(OutboxEvent)
-class OutboxEventAdmin(admin.ModelAdmin):
+class OutboxEventAdmin(UnfoldModelAdmin):
     list_display = (
         "id",
         "event_type",

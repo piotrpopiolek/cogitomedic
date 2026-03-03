@@ -5,11 +5,16 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.urls import reverse
 from django.utils.html import format_html
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 from apps.users.models import StaffUser
 
 
 @admin.register(StaffUser)
-class StaffUserAdmin(BaseUserAdmin):
+class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
     list_display = ("username", "email", "first_name", "last_name", "role", "is_staff", "is_active", "edit_link")
     list_display_links = ("username",)
     list_filter = ("role", "is_staff", "is_active")
