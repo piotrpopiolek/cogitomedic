@@ -157,3 +157,46 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(first_result.intake_form_id, second_result.intake_form_id)
         intake_form = PatientIntakeForm.objects.get(queue_entry=queue_entry)
         self.assertEqual(intake_form.session_id, second_result.session_id)
+
+    def test_patients_api_view_doctor_filtered(self) -> None:
+        from django.test import Client
+        
+        doctor_user = StaffUser.objects.create_user(
+            username="doc_test",
+            email="doc_test@example.com",
+            password="pwd",
+            role=StaffRole.DOCTOR,
+            is_staff=True,
+        )
+        # Assign clinic to doctor
+        doctor_user.clinic_sites.add(self.clinic)
+        
+        # Create a patient assigned to self.clinic
+        patient1 = Patient.objects.create(
+            first_name="Test1",
+            last_name="Test1",
+            date_of_birth=date(1991, 1, 1),
+            phone="+48111111111",
+            email="test1@example.com"
+        )
+        patient1.clinic_sites.add(self.clinic)
+
+        # Create a patient NOT assigned to self.clinic
+        other_clinic = ClinicSite.objects.create(code="OTH", name="Other")
+        patient2 = Patient.objects.create(
+            first_name="Test2",
+            last_name="Test2",
+            date_of_birth=date(1991, 1, 1),
+            phone="+48111111112",
+            email="test2@example.com"
+        )
+        patient2.clinic_sites.add(other_clinic)
+
+        client = Client()
+        client.force_login(doctor_user)
+        response = client.get("/api/v1/patients")
+        self.assertEqual(response.status_code, 200)
+        
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], str(patient1.id))
