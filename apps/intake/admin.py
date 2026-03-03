@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import admin
+from django.urls import reverse
 
 from apps.intake.models import (
     AnamnesisOptionDefinition,
@@ -12,9 +13,15 @@ from apps.intake.models import (
     PatientIntakeForm,
 )
 
+try:
+    from unfold.admin import ModelAdmin as UnfoldModelAdmin
+except ImportError:
+    UnfoldModelAdmin = admin.ModelAdmin
+
 
 @admin.register(ConsentDefinition)
-class ConsentDefinitionAdmin(admin.ModelAdmin):
+class ConsentDefinitionAdmin(UnfoldModelAdmin):
+    show_add_link = True
     list_display = ("code", "version", "title_de", "title_en", "title_pl", "is_required", "is_active", "display_order", "effective_from", "created_at")
     list_filter = ("is_required", "is_active")
     search_fields = ("code", "title_de", "title_en", "title_pl")
@@ -25,6 +32,18 @@ class ConsentDefinitionAdmin(admin.ModelAdmin):
         ("English", {"fields": ("title_en", "content_en")}),
         ("Polski", {"fields": ("title_pl", "content_pl")}),
     )
+
+    def has_add_permission(self, request):
+        if request.user.is_authenticated and request.user.is_staff:
+            return True
+        return super().has_add_permission(request)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        if self.has_add_permission(request):
+            info = self.model._meta.app_label, self.model._meta.model_name
+            extra_context["add_url"] = reverse("admin:%s_%s_add" % info)
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(AnamnesisQuestionDefinition)
