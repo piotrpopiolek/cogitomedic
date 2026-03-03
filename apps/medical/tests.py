@@ -208,3 +208,63 @@ class MedicalServicesTests(TestCase):
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(self.medical_document.versions.count(), 1)
+
+
+    def test_check_doctor_document_access_allows_author(self) -> None:
+        from apps.medical.services import check_doctor_document_access
+        
+        # doctor_user is the author of self.medical_document
+        # Should not raise exception
+        check_doctor_document_access(self.medical_document, self.doctor_user)
+
+    def test_check_doctor_document_access_allows_assigned_doctor(self) -> None:
+        from apps.medical.services import check_doctor_document_access
+        from django.core.exceptions import ObjectDoesNotExist
+
+        other_doctor = StaffUser.objects.create_user(
+            username="otherdoc",
+            email="otherdoc@example.com",
+            password="pwd",
+            role=StaffRole.DOCTOR,
+            is_staff=True,
+        )
+
+        # Should raise initially
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_document_access(self.medical_document, other_doctor)
+
+        # Assign other_doctor to the queue
+        self.medical_document.queue_entry.daily_queue.assigned_doctor = other_doctor
+        self.medical_document.queue_entry.daily_queue.save()
+
+        # Should not raise now
+        check_doctor_document_access(self.medical_document, other_doctor)
+
+    def test_check_doctor_document_access_allows_admin(self) -> None:
+        from apps.medical.services import check_doctor_document_access
+
+        admin_user = StaffUser.objects.create_user(
+            username="adminuser",
+            email="admin@example.com",
+            password="pwd",
+            role=StaffRole.ADMIN,
+            is_staff=True,
+        )
+
+        # Admin can access any document
+        check_doctor_document_access(self.medical_document, admin_user)
+
+    def test_check_doctor_queue_entry_access(self) -> None:
+        from apps.medical.services import check_doctor_queue_entry_access
+        from django.core.exceptions import ObjectDoesNotExist
+
+        # Initial state: queue has no assigned_doctor
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
+            
+        # Assign to queue
+        self.queue_entry.daily_queue.assigned_doctor = self.doctor_user
+        self.queue_entry.daily_queue.save()
+        
+        # Now it works
+        check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
