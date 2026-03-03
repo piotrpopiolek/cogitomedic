@@ -65,6 +65,7 @@ class MedicalDocument(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "-updated_at"]),
+            models.Index(fields=["created_by_user", "-created_at"]),
         ]
 
 

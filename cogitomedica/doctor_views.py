@@ -31,7 +31,6 @@ from apps.medical.services import (
     get_medical_document_context,
     list_doctor_work_queue,
     parse_medical_documents_list_params,
-    _doctor_consulting_room_id,
 )
 from apps.reception.models import QueueEntry
 from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
@@ -138,10 +137,9 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     list_params = parse_medical_documents_list_params(request.GET)
-    consulting_room_id = _doctor_consulting_room_id(request.user)
     list_items, total = list_doctor_work_queue(
         **list_params,
-        consulting_room_id=consulting_room_id,
+        user=request.user,
     )
     lang = _apply_doctor_lang(request)
     if request.GET.get("lang"):

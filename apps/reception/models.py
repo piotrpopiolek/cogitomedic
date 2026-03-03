@@ -236,6 +236,7 @@ class DailyQueue(models.Model):
         db_table = "daily_queue"
         indexes = [
             models.Index(fields=["queue_date"]),
+            models.Index(fields=["assigned_doctor", "queue_date", "status"]),
         ]
         constraints = [
             models.UniqueConstraint(
