@@ -20,11 +20,6 @@ from apps.outbox.services import retry_outbox_event
 from apps.reception.models import QueueEntry
 
 
-def _doctor_consulting_room_id(user: Any) -> uuid.UUID | None:
-    """Return consulting_room_id if doctor is restricted to one cabinet, else None (can see all)."""
-    return getattr(user, "consulting_room_id", None)
-
-
 def _event_status_to_stage_status(event: OutboxEvent | None, completed: bool) -> str:
     if completed:
         return "COMPLETED"

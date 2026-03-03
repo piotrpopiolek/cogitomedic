@@ -36,7 +36,6 @@ from apps.medical.services import (
     parse_medical_documents_list_params,
     publish_document_version,
     save_draft_document_version,
-    _doctor_consulting_room_id,
     retry_latest_document_processing,
 )
 from apps.medical.template_services import (
