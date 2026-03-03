@@ -588,6 +588,12 @@ def save_intake_signature(
     if len(raw) > SIGNATURE_MAX_SIZE:
         raise InvalidSignatureError(f"Signature payload exceeds max size ({SIGNATURE_MAX_SIZE} bytes).")
 
+    # Dodana walidacja formatu za pomocą magic bytes
+    is_png = raw.startswith(b"\x89PNG\r\n\x1a\n")
+    is_jpeg = raw.startswith(b"\xff\xd8\xff")
+    if not (is_png or is_jpeg):
+        raise InvalidSignatureError("Invalid image format. Only PNG and JPEG files are supported.")
+
     sha256_hash = hashlib.sha256(raw).hexdigest()
     now = timezone.now()
     year_month = now.strftime("%Y/%m")

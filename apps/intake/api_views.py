@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 from json import JSONDecodeError
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_http_methods
+from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
@@ -36,11 +38,17 @@ from apps.intake.services import (
     submit_patient_intake_form,
 )
 
+LOCALE_PATTERN = re.compile(r"^(de|en|pl)(-[A-Z]{2})?$")
+
 
 def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> JsonResponse:
     """Build and return GET intake form context (shared by view and PATCH response)."""
     is_tablet = getattr(request.user, "role", None) == "TABLET"
     form_locale = request.GET.get("form_locale", "de-DE")[:10]
+    
+    if not LOCALE_PATTERN.match(form_locale):
+        return json_error("Invalid form_locale format.", status=400)
+        
     context = get_intake_form_context(
         intake_form_id=intake_form_id,
         form_locale=form_locale,
@@ -50,6 +58,7 @@ def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> Jso
 
 
 @require_auth
+@ratelimit(key="ip", rate="20/m", block=True)
 def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """GET intake form context; PATCH body_map_data."""
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
@@ -90,6 +99,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
 
 @require_auth
 @require_http_methods(["PUT"])
+@ratelimit(key="ip", rate="20/m", block=True)
 def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """PUT intake form consents (acceptance set)."""
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
@@ -141,6 +151,7 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
 
 @require_auth
 @require_http_methods(["POST"])
+@ratelimit(key="ip", rate="10/m", block=True)
 def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     """POST upload signature (base64 image)."""
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
@@ -173,6 +184,7 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
 
 
 @require_auth
+@ratelimit(key="ip", rate="20/m", block=True)
 def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
@@ -211,6 +223,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
 
 
 @require_auth
+@ratelimit(key="ip", rate="5/m", block=True)
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"})
     if role_error:
