@@ -190,6 +190,9 @@ class ClinicSite(models.Model):
     class Meta:
         db_table = "clinic_site"
 
+    def __str__(self) -> str:
+        return self.name or self.code or str(self.id)
+
 
 class ConsultingRoom(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
