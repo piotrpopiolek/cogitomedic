@@ -109,6 +109,11 @@ def _is_admin_role(request) -> bool:
     return bool(user and user.is_authenticated and getattr(user, "role", None) == "ADMIN")
 
 
+def _is_doctor_or_admin_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(user and user.is_authenticated and getattr(user, "role", None) in ["ADMIN", "DOCTOR"])
+
+
 if HAS_UNFOLD:
     UNFOLD = {
         "SITE_TITLE": "Cogitomedica Staff",
@@ -119,22 +124,25 @@ if HAS_UNFOLD:
                 {
                     "title": "Panele",
                     "separator": True,
-                    "permission": lambda request: _is_admin_role(request),
+                    "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
                             "title": "Lekarz",
                             "icon": "stethoscope",
                             "link": lambda request: reverse_lazy("doctor-list"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                         {
                             "title": "Rejestracja",
                             "icon": "groups",
                             "link": lambda request: reverse_lazy("tablet:home"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Admin",
                             "icon": "admin_panel_settings",
                             "link": lambda request: reverse_lazy("admin:index"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
@@ -146,72 +154,91 @@ if HAS_UNFOLD:
                             "title": "Staff users",
                             "icon": "person",
                             "link": lambda request: reverse_lazy("admin:users_staffuser_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Grupy",
                             "icon": "group_work",
                             "link": lambda request: reverse_lazy("admin:auth_group_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
                 {
-                    "title": "Rejestracja",
-                    "permission": lambda request: _is_admin_role(request),
+                    "title": "Pacjenci i kliniki (tylko odczyt)",
+                    "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
                             "title": "Pacjenci",
-                            "icon": "person_add",
+                            "icon": "person",
                             "link": lambda request: reverse_lazy("admin:reception_patient_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                         {
-                            "title": "Historia kontaktu pacjenta",
+                            "title": "Historia kontaktu",
                             "icon": "history",
                             "link": lambda request: reverse_lazy("admin:reception_patientcontacthistory_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                         {
                             "title": "Placówki",
                             "icon": "local_hospital",
                             "link": lambda request: reverse_lazy("admin:reception_clinicsite_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                         {
                             "title": "Gabinety",
                             "icon": "meeting_room",
                             "link": lambda request: reverse_lazy("admin:reception_consultingroom_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
+                    ],
+                },
+                {
+                    "title": "Rejestracja (Admin)",
+                    "permission": lambda request: _is_admin_role(request),
+                    "items": [
                         {
                             "title": "Kolejki dzienne",
                             "icon": "today",
                             "link": lambda request: reverse_lazy("admin:reception_dailyqueue_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Kolejki master/detail",
                             "icon": "table_rows",
                             "link": lambda request: reverse_lazy("admin:reception_dailyqueue_master_detail"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Wpisy kolejki",
                             "icon": "format_list_numbered",
                             "link": lambda request: reverse_lazy("admin:reception_queueentry_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Urządzenia tablet",
                             "icon": "tablet",
                             "link": lambda request: reverse_lazy("admin:reception_tabletdevice_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Sesje formularzy",
                             "icon": "schedule",
                             "link": lambda request: reverse_lazy("admin:reception_patientformsession_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Batch importu pacjentów",
                             "icon": "upload_file",
                             "link": lambda request: reverse_lazy("admin:reception_patientimportbatch_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Błędy importu pacjentów",
                             "icon": "error",
                             "link": lambda request: reverse_lazy("admin:reception_patientimporterror_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
@@ -223,63 +250,73 @@ if HAS_UNFOLD:
                             "title": "Definicje zgód",
                             "icon": "verified_user",
                             "link": lambda request: reverse_lazy("admin:intake_consentdefinition_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Pytania anamnezy",
                             "icon": "quiz",
                             "link": lambda request: reverse_lazy("admin:intake_anamnesisquestiondefinition_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Opcje pytań anamnezy",
                             "icon": "list",
                             "link": lambda request: reverse_lazy("admin:intake_anamnesisoptiondefinition_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Formularze intake",
                             "icon": "assignment",
                             "link": lambda request: reverse_lazy("admin:intake_patientintakeform_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Zgody formularzy intake",
                             "icon": "how_to_reg",
                             "link": lambda request: reverse_lazy("admin:intake_patientintakeconsent_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
                 {
                     "title": "Medical",
-                    "permission": lambda request: _is_admin_role(request),
+                    "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
                             "title": "Dokumenty medyczne",
                             "icon": "description",
                             "link": lambda request: reverse_lazy("admin:medical_medicaldocument_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Wersje dokumentów",
                             "icon": "library_books",
                             "link": lambda request: reverse_lazy("admin:medical_medicaldocumentversion_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Szablony lekarza",
                             "icon": "article",
                             "link": lambda request: reverse_lazy("admin:medical_doctortexttemplate_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                     ],
                 },
                 {
                     "title": "Outbox i operacje",
-                    "permission": lambda request: _is_admin_role(request),
+                    "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
                             "title": "Outbox events",
                             "icon": "outbox",
                             "link": lambda request: reverse_lazy("admin:outbox_outboxevent_changelist"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                         {
                             "title": "Audit events",
                             "icon": "fact_check",
                             "link": lambda request: reverse_lazy("admin:operations_auditevent_changelist"),
+                            "permission": lambda request: _is_doctor_or_admin_role(request),
                         },
                     ],
                 },
@@ -291,6 +328,7 @@ if HAS_UNFOLD:
                             "title": "Swagger",
                             "icon": "description",
                             "link": lambda request: reverse_lazy("api-swagger"),
+                            "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
