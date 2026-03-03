@@ -31,6 +31,9 @@ from apps.reception.models import QueueEntry, QueueEntryStatus
 
 logger = logging.getLogger(__name__)
 
+CONTACT_METHOD_CONSENT_CODE = "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG"
+CONTACT_METHOD_ALLOWED_OPTIONS = {"EMAIL", "SMS", "PHONE"}
+
 
 class RequiredConsentMissingError(DomainError):
     """Raised when required active consent is not accepted."""
@@ -354,6 +357,12 @@ def get_intake_form_context(
     for cd in consent_defs:
         cd_id = cd["id"]
         pic = consent_by_def_id.get(cd_id)
+        selected_option_codes = []
+        if pic:
+            raw_codes = pic.selected_option_codes if isinstance(pic.selected_option_codes, list) else []
+            selected_option_codes = [str(x).strip().upper() for x in raw_codes if str(x).strip()]
+            if not selected_option_codes and (pic.selected_option_code or "").strip():
+                selected_option_codes = [(pic.selected_option_code or "").strip().upper()]
         if use_en and (cd.get("title_en") or "").strip():
             title = cd["title_en"]
             content = (cd.get("content_en") or "").strip() or (cd["content_de"] or "")
@@ -371,6 +380,8 @@ def get_intake_form_context(
             "is_required": cd["is_required"],
             "accepted": pic.accepted if pic else False,
             "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
+            "selected_option_codes": selected_option_codes,
+            "selected_option_code": selected_option_codes[0] if selected_option_codes else "",
         })
 
     active_options_prefetch = Prefetch(
@@ -484,9 +495,11 @@ def save_intake_consents(
     Raises ConsentNotActiveError if any consent definition is not active for today.
     """
     today = timezone.now().date()
-    effective_ids = set(
-        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values_list("id", flat=True)
+    effective_defs = list(
+        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values("id", "code")
     )
+    effective_ids = {row["id"] for row in effective_defs}
+    consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
     now = timezone.now()
 
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
@@ -500,14 +513,40 @@ def save_intake_consents(
                 f"Consent definition {cdef_id} is not active for date {today}."
             )
         accepted = bool(item.get("accepted"))
+        consent_code = consent_code_by_id.get(cdef_id)
+        raw_codes = item.get("selected_option_codes")
+        selected_option_codes = []
+        if isinstance(raw_codes, list):
+            for raw in raw_codes:
+                val = str(raw).strip().upper()
+                if val and val not in selected_option_codes:
+                    selected_option_codes.append(val)
+        fallback_one = str(item.get("selected_option_code") or "").strip().upper()
+        if fallback_one and fallback_one not in selected_option_codes:
+            selected_option_codes.append(fallback_one)
+        if consent_code == CONTACT_METHOD_CONSENT_CODE and accepted:
+            if not selected_option_codes:
+                raise DomainError("At least one contact method is required (EMAIL, SMS, PHONE).")
+            invalid = [x for x in selected_option_codes if x not in CONTACT_METHOD_ALLOWED_OPTIONS]
+            if invalid:
+                raise DomainError("Selected contact methods are invalid. Allowed: EMAIL, SMS, PHONE.")
+        else:
+            selected_option_codes = []
         pic, _ = PatientIntakeConsent.objects.get_or_create(
             intake_form_id=intake_form.id,
             consent_definition_id=cdef_id,
-            defaults={"accepted": False, "accepted_at": None},
+            defaults={
+                "accepted": False,
+                "accepted_at": None,
+                "selected_option_code": "",
+                "selected_option_codes": [],
+            },
         )
         pic.accepted = accepted
         pic.accepted_at = now if accepted else None
-        pic.save(update_fields=["accepted", "accepted_at"])
+        pic.selected_option_codes = selected_option_codes
+        pic.selected_option_code = selected_option_codes[0] if selected_option_codes else ""
+        pic.save(update_fields=["accepted", "accepted_at", "selected_option_code", "selected_option_codes"])
 
     return intake_form
 

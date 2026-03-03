@@ -10,6 +10,8 @@ class ConsentAcceptanceItem(BaseModel):
 
     consent_definition_id: UUID
     accepted: bool
+    selected_option_code: str | None = None
+    selected_option_codes: list[str] = Field(default_factory=list)
 
 
 class UpdateConsentsRequest(BaseModel):

@@ -54,13 +54,38 @@
       <h2>{{ ui.consents_title }}</h2>
       <div id="consents-msg" class="error" style="display:none;"></div>
       {% for c in consents %}
-      <div class="consent-block">
+      <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
         <h3>{{ c.title }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
         <div class="consent-content">{{ c.content }}</div>
-        <label class="consent-check">
-          <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" data-required="{{ c.is_required|yesno:'true,false' }}" {% if c.accepted %}checked{% endif %}>
-          {{ ui.consent_confirm }}
-        </label>
+        {% if c.code == "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG" %}
+          <label class="consent-check">
+            <input type="checkbox" name="contact-method-{{ c.consent_definition_id }}" value="EMAIL" {% if "EMAIL" in c.selected_option_codes %}checked{% endif %}>
+            E-Mail
+          </label>
+          <label class="consent-check">
+            <input type="checkbox" name="contact-method-{{ c.consent_definition_id }}" value="SMS" {% if "SMS" in c.selected_option_codes %}checked{% endif %}>
+            SMS
+          </label>
+          <label class="consent-check">
+            <input type="checkbox" name="contact-method-{{ c.consent_definition_id }}" value="PHONE" {% if "PHONE" in c.selected_option_codes %}checked{% endif %}>
+            {% if locale_param == "en" %}Phone{% else %}Telefon{% endif %}
+          </label>
+        {% else %}
+          <label class="consent-check">
+            <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" data-required="{{ c.is_required|yesno:'true,false' }}" {% if c.accepted %}checked{% endif %}>
+            {% if c.code == "PRAEVENTIONS_ERINNERUNGEN_EINWILLIGUNG" %}
+              {% if locale_param == "en" %}
+                Yes, I agree to be contacted.
+              {% elif locale_param == "pl" %}
+                Tak, wyrażam zgodę na kontakt.
+              {% else %}
+                Ja, ich bin mit einer Kontaktaufnahme einverstanden.
+              {% endif %}
+            {% else %}
+              {{ ui.consent_confirm }}
+            {% endif %}
+          </label>
+        {% endif %}
       </div>
       {% endfor %}
     </section>
