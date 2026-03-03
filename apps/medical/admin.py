@@ -59,11 +59,39 @@ class MedicalDocumentVersionAdmin(admin.ModelAdmin):
 
 @admin.register(DoctorTextTemplate)
 class DoctorTextTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "template_locale", "owner_user", "is_global", "is_active", "created_at", "updated_at")
+    list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "is_active", "created_at", "updated_at")
     list_filter = ("template_locale", "is_global", "is_active")
     search_fields = ("name", "template_body")
-    raw_id_fields = ("owner_user",)
+    raw_id_fields = ("owner_user", "clinic_site")
     readonly_fields = ("id", "created_at", "updated_at")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # DOCTOR: see own templates + clinic templates + global templates
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(owner_user=request.user) |
+                Q(clinic_site_id__in=request.user.clinic_sites.all()) |
+                Q(is_global=True)
+            ).distinct()
+        return qs
+
+    def has_change_permission(self, request, obj=None):
+        # DOCTOR: can only edit own templates
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            if obj is None:
+                return True  # Allow viewing the list
+            return obj.owner_user_id == request.user.id
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        # DOCTOR: can only delete own templates
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            if obj is None:
+                return True  # Allow viewing the list
+            return obj.owner_user_id == request.user.id
+        return super().has_delete_permission(request, obj)
 
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)

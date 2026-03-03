@@ -76,6 +76,31 @@ class PatientAdmin(admin.ModelAdmin):
     readonly_fields = ("id", "created_at", "updated_at")
     date_hierarchy = "created_at"
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # DOCTOR: only see patients from assigned clinics
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        return qs
+
+    def has_change_permission(self, request, obj=None):
+        # DOCTOR: read-only access (only ADMIN can edit patients)
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        # DOCTOR: no add permission
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        # DOCTOR: no delete permission
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         _ensure_patient_temp_identity_alert(obj)
         super().save_model(request, obj, form, change)
@@ -132,6 +157,28 @@ class PatientContactHistoryAdmin(admin.ModelAdmin):
     date_hierarchy = "changed_at"
     raw_id_fields = ("patient", "changed_by_user")
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # DOCTOR: only see history for patients from assigned clinics
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            qs = qs.filter(patient__clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        return qs
+
+    def has_change_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         _set_changed_by_user(request, obj)
         super().save_model(request, obj, form, change)
@@ -143,6 +190,28 @@ class ClinicSiteAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = ("code", "name")
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # DOCTOR: only see assigned clinics
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            qs = qs.filter(id__in=request.user.clinic_sites.all())
+        return qs
+
+    def has_change_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
+
 
 @admin.register(ConsultingRoom)
 class ConsultingRoomAdmin(admin.ModelAdmin):
@@ -150,6 +219,28 @@ class ConsultingRoomAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "clinic_site")
     search_fields = ("code", "name")
     raw_id_fields = ("clinic_site",)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # DOCTOR: only see rooms from assigned clinics
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            qs = qs.filter(clinic_site_id__in=request.user.clinic_sites.all())
+        return qs
+
+    def has_change_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(DailyQueue)
