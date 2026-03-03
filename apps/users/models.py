@@ -38,6 +38,12 @@ class StaffUser(AbstractUser):
         null=True,
         related_name="staff_users",
     )
+    clinic_sites = models.ManyToManyField(
+        "reception.ClinicSite",
+        db_table="staff_user_clinic_site",
+        related_name="staff_users",
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

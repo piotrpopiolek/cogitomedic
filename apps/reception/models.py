@@ -85,6 +85,12 @@ class Patient(models.Model):
         max_length=30, choices=PatientExternalSource.choices, blank=True, null=True
     )
     external_source_id = models.CharField(max_length=100, blank=True, null=True)
+    clinic_sites = models.ManyToManyField(
+        "reception.ClinicSite",
+        db_table="patient_clinic_site",
+        related_name="patients",
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -213,6 +219,13 @@ class DailyQueue(models.Model):
     shift_code = models.CharField(max_length=20, choices=QueueShift.choices, default=QueueShift.FULL_DAY)
     source = models.CharField(max_length=20, choices=QueueSource.choices, default=QueueSource.MANUAL)
     status = models.CharField(max_length=20, choices=QueueStatus.choices, default=QueueStatus.OPEN)
+    assigned_doctor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="assigned_queues",
+    )
     created_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="created_queues"
     )

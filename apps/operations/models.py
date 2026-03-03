@@ -39,6 +39,13 @@ class AuditEvent(models.Model):
         null=True,
         related_name="audit_events",
     )
+    context_clinic_site = models.ForeignKey(
+        "reception.ClinicSite",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="audit_events",
+    )
     metadata = models.JSONField(default=dict)
 
     class Meta:

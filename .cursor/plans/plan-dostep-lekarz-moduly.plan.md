@@ -223,110 +223,110 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 ## 4b. Plan migracji danych i rollback (MVP -> docelowy model)
 
 1. **Migracja schematu (bez zmian behawioralnych):**
-   - dodać `staff_user_clinic_site`,
-   - dodać `daily_queue.assigned_doctor_id` (nullable),
-   - dodać `patient_clinic_site`,
-   - dodać `audit_event.context_clinic_site_id` + indeks GIN na `audit_event.metadata`,
-   - w `doctor_text_template` wprowadzić `clinic_site_id` i rozpocząć odchodzenie od `is_global`.
+  - dodać `staff_user_clinic_site`,
+  - dodać `daily_queue.assigned_doctor_id` (nullable),
+  - dodać `patient_clinic_site`,
+  - dodać `audit_event.context_clinic_site_id` + indeks GIN na `audit_event.metadata`,
+  - w `doctor_text_template` wprowadzić `clinic_site_id` i rozpocząć odchodzenie od `is_global`.
 2. **Backfill danych historycznych:**
-   - uzupełnić `staff_user_clinic_site` na podstawie historycznych kolejek i gabinetów,
-   - uzupełnić `patient_clinic_site` na podstawie `queue_entry -> daily_queue` (upsert po `(patient_id, clinic_site_id)`),
-   - uzupełnić `daily_queue.assigned_doctor_id` tam, gdzie można wywnioskować lekarza z dokumentów/operacji dziennych,
-   - uzupełnić `audit_event.metadata` kluczami `clinic_site_id`, `assigned_doctor_id`, `medical_document_id` (jeżeli brak).
+  - uzupełnić `staff_user_clinic_site` na podstawie historycznych kolejek i gabinetów,
+  - uzupełnić `patient_clinic_site` na podstawie `queue_entry -> daily_queue` (upsert po `(patient_id, clinic_site_id)`),
+  - uzupełnić `daily_queue.assigned_doctor_id` tam, gdzie można wywnioskować lekarza z dokumentów/operacji dziennych,
+  - uzupełnić `audit_event.metadata` kluczami `clinic_site_id`, `assigned_doctor_id`, `medical_document_id` (jeżeli brak).
 3. **Tryb przejściowy aplikacji (kompatybilność):**
-   - feature flag `doctor_scope_v2`,
-   - przy `doctor_scope_v2=false`: stary mechanizm,
-   - przy `doctor_scope_v2=true`: nowe reguły `AUTHOR OR ASSIGNED_QUEUE` + kliniki,
-   - podwójny zapis kontekstu audytu (stare + nowe pola) do czasu stabilizacji.
+  - feature flag `doctor_scope_v2`,
+  - przy `doctor_scope_v2=false`: stary mechanizm,
+  - przy `doctor_scope_v2=true`: nowe reguły `AUTHOR OR ASSIGNED_QUEUE` + kliniki,
+  - podwójny zapis kontekstu audytu (stare + nowe pola) do czasu stabilizacji.
 4. **Przełączenie i czyszczenie technicznego długu:**
-   - po weryfikacji metryk i testów: domyślnie `doctor_scope_v2=true`,
-   - usunąć odwołania do `staff_user_consulting_room` w kodzie i dokumentacji,
-   - zakończyć migrację `doctor_text_template` (brak `is_global`, tylko `owner_user_id` XOR `clinic_site_id`).
+  - po weryfikacji metryk i testów: domyślnie `doctor_scope_v2=true`,
+  - usunąć odwołania do `staff_user_consulting_room` w kodzie i dokumentacji,
+  - zakończyć migrację `doctor_text_template` (brak `is_global`, tylko `owner_user_id` XOR `clinic_site_id`).
 5. **Rollback (bez utraty danych):**
-   - rollback logiczny: wyłączyć `doctor_scope_v2`,
-   - rollback schematu: pozostawić nowe kolumny jako nieużywane (nie usuwać od razu),
-   - rollback danych: brak kasowania backfillowanych rekordów; incydenty adresować korektą danych.
+  - rollback logiczny: wyłączyć `doctor_scope_v2`,
+  - rollback schematu: pozostawić nowe kolumny jako nieużywane (nie usuwać od razu),
+  - rollback danych: brak kasowania backfillowanych rekordów; incydenty adresować korektą danych.
 
 ---
 
 ## 4c. Kontrakty API do zamrożenia (Definition of Done)
 
 1. **Staff przypisania klinik:**
-   - `GET /staff-users/{id}/clinic-sites`
-   - `POST /staff-users/{id}/clinic-sites` z payloadem:
-     - `clinic_site_ids: uuid[]` (replace-all)
+  - `GET /staff-users/{id}/clinic-sites`
+  - `POST /staff-users/{id}/clinic-sites` z payloadem:
+    - `clinic_site_ids: uuid[]` (replace-all)
 2. **Kolejki lekarza:**
-   - `GET /daily-queues` zwraca tylko rekordy, gdzie `assigned_doctor_id == current_user.id`
-   - `GET /daily-queues/{id}/entries` i `GET /queue-entries/{id}` respektują ten sam filtr
+  - `GET /daily-queues` zwraca tylko rekordy, gdzie `assigned_doctor_id == current_user.id`
+  - `GET /daily-queues/{id}/entries` i `GET /queue-entries/{id}` respektują ten sam filtr
 3. **Pacjenci:**
-   - `GET /patients` filtruje po `patient_clinic_site` i `staff_user_clinic_site`
+  - `GET /patients` filtruje po `patient_clinic_site` i `staff_user_clinic_site`
 4. **Dokumenty i audit:**
-   - `GET /medical-documents*`: reguła `AUTHOR OR ASSIGNED_QUEUE`
-   - `GET /audit-events`: filtrowanie po kluczach kontekstowych w `audit_event.metadata`
-   - `GET /medical-documents/{id}/audit-trail`: tylko dla dokumentów w zakresie autoryzacji lekarza
+  - `GET /medical-documents*`: reguła `AUTHOR OR ASSIGNED_QUEUE`
+  - `GET /audit-events`: filtrowanie po kluczach kontekstowych w `audit_event.metadata`
+  - `GET /medical-documents/{id}/audit-trail`: tylko dla dokumentów w zakresie autoryzacji lekarza
 5. **Szablony tekstu:**
-   - `GET /doctor-text-templates` z `scope=clinic|private|all`
-   - create/update szablonu: `owner_user_id` XOR `clinic_site_id`
+  - `GET /doctor-text-templates` z `scope=clinic|private|all`
+  - create/update szablonu: `owner_user_id` XOR `clinic_site_id`
 6. **Publikacja dokumentu:**
-   - `POST /medical-documents/{id}/publish` wymaga `publish_locale`
-   - `publish_locale` jest persistowane na `medical_document_version`
+  - `POST /medical-documents/{id}/publish` wymaga `publish_locale`
+  - `publish_locale` jest persistowane na `medical_document_version`
 
 ---
 
 ## 4d. Wydajność i SLA (przed implementacją endpointów)
 
 1. **SLA p95 (target):**
-   - `GET /patients`: <= 250 ms (page_size <= 20)
-   - `GET /medical-documents`: <= 300 ms
-   - `GET /audit-events`: <= 300 ms
+  - `GET /patients`: <= 250 ms (page_size <= 20)
+  - `GET /medical-documents`: <= 300 ms
+  - `GET /audit-events`: <= 300 ms
 2. **Indeksy krytyczne:**
-   - `patient_clinic_site(patient_id, clinic_site_id)` + odwrotny `(clinic_site_id, patient_id)`
-   - `daily_queue(assigned_doctor_id, queue_date, status)`
-   - `medical_document(created_by_user_id, created_at)` + indeksy relacyjne do `queue_entry`
-   - `audit_event USING GIN (metadata jsonb_path_ops)` oraz B-Tree po `event_time`
+  - `patient_clinic_site(patient_id, clinic_site_id)` + odwrotny `(clinic_site_id, patient_id)`
+  - `daily_queue(assigned_doctor_id, queue_date, status)`
+  - `medical_document(created_by_user_id, created_at)` + indeksy relacyjne do `queue_entry`
+  - `audit_event USING GIN (metadata jsonb_path_ops)` oraz B-Tree po `event_time`
 3. **Zapytania referencyjne do benchmarków:**
-   - wyszukiwarka pacjentów (`search` + `clinic_site` scope)
-   - work queue lekarza (`doctor_view`, `queue_date`)
-   - audit feed lekarza (filtr po `metadata.assigned_doctor_id`)
+  - wyszukiwarka pacjentów (`search` + `clinic_site` scope)
+  - work queue lekarza (`doctor_view`, `queue_date`)
+  - audit feed lekarza (filtr po `metadata.assigned_doctor_id`)
 4. **Warunek wejścia na produkcję:**
-   - brak pełnych skanów tabel dla krytycznych endpointów przy danych testowych >= 1M rekordów audit.
+  - brak pełnych skanów tabel dla krytycznych endpointów przy danych testowych >= 1M rekordów audit.
 
 ---
 
 ## 4e. Plan testów autoryzacji i regresji
 
 1. **Role i zakresy:**
-   - testy `DOCTOR`, `ADMIN`, `RECEPTION`, `TABLET` dla endpointów sekcji 3.x
+  - testy `DOCTOR`, `ADMIN`, `RECEPTION`, `TABLET` dla endpointów sekcji 3.x
 2. **Scenariusze krytyczne:**
-   - lekarz traci bieżące przypisanie, ale widzi własne historyczne dokumenty (AUTHOR)
-   - dwóch lekarzy dzieli gabinet na zmianach i widzi tylko swoje kolejki
-   - lekarz widzi historię pacjenta w swojej klinice, nie widzi poza kliniką
-   - audit zwraca tylko dokumenty w zakresie autoryzacji
+  - lekarz traci bieżące przypisanie, ale widzi własne historyczne dokumenty (AUTHOR)
+  - dwóch lekarzy dzieli gabinet na zmianach i widzi tylko swoje kolejki
+  - lekarz widzi historię pacjenta w swojej klinice, nie widzi poza kliniką
+  - audit zwraca tylko dokumenty w zakresie autoryzacji
 3. **Testy kontraktowe API:**
-   - walidacja payloadów i filtrów z sekcji 4c
+  - walidacja payloadów i filtrów z sekcji 4c
 4. **Testy wydajnościowe:**
-   - smoke performance dla `/patients`, `/medical-documents`, `/audit-events` z danymi wolumenowymi
+  - smoke performance dla `/patients`, `/medical-documents`, `/audit-events` z danymi wolumenowymi
 
 ---
 
 ## 4f. Observability, feature flag i rollout
 
 1. **Minimalne logi:**
-   - `doctor_scope_decision` (`ALLOW`/`DENY`, endpoint, reason_code)
-   - `audit_scope_query` (czas, liczba rekordów)
+  - `doctor_scope_decision` (`ALLOW`/`DENY`, endpoint, reason_code)
+  - `audit_scope_query` (czas, liczba rekordów)
 2. **Metryki:**
-   - `doctor_scope_denied_total`
-   - `doctor_scope_allowed_total`
-   - `endpoint_latency_ms{endpoint=...}` (p50/p95/p99)
+  - `doctor_scope_denied_total`
+  - `doctor_scope_allowed_total`
+  - `endpoint_latency_ms{endpoint=...}` (p50/p95/p99)
 3. **Feature flag:**
-   - `doctor_scope_v2` (off -> old behavior, on -> nowy model)
+  - `doctor_scope_v2` (off -> old behavior, on -> nowy model)
 4. **Rollout:**
-   - etap 1: staging + testy integracyjne
-   - etap 2: produkcja na wybranej klinice (canary)
-   - etap 3: pełne włączenie i usunięcie starej ścieżki
+  - etap 1: staging + testy integracyjne
+  - etap 2: produkcja na wybranej klinice (canary)
+  - etap 3: pełne włączenie i usunięcie starej ścieżki
 5. **GO/NO-GO:**
-   - GO: brak krytycznych DENY false-positive, SLA spełnione, brak wzrostu 5xx
-   - NO-GO: przekroczenia SLA lub błędy autoryzacji wpływające na workflow lekarza
+  - GO: brak krytycznych DENY false-positive, SLA spełnione, brak wzrostu 5xx
+  - NO-GO: przekroczenia SLA lub błędy autoryzacji wpływające na workflow lekarza
 
 ---
 
@@ -350,22 +350,22 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 
 ## 5a. Kontrakt autoryzacji object-level (ALLOW / DENY)
 
-1. **`daily-queues`**
+1. `**daily-queues`**
   - `ALLOW`: `daily_queue.assigned_doctor_id == current_user.id`
   - `DENY`: każdy inny przypadek
-2. **`queue-entries`**
+2. `**queue-entries`**
   - `ALLOW`: `queue_entry.daily_queue.assigned_doctor_id == current_user.id`
   - `DENY`: każdy inny przypadek
-3. **`patients`**
+3. `**patients`**
   - `ALLOW`: istnieje rekord `patient_clinic_site(patient_id, clinic_site_id)` oraz `clinic_site_id` jest w `staff_user_clinic_site` lekarza
   - `DENY`: pacjent poza zakresem klinik lekarza
-4. **`medical-documents`**
+4. `**medical-documents`**
   - `ALLOW`: `medical_document.created_by_user_id == current_user.id` **OR** `medical_document.queue_entry.daily_queue.assigned_doctor_id == current_user.id`
   - `DENY`: brak obu warunków
-5. **`audit-events`**
+5. `**audit-events`**
   - `ALLOW`: `audit_event.metadata.assigned_doctor_id == current_user.id` **OR** (`audit_event.metadata.actor_user_id == current_user.id` i event dotyczy dokumentu widocznego dla lekarza)
   - `DENY`: brak obu warunków
-6. **`doctor-text-templates`**
+6. `**doctor-text-templates`**
   - `ALLOW-READ`: `owner_user_id == current_user.id` **OR** `clinic_site_id` w `staff_user_clinic_site` lekarza
   - `ALLOW-WRITE`: tylko `owner_user_id == current_user.id`
   - `DENY`: każdy inny przypadek

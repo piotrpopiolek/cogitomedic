@@ -67,24 +67,25 @@ def _latest_error_message(version: MedicalDocumentVersion) -> str | None:
 
 def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     """
-    Raise ObjectDoesNotExist if user (doctor) is restricted to a consulting_room and document
-    belongs to a different room. No-op when user.consulting_room_id is None.
+    Raise ObjectDoesNotExist if user (doctor) does not have access.
+    Access is granted if user is the author OR is assigned to the document's queue.
+    ADMIN has access to all.
     """
-    room_id = _doctor_consulting_room_id(user)
-    if room_id is None:
+    if getattr(user, "role", None) == "ADMIN":
         return
-    doc_room_id = document.queue_entry.daily_queue.consulting_room_id
-    if doc_room_id != room_id:
-        raise ObjectDoesNotExist("Medical document not found.")
-
+    if document.created_by_user_id == user.id:
+        return
+    if document.queue_entry.daily_queue.assigned_doctor_id == user.id:
+        return
+    raise ObjectDoesNotExist("Medical document not found.")
 
 def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
-    """Raise ObjectDoesNotExist if user is restricted to a consulting_room and entry is from another room."""
-    room_id = _doctor_consulting_room_id(user)
-    if room_id is None:
+    """Raise ObjectDoesNotExist if user does not have access to the queue entry."""
+    if getattr(user, "role", None) == "ADMIN":
         return
-    if queue_entry.daily_queue.consulting_room_id != room_id:
-        raise ObjectDoesNotExist("Queue entry not found.")
+    if queue_entry.daily_queue.assigned_doctor_id == user.id:
+        return
+    raise ObjectDoesNotExist("Queue entry not found.")
 
 
 def create_or_get_medical_document(
@@ -373,14 +374,13 @@ def list_medical_documents(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
-    consulting_room_id: uuid.UUID | None = None,
+    user: Any = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[MedicalDocument], int]:
     """
     List medical documents for doctor work queue.
-    When consulting_room_id is set, only documents from that cabinet are returned.
-    Returns (list of documents with prefetched latest version, total count).
+    If user is DOCTOR, returns only documents where user is author OR assigned to queue.
     """
     qs = (
         MedicalDocument.objects.select_related(
@@ -398,8 +398,10 @@ def list_medical_documents(
         )
         .order_by("-updated_at")
     )
-    if consulting_room_id is not None:
-        qs = qs.filter(queue_entry__daily_queue__consulting_room_id=consulting_room_id)
+    if getattr(user, "role", None) != "ADMIN" and user is not None:
+        qs = qs.filter(
+            Q(created_by_user_id=user.id) | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+        )
     if status:
         qs = qs.filter(status=status)
     if queue_date is not None:
@@ -422,22 +424,22 @@ def list_doctor_work_queue(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
-    consulting_room_id: uuid.UUID | None = None,
+    user: Any = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict[str, Any]], int]:
     """
     List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
-    When consulting_room_id is set, only entries from that cabinet are returned.
-    Returns (list of item dicts, total count). Item dict: document_id (or None), queue_entry_id,
-    intake_form_id, patient, queue_date, status, pdf_generation_status, hidrive_sent, sms_sent.
     """
     qs = (
         PatientIntakeForm.objects.filter(form_status=IntakeStatus.SUBMITTED)
         .select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     )
-    if consulting_room_id is not None:
-        qs = qs.filter(queue_entry__daily_queue__consulting_room_id=consulting_room_id)
+    if getattr(user, "role", None) != "ADMIN" and user is not None:
+        qs = qs.filter(
+            Q(queue_entry__medical_document__created_by_user_id=user.id) | 
+            Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+        )
     if status:
         qs = qs.filter(
             queue_entry_id__in=MedicalDocument.objects.filter(status=status).values_list("queue_entry_id", flat=True)
