@@ -589,7 +589,8 @@ def get_medical_document_context(
                 completed=current_version.sms_sent,
             ),
             "processing_error_message": _latest_error_message(current_version),
-            "can_retry_processing": retryable_event is not None and getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False),
+            "can_retry_processing": retryable_event is not None
+            and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
             "publish_locale": current_version.publish_locale,
             "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
         }

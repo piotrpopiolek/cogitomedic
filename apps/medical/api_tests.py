@@ -420,6 +420,67 @@ class MedicalApiTests(TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("details", r.json())
 
+    def test_medical_document_draft_preserves_full_v1_payload(self) -> None:
+        """Draft with full medical_payload v1: roundtrip via MedicalPayloadMinimal + validate_medical_payload_v1 preserves all fields."""
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        full_payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["FOLLOWUP_3_MONTHS"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            "lesions": [
+                {
+                    "lesion_numbers": [5],
+                    "dermatoscopic_features": ["ASYMMETRY"],
+                    "clinical_assessment": "CONTROL_NEEDED",
+                    "malignancy_risk": "NO_SUSPICION",
+                    "edited_text": "Befundtext Läsion 5",
+                }
+            ],
+            "summary_edited_text": "Zusammenfassung Befund",
+            "template_context": {"template_id": None, "template_name": "Test", "template_locale": "de-DE"},
+        }
+        draft_response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": full_payload,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(draft_response.status_code, 200)
+        version_id = draft_response.json()["medical_document_version_id"]
+        version_detail = self.client.get(f"/api/v1/medical-document-versions/{version_id}")
+        self.assertEqual(version_detail.status_code, 200)
+        saved = version_detail.json()["medical_payload"]
+        self.assertEqual(saved["schema_version"], 1)
+        self.assertEqual(saved["authoring_locale"], "de-DE")
+        self.assertEqual(saved["examination_scope"], ["INTIMATE_AREA_NOT_EXAMINED"])
+        self.assertEqual(saved["fitzpatrick_type"], "TYPE_III")
+        self.assertEqual(saved["overall_image_assessment"], "NO_CONTROL_NEEDED")
+        self.assertEqual(len(saved["lesions"]), 1)
+        self.assertEqual(saved["lesions"][0]["lesion_numbers"], [5])
+        self.assertEqual(saved["lesions"][0]["edited_text"], "Befundtext Läsion 5")
+        self.assertEqual(saved["summary_edited_text"], "Zusammenfassung Befund")
+        self.assertIsNotNone(saved.get("template_context"))
+
     def test_publish_accepts_resend_sms(self) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",

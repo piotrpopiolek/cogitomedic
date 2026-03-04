@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -608,15 +608,26 @@ def medical_document_audit_trail_view(request: HttpRequest, medical_document_id:
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
 
-    events = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by("-event_time")
-    
-    items = []
-    for event in events:
-        items.append({
+    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+    qs = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by("-event_time")
+    total = qs.count()
+    start = (page - 1) * page_size
+    events = list(qs[start : start + page_size])
+    items = [
+        {
             "id": str(event.id),
             "event_time": event.event_time.isoformat(),
             "event_type": event.event_type,
             "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
             "metadata": event.metadata,
-        })
-    return JsonResponse({"items": items}, status=200)
+        }
+        for event in events
+    ]
+    return JsonResponse(
+        {
+            "items": items,
+            "pagination": {"page": page, "page_size": page_size, "total": total},
+        },
+        status=200,
+    )
