@@ -62,6 +62,9 @@ class ConsentDefinition(models.Model):
             models.Index(fields=["code", "is_active", "-effective_from"]),
         ]
 
+    def __str__(self) -> str:
+        return self.title_de or f"{self.code} (v{self.version})"
+
 
 class AnamnesisQuestionDefinition(models.Model):
     class AnswerType(models.TextChoices):
@@ -104,6 +107,9 @@ class AnamnesisQuestionDefinition(models.Model):
             models.Index(fields=["code", "is_active", "-effective_from"]),
         ]
 
+    def __str__(self) -> str:
+        return self.question_text_de or f"{self.code} (v{self.version})"
+
 
 class AnamnesisOptionDefinition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -131,6 +137,9 @@ class AnamnesisOptionDefinition(models.Model):
         indexes = [
             models.Index(fields=["question", "is_active", "display_order"]),
         ]
+
+    def __str__(self) -> str:
+        return self.option_text_de or f"{self.code}"
 
 
 class PatientIntakeForm(models.Model):
@@ -186,6 +195,9 @@ class PatientIntakeForm(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return f"Ankieta: {self.queue_entry.patient} ({self.get_form_status_display()})"
+
 
 class PatientIntakeConsent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -220,6 +232,9 @@ class PatientIntakeConsent(models.Model):
         indexes = [
             models.Index(fields=["intake_form", "accepted"]),
         ]
+
+    def __str__(self) -> str:
+        return f"{self.consent_definition} – {'Tak' if self.accepted else 'Nie'}"
 
 
 class IntakeDocumentVersion(models.Model):
@@ -280,6 +295,9 @@ class IntakeDocumentVersion(models.Model):
                 opclasses=["jsonb_path_ops"],
             ),
         ]
+
+    def __str__(self) -> str:
+        return f"Wersja {self.version_no} ankiety {self.intake_form} ({self.get_pdf_generation_status_display()})"
 
 
 class IntakeOutboxEvent(models.Model):
@@ -350,3 +368,6 @@ class IntakeOutboxEvent(models.Model):
                 opclasses=["jsonb_path_ops"],
             ),
         ]
+
+    def __str__(self) -> str:
+        return f"{self.get_event_type_display()} – {self.intake_document_version} ({self.get_status_display()})"

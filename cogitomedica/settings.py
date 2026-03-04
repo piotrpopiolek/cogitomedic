@@ -337,6 +337,9 @@ if HAS_UNFOLD:
         "LOGIN": {
             "redirect_after": lambda request: reverse_lazy("admin:index"),
         },
+        "STYLES": [
+            lambda request: static("cogitomedica/css/unfold-sidebar-fix.css"),
+        ],
         "SCRIPTS": [
             lambda request: static("admin/js/unfold-force-light.js"),
         ],

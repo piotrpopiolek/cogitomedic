@@ -160,6 +160,9 @@ class Patient(models.Model):
                 kwargs["update_fields"] = list(update_fields) + [f for f in extra if f not in update_fields]
         super().save(*args, **kwargs)
 
+    def __str__(self) -> str:
+        return f"{self.last_name} {self.first_name} ({self.date_of_birth})"
+
 
 class PatientContactHistory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -178,6 +181,12 @@ class PatientContactHistory(models.Model):
 
     class Meta:
         db_table = "patient_contact_history"
+
+    def __str__(self) -> str:
+        parts = [str(self.patient)]
+        if self.changed_at:
+            parts.append(self.changed_at.strftime("%Y-%m-%d %H:%M"))
+        return " – ".join(parts)
 
 
 class ClinicSite(models.Model):
@@ -210,6 +219,9 @@ class ConsultingRoom(models.Model):
                 name="consulting_room_site_code_unique",
             )
         ]
+
+    def __str__(self) -> str:
+        return self.name or self.code or str(self.id)
 
 
 class DailyQueue(models.Model):
@@ -247,6 +259,10 @@ class DailyQueue(models.Model):
                 name="daily_queue_unique_slot",
             )
         ]
+
+    def __str__(self) -> str:
+        room = str(self.consulting_room) if self.consulting_room_id else "?"
+        return f"{self.queue_date} – {self.clinic_site} / {room} ({self.get_shift_code_display()})"
 
 
 class QueueEntry(models.Model):
@@ -301,6 +317,9 @@ class QueueEntry(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return f"{self.patient} – poz. {self.position_no} ({self.get_entry_status_display()})"
+
 
 class TabletDevice(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -311,6 +330,9 @@ class TabletDevice(models.Model):
 
     class Meta:
         db_table = "tablet_device"
+
+    def __str__(self) -> str:
+        return f"Tablet {self.android_id[:16]}…" if len(self.android_id or "") > 16 else f"Tablet {self.android_id or '?'}"
 
 
 class PatientFormSession(models.Model):
@@ -361,6 +383,9 @@ class PatientFormSession(models.Model):
                 name="session_consumed_before_expiry",
             ),
         ]
+
+    def __str__(self) -> str:
+        return f"Sesja formularza: {self.queue_entry} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
 
     @classmethod
     def create_session(
@@ -421,6 +446,9 @@ class PatientImportBatch(models.Model):
             )
         ]
 
+    def __str__(self) -> str:
+        return f"Import: {self.source_file_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')}, {self.get_status_display()})"
+
 
 class PatientImportError(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -438,3 +466,9 @@ class PatientImportError(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(row_number__gt=0), name="import_error_row_positive")
         ]
+
+    def __str__(self) -> str:
+        msg = (self.error_message or "")[:50]
+        if len(self.error_message or "") > 50:
+            msg += "…"
+        return f"Wiersz {self.row_number}: {self.error_code}" + (f" – {msg}" if msg else "")
