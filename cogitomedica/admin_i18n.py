@@ -68,6 +68,10 @@ ADMIN_UI_DE = {
     "admin_col_pacjenci": "Patienten",
     "admin_col_widok_wpisow": "Einträge anzeigen",
     "admin_col_pacjenci_dnia": "Patienten des Tages",
+    "btn_save": "Speichern",
+    "btn_save_and_add_another": "Speichern und weiteren hinzufügen",
+    "btn_save_and_continue_editing": "Speichern und weiter bearbeiten",
+    "btn_delete": "Löschen",
 }
 
 ADMIN_UI_EN = {
@@ -130,6 +134,10 @@ ADMIN_UI_EN = {
     "admin_col_pacjenci": "Patients",
     "admin_col_widok_wpisow": "View entries",
     "admin_col_pacjenci_dnia": "Patients of the day",
+    "btn_save": "Save",
+    "btn_save_and_add_another": "Save and add another",
+    "btn_save_and_continue_editing": "Save and continue editing",
+    "btn_delete": "Delete",
 }
 
 ADMIN_UI_PL = {
@@ -192,4 +200,8 @@ ADMIN_UI_PL = {
     "admin_col_pacjenci": "Pacjenci",
     "admin_col_widok_wpisow": "Widok wpisów",
     "admin_col_pacjenci_dnia": "Pacjenci dnia",
+    "btn_save": "Zapisz",
+    "btn_save_and_add_another": "Zapisz i dodaj nowy",
+    "btn_save_and_continue_editing": "Zapisz i kontynuuj edycję",
+    "btn_delete": "Usuń",
 }

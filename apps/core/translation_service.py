@@ -94,14 +94,28 @@ def _get_admin_map_for_request(request: Any) -> dict[str, str]:
     cache_attr = "_admin_i18n_map"
     if getattr(request, cache_attr, None) is not None:
         return getattr(request, cache_attr)
-    if getattr(request, "LANGUAGE_CODE", None):
-        lang = normalize_language_code(request.LANGUAGE_CODE)
-    elif getattr(request, "user", None) and getattr(request.user, "is_authenticated", False) and request.user.is_authenticated:
+    # Prefer authenticated user's preferred_locale so profile "Preferred locale" controls admin UI.
+    if getattr(request, "user", None) and getattr(request.user, "is_authenticated", False) and request.user.is_authenticated:
         locale = getattr(request.user, "preferred_locale", None) or ""
         lang = normalize_language_code(locale)
+    elif getattr(request, "LANGUAGE_CODE", None):
+        lang = normalize_language_code(request.LANGUAGE_CODE)
+    else:
+        lang = "de"
     data = get_translation_map(ADMINISTRATION_CATEGORY, lang)
     setattr(request, cache_attr, data)
     return data
+
+
+def get_admin_translation(request: Any, key: str, default: str = "") -> str:
+    """
+    Return administration translation for the given request and key (full key e.g.
+    administration.btn_save). Use in templates when request is in context.
+    """
+    if not request:
+        return default
+    mapping = _get_admin_map_for_request(request)
+    return mapping.get(key, default)
 
 
 def _resolve_db_gettext(key: str, default: str) -> str:
