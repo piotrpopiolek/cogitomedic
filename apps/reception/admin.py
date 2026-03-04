@@ -32,7 +32,6 @@ from apps.reception.models import (
     TabletDevice,
 )
 
-
 def _ensure_patient_temp_identity_alert(patient: Patient) -> None:
     """Set identity alert window when doctolib_patient_id is empty (constraint patient_temp_identity_requires_alert)."""
     if patient.doctolib_patient_id:
