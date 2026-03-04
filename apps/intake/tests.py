@@ -40,7 +40,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class SubmitPatientIntakeFormTests(TestCase):
@@ -49,9 +49,10 @@ class SubmitPatientIntakeFormTests(TestCase):
             username="reception-intake",
             email="reception.intake@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="WAW", name="Warsaw")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")
         daily_queue = DailyQueue.objects.create(

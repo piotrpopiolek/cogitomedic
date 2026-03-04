@@ -261,7 +261,7 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 3. **Pacjenci:**
   - `GET /patients` filtruje po `patient_clinic_site` i `staff_user_clinic_site`
 4. **Dokumenty i audit:**
-  - `GET /medical-documents*`: reguła `AUTHOR OR ASSIGNED_QUEUE`
+  - `GET /medical-documents`*: reguła `AUTHOR OR ASSIGNED_QUEUE`
   - `GET /audit-events`: filtrowanie po kluczach kontekstowych w `audit_event.metadata`
   - `GET /medical-documents/{id}/audit-trail`: tylko dla dokumentów w zakresie autoryzacji lekarza
 5. **Szablony tekstu:**

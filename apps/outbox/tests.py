@@ -21,7 +21,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class OutboxProcessingTests(TestCase):
@@ -30,16 +30,18 @@ class OutboxProcessingTests(TestCase):
             username="doctor-outbox",
             email="doctor.outbox@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        
         self.reception_user = StaffUser.objects.create_user(
             username="reception-outbox",
             email="reception.outbox@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="HAM", name="Hamburg")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="H1", name="H1")
         queue = DailyQueue.objects.create(

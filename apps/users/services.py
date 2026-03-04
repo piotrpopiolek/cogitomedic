@@ -5,7 +5,7 @@ import uuid
 from django.db import transaction
 
 from apps.core.exceptions import DomainError
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 @transaction.atomic
@@ -22,20 +22,27 @@ def create_staff_user(
     is_staff: bool = True,
     is_active: bool = True,
 ) -> StaffUser:
-    if role not in [c[0] for c in StaffRole.choices]:
+    VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
+    if role not in VALID_ROLES:
         raise DomainError(f"Invalid role: {role}.")
-    return StaffUser.objects.create_user(
+    
+    user = StaffUser.objects.create_user(
         username=username,
         email=email,
         first_name=first_name,
         last_name=last_name,
-        role=role,
         password=password,
         phone_number=phone_number,
         preferred_locale=preferred_locale,
         is_staff=is_staff,
         is_active=is_active,
     )
+    from django.contrib.auth.models import Group
+    group_name = role.capitalize()
+    group = Group.objects.filter(name=group_name).first()
+    if group:
+        user.groups.add(group)
+    return user
 
 
 @transaction.atomic
@@ -67,10 +74,15 @@ def update_staff_user(
         user.phone_number = phone_number
         update_fields.append("phone_number")
     if role is not None:
-        if role not in [c[0] for c in StaffRole.choices]:
+        VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
+        if role not in VALID_ROLES:
             raise DomainError(f"Invalid role: {role}.")
-        user.role = role
-        update_fields.append("role")
+        group_name = role.capitalize()
+        from django.contrib.auth.models import Group
+        group = Group.objects.filter(name=group_name).first()
+        if group:
+            user.groups.clear()
+            user.groups.add(group)
     if preferred_locale is not None:
         user.preferred_locale = preferred_locale
         update_fields.append("preferred_locale")
@@ -83,9 +95,10 @@ def update_staff_user(
     if password is not None:
         user.set_password(password)
         update_fields.append("password")
-    if not update_fields:
+    if not update_fields and role is None:
         raise DomainError("Provide at least one field to update.")
-    user.save(update_fields=update_fields)
+    if update_fields:
+        user.save(update_fields=update_fields)
     return user
 
 

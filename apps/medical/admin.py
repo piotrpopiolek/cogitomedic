@@ -73,7 +73,7 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: see own templates + clinic templates + global templates
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             from django.db.models import Q
             qs = qs.filter(
                 Q(owner_user=request.user) |
@@ -84,7 +84,7 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         # DOCTOR: can only edit own templates
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             if obj is None:
                 return True  # Allow viewing the list
             return obj.owner_user_id == request.user.id
@@ -92,7 +92,7 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         # DOCTOR: can only delete own templates
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             if obj is None:
                 return True  # Allow viewing the list
             return obj.owner_user_id == request.user.id

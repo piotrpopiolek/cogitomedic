@@ -6,13 +6,6 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
-class StaffRole(models.TextChoices):
-    RECEPTION = "RECEPTION", "Reception"
-    DOCTOR = "DOCTOR", "Doctor"
-    ADMIN = "ADMIN", "Admin"
-    TABLET = "TABLET", "Tablet (waiting room)"
-
-
 class StaffUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     password = models.CharField(max_length=128)
@@ -25,11 +18,6 @@ class StaffUser(AbstractUser):
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     code = models.CharField(max_length=50, default="")
-    role = models.CharField(
-        max_length=20,
-        choices=StaffRole.choices,
-        default=StaffRole.RECEPTION,
-    )
     preferred_locale = models.CharField(max_length=10, default="de-DE")
     consulting_room = models.ForeignKey(
         "reception.ConsultingRoom",
@@ -59,3 +47,19 @@ class StaffUser(AbstractUser):
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}".strip() or self.username
+
+    @property
+    def is_doctor(self) -> bool:
+        return self.groups.filter(name="Doctor").exists()
+
+    @property
+    def is_reception(self) -> bool:
+        return self.groups.filter(name="Reception").exists()
+
+    @property
+    def is_admin_role(self) -> bool:
+        return self.groups.filter(name="Admin").exists()
+
+    @property
+    def is_tablet(self) -> bool:
+        return self.groups.filter(name="Tablet").exists()

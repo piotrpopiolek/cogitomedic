@@ -106,12 +106,12 @@ ROOT_URLCONF = "cogitomedica.urls"
 
 def _is_admin_role(request) -> bool:
     user = getattr(request, "user", None)
-    return bool(user and user.is_authenticated and getattr(user, "role", None) == "ADMIN")
+    return bool(user and user.is_authenticated and user.is_admin_role)
 
 
 def _is_doctor_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
-    return bool(user and user.is_authenticated and getattr(user, "role", None) in ["ADMIN", "DOCTOR"])
+    return bool(user and user.is_authenticated and (user.is_admin_role or user.is_doctor))
 
 
 if HAS_UNFOLD:
@@ -365,7 +365,7 @@ WSGI_APPLICATION = "cogitomedica.wsgi.application"
 
 AUTH_USER_MODEL = "users.StaffUser"
 AUTHENTICATION_BACKENDS = [
-    "apps.users.auth_backends.StaffRoleAdminBackend",
+    "apps.users.auth_backends.StaffGroupAdminBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 

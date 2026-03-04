@@ -4,19 +4,19 @@ overview: Plan naprawczy przejścia z hardkodowanych ról na standardowe grupy D
 todos:
   - id: migrate-groups
     content: Stworzenie Data Migration tworzącej grupy, uprawnienia i przenoszącej obecnych użytkowników z `role` do `groups`
-    status: pending
+    status: completed
   - id: helpers-api
     content: Stworzenie metod pomocniczych dla `StaffUser` (np. `.is_doctor`, `.is_reception`) i podmiana we wszystkich API views/serwisach
-    status: pending
+    status: completed
   - id: cleanup-admin
     content: Usunięcie nadpisywanych metod `has_*_permission` w plikach `admin.py` i podmiana `get_queryset`
-    status: pending
+    status: completed
   - id: remove-role-schema
     content: Usunięcie pola `role` z `StaffUser`, wygenerowanie usunięcia go w DB oraz aktualizacja `apps/users/admin.py`
-    status: pending
+    status: completed
   - id: tests-auth-backend
     content: Zaktualizowanie Backendów logowania oraz mocków w testach jednostkowych
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -35,7 +35,7 @@ Oto kroki konieczne do zrealizowania tej zmiany:
     - **Reception**: pełen odczyt/zapis (np. `add_patient`, `change_patient`) dla pacjentów i kolejek.
     - **Admin**: uprawnienia na wszystkie zasoby.
 2. **Migracja danych (Data Migration)**:
-  - Utworzymy pustą migrację (przed usunięciem pola `role`).
+  - Utworzymy pustą migrację wywołując komendę na dockrze (np. `docker compose exec web python manage.py makemigrations --empty users`) (przed usunięciem pola `role`).
   - Skrypt migracyjny utworzy wymagane `Group` w bazie oraz przypisze do nich stosowne standardowe permissions (`auth.Permission`).
   - Następnie skrypt ziteruje po wszystkich istniejących użytkownikach, sprawdzi ich obecne `user.role` i doda ich do odpowiedniej grupy (`user.groups.add()`).
 
@@ -63,7 +63,7 @@ Oto kroki konieczne do zrealizowania tej zmiany:
 
 1. **Schema Migration (usunięcie `role`)**:
   - Usuniemy z definicji modelu `StaffUser` pole `role` oraz `StaffRole`.
-  - Wygenerujemy nową migrację Django (`makemigrations`), która zrzuci to pole z bazy danych.
+  - Wygenerujemy nową migrację Django wykonując operacje na kontenerze dockera (np. `docker compose exec web python manage.py makemigrations`), która zrzuci to pole z bazy danych.
 2. **Dostosowanie panelu użytkowników**:
   - W `apps/users/admin.py` zmienimy widok dla `StaffUser`. Wrzucimy standardowy widżet do zarządzania grupami (`filter_horizontal = ('groups',)`), by móc z poziomu panelu nadawać nowym użytkownikom odpowiednią grupę (np. Reception/Doctor).
 3. **Zmiana Backendów Autoryzacji**:

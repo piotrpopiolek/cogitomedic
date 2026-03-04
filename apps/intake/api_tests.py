@@ -31,7 +31,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class IntakeApiTests(TestCase):
@@ -41,9 +41,10 @@ class IntakeApiTests(TestCase):
             username="api-reception",
             email="api.reception@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="API", name="API Clinic")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")
         queue = DailyQueue.objects.create(

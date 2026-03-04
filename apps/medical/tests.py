@@ -21,7 +21,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class MedicalServicesTests(TestCase):
@@ -30,16 +30,18 @@ class MedicalServicesTests(TestCase):
             username="doctor1",
             email="doctor1@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        
         self.reception_user = StaffUser.objects.create_user(
             username="reception1",
             email="reception1@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="MUC", name="Munich")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="M1", name="M1")
         queue = DailyQueue.objects.create(
@@ -225,9 +227,10 @@ class MedicalServicesTests(TestCase):
             username="otherdoc",
             email="otherdoc@example.com",
             password="pwd",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(other_doctor, "Doctor")
 
         # Should raise initially
         with self.assertRaises(ObjectDoesNotExist):
@@ -247,9 +250,10 @@ class MedicalServicesTests(TestCase):
             username="adminuser",
             email="admin@example.com",
             password="pwd",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(admin_user, "Admin")
 
         # Admin can access any document
         check_doctor_document_access(self.medical_document, admin_user)

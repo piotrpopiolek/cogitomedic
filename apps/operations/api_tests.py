@@ -20,7 +20,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class ObservabilityHealthApiTests(TestCase):
@@ -30,23 +30,26 @@ class ObservabilityHealthApiTests(TestCase):
             username="health-doctor",
             email="health.doctor@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        
         self.reception_user = StaffUser.objects.create_user(
             username="health-reception",
             email="health.reception@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        
         self.admin_user = StaffUser.objects.create_user(
             username="health-admin",
             email="health.admin@example.com",
             password="safe-password",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        assign_group_to_test_user(self.admin_user, "Admin")
         self.client.login(username="health-admin", password="safe-password")
         clinic = ClinicSite.objects.create(code="HEA", name="Health")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="H1", name="H1")

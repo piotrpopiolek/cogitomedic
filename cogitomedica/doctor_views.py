@@ -99,8 +99,7 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
 
 
 def _doctor_role_ok_request(user) -> bool:
-    role = getattr(user, "role", None)
-    return role in ("DOCTOR", "ADMIN")
+    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
 
 
 @login_required(login_url="doctor-login")
@@ -112,8 +111,8 @@ def doctor_logout_view(request: HttpRequest) -> HttpResponse:
 
 
 def _doctor_role_ok(request: HttpRequest) -> bool:
-    role = getattr(request.user, "role", None)
-    return role in ("DOCTOR", "ADMIN")
+    user = request.user
+    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
 
 
 def _get_doctor_lang(request: HttpRequest) -> str:

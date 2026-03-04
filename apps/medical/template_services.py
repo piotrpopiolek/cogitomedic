@@ -7,7 +7,7 @@ from django.db.models import Q
 
 from apps.core.exceptions import DomainError
 from apps.medical.models import DoctorTextTemplate
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class TemplatePermissionError(DomainError):
@@ -33,7 +33,7 @@ def list_templates(*, filters: TemplateListFilters) -> list[DoctorTextTemplate]:
     actor = _get_actor(filters.actor_user_id)
     queryset = DoctorTextTemplate.objects.all().order_by("-is_global", "name")
 
-    if actor.role != StaffRole.ADMIN:
+    if not actor.is_admin_role:
         queryset = queryset.filter(
             Q(is_global=True) | 
             Q(owner_user_id=actor.id) | 
@@ -62,7 +62,7 @@ def get_template(*, template_id: uuid.UUID, actor_user_id: uuid.UUID) -> DoctorT
     except DoctorTextTemplate.DoesNotExist as exc:
         raise TemplateNotFoundError("Template not found.") from exc
 
-    if actor.role != StaffRole.ADMIN:
+    if not actor.is_admin_role:
         if not template.is_global and template.owner_user_id != actor.id:
             # Check clinic sites
             if template.clinic_site_id and not actor.clinic_sites.filter(id=template.clinic_site_id).exists():
@@ -85,10 +85,10 @@ def create_template(
     is_active: bool = True,
 ) -> DoctorTextTemplate:
     actor = _get_actor(actor_user_id)
-    if is_global and actor.role != StaffRole.ADMIN:
+    if is_global and not actor.is_admin_role:
         raise TemplatePermissionError("Only ADMIN can create global templates.")
 
-    if clinic_site_id and actor.role != StaffRole.ADMIN:
+    if clinic_site_id and not actor.is_admin_role:
         # For clinic template, actor must be in that clinic, or we can restrict it to admin. Let's say ADMIN only for clinic templates for now, or check plan.
         # "Szablony kliniki (`clinic_site_id`)	Odczyt / użycie	Edycja/usuwanie szablonów kliniki – ADMIN."
         raise TemplatePermissionError("Only ADMIN can create clinic templates.")
@@ -124,7 +124,7 @@ def update_template(
     except DoctorTextTemplate.DoesNotExist as exc:
         raise TemplateNotFoundError("Template not found.") from exc
 
-    if template.is_global and actor.role != StaffRole.ADMIN:
+    if template.is_global and not actor.is_admin_role:
         raise TemplatePermissionError("Only ADMIN can modify global templates.")
     if not template.is_global and template.owner_user_id != actor.id:
         raise TemplatePermissionError("Only template owner can modify private template.")

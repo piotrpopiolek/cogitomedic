@@ -12,6 +12,12 @@ from apps.core.exceptions import InvalidRequestBodyEncoding
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
 
+def assign_group_to_test_user(user, group_name: str) -> None:
+    """Helper for testing to replace `user = StaffUser.objects.create(..., role=StaffRole.XXX)`."""
+    from django.contrib.auth.models import Group
+    group, _ = Group.objects.get_or_create(name=group_name)
+    user.groups.add(group)
+
 def json_error(message: str, *, status: int) -> JsonResponse:
     """Build a normalized JSON error response payload."""
     return JsonResponse({"error": message}, status=status)
@@ -89,8 +95,21 @@ def require_authenticated_user(request: HttpRequest) -> JsonResponse | None:
 
 def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonResponse | None:
     """Return normalized 403 when authenticated user role is not allowed."""
-    role = getattr(request.user, "role", None)
-    if role not in allowed_roles:
+    user = request.user
+    if not user.is_authenticated:
+        return json_error("Forbidden.", status=403)
+        
+    has_role = False
+    if "DOCTOR" in allowed_roles and user.is_doctor:
+        has_role = True
+    elif "ADMIN" in allowed_roles and user.is_admin_role:
+        has_role = True
+    elif "RECEPTION" in allowed_roles and user.is_reception:
+        has_role = True
+    elif "TABLET" in allowed_roles and user.is_tablet:
+        has_role = True
+
+    if not has_role:
         return json_error("Forbidden.", status=403)
     return None
 
