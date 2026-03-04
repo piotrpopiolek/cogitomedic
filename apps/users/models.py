@@ -56,3 +56,6 @@ class StaffUser(AbstractUser):
                 name="staff_user_phone_format",
             )
         ]
+
+    def __str__(self) -> str:
+        return f"{self.first_name} {self.last_name}".strip() or self.username

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django import forms
 from django.contrib import admin
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpRequest
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -83,9 +83,12 @@ class PatientAdmin(UnfoldModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # DOCTOR: only see patients from assigned clinics
+        # DOCTOR: see patients from assigned clinics OR patients in any queue assigned to this doctor
         if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+            qs = qs.filter(
+                Q(clinic_sites__in=request.user.clinic_sites.all())
+                | Q(queue_entries__daily_queue__assigned_doctor=request.user)
+            ).distinct()
         return qs
 
     def has_change_permission(self, request, obj=None):
@@ -197,9 +200,12 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # DOCTOR: only see assigned clinics
+        # DOCTOR: see clinics from profile OR clinics from queues assigned to this doctor
         if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            qs = qs.filter(id__in=request.user.clinic_sites.all())
+            qs = qs.filter(
+                Q(id__in=request.user.clinic_sites.values_list("pk", flat=True))
+                | Q(daily_queues__assigned_doctor=request.user)
+            ).distinct()
         return qs
 
     def has_change_permission(self, request, obj=None):
@@ -227,9 +233,12 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # DOCTOR: only see rooms from assigned clinics
+        # DOCTOR: see rooms from assigned clinics OR rooms from queues assigned to this doctor
         if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            qs = qs.filter(clinic_site_id__in=request.user.clinic_sites.all())
+            qs = qs.filter(
+                Q(clinic_site_id__in=request.user.clinic_sites.values_list("pk", flat=True))
+                | Q(daily_queues__assigned_doctor=request.user)
+            ).distinct()
         return qs
 
     def has_change_permission(self, request, obj=None):

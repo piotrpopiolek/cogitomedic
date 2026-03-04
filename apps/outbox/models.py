@@ -86,3 +86,6 @@ class OutboxEvent(models.Model):
                 opclasses=["jsonb_path_ops"],
             ),
         ]
+
+    def __str__(self) -> str:
+        return f"{self.get_event_type_display()} – wersja {self.medical_document_version} ({self.get_status_display()})"

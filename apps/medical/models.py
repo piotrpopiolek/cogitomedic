@@ -68,6 +68,9 @@ class MedicalDocument(models.Model):
             models.Index(fields=["created_by_user", "-created_at"]),
         ]
 
+    def __str__(self) -> str:
+        return f"Dokument medyczny: {self.queue_entry.patient} ({self.get_status_display()})"
+
 
 class MedicalDocumentVersion(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -188,6 +191,9 @@ class MedicalDocumentVersion(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return f"Wersja {self.version_no} – {self.medical_document} ({self.get_version_status_display()})"
+
 
 class DoctorTextTemplate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -257,3 +263,6 @@ class DoctorTextTemplate(models.Model):
             models.Index(fields=["clinic_site", "template_locale", "is_active"]),
             models.Index(fields=["is_global", "template_locale", "is_active"]),
         ]
+
+    def __str__(self) -> str:
+        return self.name

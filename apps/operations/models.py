@@ -60,3 +60,7 @@ class AuditEvent(models.Model):
             models.Index(fields=["-event_time"]),
             GinIndex(fields=["metadata"], name="audit_metadata_gin_idx", opclasses=["jsonb_path_ops"]),
         ]
+
+    def __str__(self) -> str:
+        actor = str(self.actor_user) if self.actor_user_id else "—"
+        return f"{self.event_type} – {self.event_time.strftime('%Y-%m-%d %H:%M')} ({actor})"
