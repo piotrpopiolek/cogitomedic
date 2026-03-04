@@ -5,12 +5,18 @@ from __future__ import annotations
 
 from apps.core.translation_service import get_admin_translation
 
-# Keys used in admin submit_line.html (administration.*)
+# Keys used in admin UI context (administration.*)
 ADMIN_BUTTON_KEYS = (
     "btn_save",
     "btn_save_and_add_another",
     "btn_save_and_continue_editing",
     "btn_delete",
+    "menu_view_site",
+    "menu_change_password",
+    "menu_logout",
+    "theme_light",
+    "theme_dark",
+    "theme_system",
 )
 
 
@@ -30,6 +36,12 @@ def admin_submit_button_translations(request):
             "btn_save_and_add_another": "Save and add another",
             "btn_save_and_continue_editing": "Save and continue editing",
             "btn_delete": "Delete",
+            "menu_view_site": "View site",
+            "menu_change_password": "Change password",
+            "menu_logout": "Log out",
+            "theme_light": "Light",
+            "theme_dark": "Dark",
+            "theme_system": "System",
         }
         out[f"admin_{short_key}"] = get_admin_translation(
             request, full_key, defaults.get(short_key, "")
