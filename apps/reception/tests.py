@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.intake.models import PatientIntakeForm
@@ -14,6 +14,7 @@ from apps.reception.models import (
     PatientFormSession,
     QueueStatus,
 )
+from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
@@ -30,7 +31,6 @@ class ReceptionServicesTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.reception_user, "Reception")
         self.clinic = ClinicSite.objects.create(code="BER", name="Berlin")
         self.room = ConsultingRoom.objects.create(
@@ -160,15 +160,12 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(intake_form.session_id, second_result.session_id)
 
     def test_patients_api_view_doctor_filtered(self) -> None:
-        from django.test import Client
-        
         doctor_user = StaffUser.objects.create_user(
             username="doc_test",
             email="doc_test@example.com",
             password="pwd",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(doctor_user, "Doctor")
         # Assign clinic to doctor
         doctor_user.clinic_sites.add(self.clinic)

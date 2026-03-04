@@ -29,6 +29,7 @@ from apps.intake.services import (
     _effective_question_filter,
     submit_patient_intake_form,
 )
+from apps.core.api_utils import assign_group_to_test_user
 from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
@@ -51,7 +52,6 @@ class SubmitPatientIntakeFormTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="WAW", name="Warsaw")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")

@@ -7,6 +7,7 @@ from uuid import uuid4
 from django.test import Client, TestCase
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -32,7 +33,6 @@ class DailyQueuesApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.reception_user, "Reception")
         self.clinic = ClinicSite.objects.create(code="C1", name="Clinic 1")
         self.room = ConsultingRoom.objects.create(

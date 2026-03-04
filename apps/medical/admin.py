@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import admin
+from django.db.models import Q
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
@@ -74,7 +75,6 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
         qs = super().get_queryset(request)
         # DOCTOR: see own templates + clinic templates + global templates
         if request.user.is_doctor and not request.user.is_superuser:
-            from django.db.models import Q
             qs = qs.filter(
                 Q(owner_user=request.user) |
                 Q(clinic_site_id__in=request.user.clinic_sites.all()) |

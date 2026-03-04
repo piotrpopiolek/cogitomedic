@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import admin
+from django.db.models import Q
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
@@ -22,7 +23,6 @@ class AuditEventAdmin(UnfoldModelAdmin):
         qs = super().get_queryset(request)
         # DOCTOR: only see events where they are author OR assigned to queue (via metadata)
         if request.user.is_doctor and not request.user.is_superuser:
-            from django.db.models import Q
             qs = qs.filter(
                 Q(metadata__assigned_doctor_id=str(request.user.id)) |
                 Q(metadata__actor_user_id=str(request.user.id)) |

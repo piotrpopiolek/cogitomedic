@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from django.test import TestCase
 
+from cogitomedica.openapi_extension import build_cogito_openapi_schema
 from cogitomedica.openapi_schemas import (
     COMPONENTS_REF_PREFIX,
     PYDANTIC_DEFS_PREFIX,
@@ -54,8 +55,6 @@ class OpenAPISchemaIntegrationTests(TestCase):
     """Integration: full schema build and path → $ref mapping."""
 
     def test_build_cogito_openapi_schema_has_components_and_refs(self) -> None:
-        from cogitomedica.openapi_extension import build_cogito_openapi_schema
-
         schema = build_cogito_openapi_schema()
         self.assertIn("components", schema)
         self.assertIn("schemas", schema["components"])
@@ -67,8 +66,6 @@ class OpenAPISchemaIntegrationTests(TestCase):
         self.assertIn("PublishMedicalDocumentRequest", comp)
 
     def test_auth_login_request_body_uses_ref(self) -> None:
-        from cogitomedica.openapi_extension import build_cogito_openapi_schema
-
         schema = build_cogito_openapi_schema()
         login = schema["paths"].get("/api/v1/auth/login", {}).get("post", {})
         rb = login.get("requestBody", {}).get("content", {}).get("application/json", {})
