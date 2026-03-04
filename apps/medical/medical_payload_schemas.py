@@ -1,6 +1,6 @@
 """
 Full Pydantic schema for medical_payload v1 (Befund). db-plan §5.2, api-plan §4.4.
-Used for PUT draft validation and optionally for generate-text.
+Used for PUT draft validation.
 """
 
 from __future__ import annotations

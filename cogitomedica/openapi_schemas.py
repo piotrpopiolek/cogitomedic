@@ -169,7 +169,6 @@ def _get_request_model_registry() -> list[type]:
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
-        GenerateTextRequest,
         MedicalPayloadMinimal,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
@@ -220,7 +219,6 @@ def _get_request_model_registry() -> list[type]:
         # Medical (MedicalPayloadMinimal is nested in SaveDraftMedicalDocumentRequest; §6 schema_version)
         MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,
-        GenerateTextRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
@@ -281,7 +279,6 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         CreateMedicalDocumentRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
-        GenerateTextRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
@@ -339,7 +336,6 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/intake-forms/{{intake_form_id}}", "patch"): UpdateBodyMapRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/signature", "post"): SignatureUploadRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/submit", "post"): SubmitIntakeFormRequest,
-        (f"{P}/medical-documents/{{medical_document_id}}/generate-text", "post"): GenerateTextRequest,
         (f"{P}/medical-documents/{{medical_document_id}}/retry-processing", "post"): RetryProcessingRequest,
     }
 

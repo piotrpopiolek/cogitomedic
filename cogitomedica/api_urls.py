@@ -17,7 +17,6 @@ from apps.medical.api_views import (
     doctor_text_templates_view,
     medical_document_detail_view,
     medical_document_draft_view,
-    medical_document_generate_text_view,
     medical_document_preview_pdf_view,
     medical_document_publish_view,
     medical_document_retry_processing_view,
@@ -170,11 +169,6 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/preview-pdf",
         medical_document_preview_pdf_view,
         name="medical-document-preview-pdf",
-    ),
-    path(
-        "medical-documents/<uuid:medical_document_id>/generate-text",
-        medical_document_generate_text_view,
-        name="medical-document-generate-text",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/versions",

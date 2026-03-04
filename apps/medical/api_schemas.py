@@ -93,16 +93,6 @@ class DoctorTemplateUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
-class GenerateTextRequest(BaseModel):
-    """Request for POST /medical-documents/{id}/generate-text. Payload with lesions and options."""
-    model_config = ConfigDict(extra="allow")
-
-    medical_payload_schema_version: int = Field(ge=1)
-    authoring_locale: str = Field(default="de-DE", min_length=2, max_length=10)
-    template_id: UUID | None = None
-    medical_payload: dict = Field(default_factory=dict)
-
-
 class RetryProcessingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(default="manual retry from doctor panel", min_length=3, max_length=200)

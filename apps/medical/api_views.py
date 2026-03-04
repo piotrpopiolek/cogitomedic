@@ -14,12 +14,10 @@ from apps.medical.api_schemas import (
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
-    GenerateTextRequest,
     PublishMedicalDocumentRequest,
     RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
 )
-from apps.medical.befund_text import generate_befund_text
 from apps.medical.pdf_builder import build_befund_pdf_bytes
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
@@ -197,68 +195,6 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
     return response
-
-
-@require_auth
-def medical_document_generate_text_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
-    """POST: generate Befund text from medical_payload (per lesion + summary). Does not save to DB."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
-    if role_error:
-        return role_error
-    if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
-    try:
-        body = GenerateTextRequest.model_validate(read_json_body(request))
-    except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
-    except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-
-    try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
-        check_doctor_document_access(doc, request.user)
-    except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
-
-    payload = body.medical_payload or {}
-    if payload.get("schema_version") != body.medical_payload_schema_version:
-        payload = {**payload, "schema_version": body.medical_payload_schema_version}
-    if body.medical_payload_schema_version == 1:
-        try:
-            payload = validate_medical_payload_v1(payload)
-        except ValidationError as exc:
-            details = [{"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")} for e in exc.errors()]
-            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": details}, status=400)
-
-    template_context = None
-    template_body = None
-    if body.template_id:
-        try:
-            template = get_template(template_id=body.template_id, actor_user_id=request.user.id)
-            template_context = {
-                "template_id": str(template.id),
-                "template_name": template.name,
-                "template_locale": template.template_locale,
-            }
-            template_body = template.template_body
-        except TemplateNotFoundError:
-            return json_error("Template not found.", status=404)
-
-    result = generate_befund_text(
-        payload,
-        authoring_locale=body.authoring_locale,
-        template_body=template_body,
-    )
-    response_data = {
-        "generated": True,
-        "lesions": result["lesions"],
-        "summary_generated_text": result["summary_generated_text"],
-    }
-    if template_context:
-        response_data["template_context"] = template_context
-    return JsonResponse(response_data, status=200)
 
 
 @require_auth
