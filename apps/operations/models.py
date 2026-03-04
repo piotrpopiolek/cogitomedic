@@ -4,13 +4,14 @@ import uuid
 
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
+from apps.core.translation_service import db_gettext_lazy
 from django.db.models import Q
 
 
 class AuditEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event_time = models.DateTimeField(auto_now_add=True)
-    event_type = models.CharField(max_length=80)
+    event_time = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_event_time", "Event time"))
+    event_type = models.CharField(max_length=80, verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"))
     actor_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -46,7 +47,7 @@ class AuditEvent(models.Model):
         null=True,
         related_name="audit_events",
     )
-    metadata = models.JSONField(default=dict)
+    metadata = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_metadata", "Metadata"))
 
     class Meta:
         db_table = "audit_event"
