@@ -214,139 +214,6 @@ class MedicalApiTests(TestCase):
         missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
         self.assertEqual(missing.status_code, 404)
 
-    def test_medical_document_generate_text(self) -> None:
-        create_response = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                    "created_by_user_id": str(self.doctor_user.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(create_response.status_code, 201)
-        medical_document_id = create_response.json()["medical_document_id"]
-
-        gen = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "authoring_locale": "de-DE",
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "lesions": [
-                            {
-                                "lesion_numbers": [8],
-                                "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
-                                "clinical_assessment": "CONTROL_NEEDED",
-                                "malignancy_risk": "NO_SUSPICION",
-                            }
-                        ],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(gen.status_code, 200)
-        data = gen.json()
-        self.assertTrue(data["generated"])
-        self.assertEqual(len(data["lesions"]), 1)
-        self.assertEqual(data["lesions"][0]["lesion_numbers"], [8])
-        self.assertIn("Läsion Nr. 8", data["lesions"][0]["generated_text"])
-        self.assertIn("Kontrollbedürftig", data["lesions"][0]["generated_text"])
-        self.assertIn("summary_generated_text", data)
-        self.assertIn("Bei der Analyse", data["summary_generated_text"])
-
-        # Generate text for a group with multiple lesion numbers (Wideodermatoskop)
-        gen2 = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "authoring_locale": "de-DE",
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "lesions": [
-                            {
-                                "lesion_numbers": [2, 3, 13],
-                                "dermatoscopic_features": ["ASYMMETRY"],
-                                "clinical_assessment": "CONTROL_NEEDED",
-                                "malignancy_risk": "NO_SUSPICION",
-                            }
-                        ],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(gen2.status_code, 200)
-        data2 = gen2.json()
-        self.assertEqual(data2["lesions"][0]["lesion_numbers"], [2, 3, 13])
-        self.assertIn("Läsion Nr. 2, 3, 13", data2["lesions"][0]["generated_text"])
-
-        missing = self.client.post(
-            f"/api/v1/medical-documents/{uuid4()}/generate-text",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "lesions": []},
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(missing.status_code, 404)
-
-    def test_medical_document_generate_text_with_template_id(self) -> None:
-        create_response = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                    "created_by_user_id": str(self.doctor_user.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(create_response.status_code, 201)
-        medical_document_id = create_response.json()["medical_document_id"]
-        template_response = self.client.post(
-            "/api/v1/doctor-text-templates",
-            data=json.dumps(
-                {
-                    "name": "Befund Header",
-                    "template_locale": "de-DE",
-                    "template_body": "Befund-Kopfzeile gemäß Praxis.",
-                    "is_global": False,
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(template_response.status_code, 201)
-        template_id = template_response.json()["id"]
-        gen = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "authoring_locale": "de-DE",
-                    "template_id": template_id,
-                    "medical_payload": {"schema_version": 1, "lesions": []},
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(gen.status_code, 200)
-        data = gen.json()
-        self.assertIn("template_context", data)
-        self.assertEqual(data["template_context"]["template_name"], "Befund Header")
-        self.assertTrue(data["summary_generated_text"].startswith("Befund-Kopfzeile gemäß Praxis."))
-
     def test_published_version_keeps_template_snapshot_after_template_change(self) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
@@ -376,21 +243,12 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(template_response.status_code, 201)
         template_id = template_response.json()["id"]
-
-        generate_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/generate-text",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "authoring_locale": "de-DE",
-                    "template_id": template_id,
-                    "medical_payload": {"schema_version": 1, "lesions": []},
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(generate_response.status_code, 200)
-        generated = generate_response.json()
+        template_context = {
+            "template_id": str(template_id),
+            "template_name": "Snapshot Template",
+            "template_locale": "de-DE",
+        }
+        summary_generated_text = "Version A header."
 
         draft_response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
@@ -402,8 +260,8 @@ class MedicalApiTests(TestCase):
                         "authoring_locale": "de-DE",
                         "overall_image_assessment": "NO_CONTROL_NEEDED",
                         "lesions": [],
-                        "summary_generated_text": generated["summary_generated_text"],
-                        "template_context": generated["template_context"],
+                        "summary_generated_text": summary_generated_text,
+                        "template_context": template_context,
                     },
                 }
             ),

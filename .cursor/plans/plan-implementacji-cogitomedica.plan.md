@@ -150,7 +150,7 @@ flowchart LR
 - Zaimplementuj US-019 (szablony lekarza DE/EN):
   - CRUD szablonów lekarza (`create/update/activate/deactivate`),
   - rozróżnienie uprawnień dla szablonów globalnych (klinika) i prywatnych (per lekarz),
-  - użycie szablonu bazowego w endpointach `generate-text` i zapis `generated_text`/`edited_text`.
+  - użycie szablonu bazowego przy zapisie draft i zapis `generated_text`/`edited_text`.
 - Wprowadź kontrakt `medical_payload` v1 (global + lesions, `generated_text`/`edited_text`, template context).
 - Wdroż walidację `medical_payload` przez **Pydantic v2** (wersjonowanie schematu + kompatybilność wsteczna).
 - Dodaj logikę republish (edycja opublikowanego dokumentu -> nowa wersja, ta sama ścieżka HiDrive, opcjonalny SMS).

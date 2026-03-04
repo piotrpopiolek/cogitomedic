@@ -124,12 +124,11 @@ Kontrakt anamnezy (api-plan 4.3): odpowiedzi wysyłane jako `question_code` + `s
   - `GET /api/v1/medical-documents/{id}` (z `include_versions`) – intake_summary + current_version (medical_payload).  
   - `POST /api/v1/medical-documents` – utworzenie dokumentu po `queue_entry_id` (idempotent).  
   - `PATCH /api/v1/medical-documents/{id}/draft` – zapis szkicu (pełny medical_payload v1).  
-  - `POST /api/v1/medical-documents/{id}/generate-text` – generowanie tekstów z checkboxów (per zmiana + podsumowanie); odpowiedź: `generated_text` / `summary_generated_text`; lekarz może je edytować w polach `edited_text` / `summary_edited_text` przed zapisem.  
   - `POST /api/v1/medical-documents/{id}/publish` – publikacja z opcjonalnym `publish_request_id` (idempotencja) i `resend_sms`.
 - **Szablony tekstu (US-019):**  
   - `GET /api/v1/doctor-text-templates` (filtr locale, scope).  
   - CRUD: `POST/GET/PATCH/DELETE /api/v1/doctor-text-templates/{id}`.  
-  - Przy generowaniu tekstu można przekazać `template_id`.
+  - Szablony używane jako ulubione (presety) przy wypełnianiu pól tekstowych.
 - **Wersje i status:**  
   - `GET /api/v1/medical-documents/{id}/versions`, `GET /api/v1/medical-document-versions/{id}` – historia i status przetwarzania (PDF/HiDrive/SMS).
 
@@ -192,7 +191,7 @@ Zadania: widok merge pacjentów, lista outbox z przyciskiem retry, uruchomienie 
 2. **Recepcja:** widoki list kolejek dziennych i wpisów (Poczekalnia), formularze dodania pacjenta i wpisu do kolejki, przycisk „Otwórz na tablecie” (generowanie linku przez API).  
 3. **Tablet:** widok wejścia z tokenem (np. `/patient/form/?token=...`) → walidacja tokenu (API) → szablon formularza intake; sekcje zgody/anamneza/schemat ciała/podpis z zapisem przez API (fetch z strony lub POST przez Django do API).  
 4. **Import:** widok uploadu pliku (multipart do API), lista batchy, podgląd błędów, link do szablonu awaryjnego.  
-5. **Lekarz:** widok listy dokumentów medycznych, edycja draftu (formularze + generate-text + edytowalne pola tekstu), publikacja z idempotencją, status przetwarzania.  
+5. **Lekarz:** widok listy dokumentów medycznych, edycja draftu (formularze + edytowalne pola tekstu), publikacja z idempotencją, status przetwarzania.  
 6. **Szablony lekarza:** CRUD w panelu (formularze Django lub HTMX).  
 7. **Admin/operacje:** merge pacjentów, outbox (lista + retry), retencja (dry_run), dashboard recepcji, health.  
 8. **Observability:** dashboard utrzymaniowy (jeśli API udostępni dane) i spójne wyświetlanie alertów.

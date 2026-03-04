@@ -242,16 +242,6 @@ COGITO_PATHS = {
             "responses": {"200": {"description": "PDF file (inline)"}, "404": {"description": "Not found or no version to preview"}},
         },
     },
-    f"{PREFIX}/medical-documents/{{medical_document_id}}/generate-text": {
-        "post": {
-            "summary": "Generate Befund text",
-            "description": "Generates text from medical_payload (per lesion + summary). Does not save to DB.",
-            "tags": ["Medical"],
-            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "generated, lesions, summary_generated_text, optional template_context"}, "400": {"description": "Invalid medical_payload"}, "404": {"description": "Not found"}},
-        },
-    },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/versions": {
         "get": {
             "summary": "List document versions",

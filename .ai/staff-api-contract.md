@@ -10,7 +10,7 @@ Dokument opisuje endpointy używane przez personel oraz **RBAC** (kto ma dostęp
 |-----------|------------|
 | **RECEPTION** | Kolejki dzienne, wpisy kolejki, pacjenci (CRUD), urządzenia tabletu, sesje formularza (POST sessions → intake_form_id). |
 | **TABLET**    | Lista kolejek, lista wpisów kolejki, kontekst formularza (GET intake-forms), zgody/anamneza/body map/podpis/submit (PUT/PATCH/POST na intake-forms). |
-| **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), generate-text (POST), publish (POST), wersje (GET). |
+| **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), publish (POST), wersje (GET). |
 | **ADMIN**     | Wszystko powyżej + użytkownicy staff, operacje outbox (lista, retry, process), retention, metryki (observability/metrics). |
 
 ---
@@ -36,7 +36,7 @@ Dostęp: **wyłącznie rola ADMIN**. Dla RECEPTION/DOCTOR zwracane jest **403 Fo
 - **Auth:** POST login, POST logout, GET me – sesja + CSRF.
 - **Recepcja:** daily-queues, queue-entries, patients, clinic-sites, consulting-rooms, tablet-devices, POST queue-entries/…/sessions.
 - **Intake:** GET/PATCH intake-forms/{id}, PUT consents, PUT anamnesis, POST signature, POST submit.
-- **Medical:** GET/POST medical-documents, GET medical-documents/{id}, PUT draft, POST generate-text, POST publish, GET versions.
+- **Medical:** GET/POST medical-documents, GET medical-documents/{id}, PUT draft, POST publish, GET versions.
 
 Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 

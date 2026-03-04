@@ -775,45 +775,6 @@
   - Success: `200 OK`.
   - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`.
 
-- **POST** `/medical-documents/{id}/generate-text`
-  - Description: Generate base Befund texts from selected options (per lesion + global summary), without publishing.
-  - Request JSON:
-    ```json
-    {
-      "medical_payload_schema_version": 1,
-      "authoring_locale": "de-DE",
-      "template_id": "uuid-optional",
-      "medical_payload": {
-        "fitzpatrick_type": "TYPE_III",
-        "lesions": [
-          {
-            "lesion_numbers": [2, 3],
-            "dermatoscopic_features": ["ASYMMETRY", "INHOMOGENEOUS_PIGMENTATION"],
-            "clinical_assessment": "CONTROL_NEEDED",
-            "malignancy_risk": "NO_SUSPICION"
-          }
-        ],
-        "recommendations": ["FOLLOWUP_3_MONTHS"],
-        "final_assessment": "NO_HIGH_GRADE_SUSPICION"
-      }
-    }
-    ```
-  - Response JSON:
-    ```json
-    {
-      "generated": true,
-      "lesions": [
-        {
-          "lesion_numbers": [2, 3],
-          "generated_text": "Läsion Nr. 2, 3 zeigen dermatoskopisch ..."
-        }
-      ],
-      "summary_generated_text": "Bei der Analyse der digitalen dermatoskopischen Aufnahmen ..."
-    }
-    ```
-  - Success: `200 OK`.
-  - Errors: `400 INVALID_MEDICAL_SELECTIONS`, `404 DOCUMENT_NOT_FOUND`.
-
 - **POST** `/medical-documents/{id}/publish`
   - Description: Publish document version and enqueue outbox chain idempotently (US-009/010).
   - Query params: none.
@@ -1179,9 +1140,8 @@
   - Marks form `SUBMITTED`, stamps `submitted_at`, marks session consumed (`consumed_at`) if applicable, and updates queue status in one transaction. Caller is authenticated (TABLET or RECEPTION/ADMIN); no token in request.
 
 - Doctor workflow:
-  - Draft save updates/creates latest draft version.
-  - `generate-text` builds base Befund text blocks (`generated_text`) from selected features/assessments and optional doctor template.
-  - Doctor persists both generated text and final edited text (`edited_text`) in `medical_payload`.
+  - Draft save updates/creates latest draft version; doctor enters/edits text in `medical_payload` (e.g. `edited_text`, `summary_edited_text`).
+  - Doctor persists final edited text (and optional generated text from template) in `medical_payload`.
   - Publish request must provide `publish_locale`; backend persists it on `medical_document_version` and uses it as the authoritative PDF language for outbox generation.
   - Publish uses row lock on `medical_document` and idempotency checks:
     - same `publish_request_id` returns success replay;

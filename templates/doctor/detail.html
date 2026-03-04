@@ -47,6 +47,13 @@
     <div class="card-body">
       <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="form-check-label" for="oa1">{% if ui %}{{ ui.overall_no_control }}{% else %}Keine kontrollbedürftigen Hautveränderungen erkennbar{% endif %}</label></div>
       <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="form-check-label" for="oa2">{% if ui %}{{ ui.overall_control }}{% else %}Kontrollbedürftige Hautveränderungen erkennbar{% endif %}</label></div>
+      <div class="mt-3">
+        <label class="form-label small mb-1" for="doctor-template-select">{% if ui %}{{ ui.template_select_label }}{% else %}Textvorlage{% endif %}</label>
+        <select class="form-select form-select-sm" id="doctor-template-select">
+          <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
+        </select>
+        <p class="small text-muted mb-0 mt-1">Vorlage wählen – danach erscheinen die Favoriten in Abschnitt 8 und 9.</p>
+      </div>
     </div>
   </section>
 
@@ -108,7 +115,7 @@
           </div>
         </div>
         <label class="form-label small mt-2">8. Text (generiert / bearbeitet)</label>
-        <textarea class="form-control form-control-sm lesion-text" rows="3" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
+        <textarea class="form-control form-control-sm lesion-text" rows="3" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
       </div>
     </section>
   </template>
@@ -127,7 +134,7 @@
           <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="btn-apply-summary-favorite">{% if ui %}{{ ui.btn_apply_favorite }}{% else %}Anwenden{% endif %}</button>
         </div>
       </div>
-      <textarea class="form-control" id="summary_text" name="summary_text" rows="4" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Nach „Generuj tekst“ hier anzeigen und bearbeiten{% endif %}"></textarea>
+      <textarea class="form-control" id="summary_text" name="summary_text" rows="4" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
     </div>
   </section>
 
@@ -150,7 +157,6 @@
   </section>
 
   <div class="d-flex gap-2 flex-wrap">
-    <button type="button" class="btn btn-outline-primary" id="btn-generate-text">{% if ui %}{{ ui.btn_generate }}{% else %}Generuj tekst{% endif %}</button>
     <button type="button" class="btn btn-secondary" id="btn-save-draft">{% if ui %}{{ ui.btn_save_draft }}{% else %}Zapisz szkic{% endif %}</button>
     <a class="btn btn-outline-info" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{% if ui %}{{ ui.btn_preview_pdf }}{% else %}Podgląd PDF{% endif %}</a>
     <button type="button" class="btn btn-success" id="btn-publish">{% if ui %}{{ ui.btn_publish }}{% else %}Zatwierdź i wyślij{% endif %}</button>
