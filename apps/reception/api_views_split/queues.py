@@ -20,11 +20,12 @@ from apps.reception.api_schemas import (
 )
 from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import (
+    NOT_PROVIDED,
     create_daily_queue,
     create_queue_entry,
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
-    update_daily_queue_status,
+    update_daily_queue,
     update_queue_entry,
 )
 
@@ -36,6 +37,7 @@ def _serialize_queue(q: DailyQueue) -> dict:
         "queue_date": q.queue_date.isoformat(),
         "clinic_site_id": str(q.clinic_site_id),
         "consulting_room_id": str(q.consulting_room_id),
+        "assigned_doctor_id": str(q.assigned_doctor_id) if q.assigned_doctor_id else None,
         "shift_code": q.shift_code,
         "source": q.source,
         "status": q.status,
@@ -109,6 +111,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
                 queue_date=body.queue_date,
                 clinic_site_id=body.clinic_site_id,
                 consulting_room_id=body.consulting_room_id,
+                assigned_doctor_id=body.assigned_doctor_id,
                 shift_code=body.shift_code,
                 created_by_user_id=request.user.id,
                 source=body.source,
@@ -137,7 +140,8 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     if request.method == "GET":
         return JsonResponse(_serialize_queue(queue))
     try:
-        body = UpdateDailyQueueRequest.model_validate(read_json_body(request))
+        raw = read_json_body(request)
+        body = UpdateDailyQueueRequest.model_validate(raw)
     except JSONDecodeError:
         return json_error("Invalid JSON payload.", status=400)
     except InvalidRequestBodyEncoding:
@@ -145,7 +149,11 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
-        queue = update_daily_queue_status(daily_queue_id, status=body.status)
+        queue = update_daily_queue(
+            daily_queue_id,
+            status=body.status,
+            assigned_doctor_id=body.assigned_doctor_id if "assigned_doctor_id" in raw else NOT_PROVIDED,
+        )
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
     except DomainError as exc:
