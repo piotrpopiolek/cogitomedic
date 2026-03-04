@@ -134,3 +134,64 @@ def db_gettext_lazy(key: str, default: str = "") -> Any:
     current request (TranslationRequestMiddleware).
     """
     return lazy(_resolve_db_gettext, str)(key, default)
+
+
+def get_doctor_ui(lang: str) -> dict[str, str]:
+    """Return doctor UI strings from DB-only translation storage."""
+    normalized = normalize_language_code(lang)
+    mapping = get_translation_map(category="doctor", language_code=normalized)
+    ui: dict[str, str] = {}
+    for full_key, value in mapping.items():
+        if not full_key.startswith("doctor."):
+            continue
+        if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith("doctor.pdf_label."):
+            continue
+        short_key = full_key.split(".", 1)[1]
+        ui[short_key] = value
+    return ui
+
+
+def get_fitzpatrick_choices(lang: str) -> list[tuple[str, str]]:
+    """Return (value, label) pairs for Fitzpatrick from DB-only translation storage."""
+    normalized = normalize_language_code(lang)
+    mapping = get_translation_map(category="doctor", language_code=normalized)
+    codes = [
+        "TYPE_I",
+        "TYPE_II",
+        "TYPE_III",
+        "TYPE_IV",
+        "TYPE_V",
+        "TYPE_VI",
+        "TYPE_II_III",
+        "UNDETERMINED",
+    ]
+    choices: list[tuple[str, str]] = []
+    for code in codes:
+        key = f"doctor.fitzpatrick.{code}"
+        label = mapping.get(key) or code.replace("_", " ").title()
+        choices.append((code, label))
+    return choices
+
+
+def get_form_ui_strings(form_locale: str) -> dict[str, str]:
+    """Return tablet form UI from DB-only translation storage."""
+    lang = normalize_language_code(form_locale)
+    mapping = get_translation_map(category="waiting_room", language_code=lang)
+    ui: dict[str, str] = {}
+    prefix = "waiting_room.form."
+    for full_key, value in mapping.items():
+        if full_key.startswith(prefix):
+            ui[full_key[len(prefix):]] = value
+    return ui
+
+
+def get_staff_ui_strings(locale: str) -> dict[str, str]:
+    """Return tablet staff/waiting room UI from DB-only translation storage."""
+    lang = normalize_language_code(locale)
+    mapping = get_translation_map(category="waiting_room", language_code=lang)
+    ui: dict[str, str] = {}
+    prefix = "waiting_room.staff."
+    for full_key, value in mapping.items():
+        if full_key.startswith(prefix):
+            ui[full_key[len(prefix):]] = value
+    return ui

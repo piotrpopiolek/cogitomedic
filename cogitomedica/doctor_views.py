@@ -33,7 +33,7 @@ from apps.medical.services import (
     parse_medical_documents_list_params,
 )
 from apps.reception.models import QueueEntry
-from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
+from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
 
 
 def _render_doctor(

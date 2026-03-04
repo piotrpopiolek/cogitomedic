@@ -11,7 +11,7 @@ from weasyprint import HTML
 
 from apps.core.translation_service import get_translation_map
 from apps.medical.models import MedicalDocumentVersion
-from cogitomedica.doctor_i18n import get_doctor_ui, get_fitzpatrick_choices
+from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
 
 # Map payload enum codes to doctor_ui keys so PDF shows translated text (DE/EN/PL)
 RECOMMENDATION_CODE_TO_UI_KEY: dict[str, str] = {
