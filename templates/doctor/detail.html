@@ -52,7 +52,7 @@
         <select class="form-select form-select-sm" id="doctor-template-select">
           <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
         </select>
-        <p class="small text-muted mb-0 mt-1">Vorlage wählen – danach erscheinen die Favoriten in Abschnitt 8 und 9.</p>
+        <p class="small text-muted mb-0 mt-1">{% if ui %}{{ ui.template_select_hint }}{% else %}Vorlage wählen – danach erscheinen die Favoriten in Abschnitt 8 und 9.{% endif %}</p>
       </div>
     </div>
   </section>

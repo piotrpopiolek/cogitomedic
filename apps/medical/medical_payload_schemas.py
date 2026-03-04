@@ -43,8 +43,8 @@ class MedicalPayloadLesionV1(BaseModel):
     dermatoscopic_features: list[DermatoscopicFeatureCode] = Field(default_factory=list)
     clinical_assessment: ClinicalAssessmentCode
     malignancy_risk: MalignancyRiskCode
-    generated_text: str | None = None
-    edited_text: str | None = None
+    generated_text: str | None = Field(default=None, max_length=50000)
+    edited_text: str | None = Field(default=None, max_length=50000)
 
     @model_validator(mode="after")
     def no_duplicate_lesion_numbers(self) -> "MedicalPayloadLesionV1":
@@ -75,8 +75,8 @@ class MedicalPayloadV1(BaseModel):
     lesions: list[MedicalPayloadLesionV1] = Field(default_factory=list)
     recommendations: list[RecommendationCode] = Field(default_factory=list)
     final_assessment: FinalAssessmentCode = Field(default="NO_HIGH_GRADE_SUSPICION")
-    summary_generated_text: str | None = None
-    summary_edited_text: str | None = None
+    summary_generated_text: str | None = Field(default=None, max_length=50000)
+    summary_edited_text: str | None = Field(default=None, max_length=50000)
     template_context: MedicalPayloadTemplateContextV1 | dict | None = None
 
     @model_validator(mode="after")
