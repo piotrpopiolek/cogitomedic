@@ -29,7 +29,7 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
-from cogitomedica.tablet_i18n import get_form_ui_strings
+from apps.core.translation_service import get_form_ui_strings
 
 logger = logging.getLogger(__name__)
 

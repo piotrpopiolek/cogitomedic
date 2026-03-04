@@ -20,7 +20,7 @@ from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry
 from apps.reception.services import get_or_create_tablet_device_by_android_id, issue_tablet_session_latest_wins
 
-from cogitomedica.tablet_i18n import get_form_ui_strings, get_staff_ui_strings
+from apps.core.translation_service import get_form_ui_strings, get_staff_ui_strings
 
 TABLET_ALLOWED_ROLES = {"TABLET", "RECEPTION", "ADMIN"}
 
