@@ -6,6 +6,7 @@ import uuid
 import bleach
 from django.core.exceptions import ValidationError
 from django.db import models
+from apps.core.translation_service import db_gettext_lazy
 
 
 class TimeStampedUUIDModel(models.Model):
@@ -50,14 +51,14 @@ class TranslationKey(TimeStampedUUIDModel):
     - doctor.pdf_label.summary
     """
 
-    key = models.CharField(max_length=150, unique=True)
+    key = models.CharField(max_length=150, unique=True, verbose_name=db_gettext_lazy("administration.field_key", "Key"))
     category = models.CharField(
         max_length=32,
         choices=TranslationCategory.choices,
     )
-    description = models.TextField(blank=True, default="")
-    is_html_allowed = models.BooleanField(default=False)
-    allowed_placeholders = models.JSONField(default=list, blank=True)
+    description = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_description", "Description"))
+    is_html_allowed = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_html_allowed", "Is html allowed"))
+    allowed_placeholders = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_allowed_placeholders", "Allowed placeholders"))
     status = models.CharField(
         max_length=16,
         choices=TranslationKeyStatus.choices,
@@ -107,8 +108,8 @@ class TranslationValue(TimeStampedUUIDModel):
         on_delete=models.CASCADE,
         related_name="values",
     )
-    language_code = models.CharField(max_length=5)
-    value = models.TextField()
+    language_code = models.CharField(max_length=5, verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"))
+    value = models.TextField(verbose_name=db_gettext_lazy("administration.field_value", "Value"))
     updated_by = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -173,8 +174,8 @@ class TranslationCacheVersion(TimeStampedUUIDModel):
         max_length=32,
         choices=TranslationCategory.choices,
     )
-    language_code = models.CharField(max_length=5)
-    version = models.BigIntegerField(default=1)
+    language_code = models.CharField(max_length=5, verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"))
+    version = models.BigIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_version", "Version"))
 
     class Meta:
         db_table = "translation_cache_version"

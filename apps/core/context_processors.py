@@ -17,6 +17,13 @@ ADMIN_BUTTON_KEYS = (
     "theme_light",
     "theme_dark",
     "theme_system",
+    "login_welcome",
+    "login_btn",
+    "login_forgot_password",
+    "logout_title",
+    "logout_subtitle",
+    "logout_btn",
+    "return_to_site",
 )
 
 
@@ -42,6 +49,13 @@ def admin_submit_button_translations(request):
             "theme_light": "Light",
             "theme_dark": "Dark",
             "theme_system": "System",
+            "login_welcome": "Welcome back to",
+            "login_btn": "Log in",
+            "login_forgot_password": "Forgotten your password or username?",
+            "logout_title": "You have been successfully logged out from the administration",
+            "logout_subtitle": "Thanks for spending some quality time with the web site today.",
+            "logout_btn": "Log in again",
+            "return_to_site": "Return to site",
         }
         out[f"admin_{short_key}"] = get_admin_translation(
             request, full_key, defaults.get(short_key, "")

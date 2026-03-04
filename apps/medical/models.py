@@ -39,9 +39,9 @@ class MedicalDocument(models.Model):
         on_delete=models.RESTRICT,
         related_name="medical_document",
     )
-    status = models.CharField(max_length=20, choices=MedicalDocStatus.choices, default=MedicalDocStatus.DRAFT)
-    current_version_no = models.IntegerField(default=0)
-    last_published_at = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=MedicalDocStatus.choices, default=MedicalDocStatus.DRAFT, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
+    current_version_no = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_current_version_no", "Current version no"))
+    last_published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_last_published_at", "Last published at"))
     created_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.RESTRICT,
@@ -83,7 +83,7 @@ class MedicalDocumentVersion(models.Model):
         on_delete=models.CASCADE,
         related_name="versions",
     )
-    version_no = models.IntegerField()
+    version_no = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_version_no", "Version no"))
     version_status = models.CharField(
         max_length=20,
         choices=DocVersionStatus.choices,
@@ -95,18 +95,18 @@ class MedicalDocumentVersion(models.Model):
         choices=PdfStatus.choices,
         default=PdfStatus.PENDING,
     )
-    medical_payload_schema_version = models.SmallIntegerField(default=1)
-    medical_payload = models.JSONField(default=dict)
-    diagnosis_code = models.CharField(max_length=50, blank=True, null=True)
-    procedure_code = models.CharField(max_length=50, blank=True, null=True)
-    pdf_local_path = models.CharField(max_length=500, blank=True, null=True)
-    pdf_checksum_sha256 = models.CharField(max_length=64, blank=True, null=True)
-    hidrive_path = models.CharField(max_length=500, blank=True, null=True)
-    hidrive_sent = models.BooleanField(default=False)
-    hidrive_sent_at = models.DateTimeField(blank=True, null=True)
-    sms_sent = models.BooleanField(default=False)
-    sms_sent_at = models.DateTimeField(blank=True, null=True)
-    local_pdf_deleted_at = models.DateTimeField(blank=True, null=True)
+    medical_payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_medical_payload_schema_version", "Medical payload schema version"))
+    medical_payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_medical_payload", "Medical payload"))
+    diagnosis_code = models.CharField(max_length=50, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_diagnosis_code", "Diagnosis code"))
+    procedure_code = models.CharField(max_length=50, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_procedure_code", "Procedure code"))
+    pdf_local_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_local_path", "Pdf local path"))
+    pdf_checksum_sha256 = models.CharField(max_length=64, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_checksum_sha256", "Pdf checksum sha256"))
+    hidrive_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_path", "Hidrive path"))
+    hidrive_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_hidrive_sent", "Hidrive sent"))
+    hidrive_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_sent_at", "Hidrive sent at"))
+    sms_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_sms_sent", "Sms sent"))
+    sms_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_sms_sent_at", "Sms sent at"))
+    local_pdf_deleted_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_local_pdf_deleted_at", "Local pdf deleted at"))
     publish_requested_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -114,7 +114,7 @@ class MedicalDocumentVersion(models.Model):
         null=True,
         related_name="requested_medical_publications",
     )
-    publish_locale = models.CharField(max_length=10, blank=True, null=True)
+    publish_locale = models.CharField(max_length=10, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_publish_locale", "Publish locale"))
     published_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -122,7 +122,7 @@ class MedicalDocumentVersion(models.Model):
         null=True,
         related_name="published_medical_documents",
     )
-    published_at = models.DateTimeField(blank=True, null=True)
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_published_at", "Published at"))
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -215,13 +215,13 @@ class DoctorTextTemplate(models.Model):
         null=True,
         related_name="doctor_templates",
     )
-    name = models.CharField(max_length=120)
-    template_locale = models.CharField(max_length=10, default="de-DE")
-    template_body = models.TextField()
-    lesion_group_favorites = models.JSONField(default=list, blank=True)
-    summary_favorites = models.JSONField(default=list, blank=True)
-    is_global = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    name = models.CharField(max_length=120, verbose_name=db_gettext_lazy("administration.field_name", "Name"))
+    template_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_template_locale", "Template locale"))
+    template_body = models.TextField(verbose_name=db_gettext_lazy("administration.field_template_body", "Template body"))
+    lesion_group_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_lesion_group_favorites", "Lesion group favorites"))
+    summary_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_summary_favorites", "Summary favorites"))
+    is_global = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"))
+    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

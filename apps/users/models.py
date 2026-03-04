@@ -10,17 +10,17 @@ from apps.core.translation_service import db_gettext_lazy
 
 class StaffUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    password = models.CharField(max_length=128)
-    username = models.CharField(max_length=150, unique=True)
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=20, blank=True, null=True)
-    is_staff = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    date_joined = models.DateTimeField(auto_now_add=True)
-    code = models.CharField(max_length=50, default="")
-    preferred_locale = models.CharField(max_length=10, default="de-DE")
+    password = models.CharField(max_length=128, verbose_name=db_gettext_lazy("administration.field_password", "Password"))
+    username = models.CharField(max_length=150, unique=True, verbose_name=db_gettext_lazy("administration.field_username", "Username"))
+    first_name = models.CharField(max_length=50, verbose_name=db_gettext_lazy("administration.field_first_name", "First name"))
+    last_name = models.CharField(max_length=100, verbose_name=db_gettext_lazy("administration.field_last_name", "Last name"))
+    email = models.EmailField(unique=True, verbose_name=db_gettext_lazy("administration.field_email", "Email"))
+    phone_number = models.CharField(max_length=20, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_phone_number", "Phone number"))
+    is_staff = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_staff", "Is staff"))
+    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
+    date_joined = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_date_joined", "Date joined"))
+    code = models.CharField(max_length=50, default="", verbose_name=db_gettext_lazy("administration.field_code", "Code"))
+    preferred_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_preferred_locale", "Preferred locale"))
     consulting_room = models.ForeignKey(
         "reception.ConsultingRoom",
         on_delete=models.SET_NULL,
