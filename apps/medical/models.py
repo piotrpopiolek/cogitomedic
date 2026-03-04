@@ -7,6 +7,8 @@ from django.db import models
 from django.db.models import Q
 from django.contrib.postgres.indexes import GinIndex
 
+from apps.core.translation_service import db_gettext_lazy
+
 
 class MedicalDocStatus(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
@@ -57,6 +59,8 @@ class MedicalDocument(models.Model):
 
     class Meta:
         db_table = "medical_document"
+        verbose_name = db_gettext_lazy("administration.model_medicaldocument", "Medical document")
+        verbose_name_plural = db_gettext_lazy("administration.model_medicaldocument_plural", "Medical documents")
         constraints = [
             models.CheckConstraint(
                 condition=Q(current_version_no__gte=0),
@@ -234,6 +238,8 @@ class DoctorTextTemplate(models.Model):
 
     class Meta:
         db_table = "doctor_text_template"
+        verbose_name = db_gettext_lazy("administration.model_doctortexttemplate", "Doctor template")
+        verbose_name_plural = db_gettext_lazy("administration.model_doctortexttemplate_plural", "Doctor templates")
         constraints = [
             models.CheckConstraint(
                 condition=Q(template_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),

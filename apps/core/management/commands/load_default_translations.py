@@ -13,6 +13,7 @@ from cogitomedica.doctor_i18n import (
     FITZPATRICK_EN,
     FITZPATRICK_PL,
 )
+from cogitomedica.admin_i18n import ADMIN_UI_DE, ADMIN_UI_EN, ADMIN_UI_PL
 from cogitomedica.tablet_i18n import (
     FORM_UI_DE,
     FORM_UI_EN,
@@ -127,6 +128,23 @@ class Command(BaseCommand):
                     full_key,
                     category=TranslationCategory.WAITING_ROOM,
                     description="Waiting room staff UI",
+                )
+                obj, created = TranslationValue.objects.get_or_create(
+                    translation_key=key,
+                    language_code=lang,
+                    defaults={"value": text},
+                )
+                if created:
+                    created_values += 1
+
+        admin_ui_source = {"de": ADMIN_UI_DE, "en": ADMIN_UI_EN, "pl": ADMIN_UI_PL}
+        for lang, mapping in admin_ui_source.items():
+            for short_key, text in mapping.items():
+                full_key = f"administration.{short_key}"
+                key = self._ensure_key(
+                    full_key,
+                    category=TranslationCategory.ADMINISTRATION,
+                    description="Admin panel UI",
                 )
                 obj, created = TranslationValue.objects.get_or_create(
                     translation_key=key,

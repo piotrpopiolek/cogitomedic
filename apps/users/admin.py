@@ -5,6 +5,8 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.urls import reverse
 from django.utils.html import format_html
 
+from apps.core.translation_service import db_gettext_lazy
+
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
 except ImportError:
@@ -68,7 +70,7 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
             return True
         return super().has_delete_permission(request, obj=obj)
 
-    @admin.display(description="Edycja")
+    @admin.display(description=db_gettext_lazy("administration.admin_col_edycja", "Edycja"))
     def edit_link(self, obj):
         url = reverse("admin:users_staffuser_change", args=[obj.pk])
         return format_html('<a class="button" href="{}">Edytuj</a>', url)
