@@ -6,6 +6,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
+
+from apps.core.translation_service import db_gettext_lazy
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -97,6 +99,8 @@ class Patient(models.Model):
 
     class Meta:
         db_table = "patient"
+        verbose_name = db_gettext_lazy("administration.model_patient", "Patient")
+        verbose_name_plural = db_gettext_lazy("administration.model_patient_plural", "Patients")
         indexes = [
             models.Index(fields=["last_name", "first_name", "date_of_birth"]),
             models.Index(fields=["phone"]),
@@ -198,6 +202,8 @@ class ClinicSite(models.Model):
 
     class Meta:
         db_table = "clinic_site"
+        verbose_name = db_gettext_lazy("administration.model_clinicsite", "Clinic site")
+        verbose_name_plural = db_gettext_lazy("administration.model_clinicsite_plural", "Clinic sites")
 
     def __str__(self) -> str:
         return self.name or self.code or str(self.id)
@@ -213,6 +219,8 @@ class ConsultingRoom(models.Model):
 
     class Meta:
         db_table = "consulting_room"
+        verbose_name = db_gettext_lazy("administration.model_consultingroom", "Consulting room")
+        verbose_name_plural = db_gettext_lazy("administration.model_consultingroom_plural", "Consulting rooms")
         constraints = [
             models.UniqueConstraint(
                 fields=["clinic_site", "code"],
@@ -249,6 +257,8 @@ class DailyQueue(models.Model):
 
     class Meta:
         db_table = "daily_queue"
+        verbose_name = db_gettext_lazy("administration.model_dailyqueue", "Daily queue")
+        verbose_name_plural = db_gettext_lazy("administration.model_dailyqueue_plural", "Daily queues")
         indexes = [
             models.Index(fields=["queue_date"]),
             models.Index(fields=["assigned_doctor", "queue_date", "status"]),
@@ -295,6 +305,8 @@ class QueueEntry(models.Model):
 
     class Meta:
         db_table = "queue_entry"
+        verbose_name = db_gettext_lazy("administration.model_queueentry", "Queue entry")
+        verbose_name_plural = db_gettext_lazy("administration.model_queueentry_plural", "Queue entries")
         indexes = [
             models.Index(fields=["daily_queue", "entry_status", "position_no"]),
             models.Index(fields=["patient", "-created_at"]),

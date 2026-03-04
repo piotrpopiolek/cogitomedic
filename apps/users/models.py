@@ -5,6 +5,8 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from apps.core.translation_service import db_gettext_lazy
+
 
 class StaffUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -37,6 +39,8 @@ class StaffUser(AbstractUser):
 
     class Meta:
         db_table = "staff_user"
+        verbose_name = db_gettext_lazy("administration.model_staffuser", "Staff user")
+        verbose_name_plural = db_gettext_lazy("administration.model_staffuser_plural", "Staff users")
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(phone_number__isnull=True)

@@ -18,6 +18,7 @@ try:
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
+from apps.core.translation_service import db_gettext_lazy
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
@@ -255,20 +256,20 @@ class DailyQueueAdmin(UnfoldModelAdmin):
             context,
         )
 
-    @admin.display(description="Wpisy", ordering="entries_count_annotated")
+    @admin.display(description=db_gettext_lazy("administration.admin_col_wpisy", "Wpisy"), ordering="entries_count_annotated")
     def entries_count(self, obj):
         return getattr(obj, "entries_count_annotated", 0)
 
-    @admin.display(description="Pacjenci", ordering="patients_count_annotated")
+    @admin.display(description=db_gettext_lazy("administration.admin_col_pacjenci", "Pacjenci"), ordering="patients_count_annotated")
     def patients_count(self, obj):
         return getattr(obj, "patients_count_annotated", 0)
 
-    @admin.display(description="Widok wpisów")
+    @admin.display(description=db_gettext_lazy("administration.admin_col_widok_wpisow", "Widok wpisów"))
     def view_queue_entries(self, obj):
         url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode({'daily_queue__id__exact': str(obj.id)})}"
         return format_html('<a href="{}">Wpisy tej kolejki</a>', url)
 
-    @admin.display(description="Pacjenci dnia")
+    @admin.display(description=db_gettext_lazy("administration.admin_col_pacjenci_dnia", "Pacjenci dnia"))
     def view_day_patients(self, obj):
         params = {
             "daily_queue__queue_date__exact": obj.queue_date.isoformat(),

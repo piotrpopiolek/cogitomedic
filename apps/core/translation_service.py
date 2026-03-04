@@ -1,17 +1,32 @@
 from __future__ import annotations
 
+import contextvars
+from typing import Any
+
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
+from django.utils.functional import lazy
 
-from apps.core.models import (
-    TranslationCacheVersion,
-    TranslationCategory,
-    TranslationKeyStatus,
-    TranslationValue,
-)
+# Models imported lazily inside functions to avoid AppRegistryNotReady when this
+# module is imported from other apps' models.py during Django startup.
 
 ALLOWED_LANGUAGE_CODES = {"de", "en", "pl"}
+ADMINISTRATION_CATEGORY = "administration"
+
+_current_request: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "translation_current_request", default=None
+)
+
+
+def set_current_request(request: Any) -> None:
+    """Set the current request for the active context (called by middleware)."""
+    _current_request.set(request)
+
+
+def get_current_request() -> Any:
+    """Return the current request if set by middleware, else None."""
+    return _current_request.get(None)
 
 
 def normalize_language_code(value: str) -> str:
@@ -25,7 +40,9 @@ def normalize_language_code(value: str) -> str:
     return "de"
 
 
-def _ensure_cache_version(category: str, language_code: str) -> TranslationCacheVersion:
+def _ensure_cache_version(category: str, language_code: str):
+    from apps.core.models import TranslationCacheVersion
+
     normalized = normalize_language_code(language_code)
     obj, _ = TranslationCacheVersion.objects.get_or_create(
         category=category,
@@ -37,6 +54,8 @@ def _ensure_cache_version(category: str, language_code: str) -> TranslationCache
 
 @transaction.atomic
 def bump_translation_version(category: str, language_code: str) -> None:
+    from apps.core.models import TranslationCacheVersion, TranslationCategory
+
     normalized = normalize_language_code(language_code)
     if category not in TranslationCategory.values:
         return
@@ -48,6 +67,8 @@ def bump_translation_version(category: str, language_code: str) -> None:
 
 
 def get_translation_map(category: str, language_code: str) -> dict[str, str]:
+    from apps.core.models import TranslationCategory, TranslationKeyStatus, TranslationValue
+
     normalized = normalize_language_code(language_code)
     if category not in TranslationCategory.values:
         return {}
@@ -64,3 +85,38 @@ def get_translation_map(category: str, language_code: str) -> dict[str, str]:
     data = {row.translation_key.key: row.value for row in rows}
     cache.set(cache_key, data, timeout=300)
     return data
+
+
+def _get_admin_map_for_request(request: Any) -> dict[str, str]:
+    """Return administration translation map for request language; cache on request."""
+    if not request:
+        return get_translation_map(ADMINISTRATION_CATEGORY, "de")
+    cache_attr = "_admin_i18n_map"
+    if getattr(request, cache_attr, None) is not None:
+        return getattr(request, cache_attr)
+    if getattr(request, "LANGUAGE_CODE", None):
+        lang = normalize_language_code(request.LANGUAGE_CODE)
+    elif getattr(request, "user", None) and getattr(request.user, "is_authenticated", False) and request.user.is_authenticated:
+        locale = getattr(request.user, "preferred_locale", None) or ""
+        lang = normalize_language_code(locale)
+    data = get_translation_map(ADMINISTRATION_CATEGORY, lang)
+    setattr(request, cache_attr, data)
+    return data
+
+
+def _resolve_db_gettext(key: str, default: str) -> str:
+    """Resolve a single admin translation key; used by db_gettext_lazy."""
+    request = get_current_request()
+    if not request:
+        return default
+    mapping = _get_admin_map_for_request(request)
+    return mapping.get(key, default)
+
+
+def db_gettext_lazy(key: str, default: str = "") -> Any:
+    """
+    Return a lazy proxy that resolves to the administration translation for the current
+    request language when forced (e.g. in template). Requires middleware that sets the
+    current request (TranslationRequestMiddleware).
+    """
+    return lazy(_resolve_db_gettext, str)(key, default)
