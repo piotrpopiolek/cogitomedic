@@ -116,10 +116,8 @@ def build_components_schemas(
     Build OpenAPI 3.0 components.schemas from a list of Pydantic model classes.
 
     Nested models (from $defs) are merged into the same components.schemas dict
-    with unique names. Caller should set openapi_doc["components"] = {"schemas": result}.
+    with unique names.     Caller should set openapi_doc["components"] = {"schemas": result}.
     """
-    from pydantic import BaseModel
-
     all_schemas: dict[str, dict[str, Any]] = {}
 
     for model in model_classes:
