@@ -90,7 +90,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             )
         qs = Patient.objects.all().order_by("-created_at")
 
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
         search = request.GET.get("search")
         if search:
@@ -188,12 +188,12 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH"):
         return json_error("Method not allowed.", status=405)
     
-    if request.method == "PATCH" and getattr(request.user, "role", None) == "DOCTOR":
+    if request.method == "PATCH" and request.user.is_doctor:
         return json_error("Method not allowed for this role.", status=403)
 
     try:
         qs = Patient.objects.all()
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
         patient = qs.get(id=patient_id)
     except ObjectDoesNotExist:
@@ -288,7 +288,7 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
         return json_error("Method not allowed.", status=405)
     try:
         qs = Patient.objects.all()
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
         qs.get(id=patient_id)
     except ObjectDoesNotExist:

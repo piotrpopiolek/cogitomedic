@@ -20,7 +20,7 @@ from apps.reception.models import (
     QueueStatus,
     TabletDevice,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class DailyQueuesApiTests(TestCase):
@@ -30,9 +30,10 @@ class DailyQueuesApiTests(TestCase):
             username="reception-api",
             email="reception-api@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.reception_user, "Reception")
         self.clinic = ClinicSite.objects.create(code="C1", name="Clinic 1")
         self.room = ConsultingRoom.objects.create(
             clinic_site=self.clinic,
@@ -303,7 +304,7 @@ class TabletDevicesApiTests(TestCase):
             username="tablet-api",
             email="tablet-api@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
+            "role": "RECEPTION",
             is_staff=True,
         )
         self.client.login(username="tablet-api", password="safe-password")
@@ -399,7 +400,7 @@ class ClinicSitesAndRoomsApiTests(TestCase):
             username="clinic-api",
             email="clinic-api@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
+            "role": "RECEPTION",
             is_staff=True,
         )
         self.client.login(username="clinic-api", password="safe-password")
@@ -512,7 +513,7 @@ class PatientsApiTests(TestCase):
             username="patients-api-user",
             email="patients-api@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
+            "role": "RECEPTION",
             is_staff=True,
         )
         self.client.login(username="patients-api-user", password="safe-password")
@@ -773,7 +774,7 @@ class ListLimitApiTests(TestCase):
             username="listlimit-api",
             email="listlimit-api@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
+            "role": "RECEPTION",
             is_staff=True,
         )
         self.client.login(username="listlimit-api", password="safe-password")

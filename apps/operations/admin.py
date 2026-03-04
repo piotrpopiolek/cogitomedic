@@ -21,7 +21,7 @@ class AuditEventAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: only see events where they are author OR assigned to queue (via metadata)
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             from django.db.models import Q
             qs = qs.filter(
                 Q(metadata__assigned_doctor_id=str(request.user.id)) |

@@ -40,7 +40,7 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
     qs = AuditEvent.objects.all().order_by("-event_time")
     
-    if getattr(request.user, "role", None) == "DOCTOR":
+    if request.user.is_doctor:
         # DOCTOR: only events where metadata.assigned_doctor_id == current_user.id
         # OR actor_user_id == current_user.id
         qs = qs.filter(

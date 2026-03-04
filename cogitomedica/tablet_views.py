@@ -38,8 +38,8 @@ def _staff_context(request: HttpRequest) -> dict:
 
 
 def _tablet_role_ok(request: HttpRequest) -> bool:
-    return getattr(request.user, "role", None) in TABLET_ALLOWED_ROLES
-
+    user = request.user
+    return user.is_authenticated and (user.is_tablet or user.is_reception or user.is_admin_role)
 
 @require_http_methods(["GET", "POST"])
 def tablet_login_view(request: HttpRequest) -> HttpResponse:
@@ -49,7 +49,7 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
-        if user is not None and getattr(user, "role", None) in TABLET_ALLOWED_ROLES:
+        if user is not None and (user.is_tablet or user.is_reception or user.is_admin_role):
             login(request, user)
             android_id = (request.POST.get("android_id") or "").strip()
             if android_id:
@@ -179,7 +179,7 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
         )
         session.save(update_fields=["form_locale"])
     form_locale = session.form_locale or "de-DE"
-    is_tablet = getattr(request.user, "role", None) == "TABLET"
+    is_tablet = request.user.is_tablet
     try:
         context = get_intake_form_context(
             intake_form_id=intake_form_id,

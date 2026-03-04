@@ -467,8 +467,7 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
         check_doctor_document_access(doc, request.user)
         retried = retry_latest_document_processing(
             medical_document_id=medical_document_id,
-            actor_user_id=request.user.id,
-            actor_role=getattr(request.user, "role", None),
+            actor=request.user,
             reason=body.reason,
         )
     except ObjectDoesNotExist:

@@ -22,7 +22,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class OutboxApiTests(TestCase):
@@ -32,23 +32,26 @@ class OutboxApiTests(TestCase):
             username="api-doctor-outbox",
             email="api.doctor.outbox@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+
         self.reception_user = StaffUser.objects.create_user(
             username="api-reception-outbox",
             email="api.reception.outbox@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
+
         self.admin_user = StaffUser.objects.create_user(
             username="api-admin-outbox",
             email="api.admin.outbox@example.com",
             password="safe-password",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        assign_group_to_test_user(self.admin_user, "Admin")
         self.client.login(username="api-admin-outbox", password="safe-password")
         clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="O1", name="O1")

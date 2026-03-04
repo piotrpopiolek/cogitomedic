@@ -43,7 +43,7 @@ LOCALE_PATTERN = re.compile(r"^(de|en|pl)(-[A-Z]{2})?$")
 
 def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> JsonResponse:
     """Build and return GET intake form context (shared by view and PATCH response)."""
-    is_tablet = getattr(request.user, "role", None) == "TABLET"
+    is_tablet = request.user.is_tablet
     form_locale = request.GET.get("form_locale", "de-DE")[:10]
     
     if not LOCALE_PATTERN.match(form_locale):

@@ -66,7 +66,7 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     Access is granted if user is the author OR is assigned to the document's queue.
     ADMIN has access to all.
     """
-    if getattr(user, "role", None) == "ADMIN":
+    if user.is_admin_role:
         return
     if document.created_by_user_id == user.id:
         return
@@ -76,7 +76,7 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
 
 def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
     """Raise ObjectDoesNotExist if user does not have access to the queue entry."""
-    if getattr(user, "role", None) == "ADMIN":
+    if user.is_admin_role:
         return
     if queue_entry.daily_queue.assigned_doctor_id == user.id:
         return
@@ -393,7 +393,7 @@ def list_medical_documents(
         )
         .order_by("-updated_at")
     )
-    if getattr(user, "role", None) != "ADMIN" and user is not None:
+    if not user.is_admin_role and user is not None:
         qs = qs.filter(
             Q(created_by_user_id=user.id) | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
         )
@@ -430,7 +430,7 @@ def list_doctor_work_queue(
         PatientIntakeForm.objects.filter(form_status=IntakeStatus.SUBMITTED)
         .select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     )
-    if getattr(user, "role", None) != "ADMIN" and user is not None:
+    if not user.is_admin_role and user is not None:
         qs = qs.filter(
             Q(queue_entry__medical_document__created_by_user_id=user.id) | 
             Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
@@ -589,7 +589,7 @@ def get_medical_document_context(
                 completed=current_version.sms_sent,
             ),
             "processing_error_message": _latest_error_message(current_version),
-            "can_retry_processing": retryable_event is not None and getattr(user, "role", None) in {"ADMIN", "RECEPTION"},
+            "can_retry_processing": retryable_event is not None and getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False),
             "publish_locale": current_version.publish_locale,
             "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
         }
@@ -610,11 +610,10 @@ def get_medical_document_context(
 def retry_latest_document_processing(
     *,
     medical_document_id: uuid.UUID,
-    actor_user_id: uuid.UUID,
-    actor_role: str | None,
+    actor: StaffUser,
     reason: str,
 ) -> OutboxEvent:
-    if actor_role not in {"ADMIN", "RECEPTION"}:
+    if not (actor.is_admin_role or actor.is_reception):
         raise DomainError("Only ADMIN or RECEPTION can retry processing.")
     doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
     latest_version = (
@@ -634,7 +633,7 @@ def retry_latest_document_processing(
     retried = retry_outbox_event(event=retryable, reason=reason)
     create_audit_event(
         event_type="DOCUMENT_PROCESSING_RETRY_REQUESTED",
-        actor_user_id=actor_user_id,
+        actor_user_id=actor.id,
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         outbox_event_id=retried.id,

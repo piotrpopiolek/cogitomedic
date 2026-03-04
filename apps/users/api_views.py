@@ -26,13 +26,26 @@ from apps.users.models import StaffUser
 from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
 
 
+def get_primary_role(user) -> str | None:
+    if not user.is_authenticated:
+        return None
+    if user.is_admin_role:
+        return "ADMIN"
+    elif user.is_doctor:
+        return "DOCTOR"
+    elif user.is_reception:
+        return "RECEPTION"
+    elif user.is_tablet:
+        return "TABLET"
+    return getattr(user, "role", None)
+
 def _user_payload(request: HttpRequest) -> dict:
     user = request.user
     return {
-        "id": str(user.id),
-        "username": user.username,
-        "email": user.email,
-        "role": getattr(user, "role", None),
+        "id": str(user.id) if user.is_authenticated else None,
+        "username": getattr(user, "username", None),
+        "email": getattr(user, "email", None),
+        "role": get_primary_role(user),
         "preferred_locale": getattr(user, "preferred_locale", None),
         "is_authenticated": bool(user.is_authenticated),
     }
@@ -46,7 +59,7 @@ def _serialize_staff_user(user: StaffUser) -> dict:
         "first_name": user.first_name,
         "last_name": user.last_name,
         "phone_number": user.phone_number,
-        "role": user.role,
+        "role": get_primary_role(user),
         "preferred_locale": user.preferred_locale,
         "is_staff": user.is_staff,
         "is_active": user.is_active,

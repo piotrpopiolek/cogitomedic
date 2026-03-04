@@ -70,14 +70,14 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
     if request.method == "GET":
         qs = DailyQueue.objects.all().order_by("-queue_date", "clinic_site_id", "consulting_room_id")
         queue_date = request.GET.get("queue_date")
-        is_tablet = getattr(request.user, "role", None) == "TABLET"
+        is_tablet = request.user.is_tablet
         if is_tablet:
             today = timezone.now().date()
             if queue_date and queue_date != today.isoformat():
                 return json_error("TABLET role can only access queues for today.", status=403)
             queue_date = today.isoformat()
             
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(assigned_doctor_id=request.user.id)
             
         if queue_date:
@@ -174,10 +174,10 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
         
-    if getattr(request.user, "role", None) == "TABLET" and queue.queue_date != timezone.now().date():
+    if request.user.is_tablet and queue.queue_date != timezone.now().date():
         return json_error("TABLET role can only access entries of today's queues.", status=403)
         
-    if getattr(request.user, "role", None) == "DOCTOR" and queue.assigned_doctor_id != request.user.id:
+    if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
         return json_error("DOCTOR can only access own queues.", status=403)
         
     if request.method == "GET":
@@ -233,7 +233,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     except ObjectDoesNotExist:
         return json_error("Queue entry not found.", status=404)
         
-    if getattr(request.user, "role", None) == "DOCTOR" and entry.daily_queue.assigned_doctor_id != request.user.id:
+    if request.user.is_doctor and entry.daily_queue.assigned_doctor_id != request.user.id:
         return json_error("DOCTOR can only access entries from own queues.", status=403)
         
     if request.method == "GET":

@@ -65,7 +65,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         return role_error
     if request.method == "GET":
         qs = ClinicSite.objects.all().order_by("code")
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(id__in=request.user.clinic_sites.all())
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
@@ -149,7 +149,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         return role_error
     if request.method == "GET":
         qs = ConsultingRoom.objects.all().order_by("clinic_site_id", "code")
-        if getattr(request.user, "role", None) == "DOCTOR":
+        if request.user.is_doctor:
             qs = qs.filter(clinic_site_id__in=request.user.clinic_sites.all())
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:

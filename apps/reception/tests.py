@@ -19,7 +19,7 @@ from apps.reception.services import (
     create_queue_entry,
     issue_tablet_session_latest_wins,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class ReceptionServicesTests(TestCase):
@@ -28,9 +28,10 @@ class ReceptionServicesTests(TestCase):
             username="reception",
             email="reception@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.reception_user, "Reception")
         self.clinic = ClinicSite.objects.create(code="BER", name="Berlin")
         self.room = ConsultingRoom.objects.create(
             clinic_site=self.clinic,
@@ -165,9 +166,10 @@ class ReceptionServicesTests(TestCase):
             username="doc_test",
             email="doc_test@example.com",
             password="pwd",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(doctor_user, "Doctor")
         # Assign clinic to doctor
         doctor_user.clinic_sites.add(self.clinic)
         

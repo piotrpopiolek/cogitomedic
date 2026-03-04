@@ -4,7 +4,7 @@ import json
 
 from django.test import Client, TestCase
 
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class UsersAuthApiTests(TestCase):
@@ -14,9 +14,10 @@ class UsersAuthApiTests(TestCase):
             username="auth-user",
             email="auth.user@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.user, "Doctor")
 
     def test_login_and_me_and_logout_flow(self) -> None:
         login_response = self.client.post(
@@ -72,9 +73,10 @@ class StaffUsersApiTests(TestCase):
             username="admin-user",
             email="admin.user@example.com",
             password="safe-password",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.user, "Admin")
         self.client.force_login(self.user)
 
     def test_get_staff_users_returns_paginated_items(self) -> None:
@@ -168,9 +170,10 @@ class StaffUsersApiTests(TestCase):
             username="doctor-non-admin",
             email="doctor.non.admin@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(doctor, "Doctor")
         self.client.force_login(doctor)
         response = self.client.get("/api/v1/staff-users")
         self.assertEqual(response.status_code, 403)

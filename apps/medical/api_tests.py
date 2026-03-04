@@ -20,7 +20,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffRole, StaffUser
+from apps.users.models import StaffUser
 
 
 class MedicalApiTests(TestCase):
@@ -30,23 +30,26 @@ class MedicalApiTests(TestCase):
             username="api-doctor",
             email="api.doctor@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        
         self.reception_user = StaffUser.objects.create_user(
             username="api-reception-medical",
             email="api.reception.medical@example.com",
             password="safe-password",
-            role=StaffRole.RECEPTION,
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        
         self.admin_user = StaffUser.objects.create_user(
             username="api-admin-medical",
             email="api.admin.medical@example.com",
             password="safe-password",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        assign_group_to_test_user(self.admin_user, "Admin")
         clinic = ClinicSite.objects.create(code="API2", name="API Clinic 2")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="B1", name="B1")
         queue = DailyQueue.objects.create(
@@ -850,23 +853,26 @@ class DoctorTemplatesApiTests(TestCase):
             username="api-admin-templates",
             email="api.admin.templates@example.com",
             password="safe-password",
-            role=StaffRole.ADMIN,
             is_staff=True,
         )
+        from apps.core.api_utils import assign_group_to_test_user
+        assign_group_to_test_user(self.admin_user, "Admin")
+        
         self.doctor_user = StaffUser.objects.create_user(
             username="api-doctor-templates",
             email="api.doctor.templates@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        
         self.other_doctor_user = StaffUser.objects.create_user(
             username="api-doctor-templates-2",
             email="api.doctor.templates2@example.com",
             password="safe-password",
-            role=StaffRole.DOCTOR,
             is_staff=True,
         )
+        assign_group_to_test_user(self.other_doctor_user, "Doctor")
 
     def test_doctor_templates_create_list_patch_permissions(self) -> None:
         # Doctor can create private template

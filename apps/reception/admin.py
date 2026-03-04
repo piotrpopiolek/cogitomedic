@@ -83,30 +83,12 @@ class PatientAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: see patients from assigned clinics OR patients in any queue assigned to this doctor
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(
                 Q(clinic_sites__in=request.user.clinic_sites.all())
                 | Q(queue_entries__daily_queue__assigned_doctor=request.user)
             ).distinct()
         return qs
-
-    def has_change_permission(self, request, obj=None):
-        # DOCTOR: read-only access (only ADMIN can edit patients)
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_add_permission(self, request):
-        # DOCTOR: no add permission
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_add_permission(request)
-
-    def has_delete_permission(self, request, obj=None):
-        # DOCTOR: no delete permission
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_delete_permission(request, obj)
 
     def save_model(self, request, obj, form, change):
         _ensure_patient_temp_identity_alert(obj)
@@ -167,24 +149,9 @@ class PatientContactHistoryAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: only see history for patients from assigned clinics
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(patient__clinic_sites__in=request.user.clinic_sites.all()).distinct()
         return qs
-
-    def has_change_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_add_permission(self, request):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_add_permission(request)
-
-    def has_delete_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_delete_permission(request, obj)
 
     def save_model(self, request, obj, form, change):
         _set_changed_by_user(request, obj)
@@ -200,27 +167,12 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: see clinics from profile OR clinics from queues assigned to this doctor
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(
                 Q(id__in=request.user.clinic_sites.values_list("pk", flat=True))
                 | Q(daily_queues__assigned_doctor=request.user)
             ).distinct()
         return qs
-
-    def has_change_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_add_permission(self, request):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_add_permission(request)
-
-    def has_delete_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_delete_permission(request, obj)
 
 
 @admin.register(ConsultingRoom)
@@ -233,27 +185,12 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # DOCTOR: see rooms from assigned clinics OR rooms from queues assigned to this doctor
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
+        if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(
                 Q(clinic_site_id__in=request.user.clinic_sites.values_list("pk", flat=True))
                 | Q(daily_queues__assigned_doctor=request.user)
             ).distinct()
         return qs
-
-    def has_change_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_add_permission(self, request):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_add_permission(request)
-
-    def has_delete_permission(self, request, obj=None):
-        if getattr(request.user, "role", None) == "DOCTOR" and not request.user.is_superuser:
-            return False
-        return super().has_delete_permission(request, obj)
 
 
 @admin.register(DailyQueue)
