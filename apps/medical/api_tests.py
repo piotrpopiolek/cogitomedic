@@ -8,6 +8,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentVersion
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
@@ -32,7 +33,6 @@ class MedicalApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.doctor_user, "Doctor")
         
         self.reception_user = StaffUser.objects.create_user(
@@ -855,7 +855,6 @@ class DoctorTemplatesApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.admin_user, "Admin")
         
         self.doctor_user = StaffUser.objects.create_user(

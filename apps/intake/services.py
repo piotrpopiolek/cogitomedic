@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.utils import timezone
@@ -322,8 +323,6 @@ def get_intake_form_context(
     Raises ObjectDoesNotExist if form not found.
     For tablet_restrict_to_today=True (TABLET role), returns 404 when queue is not today.
     """
-    from django.core.exceptions import ObjectDoesNotExist
-
     today = timezone.now().date()
     intake_form = (
         PatientIntakeForm.objects.select_related(

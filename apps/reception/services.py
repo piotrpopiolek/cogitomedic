@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
+from apps.medical.models import MedicalDocument
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
@@ -25,6 +26,7 @@ from apps.reception.models import (
     QueueStatus,
     TabletDevice,
 )
+from apps.users.models import StaffUser
 
 
 class InvalidLocaleError(DomainError):
@@ -296,8 +298,6 @@ def create_daily_queue(
     if source not in [c[0] for c in QueueSource.choices]:
         raise DomainError(f"Invalid source: {source}.")
     if assigned_doctor_id is not None:
-        from apps.users.models import StaffUser
-
         StaffUser.objects.get(id=assigned_doctor_id)
     if DailyQueue.objects.filter(
         queue_date=queue_date,
@@ -354,8 +354,6 @@ def update_daily_queue(
     if status is not None and status not in [c[0] for c in QueueStatus.choices]:
         raise DomainError(f"Invalid status: {status}.")
     if assigned_doctor_id is not NOT_PROVIDED and assigned_doctor_id is not None:
-        from apps.users.models import StaffUser
-
         StaffUser.objects.get(id=assigned_doctor_id)
     queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     update_fields = ["updated_at"]
@@ -417,10 +415,6 @@ def merge_temporary_patient_into_confirmed(
     queue_entries_qs = QueueEntry.objects.select_for_update().filter(patient_id=source_patient_id)
     queue_entry_ids = list(queue_entries_qs.values_list("id", flat=True))
     moved_queue_entries = len(queue_entry_ids)
-
-    # Lazy imports avoid coupling at import time between app modules.
-    from apps.intake.models import PatientIntakeForm
-    from apps.medical.models import MedicalDocument
 
     moved_intake_forms = PatientIntakeForm.objects.filter(queue_entry_id__in=queue_entry_ids).count()
     moved_medical_documents = MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids).count()

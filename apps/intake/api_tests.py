@@ -20,6 +20,7 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
+from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.services import _effective_consent_filter, _effective_question_filter
 from apps.reception.models import (
     ClinicSite,
@@ -43,7 +44,6 @@ class IntakeApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.reception_user, "Reception")
         clinic = ClinicSite.objects.create(code="API", name="API Clinic")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")

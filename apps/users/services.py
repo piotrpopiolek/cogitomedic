@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.contrib.auth.models import Group
 from django.db import transaction
 
 from apps.core.exceptions import DomainError
@@ -37,7 +38,6 @@ def create_staff_user(
         is_staff=is_staff,
         is_active=is_active,
     )
-    from django.contrib.auth.models import Group
     group_name = role.capitalize()
     group = Group.objects.filter(name=group_name).first()
     if group:
@@ -78,7 +78,6 @@ def update_staff_user(
         if role not in VALID_ROLES:
             raise DomainError(f"Invalid role: {role}.")
         group_name = role.capitalize()
-        from django.contrib.auth.models import Group
         group = Group.objects.filter(name=group_name).first()
         if group:
             user.groups.clear()

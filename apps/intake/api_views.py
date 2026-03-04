@@ -22,7 +22,7 @@ from apps.intake.api_schemas import (
     UpdateBodyMapRequest,
     UpdateConsentsRequest,
 )
-from apps.intake.models import IntakeOutboxEvent
+from apps.intake.models import IntakeOutboxEvent, PatientIntakeConsent
 from apps.intake.outbox_services import (
     process_intake_outbox_events,
     retry_intake_outbox_event,
@@ -125,8 +125,6 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
     except ConsentNotActiveError as exc:
         return json_error(str(exc), status=409)
     # Return updated consents (accepted + accepted_at for accepted ones)
-    from apps.intake.models import PatientIntakeConsent
-
     updated = list(
         PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id).values(
             "consent_definition_id",

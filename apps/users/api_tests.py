@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
+from uuid import uuid4
+
 from django.test import Client, TestCase
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.users.models import StaffUser
 
 
@@ -16,7 +19,6 @@ class UsersAuthApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.user, "Doctor")
 
     def test_login_and_me_and_logout_flow(self) -> None:
@@ -75,7 +77,6 @@ class StaffUsersApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(self.user, "Admin")
         self.client.force_login(self.user)
 
@@ -154,8 +155,6 @@ class StaffUsersApiTests(TestCase):
         self.assertFalse(self.user.is_active)
 
     def test_staff_user_detail_not_found_returns_404(self) -> None:
-        from uuid import uuid4
-
         response = self.client.get(f"/api/v1/staff-users/{uuid4()}")
         self.assertEqual(response.status_code, 404)
 
@@ -172,7 +171,6 @@ class StaffUsersApiTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        from apps.core.api_utils import assign_group_to_test_user
         assign_group_to_test_user(doctor, "Doctor")
         self.client.force_login(doctor)
         response = self.client.get("/api/v1/staff-users")

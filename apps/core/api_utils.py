@@ -4,6 +4,7 @@ import json
 from functools import wraps
 from uuid import UUID
 
+from django.contrib.auth.models import Group
 from django.http import HttpRequest
 from django.http import JsonResponse
 
@@ -14,7 +15,6 @@ MAX_LIST_LIMIT = 100
 
 def assign_group_to_test_user(user, group_name: str) -> None:
     """Helper for testing to replace `user = StaffUser.objects.create(..., role=StaffRole.XXX)`."""
-    from django.contrib.auth.models import Group
     group, _ = Group.objects.get_or_create(name=group_name)
     user.groups.add(group)
 
