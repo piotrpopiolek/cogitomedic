@@ -254,6 +254,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         "queue_date",
         "clinic_site",
         "consulting_room",
+        "assigned_doctor",
         "shift_code",
         "status",
         "source",
@@ -264,8 +265,8 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         "created_at",
     )
     list_filter = ("status", "source", "shift_code", "queue_date")
-    search_fields = ("clinic_site__code", "consulting_room__code")
-    raw_id_fields = ("clinic_site", "consulting_room", "created_by_user")
+    search_fields = ("clinic_site__code", "consulting_room__code", "assigned_doctor__username")
+    raw_id_fields = ("clinic_site", "consulting_room", "created_by_user", "assigned_doctor")
     date_hierarchy = "queue_date"
 
     def get_urls(self):

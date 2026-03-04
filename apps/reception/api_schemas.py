@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Must match Patient model CheckConstraint patient_phone_format
 PHONE_PATTERN = re.compile(r"^[0-9+() -]{7,20}$")
@@ -25,6 +25,7 @@ class CreateDailyQueueRequest(BaseModel):
     queue_date: date
     clinic_site_id: UUID
     consulting_room_id: UUID
+    assigned_doctor_id: UUID | None = None
     shift_code: str = "FULL_DAY"
     source: str = "MANUAL"
     created_by_user_id: UUID
@@ -33,7 +34,15 @@ class CreateDailyQueueRequest(BaseModel):
 class UpdateDailyQueueRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: str = Field(..., pattern="^(OPEN|CLOSED)$")
+    status: str | None = Field(default=None, pattern="^(OPEN|CLOSED)$")
+    assigned_doctor_id: UUID | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def at_least_one_field(cls, data: dict) -> dict:
+        if isinstance(data, dict) and "status" not in data and "assigned_doctor_id" not in data:
+            raise ValueError("At least one of status or assigned_doctor_id must be provided.")
+        return data
 
 
 class CreateQueueEntryRequest(BaseModel):

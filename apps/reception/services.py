@@ -281,6 +281,7 @@ def create_daily_queue(
     queue_date: timezone.datetime.date,
     clinic_site_id: uuid.UUID,
     consulting_room_id: uuid.UUID,
+    assigned_doctor_id: uuid.UUID | None = None,
     shift_code: str,
     created_by_user_id: uuid.UUID,
     source: str = QueueSource.MANUAL,
@@ -294,6 +295,10 @@ def create_daily_queue(
         raise DomainError(f"Invalid shift_code: {shift_code}.")
     if source not in [c[0] for c in QueueSource.choices]:
         raise DomainError(f"Invalid source: {source}.")
+    if assigned_doctor_id is not None:
+        from apps.users.models import StaffUser
+
+        StaffUser.objects.get(id=assigned_doctor_id)
     if DailyQueue.objects.filter(
         queue_date=queue_date,
         clinic_site_id=clinic_site_id,
@@ -305,6 +310,7 @@ def create_daily_queue(
         queue_date=queue_date,
         clinic_site_id=clinic_site_id,
         consulting_room_id=consulting_room_id,
+        assigned_doctor_id=assigned_doctor_id,
         shift_code=shift_code,
         source=source,
         status=QueueStatus.OPEN,
@@ -324,6 +330,42 @@ def update_daily_queue_status(
     queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     queue.status = status
     queue.save(update_fields=["status", "updated_at"])
+    return queue
+
+
+def _not_provided():
+    """Sentinel for PATCH: field was not in request body."""
+    return object()
+
+
+NOT_PROVIDED = _not_provided()
+
+
+@transaction.atomic
+def update_daily_queue(
+    daily_queue_id: uuid.UUID,
+    *,
+    status: str | None = None,
+    assigned_doctor_id: uuid.UUID | None = NOT_PROVIDED,
+) -> DailyQueue:
+    """Update queue status and/or assigned doctor. At least one must be provided."""
+    if status is None and assigned_doctor_id is NOT_PROVIDED:
+        raise DomainError("At least one of status or assigned_doctor_id must be provided.")
+    if status is not None and status not in [c[0] for c in QueueStatus.choices]:
+        raise DomainError(f"Invalid status: {status}.")
+    if assigned_doctor_id is not NOT_PROVIDED and assigned_doctor_id is not None:
+        from apps.users.models import StaffUser
+
+        StaffUser.objects.get(id=assigned_doctor_id)
+    queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
+    update_fields = ["updated_at"]
+    if status is not None:
+        queue.status = status
+        update_fields.append("status")
+    if assigned_doctor_id is not NOT_PROVIDED:
+        queue.assigned_doctor_id = assigned_doctor_id
+        update_fields.append("assigned_doctor_id")
+    queue.save(update_fields=update_fields)
     return queue
 
 

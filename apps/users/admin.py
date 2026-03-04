@@ -20,12 +20,13 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
     list_filter = ("role", "is_staff", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
     ordering = ("username",)
-    filter_horizontal = ("groups", "user_permissions")
+    filter_horizontal = ("groups", "user_permissions", "clinic_sites")
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         ("Personal", {"fields": ("first_name", "last_name", "email", "phone_number")}),
         ("Role & access", {"fields": ("role", "preferred_locale", "is_staff", "is_active")}),
+        ("Kliniki (dla roli Lekarz)", {"fields": ("clinic_sites",), "description": "Z jakich placówek lekarz widzi pacjentów i kolejki."}),
         ("Dates", {"fields": ("date_joined", "last_login", "created_at", "updated_at")}),
         ("Permissions", {"fields": ("groups", "user_permissions")}),
     )
