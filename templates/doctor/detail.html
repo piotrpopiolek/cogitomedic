@@ -47,12 +47,6 @@
     <div class="card-body">
       <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="form-check-label" for="oa1">{% if ui %}{{ ui.overall_no_control }}{% else %}Keine kontrollbedürftigen Hautveränderungen erkennbar{% endif %}</label></div>
       <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="form-check-label" for="oa2">{% if ui %}{{ ui.overall_control }}{% else %}Kontrollbedürftige Hautveränderungen erkennbar{% endif %}</label></div>
-      <div class="mt-3">
-        <label class="form-label small mb-1" for="doctor-template-select">{% if ui %}{{ ui.template_select_label }}{% else %}Textvorlage{% endif %}</label>
-        <select class="form-select form-select-sm" id="doctor-template-select">
-          <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
-        </select>
-      </div>
     </div>
   </section>
 
