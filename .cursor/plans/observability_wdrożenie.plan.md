@@ -34,7 +34,7 @@ Pozwala to odciążyć bazę transakcyjną PostgreSQL oraz uniknąć w aplikacji
 | **Endpoint metrics**    | GET `/api/v1/observability/metrics` – wymaga **ADMIN**.                                                                   | Scraper Prometheusa potrzebuje prostego dostępu (np. Basic Auth, Bearer Token) do zrzucania danych co kilkanaście sekund.                       |
 | **Dashboardy**          | Lista lekarza pokazuje błędy.                                                                                             | Brak UI "dashboard recepcji" w Django; Brak dashboardu "utrzymanie" w Grafanie.                                                                 |
 | **Alerting i Runbooki** | Tylko JSON w health; jeden runbook dla tłumaczeń.                                                                         | Brak wdrożenia Prometheus Alertmanager i kompletu plików markdown dla alertów w repo.                                                           |
-
+| **Tracing (OTel)**      | Zależności `opentelemetry-*` dodane do `requirements.txt`. | Brak instrumentacji, konfiguracji i eksportu logów/trace'ów z aplikacji; brak kolektora OTel i wizualizacji (Jaeger/Tempo). |
 
 ---
 
@@ -45,17 +45,23 @@ flowchart LR
   subgraph backend [Backend Django]
     Health[GET /observability/health]
     Metrics[GET /observability/metrics]
+    Tracing[OpenTelemetry Instrumentation]
   end
   subgraph monitoring [Darmowy Stack OSS]
     Prom[Prometheus OSS]
     Graf[Grafana OSS]
     AlertM[Alertmanager]
+    OTelCol[OpenTelemetry Collector]
+    Tempo[Grafana Tempo - Tracing]
   end
   subgraph docs [Operacja]
     Runbooks[Runbooki per alert]
   end
   
   Metrics -->|Scrape| Prom
+  Tracing -->|OTLP gRPC| OTelCol
+  OTelCol -->|Eksport trace'ów| Tempo
+  Tempo -->|Wizualizacja| Graf
   Prom -->|Zasila| Graf
   Prom -->|Ewaluuje reguły| AlertM
   AlertM -->|Eskalacja np. Slack| Runbooks
@@ -107,6 +113,14 @@ Usunięcie z endpointu `health` logiki czasowej ("błąd od ponad 10 minut", "ra
   - `Alert: LowSuccessRatio` (success ratio < 0.98 w ciągu 1h).
 - Utworzenie folderu `docs/runbooks/` z plikami Markdown (np. `OUTBOX_BACKLOG_AGE.md`, `INTEGRATION_ERROR.md`) z konkretnymi krokami operacyjnymi naprawy błędu. Alertmanager w powiadomieniu (Slack/Email) dokleja link do runbooka.
 
+### 7. Pełny wgląd i Tracing (OpenTelemetry)
+- **Problem:** Obecnie widzimy błędy, czasy i alerty w ujęciu zagregowanym. Wiemy że był błąd integracji, ale nie widzimy całej drogi pojedynczego żądania (od akcji użytkownika do błędu).
+- **Rozwiązanie:** 
+  1. Instalacja paczek `opentelemetry-instrumentation-django`, `requests` itp.
+  2. Ręczna instrumentacja kluczowych metod (np. `generate_pdf_task`, metody wysyłające SMS/HiDrive) przez dołączenie atrybutów biznesowych (np. `document_id`) do Spanów i obsługę `span.record_exception(e)`.
+  3. Skonfigurowanie eksportera OTLP w Django i uruchomienie instancji OTel Collector + bazy do trzymania trace'ów (np. Grafana Tempo lub Jaeger) w `docker-compose.yml`.
+  4. Dodanie w Grafanie opcji skoku z loga/błędu wprost do interfejsu graficznego dla danego Trace ID, prezentującego "wodospad" czasów i komunikatów o błędach.
+
 ---
 
 ## Podsumowanie etapów
@@ -114,4 +128,5 @@ Usunięcie z endpointu `health` logiki czasowej ("błąd od ponad 10 minut", "ra
 1. **Faza 1 (Refaktoryzacja Backend):** Zadanie 1 (surowe metryki), Zadanie 2 (lekki health), Zadanie 3 (token dla metrics).
 2. **Faza 2 (Recepcja UI):** Zadanie 4 (dashboard w Django).
 3. **Faza 3 (Infrastruktura OSS):** Zadanie 5 (Grafana+Prometheus w Dockerze) oraz Zadanie 6 (Alertmanager + Runbooki).
+4. **Faza 4 (Tracing/OTel - Przyszłość):** Zadanie 7 (Instrumentacja aplikacji i dodanie stosu OTel Collector + Tempo/Jaeger dla pełnego Distributed Tracingu, co zapewni precyzyjne śledzenie źródła pojedynczego requestu/błędu).
 
