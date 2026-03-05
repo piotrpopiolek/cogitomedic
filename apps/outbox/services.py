@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from opentelemetry import trace
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -33,8 +34,24 @@ class RetentionCleanupResult:
 class OutboxEventNotRetryableError(DomainError):
     """Raised when manual retry is requested for non-retryable event."""
 
+tracer = trace.get_tracer(__name__)
 
 def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
+    with tracer.start_as_current_span(
+        f"execute_outbox_event_{event.event_type.lower()}",
+        attributes={
+            "medical_document_version_id": str(event.medical_document_version_id),
+            "outbox_event_id": str(event.id),
+            "event_type": event.event_type,
+        }
+    ) as span:
+        try:
+            _execute_event_internal(event, now=now)
+        except Exception as e:
+            span.record_exception(e)
+            raise
+
+def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
     version = MedicalDocumentVersion.objects.select_for_update().get(id=event.medical_document_version_id)
 
     if event.payload.get("simulate_error") is True:
