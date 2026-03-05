@@ -57,6 +57,9 @@ PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
 # Hosty dozwolone w nagłówku Host. W prod MUSI być ustawione ALLOWED_HOSTS (np. twojadomena.com).
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if ENVIRONMENT == "dev" or DEBUG:
+    if "web" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append("web")
 
 HAS_UNFOLD = importlib.util.find_spec("unfold") is not None
 
