@@ -8,6 +8,9 @@ from prometheus_client import Gauge
 from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.reception.models import PatientImportBatch, PatientImportError
 
+# Typy zdarzeń outbox – używane do emisji serii „zerowych”, żeby metryka zawsze istniała w Prometheusie.
+OUTBOX_EVENT_TYPES = ("GENERATE_PDF", "HIDRIVE_UPLOAD", "SMS_SEND")
+
 
 def build_metrics_payload() -> bytes:
     """Build Prometheus metrics payload for operational checks."""
@@ -21,10 +24,15 @@ def build_metrics_payload() -> bytes:
         registry=registry,
     )
     
-    # Fast group by query
-    outbox_counts = OutboxEvent.objects.values("event_type", "status").annotate(count=Count("id"))
-    for row in outbox_counts:
-        outbox_events_total.labels(event_type=row["event_type"], status=row["status"]).set(row["count"])
+    # Fast group by query; jeśli brak zdarzeń, emituj przynajmniej jedną serię 0, żeby metryka istniała.
+    outbox_counts = list(
+        OutboxEvent.objects.values("event_type", "status").annotate(count=Count("id"))
+    )
+    if outbox_counts:
+        for row in outbox_counts:
+            outbox_events_total.labels(event_type=row["event_type"], status=row["status"]).set(row["count"])
+    else:
+        outbox_events_total.labels(event_type="none", status="none").set(0)
 
     # 2. Oldest pending age (Gauge)
     outbox_pending_age = Gauge(
@@ -44,6 +52,8 @@ def build_metrics_payload() -> bytes:
     for row in oldest_events:
         age_seconds = (now - row["oldest_created"]).total_seconds()
         outbox_pending_age.labels(event_type=row["event_type"]).set(max(0.0, age_seconds))
+    if not oldest_events:
+        outbox_pending_age.labels(event_type="none").set(0)
 
     # 3. Processing duration (We provide _sum and _count to allow PromQL to calculate average latency)
     duration_sum = Gauge(
@@ -76,6 +86,10 @@ def build_metrics_payload() -> bytes:
         val_count = row["count"] or 0
         duration_sum.labels(event_type=row["event_type"]).set(val_sum)
         duration_count.labels(event_type=row["event_type"]).set(val_count)
+    if not durations:
+        for et in OUTBOX_EVENT_TYPES:
+            duration_sum.labels(event_type=et).set(0)
+            duration_count.labels(event_type=et).set(0)
 
     # 4. Import batches total
     import_batches_total = Gauge(
@@ -84,9 +98,12 @@ def build_metrics_payload() -> bytes:
         labelnames=["status"],
         registry=registry,
     )
-    batch_counts = PatientImportBatch.objects.values("status").annotate(count=Count("id"))
-    for row in batch_counts:
-        import_batches_total.labels(status=row["status"]).set(row["count"])
+    batch_counts = list(PatientImportBatch.objects.values("status").annotate(count=Count("id")))
+    if batch_counts:
+        for row in batch_counts:
+            import_batches_total.labels(status=row["status"]).set(row["count"])
+    else:
+        import_batches_total.labels(status="none").set(0)
 
     # 5. Import rows total
     import_rows_total = Gauge(
