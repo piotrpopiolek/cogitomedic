@@ -79,9 +79,9 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
   - Import: liczba importów udanych/nieudanych, `row_error_rate`, czas przetwarzania importu.
   - Dokumenty: czas od publikacji do `hidrive_sent=true`, czas od publikacji do `sms_sent=true`.
 - Muszą istnieć dashboardy operacyjne:
-  - Dashboard recepcji (status importu, zaległe dokumenty, awarie krytyczne).
-  - Dashboard utrzymaniowy (SLO/SLI, retry, dead letter, trend 24h/7d).
-- Musi istnieć alerting 24/7 z progami i eskalacją:
+  - Dashboard recepcji w aplikacji Django (status importu, zaległe dokumenty, awarie krytyczne).
+  - Dashboard utrzymaniowy oparty o darmowe narzędzia Prometheus i Grafana OSS (SLO/SLI, retry, dead letter, trend 24h/7d).
+- Musi istnieć alerting 24/7 z progami i eskalacją (za pomocą darmowego Prometheus Alertmanager):
   - Alert krytyczny: `oldest_pending_age_seconds > 900` w godzinach pracy.
   - Alert krytyczny: `failed_count > 0` przez ponad 10 min dla `HIDRIVE_UPLOAD` lub `SMS_SEND`.
   - Alert ostrzegawczy: skuteczność SMS lub HiDrive poniżej 98% w oknie 1h.

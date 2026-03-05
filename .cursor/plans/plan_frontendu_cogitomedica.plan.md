@@ -159,10 +159,10 @@ Enumy i struktura `medical_payload` – trzymać się api-plan 4.4 (examination_
   - Pobranie szablonu + upload na `POST /api/v1/imports/patients/emergency` (US-017).
 - **Dashboardy (US-014):**  
   - **Recepcja/lekarz:** status importów, zaległe dokumenty, awarie krytyczne (np. failed/DEAD_LETTER) – wyraźne powiadomienie (czerwona lampka/toast).  
-  - **Utrzymaniowy:** SLO/SLI, retry, dead letter, trendy (dane z `GET /api/v1/observability/metrics` lub dedykowanego endpointu metryk/dashboardu, jeśli backend go doda).  
+  - **Utrzymaniowy:** poza aplikacją Django (wykorzystujemy darmowe rozwiązanie Prometheus + Grafana OSS).  
   - Health: `GET /api/v1/observability/health` – status aplikacji, DB, outbox, integracji (HiDrive, SMS).
 
-Zadania: widok merge pacjentów, lista outbox z przyciskiem retry, uruchomienie procesu outbox i retencji (z dry_run), dashboard recepcji i (jeśli API udostępni dane) dashboard utrzymaniowy. Obsługa alertów zgodnie z PRD (runbooki jako linki/tekst w UI).
+Zadania: widok merge pacjentów, lista outbox z przyciskiem retry, uruchomienie procesu outbox i retencji (z dry_run), dashboard recepcji. Obsługa alertów zgodnie z PRD (runbooki jako linki/tekst w UI).
 
 ---
 
@@ -194,7 +194,7 @@ Zadania: widok merge pacjentów, lista outbox z przyciskiem retry, uruchomienie 
 5. **Lekarz:** widok listy dokumentów medycznych, edycja draftu (formularze + edytowalne pola tekstu), publikacja z idempotencją, status przetwarzania.  
 6. **Szablony lekarza:** CRUD w panelu (formularze Django lub HTMX).  
 7. **Admin/operacje:** merge pacjentów, outbox (lista + retry), retencja (dry_run), dashboard recepcji, health.  
-8. **Observability:** dashboard utrzymaniowy (jeśli API udostępni dane) i spójne wyświetlanie alertów.
+8. **Observability:** spójne wyświetlanie alertów w UI (dashboard utrzymaniowy zrealizowany będzie w Prometheus/Grafana).
 
 ---
 
