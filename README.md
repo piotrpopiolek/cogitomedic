@@ -53,7 +53,7 @@ Translations are managed in Django Admin and loaded from the database as the sin
 | **PDF** | WeasyPrint (HTML/CSS → PDF; Unicode, embed images as base64). |
 | **Scheduling** | Django 6 Tasks (`django.tasks`) with command-driven enqueueing (`manage.py enqueue_tasks`) |
 | **SMS** | smsapi-client |
-| **Monitoring** | Sentry |
+| **Monitoring & Observability** | Sentry, Prometheus OSS, Grafana OSS, Alertmanager |
 | **Config** | python-dotenv |
 | **Frontend** | Django templates, HTMX, Alpine.js, SignaturePad.js, Tailwind CSS (per implementation plan) |
 | **Other** | Pillow, pycryptodome, requests, bleach |
@@ -260,7 +260,7 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 - Daily import of patient/visit lists from files exported from Doctolib (no direct Doctolib API integration)
 - SMS notifications (link to download document)
 - Logging (e.g. OpenTelemetry as per PRD)
-- Operational dashboards: simplified reception/doctor view + advanced admin/maintenance view
+- Operational dashboards: simplified reception/doctor view in Django + advanced maintenance view in Grafana OSS
 - UI languages: German, English, Polish
 
 ### Out of scope
