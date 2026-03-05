@@ -1,0 +1,13 @@
+# Ładowanie dashboardów z plików JSON przy starcie Grafany (dashboard-as-code).
+apiVersion: 1
+providers:
+  - name: 'Cogitomedica'
+    orgId: 1
+    folder: 'Cogitomedica'
+    folderUid: 'cogitomedica'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

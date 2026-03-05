@@ -1,0 +1,10 @@
+# Prometheus jako domyślne źródło danych (opcjonalnie – można dodać ręcznie w UI).
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
