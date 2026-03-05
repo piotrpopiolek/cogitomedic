@@ -93,9 +93,10 @@ W nowym panelu:
 
 3. **Sprawdź endpoint metryk z hosta**
    - Z maszyny, na której działa Docker (np. w PowerShell):  
-     `Invoke-WebRequest -Uri "http://localhost:8000/api/v1/observability/metrics" -Headers @{ Authorization = "Bearer TWOJ_TOKEN_Z_ENV" }`
+     `Invoke-WebRequest -Uri "http://localhost:8000/api/v1/observability/metrics" -Headers @{ Authorization = "Bearer TWOJ_TOKEN_Z_ENV" } -UseBasicParsing`
    - Powinna wrócić odpowiedź 200 i tekst z liniami typu `cogitomedica_outbox_events_total` lub `cogitomedica_import_rows_total`.  
    - Jeśli 401 – token w nagłówku nie zgadza się z `PROMETHEUS_METRICS_TOKEN` w Django (czyli w `.env` dla kontenera `web`).
+   - Jeśli **400 Bad Request** – najczęściej brak `web` w `ALLOWED_HOSTS`. Prometheus wysyła żądanie z hosta `web:8000`; w `.env` ustaw np. `ALLOWED_HOSTS=localhost,127.0.0.1,web`.
 
 4. **Pusta baza**
    - Aplikacja emituje metryki także przy braku zdarzeń (wartości 0). Jeśli Prometheus ma status UP i token jest poprawny, po minucie odświeżenia w Grafanie powinny pojawić się zera zamiast „No data”.

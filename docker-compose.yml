@@ -64,7 +64,7 @@ services:
       - /bin/sh
       - -c
       - |
-        sed "s|\$\{PROMETHEUS_METRICS_TOKEN\}|$$PROMETHEUS_METRICS_TOKEN|g" /etc/prometheus/prometheus.yml.template > /tmp/prometheus.yml
+        sed "s|__PROMETHEUS_METRICS_TOKEN__|$$PROMETHEUS_METRICS_TOKEN|g" /etc/prometheus/prometheus.yml.template > /tmp/prometheus.yml
         exec /bin/prometheus \
           --config.file=/tmp/prometheus.yml \
           --storage.tsdb.path=/prometheus \

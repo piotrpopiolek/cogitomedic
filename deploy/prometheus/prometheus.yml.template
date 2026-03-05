@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - "alerts.yml"
+  - "/etc/prometheus/alerts.yml"
 
 alerting:
   alertmanagers:
@@ -16,6 +16,6 @@ scrape_configs:
     metrics_path: "/api/v1/observability/metrics"
     authorization:
       type: Bearer
-      credentials: "${PROMETHEUS_METRICS_TOKEN}"
+      credentials: "__PROMETHEUS_METRICS_TOKEN__"
     static_configs:
       - targets: ["web:8000"]
