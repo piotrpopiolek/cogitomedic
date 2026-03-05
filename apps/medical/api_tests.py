@@ -58,6 +58,7 @@ class MedicalApiTests(TestCase):
             consulting_room=room,
             status=QueueStatus.OPEN,
             created_by_user=self.reception_user,
+            assigned_doctor=self.doctor_user,
         )
         patient = Patient.objects.create(
             first_name="Medical",
