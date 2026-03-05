@@ -15,7 +15,7 @@ scrape_configs:
   - job_name: "cogitomedica_web"
     metrics_path: "/api/v1/observability/metrics"
     authorization:
-      # Matches PROMETHEUS_METRICS_TOKEN in .env
-      credentials: "change-me-in-local-env"
+      type: Bearer
+      credentials: "${PROMETHEUS_METRICS_TOKEN}"
     static_configs:
       - targets: ["web:8000"]
