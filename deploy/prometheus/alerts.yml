@@ -1,0 +1,35 @@
+groups:
+- name: cogitomedica_outbox_alerts
+  rules:
+  - alert: OutboxBacklogTooOld
+    expr: cogitomedica_outbox_pending_age_seconds > 900
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Outbox event {{ $labels.event_type }} pending for more than 15 minutes."
+      description: "Zaległe zdarzenie asynchroniczne od 15 minut. Zobacz runbook: OUTBOX_BACKLOG_AGE.md"
+
+  - alert: IntegrationErrorSpike
+    expr: rate(cogitomedica_outbox_events_total{status=~"FAILED|DEAD_LETTER"}[10m]) > 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High failure rate for {{ $labels.event_type }}."
+      description: "Pojawiły się błędy przetwarzania outbox w ostatnich 10 minutach. Zobacz runbook: INTEGRATION_ERROR.md"
+
+  - alert: LowSuccessRatio
+    # Ratio: successful events / total events. Only alert if there is some traffic.
+    expr: |
+      sum by (event_type) (rate(cogitomedica_outbox_events_total{status="PROCESSED"}[1h])) 
+      / 
+      sum by (event_type) (rate(cogitomedica_outbox_events_total[1h])) < 0.98
+      and 
+      sum by (event_type) (rate(cogitomedica_outbox_events_total[1h])) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Success ratio for {{ $labels.event_type }} dropped below 98% in the last hour."
+      description: "Wskaźnik sukcesu poniżej 98%. Możliwa degradacja usług integracyjnych (HiDrive/SMS)."

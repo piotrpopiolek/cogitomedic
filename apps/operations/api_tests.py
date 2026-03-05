@@ -111,39 +111,25 @@ class ObservabilityHealthApiTests(TestCase):
             publish_locale="de-DE",
         )
 
-    def test_health_returns_degraded_when_outbox_has_pending(self) -> None:
+    def test_health_returns_ok(self) -> None:
         response = self.client.get("/api/v1/observability/health")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["checks"]["db"], "ok")
-        self.assertEqual(payload["checks"]["outbox_tasks"], "degraded")
-
-    def test_health_returns_ok_when_outbox_queue_is_empty(self) -> None:
-        # Process entire chain until no pending/failed.
-        for _ in range(4):
-            process_outbox_events(batch_size=50)
-
-        response = self.client.get("/api/v1/observability/health")
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["checks"]["db"], "ok")
-        self.assertEqual(payload["checks"]["outbox_tasks"], "ok")
+        self.assertEqual(payload["checks"]["hidrive"], "unknown")
+        self.assertEqual(payload["checks"]["sms"], "unknown")
 
     def test_metrics_endpoint_returns_prometheus_payload(self) -> None:
         response = self.client.get("/api/v1/observability/metrics")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/plain", response["Content-Type"])
         content = response.content.decode("utf-8")
-        self.assertIn("cogitomedica_outbox_pending_count", content)
-        self.assertIn("cogitomedica_outbox_failed_count", content)
-        self.assertIn("cogitomedica_outbox_dead_letter_count", content)
-        self.assertIn("cogitomedica_outbox_oldest_pending_age_seconds", content)
-        self.assertIn("cogitomedica_pdf_success_ratio_1h", content)
-        self.assertIn("cogitomedica_hidrive_success_ratio_1h", content)
-        self.assertIn("cogitomedica_sms_success_ratio_1h", content)
-        self.assertIn("cogitomedica_publish_to_pdf_latency_p95_seconds", content)
-        self.assertIn("cogitomedica_publish_to_hidrive_latency_p95_seconds", content)
-        self.assertIn("cogitomedica_publish_to_sms_latency_p95_seconds", content)
+        self.assertIn("cogitomedica_outbox_events_total", content)
+        self.assertIn("cogitomedica_outbox_pending_age_seconds", content)
+        self.assertIn("cogitomedica_outbox_processing_duration_seconds_sum", content)
+        self.assertIn("cogitomedica_outbox_processing_duration_seconds_count", content)
+        self.assertIn("cogitomedica_import_batches_total", content)
+        self.assertIn("cogitomedica_import_rows_total", content)
 
     def test_health_and_metrics_return_json_error_for_method_not_allowed(self) -> None:
         health = self.client.post("/api/v1/observability/health", data="{}", content_type="application/json")

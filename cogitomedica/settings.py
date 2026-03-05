@@ -52,6 +52,8 @@ if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 
+PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
+
 # Hosty dozwolone w nagłówku Host. W prod MUSI być ustawione ALLOWED_HOSTS (np. twojadomena.com).
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
@@ -201,6 +203,12 @@ if HAS_UNFOLD:
                     "title": db_gettext_lazy("administration.side_reception_admin", "Rejestracja (Admin)"),
                     "permission": lambda request: _is_admin_role(request),
                     "items": [
+                        {
+                            "title": db_gettext_lazy("administration.side_dashboard_recepcji", "Dashboard operacyjny"),
+                            "icon": "dashboard",
+                            "link": lambda request: reverse_lazy("admin_reception_dashboard"),
+                            "permission": lambda request: _is_admin_role(request),
+                        },
                         {
                             "title": db_gettext_lazy("administration.side_kolejki_dzienne", "Kolejki dzienne"),
                             "icon": "today",

@@ -1,139 +1,105 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
+from django.db.models import Count, Max, Min, F, Sum, Q
 from django.utils import timezone
-from prometheus_client import CollectorRegistry, Gauge, generate_latest
+from prometheus_client import CollectorRegistry, generate_latest
+from prometheus_client import Gauge
 
-from apps.outbox.models import OutboxEventType
 from apps.outbox.models import OutboxEvent, OutboxStatus
-
-
-def _percentile(values: list[float], p: float) -> float:
-    if not values:
-        return 0.0
-    sorted_values = sorted(values)
-    idx = int((len(sorted_values) - 1) * p)
-    return float(sorted_values[idx])
-
-
-def _success_ratio_for_event(event_type: str, window_hours: int = 1) -> float:
-    start = timezone.now() - timedelta(hours=window_hours)
-    qs = OutboxEvent.objects.filter(
-        event_type=event_type,
-        created_at__gte=start,
-        status__in=[OutboxStatus.PROCESSED, OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER],
-    )
-    total = qs.count()
-    if total == 0:
-        return 1.0
-    processed = qs.filter(status=OutboxStatus.PROCESSED).count()
-    return processed / total
-
-
-def _publish_to_stage_latencies(event_type: str, window_hours: int = 24) -> list[float]:
-    start = timezone.now() - timedelta(hours=window_hours)
-    events = (
-        OutboxEvent.objects.select_related("medical_document_version")
-        .filter(
-            event_type=event_type,
-            status=OutboxStatus.PROCESSED,
-            processed_at__isnull=False,
-            processed_at__gte=start,
-            medical_document_version__published_at__isnull=False,
-        )
-        .only("processed_at", "medical_document_version__published_at")
-    )
-    latencies: list[float] = []
-    for event in events:
-        published_at = event.medical_document_version.published_at
-        if published_at is None or event.processed_at is None:
-            continue
-        latency = (event.processed_at - published_at).total_seconds()
-        if latency >= 0:
-            latencies.append(latency)
-    return latencies
+from apps.reception.models import PatientImportBatch, PatientImportError
 
 
 def build_metrics_payload() -> bytes:
     """Build Prometheus metrics payload for operational checks."""
     registry = CollectorRegistry()
 
-    pending_count_gauge = Gauge(
-        "cogitomedica_outbox_pending_count",
-        "Number of pending outbox events.",
+    # 1. Outbox events total (Counter-like, but we use Gauge to set absolute values from DB)
+    outbox_events_total = Gauge(
+        "cogitomedica_outbox_events_total",
+        "Total number of outbox events by type and status.",
+        labelnames=["event_type", "status"],
         registry=registry,
     )
-    failed_count_gauge = Gauge(
-        "cogitomedica_outbox_failed_count",
-        "Number of failed outbox events.",
-        registry=registry,
-    )
-    dead_letter_count_gauge = Gauge(
-        "cogitomedica_outbox_dead_letter_count",
-        "Number of dead-letter outbox events.",
-        registry=registry,
-    )
-    oldest_pending_age_gauge = Gauge(
-        "cogitomedica_outbox_oldest_pending_age_seconds",
+    
+    # Fast group by query
+    outbox_counts = OutboxEvent.objects.values("event_type", "status").annotate(count=Count("id"))
+    for row in outbox_counts:
+        outbox_events_total.labels(event_type=row["event_type"], status=row["status"]).set(row["count"])
+
+    # 2. Oldest pending age (Gauge)
+    outbox_pending_age = Gauge(
+        "cogitomedica_outbox_pending_age_seconds",
         "Age in seconds of the oldest pending/failed outbox event.",
+        labelnames=["event_type"],
         registry=registry,
     )
-    pdf_success_ratio_1h_gauge = Gauge(
-        "cogitomedica_pdf_success_ratio_1h",
-        "Success ratio for GENERATE_PDF events in last 1h.",
-        registry=registry,
-    )
-    hidrive_success_ratio_1h_gauge = Gauge(
-        "cogitomedica_hidrive_success_ratio_1h",
-        "Success ratio for HIDRIVE_UPLOAD events in last 1h.",
-        registry=registry,
-    )
-    sms_success_ratio_1h_gauge = Gauge(
-        "cogitomedica_sms_success_ratio_1h",
-        "Success ratio for SMS_SEND events in last 1h.",
-        registry=registry,
-    )
-    publish_to_pdf_p95 = Gauge(
-        "cogitomedica_publish_to_pdf_latency_p95_seconds",
-        "P95 latency from publish to PDF processed.",
-        registry=registry,
-    )
-    publish_to_hidrive_p95 = Gauge(
-        "cogitomedica_publish_to_hidrive_latency_p95_seconds",
-        "P95 latency from publish to HiDrive processed.",
-        registry=registry,
-    )
-    publish_to_sms_p95 = Gauge(
-        "cogitomedica_publish_to_sms_latency_p95_seconds",
-        "P95 latency from publish to SMS processed.",
-        registry=registry,
-    )
-
-    pending_count = OutboxEvent.objects.filter(status=OutboxStatus.PENDING).count()
-    failed_count = OutboxEvent.objects.filter(status=OutboxStatus.FAILED).count()
-    dead_letter_count = OutboxEvent.objects.filter(status=OutboxStatus.DEAD_LETTER).count()
-
-    pending_count_gauge.set(pending_count)
-    failed_count_gauge.set(failed_count)
-    dead_letter_count_gauge.set(dead_letter_count)
-
-    oldest_event = (
+    
+    now = timezone.now()
+    # Find oldest created_at for PENDING/FAILED per event_type
+    oldest_events = (
         OutboxEvent.objects.filter(status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED])
-        .order_by("created_at")
-        .first()
+        .values("event_type")
+        .annotate(oldest_created=Min("created_at"))
     )
-    if oldest_event is None:
-        oldest_pending_age_gauge.set(0)
-    else:
-        oldest_pending_age_gauge.set((timezone.now() - oldest_event.created_at).total_seconds())
+    for row in oldest_events:
+        age_seconds = (now - row["oldest_created"]).total_seconds()
+        outbox_pending_age.labels(event_type=row["event_type"]).set(max(0.0, age_seconds))
 
-    pdf_success_ratio_1h_gauge.set(_success_ratio_for_event(OutboxEventType.GENERATE_PDF))
-    hidrive_success_ratio_1h_gauge.set(_success_ratio_for_event(OutboxEventType.HIDRIVE_UPLOAD))
-    sms_success_ratio_1h_gauge.set(_success_ratio_for_event(OutboxEventType.SMS_SEND))
+    # 3. Processing duration (We provide _sum and _count to allow PromQL to calculate average latency)
+    duration_sum = Gauge(
+        "cogitomedica_outbox_processing_duration_seconds_sum",
+        "Total processing duration in seconds.",
+        labelnames=["event_type"],
+        registry=registry,
+    )
+    duration_count = Gauge(
+        "cogitomedica_outbox_processing_duration_seconds_count",
+        "Total number of processed events for duration calc.",
+        labelnames=["event_type"],
+        registry=registry,
+    )
+    
+    durations = (
+        OutboxEvent.objects.filter(
+            status=OutboxStatus.PROCESSED,
+            processed_at__isnull=False,
+            medical_document_version__published_at__isnull=False,
+        )
+        .values("event_type")
+        .annotate(
+            total_time=Sum(F("processed_at") - F("medical_document_version__published_at")),
+            count=Count("id")
+        )
+    )
+    for row in durations:
+        val_sum = row["total_time"].total_seconds() if row["total_time"] else 0.0
+        val_count = row["count"] or 0
+        duration_sum.labels(event_type=row["event_type"]).set(val_sum)
+        duration_count.labels(event_type=row["event_type"]).set(val_count)
 
-    publish_to_pdf_p95.set(_percentile(_publish_to_stage_latencies(OutboxEventType.GENERATE_PDF), 0.95))
-    publish_to_hidrive_p95.set(_percentile(_publish_to_stage_latencies(OutboxEventType.HIDRIVE_UPLOAD), 0.95))
-    publish_to_sms_p95.set(_percentile(_publish_to_stage_latencies(OutboxEventType.SMS_SEND), 0.95))
+    # 4. Import batches total
+    import_batches_total = Gauge(
+        "cogitomedica_import_batches_total",
+        "Total number of import batches by status.",
+        labelnames=["status"],
+        registry=registry,
+    )
+    batch_counts = PatientImportBatch.objects.values("status").annotate(count=Count("id"))
+    for row in batch_counts:
+        import_batches_total.labels(status=row["status"]).set(row["count"])
+
+    # 5. Import rows total
+    import_rows_total = Gauge(
+        "cogitomedica_import_rows_total",
+        "Total number of imported rows (inserted vs error).",
+        labelnames=["status"],
+        registry=registry,
+    )
+    row_stats = PatientImportBatch.objects.aggregate(
+        total_inserted=Sum("inserted_rows"),
+        total_error=Sum("error_rows")
+    )
+    import_rows_total.labels(status="inserted").set(row_stats["total_inserted"] or 0)
+    import_rows_total.labels(status="error").set(row_stats["total_error"] or 0)
 
     return generate_latest(registry)
