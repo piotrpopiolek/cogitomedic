@@ -165,7 +165,7 @@ COGITO_PATHS = {
             "summary": "Get doctor text template",
             "tags": ["Doctor templates"],
             "parameters": [{"name": "template_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Template (name, template_body, lesion_group_favorites, summary_favorites, etc.)"}, "404": {"description": "Not found"}},
+            "responses": {"200": {"description": "Template (name, template_body, lesion_group_favorites, etc.)"}, "404": {"description": "Not found"}},
         },
         "patch": {
             "summary": "Update doctor text template",

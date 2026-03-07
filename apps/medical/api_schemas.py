@@ -15,13 +15,6 @@ class FavoriteLesionGroupPreset(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
 
 
-class FavoriteSummaryPreset(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=120)
-    text: str = Field(min_length=1, max_length=5000)
-
-
 class MedicalPayloadMinimal(BaseModel):
     """
     Minimal contract for medical_payload stored in DB (§6: must have schema_version).
@@ -75,7 +68,6 @@ class DoctorTemplateCreateRequest(BaseModel):
     template_locale: str = Field(min_length=2, max_length=10)
     template_body: str = Field(min_length=1)
     lesion_group_favorites: list[FavoriteLesionGroupPreset] = Field(default_factory=list)
-    summary_favorites: list[FavoriteSummaryPreset] = Field(default_factory=list)
     is_global: bool = False
     clinic_site_id: UUID | None = None
     is_active: bool = True
@@ -89,7 +81,6 @@ class DoctorTemplateUpdateRequest(BaseModel):
     template_locale: str | None = Field(default=None, min_length=2, max_length=10)
     template_body: str | None = Field(default=None, min_length=1)
     lesion_group_favorites: list[FavoriteLesionGroupPreset] | None = None
-    summary_favorites: list[FavoriteSummaryPreset] | None = None
     is_active: bool | None = None
 
 

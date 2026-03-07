@@ -219,7 +219,6 @@ class DoctorTextTemplate(models.Model):
     template_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_template_locale", "Template locale"))
     template_body = models.TextField(verbose_name=db_gettext_lazy("administration.field_template_body", "Template body"))
     lesion_group_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_lesion_group_favorites", "Lesion group favorites"))
-    summary_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_summary_favorites", "Summary favorites"))
     is_global = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"))
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     created_at = models.DateTimeField(auto_now_add=True)
