@@ -257,6 +257,7 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
         "apiBase": "/api/v1",
         "context": context,
         "ui": get_doctor_ui(lang),
+        "listUrl": request.build_absolute_uri(reverse("doctor-list")),
     }
     return _render_doctor(
         request,
