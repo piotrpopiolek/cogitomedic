@@ -1,5 +1,21 @@
 # Observability – Prometheus, Grafana, dashboard
 
+## Adresy usług monitorowania
+
+Przy uruchomionym stosie Docker (`docker compose up`) usługi monitorowania są dostępne pod następującymi adresami (na hoście z Dockerem zamień `localhost` na odpowiedni host lub IP):
+
+| Usługa | URL | Uwagi |
+|--------|-----|--------|
+| **Health (aplikacja)** | http://localhost:8000/api/v1/observability/health | Health check (GET, bez auth). W Swagger UI: sekcja **Observability**. |
+| **Metryki Prometheus (aplikacja)** | http://localhost:8000/api/v1/observability/metrics | Eksport metryk dla Prometheusa. Wymaga `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub sesji ADMIN. W Swagger UI: sekcja **Observability**. |
+| **Grafana** | http://localhost:3000 | Dashboardy, Explore (Prometheus + Tempo). Domyślne logowanie: `admin` / `admin`. |
+| **Prometheus** | http://localhost:9090 | Zapytania PromQL, konfiguracja, [targety](http://localhost:9090/targets). |
+| **Alertmanager** | http://localhost:9093 | Lista alertów, status wysyłek, konfiguracja receiverów. |
+| **Grafana Tempo** | http://localhost:3200 | Backend trace’ów; w praktyce używany z Grafany (Explore → wybór datasource **Tempo**). |
+| **OTel Collector** | `localhost:4317` (gRPC), `localhost:4318` (HTTP) | Odbiera trace’y OTLP z aplikacji; brak UI – tylko wewnętrzne połączenia z kontenerów `web` i `scheduler`. |
+
+---
+
 ## Gotowy dashboard (dashboard-as-code)
 
 W repozytorium jest gotowy dashboard w formacie JSON:
