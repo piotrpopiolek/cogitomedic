@@ -26,6 +26,11 @@ PREFIX = "/api/v1"
 NO_AUTH_OPERATIONS = {
     (f"{PREFIX}/observability/health", "get"),
     (f"{PREFIX}/observability/metrics", "get"),
+    (f"{PREFIX}/observability/monitoring/grafana", "get"),
+    (f"{PREFIX}/observability/monitoring/prometheus", "get"),
+    (f"{PREFIX}/observability/monitoring/alertmanager", "get"),
+    (f"{PREFIX}/observability/monitoring/tempo", "get"),
+    (f"{PREFIX}/observability/monitoring/otel-collector", "get"),
     (f"{PREFIX}/auth/login", "post"),
 }
 
@@ -46,9 +51,50 @@ COGITO_PATHS = {
     f"{PREFIX}/observability/metrics": {
         "get": {
             "summary": "Prometheus metrics",
-            "description": "Plain text metrics for Prometheus. No auth.",
+            "description": "Eksport metryk w formacie Prometheus. Wymaga nagłówka `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub zalogowanej sesji z rolą ADMIN.",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Metrics text"}},
+            "responses": {"200": {"description": "Metrics text"}, "401": {"description": "Unauthorized"}},
+        },
+    },
+    # Adresy usług monitorowania (Docker) – tylko w dokumentacji, nie są obsługiwane przez API
+    f"{PREFIX}/observability/monitoring/grafana": {
+        "get": {
+            "summary": "Grafana",
+            "description": "Zewnętrzny adres: http://localhost:3000 — dashboardy (metryki, trace'y). Logowanie: admin / admin.",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+        },
+    },
+    f"{PREFIX}/observability/monitoring/prometheus": {
+        "get": {
+            "summary": "Prometheus",
+            "description": "Zewnętrzny adres: http://localhost:9090 — UI PromQL, targety: http://localhost:9090/targets",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+        },
+    },
+    f"{PREFIX}/observability/monitoring/alertmanager": {
+        "get": {
+            "summary": "Alertmanager",
+            "description": "Zewnętrzny adres: http://localhost:9093 — zarządzanie alertami i powiadomieniami.",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+        },
+    },
+    f"{PREFIX}/observability/monitoring/tempo": {
+        "get": {
+            "summary": "Grafana Tempo",
+            "description": "Zewnętrzny adres: http://localhost:3200 — backend trace'ów; dostęp z Grafany (Explore → Tempo).",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+        },
+    },
+    f"{PREFIX}/observability/monitoring/otel-collector": {
+        "get": {
+            "summary": "OpenTelemetry Collector",
+            "description": "Zewnętrzne adresy: localhost:4317 (gRPC), localhost:4318 (HTTP) — odbiera trace'y z aplikacji (brak UI).",
+            "tags": ["Observability"],
+            "responses": {"200": {"description": "Usługa zewnętrzna – używana wewnętrznie przez aplikację."}},
         },
     },
     f"{PREFIX}/auth/login": {

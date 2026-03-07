@@ -7,6 +7,7 @@
 - [Tech Stack](#tech-stack)
 - [Getting Started Locally](#getting-started-locally)
 - [Docker Quick Start](#docker-quick-start)
+- [Monitoring services](#monitoring-services)
 - [Available Scripts](#available-scripts)
 - [Project Scope](#project-scope)
 - [Project Status](#project-status)
@@ -188,7 +189,34 @@ cp .env.example .env
 
 App URL: `http://127.0.0.1:8000`
 
-### 2) Common commands
+### 2) Usługi monitorowania (adresy)
+
+Po uruchomieniu `docker compose up` dostępne są następujące usługi (na `localhost`; w innym środowisku zamień host):
+
+| Usługa | Adres | Opis |
+|--------|--------|------|
+| **Health (aplikacja)** | http://localhost:8000/api/v1/observability/health | Health check (GET, bez auth). Odpowiedź: status DB itd. |
+| **Metryki Prometheus (aplikacja)** | http://localhost:8000/api/v1/observability/metrics | Eksport metryk w formacie Prometheus. Wymaga nagłówka `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub sesji ADMIN. |
+| **Grafana** | http://localhost:3000 | Dashboardy (metryki, trace’y). Logowanie: `admin` / `admin`. |
+| **Prometheus** | http://localhost:9090 | UI zapytań PromQL, lista targetów: http://localhost:9090/targets |
+| **Alertmanager** | http://localhost:9093 | Zarządzanie alertami i powiadomieniami |
+| **Grafana Tempo** | http://localhost:3200 | Backend trace’ów (OpenTelemetry); dostęp głównie z poziomu Grafany (Explore → Tempo) |
+| **OpenTelemetry Collector** | localhost:4317 (gRPC), localhost:4318 (HTTP) | Odbiera trace’y z aplikacji; nie ma interfejsu web – używany wewnętrznie przez `web` i `scheduler` |
+
+Szczegóły konfiguracji, dashboard-as-code i rozwiązywanie problemów: [docs/observability-setup.md](docs/observability-setup.md).
+
+### 3) Aplikacja i dokumentacja API (Swagger)
+
+| Adres | Opis |
+|--------|------|
+| http://localhost:8000 | Aplikacja (logowanie: `/accounts/login/`, panel admin: `/admin/`) |
+| http://localhost:8000/api/docs/swagger/ | **Swagger UI** – interaktywna dokumentacja OpenAPI |
+| http://localhost:8000/api/docs/redoc/ | **ReDoc** – dokumentacja API (czytelny układ) |
+| http://localhost:8000/api/schema/ | Schemat OpenAPI (JSON/YAML) |
+
+W środowisku innym niż Docker zamień `localhost:8000` na adres serwera deweloperskiego (np. `http://127.0.0.1:8000`).
+
+### 4) Common commands
 
 PowerShell / CMD:
 
@@ -209,7 +237,7 @@ make migrate
 make superuser
 ```
 
-### 3) Notes
+### 5) Notes
 
 - Keep secrets in `.env` (do not commit real credentials).
 - In Docker, `DB_HOST` is overridden to `db` automatically by `docker-compose.yml`.
