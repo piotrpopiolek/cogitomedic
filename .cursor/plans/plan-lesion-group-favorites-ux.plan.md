@@ -44,21 +44,28 @@ Zastąpić **jedno duże pole tekstowe z surowym JSON** w formularzu szablonu le
   - `DERMATOSCOPIC_FEATURE_CHOICES`, `CLINICAL_ASSESSMENT_CHOICES`, `MALIGNANCY_RISK_CHOICES` (pary `(kod, etykieta)` lub same kody; etykiety można brać z tłumaczeń lub z `befund_text.py`).
 - Przekazać te opcje do widgetu (np. przez `widget.get_context()` lub atrybuty form field w `DoctorTextTemplateAdmin.get_form()` / `formfield_for_dbfield()`).
 
-### 2. Niestandardowy widget
+### 2. Niestandardowy widget z Alpine.js
 
 - **Klasa widgetu** (np. `LesionGroupFavoritesWidget` w `apps/medical/widgets.py`):
-  - Dla wartości: czy pole ma zwracać **string (JSON)** czy **list** – spójnie z tym, jak Django JSONField w formularzu odczytuje/zapisuje wartość (z reguły już jako list/dict). Widget powinien przyjmować wartość jako listę i w `value_from_datadict` zwracać to, co form field oczekuje (lista → JSONField w modelu zapisze bez zmian).
-  - **Render:** wyświetlić ukryty `<textarea name="...">` z JSON (żeby przy wyłączonym JS zapis nadal działał z surowym JSON) oraz kontener na „wizualny edytor” (div z kartami presetów).
-  - Do kontenera dołączyć **dane opcji** (np. w `data-`* lub w osobnym `<script type="application/json">`), żeby JS mógł budować selecty i checkboxy.
+  - Dziedziczy po domyślnym widgecie lub `UnfoldAdminTextareaWidget`.
+  - Dla wartości: upewnić się, że widget poprawnie przyjmuje listę obiektów z bazy/formularza i przekazuje ją do szablonu (template widgetu).
+  - **Render (szablon HTML widgetu):** Widget powinien korzystać z własnego szablonu (np. `medical/widgets/lesion_group_favorites.html`).
+  - Szablon wykorzysta **Alpine.js** (który jest już wbudowany w `django-unfold`), tworząc komponent np. `x-data="lesionGroupFavoritesWidget({ initialData: [...] })"`.
+  - Szablon wyrenderuje:
+    1. Ukryty `<textarea>` (aktualizowany na zdarzenia Alpine).
+    2. Wizualną listę kart presetów budowaną w pętli `<template x-for="(preset, index) in presets" :key="index">`.
+  - Do szablonu przekazać **dane opcji** jako JSON, żeby Alpine mógł budować selecty i checkboxy.
 
-### 3. Logika po stronie klienta (JS)
+### 3. Logika interfejsu (Alpine.js / JS)
 
-- Jeden plik JS (np. `static/admin/js/lesion_group_favorites_widget.js` lub w `apps/medical/static/...`), dołączany tylko na stronie add/change szablonu lekarza:
-  - **Odczyt:** sparsować JSON z textarea, dla każdego elementu wyrenderować „kartę” presetu (name, checkboxy dla cech, select clinical, select malignancy, text).
-  - **Dodaj preset:** dopisać pusty obiekt do listy, przeładować widok kart.
-  - **Usuń preset:** usunąć element z listy, przeładować widok.
-  - Przy każdej zmianie w polach: zbudować listę obiektów z formularza i zapisać do textarea jako `JSON.stringify(...)`.
-  - Walidacja po stronie klienta opcjonalna (np. wymagane name/text, wybór co najmniej jednej wartości w selectach); nie zastępuje walidacji serwerowej.
+- Ponieważ `django-unfold` bazuje na Tailwind CSS i Alpine.js, użycie **Alpine.js** do logiki tego widgetu jest najbardziej naturalne i wyeliminuje potrzebę ręcznego manipulowania DOM w czystym JS.
+- **Stan:** Komponent Alpine przechowuje tablicę `presets` (zainicjowaną z ukrytego textarea).
+- **Interakcje:**
+  - Przycisk "Dodaj preset" wywołuje funkcję dodającą pusty obiekt do tablicy `presets`.
+  - Przycisk "Usuń" wywołuje funkcję usuwającą element pod danym indeksem.
+  - Pola formularza wewnątrz kart korzystają z `x-model="preset.name"`, `x-model="preset.clinical_assessment"` itd.
+  - Cechy dermatoskopowe (lista checkboxów): można obsłużyć przez specjalne bindowanie Alpine (np. `x-model="preset.dermatoscopic_features"`).
+  - **Synchronizacja:** Do użycia np. `x-effect` lub watchera, który przy każdej zmianie w `presets` konwertuje tablicę na ciąg JSON i wrzuca do ukrytego `<textarea>`, aby formularz Django poprawnie odczytał dane podczas zapisu.
 
 ### 4. Walidacja po stronie serwera
 
@@ -72,12 +79,12 @@ Zastąpić **jedno duże pole tekstowe z surowym JSON** w formularzu szablonu le
 - W `DoctorTextTemplateAdmin`:
   - **formfield_for_dbfield:** dla `lesion_group_favorites` ustawić niestandardowy form field (jeśli potrzebny) i widget `LesionGroupFavoritesWidget` z przekazanymi opcjami (choices).
   - Lub **get_form** z rozszerzonym `ModelForm`, w którym pole `lesion_group_favorites` ma widget `LesionGroupFavoritesWidget` i ewentualnie własne `clean_lesion_group_favorites`.
-- Upewnić się, że skrypt JS jest ładowany na stronie add/change szablonu (np. przez `Media` na adminie lub na formularzu).
+- Skrypt definiujący komponent Alpine.js może być zawarty bezpośrednio w szablonie widgetu (tag `<script>`) lub w osobnym pliku ładowanym przez `Media`.
 
 ### 6. Stylowanie (opcjonalnie)
 
-- Style Unfold: użyć klas Unfold (np. karty, przyciski), żeby wygląd był spójny z panelem.
-- Minimalne własne style w pliku CSS w aplikacji `medical` tylko jeśli konieczne (układ kart, odstępy).
+- Style Unfold: użyć klas Tailwind CSS obecnych w Unfold (np. karty, przyciski, wiersze formularza), żeby wygląd był spójny z panelem.
+- Dzięki temu nie ma potrzeby tworzenia dodatkowych plików CSS.
 
 ### 7. Testy i dokumentacja
 
@@ -97,15 +104,15 @@ Zastąpić **jedno duże pole tekstowe z surowym JSON** w formularzu szablonu le
 ## Podsumowanie
 
 
-| Element      | Działanie                                                           |
-| ------------ | ------------------------------------------------------------------- |
-| Model / API  | Bez zmian                                                           |
-| Źródło opcji | Stałe/choices z `medical_payload_schemas` (lub constants)           |
-| Widget       | Niestandardowy widget: textarea (fallback) + div na karty presetów  |
-| JS           | Jedno plik: render kart z JSON, add/remove, sync do textarea        |
-| Walidacja    | `clean_lesion_group_favorites` z Pydantic / dozwolonymi wartościami |
-| Admin        | `formfield_for_dbfield` / `get_form` + Media (JS/CSS)               |
-| Docs         | Aktualizacja `.ai/instrukcja_szablony.md`                           |
+| Element      | Działanie                                                             |
+| ------------ | --------------------------------------------------------------------- |
+| Model / API  | Bez zmian                                                             |
+| Źródło opcji | Stałe/choices z `medical_payload_schemas` (lub constants)             |
+| Widget       | Niestandardowy widget: textarea (fallback) + div na karty z Alpine.js |
+| JS           | Alpine.js: zarządzanie stanem w szablonie, sync do ukrytego textarea  |
+| Walidacja    | `clean_lesion_group_favorites` z Pydantic / dozwolonymi wartościami   |
+| Admin        | `formfield_for_dbfield` / `get_form` + Media (JS/CSS)                 |
+| Docs         | Aktualizacja `.ai/instrukcja_szablony.md`                             |
 
 
 Po realizacji planu użytkownik w adminie definiuje „Ulubione grup zmian” przez formularz z listami zamiast ręcznego wpisywania JSON, przy zachowaniu obecnego formatu danych i stacku.
