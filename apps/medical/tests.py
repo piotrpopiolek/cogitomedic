@@ -137,7 +137,15 @@ class MedicalServicesTests(TestCase):
         draft = save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
-            medical_payload={"authoring_locale": "de-DE"},
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         request_id = uuid4()
 
@@ -170,7 +178,15 @@ class MedicalServicesTests(TestCase):
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
-            medical_payload={"authoring_locale": "de-DE"},
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         request_id = uuid4()
         first = publish_document_version(
@@ -196,7 +212,15 @@ class MedicalServicesTests(TestCase):
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
-            medical_payload={"authoring_locale": "de-DE"},
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         first = publish_document_version(
             medical_document_id=self.medical_document.id,

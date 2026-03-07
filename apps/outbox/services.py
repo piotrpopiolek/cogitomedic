@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,6 +36,14 @@ class OutboxEventNotRetryableError(DomainError):
     """Raised when manual retry is requested for non-retryable event."""
 
 tracer = trace.get_tracer(__name__)
+
+
+def _maybe_raise_mock_failure(event_type: str, message: str) -> None:
+    """Z prawdopodobieństwem OUTBOX_MOCK_RANDOM_FAILURE_RATE rzuca błąd (do testów retry)."""
+    rate = getattr(settings, "OUTBOX_MOCK_RANDOM_FAILURE_RATE", 0) or 0
+    if rate > 0 and random.random() < rate:
+        raise RuntimeError(message)
+
 
 def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
     with tracer.start_as_current_span(
@@ -80,6 +89,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.HIDRIVE_UPLOAD:
+        _maybe_raise_mock_failure("HIDRIVE_UPLOAD", "Mock HiDrive upload failure (random, for retry testing)")
         version.hidrive_path = build_befund_hidrive_path(version)
         version.hidrive_sent = True
         version.hidrive_sent_at = now
@@ -98,6 +108,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.SMS_SEND:
+        _maybe_raise_mock_failure("SMS_SEND", "Mock SMS send failure (random, for retry testing)")
         resend_sms = event.payload.get("resend_sms") is True
         if not resend_sms:
             other_version_sent = MedicalDocumentVersion.objects.filter(

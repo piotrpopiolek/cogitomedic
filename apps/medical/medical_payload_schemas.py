@@ -93,3 +93,56 @@ def validate_medical_payload_v1(data: dict) -> dict:
     """
     model = MedicalPayloadV1.model_validate(data)
     return model.model_dump(mode="json")
+
+
+_VALID_OVERALL = ("NO_CONTROL_NEEDED", "CONTROL_NEEDED")
+_VALID_FINAL = ("NO_HIGH_GRADE_SUSPICION", "HIGH_GRADE_CANNOT_BE_EXCLUDED")
+
+
+def validate_medical_payload_complete_for_publish(payload: dict | None, locale: str = "") -> None:
+    """
+    Sprawdza, czy medical_payload jest kompletny do publikacji (wszystkie wymagane pola wypełnione).
+    Wymagane: sekcje 1–3, 10, 11 (examination_scope, fitzpatrick_type, overall_image_assessment,
+    recommendations, final_assessment). Sekcja 4 (lesions) jest wymagana gdy overall_image_assessment=CONTROL_NEEDED
+    (walidowane przy zapisie draftu).
+    Raises DomainError z komunikatem w języku zgodnym z locale (de/en/pl).
+    """
+    from apps.core.exceptions import DomainError
+    from apps.core.translation_service import get_translation_map, normalize_language_code
+
+    if not payload or payload.get("schema_version") != 1:
+        return
+    lang = normalize_language_code(locale or "en")
+    ui = get_translation_map(category="doctor", language_code=lang)
+    def _msg(key: str, fallback: str) -> str:
+        return ui.get(key, fallback)
+
+    examination_scope = payload.get("examination_scope") or []
+    if len(examination_scope) < 1:
+        raise DomainError(_msg(
+            "msg_validation_examination_scope_required",
+            "Before publishing, please fill in section \"1. Scope of examination (multiple choice)\": select at least one option.",
+        ))
+    if payload.get("fitzpatrick_type") is None:
+        raise DomainError(_msg(
+            "msg_validation_fitzpatrick_required",
+            "Before publishing, please select Fitzpatrick skin type (section 2).",
+        ))
+    overall = payload.get("overall_image_assessment")
+    if overall not in _VALID_OVERALL:
+        raise DomainError(_msg(
+            "msg_validation_overall_assessment_required",
+            "Before publishing, please select overall image assessment (section 3).",
+        ))
+    recommendations = payload.get("recommendations") or []
+    if len(recommendations) < 1:
+        raise DomainError(_msg(
+            "msg_validation_recommendations_required",
+            "Before publishing, please select at least one medical recommendation (section 10).",
+        ))
+    final = payload.get("final_assessment")
+    if final not in _VALID_FINAL:
+        raise DomainError(_msg(
+            "msg_validation_final_assessment_required",
+            "Before publishing, please select final medical assessment (section 11).",
+        ))
