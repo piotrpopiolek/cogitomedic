@@ -455,6 +455,8 @@ TASKS = {
 OUTBOX_BATCH_SIZE = int(os.environ.get("OUTBOX_BATCH_SIZE", "10"))
 OUTBOX_MAX_RETRIES = int(os.environ.get("OUTBOX_MAX_RETRIES", "10"))
 OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", "30"))
+# Prawdopodobieństwo (0.0–1.0) losowego błędu w mockach HiDrive i SMS, aby testować retry. Domyślnie 0 (wyłączone).
+OUTBOX_MOCK_RANDOM_FAILURE_RATE = float(os.environ.get("OUTBOX_MOCK_RANDOM_FAILURE_RATE", "0"))
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

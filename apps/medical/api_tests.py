@@ -129,7 +129,16 @@ class MedicalApiTests(TestCase):
                 {
                     "updated_by_user_id": str(self.doctor_user.id),
                     "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
                 }
             ),
             content_type="application/json",
@@ -261,6 +270,11 @@ class MedicalApiTests(TestCase):
                         "authoring_locale": "de-DE",
                         "overall_image_assessment": "NO_CONTROL_NEEDED",
                         "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
                         "summary_generated_text": summary_generated_text,
                         "template_context": template_context,
                     },
@@ -501,7 +515,16 @@ class MedicalApiTests(TestCase):
             data=json.dumps(
                 {
                     "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
                 }
             ),
             content_type="application/json",
@@ -549,6 +572,51 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(publish_response.status_code, 400)
         self.assertIn("No draft version available", publish_response.json().get("error", ""))
+
+    def test_publish_with_incomplete_draft_returns_400(self) -> None:
+        """Draft bez wypełnionego Untersuchungsumfang lub Fitzpatrick nie może być opublikowany."""
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "updated_by_user_id": str(self.doctor_user.id),
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                }
+            ),
+            content_type="application/json",
+        )
+        publish_response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "published_by_user_id": str(self.doctor_user.id),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(publish_response.status_code, 400)
+        error_msg = publish_response.json().get("error", "")
+        # Komunikat w języku publish_locale (lub fallback EN); w teście bez seed tłumaczeń = angielski fallback
+        self.assertTrue(
+            "Before publishing" in error_msg or "Untersuchungsumfang" in error_msg or "Przed publikacją" in error_msg,
+            f"Expected validation message in error, got: {error_msg!r}",
+        )
 
     def test_publish_missing_publish_locale_returns_400(self) -> None:
         create_response = self.client.post(
@@ -617,6 +685,11 @@ class MedicalApiTests(TestCase):
                         "authoring_locale": "de-DE",
                         "overall_image_assessment": "NO_CONTROL_NEEDED",
                         "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
                     },
                 }
             ),
@@ -713,7 +786,16 @@ class MedicalApiTests(TestCase):
             data=json.dumps(
                 {
                     "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
                 }
             ),
             content_type="application/json",

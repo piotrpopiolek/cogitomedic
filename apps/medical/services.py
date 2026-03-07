@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.core.api_utils import safe_parse_positive_int
 from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
+from apps.medical.medical_payload_schemas import validate_medical_payload_complete_for_publish
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
@@ -271,6 +272,8 @@ def publish_document_version(
         raise DomainError(
             "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing."
         )
+
+    validate_medical_payload_complete_for_publish(draft_version.medical_payload, locale=publish_locale)
 
     draft_version.version_status = DocVersionStatus.PUBLISHED
     draft_version.publish_request_id = publish_request_id
