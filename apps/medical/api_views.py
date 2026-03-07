@@ -460,7 +460,6 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                         "template_locale": template.template_locale,
                         "template_body": template.template_body,
                         "lesion_group_favorites": template.lesion_group_favorites or [],
-                        "summary_favorites": template.summary_favorites or [],
                         "is_global": template.is_global,
                         "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                         "is_active": template.is_active,
@@ -489,7 +488,6 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 template_locale=body.template_locale,
                 template_body=body.template_body,
                 lesion_group_favorites=[p.model_dump(mode="json") for p in body.lesion_group_favorites],
-                summary_favorites=[p.model_dump(mode="json") for p in body.summary_favorites],
                 is_global=body.is_global,
                 clinic_site_id=body.clinic_site_id,
                 is_active=body.is_active,
@@ -508,7 +506,6 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 "template_locale": template.template_locale,
                 "template_body": template.template_body,
                 "lesion_group_favorites": template.lesion_group_favorites or [],
-                "summary_favorites": template.summary_favorites or [],
                 "is_global": template.is_global,
                 "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                 "is_active": template.is_active,
@@ -536,7 +533,6 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
                 "template_locale": template.template_locale,
                 "template_body": template.template_body,
                 "lesion_group_favorites": template.lesion_group_favorites or [],
-                "summary_favorites": template.summary_favorites or [],
                 "is_global": template.is_global,
                 "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
                 "is_active": template.is_active,
@@ -566,9 +562,6 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             lesion_group_favorites=[p.model_dump(mode="json") for p in body.lesion_group_favorites]
             if body.lesion_group_favorites is not None
             else None,
-            summary_favorites=[p.model_dump(mode="json") for p in body.summary_favorites]
-            if body.summary_favorites is not None
-            else None,
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
@@ -587,7 +580,6 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             "template_locale": template.template_locale,
             "template_body": template.template_body,
             "lesion_group_favorites": template.lesion_group_favorites or [],
-            "summary_favorites": template.summary_favorites or [],
             "is_global": template.is_global,
             "is_active": template.is_active,
         },
