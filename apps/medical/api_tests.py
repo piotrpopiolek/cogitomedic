@@ -895,12 +895,6 @@ class DoctorTemplatesApiTests(TestCase):
                             "text": "Zmiana kontrolna do obserwacji.",
                         }
                     ],
-                    "summary_favorites": [
-                        {
-                            "name": "Summary short",
-                            "text": "Brak cech wysokiego ryzyka.",
-                        }
-                    ],
                     "is_global": False,
                 }
             ),
@@ -909,13 +903,11 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertEqual(create_private.status_code, 201)
         self.assertEqual(create_private.json()["template_locale"], "pl-PL")
         self.assertEqual(len(create_private.json()["lesion_group_favorites"]), 1)
-        self.assertEqual(len(create_private.json()["summary_favorites"]), 1)
         template_id = create_private.json()["id"]
 
         template_detail = self.client.get(f"/api/v1/doctor-text-templates/{template_id}")
         self.assertEqual(template_detail.status_code, 200)
         self.assertEqual(template_detail.json()["lesion_group_favorites"][0]["clinical_assessment"], "CONTROL_NEEDED")
-        self.assertEqual(template_detail.json()["summary_favorites"][0]["name"], "Summary short")
 
         # Doctor cannot create global template
         create_global_forbidden = self.client.post(
@@ -979,7 +971,6 @@ class DoctorTemplatesApiTests(TestCase):
             data=json.dumps(
                 {
                     "actor_user_id": str(self.doctor_user.id),
-                    "summary_favorites": [{"name": "Summary changed", "text": "Nowy tekst podsumowania."}],
                     "is_active": False,
                 }
             ),
@@ -987,4 +978,3 @@ class DoctorTemplatesApiTests(TestCase):
         )
         self.assertEqual(patch_owner.status_code, 200)
         self.assertFalse(patch_owner.json()["is_active"])
-        self.assertEqual(patch_owner.json()["summary_favorites"][0]["name"], "Summary changed")

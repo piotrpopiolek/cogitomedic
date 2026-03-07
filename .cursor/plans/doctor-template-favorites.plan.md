@@ -6,7 +6,7 @@ todos:
     content: Dodać pola JSON na favorites do DoctorTextTemplate + migracja + rozszerzenie locale o PL
     status: completed
   - id: api-contract-template-favorites
-    content: Rozszerzyć api_schemas i template_services o lesion_group_favorites oraz summary_favorites
+    content: Rozszerzyć api_schemas i template_services o lesion_group_favorites
     status: completed
   - id: doctor-ui-favorites
     content: Dodać UI wyboru ulubionych w detail.html (grupa znamion + sekcja 9) i logikę apply w befund-form.js
@@ -21,9 +21,8 @@ isProject: false
 
 ## Zakres i decyzje
 
-- Używamy istniejącego modelu `DoctorTextTemplate` i rozszerzamy go o **dwa odseparowane** pola JSON:
-  - `lesion_group_favorites` (sekwencja checkboxów/radiów + tekst grupy)
-  - `summary_favorites` (teksty sekcji 9)
+- Używamy istniejącego modelu `DoctorTextTemplate` i rozszerzamy go o pole JSON:
+  - `lesion_group_favorites` (sekwencja checkboxów/radiów + tekst grupy). Sekcja 9 korzysta z `template_body` jako pojedynczego presetu.
 - Zastosowanie ulubionego dla grupy znamion: **replace-all** (nadpisuje checkboxy/radia i tekst).
 - Wspieramy locale: `de-DE`, `en-GB`, `pl-PL` (oraz warianty skrócone jeśli już używane).
 
@@ -44,17 +43,15 @@ flowchart LR
 
 - **Model i migracje**
   - Rozszerzyć model w `[C:/Users/piotr/Programming/cogitomedica/apps/medical/models.py](C:/Users/piotr/Programming/cogitomedica/apps/medical/models.py)`:
-    - dodać `lesion_group_favorites = models.JSONField(default=list, blank=True)`
-    - dodać `summary_favorites = models.JSONField(default=list, blank=True)`
+    - dodać `lesion_group_favorites = models.JSONField(default=list, blank=True)` (pole `summary_favorites` zostało usunięte)
   - Zaktualizować ograniczenie locale (`CheckConstraint`) tak, by akceptowało `pl`/`pl-PL` obok DE/EN.
   - Dodać migrację rozszerzającą schemat.
 - **Schematy API i walidacja**
   - Rozszerzyć request/response template API w `[C:/Users/piotr/Programming/cogitomedica/apps/medical/api_schemas.py](C:/Users/piotr/Programming/cogitomedica/apps/medical/api_schemas.py)`:
-    - pola create/update/list/detail dla `lesion_group_favorites` i `summary_favorites`
+    - pola create/update/list/detail dla `lesion_group_favorites`
     - walidacja struktury presetów (klucze wymagane, limity długości, typy)
   - Ustalić kontrakt JSON:
     - `lesion_group_favorites[]`: `name`, `dermatoscopic_features[]`, `clinical_assessment`, `malignancy_risk`, `text`
-    - `summary_favorites[]`: `name`, `text`
 - **Serwisy i endpointy template**
   - Rozszerzyć serwisy w `[C:/Users/piotr/Programming/cogitomedica/apps/medical/template_services.py](C:/Users/piotr/Programming/cogitomedica/apps/medical/template_services.py)`, aby create/update/list/get zwracały i zapisywały nowe pola JSON.
   - Utrzymać aktualne endpointy (`/doctor-text-templates`, `/doctor-text-templates/{id}`) bez tworzenia nowych URL.
@@ -80,7 +77,7 @@ flowchart LR
 
 ## Kryteria ukończenia
 
-- Lekarz może tworzyć/edytować/aktywować/dezaktywować szablony z odseparowanymi ulubionymi presetami grup i sekcji 9 dla DE/EN/PL.
-- Formularz pozwala zastosować preset grupy (replace-all) oraz preset sekcji 9.
+- Lekarz może tworzyć/edytować/aktywować/dezaktywować szablony z ulubionymi presetami grup dla DE/EN/PL; sekcja 9 używa treści szablonu (`template_body`) jako jednego presetu.
+- Formularz pozwala zastosować preset grupy (replace-all) oraz treść szablonu w sekcji 9.
 - Wersje dokumentu zachowują zapisany tekst wygenerowany i finalny po edycji; historia publikacji pozostaje niezmienna przy późniejszych zmianach szablonów.
 
