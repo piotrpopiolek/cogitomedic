@@ -133,39 +133,53 @@ Recepcja nie powinna mieć dostępu do modułów administracyjnych, medycznych a
 
 ## Docelowa polityka object-level dla RECEPTION
 
-### 1. `daily-queues`
+### 1. `clinic-sites`
+
+- `ALLOW-READ`: recepcja widzi wyłącznie placówki przypisane do użytkownika przez relację zakresu (`staff_user_clinic_site` lub równoważny mechanizm autoryzacji).
+- `DENY`: brak dostępu do placówek spoza przypisanego zakresu.
+- `DENY-WRITE`: recepcja nie tworzy, nie edytuje i nie usuwa placówek.
+
+### 2. `consulting-rooms`
+
+- `ALLOW-READ`: recepcja widzi wyłącznie gabinety należące do przypisanych placówek.
+- `DENY`: brak dostępu do gabinetów spoza przypisanych placówek.
+- `DENY-WRITE`: recepcja nie tworzy, nie edytuje i nie usuwa gabinetów.
+
+### 3. `daily-queues`
 
 - `ALLOW`: kolejka należy do placówki w zakresie recepcji.
 - `DENY`: kolejka poza zakresem placówki użytkownika.
 
-### 2. `queue-entries`
+### 4. `queue-entries`
 
 - `ALLOW`: wpis należy do kolejki dostępnej dla recepcji.
 - `DENY`: wpis poza zakresem widocznych kolejek.
 
-### 3. `patients`
+### 5. `patients`
 
 - `ALLOW-READ`: pacjent należy do placówki obsługiwanej przez recepcję lub występuje w kolejce tej placówki.
 - `ALLOW-WRITE`: tworzenie i aktualizacja tylko w kontekście placówek obsługiwanych przez recepcję.
 - `ALLOW-MERGE`: merge dozwolony tylko wtedy, gdy zarówno rekord źródłowy, jak i docelowy należą do zakresu placówek recepcji albo są powiązane z kolejkami w tym zakresie.
 - `DENY`: pacjent poza zakresem placówek użytkownika.
 
-### 4. `patient sessions`
+### 6. `patient sessions`
 
 - `ALLOW`: sesja tworzona dla wpisu kolejki dostępnego dla recepcji.
 - `DENY`: próba uruchomienia sesji dla obcego wpisu lub nieaktywnego urządzenia.
 
-### 5. `tablet-devices`
+### 7. `tablet-devices`
 
-- `ALLOW`: urządzenie dostępne dla recepcji w przypisanej placówce.
-- `UWAGA`: obecny model danych nie ma jawnego `clinic_site_id` na `tablet_device`; przed implementacją trzeba potwierdzić, czy MVP zakłada globalną pulę tabletów, czy dopinamy scoping per placówka.
+- `ALLOW-READ`: recepcja widzi urządzenia dostępne dla przypisanych placówek.
+- `ALLOW-WRITE`: recepcja może aktywować, dezaktywować i utrzymywać urządzenia używane w przypisanych placówkach.
+- `DENY`: brak dostępu do urządzeń spoza zakresu placówek użytkownika.
+- `UWAGA`: obecny model danych nie ma jawnego `clinic_site_id` na `tablet_device`; przed implementacją trzeba dopiąć albo relację placówki do urządzenia, albo spójny mechanizm mapowania urządzenia do zakresu recepcji.
 
-### 6. `imports`
+### 8. `imports`
 
 - `ALLOW`: batch uruchomiony przez recepcję lub dotyczący placówki z jej zakresem.
 - `DENY`: batch spoza zakresu użytkownika, jeśli system będzie wieloplacówkowy.
 
-### 7. `patient merge`
+### 9. `patient merge`
 
 - `ALLOW`: recepcja może wykonać `POST /patients/{id}/merge`, jeśli rekord źródłowy i docelowy mieszczą się w obrębie przypisanych placówek.
 - `DENY`: brak możliwości merge poza zakresem placówek użytkownika.
