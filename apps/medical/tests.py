@@ -287,3 +287,71 @@ class MedicalServicesTests(TestCase):
         
         # Now it works
         check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
+
+
+class LesionGroupFavoritesAdminTests(TestCase):
+    """Tests for lesion_group_favorites widget and form validation in admin."""
+
+    def test_widget_render_contains_textarea_and_visual_editor_markup(self) -> None:
+        from apps.medical.widgets import LesionGroupFavoritesWidget
+
+        w = LesionGroupFavoritesWidget()
+        html = w.render("lesion_group_favorites", [], {"id": "id_lesion_group_favorites"})
+        self.assertIn('name="lesion_group_favorites"', html)
+        self.assertIn("id_lesion_group_favorites", html)
+        self.assertIn("lesionGroupFavoritesWidget", html)
+        self.assertIn("lesion-group-favorites-", html)
+        self.assertIn('x-data="lesionGroupFavoritesWidget', html)
+
+    def test_widget_render_includes_choices_data(self) -> None:
+        from apps.medical.widgets import LesionGroupFavoritesWidget
+
+        w = LesionGroupFavoritesWidget()
+        html = w.render("lesion_group_favorites", [], {"id": "id_lgf"})
+        self.assertIn("ASYMMETRY", html)
+        self.assertIn("CONTROL_NEEDED", html)
+        self.assertIn("NO_SUSPICION", html)
+
+    def test_form_clean_lesion_group_favorites_valid_list_passes(self) -> None:
+        from apps.medical.admin import DoctorTextTemplateForm
+
+        form = DoctorTextTemplateForm(
+            data={
+                "name": "Test",
+                "template_locale": "pl-PL",
+                "template_body": "Body",
+                "is_global": True,
+                "is_active": True,
+                "lesion_group_favorites": '[{"name":"P1","dermatoscopic_features":["ASYMMETRY"],"clinical_assessment":"CONTROL_NEEDED","malignancy_risk":"LOW_SUSPICION","text":"Text."}]',
+            },
+        )
+        form.is_valid()
+        self.assertNotIn("lesion_group_favorites", form.errors)
+
+    def test_form_clean_lesion_group_favorites_invalid_code_raises(self) -> None:
+        from apps.medical.admin import DoctorTextTemplateForm
+
+        form = DoctorTextTemplateForm(
+            data={
+                "name": "Test",
+                "template_locale": "pl-PL",
+                "template_body": "Body",
+                "lesion_group_favorites": '[{"name":"P1","dermatoscopic_features":["INVALID_CODE"],"clinical_assessment":"CONTROL_NEEDED","malignancy_risk":"LOW_SUSPICION","text":"Text."}]',
+            },
+        )
+        form.is_valid()
+        self.assertIn("lesion_group_favorites", form.errors)
+
+    def test_form_clean_lesion_group_favorites_empty_name_raises(self) -> None:
+        from apps.medical.admin import DoctorTextTemplateForm
+
+        form = DoctorTextTemplateForm(
+            data={
+                "name": "Test",
+                "template_locale": "pl-PL",
+                "template_body": "Body",
+                "lesion_group_favorites": '[{"name":"","dermatoscopic_features":[],"clinical_assessment":"UNREMARKABLE","malignancy_risk":"NO_SUSPICION","text":"Some text."}]',
+            },
+        )
+        form.is_valid()
+        self.assertIn("lesion_group_favorites", form.errors)

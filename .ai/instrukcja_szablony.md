@@ -40,10 +40,18 @@ Bez tego szablon się nie zapisze.
 
 ## Krok 4: Wpisanie presetów w polu „Ulubione grup zmian”
 
-W formularzu szablonu znajdź pole **„Ulubione grup zmian”** (w bazie: `lesion_group_favorites`).  
-W adminie jest to **pole tekstowe JSON** – wpisujesz poprawną listę JSON.
+W formularzu szablonu znajdź pole **„Ulubione grup zmian”** (w bazie: `lesion_group_favorites`).
 
-### Format jednego presetu
+**W panelu admina (z włączonym JavaScript):** dostępny jest **edytor wizualny**: lista kart (presetów) z przyciskami „Dodaj preset” i „Usuń”. W każdej karcie uzupełniasz:
+- **Nazwa** – np. „Zmiana kontrolna”,
+- **Ocena kliniczna** (clinical assessment) – wybór z listy,
+- **Ryzyko złośliwości** (malignancy risk) – wybór z listy,
+- **Cechy dermatoskopowe** – wielokrotny wybór (checkboxy),
+- **Tekst (sekcja 8)** – treść wstawiana do pola „8. Text (generiert / bearbeitet)” po „Zastosuj”.
+
+Edytor synchronizuje dane z polem JSON poniżej. **Bez JavaScript** możesz edytować bezpośrednio **pole tekstowe JSON** – wpisujesz poprawną listę JSON (format jak poniżej). Zapis w bazie pozostaje w tym samym formacie; presety można też definiować przez API.
+
+### Format jednego presetu (dla edycji JSON / API)
 
 ```json
 {
