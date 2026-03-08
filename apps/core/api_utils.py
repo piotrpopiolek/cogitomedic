@@ -114,6 +114,23 @@ def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonR
     return None
 
 
+def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
+    """
+    Return clinic_site IDs for object-level scope, or None for no filter (ADMIN).
+    RECEPTION and DOCTOR see only data for their assigned clinic_sites (staff_user_clinic_site).
+    Returns empty list if user has no clinic_sites assigned (they see nothing).
+    """
+    if getattr(user, "is_admin_role", False) and user.is_admin_role:
+        return None
+    if getattr(user, "is_reception", False) and user.is_reception:
+        ids = list(user.clinic_sites.values_list("id", flat=True))
+        return ids
+    if getattr(user, "is_doctor", False) and user.is_doctor:
+        ids = list(user.clinic_sites.values_list("id", flat=True))
+        return ids
+    return None
+
+
 def require_actor_match(request: HttpRequest, actor_id: UUID | None) -> JsonResponse | None:
     """Return 403 when actor_id is not None and does not match request.user.id. Use for body/query actor fields."""
     if actor_id is not None and actor_id != request.user.id:

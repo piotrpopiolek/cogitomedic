@@ -119,6 +119,11 @@ def _is_admin_role(request) -> bool:
     return bool(user and user.is_authenticated and user.is_admin_role)
 
 
+def _is_reception_or_admin_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(user and user.is_authenticated and (user.is_admin_role or user.is_reception))
+
+
 def _is_doctor_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
     return bool(user and user.is_authenticated and (user.is_admin_role or user.is_doctor))
@@ -147,8 +152,8 @@ if HAS_UNFOLD:
                         {
                             "title": db_gettext_lazy("administration.side_rejestracja", "Rejestracja"),
                             "icon": "groups",
-                            "link": lambda request: reverse_lazy("tablet:home"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "link": lambda request: reverse_lazy("admin_reception_dashboard"),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_admin", "Admin"),
@@ -178,85 +183,85 @@ if HAS_UNFOLD:
                 },
                 {
                     "title": db_gettext_lazy("administration.side_patients_readonly", "Pacjenci i kliniki (tylko odczyt)"),
-                    "permission": lambda request: _is_doctor_or_admin_role(request),
+                    "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                     "items": [
                         {
                             "title": db_gettext_lazy("administration.side_pacjenci", "Pacjenci"),
                             "icon": "person",
                             "link": lambda request: reverse_lazy("admin:reception_patient_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_historia_kontaktu", "Historia kontaktu"),
                             "icon": "history",
                             "link": lambda request: reverse_lazy("admin:reception_patientcontacthistory_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_placowki", "Placówki"),
                             "icon": "local_hospital",
                             "link": lambda request: reverse_lazy("admin:reception_clinicsite_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_gabinety", "Gabinety"),
                             "icon": "meeting_room",
                             "link": lambda request: reverse_lazy("admin:reception_consultingroom_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                         },
                     ],
                 },
                 {
                     "title": db_gettext_lazy("administration.side_reception_admin", "Rejestracja (Admin)"),
-                    "permission": lambda request: _is_admin_role(request),
+                    "permission": lambda request: _is_reception_or_admin_role(request),
                     "items": [
                         {
                             "title": db_gettext_lazy("administration.side_dashboard_recepcji", "Dashboard operacyjny"),
                             "icon": "dashboard",
                             "link": lambda request: reverse_lazy("admin_reception_dashboard"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_kolejki_dzienne", "Kolejki dzienne"),
                             "icon": "today",
                             "link": lambda request: reverse_lazy("admin:reception_dailyqueue_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_kolejki_master_detail", "Kolejki master/detail"),
                             "icon": "table_rows",
                             "link": lambda request: reverse_lazy("admin:reception_dailyqueue_master_detail"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_wpisy_kolejki", "Wpisy kolejki"),
                             "icon": "format_list_numbered",
                             "link": lambda request: reverse_lazy("admin:reception_queueentry_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_urzadzenia_tablet", "Urządzenia tablet"),
                             "icon": "tablet",
                             "link": lambda request: reverse_lazy("admin:reception_tabletdevice_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_sesje_formularzy", "Sesje formularzy"),
                             "icon": "schedule",
                             "link": lambda request: reverse_lazy("admin:reception_patientformsession_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_batch_importu", "Batch importu pacjentów"),
                             "icon": "upload_file",
                             "link": lambda request: reverse_lazy("admin:reception_patientimportbatch_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
                             "title": db_gettext_lazy("administration.side_bledy_importu", "Błędy importu pacjentów"),
                             "icon": "error",
                             "link": lambda request: reverse_lazy("admin:reception_patientimporterror_changelist"),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                     ],
                 },
