@@ -23,6 +23,7 @@ from cogitomedica.openapi_extension import cogito_openapi_schema_view
 from apps.reception.views import reception_dashboard_view
 
 urlpatterns = [
+    path("", lambda request: redirect("admin:index", permanent=False)),
     path("admin/reception-dashboard/", reception_dashboard_view, name="admin_reception_dashboard"),
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
