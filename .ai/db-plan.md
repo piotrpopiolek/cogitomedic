@@ -53,29 +53,17 @@
 - `phone` `varchar(20)` NOT NULL
 - `email` `citext` NOT NULL
 - `doctolib_patient_id` `varchar(64)` NULL UNIQUE
-- `identity_status` `patient_identity_status_enum` GENERATED ALWAYS AS (
-    CASE
-      WHEN doctolib_patient_id IS NULL THEN 'TEMPORARY'::patient_identity_status_enum
-      ELSE 'CONFIRMED'::patient_identity_status_enum
-    END
-  ) STORED
-- `identity_alert_created_at` `timestamptz` NULL
-- `identity_resolution_due_at` `timestamptz` NULL
 - `street` `varchar(150)` NULL
 - `city` `varchar(100)` NULL
 - `postal_code` `varchar(20)` NULL
 - `country_code` `char(2)` NOT NULL DEFAULT `'DE'`
-- `external_source` `varchar(30)` NULL
-- `external_source_id` `varchar(100)` NULL
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:
-  - `UNIQUE (external_source, external_source_id)`
+  - `UNIQUE (first_name, last_name, phone, date_of_birth)`
   - `CHECK (phone ~ '^[0-9+() -]{7,20}$')`
   - `CHECK (date_of_birth <= current_date)`
-  - `CHECK (doctolib_patient_id IS NOT NULL OR (identity_alert_created_at IS NOT NULL AND identity_resolution_due_at IS NOT NULL))`
-  - `CHECK (identity_resolution_due_at IS NULL OR identity_alert_created_at IS NULL OR identity_resolution_due_at >= identity_alert_created_at)`
 
 #### `patient_contact_history`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
@@ -449,7 +437,7 @@
 ### 3.1. Indeksy krytyczne (operacyjne)
 - `patient(last_name, first_name, date_of_birth)`
 - `patient(phone)`
-- `patient(identity_status, created_at DESC)`
+- `patient(first_name, last_name, phone, date_of_birth)` UNIQUE
 - `daily_queue(queue_date)`
 - `daily_queue(queue_date, clinic_site_id, consulting_room_id, shift_code)` UNIQUE
 - `queue_entry(daily_queue_id, entry_status, position_no)`
@@ -485,7 +473,6 @@
 - `patient_form_session(expires_at)` WHERE `consumed_at IS NULL`
 - `queue_entry(daily_queue_id, position_no)` WHERE `entry_status IN ('WAITING','IN_PROGRESS')`
 - `patient(doctolib_patient_id)` WHERE `doctolib_patient_id IS NOT NULL`
-- `patient(identity_resolution_due_at)` WHERE `identity_status = 'TEMPORARY'`
 - `queue_entry(daily_queue_id, visit_external_id)` UNIQUE WHERE `visit_external_id IS NOT NULL`
 
 ### 3.3. Indeksy GIN dla JSONB
@@ -499,7 +486,6 @@
 
 ### 4.1. Typy ENUM
 - `staff_role_enum`: `RECEPTION`, `DOCTOR`, `ADMIN`, `TABLET`
-- `patient_identity_status_enum`: `CONFIRMED`, `TEMPORARY`
 - `queue_shift_enum`: `FULL_DAY`, `MORNING`, `AFTERNOON`, `EVENING`
 - `queue_source_enum`: `MANUAL`, `IMPORT`
 - `queue_status_enum`: `OPEN`, `CLOSED`
@@ -516,10 +502,10 @@
 
 ### 4.2. Zasady aplikacyjne zamiast triggerów (docelowo: 0 triggerów domenowych)
 - `updated_at` aktualizowane w warstwie aplikacyjnej (`auto_now=True` w modelach Django lub centralny serwis repozytorium).
-- Tymczasowa tożsamość pacjenta:
-  - ręczne dodanie bez `Doctolib Patient ID` skutkuje `identity_status='TEMPORARY'` (status wyliczany automatycznie z obecności ID),
-  - w tej samej transakcji tworzony jest alert administracyjny (kanał operacyjny) i ustawiane są `identity_alert_created_at` oraz `identity_resolution_due_at`,
-  - po uzupełnieniu `Doctolib Patient ID` rekord automatycznie przechodzi na `identity_status='CONFIRMED'`, a alert jest zamykany.
+- Tożsamość pacjenta:
+  - rekord pacjenta jest unikalny po `first_name`, `last_name`, `phone`, `date_of_birth`,
+  - `doctolib_patient_id` jest opcjonalny, ale jeśli występuje, musi być unikalny,
+  - ręczne dodanie bez `Doctolib Patient ID` nie tworzy osobnego statusu ani alertu administracyjnego.
 - Model sesji `latest-wins` (bez tokenu):
   - utworzenie sesji (POST queue-entries/{id}/sessions) zawsze tworzy nowy rekord `patient_form_session` (bez pola token),
   - w tej samej transakcji `queue_entry.active_session_id` jest przestawiane na nową sesję,
@@ -551,7 +537,7 @@
 - `ON DELETE RESTRICT` dla bytów medycznych wysokiego poziomu (`queue_entry`, `patient_intake_form`, `medical_document`) w celu ochrony historii klinicznej.
 - `ON DELETE CASCADE` dopuszczalne dla bytów technicznych ściśle podrzędnych (`medical_document_version`, `outbox_event`), które nie mają samodzielnego znaczenia biznesowego bez rekordu nadrzędnego.
 - Token jednorazowy został wycofany: w `patient_form_session` nie ma pola `token_hash`; sesja identyfikowana po id, autoryzacja tabletu po roli TABLET i zakresie kolejki.
-- `Doctolib Patient ID` jest obowiązkowym kluczem tożsamości dla danych importowanych; rekordy ręczne bez tego ID są formalnie tymczasowe i wymagają pilnego domknięcia alertu administracyjnego.
+- `Doctolib Patient ID` pozostaje opcjonalnym identyfikatorem pomocniczym; główna reguła unikalności pacjenta opiera się na `first_name + last_name + phone + date_of_birth`.
 - Włączenie rozszerzeń:
   - `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
   - `CREATE EXTENSION IF NOT EXISTS citext;`

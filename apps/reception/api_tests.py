@@ -535,7 +535,7 @@ class PatientsApiTests(TestCase):
         self.assertEqual(payload["items"], [])
         self.assertEqual(payload["pagination"]["total"], 0)
 
-    def test_post_patient_creates_temporary_identity(self) -> None:
+    def test_post_patient_creates_patient_without_optional_doctolib_id(self) -> None:
         response = self.client.post(
             "/api/v1/patients",
             data=json.dumps(
@@ -550,17 +550,14 @@ class PatientsApiTests(TestCase):
                     "city": "Berlin",
                     "postal_code": "10115",
                     "country_code": "DE",
-                    "external_source": "OTHER",
-                    "external_source_id": "frontdesk-001",
                 }
             ),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 201)
         payload = response.json()
-        self.assertEqual(payload["patient"]["identity_status"], "TEMPORARY")
-        self.assertTrue(payload["identity_alert"]["created"])
-        self.assertIsNotNone(payload["identity_alert"]["due_at"])
+        self.assertIsNone(payload["patient"]["doctolib_patient_id"])
+        self.assertEqual(payload["patient"]["first_name"], "Jan")
 
     def test_get_patient_detail_returns_200(self) -> None:
         patient = Patient.objects.create(
@@ -576,7 +573,7 @@ class PatientsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["id"], str(patient.id))
-        self.assertEqual(payload["identity_status"], "CONFIRMED")
+        self.assertEqual(payload["doctolib_patient_id"], "DOC-123")
 
     def test_patch_patient_updates_contact_and_creates_history(self) -> None:
         patient = Patient.objects.create(
@@ -660,132 +657,57 @@ class PatientsApiTests(TestCase):
         response = self.client.get(f"/api/v1/patients/{uuid4()}")
         self.assertEqual(response.status_code, 404)
 
-    def test_post_patient_merge_moves_queue_entries_and_archives_source(self) -> None:
-        source_patient = Patient.objects.create(
-            first_name="Temp",
-            last_name="Patient",
-            date_of_birth=date(1988, 5, 1),
-            phone="+49101010101",
-            email="temp@example.com",
-            doctolib_patient_id=None,
-            identity_alert_created_at=timezone.now(),
-            identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
-        )
-        target_patient = Patient.objects.create(
-            first_name="Confirmed",
-            last_name="Patient",
-            date_of_birth=date(1980, 1, 1),
-            phone="+49202020202",
-            email="confirmed@example.com",
-            doctolib_patient_id="DOC-CONF-1",
-        )
-        clinic = ClinicSite.objects.create(code="M1", name="Merge Clinic")
-        self.reception_user.clinic_sites.add(clinic)
-        source_patient.clinic_sites.add(clinic)
-        target_patient.clinic_sites.add(clinic)
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="MR1", name="Merge Room")
-        queue = DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
-            clinic_site=clinic,
-            consulting_room=room,
-            status=QueueStatus.OPEN,
-            created_by_user=self.reception_user,
-        )
-        queue_entry = QueueEntry.objects.create(
-            daily_queue=queue,
-            patient=source_patient,
-            position_no=1,
-            entry_status=QueueEntryStatus.WAITING,
-            created_by_user=self.reception_user,
-        )
+    def test_post_patient_returns_409_for_duplicate_patient_identity(self) -> None:
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+        ).clinic_sites.add(self.clinic)
 
         response = self.client.post(
-            f"/api/v1/patients/{source_patient.id}/merge",
+            "/api/v1/patients",
             data=json.dumps(
                 {
-                    "target_patient_id": str(target_patient.id),
-                    "source_action": "ARCHIVE",
-                    "reason": "Matched by Doctolib ID after import",
-                    "actor_user_id": str(self.reception_user.id),
+                    "first_name": "Anna",
+                    "last_name": "Nowak",
+                    "date_of_birth": "1990-01-01",
+                    "phone": "+49123456789",
+                    "email": "anna.duplicate@example.com",
                 }
             ),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertTrue(payload["merged"])
-        self.assertEqual(payload["moved_entities"]["queue_entries"], 1)
-        self.assertTrue(payload["identity_alert_closed"])
 
-        queue_entry.refresh_from_db()
-        self.assertEqual(queue_entry.patient_id, target_patient.id)
-        source_patient.refresh_from_db()
-        self.assertFalse(source_patient.is_active)
-
-    def test_post_patient_merge_returns_422_when_source_is_not_temporary(self) -> None:
-        source_patient = Patient.objects.create(
-            first_name="Source",
-            last_name="Confirmed",
-            date_of_birth=date(1988, 5, 1),
-            phone="+49101010101",
-            email="source@example.com",
-            doctolib_patient_id="DOC-SOURCE",
-        )
-        target_patient = Patient.objects.create(
-            first_name="Target",
-            last_name="Confirmed",
-            date_of_birth=date(1980, 1, 1),
-            phone="+49202020202",
-            email="target@example.com",
-            doctolib_patient_id="DOC-TARGET",
-        )
-        source_patient.clinic_sites.add(self.clinic)
-        target_patient.clinic_sites.add(self.clinic)
-
-        response = self.client.post(
-            f"/api/v1/patients/{source_patient.id}/merge",
-            data=json.dumps({"target_patient_id": str(target_patient.id), "source_action": "ARCHIVE"}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 422)
-
-    def test_post_patient_merge_returns_409_for_same_source_and_target(self) -> None:
-        source_patient = Patient.objects.create(
-            first_name="Temp",
-            last_name="Patient",
-            date_of_birth=date(1988, 5, 1),
-            phone="+49101010101",
-            email="temp2@example.com",
-            doctolib_patient_id=None,
-            identity_alert_created_at=timezone.now(),
-            identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
-        )
-        source_patient.clinic_sites.add(self.clinic)
-        response = self.client.post(
-            f"/api/v1/patients/{source_patient.id}/merge",
-            data=json.dumps({"target_patient_id": str(source_patient.id), "source_action": "ARCHIVE"}),
-            content_type="application/json",
-        )
         self.assertEqual(response.status_code, 409)
 
-    def test_post_patient_merge_returns_404_when_target_missing(self) -> None:
-        source_patient = Patient.objects.create(
-            first_name="Temp",
-            last_name="Patient",
-            date_of_birth=date(1988, 5, 1),
-            phone="+49101010101",
-            email="temp3@example.com",
-            doctolib_patient_id=None,
-            identity_alert_created_at=timezone.now(),
-            identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
-        )
-        source_patient.clinic_sites.add(self.clinic)
+    def test_post_patient_returns_409_for_duplicate_doctolib_patient_id(self) -> None:
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+            doctolib_patient_id="DOC-123",
+        ).clinic_sites.add(self.clinic)
+
         response = self.client.post(
-            f"/api/v1/patients/{source_patient.id}/merge",
-            data=json.dumps({"target_patient_id": str(uuid4()), "source_action": "ARCHIVE"}),
+            "/api/v1/patients",
+            data=json.dumps(
+                {
+                    "first_name": "Other",
+                    "last_name": "Patient",
+                    "date_of_birth": "1981-02-02",
+                    "phone": "+49999999999",
+                    "email": "other@example.com",
+                    "doctolib_patient_id": "DOC-123",
+                }
+            ),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 404)
+
+        self.assertEqual(response.status_code, 409)
 
 
 class ListLimitApiTests(TestCase):

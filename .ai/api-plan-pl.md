@@ -39,7 +39,7 @@
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
 - `audit-events` -> `audit_event`
-- `operations` -> akcje domenowe niebędące czystym CRUD (publikacja, merge, retry, retencja)
+- `operations` -> akcje domenowe niebędące czystym CRUD (publikacja, retry, retencja)
 - `observability` -> ekspozycja metryk i health-checków
 
 ## 2. Endpointy
@@ -174,7 +174,7 @@
 
 - **GET** `/patients`
   - Opis: Wyszukiwanie/listowanie pacjentów.
-  - Parametry zapytania: `search`, `last_name`, `date_of_birth`, `phone`, `identity_status`, `doctolib_patient_id`, `is_active`. Parametr `date_of_birth` musi być w formacie ISO `YYYY-MM-DD`; nieprawidłowy format zwraca `400 VALIDATION_ERROR`.
+  - Parametry zapytania: `search`, `last_name`, `date_of_birth`, `phone`, `doctolib_patient_id`, `is_active`. Parametr `date_of_birth` musi być w formacie ISO `YYYY-MM-DD`; nieprawidłowy format zwraca `400 VALIDATION_ERROR`.
   - Request JSON: brak.
   - Response JSON:
     ```json
@@ -188,9 +188,10 @@
           "phone": "+49111111111",
           "email": "jan@example.com",
           "doctolib_patient_id": null,
-          "identity_status": "TEMPORARY",
-          "identity_alert_created_at": "2026-02-16T09:00:00Z",
-          "identity_resolution_due_at": "2026-02-17T09:00:00Z"
+          "street": "Main 1",
+          "city": "Berlin",
+          "postal_code": "10115",
+          "country_code": "DE"
         }
       ],
       "pagination": {"page": 1, "page_size": 20, "total": 1}
@@ -200,7 +201,7 @@
   - Kody błędów: `400 VALIDATION_ERROR` (np. nieprawidłowy format `date_of_birth`), `403 FORBIDDEN`.
 
 - **POST** `/patients`
-  - Opis: Tworzy pacjenta (ścieżka manualna wspiera tożsamość tymczasową). Użytkownik tworzący jest pobierany z uwierzytelnionej sesji; brak pola w body żądania dla aktora.
+  - Opis: Tworzy pacjenta. Użytkownik tworzący jest pobierany z uwierzytelnionej sesji; brak pola w body żądania dla aktora.
   - Parametry zapytania: brak.
   - Request JSON:
     ```json
@@ -214,20 +215,17 @@
       "street": "Main 1",
       "city": "Berlin",
       "postal_code": "10115",
-      "country_code": "DE",
-      "external_source": "MANUAL",
-      "external_source_id": "frontdesk-20260216-001"
+      "country_code": "DE"
     }
     ```
   - Response JSON:
     ```json
     {
-      "patient": {"id": "uuid", "identity_status": "TEMPORARY"},
-      "identity_alert": {"created": true, "due_at": "2026-02-17T09:00:00Z"}
+      "patient": {"id": "uuid", "doctolib_patient_id": null}
     }
     ```
   - Kody sukcesu: `201 CREATED`.
-  - Kody błędów: `400 VALIDATION_ERROR` (np. nieprawidłowy format telefonu: `^[0-9+() -]{7,20}$`), `409 DUPLICATE_EXTERNAL_SOURCE`, `422 INVALID_BUSINESS_STATE`.
+  - Kody błędów: `400 VALIDATION_ERROR` (np. nieprawidłowy format telefonu: `^[0-9+() -]{7,20}$`), `409 UNIQUE_CONSTRAINT`.
 
 - **GET** `/patients/{id}`
 - **PATCH** `/patients/{id}`
@@ -237,34 +235,6 @@
   - Response JSON: obiekt pacjenta.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 UNIQUE_CONSTRAINT`.
-
-- **POST** `/patients/{id}/merge`
-  - Opis: Merge rekordu tymczasowego do potwierdzonego (US-018).
-  - Parametry zapytania: brak.
-  - Request JSON:
-    ```json
-    {
-      "target_patient_id": "uuid-confirmed",
-      "source_action": "ARCHIVE",
-      "reason": "Matched by Doctolib ID after import"
-    }
-    ```
-  - Response JSON:
-    ```json
-    {
-      "merged": true,
-      "source_patient_id": "uuid-temp",
-      "target_patient_id": "uuid-confirmed",
-      "moved_entities": {
-        "queue_entries": 3,
-        "intake_forms": 2,
-        "medical_documents": 2
-      },
-      "identity_alert_closed": true
-    }
-    ```
-  - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 MERGE_CONFLICT`, `422 SOURCE_NOT_TEMPORARY`.
 
 - **GET** `/patients/{id}/contact-history`
   - Opis: Oś czasu zmian danych kontaktowych.
@@ -1031,7 +1001,7 @@
   - **TABLET**: tylko: lista kolejek na dziś (wybór), lista wpisów kolejki, POST queue-entries/{id}/sessions, GET kontekstu formularza intake, PUT anamneza/zgody, upload podpisu, POST submit intake. Brak wyszukiwarki pacjentów, braku CRUD kolejek, braku zarządzania użytkownikami.
   - `RECEPTION`: kolejki, wpisy kolejki, tworzenie/aktualizacja pacjentów, generacja sesji (POST sessions), importy read/write.
   - `DOCTOR`: odczyt/zapis dokumentów medycznych, publikacja/republikacja, podgląd wersji.
-  - `ADMIN`: zarządzanie użytkownikami, słownik zgód, merge pacjentów, operacje techniczne, pełny podgląd audytu/outbox.
+  - `ADMIN`: zarządzanie użytkownikami, słownik zgód, operacje techniczne, pełny podgląd audytu/outbox.
   - Ochrona endpointów przez klasy uprawnień Django + kontrole na poziomie obiektu.
 
 - Kontrole sesji/bezpieczeństwa:
@@ -1049,7 +1019,7 @@
   - Limity rozmiaru żądań dla podpisów/uploadów.
   - Sanityzacja plain-text dla narracji lekarza i treści szablonów przed zapisem/generowaniem PDF.
   - Sanityzacja wejścia i allowlisty dla pól sortowania/filtrowania.
-  - Audyt wszystkich akcji bezpieczeństwa (błędy logowania, publikacje, retry, merge, retencja).
+  - Audyt wszystkich akcji bezpieczeństwa (błędy logowania, publikacje, retry, retencja).
 
 ## 4. Walidacja i logika biznesowa
 
@@ -1063,9 +1033,8 @@
   - Wymagane: `first_name`, `last_name`, `date_of_birth`, `phone`, `email`.
   - `phone` regex: `^[0-9+() -]{7,20}$`.
   - `date_of_birth <= current_date`.
-  - `(external_source, external_source_id)` unikalne.
-  - Gdy `doctolib_patient_id` jest puste, muszą być ustawione `identity_alert_created_at` i `identity_resolution_due_at`.
-  - `identity_resolution_due_at >= identity_alert_created_at`, gdy oba pola istnieją.
+  - `(first_name, last_name, phone, date_of_birth)` unikalne.
+  - `doctolib_patient_id` jest opcjonalne, ale unikalne gdy istnieje.
 
 - `consulting_room`
   - Unikalność per placówka: `(clinic_site_id, code)`.
@@ -1128,14 +1097,14 @@
 
 ### 4.2 Implementacja logiki biznesowej w API
 
-- Manualne dodanie pacjenta wspiera tożsamość tymczasową:
-  - Jeśli brak `doctolib_patient_id`, API ustawia znaczniki alertu tożsamości i zwraca metadane alertu.
+- Manualne dodanie pacjenta wspiera brak `doctolib_patient_id`:
+  - Jeśli brak `doctolib_patient_id`, API nadal tworzy pacjenta bez nadawania statusu tymczasowego i bez metadanych alertu.
 
 - Ujednolicona ingestia:
   - Dodanie ręczne, import pliku i autoimport korzystają ze wspólnego serwisu ingestii z tymi samymi walidacjami i deduplikacją.
 
 - Idempotentny import:
-  - Wykorzystanie identyfikatorów zewnętrznych (`doctolib_patient_id`, klucze zewnętrzne wizyty) do unikania duplikatów pacjentów/wizyt.
+  - Wykorzystanie unikalności `first_name + last_name + phone + date_of_birth`, opcjonalnego `doctolib_patient_id` oraz kluczy zewnętrznych wizyty do unikania duplikatów pacjentów/wizyt.
 
 - Model sesji latest-wins (bez tokenu):
   - Utworzenie sesji (POST queue-entries/{id}/sessions) tworzy nowy `patient_form_session` (bez pola token) i atomowo przełącza `queue_entry.active_session_id`.

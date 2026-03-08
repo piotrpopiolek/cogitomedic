@@ -36,7 +36,8 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
 - W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
 - **Proces poczekalni (tablet):** Tablety są na wyposażeniu rejestracji. Na tablecie recepcja wybiera kolejkę (z listy dzisiejszych kolejek), potem pacjenta z listy; przekazuje tablet pacjentowi do wypełnienia ankiety. **Brak linków z tokenem** – tablet zalogowany na rolę TABLET (sesja); sesja formularza tworzona bez tokenu. Pacjent wypełnia ankietę wyłącznie w poczekalni na tablecie (brak dostępu z zewnątrz).
-- Dopuszczony jest tryb tymczasowy rekordu pacjenta bez `Doctolib Patient ID` wyłącznie dla ręcznego dodania; system musi automatycznie wygenerować alert dla administratora o konieczności pilnego uzupełnienia identyfikatora.
+- `Doctolib Patient ID` pozostaje polem opcjonalnym; jeśli jest podane, musi być unikalne.
+- Unikalność rekordu pacjenta jest pilnowana przez zestaw pól: `first_name`, `last_name`, `phone`, `date_of_birth`.
 - System dopuszcza więcej niż jedną wizytę tego samego pacjenta tego samego dnia w tym samym gabinecie (osobne wpisy kolejki/wizyty).
 
 ### 3.2. Interfejs Pacjenta (Tablet)
@@ -127,7 +128,7 @@ Kryteria akceptacji:
 - Formularz wymaga podania: imienia, nazwiska, daty urodzenia, telefonu, adresu e-mail.
 - System waliduje poprawność adresu e-mail i numeru telefonu.
 - Nowy pacjent pojawia się na liście w widoku Poczekalnia.
-- Jeśli rekord tworzony jest bez `Doctolib Patient ID`, otrzymuje status tymczasowy i automatycznie tworzony jest alert dla administratora.
+- Jeśli rekord tworzony jest bez `Doctolib Patient ID`, pacjent nadal może zostać zapisany ręcznie, bez nadawania osobnego statusu tymczasowego i bez alertu administracyjnego.
 
 ID: US-003
 Tytuł: Import pacjentów
@@ -135,7 +136,7 @@ Opis: Jako recepcjonista, chcę zaimportować listę pacjentów z pliku, aby prz
 Kryteria akceptacji:
 - System przyjmuje plik w formacie .xlsx lub .csv.
 - System mapuje kolumny zgodnie ze zdefiniowanym szablonem.
-- `Doctolib Patient ID` jest polem wymaganym dla każdego rekordu importowanego.
+- `Doctolib Patient ID` może występować w rekordzie importowanym jako opcjonalny identyfikator pomocniczy; jeśli jest podany, musi być unikalny.
 - W przypadku błędów w pliku, import jest przerywany lub błędne wiersze są raportowane.
 - Zaimportowani pacjenci są widoczni w Poczekalni.
 
@@ -223,7 +224,7 @@ Opis: System codziennie importuje listę wizyt z plików eksportowanych z Doctol
 Kryteria akceptacji:
 - System przyjmuje plik .xlsx lub .csv zgodny z ustalonym szablonem eksportu.
 - Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
-- `Doctolib Patient ID` jest polem obowiązkowym i podstawą mapowania tożsamości pacjenta.
+- `Doctolib Patient ID` jest polem opcjonalnym i pomocniczym; jeśli występuje w danych importowanych lub ręcznych, musi być unikalne.
 - Dane (imię, nazwisko, data urodzenia, kontakt) są mapowane do struktury pacjenta jako dane uzupełniające.
 - Błędy importu są raportowane na poziomie wiersza.
 
@@ -263,7 +264,7 @@ Opis: Jako recepcja, chcę aby ręczne dodanie, import pliku i autoimport nie tw
 Kryteria akceptacji:
 - Wszystkie ścieżki wejścia korzystają z jednej warstwy ingestii i tych samych walidacji.
 - Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
-- Dla danych importowanych kluczem tożsamości pacjenta jest wyłącznie `Doctolib Patient ID`; rekordy ręczne bez tego ID są traktowane jako tymczasowe i wymagają domknięcia alertu administracyjnego.
+- Dla danych pacjenta obowiązuje reguła unikalności `first_name + last_name + phone + date_of_birth`; `Doctolib Patient ID` pozostaje dodatkowym, opcjonalnym i nadal unikalnym identyfikatorem pomocniczym.
 
 ID: US-016
 Tytuł: Wypełnienie ankiety anamnestycznej przez pacjenta (DE/EN)
@@ -276,15 +277,6 @@ Kryteria akceptacji:
 - Walidacja blokuje finalizację formularza, jeśli nie udzielono odpowiedzi na pytania oznaczone jako wymagane.
 - Po finalizacji formularza lekarz widzi odpowiedzi anamnestyczne razem ze zgodami i schematem ciała.
 
-ID: US-018
-Tytuł: Scalanie pacjentów (Merge Temporary to Confirmed)
-Opis: Jako administrator, chcę połączyć rekord pacjenta tymczasowego (bez ID) z rekordem potwierdzonym (z importu), aby przenieść historię zgód i zamknąć alert tożsamości.
-Kryteria akceptacji:
-- Dostępna jest funkcja "Scal z potwierdzonym" dla rekordów o statusie `TEMPORARY`.
-- System pozwala wskazać docelowy rekord `CONFIRMED` (wyszukiwanie po nazwisku/ID).
-- Po zatwierdzeniu: historia (zgody, dokumenty, wizyty) jest przepinana na rekord docelowy.
-- Rekord źródłowy (`TEMPORARY`) jest archiwizowany lub usuwany.
-- Alert dotyczący braku tożsamości dla rekordu źródłowego jest automatycznie zamykany.
 
 ID: US-017
 Tytuł: Awaryjny import z szablonu (Excel Template Fallback)

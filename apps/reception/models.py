@@ -11,16 +11,6 @@ from apps.core.translation_service import db_gettext_lazy
 from django.db.models import F, Q
 from django.utils import timezone
 
-class PatientIdentityStatus(models.TextChoices):
-    CONFIRMED = "CONFIRMED", "Confirmed"
-    TEMPORARY = "TEMPORARY", "Temporary"
-
-
-class PatientExternalSource(models.TextChoices):
-    DOCTOLIB_EXPORT = "DOCTOLIB_EXPORT", "Doctolib Export"
-    OTHER = "OTHER", "Other"
-
-
 class QueueShift(models.TextChoices):
     FULL_DAY = "FULL_DAY", "Full day"
     MORNING = "MORNING", "Morning"
@@ -72,21 +62,10 @@ class Patient(models.Model):
     phone = models.CharField(max_length=20, verbose_name=db_gettext_lazy("administration.field_phone", "Phone"))
     email = models.EmailField(verbose_name=db_gettext_lazy("administration.field_email", "Email"))
     doctolib_patient_id = models.CharField(max_length=64, blank=True, null=True, unique=True, verbose_name=db_gettext_lazy("administration.field_doctolib_patient_id", "Doctolib patient id"))
-    identity_status = models.CharField(
-        max_length=20,
-        choices=PatientIdentityStatus.choices,
-        default=PatientIdentityStatus.TEMPORARY,
-    )
-    identity_alert_created_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_identity_alert_created_at", "Identity alert created at"))
-    identity_resolution_due_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_identity_resolution_due_at", "Identity resolution due at"))
     street = models.CharField(max_length=150, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_street", "Street"))
     city = models.CharField(max_length=100, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_city", "City"))
     postal_code = models.CharField(max_length=20, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_postal_code", "Postal code"))
     country_code = models.CharField(max_length=2, default="DE", verbose_name=db_gettext_lazy("administration.field_country_code", "Country code"))
-    external_source = models.CharField(
-        max_length=30, choices=PatientExternalSource.choices, blank=True, null=True
-    )
-    external_source_id = models.CharField(max_length=100, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_external_source_id", "External source id"))
     clinic_sites = models.ManyToManyField(
         "reception.ClinicSite",
         db_table="patient_clinic_site",
@@ -104,65 +83,17 @@ class Patient(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name", "date_of_birth"]),
             models.Index(fields=["phone"]),
-            models.Index(fields=["identity_status", "-created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["external_source", "external_source_id"],
-                name="patient_external_unique",
+                fields=["first_name", "last_name", "phone", "date_of_birth"],
+                name="patient_identity_unique",
             ),
             models.CheckConstraint(
                 condition=Q(phone__regex=r"^[0-9+() -]{7,20}$"),
                 name="patient_phone_format",
             ),
-            models.CheckConstraint(
-                condition=Q(
-                    identity_status__in=[
-                        PatientIdentityStatus.CONFIRMED,
-                        PatientIdentityStatus.TEMPORARY,
-                    ]
-                ),
-                name="patient_identity_status_valid",
-            ),
-            models.CheckConstraint(
-                condition=Q(doctolib_patient_id__isnull=False)
-                | (
-                    Q(identity_alert_created_at__isnull=False)
-                    & Q(identity_resolution_due_at__isnull=False)
-                ),
-                name="patient_temp_identity_requires_alert",
-            ),
-            models.CheckConstraint(
-                condition=Q(identity_resolution_due_at__isnull=True)
-                | Q(identity_alert_created_at__isnull=True)
-                | Q(identity_resolution_due_at__gte=F("identity_alert_created_at")),
-                name="patient_identity_due_after_alert",
-            ),
         ]
-
-    def save(self, *args: object, **kwargs: object) -> None:
-        self.identity_status = (
-            PatientIdentityStatus.CONFIRMED
-            if self.doctolib_patient_id
-            else PatientIdentityStatus.TEMPORARY
-        )
-        # Constraint patient_temp_identity_requires_alert: when doctolib_patient_id is null,
-        # both identity_alert_created_at and identity_resolution_due_at must be set.
-        if not self.doctolib_patient_id and (
-            self.identity_alert_created_at is None or self.identity_resolution_due_at is None
-        ):
-            now = timezone.now()
-            if self.identity_alert_created_at is None and self.identity_resolution_due_at is not None:
-                self.identity_alert_created_at = self.identity_resolution_due_at - timedelta(hours=24)
-            elif self.identity_alert_created_at is None:
-                self.identity_alert_created_at = now
-            if self.identity_resolution_due_at is None:
-                self.identity_resolution_due_at = self.identity_alert_created_at + timedelta(hours=24)
-            update_fields = kwargs.get("update_fields")
-            if update_fields is not None:
-                extra = {"identity_alert_created_at", "identity_resolution_due_at"}
-                kwargs["update_fields"] = list(update_fields) + [f for f in extra if f not in update_fields]
-        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.last_name} {self.first_name} ({self.date_of_birth})"

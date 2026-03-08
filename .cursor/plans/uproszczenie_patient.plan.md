@@ -4,16 +4,16 @@ overview: Usunięcie statusów/alertów tożsamości i pól źródła z modelu `
 todos:
   - id: map-schema-change
     content: Zaprojektować końcowy kształt modelu Patient i kontraktów API po usunięciu statusów, alertów, external_source i merge.
-    status: pending
+    status: completed
   - id: prepare-db-migration
     content: "Przygotować plan migracji DB: usunięcie kolumn/constraintów oraz dodanie złożonej unikalności pacjenta z kontrolą duplikatów danych."
-    status: pending
+    status: completed
   - id: update-runtime-code
     content: Zaktualizować model, serwisy, admin, widoki i OpenAPI tak, aby nie używały TEMPORARY/CONFIRMED, alertów ani merge.
-    status: pending
+    status: completed
   - id: refresh-tests-docs
     content: Zaktualizować testy, seedy i dokumentację, aby odzwierciedlały nową semantykę Patient.
-    status: pending
+    status: completed
 isProject: false
 ---
 
