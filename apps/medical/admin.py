@@ -1,14 +1,81 @@
 from __future__ import annotations
 
+import json
+
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.db.models import Q
+from pydantic import ValidationError as PydanticValidationError
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
+from apps.medical.api_schemas import FavoriteLesionGroupPreset
+from apps.medical.constants import (
+    CLINICAL_ASSESSMENT_CHOICES,
+    DERMATOSCOPIC_FEATURE_CHOICES,
+    MALIGNANCY_RISK_CHOICES,
+)
 from apps.medical.models import DoctorTextTemplate, MedicalDocument, MedicalDocumentVersion
+from apps.medical.widgets import LesionGroupFavoritesWidget
+
+_ALLOWED_CLINICAL = {v for v, _ in CLINICAL_ASSESSMENT_CHOICES}
+_ALLOWED_MALIGNANCY = {v for v, _ in MALIGNANCY_RISK_CHOICES}
+_ALLOWED_FEATURES = {v for v, _ in DERMATOSCOPIC_FEATURE_CHOICES}
+
+
+class DoctorTextTemplateForm(forms.ModelForm):
+    class Meta:
+        model = DoctorTextTemplate
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lesion_group_favorites"].widget = LesionGroupFavoritesWidget()
+        self.fields["lesion_group_favorites"].help_text = (
+            "With JavaScript enabled, a visual editor is available. You can also edit the JSON directly."
+        )
+
+    def clean_lesion_group_favorites(self):
+        value = self.cleaned_data.get("lesion_group_favorites")
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            try:
+                value = json.loads(value) if isinstance(value, str) else list(value)
+            except (TypeError, ValueError):
+                raise ValidationError("Invalid JSON list.")
+        for i, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise ValidationError(f"Preset {i + 1}: must be an object.")
+            try:
+                FavoriteLesionGroupPreset.model_validate(item)
+            except PydanticValidationError as e:
+                errs = e.errors()
+                msg = "; ".join(f"{x.get('loc', [])}: {x.get('msg', '')}" for x in errs[:3])
+                raise ValidationError(f"Preset {i + 1}: {msg}")
+            for code in item.get("dermatoscopic_features") or []:
+                if code not in _ALLOWED_FEATURES:
+                    raise ValidationError(
+                        f"Preset {i + 1}: invalid dermatoscopic_features value '{code}'. "
+                        f"Allowed: {', '.join(sorted(_ALLOWED_FEATURES))}."
+                    )
+            ca = item.get("clinical_assessment")
+            if ca and ca not in _ALLOWED_CLINICAL:
+                raise ValidationError(
+                    f"Preset {i + 1}: invalid clinical_assessment '{ca}'. "
+                    f"Allowed: {', '.join(sorted(_ALLOWED_CLINICAL))}."
+                )
+            mr = item.get("malignancy_risk")
+            if mr and mr not in _ALLOWED_MALIGNANCY:
+                raise ValidationError(
+                    f"Preset {i + 1}: invalid malignancy_risk '{mr}'. "
+                    f"Allowed: {', '.join(sorted(_ALLOWED_MALIGNANCY))}."
+                )
+        return value
 
 
 def _set_medical_document_users(request, obj, change: bool) -> None:
@@ -65,6 +132,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
 
 @admin.register(DoctorTextTemplate)
 class DoctorTextTemplateAdmin(UnfoldModelAdmin):
+    form = DoctorTextTemplateForm
     list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "is_active", "created_at", "updated_at")
     list_filter = ("template_locale", "is_global", "is_active")
     search_fields = ("name", "template_body")
