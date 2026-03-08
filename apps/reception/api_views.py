@@ -12,7 +12,6 @@ from apps.reception.api_views_split.dictionaries import (
 from apps.reception.api_views_split.patients import (
     patient_contact_history_view,
     patient_detail_view,
-    patient_merge_view,
     patients_view,
 )
 from apps.reception.api_views_split.queues import (
@@ -33,7 +32,6 @@ __all__ = [
     "daily_queues_view",
     "patient_contact_history_view",
     "patient_detail_view",
-    "patient_merge_view",
     "patients_view",
     "queue_entry_detail_view",
     "queue_entry_sessions_view",

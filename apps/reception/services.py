@@ -10,8 +10,6 @@ from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
-from apps.medical.models import MedicalDocument
-from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -33,18 +31,6 @@ class InvalidLocaleError(DomainError):
     """Raised when locale for tablet session is unsupported."""
 
 
-class InvalidSourceActionError(DomainError):
-    """Raised when merge source action is unsupported."""
-
-
-class SourceNotTemporaryError(DomainError):
-    """Raised when merge source patient is not temporary."""
-
-
-class TargetNotConfirmedError(DomainError):
-    """Raised when merge target patient is not confirmed."""
-
-
 @dataclass(frozen=True)
 class IssuedSessionResult:
     """Return payload for newly created session (no token)."""
@@ -52,17 +38,6 @@ class IssuedSessionResult:
     session_id: uuid.UUID
     expires_at: timezone.datetime
     intake_form_id: uuid.UUID
-
-
-@dataclass(frozen=True)
-class MergedPatientsResult:
-    merged: bool
-    source_patient_id: uuid.UUID
-    target_patient_id: uuid.UUID
-    moved_queue_entries: int
-    moved_intake_forms: int
-    moved_medical_documents: int
-    identity_alert_closed: bool
 
 
 @transaction.atomic
@@ -227,12 +202,6 @@ def _is_supported_locale(locale: str) -> bool:
     return normalized in {"de", "de-de", "en", "en-gb", "en-us", "pl", "pl-pl"}
 
 
-def _build_patient_identity_alert_window() -> tuple[timezone.datetime, timezone.datetime]:
-    created_at = timezone.now()
-    resolution_due_at = created_at + timedelta(hours=24)
-    return created_at, resolution_due_at
-
-
 @transaction.atomic
 def create_or_update_patient_manual(
     *,
@@ -245,12 +214,7 @@ def create_or_update_patient_manual(
     doctolib_patient_id: str | None = None,
     patient_id: uuid.UUID | None = None,
 ) -> Patient:
-    """
-    Create/update patient in manual flow with temporary identity alert handling.
-
-    When `doctolib_patient_id` is missing, alert timestamps are set to satisfy the
-    temporary-identity contract from the domain model and DB constraints.
-    """
+    """Create or update a patient in the manual reception flow."""
 
     # The actor id is part of the service signature for audit extension in next steps.
     _ = created_or_updated_by_user_id
@@ -262,16 +226,6 @@ def create_or_update_patient_manual(
     patient.phone = phone
     patient.email = email
     patient.doctolib_patient_id = doctolib_patient_id or None
-
-    if not patient.doctolib_patient_id:
-        if not patient.identity_alert_created_at or not patient.identity_resolution_due_at:
-            (
-                patient.identity_alert_created_at,
-                patient.identity_resolution_due_at,
-            ) = _build_patient_identity_alert_window()
-    else:
-        patient.identity_alert_created_at = None
-        patient.identity_resolution_due_at = None
 
     patient.save()
     return patient
@@ -387,78 +341,6 @@ def update_queue_entry(
         update_fields.append("notes")
     entry.save(update_fields=update_fields)
     return entry
-
-
-@transaction.atomic
-def merge_temporary_patient_into_confirmed(
-    *,
-    source_patient_id: uuid.UUID,
-    target_patient_id: uuid.UUID,
-    source_action: str,
-    reason: str | None,
-    actor_user_id: uuid.UUID | None = None,
-) -> MergedPatientsResult:
-    """Merge source temporary patient into target confirmed patient."""
-    if source_patient_id == target_patient_id:
-        raise StateTransitionError("Source and target patients must differ.")
-    if source_action not in {"ARCHIVE", "KEEP_ACTIVE"}:
-        raise InvalidSourceActionError("INVALID_SOURCE_ACTION")
-
-    source = Patient.objects.select_for_update().get(id=source_patient_id)
-    target = Patient.objects.select_for_update().get(id=target_patient_id)
-
-    if source.identity_status != "TEMPORARY":
-        raise SourceNotTemporaryError("SOURCE_NOT_TEMPORARY")
-    if target.identity_status != "CONFIRMED":
-        raise TargetNotConfirmedError("TARGET_NOT_CONFIRMED")
-
-    queue_entries_qs = QueueEntry.objects.select_for_update().filter(patient_id=source_patient_id)
-    queue_entry_ids = list(queue_entries_qs.values_list("id", flat=True))
-    moved_queue_entries = len(queue_entry_ids)
-
-    moved_intake_forms = PatientIntakeForm.objects.filter(queue_entry_id__in=queue_entry_ids).count()
-    moved_medical_documents = MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids).count()
-
-    now = timezone.now()
-    if moved_queue_entries:
-        queue_entries_qs.update(patient_id=target_patient_id, updated_at=now)
-
-    PatientContactHistory.objects.filter(patient_id=source_patient_id).update(patient_id=target_patient_id)
-
-    identity_alert_closed = False
-    if source_action == "ARCHIVE":
-        source.is_active = False
-        source.identity_resolution_due_at = now
-        source.save(update_fields=["is_active", "identity_resolution_due_at", "updated_at"])
-        identity_alert_closed = True
-
-    create_audit_event(
-        event_type="PATIENT_MERGED",
-        actor_user_id=actor_user_id,
-        patient_id=target.id,
-        metadata={
-            "source_patient_id": str(source.id),
-            "target_patient_id": str(target.id),
-            "source_action": source_action,
-            "reason": reason,
-            "moved_entities": {
-                "queue_entries": moved_queue_entries,
-                "intake_forms": moved_intake_forms,
-                "medical_documents": moved_medical_documents,
-            },
-            "identity_alert_closed": identity_alert_closed,
-        },
-    )
-
-    return MergedPatientsResult(
-        merged=True,
-        source_patient_id=source.id,
-        target_patient_id=target.id,
-        moved_queue_entries=moved_queue_entries,
-        moved_intake_forms=moved_intake_forms,
-        moved_medical_documents=moved_medical_documents,
-        identity_alert_closed=identity_alert_closed,
-    )
 
 
 @transaction.atomic

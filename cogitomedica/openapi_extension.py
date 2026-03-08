@@ -362,7 +362,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/patients": {
-        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "identity_status", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items and pagination"}},
+        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items and pagination"}},
         },
         "post": {"summary": "Create or update patient (manual)", "tags": ["Reception – Patients"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "Patient"}, "201": {"description": "Created"}},
         },
@@ -381,15 +381,6 @@ COGITO_PATHS = {
             "tags": ["Reception – Patients"],
             "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}],
             "responses": {"200": {"description": "Items and pagination"}, "404": {"description": "Not found"}},
-        },
-    },
-    f"{PREFIX}/patients/{{patient_id}}/merge": {
-        "post": {
-            "summary": "Merge temporary patient into confirmed",
-            "tags": ["Reception – Patients"],
-            "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"target_patient_id": {"type": "string", "format": "uuid"}, "source_action": {"type": "string"}, "reason": {"type": "string"}, "actor_user_id": {"type": "string", "format": "uuid"}}}}}},
-            "responses": {"200": {"description": "Merge result"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}, "422": {"description": "Unprocessable"}},
         },
     },
     f"{PREFIX}/daily-queues": {

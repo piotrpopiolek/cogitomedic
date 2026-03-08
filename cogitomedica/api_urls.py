@@ -46,7 +46,6 @@ from apps.reception.api_views import (
     daily_queues_view,
     patient_contact_history_view,
     patient_detail_view,
-    patient_merge_view,
     patients_view,
     queue_entry_detail_view,
     queue_entry_sessions_view,
@@ -234,11 +233,6 @@ urlpatterns = [
         "patients/<uuid:patient_id>/contact-history",
         patient_contact_history_view,
         name="patient-contact-history",
-    ),
-    path(
-        "patients/<uuid:patient_id>/merge",
-        patient_merge_view,
-        name="patient-merge",
     ),
     path(
         "daily-queues",
