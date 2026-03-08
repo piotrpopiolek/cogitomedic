@@ -107,15 +107,15 @@ Potrzebne do kontekstu i filtrów w widoku „kolejka / lista dokumentów”. Le
 Pełny flow lekarza (US-008, US-009, US-010): lista dokumentów do opracowania, podgląd intake + szkic, zapis szkicu, generowanie tekstu, publikacja, edycja opublikowanego i ponowna wysyłka.
 
 
-| Moduł / Zasób                                | Dostęp DOCTOR | Uwagi                                                                                                                                                      |
-| -------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET `/medical-documents`                     | Tak           | Lista „work queue” **tylko dla dokumentów z własnych kolejek LUB własnego autorstwa**. Parametry: `status`, `queue_date`, `doctor_view`, `patient_search`. |
-| GET `/medical-documents/{id}`                | Tak           | Tylko jeśli dokument należy do kolejki lekarza LUB lekarz jest jego autorem. Pełny kontekst.                                                               |
-| POST `/medical-documents`                    | Tak           | Utworzenie dokumentu dla `queue_entry_id` – tylko jeśli wpis należy do dzisiejszej kolejki przypisanej do lekarza.                                         |
-| PATCH `/medical-documents/{id}/draft`        | Tak           | Zapis szkicu (medical_payload, diagnosis_code, procedure_code) – US-008, US-009.                                                                           |
-| POST `/medical-documents/{id}/publish`       | Tak           | Publikacja z `publish_request_id`, `publish_locale`, opcjonalnie `resend_sms` – US-009, US-010.                                                            |
-| GET `/medical-documents/{id}/versions`       | Tak           | Historia wersji dokumentu – tylko dla dokumentów w zakresie lekarza.                                                                                       |
-| GET `/medical-document-versions/{id}`        | Tak           | Szczegóły wersji (status generowania PDF, HiDrive, SMS) – tylko dla wersji dokumentów w zakresie lekarza.                                                  |
+| Moduł / Zasób                          | Dostęp DOCTOR | Uwagi                                                                                                                                                      |
+| -------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET `/medical-documents`               | Tak           | Lista „work queue” **tylko dla dokumentów z własnych kolejek LUB własnego autorstwa**. Parametry: `status`, `queue_date`, `doctor_view`, `patient_search`. |
+| GET `/medical-documents/{id}`          | Tak           | Tylko jeśli dokument należy do kolejki lekarza LUB lekarz jest jego autorem. Pełny kontekst.                                                               |
+| POST `/medical-documents`              | Tak           | Utworzenie dokumentu dla `queue_entry_id` – tylko jeśli wpis należy do dzisiejszej kolejki przypisanej do lekarza.                                         |
+| PATCH `/medical-documents/{id}/draft`  | Tak           | Zapis szkicu (medical_payload, diagnosis_code, procedure_code) – US-008, US-009.                                                                           |
+| POST `/medical-documents/{id}/publish` | Tak           | Publikacja z `publish_request_id`, `publish_locale`, opcjonalnie `resend_sms` – US-009, US-010.                                                            |
+| GET `/medical-documents/{id}/versions` | Tak           | Historia wersji dokumentu – tylko dla dokumentów w zakresie lekarza.                                                                                       |
+| GET `/medical-document-versions/{id}`  | Tak           | Szczegóły wersji (status generowania PDF, HiDrive, SMS) – tylko dla wersji dokumentów w zakresie lekarza.                                                  |
 
 
 Lekarz **nie** wywołuje bezpośrednio endpointów intake (PATCH/PUT/POST na `/intake-forms/...`) – dane intake są tylko do odczytu w `intake_summary` w ramach dokumentu medycznego.
@@ -374,16 +374,16 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 ## 6. Podsumowanie – moduły z dostępem DOCTOR
 
 
-| Kategoria            | Moduły / zasoby z dostępem (odczyt i/lub zapis)                                                                                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth                 | login, logout, me                                                                                                                                                                                     |
-| Kolejki (read-only)  | daily-queues (GET), daily-queues/{id}/entries (GET), queue-entries/{id} (GET) – **tylko kolejki przypisane do lekarza (`assigned_doctor_id`)**                                                        |
-| Pacjenci (read-only) | patients (GET), patients/{id} (GET), patients/{id}/contact-history (GET) – **pacjenci z przypisanych klinik lekarza (`patient_clinic_site`)**                                                         |
-| Lokacje (read-only)  | clinic-sites (GET), consulting-rooms (GET)                                                                                                                                                            |
+| Kategoria            | Moduły / zasoby z dostępem (odczyt i/lub zapis)                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                 | login, logout, me                                                                                                                                                               |
+| Kolejki (read-only)  | daily-queues (GET), daily-queues/{id}/entries (GET), queue-entries/{id} (GET) – **tylko kolejki przypisane do lekarza (`assigned_doctor_id`)**                                  |
+| Pacjenci (read-only) | patients (GET), patients/{id} (GET), patients/{id}/contact-history (GET) – **pacjenci z przypisanych klinik lekarza (`patient_clinic_site`)**                                   |
+| Lokacje (read-only)  | clinic-sites (GET), consulting-rooms (GET)                                                                                                                                      |
 | Dokumenty medyczne   | medical-documents (GET, POST), medical-documents/{id} (GET), draft (PATCH), publish (POST), versions (GET); medical-document-versions/{id} (GET) – **AUTHOR OR ASSIGNED_QUEUE** |
-| Szablony lekarza     | doctor-text-templates (GET, POST, GET/PATCH/DELETE własne)                                                                                                                                            |
-| Audit (ograniczony)  | audit-events (GET z filtrem po dokumentach w zakresie), medical-documents/{id}/audit-trail (GET) – **dla dokumentów w zakresie autoryzacji lekarza**                                                  |
-| Observability        | status w ramach medical-documents; opcjonalnie GET /observability/health                                                                                                                              |
+| Szablony lekarza     | doctor-text-templates (GET, POST, GET/PATCH/DELETE własne)                                                                                                                      |
+| Audit (ograniczony)  | audit-events (GET z filtrem po dokumentach w zakresie), medical-documents/{id}/audit-trail (GET) – **dla dokumentów w zakresie autoryzacji lekarza**                            |
+| Observability        | status w ramach medical-documents; opcjonalnie GET /observability/health                                                                                                        |
 
 
 Wszystkie pozostałe moduły (staff-users, consent/anamnesis definitions, intake write, sessions, tablet devices, imports, outbox, operations, retention, pełna lista audit bez filtra, merge) – **bez dostępu** dla roli DOCTOR (zarezerwowane dla RECEPTION, ADMIN lub TABLET zgodnie z api-plan i db-plan).
