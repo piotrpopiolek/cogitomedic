@@ -10,6 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
     json_error,
     parse_bool_query,
     read_json_body,
@@ -90,8 +91,16 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             )
         qs = Patient.objects.all().order_by("-created_at")
 
-        if request.user.is_doctor:
-            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return JsonResponse(
+                    {"items": [], "pagination": {"page": 1, "page_size": 20, "total": 0}}
+                )
+            qs = qs.filter(
+                Q(clinic_sites__id__in=scope_ids)
+                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
+            ).distinct()
         search = request.GET.get("search")
         if search:
             qs = qs.filter(
@@ -193,8 +202,14 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
 
     try:
         qs = Patient.objects.all()
-        if request.user.is_doctor:
-            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return json_error("Patient not found.", status=404)
+            qs = qs.filter(
+                Q(clinic_sites__id__in=scope_ids)
+                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
+            ).distinct()
         patient = qs.get(id=patient_id)
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)
@@ -288,8 +303,14 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
         return json_error("Method not allowed.", status=405)
     try:
         qs = Patient.objects.all()
-        if request.user.is_doctor:
-            qs = qs.filter(clinic_sites__in=request.user.clinic_sites.all()).distinct()
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return json_error("Patient not found.", status=404)
+            qs = qs.filter(
+                Q(clinic_sites__id__in=scope_ids)
+                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
+            ).distinct()
         qs.get(id=patient_id)
     except ObjectDoesNotExist:
         return json_error("Patient not found.", status=404)
@@ -318,6 +339,24 @@ def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None:
+        if not scope_ids:
+            return json_error("Merge not allowed: no clinic sites assigned.", status=403)
+        allowed_patient_ids = set(
+            Patient.objects.filter(
+                Q(clinic_sites__id__in=scope_ids)
+                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
+            ).values_list("id", flat=True).distinct()
+        )
+        if patient_id not in allowed_patient_ids:
+            return json_error("Source patient is not in your assigned scope.", status=403)
+        target = Patient.objects.filter(id=body.target_patient_id).first()
+        if target is None:
+            return json_error("Patient not found.", status=404)
+        if target.id not in allowed_patient_ids:
+            return json_error("Target patient is not in your assigned scope.", status=403)
     try:
         result = merge_temporary_patient_into_confirmed(
             source_patient_id=patient_id,

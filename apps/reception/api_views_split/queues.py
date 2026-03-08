@@ -9,7 +9,14 @@ from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
+    json_error,
+    parse_list_limit,
+    read_json_body,
+    require_auth,
+    require_user_role,
+)
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.reception.api_schemas import (
     CreateDailyQueueRequest,
@@ -76,7 +83,12 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             if queue_date and queue_date != today.isoformat():
                 return json_error("TABLET role can only access queues for today.", status=403)
             queue_date = today.isoformat()
-            
+
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return JsonResponse({"items": []})
+            qs = qs.filter(clinic_site_id__in=scope_ids)
         if request.user.is_doctor:
             qs = qs.filter(assigned_doctor_id=request.user.id)
             
@@ -106,6 +118,9 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             return json_error("Invalid request encoding.", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None and str(body.clinic_site_id) not in {str(sid) for sid in scope_ids}:
+            return json_error("Clinic site is not in your assigned scope.", status=403)
         try:
             queue = create_daily_queue(
                 queue_date=body.queue_date,
@@ -137,6 +152,9 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
         queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and queue.clinic_site_id not in scope_ids:
+        return json_error("Daily queue is not in your assigned scope.", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_queue(queue))
     try:
@@ -173,7 +191,10 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
-        
+
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and queue.clinic_site_id not in scope_ids:
+        return json_error("Daily queue is not in your assigned scope.", status=403)
     if request.user.is_tablet and queue.queue_date != timezone.now().date():
         return json_error("TABLET role can only access entries of today's queues.", status=403)
         
@@ -232,7 +253,10 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
     except ObjectDoesNotExist:
         return json_error("Queue entry not found.", status=404)
-        
+
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
+        return json_error("Queue entry is not in your assigned scope.", status=403)
     if request.user.is_doctor and entry.daily_queue.assigned_doctor_id != request.user.id:
         return json_error("DOCTOR can only access entries from own queues.", status=403)
         
@@ -272,6 +296,13 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
         return role_error
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
+    except ObjectDoesNotExist:
+        return json_error("Queue entry not found.", status=404)
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
+        return json_error("Queue entry is not in your assigned scope.", status=403)
     try:
         body = CreateQueueEntrySessionRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
