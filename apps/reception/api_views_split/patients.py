@@ -18,21 +18,14 @@ from apps.core.api_utils import (
     require_user_role,
     safe_parse_positive_int,
 )
-from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import (
     CreatePatientRequest,
-    MergePatientRequest,
     PatientsListQuery,
     UpdatePatientRequest,
 )
 from apps.reception.models import Patient, PatientContactHistory
-from apps.reception.services import (
-    InvalidSourceActionError,
-    SourceNotTemporaryError,
-    TargetNotConfirmedError,
-    create_or_update_patient_manual,
-    merge_temporary_patient_into_confirmed,
-)
+from apps.reception.services import create_or_update_patient_manual
 
 
 
@@ -45,19 +38,10 @@ def _serialize_patient(patient: Patient) -> dict:
         "phone": patient.phone,
         "email": patient.email,
         "doctolib_patient_id": patient.doctolib_patient_id,
-        "identity_status": patient.identity_status,
-        "identity_alert_created_at": (
-            patient.identity_alert_created_at.isoformat() if patient.identity_alert_created_at else None
-        ),
-        "identity_resolution_due_at": (
-            patient.identity_resolution_due_at.isoformat() if patient.identity_resolution_due_at else None
-        ),
         "street": patient.street,
         "city": patient.city,
         "postal_code": patient.postal_code,
         "country_code": patient.country_code,
-        "external_source": patient.external_source,
-        "external_source_id": patient.external_source_id,
         "is_active": patient.is_active,
         "created_at": patient.created_at.isoformat(),
         "updated_at": patient.updated_at.isoformat(),
@@ -117,9 +101,6 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         phone = request.GET.get("phone")
         if phone:
             qs = qs.filter(phone__icontains=phone)
-        identity_status = request.GET.get("identity_status")
-        if identity_status:
-            qs = qs.filter(identity_status=identity_status)
         doctolib_patient_id = request.GET.get("doctolib_patient_id")
         if doctolib_patient_id:
             qs = qs.filter(doctolib_patient_id=doctolib_patient_id)
@@ -164,27 +145,12 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             update_fields.append("postal_code")
             patient.country_code = body.country_code
             update_fields.append("country_code")
-            patient.external_source = body.external_source
-            update_fields.append("external_source")
-            patient.external_source_id = body.external_source_id
-            update_fields.append("external_source_id")
             patient.save(update_fields=update_fields)
         except IntegrityError:
             return json_error("Patient uniqueness conflict.", status=409)
         except DomainError as exc:
             return json_error(str(exc), status=400)
-        return JsonResponse(
-            {
-                "patient": _serialize_patient(patient),
-                "identity_alert": {
-                    "created": patient.identity_status == "TEMPORARY",
-                    "due_at": (
-                        patient.identity_resolution_due_at.isoformat() if patient.identity_resolution_due_at else None
-                    ),
-                },
-            },
-            status=201,
-        )
+        return JsonResponse({"patient": _serialize_patient(patient)}, status=201)
 
     return json_error("Method not allowed.", status=405)
 
@@ -267,12 +233,6 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         if "country_code" in fields_set:
             patient.country_code = body.country_code
             update_fields.append("country_code")
-        if "external_source" in fields_set:
-            patient.external_source = body.external_source
-            update_fields.append("external_source")
-        if "external_source_id" in fields_set:
-            patient.external_source_id = body.external_source_id
-            update_fields.append("external_source_id")
         if "is_active" in fields_set and body.is_active is not None:
             patient.is_active = body.is_active
             update_fields.append("is_active")
@@ -322,69 +282,3 @@ def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> Json
     end = start + page_size
     items = [_serialize_contact_history(item) for item in qs[start:end]]
     return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
-
-
-@require_auth
-def patient_merge_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
-    if role_error:
-        return role_error
-    if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
-    try:
-        body = MergePatientRequest.model_validate(read_json_body(request))
-    except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
-    except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
-
-    scope_ids = get_scoped_clinic_site_ids(request.user)
-    if scope_ids is not None:
-        if not scope_ids:
-            return json_error("Merge not allowed: no clinic sites assigned.", status=403)
-        allowed_patient_ids = set(
-            Patient.objects.filter(
-                Q(clinic_sites__id__in=scope_ids)
-                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
-            ).values_list("id", flat=True).distinct()
-        )
-        if patient_id not in allowed_patient_ids:
-            return json_error("Source patient is not in your assigned scope.", status=403)
-        target = Patient.objects.filter(id=body.target_patient_id).first()
-        if target is None:
-            return json_error("Patient not found.", status=404)
-        if target.id not in allowed_patient_ids:
-            return json_error("Target patient is not in your assigned scope.", status=403)
-    try:
-        result = merge_temporary_patient_into_confirmed(
-            source_patient_id=patient_id,
-            target_patient_id=body.target_patient_id,
-            source_action=body.source_action,
-            reason=body.reason,
-            actor_user_id=request.user.id,
-        )
-    except ObjectDoesNotExist:
-        return json_error("Patient not found.", status=404)
-    except StateTransitionError as exc:
-        return json_error(str(exc), status=409)
-    except (SourceNotTemporaryError, TargetNotConfirmedError) as exc:
-        return json_error(str(exc), status=422)
-    except InvalidSourceActionError as exc:
-        return json_error(str(exc), status=400)
-    except DomainError as exc:
-        return json_error(str(exc), status=400)
-    return JsonResponse(
-        {
-            "merged": result.merged,
-            "source_patient_id": str(result.source_patient_id),
-            "target_patient_id": str(result.target_patient_id),
-            "moved_entities": {
-                "queue_entries": result.moved_queue_entries,
-                "intake_forms": result.moved_intake_forms,
-                "medical_documents": result.moved_medical_documents,
-            },
-            "identity_alert_closed": result.identity_alert_closed,
-        }
-    )

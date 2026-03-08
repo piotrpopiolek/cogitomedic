@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -46,7 +47,7 @@ class ReceptionServicesTests(TestCase):
             created_by_user=self.reception_user,
         )
 
-    def test_create_or_update_patient_manual_sets_identity_alert_when_missing_doctolib_id(self) -> None:
+    def test_create_or_update_patient_manual_allows_missing_doctolib_id(self) -> None:
         patient = create_or_update_patient_manual(
             first_name="Jan",
             last_name="Nowak",
@@ -57,37 +58,47 @@ class ReceptionServicesTests(TestCase):
             created_or_updated_by_user_id=self.reception_user.id,
         )
 
-        self.assertEqual(patient.identity_status, "TEMPORARY")
-        self.assertIsNotNone(patient.identity_alert_created_at)
-        self.assertIsNotNone(patient.identity_resolution_due_at)
-        self.assertGreaterEqual(patient.identity_resolution_due_at, patient.identity_alert_created_at)
+        self.assertIsNone(patient.doctolib_patient_id)
+        self.assertEqual(patient.first_name, "Jan")
+        self.assertEqual(patient.phone, "+48123123123")
 
-    def test_create_or_update_patient_manual_clears_alert_when_doctolib_id_present(self) -> None:
-        patient = Patient.objects.create(
+    def test_patient_identity_unique_constraint_blocks_duplicate_patient(self) -> None:
+        Patient.objects.create(
             first_name="Anna",
             last_name="Kowalska",
             date_of_birth=date(1985, 5, 5),
             phone="+48999999999",
             email="anna.k@example.com",
-            doctolib_patient_id=None,
-            identity_alert_created_at=timezone.now(),
-            identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
         )
 
-        updated = create_or_update_patient_manual(
-            patient_id=patient.id,
-            first_name=patient.first_name,
-            last_name=patient.last_name,
-            date_of_birth=patient.date_of_birth,
-            phone=patient.phone,
-            email=patient.email,
+        with self.assertRaises(IntegrityError):
+            Patient.objects.create(
+                first_name="Anna",
+                last_name="Kowalska",
+                date_of_birth=date(1985, 5, 5),
+                phone="+48999999999",
+                email="other@example.com",
+            )
+
+    def test_doctolib_patient_id_remains_unique(self) -> None:
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalska",
+            date_of_birth=date(1985, 5, 5),
+            phone="+48999999999",
+            email="anna.k@example.com",
             doctolib_patient_id="DOC-123",
-            created_or_updated_by_user_id=self.reception_user.id,
         )
 
-        self.assertEqual(updated.identity_status, "CONFIRMED")
-        self.assertIsNone(updated.identity_alert_created_at)
-        self.assertIsNone(updated.identity_resolution_due_at)
+        with self.assertRaises(IntegrityError):
+            Patient.objects.create(
+                first_name="Other",
+                last_name="Patient",
+                date_of_birth=date(1990, 1, 1),
+                phone="+48111111111",
+                email="other@example.com",
+                doctolib_patient_id="DOC-123",
+            )
 
     def test_create_queue_entry_auto_assigns_next_position(self) -> None:
         patient_one = Patient.objects.create(

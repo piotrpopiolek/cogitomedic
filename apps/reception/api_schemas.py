@@ -131,8 +131,6 @@ class CreatePatientRequest(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     postal_code: str | None = Field(default=None, max_length=20)
     country_code: str = Field(default="DE", min_length=2, max_length=2)
-    external_source: str | None = Field(default=None, max_length=30)
-    external_source_id: str | None = Field(default=None, max_length=100)
 
     @field_validator("phone", mode="after")
     @classmethod
@@ -153,8 +151,6 @@ class UpdatePatientRequest(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     postal_code: str | None = Field(default=None, max_length=20)
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
-    external_source: str | None = Field(default=None, max_length=30)
-    external_source_id: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
     changed_by_user_id: UUID | None = None
     change_reason: str | None = Field(default=None, max_length=100)
@@ -163,16 +159,6 @@ class UpdatePatientRequest(BaseModel):
     @classmethod
     def phone_format(cls, v: str | None) -> str | None:
         return _validate_phone_format(v)
-
-
-class MergePatientRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    target_patient_id: UUID
-    source_action: str = Field(default="ARCHIVE", pattern="^(ARCHIVE|KEEP_ACTIVE)$")
-    reason: str | None = Field(default=None, max_length=250)
-    actor_user_id: UUID | None = None
-
 
 class PatientsListQuery(BaseModel):
     """Query params for GET /api/v1/patients. Validates date_of_birth format (YYYY-MM-DD)."""
