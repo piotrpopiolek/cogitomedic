@@ -40,6 +40,7 @@ class DailyQueuesApiTests(TestCase):
             code="R1",
             name="Room 1",
         )
+        self.reception_user.clinic_sites.add(self.clinic)
         self.client.login(username="reception-api", password="safe-password")
 
     def test_get_daily_queues_empty(self) -> None:
@@ -304,9 +305,9 @@ class TabletDevicesApiTests(TestCase):
             username="tablet-api",
             email="tablet-api@example.com",
             password="safe-password",
-            "role": "RECEPTION",
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
         self.client.login(username="tablet-api", password="safe-password")
 
     def test_get_tablet_devices_empty(self) -> None:
@@ -394,15 +395,17 @@ class TabletDevicesApiTests(TestCase):
 
 
 class ClinicSitesAndRoomsApiTests(TestCase):
+    """Clinic sites and consulting rooms: create/patch/delete require ADMIN (RECEPTION is read-only in scope)."""
+
     def setUp(self) -> None:
         self.client = Client()
-        self.reception_user = StaffUser.objects.create_user(
+        self.admin_user = StaffUser.objects.create_user(
             username="clinic-api",
             email="clinic-api@example.com",
             password="safe-password",
-            "role": "RECEPTION",
             is_staff=True,
         )
+        assign_group_to_test_user(self.admin_user, "Admin")
         self.client.login(username="clinic-api", password="safe-password")
 
     def test_clinic_sites_create_list_patch_delete(self) -> None:
@@ -513,9 +516,16 @@ class PatientsApiTests(TestCase):
             username="patients-api-user",
             email="patients-api@example.com",
             password="safe-password",
-            "role": "RECEPTION",
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.clinic = ClinicSite.objects.create(code="P1", name="Patients Clinic")
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic,
+            code="PR1",
+            name="Patients Room",
+        )
+        self.reception_user.clinic_sites.add(self.clinic)
         self.client.login(username="patients-api-user", password="safe-password")
 
     def test_get_patients_empty(self) -> None:
@@ -561,6 +571,7 @@ class PatientsApiTests(TestCase):
             email="anna@example.com",
             doctolib_patient_id="DOC-123",
         )
+        patient.clinic_sites.add(self.clinic)
         response = self.client.get(f"/api/v1/patients/{patient.id}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -576,6 +587,7 @@ class PatientsApiTests(TestCase):
             email="anna@example.com",
             doctolib_patient_id="DOC-123",
         )
+        patient.clinic_sites.add(self.clinic)
         response = self.client.patch(
             f"/api/v1/patients/{patient.id}",
             data=json.dumps(
@@ -609,6 +621,7 @@ class PatientsApiTests(TestCase):
             email="anna@example.com",
             doctolib_patient_id="DOC-123",
         )
+        patient.clinic_sites.add(self.clinic)
         PatientContactHistory.objects.create(
             patient=patient,
             phone="+49111111111",
@@ -633,6 +646,7 @@ class PatientsApiTests(TestCase):
             email="anna@example.com",
             doctolib_patient_id="DOC-123",
         )
+        patient.clinic_sites.add(self.clinic)
         response = self.client.patch(
             f"/api/v1/patients/{patient.id}",
             data=json.dumps({"phone": "+49999000111"}),
@@ -666,6 +680,9 @@ class PatientsApiTests(TestCase):
             doctolib_patient_id="DOC-CONF-1",
         )
         clinic = ClinicSite.objects.create(code="M1", name="Merge Clinic")
+        self.reception_user.clinic_sites.add(clinic)
+        source_patient.clinic_sites.add(clinic)
+        target_patient.clinic_sites.add(clinic)
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="MR1", name="Merge Room")
         queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
@@ -722,6 +739,8 @@ class PatientsApiTests(TestCase):
             email="target@example.com",
             doctolib_patient_id="DOC-TARGET",
         )
+        source_patient.clinic_sites.add(self.clinic)
+        target_patient.clinic_sites.add(self.clinic)
 
         response = self.client.post(
             f"/api/v1/patients/{source_patient.id}/merge",
@@ -741,6 +760,7 @@ class PatientsApiTests(TestCase):
             identity_alert_created_at=timezone.now(),
             identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
         )
+        source_patient.clinic_sites.add(self.clinic)
         response = self.client.post(
             f"/api/v1/patients/{source_patient.id}/merge",
             data=json.dumps({"target_patient_id": str(source_patient.id), "source_action": "ARCHIVE"}),
@@ -759,6 +779,7 @@ class PatientsApiTests(TestCase):
             identity_alert_created_at=timezone.now(),
             identity_resolution_due_at=timezone.now() + timezone.timedelta(hours=24),
         )
+        source_patient.clinic_sites.add(self.clinic)
         response = self.client.post(
             f"/api/v1/patients/{source_patient.id}/merge",
             data=json.dumps({"target_patient_id": str(uuid4()), "source_action": "ARCHIVE"}),
@@ -774,9 +795,9 @@ class ListLimitApiTests(TestCase):
             username="listlimit-api",
             email="listlimit-api@example.com",
             password="safe-password",
-            "role": "RECEPTION",
             is_staff=True,
         )
+        assign_group_to_test_user(self.reception_user, "Reception")
         self.client.login(username="listlimit-api", password="safe-password")
 
     def test_tablet_devices_list_uses_default_limit(self) -> None:

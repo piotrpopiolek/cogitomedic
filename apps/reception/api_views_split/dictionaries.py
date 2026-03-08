@@ -10,6 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
     json_error,
     parse_bool_query,
     parse_list_limit,
@@ -59,14 +60,17 @@ def _serialize_consulting_room(room: ConsultingRoom) -> dict:
 
 @require_auth
 def clinic_sites_view(request: HttpRequest) -> JsonResponse:
-    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method == "GET":
         qs = ClinicSite.objects.all().order_by("code")
-        if request.user.is_doctor:
-            qs = qs.filter(id__in=request.user.clinic_sites.all())
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return JsonResponse({"items": []})
+            qs = qs.filter(id__in=scope_ids)
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
             return json_error("Invalid is_active query parameter.", status=400)
@@ -79,6 +83,8 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs[:limit]]})
 
     if request.method == "POST":
+        if not request.user.is_admin_role:
+            return json_error("Only ADMIN can create clinic sites.", status=403)
         try:
             body = CreateClinicSiteRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
@@ -108,8 +114,13 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
     except ObjectDoesNotExist:
         return json_error("Clinic site not found.", status=404)
 
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and site.id not in scope_ids:
+        return json_error("Clinic site is not in your assigned scope.", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_clinic_site(site))
+    if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
+        return json_error("Only ADMIN can update or deactivate clinic sites.", status=403)
     if request.method == "DELETE":
         try:
             site = deactivate_clinic_site(clinic_site_id=clinic_site_id)
@@ -143,14 +154,17 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
 
 @require_auth
 def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
-    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"RECEPTION", "ADMIN"}
+    allowed = {"RECEPTION", "ADMIN", "DOCTOR"} if request.method == "GET" else {"ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
     if request.method == "GET":
         qs = ConsultingRoom.objects.all().order_by("clinic_site_id", "code")
-        if request.user.is_doctor:
-            qs = qs.filter(clinic_site_id__in=request.user.clinic_sites.all())
+        scope_ids = get_scoped_clinic_site_ids(request.user)
+        if scope_ids is not None:
+            if not scope_ids:
+                return JsonResponse({"items": []})
+            qs = qs.filter(clinic_site_id__in=scope_ids)
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:
             qs = qs.filter(clinic_site_id=clinic_site_id)
@@ -166,6 +180,8 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs[:limit]]})
 
     if request.method == "POST":
+        if not request.user.is_admin_role:
+            return json_error("Only ADMIN can create consulting rooms.", status=403)
         try:
             body = CreateConsultingRoomRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
@@ -201,8 +217,13 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
         room = ConsultingRoom.objects.get(id=consulting_room_id)
     except ObjectDoesNotExist:
         return json_error("Consulting room not found.", status=404)
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and room.clinic_site_id not in scope_ids:
+        return json_error("Consulting room is not in your assigned scope.", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_consulting_room(room))
+    if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
+        return json_error("Only ADMIN can update or deactivate consulting rooms.", status=403)
     if request.method == "DELETE":
         try:
             room = deactivate_consulting_room(consulting_room_id=consulting_room_id)
