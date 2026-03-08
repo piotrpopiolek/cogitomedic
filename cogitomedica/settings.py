@@ -60,6 +60,9 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",
 if ENVIRONMENT == "dev" or DEBUG:
     if "web" not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append("web")
+    # Quick Tunnel (trycloudflare.com) – dowolna subdomena
+    if ".trycloudflare.com" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(".trycloudflare.com")
 
 HAS_UNFOLD = importlib.util.find_spec("unfold") is not None
 
@@ -96,6 +99,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "apps.core.middleware.CsrfTrustTunnelOriginMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "apps.core.middleware.TranslationRequestMiddleware",
