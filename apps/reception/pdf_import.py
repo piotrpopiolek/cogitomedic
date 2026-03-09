@@ -68,6 +68,7 @@ class PatientPdfImportErrorCode:
     PATIENT_UNIQUENESS_CONFLICT = "PATIENT_UNIQUENESS_CONFLICT"
     DUPLICATE_VISIT = "DUPLICATE_VISIT"
     MISSING_QUEUE_IMPORT_CONFIG = "MISSING_QUEUE_IMPORT_CONFIG"
+    AMBIGUOUS_CLINIC = "AMBIGUOUS_CLINIC"
 
 
 class PatientPdfImportFailure(DomainError):
@@ -157,12 +158,25 @@ class StoredPdfUpload:
 def _normalize_label(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value or "")
     ascii_value = "".join(char for char in normalized if not unicodedata.combining(char))
+    ascii_value = ascii_value.replace("ß", "ss").replace("ẞ", "SS")
     return re.sub(r"\s+", " ", ascii_value).strip().lower()
+
+
+def _normalize_clinic_name_for_matching(value: str) -> str:
+    normalized = _normalize_label(value)
+    normalized = re.sub(r"^(standort|clinic|klinika|location|site|placowka)\s+", "", normalized)
+    return normalized.strip(" -:|,")
 
 
 def _sanitize_pdf_text(value: str) -> str:
     cleaned = re.sub(r"\(cid:\d+\)", "", value or "")
     return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _strip_date_fragments(value: str) -> str:
+    cleaned = DATE_TOKEN_PATTERN.sub("", value or "")
+    cleaned = TEXTUAL_DATE_PATTERN.sub("", cleaned)
+    return _sanitize_pdf_text(cleaned).strip(" -:|,")
 
 
 def _group_words_into_lines(words: list[ExtractedWord], *, y_tolerance: float = 3.0) -> list[ExtractedLine]:
@@ -354,11 +368,11 @@ class DoctolibPdfParser:
             for pattern in patterns:
                 match = pattern.search(stripped)
                 if match:
-                    clinic_name = match.group("value").strip()
+                    clinic_name = _strip_date_fragments(match.group("value"))
                     if clinic_name:
                         return clinic_name
         for line in reversed(preamble_lines):
-            stripped = DATE_TOKEN_PATTERN.sub("", line.text).strip(" -:|")
+            stripped = _strip_date_fragments(line.text)
             normalized = _normalize_label(stripped)
             if not stripped:
                 continue
@@ -638,8 +652,8 @@ def process_patient_pdf_import_batch(*, batch_id: uuid.UUID, stored_file_path: s
         batch.total_rows = len(parsed_import.rows)
         batch.save(update_fields=["total_rows"])
 
-        clinic_site = ClinicSite.objects.select_related("pdf_import_default_consulting_room").get(
-            name=parsed_import.clinic_name
+        clinic_site = _resolve_clinic_site(
+            parsed_import.clinic_name
         )
         if clinic_site.pdf_import_default_consulting_room_id is None:
             raise PatientPdfImportFailure(
@@ -689,13 +703,6 @@ def process_patient_pdf_import_batch(*, batch_id: uuid.UUID, stored_file_path: s
                 "finished_at",
             ]
         )
-    except ClinicSite.DoesNotExist as exc:
-        _mark_batch_failed(
-            batch=batch,
-            error_code=PatientPdfImportErrorCode.UNKNOWN_CLINIC,
-            message="Clinic from PDF could not be mapped to an existing ClinicSite.",
-        )
-        _ = exc
     except PatientPdfImportFailure as exc:
         _mark_batch_failed(batch=batch, error_code=exc.error_code, message=str(exc))
     except Exception as exc:
@@ -737,6 +744,26 @@ def _get_or_create_import_queue(
             consulting_room_id=clinic_site.pdf_import_default_consulting_room_id,
             shift_code=clinic_site.pdf_import_shift_code,
         )
+
+
+def _resolve_clinic_site(clinic_name: str) -> ClinicSite:
+    normalized_target = _normalize_clinic_name_for_matching(clinic_name)
+    matches = [
+        clinic_site
+        for clinic_site in ClinicSite.objects.select_related("pdf_import_default_consulting_room").all()
+        if _normalize_clinic_name_for_matching(clinic_site.name) == normalized_target
+    ]
+    if not matches:
+        raise PatientPdfImportFailure(
+            PatientPdfImportErrorCode.UNKNOWN_CLINIC,
+            f"Clinic from PDF could not be mapped to an existing ClinicSite: {clinic_name}",
+        )
+    if len(matches) > 1:
+        raise PatientPdfImportFailure(
+            PatientPdfImportErrorCode.AMBIGUOUS_CLINIC,
+            f"Clinic name from PDF matches multiple ClinicSite records: {clinic_name}",
+        )
+    return matches[0]
 
 
 def _create_import_row(
