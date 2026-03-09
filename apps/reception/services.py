@@ -26,6 +26,8 @@ from apps.reception.models import (
 )
 from apps.users.models import StaffUser
 
+CLINIC_SITE_FIELD_NOT_PROVIDED = object()
+
 
 class InvalidLocaleError(DomainError):
     """Raised when locale for tablet session is unsupported."""
@@ -41,9 +43,26 @@ class IssuedSessionResult:
 
 
 @transaction.atomic
-def create_clinic_site(*, code: str, name: str, is_active: bool = True) -> ClinicSite:
+def create_clinic_site(
+    *,
+    code: str,
+    name: str,
+    is_active: bool = True,
+    pdf_import_default_consulting_room_id: uuid.UUID | None = None,
+    pdf_import_shift_code: str = QueueShift.FULL_DAY,
+) -> ClinicSite:
     """Create a clinic site."""
-    return ClinicSite.objects.create(code=code, name=name, is_active=is_active)
+    if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
+        raise DomainError(f"Invalid shift_code: {pdf_import_shift_code}.")
+    if pdf_import_default_consulting_room_id is not None:
+        raise DomainError("Default PDF import consulting room can be configured after clinic creation.")
+    return ClinicSite.objects.create(
+        code=code,
+        name=name,
+        is_active=is_active,
+        pdf_import_default_consulting_room_id=pdf_import_default_consulting_room_id,
+        pdf_import_shift_code=pdf_import_shift_code,
+    )
 
 
 @transaction.atomic
@@ -53,6 +72,8 @@ def update_clinic_site(
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
+    pdf_import_default_consulting_room_id: uuid.UUID | None | object = CLINIC_SITE_FIELD_NOT_PROVIDED,
+    pdf_import_shift_code: str | object = CLINIC_SITE_FIELD_NOT_PROVIDED,
 ) -> ClinicSite:
     """Update mutable clinic site fields."""
     site = ClinicSite.objects.select_for_update().get(id=clinic_site_id)
@@ -66,6 +87,20 @@ def update_clinic_site(
     if is_active is not None:
         site.is_active = is_active
         update_fields.append("is_active")
+    if pdf_import_default_consulting_room_id is not CLINIC_SITE_FIELD_NOT_PROVIDED:
+        if pdf_import_default_consulting_room_id is None:
+            site.pdf_import_default_consulting_room = None
+        else:
+            room = ConsultingRoom.objects.get(id=pdf_import_default_consulting_room_id)
+            if room.clinic_site_id != site.id:
+                raise DomainError("Consulting room does not belong to the given clinic site.")
+            site.pdf_import_default_consulting_room = room
+        update_fields.append("pdf_import_default_consulting_room")
+    if pdf_import_shift_code is not CLINIC_SITE_FIELD_NOT_PROVIDED:
+        if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
+            raise DomainError(f"Invalid shift_code: {pdf_import_shift_code}.")
+        site.pdf_import_shift_code = pdf_import_shift_code
+        update_fields.append("pdf_import_shift_code")
     if not update_fields:
         raise DomainError("Provide at least one field to update.")
     site.save(update_fields=update_fields)

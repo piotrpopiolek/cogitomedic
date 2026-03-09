@@ -94,9 +94,17 @@ class PatientContactHistoryAdmin(UnfoldModelAdmin):
 
 @admin.register(ClinicSite)
 class ClinicSiteAdmin(UnfoldModelAdmin):
-    list_display = ("code", "name", "is_active", "created_at")
+    list_display = (
+        "code",
+        "name",
+        "pdf_import_default_consulting_room",
+        "pdf_import_shift_code",
+        "is_active",
+        "created_at",
+    )
     list_filter = ("is_active",)
     search_fields = ("code", "name")
+    raw_id_fields = ("pdf_import_default_consulting_room",)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

@@ -128,6 +128,26 @@ class ClinicSite(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=20, unique=True, verbose_name=db_gettext_lazy("administration.field_code", "Code"))
     name = models.CharField(max_length=120, verbose_name=db_gettext_lazy("administration.field_name", "Name"))
+    pdf_import_default_consulting_room = models.ForeignKey(
+        "reception.ConsultingRoom",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_import_default_consulting_room",
+            "PDF import default consulting room",
+        ),
+    )
+    pdf_import_shift_code = models.CharField(
+        max_length=20,
+        choices=QueueShift.choices,
+        default=QueueShift.FULL_DAY,
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_import_shift_code",
+            "PDF import shift code",
+        ),
+    )
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"))
 
