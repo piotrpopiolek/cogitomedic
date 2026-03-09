@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import date
+from unittest.mock import patch
 from uuid import uuid4
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
+from django.test.utils import override_settings
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -14,6 +18,8 @@ from apps.reception.models import (
     DailyQueue,
     Patient,
     PatientContactHistory,
+    PatientImportBatch,
+    PatientImportError,
     QueueEntry,
     QueueEntryStatus,
     QueueShift,
@@ -729,3 +735,57 @@ class ListLimitApiTests(TestCase):
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 20)
+
+
+class PatientPdfImportApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="import-api-user",
+            email="import-api@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.client.login(username="import-api-user", password="safe-password")
+
+    def test_post_patient_pdf_import_enqueues_background_task_and_creates_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                with patch("apps.reception.tasks.run_patient_pdf_import") as task_mock:
+                    response = self.client.post(
+                        "/api/v1/imports/patients/pdf",
+                        data={"file": SimpleUploadedFile("patients.pdf", b"%PDF-1.4")},
+                    )
+
+        self.assertEqual(response.status_code, 202)
+        batch = PatientImportBatch.objects.get()
+        self.assertEqual(batch.status, "PROCESSING")
+        task_mock.enqueue.assert_called_once()
+        self.assertEqual(response.json()["batch"]["id"], str(batch.id))
+
+    def test_get_import_batches_detail_and_errors(self) -> None:
+        batch = PatientImportBatch.objects.create(
+            source_file_name="patients.pdf",
+            source_file_sha256="a" * 64,
+            created_by_user=self.reception_user,
+        )
+        PatientImportError.objects.create(
+            batch=batch,
+            row_number=1,
+            error_code="INVALID_ROW_FORMAT",
+            error_message="Broken row",
+            raw_row={"row": "raw"},
+        )
+
+        list_response = self.client.get("/api/v1/imports/batches")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()["items"]), 1)
+
+        detail_response = self.client.get(f"/api/v1/imports/batches/{batch.id}")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["id"], str(batch.id))
+
+        errors_response = self.client.get(f"/api/v1/imports/batches/{batch.id}/errors")
+        self.assertEqual(errors_response.status_code, 200)
+        self.assertEqual(len(errors_response.json()["items"]), 1)

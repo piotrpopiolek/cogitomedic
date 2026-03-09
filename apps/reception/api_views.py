@@ -3,6 +3,12 @@ from apps.reception.api_views_split.devices import (
     tablet_device_heartbeat_view,
     tablet_devices_view,
 )
+from apps.reception.api_views_split.imports import (
+    import_batch_detail_view,
+    import_batch_errors_view,
+    import_batches_view,
+    patient_pdf_import_view,
+)
 from apps.reception.api_views_split.dictionaries import (
     clinic_site_detail_view,
     clinic_sites_view,
@@ -30,8 +36,12 @@ __all__ = [
     "daily_queue_detail_view",
     "daily_queue_entries_view",
     "daily_queues_view",
+    "import_batch_detail_view",
+    "import_batch_errors_view",
+    "import_batches_view",
     "patient_contact_history_view",
     "patient_detail_view",
+    "patient_pdf_import_view",
     "patients_view",
     "queue_entry_detail_view",
     "queue_entry_sessions_view",
