@@ -324,6 +324,52 @@ class PatientPdfParserTests(TestCase):
 
         self.assertEqual(context.exception.error_code, PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT)
 
+    def test_parse_supports_german_doctolib_headers(self) -> None:
+        parser = DoctolibPdfParser()
+        fake_pdf = FakePdfDocument(
+            [
+                FakePdfPage(
+                    text=(
+                        "Standort Kreutzigerstraße\n"
+                        "Montag, 9. März\n"
+                        "Uhrzeit Patient:in Telefon Geburtsdatum E-Mail-Adresse Anschrift Postleitzahl\n"
+                        "08:30 Anna Nowak +49111111111 01.01.1990 anna@example.com Main 1 10115"
+                    ),
+                    words=[
+                        {"text": "Standort", "x0": 10, "x1": 45, "top": 10, "bottom": 12},
+                        {"text": "Kreutzigerstraße", "x0": 50, "x1": 120, "top": 10, "bottom": 12},
+                        {"text": "Montag,", "x0": 10, "x1": 45, "top": 20, "bottom": 22},
+                        {"text": "9.", "x0": 50, "x1": 58, "top": 20, "bottom": 22},
+                        {"text": "März", "x0": 62, "x1": 84, "top": 20, "bottom": 22},
+                        {"text": "Uhrzeit", "x0": 10, "x1": 45, "top": 30, "bottom": 32},
+                        {"text": "Patient:in", "x0": 80, "x1": 130, "top": 30, "bottom": 32},
+                        {"text": "Telefon", "x0": 200, "x1": 240, "top": 30, "bottom": 32},
+                        {"text": "Geburtsdatum", "x0": 300, "x1": 365, "top": 30, "bottom": 32},
+                        {"text": "E-Mail-Adresse", "x0": 430, "x1": 505, "top": 30, "bottom": 32},
+                        {"text": "Anschrift", "x0": 520, "x1": 565, "top": 30, "bottom": 32},
+                        {"text": "Postleitzahl", "x0": 640, "x1": 700, "top": 30, "bottom": 32},
+                        {"text": "08:30", "x0": 10, "x1": 35, "top": 40, "bottom": 42},
+                        {"text": "Anna", "x0": 80, "x1": 100, "top": 40, "bottom": 42},
+                        {"text": "Nowak", "x0": 105, "x1": 135, "top": 40, "bottom": 42},
+                        {"text": "+49111111111", "x0": 200, "x1": 255, "top": 40, "bottom": 42},
+                        {"text": "01.01.1990", "x0": 300, "x1": 350, "top": 40, "bottom": 42},
+                        {"text": "anna@example.com", "x0": 430, "x1": 500, "top": 40, "bottom": 42},
+                        {"text": "Main", "x0": 520, "x1": 545, "top": 40, "bottom": 42},
+                        {"text": "1", "x0": 548, "x1": 552, "top": 40, "bottom": 42},
+                        {"text": "10115", "x0": 640, "x1": 665, "top": 40, "bottom": 42},
+                    ],
+                )
+            ]
+        )
+
+        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
+            parsed = parser.parse("dummy.pdf")
+
+        self.assertEqual(parsed.clinic_name, "Kreutzigerstraße")
+        self.assertEqual(parsed.import_date.month, 3)
+        self.assertEqual(parsed.import_date.day, 9)
+        self.assertEqual(len(parsed.rows), 1)
+
 
 class PatientPdfImportServiceTests(TestCase):
     def setUp(self) -> None:

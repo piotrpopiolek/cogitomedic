@@ -35,6 +35,24 @@ from apps.reception.services import (
 
 TIME_PATTERN = re.compile(r"^\d{1,2}:\d{2}$")
 DATE_TOKEN_PATTERN = re.compile(r"\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b")
+TEXTUAL_DATE_PATTERN = re.compile(
+    r"\b(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\s*,?\s*(?P<day>\d{1,2})\.\s*(?P<month>[a-zA-ZäöüÄÖÜ]+)(?:\s*(?P<year>\d{4}))?\b",
+    re.IGNORECASE,
+)
+GERMAN_MONTHS = {
+    "januar": 1,
+    "februar": 2,
+    "marz": 3,
+    "april": 4,
+    "mai": 5,
+    "juni": 6,
+    "juli": 7,
+    "august": 8,
+    "september": 9,
+    "oktober": 10,
+    "november": 11,
+    "dezember": 12,
+}
 
 
 class PatientPdfImportErrorCode:
@@ -206,18 +224,26 @@ class PdfTextExtractor:
 
 class DoctolibPdfLayoutDetector:
     REQUIRED_MARKERS = (
-        "godzina",
+        ("godzina", "uhrzeit"),
         "telefon",
-        "email",
-        "adres",
-        "kod pocztowy",
-        "data urodzenia",
+        ("email", "e-mail-adresse"),
+        ("adres", "anschrift"),
+        ("kod pocztowy", "postleitzahl"),
+        ("data urodzenia", "geburtsdatum"),
     )
 
     def validate(self, document: ExtractedPdfDocument) -> None:
         normalized_text = _normalize_label(document.full_text)
-        has_required_name_header = "imie nazwisko" in normalized_text
-        if has_required_name_header and all(marker in normalized_text for marker in self.REQUIRED_MARKERS):
+        has_required_name_header = any(
+            marker in normalized_text
+            for marker in ("imie nazwisko", "patient:in", "patientin")
+        )
+        if has_required_name_header and all(
+            any(option in normalized_text for option in marker)
+            if isinstance(marker, tuple)
+            else marker in normalized_text
+            for marker in self.REQUIRED_MARKERS
+        ):
             return
         raise PatientPdfImportFailure(
             PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT,
@@ -252,7 +278,10 @@ class DoctolibPdfParser:
             normalized_line = _normalize_label(line.text)
             if not normalized_line:
                 continue
-            if "imie nazwisko" in normalized_line and "telefon" in normalized_line:
+            if (
+                ("imie nazwisko" in normalized_line or "patient:in" in normalized_line or "patientin" in normalized_line)
+                and "telefon" in normalized_line
+            ):
                 continue
             if not line.words or not TIME_PATTERN.fullmatch(line.words[0].text.strip()):
                 continue
@@ -280,13 +309,13 @@ class DoctolibPdfParser:
         for index, line in enumerate(lines):
             normalized = _normalize_label(line.text)
             if (
-                "godzina" in normalized
-                and "imie nazwisko" in normalized
+                ("godzina" in normalized or "uhrzeit" in normalized)
+                and ("imie nazwisko" in normalized or "patient:in" in normalized or "patientin" in normalized)
                 and "telefon" in normalized
-                and "data urodzenia" in normalized
-                and "email" in normalized
-                and "adres" in normalized
-                and "kod pocztowy" in normalized
+                and ("data urodzenia" in normalized or "geburtsdatum" in normalized)
+                and ("email" in normalized or "e-mail-adresse" in normalized)
+                and ("adres" in normalized or "anschrift" in normalized)
+                and ("kod pocztowy" in normalized or "postleitzahl" in normalized)
             ):
                 return index
         raise PatientPdfImportFailure(
@@ -298,6 +327,13 @@ class DoctolibPdfParser:
         for line in preamble_lines:
             if match := DATE_TOKEN_PATTERN.search(line.text):
                 return _parse_date_value(match.group(0))
+            normalized_line = _normalize_label(line.text)
+            if textual_match := TEXTUAL_DATE_PATTERN.search(normalized_line):
+                return _parse_textual_date_value(
+                    day=textual_match.group("day"),
+                    month=textual_match.group("month"),
+                    year=textual_match.group("year"),
+                )
         raise PatientPdfImportFailure(
             PatientPdfImportErrorCode.MISSING_IMPORT_DATE,
             "Import date was not found in the PDF header.",
@@ -305,7 +341,7 @@ class DoctolibPdfParser:
 
     def _extract_clinic_name(self, preamble_lines: list[ExtractedLine]) -> str:
         patterns = (
-            re.compile(r"(?:clinic|klinika|standort|location)\s*[:\-]\s*(?P<value>.+)$", re.I),
+            re.compile(r"(?:clinic|klinika|standort|location)\s*[:\-]?\s*(?P<value>.+)$", re.I),
             re.compile(r"(?:site|placowka)\s*[:\-]\s*(?P<value>.+)$", re.I),
         )
         for line in preamble_lines:
@@ -333,19 +369,19 @@ class DoctolibPdfParser:
         header_starts: list[tuple[str, float]] = []
         for word in header_line.words:
             label = _normalize_label(word.text)
-            if label == "godzina":
+            if label in {"godzina", "uhrzeit"}:
                 header_starts.append(("appointment_time_raw", word.x0))
-            elif label in {"imie", "imie nazwisko"}:
+            elif label in {"imie", "imie nazwisko"} or label.startswith("patient"):
                 header_starts.append(("full_name_raw", word.x0))
             elif label == "telefon":
                 header_starts.append(("phone_raw", word.x0))
-            elif label == "data":
+            elif label in {"data", "geburtsdatum"}:
                 header_starts.append(("date_of_birth_raw", word.x0))
-            elif label == "email":
+            elif label in {"email", "e-mail-adresse"}:
                 header_starts.append(("email_raw", word.x0))
-            elif label == "adres":
+            elif label in {"adres", "anschrift"}:
                 header_starts.append(("address_raw", word.x0))
-            elif label == "kod":
+            elif label in {"kod", "postleitzahl"}:
                 header_starts.append(("postal_code_raw", word.x0))
         expected_order = [
             "appointment_time_raw",
@@ -399,6 +435,18 @@ def _parse_date_value(value: str) -> date:
         PatientPdfImportErrorCode.INVALID_DATE_OF_BIRTH,
         f"Invalid date value: {value}",
     )
+
+
+def _parse_textual_date_value(*, day: str, month: str, year: str | None) -> date:
+    month_key = _normalize_label(month)
+    month_number = GERMAN_MONTHS.get(month_key)
+    if month_number is None:
+        raise PatientPdfImportFailure(
+            PatientPdfImportErrorCode.INVALID_DATE_OF_BIRTH,
+            f"Invalid textual date month: {month}",
+        )
+    parsed_year = int(year) if year else timezone.localdate().year
+    return date(parsed_year, month_number, int(day))
 
 
 def _parse_time_value(value: str) -> time:
