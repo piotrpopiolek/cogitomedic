@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.http import HttpRequest
+from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.urls import reverse
@@ -15,6 +19,7 @@ except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
 from apps.core.translation_service import db_gettext_lazy
+from apps.reception.pdf_import import enqueue_patient_pdf_import
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -27,6 +32,19 @@ from apps.reception.models import (
     QueueEntry,
     TabletDevice,
 )
+
+
+class PatientPdfImportAdminForm(forms.Form):
+    file = forms.FileField(
+        label="Plik PDF",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "accept": ".pdf,application/pdf",
+                "class": "hidden",
+            }
+        ),
+    )
+    next = forms.CharField(widget=forms.HiddenInput(), required=False)
 
 
 @admin.register(Patient)
@@ -137,6 +155,7 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
 
 @admin.register(DailyQueue)
 class DailyQueueAdmin(UnfoldModelAdmin):
+    change_list_template = "admin/reception/dailyqueue/change_list.html"
     list_display = (
         "queue_date",
         "clinic_site",
@@ -164,8 +183,21 @@ class DailyQueueAdmin(UnfoldModelAdmin):
                 self.admin_site.admin_view(self.master_detail_view),
                 name="reception_dailyqueue_master_detail",
             ),
+            path(
+                "import-pdf/",
+                self.admin_site.admin_view(self.import_pdf_view),
+                name="reception_dailyqueue_import_pdf",
+            ),
         ]
         return custom_urls + urls
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["import_pdf_url"] = "{}?{}".format(
+            reverse("admin:reception_dailyqueue_import_pdf"),
+            urlencode({"next": request.get_full_path()}),
+        )
+        return super().changelist_view(request, extra_context=extra_context)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -194,6 +226,44 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         return TemplateResponse(
             request,
             "admin/reception/dailyqueue/master_detail.html",
+            context,
+        )
+
+    def import_pdf_view(self, request: HttpRequest):
+        if not (request.user.is_authenticated and (request.user.is_admin_role or request.user.is_reception or request.user.is_superuser)):
+            raise PermissionDenied
+
+        next_url = request.GET.get("next") or request.POST.get("next") or reverse("admin:reception_dailyqueue_changelist")
+        if request.method == "POST":
+            form = PatientPdfImportAdminForm(request.POST, request.FILES)
+            if form.is_valid():
+                batch = enqueue_patient_pdf_import(
+                    uploaded_file=form.cleaned_data["file"],
+                    created_by_user=request.user,
+                )
+                batch_url = reverse("admin:reception_patientimportbatch_change", args=[batch.id])
+                self.message_user(
+                    request,
+                    format_html(
+                        'Import PDF został zakolejkowany. <a href="{}">Zobacz batch</a>.',
+                        batch_url,
+                    ),
+                    level=messages.SUCCESS,
+                )
+                return redirect(form.cleaned_data["next"] or reverse("admin:reception_dailyqueue_changelist"))
+        else:
+            form = PatientPdfImportAdminForm(initial={"next": next_url})
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "title": "Import pacjentów z PDF",
+            "form": form,
+            "next_url": next_url,
+        }
+        return TemplateResponse(
+            request,
+            "admin/reception/dailyqueue/import_pdf.html",
             context,
         )
 

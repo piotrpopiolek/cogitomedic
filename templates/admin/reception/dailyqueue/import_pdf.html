@@ -1,0 +1,74 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-8">
+    <div class="max-w-3xl">
+        <h1 class="text-2xl font-semibold mb-2">{{ title }}</h1>
+        <p class="text-sm text-gray-500 mb-6">
+            Wgraj tekstowy plik PDF z eksportem Doctolib. Import uruchomi się w tle i utworzy nowy batch.
+        </p>
+
+        <form method="post" enctype="multipart/form-data" class="bg-white rounded-default border border-base-200 p-6 dark:bg-base-900 dark:border-base-800">
+            {% csrf_token %}
+            {{ form.next }}
+
+            <div class="mb-4">
+                <label for="{{ form.file.id_for_label }}" class="block text-sm font-medium mb-2">
+                    {{ form.file.label }}
+                </label>
+                {{ form.file }}
+                <div class="flex items-center gap-3">
+                    <button
+                        id="open-file-picker"
+                        type="button"
+                        class="inline-flex items-center rounded-default border border-base-300 px-4 py-2 text-sm font-medium hover:bg-base-100 dark:border-base-700 dark:hover:bg-base-800"
+                    >
+                        Wybierz plik
+                    </button>
+                    <span id="selected-file-name" class="text-sm text-gray-500">Nie wybrano pliku.</span>
+                </div>
+                {% if form.file.errors %}
+                    <div class="mt-2 text-sm text-red-600">
+                        {{ form.file.errors }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="text-sm text-gray-500 mb-6">
+                Uwaga: klinika z PDF musi być zmapowana po nazwie do `ClinicSite`, a klinika musi mieć ustawiony domyślny gabinet dla importów PDF.
+            </div>
+
+            <div class="flex gap-3">
+                {% component "unfold/components/button.html" with submit=1 variant="primary" %}
+                    Uruchom import
+                {% endcomponent %}
+                {% component "unfold/components/button.html" with href=next_url variant="default" %}
+                    Anuluj
+                {% endcomponent %}
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function () {
+        var fileInput = document.getElementById("{{ form.file.id_for_label }}");
+        var triggerButton = document.getElementById("open-file-picker");
+        var fileName = document.getElementById("selected-file-name");
+
+        if (!fileInput || !triggerButton || !fileName) {
+            return;
+        }
+
+        triggerButton.addEventListener("click", function () {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener("change", function () {
+            fileName.textContent = fileInput.files && fileInput.files.length
+                ? fileInput.files[0].name
+                : "Nie wybrano pliku.";
+        });
+    })();
+</script>
+{% endblock %}
