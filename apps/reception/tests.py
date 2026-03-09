@@ -27,6 +27,7 @@ from apps.reception.models import (
 from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.pdf_import import (
     DoctolibPdfParser,
+    normalize_patient_row,
     ParsedPatientRow,
     ParsedPdfImport,
     PatientPdfImportErrorCode,
@@ -369,6 +370,28 @@ class PatientPdfParserTests(TestCase):
         self.assertEqual(parsed.import_date.month, 3)
         self.assertEqual(parsed.import_date.day, 9)
         self.assertEqual(len(parsed.rows), 1)
+
+    def test_normalize_patient_row_handles_honorific_age_and_missing_address(self) -> None:
+        normalized = normalize_patient_row(
+            parsed_row=ParsedPatientRow(
+                row_number=1,
+                appointment_time_raw="13:00",
+                full_name_raw="Herr Patient Christian",
+                phone_raw="0176(cid:182)2222222",
+                date_of_birth_raw="01.03.1960 (66 Jahre)",
+                email_raw="patient@example.com",
+                address_raw="",
+                postal_code_raw="",
+            ),
+            import_date=date(2026, 3, 9),
+        )
+
+        self.assertEqual(normalized.first_name, "Christian")
+        self.assertEqual(normalized.last_name, "PATIENT")
+        self.assertEqual(normalized.phone, "01762222222")
+        self.assertEqual(normalized.date_of_birth, date(1960, 3, 1))
+        self.assertIsNone(normalized.street)
+        self.assertIsNone(normalized.postal_code)
 
 
 class PatientPdfImportServiceTests(TestCase):
