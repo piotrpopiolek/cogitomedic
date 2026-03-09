@@ -33,6 +33,7 @@ from apps.reception.pdf_import import (
     PatientPdfImportErrorCode,
     PatientPdfImportFailure,
     process_patient_pdf_import_batch,
+    _resolve_clinic_site,
 )
 from apps.reception.services import (
     create_or_update_patient_manual,
@@ -371,12 +372,54 @@ class PatientPdfParserTests(TestCase):
         self.assertEqual(parsed.import_date.day, 9)
         self.assertEqual(len(parsed.rows), 1)
 
+    def test_parse_strips_textual_date_from_clinic_name(self) -> None:
+        parser = DoctolibPdfParser()
+        fake_pdf = FakePdfDocument(
+            [
+                FakePdfPage(
+                    text=(
+                        "Standort Kreutzigerstraße Montag, 9. März\n"
+                        "Uhrzeit Patient:in Telefon Geburtsdatum E-Mail-Adresse Anschrift Postleitzahl\n"
+                        "08:30 Anna Nowak +49111111111 01.01.1990 anna@example.com Main 1 10115"
+                    ),
+                    words=[
+                        {"text": "Standort", "x0": 10, "x1": 45, "top": 10, "bottom": 12},
+                        {"text": "Kreutzigerstraße", "x0": 50, "x1": 120, "top": 10, "bottom": 12},
+                        {"text": "Montag,", "x0": 150, "x1": 185, "top": 10, "bottom": 12},
+                        {"text": "9.", "x0": 190, "x1": 198, "top": 10, "bottom": 12},
+                        {"text": "März", "x0": 202, "x1": 224, "top": 10, "bottom": 12},
+                        {"text": "Uhrzeit", "x0": 10, "x1": 45, "top": 30, "bottom": 32},
+                        {"text": "Patient:in", "x0": 80, "x1": 130, "top": 30, "bottom": 32},
+                        {"text": "Telefon", "x0": 200, "x1": 240, "top": 30, "bottom": 32},
+                        {"text": "Geburtsdatum", "x0": 300, "x1": 365, "top": 30, "bottom": 32},
+                        {"text": "E-Mail-Adresse", "x0": 430, "x1": 505, "top": 30, "bottom": 32},
+                        {"text": "Anschrift", "x0": 520, "x1": 565, "top": 30, "bottom": 32},
+                        {"text": "Postleitzahl", "x0": 640, "x1": 700, "top": 30, "bottom": 32},
+                        {"text": "08:30", "x0": 10, "x1": 35, "top": 40, "bottom": 42},
+                        {"text": "Anna", "x0": 80, "x1": 100, "top": 40, "bottom": 42},
+                        {"text": "Nowak", "x0": 105, "x1": 135, "top": 40, "bottom": 42},
+                        {"text": "+49111111111", "x0": 200, "x1": 255, "top": 40, "bottom": 42},
+                        {"text": "01.01.1990", "x0": 300, "x1": 350, "top": 40, "bottom": 42},
+                        {"text": "anna@example.com", "x0": 430, "x1": 500, "top": 40, "bottom": 42},
+                        {"text": "Main", "x0": 520, "x1": 545, "top": 40, "bottom": 42},
+                        {"text": "1", "x0": 548, "x1": 552, "top": 40, "bottom": 42},
+                        {"text": "10115", "x0": 640, "x1": 665, "top": 40, "bottom": 42},
+                    ],
+                )
+            ]
+        )
+
+        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
+            parsed = parser.parse("dummy.pdf")
+
+        self.assertEqual(parsed.clinic_name, "Kreutzigerstraße")
+
     def test_normalize_patient_row_handles_honorific_age_and_missing_address(self) -> None:
         normalized = normalize_patient_row(
             parsed_row=ParsedPatientRow(
                 row_number=1,
                 appointment_time_raw="13:00",
-                full_name_raw="Herr Patient Christian",
+                full_name_raw="Herr PATIENT Christian",
                 phone_raw="0176(cid:182)2222222",
                 date_of_birth_raw="01.03.1960 (66 Jahre)",
                 email_raw="patient@example.com",
@@ -498,6 +541,20 @@ class PatientPdfImportServiceTests(TestCase):
             PatientImportError.objects.get(batch=second_batch).error_code,
             PatientPdfImportErrorCode.DUPLICATE_VISIT,
         )
+
+    def test_resolve_clinic_site_matches_normalized_name(self) -> None:
+        clinic = ClinicSite.objects.create(code="KREU", name="Standort   Kreutzigerstrasse")
+
+        resolved = _resolve_clinic_site("Standort Kreutzigerstraße")
+
+        self.assertEqual(resolved.id, clinic.id)
+
+    def test_resolve_clinic_site_matches_without_standort_prefix(self) -> None:
+        clinic = ClinicSite.objects.create(code="KREU2", name="Standort Kreutzigerstraße")
+
+        resolved = _resolve_clinic_site("Kreutzigerstraße")
+
+        self.assertEqual(resolved.id, clinic.id)
 
 
 class DailyQueueAdminImportTests(TestCase):
