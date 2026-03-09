@@ -160,6 +160,11 @@ def _normalize_label(value: str) -> str:
     return re.sub(r"\s+", " ", ascii_value).strip().lower()
 
 
+def _sanitize_pdf_text(value: str) -> str:
+    cleaned = re.sub(r"\(cid:\d+\)", "", value or "")
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 def _group_words_into_lines(words: list[ExtractedWord], *, y_tolerance: float = 3.0) -> list[ExtractedLine]:
     if not words:
         return []
@@ -415,8 +420,18 @@ class DoctolibPdfParser:
                 if word.x0 >= start_x0 and (end_x0 is None or word.x0 < end_x0):
                     values[column_name].append(word.text.strip())
                     break
-        parsed_values = {key: " ".join(part for part in parts if part).strip() for key, parts in values.items()}
-        if not all(parsed_values.values()):
+        parsed_values = {
+            key: _sanitize_pdf_text(" ".join(part for part in parts if part).strip())
+            for key, parts in values.items()
+        }
+        required_columns = {
+            "appointment_time_raw",
+            "full_name_raw",
+            "phone_raw",
+            "date_of_birth_raw",
+            "email_raw",
+        }
+        if any(not parsed_values[column_name] for column_name in required_columns):
             raise PatientPdfImportFailure(
                 PatientPdfImportErrorCode.INVALID_ROW_FORMAT,
                 f"Could not parse all columns for line: {line.text}",
@@ -425,7 +440,9 @@ class DoctolibPdfParser:
 
 
 def _parse_date_value(value: str) -> date:
-    normalized = value.strip()
+    normalized = _sanitize_pdf_text(value)
+    if match := DATE_TOKEN_PATTERN.search(normalized):
+        normalized = match.group(0)
     for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
         try:
             return datetime.strptime(normalized, fmt).date()
@@ -460,12 +477,12 @@ def _parse_time_value(value: str) -> time:
 
 
 def normalize_patient_row(*, parsed_row: ParsedPatientRow, import_date: date) -> NormalizedPatientRow:
-    name_parts = [part for part in parsed_row.full_name_raw.split() if part]
-    if len(name_parts) != 2:
+    first_name, last_name = _split_full_name(parsed_row.full_name_raw)
+    if not first_name or not last_name:
         raise PatientPdfImportRowFailure(
             row_number=parsed_row.row_number,
             error_code=PatientPdfImportErrorCode.AMBIGUOUS_FULL_NAME,
-            message=f"Expected exactly two name parts, got: {parsed_row.full_name_raw}",
+            message=f"Could not split full name: {parsed_row.full_name_raw}",
             raw_row=asdict(parsed_row),
         )
 
@@ -492,7 +509,7 @@ def normalize_patient_row(*, parsed_row: ParsedPatientRow, import_date: date) ->
             raw_row=asdict(parsed_row),
         ) from exc
 
-    email = parsed_row.email_raw.strip().lower()
+    email = _sanitize_pdf_text(parsed_row.email_raw).lower()
     if not email:
         raise PatientPdfImportRowFailure(
             row_number=parsed_row.row_number,
@@ -513,24 +530,52 @@ def normalize_patient_row(*, parsed_row: ParsedPatientRow, import_date: date) ->
     return NormalizedPatientRow(
         row_number=parsed_row.row_number,
         appointment_time=appointment_time,
-        first_name=name_parts[0],
-        last_name=name_parts[1],
+        first_name=first_name,
+        last_name=last_name,
         phone=phone,
         date_of_birth=date_of_birth,
         email=email,
-        street=parsed_row.address_raw.strip() or None,
-        postal_code=parsed_row.postal_code_raw.strip() or None,
+        street=_sanitize_pdf_text(parsed_row.address_raw) or None,
+        postal_code=_sanitize_pdf_text(parsed_row.postal_code_raw) or None,
         city=None,
         country_code="DE",
     )
 
 
 def _normalize_phone(value: str) -> str:
-    stripped = value.strip()
+    stripped = _sanitize_pdf_text(value)
     digits_only = re.sub(r"[^\d]", "", stripped)
     if stripped.startswith("+"):
         return f"+{digits_only}"
     return digits_only
+
+
+def _split_full_name(value: str) -> tuple[str | None, str | None]:
+    honorifics = {"herr", "frau", "mr", "mrs", "ms"}
+    raw_parts = [_sanitize_pdf_text(part) for part in value.split() if _sanitize_pdf_text(part)]
+    parts = [part for part in raw_parts if _normalize_label(part) not in honorifics]
+    if len(parts) < 2:
+        return None, None
+    if _looks_like_last_name_first(parts):
+        first_name = parts[-1]
+        last_name = " ".join(parts[:-1])
+        return first_name, last_name
+    first_name = parts[0]
+    last_name = " ".join(parts[1:])
+    return first_name, last_name
+
+
+def _looks_like_last_name_first(parts: list[str]) -> bool:
+    if len(parts) < 2:
+        return False
+    leading_parts = parts[:-1]
+    trailing_part = parts[-1]
+    return all(_is_likely_surname_token(part) for part in leading_parts) and not _is_likely_surname_token(trailing_part)
+
+
+def _is_likely_surname_token(value: str) -> bool:
+    letters_only = re.sub(r"[^A-Za-zÄÖÜäöüß-]", "", value)
+    return bool(letters_only) and letters_only.upper() == letters_only
 
 
 def _json_safe(value: Any) -> Any:
