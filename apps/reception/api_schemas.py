@@ -82,6 +82,8 @@ class CreateClinicSiteRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
     name: str = Field(..., min_length=1, max_length=120)
     is_active: bool = True
+    pdf_import_default_consulting_room_id: UUID | None = None
+    pdf_import_shift_code: str = "FULL_DAY"
 
 
 class UpdateClinicSiteRequest(BaseModel):
@@ -90,6 +92,8 @@ class UpdateClinicSiteRequest(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=20)
     name: str | None = Field(default=None, min_length=1, max_length=120)
     is_active: bool | None = None
+    pdf_import_default_consulting_room_id: UUID | None = None
+    pdf_import_shift_code: str | None = None
 
 
 class CreateConsultingRoomRequest(BaseModel):

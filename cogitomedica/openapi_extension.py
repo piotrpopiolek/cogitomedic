@@ -361,6 +361,54 @@ COGITO_PATHS = {
         "delete": {"summary": "Deactivate consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
     },
+    f"{PREFIX}/imports/patients/pdf": {
+        "post": {
+            "summary": "Enqueue patient PDF import",
+            "tags": ["Reception – Imports"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["file"],
+                            "properties": {
+                                "file": {
+                                    "type": "string",
+                                    "format": "binary",
+                                }
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {"202": {"description": "Import batch enqueued"}},
+        },
+    },
+    f"{PREFIX}/imports/batches": {
+        "get": {
+            "summary": "List import batches",
+            "tags": ["Reception – Imports"],
+            "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer"}}],
+            "responses": {"200": {"description": "Items"}},
+        },
+    },
+    f"{PREFIX}/imports/batches/{{batch_id}}": {
+        "get": {
+            "summary": "Get import batch",
+            "tags": ["Reception – Imports"],
+            "parameters": [{"name": "batch_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/imports/batches/{{batch_id}}/errors": {
+        "get": {
+            "summary": "List import batch errors",
+            "tags": ["Reception – Imports"],
+            "parameters": [{"name": "batch_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
+        },
+    },
     f"{PREFIX}/patients": {
         "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items and pagination"}},
         },

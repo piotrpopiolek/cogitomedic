@@ -817,22 +817,25 @@
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
 
-### 2.11 Imports (manual, scheduled, emergency)
+### 2.11 Imports (manual PDF, scheduled, emergency)
 
-- **POST** `/imports/patients`
-  - Description: Upload `.csv/.xlsx` for daily import (US-003/011/015).
-  - Query params: `mode` (`daily` or `scheduled`).
+- **POST** `/imports/patients/pdf`
+  - Description: Upload a text-based Doctolib PDF for daily patient import. The request enqueues a background job on Django Tasks (`imports` queue).
+  - Query params: none.
   - Request: `multipart/form-data` with file.
   - Response JSON:
     ```json
     {
-      "batch_id": "uuid",
-      "status": "PROCESSING",
-      "source_system": "DOCTOLIB_EXPORT"
+      "batch": {
+        "id": "uuid",
+        "status": "PROCESSING",
+        "source_system": "DOCTOLIB_EXPORT"
+      },
+      "message": "Patient PDF import enqueued."
     }
     ```
   - Success: `202 ACCEPTED`.
-  - Errors: `400 INVALID_FILE_FORMAT`, `422 TEMPLATE_MISMATCH`, `403 FORBIDDEN`.
+  - Errors: `400 INVALID_FILE_FORMAT`, `403 FORBIDDEN`.
 
 - **POST** `/imports/patients/emergency`
   - Description: Emergency template import path (US-017).
@@ -844,7 +847,7 @@
 
 - **GET** `/imports/batches`
   - Description: List import batches.
-  - Query params: `status`, `source_system`, `import_type`, `created_from`, `created_to`.
+  - Query params: `limit`.
   - Response JSON: batch list.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
@@ -855,7 +858,7 @@
     ```json
     {
       "id": "uuid",
-      "source_file_name": "export_20260216.csv",
+      "source_file_name": "export_20260308.pdf",
       "status": "COMPLETED_WITH_ERRORS",
       "total_rows": 120,
       "inserted_rows": 115,
@@ -868,7 +871,7 @@
 
 - **GET** `/imports/batches/{id}/errors`
   - Description: Row-level error report.
-  - Query params: pagination.
+  - Query params: none.
   - Response JSON:
     ```json
     {

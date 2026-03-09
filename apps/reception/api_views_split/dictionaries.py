@@ -27,6 +27,7 @@ from apps.reception.api_schemas import (
 )
 from apps.reception.models import ClinicSite, ConsultingRoom
 from apps.reception.services import (
+    CLINIC_SITE_FIELD_NOT_PROVIDED,
     create_clinic_site,
     create_consulting_room,
     deactivate_clinic_site,
@@ -42,6 +43,12 @@ def _serialize_clinic_site(site: ClinicSite) -> dict:
         "id": str(site.id),
         "code": site.code,
         "name": site.name,
+        "pdf_import_default_consulting_room_id": (
+            str(site.pdf_import_default_consulting_room_id)
+            if site.pdf_import_default_consulting_room_id
+            else None
+        ),
+        "pdf_import_shift_code": site.pdf_import_shift_code,
         "is_active": site.is_active,
         "created_at": site.created_at.isoformat(),
     }
@@ -94,9 +101,17 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
-            site = create_clinic_site(code=body.code, name=body.name, is_active=body.is_active)
+            site = create_clinic_site(
+                code=body.code,
+                name=body.name,
+                is_active=body.is_active,
+                pdf_import_default_consulting_room_id=body.pdf_import_default_consulting_room_id,
+                pdf_import_shift_code=body.pdf_import_shift_code,
+            )
         except IntegrityError:
             return json_error("Clinic site code already exists.", status=409)
+        except DomainError as exc:
+            return json_error(str(exc), status=400)
         return JsonResponse(_serialize_clinic_site(site), status=201)
 
     return json_error("Method not allowed.", status=405)
@@ -136,12 +151,23 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    fields_set = body.model_fields_set
     try:
         site = update_clinic_site(
             clinic_site_id=clinic_site_id,
             code=body.code,
             name=body.name,
             is_active=body.is_active,
+            pdf_import_default_consulting_room_id=(
+                body.pdf_import_default_consulting_room_id
+                if "pdf_import_default_consulting_room_id" in fields_set
+                else CLINIC_SITE_FIELD_NOT_PROVIDED
+            ),
+            pdf_import_shift_code=(
+                body.pdf_import_shift_code
+                if "pdf_import_shift_code" in fields_set
+                else CLINIC_SITE_FIELD_NOT_PROVIDED
+            ),
         )
     except ObjectDoesNotExist:
         return json_error("Clinic site not found.", status=404)

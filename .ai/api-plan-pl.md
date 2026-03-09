@@ -823,22 +823,25 @@
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`.
 
-### 2.11 Importy (manualny, harmonogram, awaryjny)
+### 2.11 Importy (manualny PDF, harmonogram, awaryjny)
 
-- **POST** `/imports/patients`
-  - Opis: Upload `.csv/.xlsx` dla importu dziennego (US-003/011/015).
-  - Parametry zapytania: `mode` (`daily` lub `scheduled`).
+- **POST** `/imports/patients/pdf`
+  - Opis: Upload tekstowego PDF Doctolib dla dziennego importu pacjentów. Request jedynie kolejkuje zadanie w tle w Django Tasks (`imports`).
+  - Parametry zapytania: brak.
   - Request: `multipart/form-data` z plikiem.
   - Response JSON:
     ```json
     {
-      "batch_id": "uuid",
-      "status": "PROCESSING",
-      "source_system": "DOCTOLIB_EXPORT"
+      "batch": {
+        "id": "uuid",
+        "status": "PROCESSING",
+        "source_system": "DOCTOLIB_EXPORT"
+      },
+      "message": "Patient PDF import enqueued."
     }
     ```
   - Kody sukcesu: `202 ACCEPTED`.
-  - Kody błędów: `400 INVALID_FILE_FORMAT`, `422 TEMPLATE_MISMATCH`, `403 FORBIDDEN`.
+  - Kody błędów: `400 INVALID_FILE_FORMAT`, `403 FORBIDDEN`.
 
 - **POST** `/imports/patients/emergency`
   - Opis: Ścieżka awaryjnego importu ze sztywnego szablonu (US-017).
@@ -850,7 +853,7 @@
 
 - **GET** `/imports/batches`
   - Opis: Lista batchy importu.
-  - Parametry zapytania: `status`, `source_system`, `import_type`, `created_from`, `created_to`.
+  - Parametry zapytania: `limit`.
   - Response JSON: lista batchy.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
@@ -861,7 +864,7 @@
     ```json
     {
       "id": "uuid",
-      "source_file_name": "export_20260216.csv",
+      "source_file_name": "export_20260308.pdf",
       "status": "COMPLETED_WITH_ERRORS",
       "total_rows": 120,
       "inserted_rows": 115,
@@ -874,7 +877,7 @@
 
 - **GET** `/imports/batches/{id}/errors`
   - Opis: Raport błędów na poziomie wiersza.
-  - Parametry zapytania: paginacja.
+  - Parametry zapytania: brak.
   - Response JSON:
     ```json
     {

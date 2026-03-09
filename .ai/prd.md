@@ -134,10 +134,12 @@ ID: US-003
 Tytuł: Import pacjentów
 Opis: Jako recepcjonista, chcę zaimportować listę pacjentów z pliku, aby przyspieszyć tworzenie listy dziennej.
 Kryteria akceptacji:
-- System przyjmuje plik w formacie .xlsx lub .csv.
-- System mapuje kolumny zgodnie ze zdefiniowanym szablonem.
+- System przyjmuje tekstowy, machine-readable plik PDF z jednym ustalonym układem eksportu Doctolib.
+- System odczytuje z PDF datę importu, nazwę kliniki oraz rekordy z kolumnami `godzina`, `imię i nazwisko`, `telefon`, `data urodzenia`, `email`, `adres`, `kod pocztowy`.
+- System mapuje klinikę po nazwie na `ClinicSite`, a kolejkę tworzy/uzupełnia z użyciem skonfigurowanego per klinika domyślnego `consulting_room` i `shift_code`.
 - `Doctolib Patient ID` może występować w rekordzie importowanym jako opcjonalny identyfikator pomocniczy; jeśli jest podany, musi być unikalny.
-- W przypadku błędów w pliku, import jest przerywany lub błędne wiersze są raportowane.
+- Import jest uruchamiany asynchronicznie w tle przez Django Tasks; request HTTP tylko kolejkue batch.
+- W przypadku błędów w pliku błędne wiersze są raportowane w `PatientImportError`, a poprawne rekordy nadal są importowane.
 - Zaimportowani pacjenci są widoczni w Poczekalni.
 
 ID: US-004
@@ -222,10 +224,10 @@ ID: US-011
 Tytuł: Codzienny import plików z listą wizyt (Faza 3)
 Opis: System codziennie importuje listę wizyt z plików eksportowanych z Doctolib, aby wyeliminować ręczne wprowadzanie danych.
 Kryteria akceptacji:
-- System przyjmuje plik .xlsx lub .csv zgodny z ustalonym szablonem eksportu.
+- System przyjmuje tekstowy PDF Doctolib o jednym wspieranym układzie.
 - Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
 - `Doctolib Patient ID` jest polem opcjonalnym i pomocniczym; jeśli występuje w danych importowanych lub ręcznych, musi być unikalne.
-- Dane (imię, nazwisko, data urodzenia, kontakt) są mapowane do struktury pacjenta jako dane uzupełniające.
+- Dane z PDF (w tym godzina wizyty i adres) są mapowane do struktury pacjenta i wpisu kolejki.
 - Błędy importu są raportowane na poziomie wiersza.
 
 ID: US-012

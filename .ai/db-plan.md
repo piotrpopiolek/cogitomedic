@@ -78,6 +78,8 @@
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `code` `varchar(20)` NOT NULL UNIQUE
 - `name` `varchar(120)` NOT NULL
+- `pdf_import_default_consulting_room_id` `uuid` NULL FK -> `consulting_room(id)` ON DELETE SET NULL
+- `pdf_import_shift_code` `queue_shift_enum` NOT NULL DEFAULT `'FULL_DAY'`
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 
@@ -373,6 +375,7 @@
 - `created_by_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `finished_at` `timestamptz` NULL
+- Import PDF Doctolib jest uruchamiany asynchronicznie przez Django Tasks; plik z uploadu jest tymczasowo zapisywany w `MEDIA_ROOT/imports/patients_pdf/`, a w bazie pozostaje wyłącznie hash, nazwa pliku i wynik batcha.
 - Ograniczenia:
   - `CHECK (total_rows >= 0 AND inserted_rows >= 0 AND error_rows >= 0)`
 
