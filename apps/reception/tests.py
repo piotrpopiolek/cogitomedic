@@ -5,8 +5,10 @@ import tempfile
 from datetime import date
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import Client, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.intake.models import PatientIntakeForm
@@ -427,3 +429,40 @@ class PatientPdfImportServiceTests(TestCase):
             PatientImportError.objects.get(batch=second_batch).error_code,
             PatientPdfImportErrorCode.DUPLICATE_VISIT,
         )
+
+
+class DailyQueueAdminImportTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin_user = StaffUser.objects.create_superuser(
+            username="admin-import",
+            email="admin-import@example.com",
+            password="safe-password",
+        )
+        self.client.force_login(self.admin_user)
+
+    def test_daily_queue_changelist_contains_import_button(self) -> None:
+        response = self.client.get(reverse("admin:reception_dailyqueue_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import z pliku")
+        self.assertContains(response, reverse("admin:reception_dailyqueue_import_pdf"))
+
+    def test_import_pdf_admin_view_enqueues_batch(self) -> None:
+        batch = PatientImportBatch.objects.create(
+            source_file_name="patients.pdf",
+            source_file_sha256="b" * 64,
+            created_by_user=self.admin_user,
+        )
+        with patch("apps.reception.admin.enqueue_patient_pdf_import", return_value=batch) as enqueue_mock:
+            response = self.client.post(
+                reverse("admin:reception_dailyqueue_import_pdf"),
+                data={
+                    "file": SimpleUploadedFile("patients.pdf", b"%PDF-1.4"),
+                    "next": reverse("admin:reception_dailyqueue_changelist"),
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("admin:reception_dailyqueue_changelist"))
+        enqueue_mock.assert_called_once()
