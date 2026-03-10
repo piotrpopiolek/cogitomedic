@@ -12,6 +12,11 @@ from apps.intake.api_views import (
     intake_outbox_events_view,
     intake_outbox_process_view,
 )
+from apps.intake.document_views import (
+    intake_document_detail_view,
+    intake_document_preview_pdf_view,
+    intake_documents_view,
+)
 from apps.medical.api_views import (
     doctor_text_template_detail_view,
     doctor_text_templates_view,
@@ -322,5 +327,20 @@ urlpatterns = [
         "intake-forms/<uuid:intake_form_id>",
         intake_form_detail_view,
         name="intake-form-detail",
+    ),
+    path(
+        "intake-documents",
+        intake_documents_view,
+        name="intake-documents",
+    ),
+    path(
+        "intake-documents/<uuid:intake_document_version_id>",
+        intake_document_detail_view,
+        name="intake-document-detail",
+    ),
+    path(
+        "intake-documents/<uuid:intake_document_version_id>/preview-pdf",
+        intake_document_preview_pdf_view,
+        name="intake-document-preview-pdf",
     ),
 ]
