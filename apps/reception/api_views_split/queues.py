@@ -137,13 +137,15 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             if "Duplicate queue" in str(exc):
                 return json_error("Duplicate queue for this date/site/room/shift.", status=409)
             return json_error(str(exc), status=400)
+        except IntegrityError:
+            return json_error("Duplicate queue for this date/site/room/shift.", status=409)
         return JsonResponse(_serialize_queue(queue), status=201)
     return json_error("Method not allowed.", status=405)
 
 
 @require_auth
 def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH"):
@@ -155,8 +157,12 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
         return json_error("Daily queue is not in your assigned scope.", status=403)
+    if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
+        return json_error("DOCTOR can only access own assigned queues.", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_queue(queue))
+    if request.user.is_doctor:
+        return json_error("Only RECEPTION or ADMIN can update daily queue.", status=403)
     try:
         raw = read_json_body(request)
         body = UpdateDailyQueueRequest.model_validate(raw)
