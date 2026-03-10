@@ -27,7 +27,7 @@
 
 **Main capabilities:**
 
-- **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links
+- **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links; browse generated intake PDFs (list, filters, detail, inline preview) in the panel at `/admin/intake-documents/`
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive (mock then API) archiving, SMS notifications via SMSApi, 30-day retention policy for local PDFs
@@ -280,7 +280,7 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 
 ### In scope
 
-- Reception module: daily list (CRUD + daily file import)
+- Reception module: daily list (CRUD + daily file import), read-only intake PDF viewer (list/detail/preview) for RECEPTION/ADMIN at `/admin/intake-documents/`
 - Patient web app (RWD/tablet) for consent signing, body map, and e-signature
 - Doctor module: medical section, draft/publish, edit and resend
 - PDF generation (consents, body map, signature)
