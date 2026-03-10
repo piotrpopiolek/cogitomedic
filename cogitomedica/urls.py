@@ -21,10 +21,20 @@ from drf_spectacular.views import SpectacularRedocView, SpectacularSwaggerView
 
 from cogitomedica.openapi_extension import cogito_openapi_schema_view
 from apps.reception.views import reception_dashboard_view
+from apps.intake.views import (
+    intake_documents_list_view,
+    intake_document_detail_view,
+)
 
 urlpatterns = [
     path("", lambda request: redirect("admin:index", permanent=False)),
     path("admin/reception-dashboard/", reception_dashboard_view, name="admin_reception_dashboard"),
+    path("admin/intake-documents/", intake_documents_list_view, name="admin_intake_documents"),
+    path(
+        "admin/intake-documents/<uuid:version_id>/",
+        intake_document_detail_view,
+        name="admin_intake_document_detail",
+    ),
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
     path("doctor/", include("cogitomedica.doctor_urls")),
