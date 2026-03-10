@@ -252,6 +252,12 @@ if HAS_UNFOLD:
                             "permission": lambda request: _is_reception_or_admin_role(request),
                         },
                         {
+                            "title": db_gettext_lazy("administration.side_dokumenty_intake_pdf", "Dokumenty intake (PDF)"),
+                            "icon": "picture_as_pdf",
+                            "link": lambda request: reverse_lazy("admin_intake_documents"),
+                            "permission": lambda request: _is_reception_or_admin_role(request),
+                        },
+                        {
                             "title": db_gettext_lazy("administration.side_batch_importu", "Batch importu pacjentów"),
                             "icon": "upload_file",
                             "link": lambda request: reverse_lazy("admin:reception_patientimportbatch_changelist"),
