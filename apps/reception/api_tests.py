@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 from datetime import date
 from unittest.mock import patch
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.test.utils import override_settings
 from django.utils import timezone
 
@@ -302,6 +303,263 @@ class DailyQueuesApiTests(TestCase):
     def test_queue_entry_not_found_returns_404(self) -> None:
         response = self.client.get(f"/api/v1/queue-entries/{uuid4()}")
         self.assertEqual(response.status_code, 404)
+
+
+class DailyQueueConcurrencyApiTests(TransactionTestCase):
+    """Concurrent POSTs for the same queue slot: one 201, one 409 (IntegrityError handled)."""
+
+    def setUp(self) -> None:
+        self.reception_user = StaffUser.objects.create_user(
+            username="reception-concurrent",
+            email="reception-concurrent@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.clinic = ClinicSite.objects.create(code="CC", name="Concurrent Clinic")
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic,
+            code="RR",
+            name="Room R",
+        )
+        self.reception_user.clinic_sites.add(self.clinic)
+
+    def test_concurrent_post_same_queue_one_201_one_409(self) -> None:
+        queue_date = timezone.now().date()
+        payload = {
+            "queue_date": queue_date.isoformat(),
+            "clinic_site_id": str(self.clinic.id),
+            "consulting_room_id": str(self.room.id),
+            "shift_code": QueueShift.FULL_DAY,
+            "source": QueueSource.MANUAL,
+            "created_by_user_id": str(self.reception_user.id),
+        }
+        results: list[int] = []
+
+        def post_queue() -> None:
+            try:
+                client = Client()
+                client.login(username="reception-concurrent", password="safe-password")
+                resp = client.post(
+                    "/api/v1/daily-queues",
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
+                results.append(resp.status_code)
+            finally:
+                from django.db import connection
+
+                connection.close()
+
+        t1 = threading.Thread(target=post_queue)
+        t2 = threading.Thread(target=post_queue)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+        results.sort()
+        self.assertEqual(results, [201, 409], "One request must get 201, the other 409")
+
+
+class TabletQueueScopeApiTests(TestCase):
+    """TABLET role must be assigned to clinic_sites to see their queues and entries."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.tablet_user = StaffUser.objects.create_user(
+            username="tablet-queue-user",
+            email="tablet-queue@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.tablet_user, "Tablet")
+
+    def test_tablet_with_no_clinic_sites_sees_empty_queues(self) -> None:
+        """TABLET with no clinic_sites assigned gets empty list, not all queues."""
+        self.client.login(username="tablet-queue-user", password="safe-password")
+        clinic = ClinicSite.objects.create(code="C1", name="Clinic 1")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        response = self.client.get("/api/v1/daily-queues")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["items"], [])
+
+    def test_tablet_with_clinic_site_sees_only_its_queues(self) -> None:
+        """TABLET assigned to one clinic_site sees only that site's queues."""
+        self.client.login(username="tablet-queue-user", password="safe-password")
+        clinic_a = ClinicSite.objects.create(code="A1", name="Clinic A")
+        clinic_b = ClinicSite.objects.create(code="B1", name="Clinic B")
+        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
+        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        self.tablet_user.clinic_sites.add(clinic_a)
+        queue_a = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic_a,
+            consulting_room=room_a,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic_b,
+            consulting_room=room_b,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        response = self.client.get("/api/v1/daily-queues")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], str(queue_a.id))
+        self.assertEqual(items[0]["clinic_site_id"], str(clinic_a.id))
+
+    def test_tablet_cannot_access_entries_of_other_clinic(self) -> None:
+        """TABLET assigned to clinic A gets 403 when accessing queue of clinic B."""
+        self.client.login(username="tablet-queue-user", password="safe-password")
+        clinic_a = ClinicSite.objects.create(code="A1", name="Clinic A")
+        clinic_b = ClinicSite.objects.create(code="B1", name="Clinic B")
+        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
+        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        self.tablet_user.clinic_sites.add(clinic_a)
+        queue_b = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic_b,
+            consulting_room=room_b,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        response = self.client.get(f"/api/v1/daily-queues/{queue_b.id}/entries")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("assigned scope", response.json().get("error", ""))
+
+
+class DoctorAndTabletAuthorizationApiTests(TestCase):
+    """DOCTOR can GET list + detail (in scope); TABLET cannot POST queues. PATCH/DELETE stay ADMIN-only."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.doctor = StaffUser.objects.create_user(
+            username="doctor-auth",
+            email="doctor-auth@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor, "Doctor")
+        self.tablet_user = StaffUser.objects.create_user(
+            username="tablet-auth",
+            email="tablet-auth@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.tablet_user, "Tablet")
+        self.clinic = ClinicSite.objects.create(code="D1", name="Doctor Clinic")
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic,
+            code="DR1",
+            name="Doctor Room",
+        )
+        self.doctor.clinic_sites.add(self.clinic)
+        self.tablet_user.clinic_sites.add(self.clinic)
+
+    def test_doctor_can_get_clinic_site_detail_when_in_scope(self) -> None:
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.get(f"/api/v1/clinic-sites/{self.clinic.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], str(self.clinic.id))
+
+    def test_doctor_can_get_consulting_room_detail_when_in_scope(self) -> None:
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.get(f"/api/v1/consulting-rooms/{self.room.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], str(self.room.id))
+
+    def test_doctor_can_get_daily_queue_detail_when_assigned(self) -> None:
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+            status=QueueStatus.OPEN,
+            assigned_doctor_id=self.doctor.id,
+            created_by_user=self.doctor,
+        )
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.get(f"/api/v1/daily-queues/{queue.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], str(queue.id))
+
+    def test_doctor_gets_403_for_daily_queue_detail_not_assigned(self) -> None:
+        other_doctor = StaffUser.objects.create_user(
+            username="doctor-other",
+            email="doctor-other@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other_doctor, "Doctor")
+        other_doctor.clinic_sites.add(self.clinic)
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+            status=QueueStatus.OPEN,
+            assigned_doctor_id=other_doctor.id,
+            created_by_user=other_doctor,
+        )
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.get(f"/api/v1/daily-queues/{queue.id}")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("own assigned", response.json().get("error", ""))
+
+    def test_doctor_gets_403_for_patch_clinic_site(self) -> None:
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/clinic-sites/{self.clinic.id}",
+            data=json.dumps({"name": "Changed"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("ADMIN", response.json().get("error", ""))
+
+    def test_doctor_gets_403_for_patch_daily_queue(self) -> None:
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+            status=QueueStatus.OPEN,
+            assigned_doctor_id=self.doctor.id,
+            created_by_user=self.doctor,
+        )
+        self.client.login(username="doctor-auth", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/daily-queues/{queue.id}",
+            data=json.dumps({"status": "CLOSED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("RECEPTION", response.json().get("error", ""))
+
+    def test_tablet_gets_403_for_post_daily_queue(self) -> None:
+        self.client.login(username="tablet-auth", password="safe-password")
+        payload = {
+            "queue_date": timezone.now().date().isoformat(),
+            "clinic_site_id": str(self.clinic.id),
+            "consulting_room_id": str(self.room.id),
+            "shift_code": QueueShift.FULL_DAY,
+            "source": QueueSource.MANUAL,
+            "created_by_user_id": str(self.tablet_user.id),
+        }
+        response = self.client.post(
+            "/api/v1/daily-queues",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 class TabletDevicesApiTests(TestCase):

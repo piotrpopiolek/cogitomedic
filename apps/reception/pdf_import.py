@@ -564,9 +564,19 @@ def _normalize_phone(value: str) -> str:
     return digits_only
 
 
+def _sanitize_name_token(value: str) -> str:
+    allowed_separators = {"-", "'", "’"}
+    cleaned_chars: list[str] = []
+    for char in _sanitize_pdf_text(value):
+        if char.isalpha() or char in allowed_separators:
+            cleaned_chars.append(char)
+    cleaned = "".join(cleaned_chars).strip("-'’")
+    return cleaned
+
+
 def _split_full_name(value: str) -> tuple[str | None, str | None]:
     honorifics = {"herr", "frau", "mr", "mrs", "ms"}
-    raw_parts = [_sanitize_pdf_text(part) for part in value.split() if _sanitize_pdf_text(part)]
+    raw_parts = [_sanitize_name_token(part) for part in value.split() if _sanitize_name_token(part)]
     parts = [part for part in raw_parts if _normalize_label(part) not in honorifics]
     if len(parts) < 2:
         return None, None

@@ -119,7 +119,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -234,7 +234,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
