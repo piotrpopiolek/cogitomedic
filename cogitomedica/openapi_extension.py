@@ -241,6 +241,40 @@ COGITO_PATHS = {
             "responses": {"202": {"description": "processed, failed, dead_lettered"}},
         },
     },
+    f"{PREFIX}/intake-documents": {
+        "get": {
+            "summary": "List intake document versions (PDF)",
+            "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page, page_size.",
+            "tags": ["Intake – Documents"],
+            "parameters": [
+                {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                {"name": "pdf_generation_status", "in": "query", "schema": {"type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"]}},
+                {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
+                {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "page", "in": "query", "schema": {"type": "integer"}},
+                {"name": "page_size", "in": "query", "schema": {"type": "integer"}},
+            ],
+            "responses": {"200": {"description": "items (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, …), pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden (e.g. DOCTOR)"}},
+        },
+    },
+    f"{PREFIX}/intake-documents/{{intake_document_version_id}}": {
+        "get": {
+            "summary": "Get intake document version detail",
+            "description": "Detail of one intake document version. RECEPTION/ADMIN only; scope by clinic_site.",
+            "tags": ["Intake – Documents"],
+            "parameters": [{"name": "intake_document_version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "Detail (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, pdf_local_path, …)"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "404": {"description": "Not found"}},
+        },
+    },
+    f"{PREFIX}/intake-documents/{{intake_document_version_id}}/preview-pdf": {
+        "get": {
+            "summary": "Preview intake PDF",
+            "description": "Returns the generated intake PDF file (Content-Disposition: inline). Only when pdf_generation_status is COMPLETED and file exists. RECEPTION/ADMIN only; scope by clinic_site.",
+            "tags": ["Intake – Documents"],
+            "parameters": [{"name": "intake_document_version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "application/pdf (inline)"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "404": {"description": "Not found (out of scope, file missing, or status ≠ COMPLETED)"}},
+        },
+    },
     f"{PREFIX}/medical-documents": {
         "get": {
             "summary": "List medical documents",

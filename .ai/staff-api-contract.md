@@ -8,7 +8,7 @@ Dokument opisuje endpointy używane przez personel oraz **RBAC** (kto ma dostęp
 
 | Rola       | Zakres API |
 |-----------|------------|
-| **RECEPTION** | Kolejki dzienne, wpisy kolejki, pacjenci (CRUD), urządzenia tabletu, sesje formularza (POST sessions → intake_form_id). |
+| **RECEPTION** | Kolejki dzienne, wpisy kolejki, pacjenci (CRUD), urządzenia tabletu, sesje formularza (POST sessions → intake_form_id); dokumenty intake (PDF): lista, szczegóły, podgląd PDF – scope po placówce. |
 | **TABLET**    | Lista kolejek, lista wpisów kolejki, kontekst formularza (GET intake-forms), zgody/anamneza/body map/podpis/submit (PUT/PATCH/POST na intake-forms). |
 | **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), publish (POST), wersje (GET). |
 | **ADMIN**     | Wszystko powyżej + użytkownicy staff, operacje outbox (lista, retry, process), retention, metryki (observability/metrics). |
@@ -34,7 +34,7 @@ Dostęp: **wyłącznie rola ADMIN**. Dla RECEPTION/DOCTOR zwracane jest **403 Fo
 ## 3. Pozostałe grupy endpointów (skrót)
 
 - **Auth:** POST login, POST logout, GET me – sesja + CSRF.
-- **Recepcja:** daily-queues, queue-entries, patients, clinic-sites, consulting-rooms, tablet-devices, POST queue-entries/…/sessions.
+- **Recepcja:** daily-queues, queue-entries, patients, clinic-sites, consulting-rooms, tablet-devices, POST queue-entries/…/sessions; GET intake-documents (lista), GET intake-documents/{id} (szczegóły), GET intake-documents/{id}/preview-pdf (RECEPTION/ADMIN, scope po clinic_site).
 - **Intake:** GET/PATCH intake-forms/{id}, PUT consents, PUT anamnesis, POST signature, POST submit.
 - **Medical:** GET/POST medical-documents, GET medical-documents/{id}, PUT draft, POST publish, GET versions.
 
@@ -46,9 +46,11 @@ Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 
 - **Tablet (poczekalnia):** `/tablet/` → logowanie (TABLET) → wybór kolejki → lista pacjentów → „Otwórz formularz” → ekran „Formularz przygotowany” → **„Przekaż tablet pacjentowi – wypełnij formularz”** → `/tablet/form/<intake_form_id>/` (zgody, anamneza, body map, podpis, submit).
 - **Lekarz:** `/doctor/` → logowanie (DOCTOR/ADMIN) → lista dokumentów (work queue) z filtrami → „Öffnen” → `/doctor/<medical_document_id>/` (formularz Befund, zapis szkicu, publikacja).
+- **Recepcja/Admin – dokumenty intake (PDF):** w menu panelu Unfold: Rejestracja (Admin) → **Dokumenty intake (PDF)** lub bezpośrednio `/admin/intake-documents/` – lista dokumentów z filtrami (data kolejki, status PDF, placówka, pacjent), paginacja, link do szczegółów i przycisk „Podgląd PDF” (inline).
 
 ---
 
 ## 5. Historia zmian
 
+- **Dokumenty intake (PDF):** Dodane endpointy GET intake-documents (lista), GET intake-documents/{id}, GET intake-documents/{id}/preview-pdf dla RECEPTION/ADMIN (scope po clinic_site). W panelu Unfold: strona „Dokumenty intake (PDF)” pod `/admin/intake-documents/` (lista, szczegóły, podgląd PDF).
 - **Opcja B (dopełnienie procesu):** GET outbox-events i POST outbox-events/{id}/retry ograniczone do roli ADMIN (wcześniej: dowolny zalogowany użytkownik). Process i retention były już ADMIN-only.

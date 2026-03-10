@@ -35,6 +35,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
+- `intake-documents` -> `intake_document_version` (read-only: list, detail, preview PDF; RECEPTION/ADMIN, scoped by `clinic_site`)
 - `doctor-text-templates` -> `doctor_text_template`
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
@@ -816,6 +817,29 @@
   - Response JSON: version object with PDF/HiDrive/SMS flags.
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
+
+### 2.10a Intake documents (PDF) – RECEPTION/ADMIN
+
+Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from assigned clinic sites; ADMIN sees all. Read-only resource (list, detail, PDF file preview).
+
+- **GET** `/intake-documents`
+  - Description: List intake document versions (generated PDFs). Used by reception and admin to browse/retrieve documents.
+  - Query params: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search`, `clinic_site_id`, `page`, `page_size`.
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. Each item: `id`, `version_no`, `form_locale`, `pdf_generation_status`, `created_at`, `queue_entry_id`, `intake_form_id`, `queue_date`, `clinic_site_id`, `clinic_site_name`, `patient` (id, first_name, last_name, date_of_birth), `pdf_available`, `hidrive_sent`, `processing_error_message`.
+  - Success: `200 OK`.
+  - Errors: `403 FORBIDDEN` (e.g. DOCTOR role).
+
+- **GET** `/intake-documents/{id}`
+  - Description: Detail of one intake document version.
+  - Response JSON: detail object (like list item plus e.g. `pdf_local_path`, `pdf_checksum_sha256`, `hidrive_path`, `hidrive_sent_at`).
+  - Success: `200 OK`.
+  - Errors: `403 FORBIDDEN`, `404 NOT_FOUND`.
+
+- **GET** `/intake-documents/{id}/preview-pdf`
+  - Description: Returns the PDF file for inline preview (`Content-Disposition: inline`). Available only when `pdf_generation_status == COMPLETED` and file exists under `MEDIA_ROOT`.
+  - Response: `Content-Type: application/pdf`, binary body.
+  - Success: `200 OK`.
+  - Errors: `404 NOT_FOUND` (document out of scope, file missing, or status ≠ COMPLETED).
 
 ### 2.11 Imports (manual PDF, scheduled, emergency)
 

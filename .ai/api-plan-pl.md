@@ -35,6 +35,7 @@
 - `intake-consents` -> `patient_intake_consent`
 - `medical-documents` -> `medical_document`
 - `medical-document-versions` -> `medical_document_version`
+- `intake-documents` -> `intake_document_version` (tylko odczyt: lista, szczegóły, podgląd PDF; RECEPTION/ADMIN, scope po `clinic_site`)
 - `doctor-text-templates` -> `doctor_text_template`
 - `imports` -> `patient_import_batch`, `patient_import_error`
 - `outbox-events` -> `outbox_event`
@@ -822,6 +823,29 @@
   - Response JSON: obiekt wersji z flagami PDF/HiDrive/SMS.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`.
+
+### 2.10a Dokumenty intake (PDF) – RECEPTION/ADMIN
+
+Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie dokumenty z przypisanych placówek (`clinic_site`); ADMIN – wszystkie. Zasób read-only (lista, szczegóły, podgląd pliku PDF).
+
+- **GET** `/intake-documents`
+  - Opis: Lista wersji dokumentów intake (wygenerowane PDF). Używane przez recepcję i admina do przeglądania/odtwarzania dokumentów.
+  - Parametry zapytania: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search` (nazwisko/imiona), `clinic_site_id`, `page`, `page_size`.
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. Każdy element: `id`, `version_no`, `form_locale`, `pdf_generation_status`, `created_at`, `queue_entry_id`, `intake_form_id`, `queue_date`, `clinic_site_id`, `clinic_site_name`, `patient` (id, first_name, last_name, date_of_birth), `pdf_available`, `hidrive_sent`, `processing_error_message`.
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `403 FORBIDDEN` (np. rola DOCTOR).
+
+- **GET** `/intake-documents/{id}`
+  - Opis: Szczegóły jednej wersji dokumentu intake.
+  - Response JSON: obiekt szczegółów (jak element listy + m.in. `pdf_local_path`, `pdf_checksum_sha256`, `hidrive_path`, `hidrive_sent_at`).
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `403 FORBIDDEN`, `404 NOT_FOUND` (brak dostępu lub brak rekordu).
+
+- **GET** `/intake-documents/{id}/preview-pdf`
+  - Opis: Zwraca plik PDF do podglądu inline (`Content-Disposition: inline`). Dostępne tylko gdy `pdf_generation_status == COMPLETED` i plik istnieje w `MEDIA_ROOT`.
+  - Response: `Content-Type: application/pdf`, body binarny.
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `404 NOT_FOUND` (dokument nie w scope, brak pliku lub status ≠ COMPLETED).
 
 ### 2.11 Importy (manualny PDF, harmonogram, awaryjny)
 
