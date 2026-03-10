@@ -63,17 +63,17 @@ create_audit_event(
 ## Największe zagrożenia i kroki naprawcze
 
 - Ryzyko: budowa streamów na niepełnych lub semantycznie niespójnych danych audytowych.
-  Krok naprawczy: najpierw ustalić kontrakt danych audytu, coverage matrix producentów i blokery wdrożenia dla eventów bez wymaganych referencji.
+Krok naprawczy: najpierw ustalić kontrakt danych audytu, coverage matrix producentów i blokery wdrożenia dla eventów bez wymaganych referencji.
 - Ryzyko: przepłacenie architekturą problemu, który może wynikać głównie z brakujących indeksów i zbyt ubogich endpointów.
-  Krok naprawczy: przed dodaniem `AuditEventStreamLink` zmierzyć obecne query, dodać podstawowe indeksy i porównać koszt/efekt.
+Krok naprawczy: przed dodaniem `AuditEventStreamLink` zmierzyć obecne query, dodać podstawowe indeksy i porównać koszt/efekt.
 - Ryzyko: fałszywy backfill historii pacjenta/dokumentu/przychodni.
-  Krok naprawczy: wprowadzić politykę backfillu z poziomem pewności i zasadą „nie zgadujemy historii”; brakujące powiązania oznaczać jawnie jako `unknown` lub pozostawić niezalinkowane.
+Krok naprawczy: wprowadzić politykę backfillu z poziomem pewności i zasadą „nie zgadujemy historii”; brakujące powiązania oznaczać jawnie jako `unknown` lub pozostawić niezalinkowane.
 - Ryzyko: chaos pojęciowy między `audit event`, eventem operacyjnym outboxa i przyszłym `domain event`.
-  Krok naprawczy: rozdzielić te trzy klasy zdarzeń przed projektowaniem streamów i read modeli.
+Krok naprawczy: rozdzielić te trzy klasy zdarzeń przed projektowaniem streamów i read modeli.
 - Ryzyko: wycieki danych przez nowe szybkie endpointy streamowe.
-  Krok naprawczy: zdefiniować osobną macierz autoryzacji dla streamów i support timeline, zamiast kopiować obecne reguły oparte częściowo na `metadata`.
+Krok naprawczy: zdefiniować osobną macierz autoryzacji dla streamów i support timeline, zamiast kopiować obecne reguły oparte częściowo na `metadata`.
 - Ryzyko: niedoszacowanie kosztów projektorów, replay, lagów i niespójności eventual consistency.
-  Krok naprawczy: ograniczyć v1 do read-only stream indexów i dopiero po walidacji wartości dodawać projekcje aktualizowane asynchronicznie.
+Krok naprawczy: ograniczyć v1 do read-only stream indexów i dopiero po walidacji wartości dodawać projekcje aktualizowane asynchronicznie.
 
 ## Architektura docelowa etapu 1-3
 
@@ -88,6 +88,8 @@ flowchart LR
     streamLinks --> opsStream[support_or_error_streams]
     streamLinks --> projections[ReadModelsAndReports]
 ```
+
+
 
 ## Etap 0: Naprawa fundamentów danych i walidacja problemu
 
