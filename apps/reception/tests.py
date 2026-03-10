@@ -436,6 +436,24 @@ class PatientPdfParserTests(TestCase):
         self.assertIsNone(normalized.street)
         self.assertIsNone(normalized.postal_code)
 
+    def test_normalize_patient_row_ignores_symbols_in_full_name(self) -> None:
+        normalized = normalize_patient_row(
+            parsed_row=ParsedPatientRow(
+                row_number=1,
+                appointment_time_raw="13:00",
+                full_name_raw="@ Herr PATIENT Christian",
+                phone_raw="01762222222",
+                date_of_birth_raw="01.03.1960",
+                email_raw="patient@example.com",
+                address_raw="",
+                postal_code_raw="",
+            ),
+            import_date=date(2026, 3, 9),
+        )
+
+        self.assertEqual(normalized.first_name, "Christian")
+        self.assertEqual(normalized.last_name, "PATIENT")
+
 
 class PatientPdfImportServiceTests(TestCase):
     def setUp(self) -> None:
