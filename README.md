@@ -287,6 +287,7 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 - HiDrive mock (Phases 1–2) and HiDrive API integration (Phase 3)
 - Daily import of patient/visit lists from files exported from Doctolib (no direct Doctolib API integration)
 - SMS notifications (link to download document)
+- Audit trail (operations): event log with immutable entity refs in `metadata._ref` for compliance after anonymization; filters by patient, document, clinic site, actor, outbox event, and time range
 - Logging (e.g. OpenTelemetry as per PRD)
 - Operational dashboards: simplified reception/doctor view in Django + advanced maintenance view in Grafana OSS
 - UI languages: German, English, Polish
