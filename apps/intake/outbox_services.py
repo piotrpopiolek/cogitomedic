@@ -37,7 +37,12 @@ class IntakeOutboxProcessingResult:
 def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
     version = (
         IntakeDocumentVersion.objects.select_for_update()
-        .select_related("intake_form", "intake_form__queue_entry", "intake_form__queue_entry__patient")
+        .select_related(
+            "intake_form",
+            "intake_form__queue_entry",
+            "intake_form__queue_entry__patient",
+            "intake_form__queue_entry__daily_queue",
+        )
         .get(id=event.intake_document_version_id)
     )
 
@@ -117,6 +122,7 @@ def process_intake_outbox_events(
             create_audit_event(
                 event_type="INTAKE_OUTBOX_EVENT_PROCESSED",
                 patient_id=patient_id,
+                context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
                 metadata={
                     "intake_document_version_id": str(version.id),
                     "intake_outbox_event_id": str(event.id),
@@ -167,6 +173,7 @@ def process_intake_outbox_events(
                     else "INTAKE_OUTBOX_EVENT_FAILED"
                 ),
                 patient_id=patient_id,
+                context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
                 metadata={
                     "intake_document_version_id": str(version.id),
                     "intake_outbox_event_id": str(event.id),
@@ -225,6 +232,7 @@ def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> Intak
             "intake_document_version",
             "intake_document_version__intake_form",
             "intake_document_version__intake_form__queue_entry",
+            "intake_document_version__intake_form__queue_entry__daily_queue",
         )
         .get(id=event.id)
     )
@@ -242,6 +250,7 @@ def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> Intak
     create_audit_event(
         event_type="INTAKE_OUTBOX_EVENT_RETRY_REQUESTED",
         patient_id=patient_id,
+        context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
         metadata={
             "intake_document_version_id": str(version.id),
             "intake_outbox_event_id": str(event.id),

@@ -60,6 +60,10 @@ class AuditEvent(models.Model):
         indexes = [
             models.Index(fields=["-event_time"]),
             GinIndex(fields=["metadata"], name="audit_metadata_gin_idx", opclasses=["jsonb_path_ops"]),
+            models.Index(fields=["patient_id", "-event_time"], name="audit_event_patient_time_idx"),
+            models.Index(fields=["medical_document_id", "-event_time"], name="audit_event_doc_time_idx"),
+            models.Index(fields=["context_clinic_site_id", "-event_time"], name="audit_event_clinic_time_idx"),
+            models.Index(fields=["outbox_event_id", "-event_time"], name="audit_event_outbox_time_idx"),
         ]
 
     def __str__(self) -> str:

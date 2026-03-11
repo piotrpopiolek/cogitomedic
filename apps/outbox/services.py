@@ -167,11 +167,13 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
                     "updated_at",
                 ]
             )
+            doc = event.medical_document_version.medical_document
             create_audit_event(
                 event_type="OUTBOX_EVENT_PROCESSED",
-                patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
-                medical_document_id=event.medical_document_version.medical_document_id,
+                patient_id=doc.queue_entry.patient_id,
+                medical_document_id=doc.id,
                 outbox_event_id=event.id,
+                context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
                 metadata={
                     "event_type": event.event_type,
                     "retry_count": event.retry_count,
@@ -204,15 +206,17 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
                     "updated_at",
                 ]
             )
+            doc = event.medical_document_version.medical_document
             create_audit_event(
                 event_type=(
                     "OUTBOX_EVENT_DEAD_LETTERED"
                     if event.status == OutboxStatus.DEAD_LETTER
                     else "OUTBOX_EVENT_FAILED"
                 ),
-                patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
-                medical_document_id=event.medical_document_version.medical_document_id,
+                patient_id=doc.queue_entry.patient_id,
+                medical_document_id=doc.id,
                 outbox_event_id=event.id,
+                context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
                 metadata={
                     "event_type": event.event_type,
                     "retry_count": event.retry_count,
@@ -230,7 +234,13 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
 @transaction.atomic
 def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
     """Move FAILED/DEAD_LETTER event back to PENDING for manual retry."""
-    event = OutboxEvent.objects.select_for_update().get(id=event.id)
+    event = (
+        OutboxEvent.objects.select_for_update()
+        .select_related(
+            "medical_document_version__medical_document__queue_entry__daily_queue",
+        )
+        .get(id=event.id)
+    )
     if event.status not in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]:
         raise OutboxEventNotRetryableError("Event is not retryable in current status.")
 
@@ -245,6 +255,7 @@ def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
         patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
         medical_document_id=event.medical_document_version.medical_document_id,
         outbox_event_id=event.id,
+        context_clinic_site_id=event.medical_document_version.medical_document.queue_entry.daily_queue.clinic_site_id,
         metadata={"event_type": event.event_type, "reason": reason},
     )
     return event
@@ -269,6 +280,9 @@ def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) ->
     threshold = timezone.now() - timedelta(days=older_than_days)
     candidates = list(
         MedicalDocumentVersion.objects.select_for_update()
+        .select_related(
+            "medical_document__queue_entry__daily_queue",
+        )
         .filter(
             version_status=DocVersionStatus.PUBLISHED,
             published_at__isnull=False,
@@ -289,6 +303,7 @@ def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) ->
                 event_type="RETENTION_FILE_SKIPPED",
                 patient_id=version.medical_document.queue_entry.patient_id,
                 medical_document_id=version.medical_document_id,
+                context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
                 metadata={
                     "medical_document_version_id": str(version.id),
                     "reason": "NOT_SAFE_FOR_DELETION",
@@ -309,6 +324,7 @@ def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) ->
             event_type="RETENTION_FILE_DELETED",
             patient_id=version.medical_document.queue_entry.patient_id,
             medical_document_id=version.medical_document_id,
+            context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
             metadata={
                 "medical_document_version_id": str(version.id),
                 "older_than_days": older_than_days,
