@@ -10,6 +10,7 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import DocVersionStatus, MedicalDocument, MedicalDocStatus
 from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
 from apps.operations.models import AuditEvent
+from apps.operations.services import REF_KEY
 from apps.outbox.models import OutboxEvent, OutboxEventType
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -107,12 +108,16 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(version.version_status, DocVersionStatus.DRAFT)
         self.assertEqual(self.medical_document.current_version_no, 1)
         self.assertEqual(self.medical_document.status, MedicalDocStatus.DRAFT)
-        self.assertTrue(
-            AuditEvent.objects.filter(
-                event_type="DOCUMENT_DRAFT_SAVED",
-                medical_document_id=self.medical_document.id,
-            ).exists()
-        )
+        audit = AuditEvent.objects.filter(
+            event_type="DOCUMENT_DRAFT_SAVED",
+            medical_document_id=self.medical_document.id,
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.context_clinic_site_id, self.queue_entry.daily_queue.clinic_site_id)
+        ref = audit.metadata.get(REF_KEY) or {}
+        self.assertEqual(ref.get("patient_id"), str(self.medical_document.queue_entry.patient_id))
+        self.assertEqual(ref.get("medical_document_id"), str(self.medical_document.id))
+        self.assertEqual(ref.get("context_clinic_site_id"), str(self.queue_entry.daily_queue.clinic_site_id))
 
     def test_save_draft_document_version_updates_existing_draft(self) -> None:
         first = save_draft_document_version(
