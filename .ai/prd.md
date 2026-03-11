@@ -5,6 +5,7 @@
 Cogitomedica Digital Consents to aplikacja internetowa mająca na celu cyfryzację procesu przyjmowania pacjentów, podpisywania zgód oraz dokumentacji medycznej w placówce medycznej. System ma zastąpić obieg papierowy rozwiązaniem tabletowym dla pacjentów oraz panelem zarządzania dla personelu.
 
 Projekt realizowany jest w trzech fazach:
+
 - Faza 1: Obsługa tabletów, cyfrowe zgody, ankieta anamnestyczna (Anamnesebogen), schemat ciała i podpis elektroniczny pacjenta. Zarządzanie kolejką (Poczekalnia) odbywa się ręcznie lub przez import.
 - Faza 2: Panel lekarza do uzupełniania danych medycznych, zatwierdzanie dokumentów oraz automatyzacja wysyłki (zapis do archiwum i powiadomienie SMS).
 - Faza 3: Usprawnienie procesu codziennego importu plików eksportowanych z Doctolib oraz integracja z API HiDrive (docelowe API archiwizacji).
@@ -12,6 +13,7 @@ Projekt realizowany jest w trzech fazach:
 Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językami interfejsu portalu są niemiecki, angielski i polski (użytkownik może wybrać preferowany język).
 
 ### 1.1. Aktualna baza technologiczna backendu
+
 - Backend jest utrzymywany na **Django 6.0.x**.
 - Zadania asynchroniczne są definiowane i uruchamiane przez natywny framework **Django Tasks** (`django.tasks`), a nie przez `django-cron`.
 - W projekcie obowiązuje jedno rozwiązanie dla pracy asynchronicznej: **Django Tasks + Transactional Outbox**.
@@ -20,6 +22,7 @@ Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpiecz
 ## 2. Problem użytkownika
 
 Obecny proces obsługi pacjenta opiera się na dokumentacji papierowej, co generuje następujące problemy:
+
 - Czasochłonne ręczne wprowadzanie danych pacjentów do systemu.
 - Ryzyko błędów przy przepisywaniu danych oraz ryzyko zgubienia dokumentów papierowych.
 - Trudności w archiwizacji i wyszukiwaniu historycznych zgód.
@@ -32,6 +35,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 ## 3. Wymagania funkcjonalne
 
 ### 3.1. Zarządzanie pacjentami i Poczekalnia
+
 - System umożliwia ręczne dodawanie pacjenta do listy dziennej (Poczekalni).
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
 - W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
@@ -41,6 +45,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - System dopuszcza więcej niż jedną wizytę tego samego pacjenta tego samego dnia w tym samym gabinecie (osobne wpisy kolejki/wizyty).
 
 ### 3.2. Interfejs Pacjenta (Tablet)
+
 - Aplikacja dostosowana do obsługi dotykowej na 4 dedykowanych tabletach.
 - Formularz zawiera sekcje: Dane osobowe (tylko do odczytu/weryfikacji), Ankieta anamnestyczna (Anamnesebogen), Zgody (checkboxy), Schemat ciała (interaktywne zaznaczanie), Podpis (canvas).
 - Pacjent może wypełniać ustrukturyzowaną ankietę anamnestyczną (pytania jednokrotnego wyboru i wielokrotnego wyboru, bez swobodnego opisu medycznego).
@@ -48,6 +53,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Interfejs dostępny w języku niemieckim, angielskim lub polskim (wybór zgodnie z preferencją użytkownika lub ustawieniem sesji/urządzenia).
 
 ### 3.3. Interfejs Lekarza i Personelu
+
 - Administrator zarządza przypisaniami lekarzy do klinik (`clinic_site`).
 - W listach kolejek dziennych (`daily_queue`) lekarz przypisywany jest do konkretnej zmiany (`assigned_doctor_id`), co izoluje kolejki w czasie współdzielenia fizycznego gabinetu.
 - Lekarz widzi pacjentów z klinik, do których jest przypisany (dzięki automatycznemu budowaniu asocjacji `patient_clinic_site`).
@@ -64,6 +70,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Opcja edycji opublikowanego dokumentu i ponownej wysyłki (nadpisanie w archiwum).
 
 ### 3.4. Przetwarzanie i Archiwizacja (Backend)
+
 - Generowanie dokumentów PDF na podstawie danych z formularzy.
 - **Idempotentność publikacji:** Serwer przed utworzeniem nowej wersji publikowanej i wpisów outbox sprawdza, czy dla danego dokumentu nie ma już publikacji w toku (wersja w trakcie generowania PDF / uploadu); w takim przypadku zwraca sukces bez duplikowania zadań. Dopuszczalne jest uzupełnienie o klucz idempotentności z klienta (`publish_request_id`).
 - Mechanizm Transactional Outbox do obsługi procesów asynchronicznych.
@@ -74,6 +81,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Tłumaczenia UI/PDF są utrzymywane wyłącznie w bazie danych i edytowalne przez administrację w Django Admin (bez fallbacków runtime w kodzie).
 
 ### 3.5. Observability i gotowość operacyjna (wymaganie obowiązkowe)
+
 - System musi emitować metryki techniczne i operacyjne (nie tylko logi), minimum:
   - Outbox: `pending_count`, `failed_count`, `dead_letter_count`, `oldest_pending_age_seconds`, `processing_latency_p95/p99`.
   - Integracje: skuteczność `HiDrive` i `SMS` (success ratio), liczba błędów per provider i per typ błędu.
@@ -92,6 +100,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 ## 4. Granice produktu
 
 ### W zakresie (In-Scope)
+
 - Moduł recepcji do zarządzania listą dzienną (CRUD + Import).
 - Aplikacja webowa dla pacjenta (RWD/Tablet) do wypełnienia ankiety anamnestycznej, podpisywania zgód i podpisu elektronicznego.
 - Moduł lekarza do uzupełniania części medycznej.
@@ -103,6 +112,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Edycja tłumaczeń DE/EN/PL przez administrację (Django Admin), z walidacją placeholderów i polityką anty-XSS.
 
 ### Poza zakresem (Out-of-Scope)
+
 - Swobodny opis medyczny (narracyjny) tworzony przez pacjenta bez struktury pytań.
 - Skomplikowane raportowanie biznesowe (BI).
 - Bezpośrednia integracja API z Doctolib.
@@ -111,20 +121,24 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 ## 5. Historyjki użytkowników
 
 ### Uwierzytelnianie i Dostęp
+
 ID: US-001
 Tytuł: Logowanie personelu
 Opis: Jako pracownik recepcji lub lekarz, chcę bezpiecznie zalogować się do systemu za pomocą loginu i hasła, aby uzyskać dostęp do danych pacjentów.
 Kryteria akceptacji:
+
 - System wymaga podania loginu i hasła.
 - Błędne logowanie wyświetla ogólny komunikat błędu.
 - Sesja wygasa po określonym czasie bezczynności.
 - Dostęp jest ograniczony do zdefiniowanych ról (Recepcja, Lekarz, Administrator).
 
 ### Zarządzanie Listą Dzienną (Recepcja)
+
 ID: US-002
 Tytuł: Ręczne dodawanie pacjenta
 Opis: Jako recepcjonista, chcę ręcznie dodać pacjenta do listy dziennej, wprowadzając jego podstawowe dane, aby umożliwić mu wypełnienie formularza.
 Kryteria akceptacji:
+
 - Formularz wymaga podania: imienia, nazwiska, daty urodzenia, telefonu, adresu e-mail.
 - System waliduje poprawność adresu e-mail i numeru telefonu.
 - Nowy pacjent pojawia się na liście w widoku Poczekalnia.
@@ -134,6 +148,7 @@ ID: US-003
 Tytuł: Import pacjentów
 Opis: Jako recepcjonista, chcę zaimportować listę pacjentów z pliku, aby przyspieszyć tworzenie listy dziennej.
 Kryteria akceptacji:
+
 - System przyjmuje tekstowy, machine-readable plik PDF z jednym ustalonym układem eksportu Doctolib.
 - System odczytuje z PDF datę importu, nazwę kliniki oraz rekordy z kolumnami `godzina`, `imię i nazwisko`, `telefon`, `data urodzenia`, `email`, `adres`, `kod pocztowy`.
 - System mapuje klinikę po nazwie na `ClinicSite`, a kolejkę tworzy/uzupełnia z użyciem skonfigurowanego per klinika domyślnego `consulting_room` i `shift_code`.
@@ -146,6 +161,7 @@ ID: US-004
 Tytuł: Uruchomienie formularza na tablecie (poczekalnia)
 Opis: Jako recepcjonista, chcę na tablecie wybrać kolejkę i pacjenta z listy, a następnie przekazać tablet pacjentowi do wypełnienia ankiety, bez generowania linków z tokenem.
 Kryteria akceptacji:
+
 - Tablet jest zalogowany na rolę TABLET (sesja); recepcja na tablecie wybiera kolejkę z listy dzisiejszych kolejek (brak twardego przypisania tabletu do kolejki w panelu recepcji).
 - Po wyborze kolejki recepcja widzi listę pacjentów tej kolejki i wybiera jednego pacjenta (tap).
 - Wybór pacjenta wywołuje utworzenie/aktualizację sesji formularza (bez tokenu); backend zwraca `intake_form_id`. Tablet pokazuje ekran weryfikacji danych pacjenta, potem formularz intake.
@@ -153,10 +169,12 @@ Kryteria akceptacji:
 - Model sesji: latest-wins (ponowne wybranie innego pacjenta dla tego samego wpisu aktualizuje sesję). Autoryzacja: `request.user.role == TABLET` oraz intake_form w wybranej kolejce.
 
 ### Proces Pacjenta (Tablet)
+
 ID: US-005
 Tytuł: Akceptacja zgód
 Opis: Jako pacjent, chcę zapoznać się z treścią zgód i zaakceptować je za pomocą checkboxów, aby wyrazić zgodę na procedury.
 Kryteria akceptacji:
+
 - Lista zgód jest wyświetlana czytelnie na tablecie.
 - Wymagane zgody są oznaczone i blokują przejście dalej, jeśli nie są zaznaczone.
 - Interfejs jest dostępny w języku niemieckim, angielskim lub polskim.
@@ -165,6 +183,7 @@ ID: US-006
 Tytuł: Oznaczenie schematu ciała
 Opis: Jako pacjent, chcę zaznaczyć na schemacie ciała miejsca bólu lub dolegliwości, aby lekarz wiedział, gdzie występuje problem.
 Kryteria akceptacji:
+
 - Wyświetlany jest schemat sylwetki (przód i tył).
 - Dotknięcie ekranu nanosi znacznik w wybranym miejscu.
 - Możliwość cofnięcia/usunięcia znacznika.
@@ -173,15 +192,18 @@ ID: US-007
 Tytuł: Podpis elektroniczny
 Opis: Jako pacjent, chcę złożyć odręczny podpis na ekranie tabletu, aby autoryzować dokument.
 Kryteria akceptacji:
+
 - Pole podpisu obsługuje wprowadzanie dotykowe (rysik/palec).
 - Wymagane jest złożenie podpisu przed finalizacją.
 - Po zatwierdzeniu formularz jest zapisywany (stan SUBMITTED); nie można cofnąć się do edycji.
 
 ### Proces Lekarza
+
 ID: US-008
 Tytuł: Wypełnianie części medycznej
 Opis: Jako lekarz, chcę uzupełnić formularz o dane medyczne (rozpoznanie, procedura) dla pacjenta, który zakończył proces na tablecie.
 Kryteria akceptacji:
+
 - Dostęp do formularza pacjenta z widocznymi zgodami i schematem ciała.
 - Sekcja medyczna zawiera zdefiniowane pola (listy, checkboxy, pola tekstowe).
 - Sekcja medyczna obsługuje model zmian skórnych (lista zmian 1..N) i dane per zmiana: cechy dermatoskopowe, ocena kliniczna oraz ryzyko złośliwości.
@@ -194,6 +216,7 @@ ID: US-009
 Tytuł: Zapis szkicu i publikacja
 Opis: Jako lekarz, chcę mieć możliwość zapisu pracy jako szkic lub ostatecznej publikacji dokumentu.
 Kryteria akceptacji:
+
 - Opcja Zapisz jako szkic pozwala na późniejszą edycję i nie uruchamia wysyłki.
 - Opcja Zatwierdź i wyślij blokuje edycję, zmienia status na Opublikowany i kolejkuje zadanie generowania PDF w tle (asynchronicznie).
 - UI lekarza nie jest blokowane przez proces generowania PDF, uploadu czy wysyłki SMS.
@@ -205,6 +228,7 @@ ID: US-010
 Tytuł: Edycja opublikowanego dokumentu
 Opis: Jako lekarz, chcę poprawić błąd w już opublikowanym dokumencie i wysłać go ponownie.
 Kryteria akceptacji:
+
 - Możliwość edycji zatwierdzonego formularza.
 - Ponowne zatwierdzenie tworzy nową wersję PDF.
 - Nowa wersja nadpisuje plik w HiDrive (zachowanie tej samej ścieżki/nazwy).
@@ -214,16 +238,19 @@ ID: US-019
 Tytuł: Własne szablony tekstu lekarza (DE/EN/PL)
 Opis: Jako lekarz, chcę tworzyć i używać własnych szablonów opisu, aby zachować swój styl dokumentacji.
 Kryteria akceptacji:
+
 - Lekarz może utworzyć, edytować, aktywować/dezaktywować własny szablon tekstu (dla języka niemieckiego, angielskiego lub polskiego).
 - System zapisuje zarówno tekst wygenerowany automatycznie, jak i tekst końcowy po edycji lekarza.
 - Zmiana szablonu po publikacji nie modyfikuje historycznych wersji dokumentu.
 - Szablony globalne (kliniki) i prywatne (per lekarz) są rozróżnione w uprawnieniach.
 
 ### System i Backend
+
 ID: US-011
 Tytuł: Codzienny import plików z listą wizyt (Faza 3)
 Opis: System codziennie importuje listę wizyt z plików eksportowanych z Doctolib, aby wyeliminować ręczne wprowadzanie danych.
 Kryteria akceptacji:
+
 - System przyjmuje tekstowy PDF Doctolib o jednym wspieranym układzie.
 - Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
 - `Doctolib Patient ID` jest polem opcjonalnym i pomocniczym; jeśli występuje w danych importowanych lub ręcznych, musi być unikalne.
@@ -234,6 +261,7 @@ ID: US-012
 Tytuł: Przetwarzanie Outbox (HiDrive i SMS)
 Opis: System automatycznie przetwarza kolejkę zadań, aby zapisać pliki w chmurze i powiadomić pacjenta.
 Kryteria akceptacji:
+
 - Cron uruchamia przetwarzanie tabeli Outbox.
 - Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez zadanie Django Tasks, a nie w żądaniu HTTP.
 - Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
@@ -245,6 +273,7 @@ ID: US-013
 Tytuł: Polityka retencji (30 dni)
 Opis: System automatycznie usuwa pliki PDF z lokalnego serwera po 30 dniach, aby oszczędzać miejsce i dbać o bezpieczeństwo, ale tylko jeśli są bezpieczne w archiwum.
 Kryteria akceptacji:
+
 - Cron sprawdza dokumenty starsze niż 30 dni od publikacji.
 - Usunięcie następuje TYLKO GDY: flaga zapisu do HiDrive == true ORAZ flaga wysyłki SMS == true.
 - Zdarzenie usunięcia jest logowane w systemie.
@@ -253,6 +282,7 @@ ID: US-014
 Tytuł: Monitoring outbox i integracji
 Opis: Jako zespół utrzymania, chcę widzieć metryki i alerty dla outbox oraz integracji, aby wykrywać awarie zanim zgłosi je recepcja.
 Kryteria akceptacji:
+
 - Dostępne są dwa dashboardy:
   - prosty dashboard recepcji/lekarza (status dokumentów i błędów wymagających interwencji),
   - zaawansowany dashboard administracyjno-utrzymaniowy (metryki p95/p99, success ratio, queue depth, oldest pending).
@@ -264,6 +294,7 @@ ID: US-015
 Tytuł: Idempotentny import wieloźródłowy
 Opis: Jako recepcja, chcę aby ręczne dodanie, import pliku i autoimport nie tworzyły duplikatów wizyt i pacjentów.
 Kryteria akceptacji:
+
 - Wszystkie ścieżki wejścia korzystają z jednej warstwy ingestii i tych samych walidacji.
 - Import jest idempotentny na podstawie klucza zewnętrznego wizyty/pacjenta.
 - Dla danych pacjenta obowiązuje reguła unikalności `first_name + last_name + phone + date_of_birth`; `Doctolib Patient ID` pozostaje dodatkowym, opcjonalnym i nadal unikalnym identyfikatorem pomocniczym.
@@ -272,6 +303,7 @@ ID: US-016
 Tytuł: Wypełnienie ankiety anamnestycznej przez pacjenta (DE/EN)
 Opis: Jako pacjent, chcę wypełnić na tablecie ankietę anamnestyczną przed wizytą, aby lekarz otrzymał ustrukturyzowany wywiad.
 Kryteria akceptacji:
+
 - Ankieta zawiera predefiniowane pytania i odpowiedzi (m.in. `Ja/Nein/Weiß nicht` oraz odpowiedniki EN) mapowane do stabilnych kodów technicznych.
 - Treść pytań i odpowiedzi wyświetla się w języku interfejsu pacjenta (angielski lub niemiecki), bez zmiany modelu danych.
 - Odpowiedzi są zapisywane jako dane ustrukturyzowane (kody pytań/opcji), a nie jako wolny tekst.
@@ -279,11 +311,11 @@ Kryteria akceptacji:
 - Walidacja blokuje finalizację formularza, jeśli nie udzielono odpowiedzi na pytania oznaczone jako wymagane.
 - Po finalizacji formularza lekarz widzi odpowiedzi anamnestyczne razem ze zgodami i schematem ciała.
 
-
 ID: US-017
 Tytuł: Awaryjny import z szablonu (Excel Template Fallback)
 Opis: Jako administrator, chcę mieć możliwość pobrania awaryjnego szablonu Excel i zaimportowania go, aby utrzymać ciągłość pracy recepcji w przypadku nagłej zmiany formatu pliku Doctolib.
 Kryteria akceptacji:
+
 - System udostępnia do pobrania stały szablon `.xlsx` z kolumnami: `doctolib_id`, `first_name`, `last_name`, `dob`, `phone`, `email`.
 - Dostępny jest dedykowany importer "Awaryjny", który akceptuje wyłącznie pliki zgodne z tym szablonem (sztywna walidacja).
 - Procedura awaryjna (kopiuj-wklej z zepsutego pliku do szablonu) jest udokumentowana w runbooku dla administratora/recepcji.
@@ -292,6 +324,7 @@ Kryteria akceptacji:
 ## 6. Metryki sukcesu
 
 Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe dla monitoringu technicznego):
+
 - Dostępność systemu (Uptime) na poziomie >= 99.9% w godzinach pracy placówki.
 - Skuteczność zapisu do HiDrive >= 99.0% (okno 24h).
 - Skuteczność wysyłki SMS >= 98.0% (okno 24h).
@@ -321,3 +354,4 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 - `anamnesis_payload` przechowuje neutralne językowo kody pytań i opcji; lokalizacja DE/EN jest odpowiedzialnością warstwy prezentacji/słowników.
 - **Opis lekarski (Befund):** W `medical_payload` zapisywany jest zarówno wybór strukturyzowany (checkboxy, opcje – do ewentualnego ponownego wygenerowania tekstu), jak i **końcowy tekst opisu po edycji przez lekarza**. Do PDF i archiwum trafia wersja zatwierdzona przez lekarza (po ewentualnych poprawkach wygenerowanego tekstu lub dopisaniach własnych).
 - `medical_payload` dla Befund v1 (`medical_payload_schema_version: 1`) zawiera część globalną i tablicę **grup zmian** `lesions[]`. Każdy element `lesions[]` ma: `lesion_numbers` (array integer – numery zmian z Wideodermatoskopu w tej grupie), `dermatoscopic_features[]`, `clinical_assessment`, `malignancy_risk`, `generated_text`, `edited_text`. Walidacja: `lesion_numbers` niepuste (`length >= 1`), bez duplikatów w tablicy; `clinical_assessment` i `malignancy_risk` z zdefiniowanych zestawów (jak w db-plan). Do PDF trafia tekst końcowy (`edited_text` lub `generated_text`) per grupa oraz podsumowanie globalne.
+
