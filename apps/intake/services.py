@@ -754,6 +754,7 @@ def submit_patient_intake_form(
         event_type="INTAKE_SUBMITTED",
         actor_user_id=submitted_by_user_id,
         patient_id=queue_entry.patient_id,
+        context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
         metadata={
             "intake_form_id": str(intake_form.id),
             "intake_document_version_id": str(intake_version.id),

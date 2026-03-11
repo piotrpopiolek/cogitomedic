@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 from typing import Any
 
@@ -9,24 +10,33 @@ from django.db.models import Q
 from django.db.utils import Error as DatabaseError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from pydantic import BaseModel, ConfigDict
 
+from apps.operations.services import REF_KEY
 from apps.core.api_utils import json_error, parse_list_limit, require_auth, require_user_role, safe_parse_positive_int
 from apps.operations.metrics import build_metrics_payload
 from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 
+def _ref(event: AuditEvent, key: str) -> str | None:
+    """Return immutable ref from metadata when FK was nulled (compliance)."""
+    ref = (event.metadata or {}).get(REF_KEY) or {}
+    return ref.get(key)
+
+
 def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
+    """Serialize event; use metadata._ref for IDs when FK is null (after anonymization/deletion)."""
     return {
         "id": str(event.id),
         "event_time": event.event_time.isoformat(),
         "event_type": event.event_type,
-        "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
-        "patient_id": str(event.patient_id) if event.patient_id else None,
-        "medical_document_id": str(event.medical_document_id) if event.medical_document_id else None,
-        "outbox_event_id": str(event.outbox_event_id) if event.outbox_event_id else None,
-        "context_clinic_site_id": str(event.context_clinic_site_id) if event.context_clinic_site_id else None,
+        "actor_user_id": str(event.actor_user_id) if event.actor_user_id else _ref(event, "actor_user_id"),
+        "patient_id": str(event.patient_id) if event.patient_id else _ref(event, "patient_id"),
+        "medical_document_id": str(event.medical_document_id) if event.medical_document_id else _ref(event, "medical_document_id"),
+        "outbox_event_id": str(event.outbox_event_id) if event.outbox_event_id else _ref(event, "outbox_event_id"),
+        "context_clinic_site_id": str(event.context_clinic_site_id) if event.context_clinic_site_id else _ref(event, "context_clinic_site_id"),
         "metadata": event.metadata,
     }
 
@@ -60,7 +70,43 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
     medical_document_id = request.GET.get("medical_document_id")
     if medical_document_id:
-        qs = qs.filter(medical_document_id=medical_document_id)
+        try:
+            qs = qs.filter(medical_document_id=uuid.UUID(medical_document_id))
+        except (ValueError, TypeError):
+            pass
+
+    context_clinic_site_id = request.GET.get("context_clinic_site_id")
+    if context_clinic_site_id:
+        try:
+            qs = qs.filter(context_clinic_site_id=uuid.UUID(context_clinic_site_id))
+        except (ValueError, TypeError):
+            pass
+
+    actor_user_id = request.GET.get("actor_user_id")
+    if actor_user_id:
+        try:
+            qs = qs.filter(actor_user_id=uuid.UUID(actor_user_id))
+        except (ValueError, TypeError):
+            pass
+
+    outbox_event_id = request.GET.get("outbox_event_id")
+    if outbox_event_id:
+        try:
+            qs = qs.filter(outbox_event_id=uuid.UUID(outbox_event_id))
+        except (ValueError, TypeError):
+            pass
+
+    from_time = request.GET.get("from")
+    if from_time:
+        parsed = parse_datetime(from_time)
+        if parsed:
+            qs = qs.filter(event_time__gte=parsed)
+
+    to_time = request.GET.get("to")
+    if to_time:
+        parsed = parse_datetime(to_time)
+        if parsed:
+            qs = qs.filter(event_time__lte=parsed)
 
     page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)

@@ -153,6 +153,7 @@ def save_draft_document_version(
             actor_user_id=updated_by_user_id,
             patient_id=medical_document.queue_entry.patient_id,
             medical_document_id=medical_document.id,
+            context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
             metadata={
                 "medical_document_version_id": str(latest_version.id),
                 "version_no": latest_version.version_no,
@@ -193,6 +194,7 @@ def save_draft_document_version(
         actor_user_id=updated_by_user_id,
         patient_id=medical_document.queue_entry.patient_id,
         medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
         metadata={
             "medical_document_version_id": str(created_version.id),
             "version_no": created_version.version_no,
@@ -329,6 +331,7 @@ def publish_document_version(
         actor_user_id=published_by_user_id,
         patient_id=medical_document.queue_entry.patient_id,
         medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
         metadata={
             "medical_document_version_id": str(draft_version.id),
             "version_no": draft_version.version_no,
@@ -641,6 +644,7 @@ def retry_latest_document_processing(
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         outbox_event_id=retried.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
         metadata={
             "medical_document_version_id": str(latest_version.id),
             "event_type": retried.event_type,
