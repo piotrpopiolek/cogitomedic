@@ -398,10 +398,11 @@
 - `patient_id` `uuid` NULL FK -> `patient(id)` ON DELETE SET NULL
 - `medical_document_id` `uuid` NULL FK -> `medical_document(id)` ON DELETE SET NULL
 - `outbox_event_id` `uuid` NULL FK -> `outbox_event(id)` ON DELETE SET NULL
-- `context_clinic_site_id` `uuid` NULL
+- `context_clinic_site_id` `uuid` NULL FK -> `clinic_site(id)` ON DELETE SET NULL
 - `metadata` `jsonb` NOT NULL DEFAULT '{}'::jsonb
 - Ograniczenia:
   - `CHECK (jsonb_typeof(metadata) = 'object')`
+- Uwaga: W `metadata` zarezerwowany klucz `_ref` (obiekt) przechowuje niezmienną kopię ID encji (`patient_id`, `medical_document_id`, `context_clinic_site_id`, `actor_user_id`, `outbox_event_id`) w celu compliance po anonimizacji/usunięciu (gdy FK ulegnie SET NULL).
 
 ## 2. Relacje między tabelami
 
@@ -468,6 +469,10 @@
 - `outbox_event(event_type, status, retry_count, available_at, payload_schema_version)`
 - `outbox_event(medical_document_version_id, created_at DESC)`
 - `audit_event(event_time DESC)`
+- `audit_event(patient_id, event_time DESC)`
+- `audit_event(medical_document_id, event_time DESC)`
+- `audit_event(context_clinic_site_id, event_time DESC)`
+- `audit_event(outbox_event_id, event_time DESC)`
 - `audit_event` -> `GIN (metadata jsonb_path_ops)` (w szczególności po `metadata->>'assigned_doctor_id'`)
 
 ### 3.2. Indeksy częściowe (PostgreSQL partial indexes)

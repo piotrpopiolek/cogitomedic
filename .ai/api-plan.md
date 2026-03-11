@@ -984,8 +984,8 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - **GET** `/audit-events`
   - Description: Audit trail query.
-  - Query params: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `from`, `to`.
-  - Response JSON: audit events list.
+  - Query params: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUIDs for entity IDs; ISO datetime for `from`/`to`).
+  - Response JSON: audit events list. When an entity is anonymized or deleted, its FK may be NULL; the API still exposes the ID from `metadata._ref` for compliance.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
@@ -1113,7 +1113,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - `row_number > 0` in error rows.
 
 - `audit_event`
-  - `metadata` must be JSON object.
+  - `metadata` must be JSON object. Reserved key `_ref` stores immutable copy of entity IDs (patient_id, medical_document_id, context_clinic_site_id, etc.) for compliance after anonymization/deletion.
 
 ### 4.2 Business logic implementation in API
 

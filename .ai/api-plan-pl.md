@@ -990,8 +990,8 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 - **GET** `/audit-events`
   - Opis: Zapytania do śladu audytowego.
-  - Parametry zapytania: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `from`, `to`.
-  - Response JSON: lista zdarzeń audytowych.
+  - Parametry zapytania: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUID dla identyfikatorów encji; ISO datetime dla `from`/`to`).
+  - Response JSON: lista zdarzeń audytowych. Po anonimizacji lub usunięciu encji FK może być NULL; API nadal zwraca ID z `metadata._ref` w celu compliance.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
 
@@ -1120,7 +1120,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - `row_number > 0` dla rekordów błędów.
 
 - `audit_event`
-  - `metadata` musi być obiektem JSON.
+  - `metadata` musi być obiektem JSON. Zarezerwowany klucz `_ref` przechowuje niezmienną kopię ID encji (patient_id, medical_document_id, context_clinic_site_id itd.) w celu compliance po anonimizacji/usunięciu.
 
 ### 4.2 Implementacja logiki biznesowej w API
 
