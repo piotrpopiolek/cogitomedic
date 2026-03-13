@@ -505,3 +505,20 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     "https://sentimentless-lourie-predesirously.ngrok-free.dev",
 ]
+
+# PDF import: INFO logs (completed import, extracted text preview) visible in console/Docker.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "apps.reception.pdf_import": {
+            "level": "INFO",
+            "handlers": ["console"],
+        },
+    },
+}
