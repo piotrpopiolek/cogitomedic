@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import unicodedata
 import uuid
@@ -10,11 +11,20 @@ from pathlib import Path
 from typing import Any
 
 import pdfplumber
+try:
+    import fitz  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - optional dependency
+    fitz = None
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError, StateTransitionError
+
+logger = logging.getLogger(__name__)
+
+# Max length of extracted text to log (avoid huge payloads).
+_EXTRACTED_TEXT_LOG_LIMIT = 2000
 from apps.reception.models import (
     ClinicSite,
     ImportSourceSystem,
@@ -173,10 +183,116 @@ def _sanitize_pdf_text(value: str) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
+def _full_text_for_layout_check(document: ExtractedPdfDocument) -> str:
+    """
+    Text used for layout validation. Strips (cid:N) placeholders so that
+    CID-encoded PDFs don't match literal '(cid:0)' etc.; after stripping,
+    if the PDF had real text mixed in, it can still match.
+    """
+    return _sanitize_pdf_text(document.full_text)
+
+
+def _is_likely_cid_encoded(full_text: str, sanitized: str) -> bool:
+    """True if PDF appears to be mostly CID-encoded (no usable text after stripping CIDs)."""
+    if not full_text or len(sanitized) > 100:
+        return False
+    cid_count = len(re.findall(r"\(cid:\d+\)", full_text))
+    return cid_count > 20 and len(sanitized.strip()) < 50
+
+
 def _strip_date_fragments(value: str) -> str:
     cleaned = DATE_TOKEN_PATTERN.sub("", value or "")
     cleaned = TEXTUAL_DATE_PATTERN.sub("", cleaned)
     return _sanitize_pdf_text(cleaned).strip(" -:|,")
+
+
+# Alias table for Doctolib PDF import: one logical column can match multiple header strings (DE/PL/EN).
+# Keys are internal column names; values are tuples of normalized labels accepted for that column.
+DOCTOLIB_IMPORT_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "appointment_time_raw": ("godzina", "uhrzeit"),
+    "full_name_raw": ("imie nazwisko", "patient:in", "patientin", "patient", "imie"),
+    "phone_raw": ("telefon",),
+    "date_of_birth_raw": ("data urodzenia", "geburtsdatum", "data"),
+    "email_raw": ("email", "e-mail-adresse"),
+    "address_raw": ("adres", "anschrift"),
+    "postal_code_raw": ("kod pocztowy", "postleitzahl", "kod"),
+}
+DOCTOLIB_IMPORT_COLUMN_ORDER = (
+    "appointment_time_raw",
+    "full_name_raw",
+    "phone_raw",
+    "date_of_birth_raw",
+    "email_raw",
+    "address_raw",
+    "postal_code_raw",
+)
+
+
+def _normalized_text_has_column(normalized_text: str, column_key: str) -> bool:
+    """Return True if normalized_text contains any alias for the given column."""
+    return any(
+        alias in normalized_text for alias in DOCTOLIB_IMPORT_COLUMN_ALIASES[column_key]
+    )
+
+
+def _label_matches_column(normalized_label: str, column_key: str) -> bool:
+    """Return True if a single header word/label matches any alias for the column."""
+    return normalized_label in DOCTOLIB_IMPORT_COLUMN_ALIASES[column_key]
+
+
+def _document_quality_score(document: ExtractedPdfDocument) -> tuple[int, int, int, int]:
+    """
+    Rank extraction quality so we can choose the more readable backend.
+    Prefer documents that expose expected headers and contain more letters.
+    """
+    normalized_text = _normalize_label(_full_text_for_layout_check(document))
+    alias_hits = sum(
+        1 for column_key in DOCTOLIB_IMPORT_COLUMN_ORDER if _normalized_text_has_column(normalized_text, column_key)
+    )
+    best_line_alias_hits = 0
+    for line in document.lines:
+        normalized_line = _normalize_label(_sanitize_pdf_text(line.text))
+        if not normalized_line:
+            continue
+        line_alias_hits = sum(
+            1 for column_key in DOCTOLIB_IMPORT_COLUMN_ORDER if _normalized_text_has_column(normalized_line, column_key)
+        )
+        best_line_alias_hits = max(best_line_alias_hits, line_alias_hits)
+    alpha_chars = sum(1 for char in normalized_text if char.isalpha())
+    return (alias_hits, best_line_alias_hits, alpha_chars, len(normalized_text))
+
+
+def _log_extracted_pdf_text(
+    file_path: str | Path | None,
+    document: ExtractedPdfDocument,
+    *,
+    normalized_text: str | None = None,
+    missing_columns: list[str] | None = None,
+) -> None:
+    """Log extracted and normalized PDF text for debugging layout validation."""
+    path_str = str(file_path) if file_path else "unknown"
+    norm = (
+        normalized_text
+        if normalized_text is not None
+        else _normalize_label(_full_text_for_layout_check(document))
+    )
+    snippet = norm[:_EXTRACTED_TEXT_LOG_LIMIT]
+    if len(norm) > _EXTRACTED_TEXT_LOG_LIMIT:
+        snippet += f" ... [truncated, total {len(norm)} chars]"
+    if not missing_columns:
+        logger.info(
+            "PDF import extracted text: path=%s, full_text_len=%s, normalized_preview=%s",
+            path_str,
+            len(document.full_text),
+            repr(snippet),
+        )
+    if missing_columns:
+        logger.warning(
+            "PDF import layout validation failed: path=%s, missing_columns=%s, normalized_text_preview=%s",
+            path_str,
+            missing_columns,
+            repr(snippet),
+        )
 
 
 def _group_words_into_lines(words: list[ExtractedWord], *, y_tolerance: float = 3.0) -> list[ExtractedLine]:
@@ -208,33 +324,91 @@ def _group_words_into_lines(words: list[ExtractedWord], *, y_tolerance: float = 
 
 class PdfTextExtractor:
     def extract(self, file_path: str | Path) -> ExtractedPdfDocument:
-        lines: list[ExtractedLine] = []
-        full_text_parts: list[str] = []
+        pdfplumber_document: ExtractedPdfDocument | None = None
+        pdfplumber_error: Exception | None = None
+
         try:
-            with pdfplumber.open(str(file_path)) as pdf:
-                for page_number, page in enumerate(pdf.pages, start=1):
-                    page_text = page.extract_text() or ""
-                    full_text_parts.append(page_text)
-                    page_words = [
-                        ExtractedWord(
-                            text=str(word.get("text", "")).strip(),
-                            x0=float(word.get("x0", 0.0)),
-                            x1=float(word.get("x1", 0.0)),
-                            top=float(word.get("top", 0.0)),
-                            bottom=float(word.get("bottom", 0.0)),
-                            page_number=page_number,
-                        )
-                        for word in page.extract_words(use_text_flow=True, keep_blank_chars=False)
-                        if str(word.get("text", "")).strip()
-                    ]
-                    lines.extend(_group_words_into_lines(page_words))
-        except PatientPdfImportFailure:
-            raise
+            pdfplumber_document = self._extract_with_pdfplumber(file_path)
         except Exception as exc:
+            pdfplumber_error = exc
+
+        if fitz is not None and Path(file_path).exists():
+            try:
+                pymupdf_document = self._extract_with_pymupdf(file_path)
+            except Exception as exc:
+                if pdfplumber_document is None:
+                    raise PatientPdfImportFailure(
+                        PatientPdfImportErrorCode.PDF_PARSE_FAILED,
+                        f"Could not read PDF file: {exc}",
+                    ) from exc
+                logger.warning("PyMuPDF fallback extraction failed for %s: %s", file_path, exc)
+            else:
+                if pdfplumber_document is None:
+                    logger.info("PDF import extractor selected: path=%s, extractor=pymupdf", file_path)
+                    return pymupdf_document
+                if _document_quality_score(pymupdf_document) > _document_quality_score(pdfplumber_document):
+                    logger.info("PDF import extractor selected: path=%s, extractor=pymupdf", file_path)
+                    return pymupdf_document
+
+        if pdfplumber_document is not None:
+            return pdfplumber_document
+        if pdfplumber_error is not None:
             raise PatientPdfImportFailure(
                 PatientPdfImportErrorCode.PDF_PARSE_FAILED,
-                f"Could not read PDF file: {exc}",
-            ) from exc
+                f"Could not read PDF file: {pdfplumber_error}",
+            ) from pdfplumber_error
+        raise PatientPdfImportFailure(
+            PatientPdfImportErrorCode.PDF_PARSE_FAILED,
+            "Could not read PDF file.",
+        )
+
+    def _extract_with_pdfplumber(self, file_path: str | Path) -> ExtractedPdfDocument:
+        lines: list[ExtractedLine] = []
+        full_text_parts: list[str] = []
+        with pdfplumber.open(str(file_path)) as pdf:
+            for page_number, page in enumerate(pdf.pages, start=1):
+                page_text = page.extract_text() or ""
+                full_text_parts.append(page_text)
+                page_words = [
+                    ExtractedWord(
+                        text=str(word.get("text", "")).strip(),
+                        x0=float(word.get("x0", 0.0)),
+                        x1=float(word.get("x1", 0.0)),
+                        top=float(word.get("top", 0.0)),
+                        bottom=float(word.get("bottom", 0.0)),
+                        page_number=page_number,
+                    )
+                    for word in page.extract_words(use_text_flow=True, keep_blank_chars=False)
+                    if str(word.get("text", "")).strip()
+                ]
+                lines.extend(_group_words_into_lines(page_words))
+        return ExtractedPdfDocument(
+            lines=tuple(lines),
+            full_text="\n".join(part for part in full_text_parts if part),
+        )
+
+    def _extract_with_pymupdf(self, file_path: str | Path) -> ExtractedPdfDocument:
+        if fitz is None:  # pragma: no cover - guarded by caller
+            raise RuntimeError("PyMuPDF is not installed")
+        lines: list[ExtractedLine] = []
+        full_text_parts: list[str] = []
+        with fitz.open(str(file_path)) as pdf:
+            for page_number, page in enumerate(pdf, start=1):
+                page_text = page.get_text("text", sort=True) or ""
+                full_text_parts.append(page_text)
+                page_words = [
+                    ExtractedWord(
+                        text=str(word[4]).strip(),
+                        x0=float(word[0]),
+                        x1=float(word[2]),
+                        top=float(word[1]),
+                        bottom=float(word[3]),
+                        page_number=page_number,
+                    )
+                    for word in page.get_text("words", sort=True)
+                    if len(word) >= 5 and str(word[4]).strip()
+                ]
+                lines.extend(_group_words_into_lines(page_words))
         return ExtractedPdfDocument(
             lines=tuple(lines),
             full_text="\n".join(part for part in full_text_parts if part),
@@ -242,32 +416,30 @@ class PdfTextExtractor:
 
 
 class DoctolibPdfLayoutDetector:
-    REQUIRED_MARKERS = (
-        ("godzina", "uhrzeit"),
-        "telefon",
-        ("email", "e-mail-adresse"),
-        ("adres", "anschrift"),
-        ("kod pocztowy", "postleitzahl"),
-        ("data urodzenia", "geburtsdatum"),
-    )
+    """Validates that the PDF contains the expected Doctolib table header (all columns via alias table)."""
 
-    def validate(self, document: ExtractedPdfDocument) -> None:
-        normalized_text = _normalize_label(document.full_text)
-        has_required_name_header = any(
-            marker in normalized_text
-            for marker in ("imie nazwisko", "patient:in", "patientin")
-        )
-        if has_required_name_header and all(
-            any(option in normalized_text for option in marker)
-            if isinstance(marker, tuple)
-            else marker in normalized_text
-            for marker in self.REQUIRED_MARKERS
-        ):
+    def validate(self, document: ExtractedPdfDocument, file_path: str | Path | None = None) -> None:
+        text_for_layout = _full_text_for_layout_check(document)
+        normalized_text = _normalize_label(text_for_layout)
+        missing: list[str] = []
+        for column_key in DOCTOLIB_IMPORT_COLUMN_ORDER:
+            if not _normalized_text_has_column(normalized_text, column_key):
+                aliases = DOCTOLIB_IMPORT_COLUMN_ALIASES[column_key]
+                missing.append(f"one of: {', '.join(aliases)}")
+        if not missing:
             return
-        raise PatientPdfImportFailure(
-            PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT,
-            "PDF layout does not match the expected Doctolib export.",
+        _log_extracted_pdf_text(file_path, document, normalized_text=normalized_text, missing_columns=missing)
+        msg = (
+            "PDF layout does not match the expected Doctolib export. Missing in PDF: "
+            + "; ".join(missing)
+            + ". Expected: table header with Uhrzeit/Godzina, Patient:in/Imię Nazwisko, Telefon, Geburtsdatum, E-Mail, Anschrift, Postleitzahl (DE/PL)."
         )
+        if _is_likely_cid_encoded(document.full_text, text_for_layout):
+            msg += (
+                " This PDF appears to use CID-encoded fonts (text not extractable). "
+                "Try re-exporting from Doctolib (e.g. 'Print to PDF' with 'Background graphics') or use a different browser/PDF export."
+            )
+        raise PatientPdfImportFailure(PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT, msg)
 
 
 class DoctolibPdfParser:
@@ -282,7 +454,8 @@ class DoctolibPdfParser:
 
     def parse(self, file_path: str | Path) -> ParsedPdfImport:
         document = self.extractor.extract(file_path)
-        self.layout_detector.validate(document)
+        _log_extracted_pdf_text(file_path, document)
+        self.layout_detector.validate(document, file_path)
 
         lines = [line for line in document.lines if line.text.strip()]
         header_index = self._find_header_index(lines)
@@ -294,12 +467,11 @@ class DoctolibPdfParser:
         row_number = 1
 
         for line in lines[header_index + 1 :]:
-            normalized_line = _normalize_label(line.text)
+            normalized_line = _normalize_label(_sanitize_pdf_text(line.text))
             if not normalized_line:
                 continue
-            if (
-                ("imie nazwisko" in normalized_line or "patient:in" in normalized_line or "patientin" in normalized_line)
-                and "telefon" in normalized_line
+            if _normalized_text_has_column(normalized_line, "full_name_raw") and _normalized_text_has_column(
+                normalized_line, "phone_raw"
             ):
                 continue
             if not line.words or not TIME_PATTERN.fullmatch(line.words[0].text.strip()):
@@ -326,16 +498,8 @@ class DoctolibPdfParser:
 
     def _find_header_index(self, lines: list[ExtractedLine]) -> int:
         for index, line in enumerate(lines):
-            normalized = _normalize_label(line.text)
-            if (
-                ("godzina" in normalized or "uhrzeit" in normalized)
-                and ("imie nazwisko" in normalized or "patient:in" in normalized or "patientin" in normalized)
-                and "telefon" in normalized
-                and ("data urodzenia" in normalized or "geburtsdatum" in normalized)
-                and ("email" in normalized or "e-mail-adresse" in normalized)
-                and ("adres" in normalized or "anschrift" in normalized)
-                and ("kod pocztowy" in normalized or "postleitzahl" in normalized)
-            ):
+            normalized = _normalize_label(_sanitize_pdf_text(line.text))
+            if all(_normalized_text_has_column(normalized, col) for col in DOCTOLIB_IMPORT_COLUMN_ORDER):
                 return index
         raise PatientPdfImportFailure(
             PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT,
@@ -387,32 +551,13 @@ class DoctolibPdfParser:
     def _build_column_ranges(self, header_line: ExtractedLine) -> dict[str, tuple[float, float | None]]:
         header_starts: list[tuple[str, float]] = []
         for word in header_line.words:
-            label = _normalize_label(word.text)
-            if label in {"godzina", "uhrzeit"}:
-                header_starts.append(("appointment_time_raw", word.x0))
-            elif label in {"imie", "imie nazwisko"} or label.startswith("patient"):
-                header_starts.append(("full_name_raw", word.x0))
-            elif label == "telefon":
-                header_starts.append(("phone_raw", word.x0))
-            elif label in {"data", "geburtsdatum"}:
-                header_starts.append(("date_of_birth_raw", word.x0))
-            elif label in {"email", "e-mail-adresse"}:
-                header_starts.append(("email_raw", word.x0))
-            elif label in {"adres", "anschrift"}:
-                header_starts.append(("address_raw", word.x0))
-            elif label in {"kod", "postleitzahl"}:
-                header_starts.append(("postal_code_raw", word.x0))
-        expected_order = [
-            "appointment_time_raw",
-            "full_name_raw",
-            "phone_raw",
-            "date_of_birth_raw",
-            "email_raw",
-            "address_raw",
-            "postal_code_raw",
-        ]
+            label = _normalize_label(_sanitize_pdf_text(word.text))
+            for column_key in DOCTOLIB_IMPORT_COLUMN_ORDER:
+                if _label_matches_column(label, column_key):
+                    header_starts.append((column_key, word.x0))
+                    break
         found_columns = [column_name for column_name, _ in header_starts]
-        if found_columns != expected_order:
+        if found_columns != list(DOCTOLIB_IMPORT_COLUMN_ORDER):
             raise PatientPdfImportFailure(
                 PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT,
                 "Could not determine PDF column positions.",
@@ -712,6 +857,16 @@ def process_patient_pdf_import_batch(*, batch_id: uuid.UUID, stored_file_path: s
                 "status",
                 "finished_at",
             ]
+        )
+        logger.info(
+            "PDF import completed: batch_id=%s, path=%s, clinic=%s, import_date=%s, total_rows=%s, inserted=%s, errors=%s",
+            batch_id,
+            stored_file_path,
+            parsed_import.clinic_name,
+            parsed_import.import_date.isoformat(),
+            batch.total_rows,
+            inserted_rows,
+            error_rows,
         )
     except PatientPdfImportFailure as exc:
         _mark_batch_failed(batch=batch, error_code=exc.error_code, message=str(exc))
