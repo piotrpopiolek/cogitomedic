@@ -42,6 +42,7 @@
 - `audit-events` -> `audit_event`
 - `operations` -> domain actions not pure CRUD (publish, retry, retention)
 - `observability` -> metrics/health surfaces for operations
+- `patient-results` -> portal wyniki (US-018): request-otp, verify-otp, download PDF; no staff auth – patient login by phone+DOB, OTP 15 min
 
 ## 2. Endpoints
 
@@ -1146,8 +1147,15 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 - Transactional outbox chain:
   - Publish transaction enqueues `GENERATE_PDF`.
   - Django Tasks processing enqueues `HIDRIVE_UPLOAD` after successful PDF.
-  - Django Tasks processing enqueues `SMS_SEND` after successful upload.
+  - Django Tasks processing enqueues `SMS_SEND` after successful upload. **SMS content:** logistic only – „Nowa dokumentacja w Cogito“ (no link; patient fetches via portal wyniki).
   - Retries and dead-letter managed via outbox status/retry fields.
+
+- Patient results portal (US-018, PRD 3.4a):
+  - SMS is strictly logistic; patient visits e.g. wyniki.cogitomedica.pl.
+  - Login: phone + date_of_birth (verified at reception).
+  - OTP: 6-digit code, 15 min validity; sent asynchronously when phone+DOB match.
+  - After valid OTP: serve PDF via HTTPS; audit logs (timestamp, IP).
+  - Doctor can revoke publication; patient will not see revoked file after OTP entry.
 
 - Republishing:
   - Editing a published document creates next version and repeats chain; archive path is overwritten per business rule.

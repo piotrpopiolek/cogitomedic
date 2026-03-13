@@ -28,7 +28,7 @@ Obecny proces obsługi pacjenta opiera się na dokumentacji papierowej, co gener
 - Trudności w archiwizacji i wyszukiwaniu historycznych zgód.
 - Brak natychmiastowej dostępności cyfrowej kopii dokumentu dla pacjenta i lekarza.
 - Konieczność fizycznego przechowywania dużej ilości papieru.
-- Skomplikowany proces udostępniania wyników i dokumentacji pacjentowi po wizycie.
+- Skomplikowany proces udostępniania wyników i dokumentacji pacjentowi po wizycie (zastąpiony 4-etapowym procesem: SMS logistyczny → portal wyniki z logowaniem phone+DOB → OTP → pobranie PDF).
 
 Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cyfrowego obiegu, od momentu rejestracji, przez podpis na tablecie, aż po bezpieczną archiwizację w chmurze i powiadomienie pacjenta.
 
@@ -76,9 +76,23 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Mechanizm Transactional Outbox do obsługi procesów asynchronicznych.
 - Mockowanie systemu plików HiDrive (Faza 1-2) z zachowaniem docelowej struktury katalogów.
 - Integracja z API HiDrive (Faza 3).
-- Integracja z SMSApi do powiadamiania pacjentów o dostępności dokumentu.
+- Integracja z SMSApi do powiadamiania pacjentów (SMS wyłącznie logistyczny: „Nowa dokumentacja w Cogito” – bez informacji o badaniu/wyniku; 100% zgodność RODO/BÄK).
 - Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
 - Tłumaczenia UI/PDF są utrzymywane wyłącznie w bazie danych i edytowalne przez administrację w Django Admin (bez fallbacków runtime w kodzie).
+
+### 3.4a. Proces udostępniania wyników pacjentowi (4 etapy, RODO/BÄK)
+
+Proces udostępniania podzielony jest na kilka ściśle zabezpieczonych etapów, stanowiących modelowy przykład zgodności z RODO i wytycznymi BÄK:
+
+- **Krok 1 – Powiadomienie SMS o charakterze logistycznym:** Gdy lekarz publikuje Befund, architektura Transactional Outbox wysyła zadanie do bramki SMSApi. Pacjent otrzymuje wyłącznie krótką wiadomość: „Nowa dokumentacja w Cogito”. Taka konstrukcja jest w 100% zgodna z prawem – nie zdradza faktu, jakie badanie zostało przeprowadzone (brak słów o znamionach czy dermatologii) ani jaki jest jego wynik.
+
+- **Krok 2 – Logowanie oparte na danych historycznych (Cross-Verification):** Pacjent samodzielnie wchodzi na bezpieczny adres internetowy (np. wyniki.cogitomedica.pl). Loginem w systemie nie jest ustalany wcześniej ciąg znaków, a zweryfikowany numer telefonu komórkowego skojarzony z datą urodzenia. Dane te były szczegółowo walidowane w recepcji podczas cyfryzacji (integracja z Doctolib/Tablet) i stanowią silny punkt weryfikacji tożsamości („Something you are / Something you know”).
+
+- **Krok 3 – Emisja dynamicznego OTP (One-Time Password):** Jeżeli wprowadzony numer telefonu i data urodzenia korelują z wpisem w bazie PostgreSQL Django, system asynchronicznie generuje i wysyła na podany numer telefonu 6-cyfrowy kod OTP. Kod ten jest ważny wyłącznie przez 15 minut. Jest to mechanizm logowania dwukanałowego (Out-of-Band Authentication) i MFA. Nawet jeśli cyberprzestępca zna datę urodzenia i numer telefonu pacjenta (np. z wycieku innej bazy), nie przejdzie etapu autoryzacji bez fizycznego dostępu do karty SIM w konkretnym oknie 15-minutowym.
+
+- **Krok 4 – Autoryzacja i dostęp:** Po prawidłowym wprowadzeniu kodu OTP pacjent otrzymuje plik PDF z wynikiem przez zaszyfrowane połączenie TLS/HTTPS. Proces odbywa się całkowicie pod kontrolą systemu Cogitomedica, co pozwala na tworzenie logów audytowych (data, godzina, IP pobierającego). Lekarz może asynchronicznie wycofać publikację w panelu Django – pacjent po wpisaniu OTP nie zobaczy już błędnego pliku, co było niemożliwe przy dystrybucji tradycyjnym mailem.
+
+**Zalety:** Eliminacja problemów ze starszymi czytnikami PDF (hasłowane pliki); uwolnienie recepcji od resetowania haseł; pełna suwerenność nad plikiem i możliwość natychmiastowego wycofania błędnej wersji.
 
 ### 3.5. Observability i gotowość operacyjna (wymaganie obowiązkowe)
 
@@ -106,7 +120,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - Moduł lekarza do uzupełniania części medycznej.
 - Generowanie plików PDF z podpisem i schematem ciała.
 - Mock i późniejsza integracja z HiDrive.
-- Powiadomienia SMS (link do pobrania).
+- Powiadomienia SMS (treść logistyczna) + portal wyniki dla pacjenta (logowanie phone+DOB, OTP, pobranie PDF przez HTTPS).
 - Logowanie zdarzeń (OpenTelemetry).
 - Języki interfejsu: niemiecki, angielski i polski.
 - Edycja tłumaczeń DE/EN/PL przez administrację (Django Admin), z walidacją placeholderów i polityką anty-XSS.
@@ -265,7 +279,7 @@ Kryteria akceptacji:
 - Cron uruchamia przetwarzanie tabeli Outbox.
 - Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez zadanie Django Tasks, a nie w żądaniu HTTP.
 - Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
-- Krok 3: Po sukcesie Kroku 2, wysyłka SMS z linkiem do pacjenta.
+- Krok 3: Po sukcesie Kroku 2, wysyłka SMS o charakterze wyłącznie logistycznym – treść: „Nowa dokumentacja w Cogito” (bez linku, bez informacji o badaniu/wyniku; zgodność RODO/BÄK). Pacjent pobiera wynik przez portal wyniki (logowanie phone+DOB, OTP, PDF).
 - W przypadku błędu, zadanie otrzymuje status błędu i jest ponawiane w kolejnym cyklu (zgodnie z polityką retry).
 - Dokument ma status Opublikowany, ale flagi hidrive_sent/sms_sent odzwierciedlają stan faktyczny.
 
@@ -310,6 +324,18 @@ Kryteria akceptacji:
 - Dla pytania o lokalizację zmian pacjent może wskazać obszar na schemacie ciała i/lub wybrać predefiniowany region; opcjonalnie może wpisać "inną lokalizację".
 - Walidacja blokuje finalizację formularza, jeśli nie udzielono odpowiedzi na pytania oznaczone jako wymagane.
 - Po finalizacji formularza lekarz widzi odpowiedzi anamnestyczne razem ze zgodami i schematem ciała.
+
+ID: US-018
+Tytuł: Portal wyniki – dostęp pacjenta do dokumentacji (4 etapy)
+Opis: Jako pacjent, chcę bezpiecznie pobrać moją dokumentację medyczną po otrzymaniu SMS, logując się numerem telefonu i datą urodzenia, a następnie weryfikując tożsamość kodem OTP.
+Kryteria akceptacji:
+
+- Pacjent wchodzi na bezpieczny adres (np. wyniki.cogitomedica.pl).
+- Logowanie: numer telefonu + data urodzenia (dane zweryfikowane w recepcji przy cyfryzacji).
+- Po dopasowaniu w DB system wysyła 6-cyfrowy OTP na podany numer; ważność 15 minut.
+- Po poprawnym OTP pacjent otrzymuje PDF przez HTTPS; logi audytowe (data, godzina, IP).
+- Lekarz może wycofać publikację – pacjent po OTP nie zobaczy już wycofanego pliku.
+- Brak linków w SMS; treść wyłącznie: „Nowa dokumentacja w Cogito”.
 
 ID: US-017
 Tytuł: Awaryjny import z szablonu (Excel Template Fallback)

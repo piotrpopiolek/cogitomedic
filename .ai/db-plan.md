@@ -569,6 +569,7 @@
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
+- **Portal wyniki (US-018, PRD 3.4a):** Proces udostępniania 4-etapowy: SMS logistyczny („Nowa dokumentacja w Cogito"), logowanie pacjenta phone+DOB, OTP 6-cyfrowy 15 min, serwowanie PDF przez HTTPS. Implementacja wymagać może nowej tabeli sesji OTP (np. `patient_results_otp_session`) do przechowania kodu i ważności; audyt pobrań w `audit_event`.
 - Runtime backendu: Django 6 + natywne `django.tasks`; w projekcie obowiązuje jedno rozwiązanie asynchroniczne (Django Tasks + Outbox), a tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu.
 - **Języki portalu:** interfejs jest dostępny w języku niemieckim, angielskim i polskim. Pole `staff_user.preferred_locale` (np. `de-DE`, `en-GB`, `pl-PL`) określa preferowany język panelu personelu; dla tabletu pacjenta język wybierany jest w kontekście sesji/formularza.
 

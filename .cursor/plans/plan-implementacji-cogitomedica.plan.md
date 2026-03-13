@@ -26,6 +26,9 @@ todos:
   - id: phase3-import-hidrive-api
     content: Dowieźć import dzienny i awaryjny oraz integrację API HiDrive (Faza 3).
     status: pending
+  - id: patient-results-portal
+    content: "Portal wyniki (US-018): 4-etapowy proces – SMS logistyczny, logowanie phone+DOB, OTP 15 min, serwowanie PDF przez HTTPS. Zgodność RODO/BÄK."
+    status: pending
   - id: observability-alerting
     content: Wdrożyć metryki, dashboardy, alerting i runbooki dla outbox/import/integracji.
     status: pending

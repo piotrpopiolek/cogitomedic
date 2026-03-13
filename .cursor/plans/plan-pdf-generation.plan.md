@@ -11,6 +11,8 @@ Plan implementacji **realnego** generowania plików PDF dokumentu medycznego (Be
 
 **Stan wdrożenia (2026-02-22):** Fazy 1–4 zrealizowane: ścieżki względne i MEDIA_ROOT w retencji, builder WeasyPrint (`apps/medical/pdf_builder.py`), integracja GENERATE_PDF w outbox, retencja, metryki (success ratio, P95 latency), health z alertami. HiDrive/SMS pozostają mock. Szczegóły: `.ai/stan-wdrozenia-i-dalej.md`.
 
+**Proces udostępniania (PRD 3.4a):** SMS wyłącznie logistyczny – treść „Nowa dokumentacja w Cogito” (bez linku). Pacjent pobiera PDF przez portal wyniki (logowanie phone+DOB, OTP 15 min, HTTPS). Zgodność RODO/BÄK.
+
 ---
 
 ## 1. Cel i zakres
@@ -107,6 +109,10 @@ Zmiany:
 **Idempotentność:** Jedno zdarzenie GENERATE_PDF na wersję (UNIQUE per version + event_type). Ponowne przetworzenie po retry – builder powinien nadpisać plik tym samym ścieżką; bez duplikatów.
 
 ---
+
+## 6a. SMS_SEND – treść logistyczna (PRD 3.4a)
+
+Handler `SMS_SEND` wysyła SMS **wyłącznie o charakterze logistycznym**. Treść: „Nowa dokumentacja w Cogito“ – bez linku, bez informacji o badaniu czy wyniku. Zgodność RODO i wytycznych BÄK. Pacjent pobiera PDF przez portal wyniki (logowanie phone+DOB, OTP 15 min, HTTPS).
 
 ## 7. HIDRIVE_UPLOAD a plik lokalny
 

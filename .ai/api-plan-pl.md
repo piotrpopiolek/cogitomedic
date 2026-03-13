@@ -42,6 +42,7 @@
 - `audit-events` -> `audit_event`
 - `operations` -> akcje domenowe niebędące czystym CRUD (publikacja, retry, retencja)
 - `observability` -> ekspozycja metryk i health-checków
+- `patient-results` -> portal wyniki (US-018): request-otp, verify-otp, pobranie PDF; bez auth staff – logowanie pacjenta phone+DOB, OTP 15 min
 
 ## 2. Endpointy
 
@@ -1154,8 +1155,15 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 - Łańcuch transactional outbox:
   - Transakcja publikacji enqueuje `GENERATE_PDF`.
   - Worker po sukcesie PDF enqueuje `HIDRIVE_UPLOAD`.
-  - Worker po sukcesie uploadu enqueuje `SMS_SEND`.
+  - Worker po sukcesie uploadu enqueuje `SMS_SEND`. **Treść SMS:** wyłącznie logistyczna – „Nowa dokumentacja w Cogito“ (bez linku; pacjent pobiera przez portal wyniki).
   - Retry i dead-letter obsługiwane przez statusy/liczniki outbox.
+
+- Portal wyniki dla pacjenta (US-018, PRD 3.4a):
+  - SMS wyłącznie logistyczny; pacjent wchodzi na np. wyniki.cogitomedica.pl.
+  - Logowanie: telefon + data urodzenia (zweryfikowane w recepcji).
+  - OTP: 6-cyfrowy kod, ważność 15 min; wysyłany asynchronicznie gdy telefon+DOB się zgadzają.
+  - Po prawidłowym OTP: serwowanie PDF przez HTTPS; logi audytowe (timestamp, IP).
+  - Lekarz może wycofać publikację; pacjent po wpisaniu OTP nie zobaczy wycofanego pliku.
 
 - Republikacja:
   - Edycja opublikowanego dokumentu tworzy kolejną wersję i uruchamia łańcuch ponownie; ścieżka archiwum jest nadpisywana zgodnie z wymaganiem biznesowym.

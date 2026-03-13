@@ -68,7 +68,7 @@ flowchart LR
 - W [apps/outbox/services.py](apps/outbox/services.py) w `_execute_event_internal`, przy `event.event_type == OutboxEventType.HIDRIVE_UPLOAD`:
   - Nie zmieniać logiki mock-failure do testów (`_maybe_raise_mock_failure`).
   - Jeśli mock: zachowanie jak dotąd (ustawienie `hidrive_path` z [build_befund_hidrive_path](apps/outbox/hidrive_paths.py), `hidrive_sent`, `hidrive_sent_at`).
-  - Jeśli nie mock: rozwiązać pełną ścieżkę pliku: `full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path`; jeśli plik nie istnieje – wyjątek (FAILED, retry). Wywołać `adapter.upload(remote_path=build_befund_hidrive_path(version), local_path=full_path)`. Po sukcesie – ustawić `version.hidrive_path`, `hidrive_sent=True`, `hidrive_sent_at=now` i zapisać; następnie jak dotąd enqueue SMS_SEND.
+  - Jeśli nie mock: rozwiązać pełną ścieżkę pliku: `full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path`; jeśli plik nie istnieje – wyjątek (FAILED, retry). Wywołać `adapter.upload(remote_path=build_befund_hidrive_path(version), local_path=full_path)`. Po sukcesie – ustawić `version.hidrive_path`, `hidrive_sent=True`, `hidrive_sent_at=now` i zapisać; następnie jak dotąd enqueue SMS_SEND (treść logistyczna: „Nowa dokumentacja w Cogito" – PRD 3.4a).
 - Nie zmieniać kontraktu outbox (payload, event_type); zmiana tylko wewnątrz handlera.
 
 ### 4. Integracja w outbox – Intake PDF

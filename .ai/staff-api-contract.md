@@ -50,7 +50,16 @@ Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 
 ---
 
-## 5. Historia zmian
+## 5. Portal wyniki (US-018) – poza kontraktem staff
+
+Portal wyniki dla pacjenta (wyniki.cogitomedica.pl) korzysta z **osobnych endpointów**, bez sesji staff:
+- Logowanie: phone + date_of_birth (dane zweryfikowane w recepcji).
+- OTP 6-cyfrowy, ważność 15 min.
+- Po poprawnej OTP: serwowanie PDF przez HTTPS; logi audytowe.
+- Szczegóły: PRD 3.4a, api-plan §4.2 (Patient results portal).
+
+## 6. Historia zmian
 
 - **Dokumenty intake (PDF):** Dodane endpointy GET intake-documents (lista), GET intake-documents/{id}, GET intake-documents/{id}/preview-pdf dla RECEPTION/ADMIN (scope po clinic_site). W panelu Unfold: strona „Dokumenty intake (PDF)” pod `/admin/intake-documents/` (lista, szczegóły, podgląd PDF).
 - **Opcja B (dopełnienie procesu):** GET outbox-events i POST outbox-events/{id}/retry ograniczone do roli ADMIN (wcześniej: dowolny zalogowany użytkownik). Process i retention były już ADMIN-only.
+- **Proces udostępniania (PRD 3.4a):** SMS wyłącznie logistyczny; pacjent pobiera PDF przez portal wyniki (phone+DOB, OTP, HTTPS).
