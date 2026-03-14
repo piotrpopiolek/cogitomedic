@@ -32,6 +32,8 @@ NO_AUTH_OPERATIONS = {
     (f"{PREFIX}/observability/monitoring/tempo", "get"),
     (f"{PREFIX}/observability/monitoring/otel-collector", "get"),
     (f"{PREFIX}/auth/login", "post"),
+    (f"{PREFIX}/patient-results/request-otp", "post"),
+    (f"{PREFIX}/patient-results/verify-otp", "post"),
 }
 
 # OpenAPI 3 security scheme: session cookie (Django). Used so Swagger UI shows lock icon.
@@ -574,6 +576,71 @@ COGITO_PATHS = {
             "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"submitted_by_user_id": {"type": "string", "format": "uuid"}}}}}},
             "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "400": {"description": "Validation error"}},
+        },
+    },
+    f"{PREFIX}/patient-results/request-otp": {
+        "post": {
+            "summary": "Request OTP",
+            "description": "Request OTP for patient results portal. Sends SMS if patient exists (phone + date_of_birth). CAPTCHA required. No auth.",
+            "tags": ["Patient results"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "phone": {"type": "string"},
+                                "date_of_birth": {"type": "string", "format": "date", "description": "YYYY-MM-DD"},
+                                "captcha_token": {"type": "string"},
+                            },
+                            "required": ["phone", "date_of_birth", "captcha_token"],
+                        }
+                    }
+                },
+            },
+            "responses": {"200": {"description": "OK (always, to prevent enumeration)"}, "400": {"description": "Invalid input or CAPTCHA failed"}},
+        },
+    },
+    f"{PREFIX}/patient-results/verify-otp": {
+        "post": {
+            "summary": "Verify OTP",
+            "description": "Verify OTP code and establish patient results session. Sets session cookie for documents/download. No auth.",
+            "tags": ["Patient results"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "phone": {"type": "string"},
+                                "date_of_birth": {"type": "string", "format": "date", "description": "YYYY-MM-DD"},
+                                "otp_code": {"type": "string"},
+                            },
+                            "required": ["phone", "date_of_birth", "otp_code"],
+                        }
+                    }
+                },
+            },
+            "responses": {"200": {"description": "OK, session cookie set"}, "400": {"description": "Invalid or expired code"}},
+        },
+    },
+    f"{PREFIX}/patient-results/documents": {
+        "get": {
+            "summary": "List documents",
+            "description": "List published documents for the logged-in patient. Requires patient_results session (from verify-otp).",
+            "tags": ["Patient results"],
+            "responses": {"200": {"description": "items: [{version_id, document_id, queue_date, published_at}]"}, "401": {"description": "Session required"}},
+        },
+    },
+    f"{PREFIX}/patient-results/documents/{{version_id}}/download": {
+        "get": {
+            "summary": "Download PDF",
+            "description": "Download Befund PDF for a version. Requires patient_results session.",
+            "tags": ["Patient results"],
+            "parameters": [{"name": "version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": {"description": "PDF file"}, "401": {"description": "Session required"}, "404": {"description": "Not found or unavailable"}},
         },
     },
 }
