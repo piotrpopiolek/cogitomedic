@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError
+from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
 from apps.medical.pdf_builder import generate_befund_pdf
 from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
@@ -61,7 +62,16 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
             raise
 
 def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
-    version = MedicalDocumentVersion.objects.select_for_update().get(id=event.medical_document_version_id)
+    version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__patient",
+            "medical_document__intake_form",
+        )
+        .get(id=event.medical_document_version_id)
+    )
 
     if event.payload.get("simulate_error") is True:
         raise RuntimeError("Simulated outbox processing failure.")
@@ -119,6 +129,16 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 version.sms_sent = False
                 version.save(update_fields=["sms_sent"])
                 return
+
+        patient = version.medical_document.queue_entry.patient
+        base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://wyniki.cogitomedica.pl")
+        form_locale = None
+        if version.medical_document.intake_form_id:
+            form_locale = version.medical_document.intake_form.form_locale
+        sms_text = get_sms_patient_results_text(form_locale, base_url)
+        adapter = get_sms_adapter()
+        adapter.send_sms(to=patient.phone, message=sms_text)
+
         version.sms_sent = True
         version.sms_sent_at = now
         version.save(update_fields=["sms_sent", "sms_sent_at"])
