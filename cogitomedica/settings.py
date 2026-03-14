@@ -476,7 +476,7 @@ OUTBOX_MOCK_RANDOM_FAILURE_RATE = float(os.environ.get("OUTBOX_MOCK_RANDOM_FAILU
 
 # SMS (SMSApi smsapi.pl)
 SMSAPI_ACCESS_TOKEN = os.environ.get("SMSAPI_ACCESS_TOKEN", "")
-SMSAPI_USE_MOCK = os.environ.get("SMSAPI_USE_MOCK", "1")
+SMSAPI_USE_MOCK = os.environ.get("SMSAPI_USE_MOCK", "0")
 
 # Portal wyniki (patient results)
 PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
