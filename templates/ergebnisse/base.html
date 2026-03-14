@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Ergebnisse – CogitoMed{% endblock %}</title>
+  <title>{% block title %}{{ ergebnisse_ui.page_title|default:"Ergebnisse – CogitoMed" }}{% endblock %}</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 1rem; }
     h1 { font-size: 1.25rem; }
@@ -20,6 +20,23 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {% if ergebnisse_ui %}
+  <nav class="ergebnisse-lang-nav" aria-label="Wybierz język" style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:1.5rem;line-height:1">
+    {% if ergebnisse_locale == 'en' %}
+      <a href="?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}"><span aria-hidden="true">🇩🇪</span></a>
+      <span title="{{ ergebnisse_ui.lang_en|default:'English' }}">🇬🇧</span>
+      <a href="?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}"><span aria-hidden="true">🇵🇱</span></a>
+    {% elif ergebnisse_locale == 'pl' %}
+      <a href="?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}"><span aria-hidden="true">🇩🇪</span></a>
+      <a href="?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}"><span aria-hidden="true">🇬🇧</span></a>
+      <span title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">🇵🇱</span>
+    {% else %}
+      <span title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">🇩🇪</span>
+      <a href="?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}"><span aria-hidden="true">🇬🇧</span></a>
+      <a href="?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}"><span aria-hidden="true">🇵🇱</span></a>
+    {% endif %}
+  </nav>
+  {% endif %}
   {% block content %}{% endblock %}
 </body>
 </html>

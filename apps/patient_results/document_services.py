@@ -20,6 +20,7 @@ def list_patient_documents(patient_id: UUID) -> list[dict]:
             version_status=DocVersionStatus.PUBLISHED,
             pdf_generation_status=PdfStatus.COMPLETED,
             local_pdf_deleted_at__isnull=True,
+            revoked_at__isnull=True,
         )
         .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__daily_queue")
         .order_by("-published_at")
@@ -56,6 +57,7 @@ def get_patient_pdf_version(version_id: UUID, patient_id: UUID) -> MedicalDocume
                 version_status=DocVersionStatus.PUBLISHED,
                 pdf_generation_status=PdfStatus.COMPLETED,
                 local_pdf_deleted_at__isnull=True,
+                revoked_at__isnull=True,
             )
         )
     except MedicalDocumentVersion.DoesNotExist:

@@ -33,6 +33,7 @@ from apps.medical.services import (
     list_medical_documents,
     parse_medical_documents_list_params,
     publish_document_version,
+    revoke_document_version,
     save_draft_document_version,
     retry_latest_document_processing,
 )
@@ -220,6 +221,7 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
             "version_status",
             "pdf_generation_status",
             "published_at",
+            "revoked_at",
             "hidrive_sent",
             "sms_sent",
         )
@@ -231,6 +233,7 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
             "version_status": v["version_status"],
             "pdf_generation_status": v["pdf_generation_status"],
             "published_at": v["published_at"].isoformat() if v["published_at"] else None,
+            "revoked_at": v["revoked_at"].isoformat() if v["revoked_at"] else None,
             "hidrive_sent": v["hidrive_sent"],
             "sms_sent": v["sms_sent"],
         }
@@ -374,6 +377,7 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
             "sms_sent": version.sms_sent,
             "sms_sent_at": version.sms_sent_at.isoformat() if version.sms_sent_at else None,
             "published_at": version.published_at.isoformat() if version.published_at else None,
+            "revoked_at": version.revoked_at.isoformat() if version.revoked_at else None,
             "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
             "publish_locale": version.publish_locale,
             "created_at": version.created_at.isoformat(),
@@ -417,6 +421,35 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
             "outbox_event_id": str(retried.id),
             "event_type": retried.event_type,
             "status": retried.status,
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+    """POST: Revoke the current published version. Patient loses access in ergebnisse portal."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("Method not allowed.", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        check_doctor_document_access(doc, request.user)
+        version = revoke_document_version(
+            medical_document_id=medical_document_id,
+            revoked_by_user_id=request.user.id,
+        )
+    except ObjectDoesNotExist:
+        return json_error("Medical document not found.", status=404)
+    except DomainError as exc:
+        return json_error(str(exc), status=400)
+    return JsonResponse(
+        {
+            "medical_document_version_id": str(version.id),
+            "version_no": version.version_no,
+            "revoked_at": version.revoked_at.isoformat() if version.revoked_at else None,
         },
         status=200,
     )

@@ -17,7 +17,7 @@ from apps.intake.services import get_intake_form_context
 from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
-from apps.outbox.services import retry_outbox_event
+from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry
 
 
@@ -340,6 +340,64 @@ def publish_document_version(
         },
     )
     return draft_version
+
+
+@transaction.atomic
+def revoke_document_version(
+    *,
+    medical_document_id: uuid.UUID,
+    revoked_by_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """
+    Revoke the current published version. Deletes local PDF, sets revoked_at.
+    Patient will no longer see or download the document in ergebnisse portal.
+    """
+    medical_document = MedicalDocument.objects.select_for_update().select_related(
+        "queue_entry",
+        "queue_entry__daily_queue",
+    ).get(id=medical_document_id)
+
+    current_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            version_no=medical_document.current_version_no,
+        )
+        .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__daily_queue")
+        .first()
+    )
+    if not current_version:
+        raise DomainError("No published version to revoke.")
+
+    if current_version.revoked_at:
+        return current_version
+
+    now = timezone.now()
+    _try_delete_file(current_version.pdf_local_path)
+
+    update_fields = ["revoked_at", "pdf_local_path"]
+    current_version.revoked_at = now
+    current_version.pdf_local_path = None
+
+    if current_version.hidrive_sent and current_version.sms_sent:
+        current_version.local_pdf_deleted_at = now
+        update_fields.append("local_pdf_deleted_at")
+
+    current_version.save(update_fields=update_fields)
+
+    create_audit_event(
+        event_type="DOCUMENT_REVOKED",
+        actor_user_id=revoked_by_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(current_version.id),
+            "version_no": current_version.version_no,
+        },
+    )
+    return current_version
 
 
 def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:

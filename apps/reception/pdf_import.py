@@ -37,6 +37,7 @@ from apps.reception.models import (
     QueueShift,
     QueueSource,
 )
+from apps.reception.phone_utils import normalize_phone
 from apps.reception.services import (
     create_daily_queue,
     create_or_update_patient_manual,
@@ -981,19 +982,24 @@ def _upsert_patient_for_import(
     normalized_row: NormalizedPatientRow,
     created_by_user_id: uuid.UUID,
 ) -> Patient:
-    existing_patient = Patient.objects.filter(
-        first_name=normalized_row.first_name,
-        last_name=normalized_row.last_name,
-        phone=normalized_row.phone,
-        date_of_birth=normalized_row.date_of_birth,
-    ).first()
+    phone_norm = normalize_phone(normalized_row.phone)
+    existing_patient = None
+    if phone_norm:
+        existing_patient = Patient.objects.filter(
+            first_name=normalized_row.first_name,
+            last_name=normalized_row.last_name,
+            date_of_birth=normalized_row.date_of_birth,
+            phone=phone_norm,
+        ).first()
+        if not existing_patient:
+            existing_patient = Patient.objects.filter(phone=phone_norm).first()
     try:
         patient = create_or_update_patient_manual(
             patient_id=existing_patient.id if existing_patient else None,
             first_name=normalized_row.first_name,
             last_name=normalized_row.last_name,
             date_of_birth=normalized_row.date_of_birth,
-            phone=normalized_row.phone,
+            phone=phone_norm or normalized_row.phone,
             email=normalized_row.email,
             created_or_updated_by_user_id=created_by_user_id,
         )

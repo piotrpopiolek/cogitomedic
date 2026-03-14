@@ -193,5 +193,17 @@ def get_staff_ui_strings(locale: str) -> dict[str, str]:
     prefix = "waiting_room.staff."
     for full_key, value in mapping.items():
         if full_key.startswith(prefix):
-            ui[full_key[len(prefix):]] = value
+            ui[full_key[len(prefix) :]] = value
+    return ui
+
+
+def get_ergebnisse_ui_strings(locale: str) -> dict[str, str]:
+    """Return ergebnisse portal UI from DB-only translation storage."""
+    lang = normalize_language_code(locale)
+    mapping = get_translation_map(category="other", language_code=lang)
+    ui: dict[str, str] = {}
+    prefix = "other.ergebnisse."
+    for full_key, value in mapping.items():
+        if full_key.startswith(prefix):
+            ui[full_key[len(prefix) :]] = value
     return ui
