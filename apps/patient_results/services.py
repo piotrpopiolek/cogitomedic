@@ -2,19 +2,25 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import random
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+import requests
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.integrations.sms.client import get_sms_adapter
+from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import Patient
 from apps.reception.phone_utils import normalize_phone
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -29,8 +35,6 @@ _DEFAULT_OTP_SMS = "CogitoMed: Ihr Code lautet {otp}"
 
 def _phone_match_q(phone_normalized: str):
     """Q filter to match Patient.phone (stored as digits only after migration)."""
-    from django.db.models import Q
-
     if not phone_normalized:
         return Q(pk=None)  # no match
     return Q(phone=phone_normalized) | Q(phone=f"+{phone_normalized}")
@@ -53,8 +57,6 @@ def _verify_captcha(captcha_token: str) -> bool:
     if not secret:
         return False
     try:
-        import requests
-
         resp = requests.post(
             "https://challenges.cloudflare.com/turnstile/v0/siteverify",
             data={"secret": secret, "response": token},
@@ -63,6 +65,7 @@ def _verify_captcha(captcha_token: str) -> bool:
         data = resp.json()
         return bool(data.get("success"))
     except Exception:
+        logger.warning("CAPTCHA verify failed", exc_info=True)
         return False
 
 
@@ -107,8 +110,6 @@ def request_otp(
 
     # Rate limit: max 3 OTP per number per hour
     since = timezone.now() - timedelta(hours=1)
-    from apps.patient_results.models import PatientResultsOtpSession
-
     recent_count = PatientResultsOtpSession.objects.filter(
         phone=phone_norm,
         created_at__gte=since,
@@ -127,24 +128,24 @@ def request_otp(
     if not patient:
         return RequestOtpResult(status="ok")  # Don't reveal patient existence
 
+    pepper = (getattr(settings, "PATIENT_RESULTS_OTP_PEPPER", "") or "").strip()
+    if not pepper and not getattr(settings, "DEBUG", True):
+        raise ValueError("PATIENT_RESULTS_OTP_PEPPER must be set when DEBUG is False.")
+
     otp_code = f"{random.randint(100000, 999999)}"
     otp_hash = _hash_otp(otp_code)
     expires_at = timezone.now() + timedelta(minutes=OTP_VALID_MINUTES)
 
-    try:
-        with transaction.atomic():
-            session = PatientResultsOtpSession.objects.create(
-                patient=patient,
-                phone=phone_norm,
-                otp_code_hash=otp_hash,
-                expires_at=expires_at,
-            )
-            sms_text = _get_otp_sms_text(otp_code)
-            adapter = get_sms_adapter()
-            adapter.send_sms(to=patient.phone, message=sms_text)
-    except Exception:
-        # Rollback via transaction
-        raise
+    with transaction.atomic():
+        session = PatientResultsOtpSession.objects.create(
+            patient=patient,
+            phone=phone_norm,
+            otp_code_hash=otp_hash,
+            expires_at=expires_at,
+        )
+        sms_text = _get_otp_sms_text(otp_code)
+        adapter = get_sms_adapter()
+        adapter.send_sms(to=patient.phone, message=sms_text)
 
     return RequestOtpResult(status="ok")  # OTP sent
 
@@ -162,8 +163,6 @@ def verify_otp(
     otp_stripped = (otp_code or "").strip()
     if len(otp_stripped) != 6 or not otp_stripped.isdigit():
         return VerifyOtpResult(success=False, error="invalid")
-
-    from apps.patient_results.models import PatientResultsOtpSession
 
     now = timezone.now()
     session = (

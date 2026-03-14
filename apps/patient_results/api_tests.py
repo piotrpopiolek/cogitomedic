@@ -1,6 +1,7 @@
 """API tests for patient results portal."""
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -67,6 +68,15 @@ class PatientResultsRequestOtpApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    def test_request_otp_rejects_future_date_of_birth(self) -> None:
+        response = self.client.post(
+            "/api/v1/patient-results/request-otp",
+            data={"phone": "01763333333", "date_of_birth": "2090-01-15", "captcha_token": "skip"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 
 class PatientResultsVerifyOtpApiTests(TestCase):
     def setUp(self) -> None:
@@ -81,7 +91,6 @@ class PatientResultsVerifyOtpApiTests(TestCase):
 
     @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
     def _create_session(self, otp: str) -> None:
-        import hashlib
         h = hashlib.sha256(f"test-pepper{otp}".encode()).hexdigest()
         PatientResultsOtpSession.objects.create(
             patient=self.patient,

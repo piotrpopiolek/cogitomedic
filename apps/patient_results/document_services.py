@@ -64,12 +64,16 @@ def get_patient_pdf_version(version_id: UUID, patient_id: UUID) -> MedicalDocume
         return None
 
 
-def get_patient_pdf_path(version_id: UUID, patient_id: UUID) -> Path | None:
+def get_patient_pdf_path(
+    version_id: UUID, patient_id: UUID, version: MedicalDocumentVersion | None = None
+) -> Path | None:
     """
     Resolve PDF path for a version if it belongs to the patient and is available.
     Returns Path or None if not found/not accessible.
+    Pass version to avoid duplicate DB query when already fetched.
     """
-    version = get_patient_pdf_version(version_id, patient_id)
+    if version is None:
+        version = get_patient_pdf_version(version_id, patient_id)
     if not version or not version.pdf_local_path:
         return None
     path = Path(version.pdf_local_path)
