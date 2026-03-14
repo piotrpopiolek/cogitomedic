@@ -5,6 +5,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django_ratelimit.decorators import ratelimit
 
 from apps.core.api_utils import json_error, read_json_body
 from apps.operations.services import create_audit_event
@@ -31,6 +32,7 @@ def _parse_date(s: str | None) -> date | None:
         return None
 
 
+@ratelimit(key="ip", rate="10/m", method="POST", block=True)
 def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     """POST: Request OTP for patient results. Public, no auth. CAPTCHA required."""
     if request.method != "POST":
@@ -55,6 +57,7 @@ def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok"}, status=200)
 
 
+@ratelimit(key="ip", rate="15/m", method="POST", block=True)
 def patient_results_verify_otp_view(request: HttpRequest) -> JsonResponse:
     """POST: Verify OTP and establish patient results session. Public, no auth."""
     if request.method != "POST":

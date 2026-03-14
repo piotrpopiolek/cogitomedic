@@ -79,7 +79,7 @@ class ReceptionServicesTests(TestCase):
 
         self.assertIsNone(patient.doctolib_patient_id)
         self.assertEqual(patient.first_name, "Jan")
-        self.assertEqual(patient.phone, "+48123123123")
+        self.assertEqual(patient.phone, "48123123123")
 
     def test_patient_identity_unique_constraint_blocks_duplicate_patient(self) -> None:
         Patient.objects.create(

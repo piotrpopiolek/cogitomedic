@@ -8,6 +8,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
+from apps.reception.phone_utils import normalize_phone
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -86,14 +87,20 @@ class Patient(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["first_name", "last_name", "phone", "date_of_birth"],
-                name="patient_identity_unique",
+                fields=["phone"],
+                name="patient_phone_unique",
             ),
             models.CheckConstraint(
-                condition=Q(phone__regex=r"^[0-9+() -]{7,20}$"),
+                condition=Q(phone__regex=r"^[0-9]{7,20}$"),
                 name="patient_phone_format",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        norm = normalize_phone(self.phone)
+        if norm:
+            self.phone = norm
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.last_name} {self.first_name} ({self.date_of_birth})"
