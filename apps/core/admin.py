@@ -14,6 +14,7 @@ from apps.core.models import TranslationCacheVersion, TranslationKey, Translatio
 class TranslationKeyAdmin(UnfoldModelAdmin):
     list_display = ("key", "category", "status", "is_html_allowed", "updated_at")
     list_filter = ("category", "status", "is_html_allowed")
+    ordering = ["-created_at"]
     search_fields = ("key", "description")
     readonly_fields = ("id", "created_at", "updated_at")
 
@@ -22,6 +23,7 @@ class TranslationKeyAdmin(UnfoldModelAdmin):
 class TranslationValueAdmin(UnfoldModelAdmin):
     list_display = ("translation_key", "language_code", "updated_by", "updated_at")
     list_filter = ("language_code", "translation_key__category")
+    ordering = ["-created_at"]
     search_fields = ("translation_key__key", "value")
     raw_id_fields = ("translation_key", "updated_by")
     readonly_fields = ("id", "created_at", "updated_at")
@@ -36,4 +38,5 @@ class TranslationValueAdmin(UnfoldModelAdmin):
 class TranslationCacheVersionAdmin(UnfoldModelAdmin):
     list_display = ("category", "language_code", "version", "updated_at")
     list_filter = ("category", "language_code")
+    ordering = ["-created_at"]
     readonly_fields = ("id", "created_at", "updated_at")
