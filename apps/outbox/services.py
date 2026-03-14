@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -39,13 +38,6 @@ class OutboxEventNotRetryableError(DomainError):
 tracer = trace.get_tracer(__name__)
 
 
-def _maybe_raise_mock_failure(event_type: str, message: str) -> None:
-    """Z prawdopodobieństwem OUTBOX_MOCK_RANDOM_FAILURE_RATE rzuca błąd (do testów retry)."""
-    rate = getattr(settings, "OUTBOX_MOCK_RANDOM_FAILURE_RATE", 0) or 0
-    if rate > 0 and random.random() < rate:
-        raise RuntimeError(message)
-
-
 def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
     with tracer.start_as_current_span(
         f"execute_outbox_event_{event.event_type.lower()}",
@@ -69,6 +61,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             "medical_document__queue_entry",
             "medical_document__queue_entry__patient",
             "medical_document__intake_form",
+            "medical_document__intake_form__session",
         )
         .get(id=event.medical_document_version_id)
     )
@@ -99,7 +92,6 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.HIDRIVE_UPLOAD:
-        _maybe_raise_mock_failure("HIDRIVE_UPLOAD", "Mock HiDrive upload failure (random, for retry testing)")
         version.hidrive_path = build_befund_hidrive_path(version)
         version.hidrive_sent = True
         version.hidrive_sent_at = now
@@ -118,7 +110,6 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.SMS_SEND:
-        _maybe_raise_mock_failure("SMS_SEND", "Mock SMS send failure (random, for retry testing)")
         resend_sms = event.payload.get("resend_sms") is True
         if not resend_sms:
             other_version_sent = MedicalDocumentVersion.objects.filter(
@@ -133,9 +124,9 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         patient = version.medical_document.queue_entry.patient
         base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
         form_locale = None
-        if version.medical_document.intake_form_id:
-            form_locale = version.medical_document.intake_form.form_locale
-        sms_text = get_sms_patient_results_text(form_locale, base_url)
+        intake_form = version.medical_document.intake_form
+        if intake_form and intake_form.session_id:
+            form_locale = intake_form.session.form_locale
         adapter = get_sms_adapter()
         adapter.send_sms(to=patient.phone, message=sms_text)
 
