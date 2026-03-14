@@ -123,6 +123,7 @@ class MedicalDocumentVersion(models.Model):
         related_name="published_medical_documents",
     )
     published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_published_at", "Published at"))
+    revoked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_revoked_at", "Revoked at"))
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.integrations.sms.client import get_sms_adapter
 from apps.reception.models import Patient
+from apps.reception.phone_utils import normalize_phone
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -26,14 +27,8 @@ OTP_RATE_LIMIT_PER_HOUR = 3
 _DEFAULT_OTP_SMS = "CogitoMed: Ihr Code lautet {otp}"
 
 
-def normalize_phone(value: str) -> str:
-    """Normalize phone for lookup; digits only, matches import format."""
-    digits = re.sub(r"[^\d]", "", value)
-    return digits if digits else ""
-
-
 def _phone_match_q(phone_normalized: str):
-    """Q filter to match Patient.phone (stored as digits or +digits)."""
+    """Q filter to match Patient.phone (stored as digits only after migration)."""
     from django.db.models import Q
 
     if not phone_normalized:

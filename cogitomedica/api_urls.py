@@ -25,6 +25,7 @@ from apps.medical.api_views import (
     medical_document_preview_pdf_view,
     medical_document_publish_view,
     medical_document_retry_processing_view,
+    medical_document_revoke_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
     medical_document_audit_trail_view,
@@ -208,6 +209,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/retry-processing",
         medical_document_retry_processing_view,
         name="medical-document-retry-processing",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/revoke",
+        medical_document_revoke_view,
+        name="medical-document-revoke",
     ),
     path(
         "medical-document-versions/<uuid:version_id>",
