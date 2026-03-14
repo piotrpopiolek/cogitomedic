@@ -8,6 +8,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import Client, TestCase, TransactionTestCase
 from django.test.utils import override_settings
 from django.utils import timezone
@@ -347,8 +348,6 @@ class DailyQueueConcurrencyApiTests(TransactionTestCase):
                 )
                 results.append(resp.status_code)
             finally:
-                from django.db import connection
-
                 connection.close()
 
         t1 = threading.Thread(target=post_queue)

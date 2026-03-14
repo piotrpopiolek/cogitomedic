@@ -8,7 +8,15 @@ from django.utils import timezone
 
 from apps.operations.api_views import _serialize_audit_event
 from apps.operations.services import REF_KEY, create_audit_event
-from apps.reception.models import ClinicSite, Patient
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    QueueEntry,
+    QueueEntryStatus,
+    QueueStatus,
+)
 from apps.users.models import StaffUser
 
 
@@ -70,19 +78,6 @@ class CreateAuditEventContractTests(TestCase):
 
     def test_serialize_prefers_fk_over_ref(self) -> None:
         """When FK is set, response uses FK; _ref is for fallback only."""
-        from django.utils import timezone
-
-        from apps.reception.models import (
-            ClinicSite,
-            ConsultingRoom,
-            DailyQueue,
-            Patient,
-            QueueEntry,
-            QueueEntryStatus,
-            QueueStatus,
-        )
-        from apps.users.models import StaffUser
-
         user = StaffUser.objects.create_user(
             username="audit_test_user",
             email="audit@test.com",
