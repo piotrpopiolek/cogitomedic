@@ -1,6 +1,6 @@
 ---
 name: Portal wyniki 4-etapowy
-overview: "Plan implementacji 4-etapowego procesu udostępniania wyników pacjentowi (US-018, PRD 3.4a): wysyłka SMS logistycznego, integracja SMSApi, nowa aplikacja patient_results z logowaniem phone+DOB, OTP 15 min oraz serwowaniem PDF przez HTTPS."
+overview: "Plan implementacji 4-etapowego procesu udostępniania wyników pacjentowi (US-018, PRD 3.4a): wysyłka SMS z linkiem do portalu (treść: Nowa dokumentacja w CogitoMed), integracja SMSApi, nowa aplikacja patient_results z logowaniem phone+DOB, OTP 15 min oraz serwowaniem PDF przez HTTPS."
 todos: []
 isProject: false
 ---
@@ -11,7 +11,7 @@ isProject: false
 
 Proces udostępniania zgodnie z PRD 3.4a i US-018:
 
-1. **SMS logistyczny** – treść „Nowa dokumentacja w Cogito" (bez linku); wysyłany po publikacji Befund
+1. **SMS logistyczny** – wysyłany po publikacji Befund; treść: „Nowa dokumentacja w CogitoMed" + link do portalu (np. [https://wyniki.cogitomedica.pl](https://wyniki.cogitomedica.pl))
 2. **Logowanie cross-verification** – pacjent na wyniki.cogitomedica.pl; phone + date_of_birth
 3. **OTP 15 min** – 6-cyfrowy kod, MFA
 4. **Dostęp do PDF** – serwowanie przez HTTPS; logi audytowe; filtrowanie wycofanych publikacji
@@ -21,8 +21,14 @@ Proces udostępniania zgodnie z PRD 3.4a i US-018:
 - Handler `SMS_SEND` w [apps/outbox/services.py](apps/outbox/services.py) tylko ustawia `sms_sent` – brak wywołania SMSApi
 - Brak endpointów dla pacjenta (publicznych, bez staff auth)
 - `smsapi-client` w `requirements.txt`; brak adaptera i konfiguracji
-- Pacjent: `Patient` w [apps/reception/models.py](apps/reception/models.py) – `phone`, `date_of_birth` z walidacją
+- Pacjent: `Patient` w [apps/reception/models.py](apps/reception/models.py) – `phone`, `date_of_birth`; migracja doda `UNIQUE(phone)`. Pacjent potwierdza dane w ankiecie
 - PDF: `build_befund_pdf_bytes` w [apps/medical/pdf_builder.py](apps/medical/pdf_builder.py) – generuje z wersji; preview w [apps/medical/api_views.py](apps/medical/api_views.py) (linie 167–198)
+
+**Wymagania biznesowe:**
+- **Unikalność numeru telefonu:** W systemie nie mogą istnieć dwie osoby z tym samym numerem. Migracja: `UNIQUE(phone)` na `Patient` (lub walidacja przy tworzeniu/impicie).
+- **Normalizacja telefonu:** Przy imporcie i ręcznym dodawaniu pacjenta numer jest normalizowany (np. `re.sub(r'\D', '', v)` → tylko cyfry; ewentualnie prefix kraju). Kolumna `phone` lub `phone_normalized` – spójna całość.
+- **Weryfikacja danych:** Pacjent potwierdza numer i datę urodzenia w ankiecie na tablecie – dane są zweryfikowane.
+- **CAPTCHA:** Mechanizm CAPTCHA przed wysłaniem OTP – ochrona przed botami, skanerami i masowym wywoływaniem request-otp (np. DoS na koszt SMSów).
 
 ---
 
@@ -44,7 +50,7 @@ flowchart TB
     subgraph sms [SMS]
         SMS --> Resolve[Resolve patient.phone]
         Resolve --> Adapter[SMSApi Adapter]
-        Adapter --> Send["Send: 'Nowa dokumentacja w Cogito'"]
+        Adapter --> Send["Send: 'Nowa dokumentacja w CogitoMed' + link do portalu"]
     end
     subgraph portal [Portal wyniki]
         Login[POST request-otp: phone, dob]
@@ -69,7 +75,7 @@ flowchart TB
 
 - Utworzyć moduł `apps/integrations/sms/`:
   - `client.py` – klasa `SmsAdapter` z metodą `send_sms(to: str, message: str) -> None`
-  - Wykorzystać `smsapi.client.SmsApiPlClient` (smsapi.pl) lub `SmsApiComClient` (smsapi.com)
+  - Wykorzystać `SmsApiPlClient` z [smsapi.pl](https://ssl.smsapi.pl/) (umowa projektowa)
   - Konfiguracja: `SMSAPI_ACCESS_TOKEN`, `SMSAPI_USE_MOCK` (domyślnie `True` w dev)
   - Przy mock: tylko log; bez HTTP
 - Dodać do [.env.example](.env.example):
@@ -77,6 +83,11 @@ flowchart TB
 ```
   SMSAPI_ACCESS_TOKEN=
   SMSAPI_USE_MOCK=1
+  PATIENT_RESULTS_BASE_URL=https://wyniki.cogitomedica.pl
+  PATIENT_RESULTS_OTP_PEPPER=change-me-secret-pepper
+  TURNSTILE_SECRET_KEY=
+  TURNSTILE_SITE_KEY=
+  CAPTCHA_VERIFY_SKIP=0
   
 
 ```
@@ -84,9 +95,11 @@ flowchart TB
 ### 1.2 Modyfikacja handlera `SMS_SEND` w [apps/outbox/services.py](apps/outbox/services.py)
 
 - Pobrać pacjenta: `version.medical_document.queue_entry.patient` (select_related)
-- Znormalizować numer: `re.sub(r'\D', '', patient.phone)` lub użyć istniejącej walidacji
-- Treść: `"Nowa dokumentacja w Cogito"`
+- Numer już znormalizowany w DB (patrz: normalizacja przy imporcie)
+- Język SMS: z `form_locale` ankiety pacjenta (intake_form) lub fallback – treść w DE/EN/PL
+- Treść: „Nowa dokumentacja w CogitoMed {url}" (słownik tłumaczeń per język)
 - Wywołać `get_sms_adapter().send_sms(to=phone, message=text)`
+- **SMSApi:** umowa z [ssl.smsapi.pl](https://ssl.smsapi.pl/) – użyć `SmsApiPlClient`
 - Po sukcesie: `version.sms_sent = True`, `version.sms_sent_at = now` (jak obecnie)
 - Przy błędzie SMSApi: rzucić wyjątek – outbox ustawi FAILED/retry
 - Zachować logikę `resend_sms` i pomijanie przy wcześniej wysłanym SMS
@@ -106,33 +119,38 @@ flowchart TB
   - `id` UUID PK
   - `patient_id` FK → Patient (CASCADE)
   - `phone` varchar(20) – numer, na który wysłano OTP
-  - `otp_code_hash` varchar(64) – SHA-256 hash kodu (nie przechowywać plaintext)
+  - `otp_code_hash` varchar(64) – SHA-256(pepper + otp) – pepper z `PATIENT_RESULTS_OTP_PEPPER` w .env
   - `expires_at` timestamptz – ważność 15 min
-  - `verified_at` timestamptz NULL – po poprawnej weryfikacji
+  - `verified_at` timestamptz NULL – po poprawnej weryfikacji (atomowy UPDATE)
+  - `verify_attempt_count` int DEFAULT 0 – liczba nieudanych prób; max 5, potem blokada sesji
   - `created_at`
   - Indeks: `(patient_id, expires_at)`; ograniczenie: `expires_at > created_at`
 - Migracja
-- `Patient.normalize_phone()` – helper do porównania (re.sub, trim)
+- Helper normalizacji: spójny z warstwą importu (tylko cyfry)
 
-### 2.2 Serwis domenowy `request_otp(phone: str, date_of_birth: date)`
+### 2.2 Serwis domenowy `request_otp(phone: str, date_of_birth: date, captcha_token: str)`
 
+- **CAPTCHA:** Najpierw walidacja tokenu (wywołanie Turnstile/reCAPTCHA verify). Przy błędzie – zwrócić błąd bez dalszej logiki.
 - Walidacja wejścia: format telefonu (regex jak w Patient), DOB w rozsądnym zakresie
-- `Patient.objects.filter(phone__iexact=normalize_phone(phone), date_of_birth=dob)`
-- **Bez enumeracji:** jeśli brak dopasowania – zwrócić generyczną odpowiedź sukcesu („Jeśli dane są poprawne, kod został wysłany”) – ten sam timing co przy sukcesie (np. `time.sleep` minimalny lub opcjonalnie fałszywy delay)
-- Przy dopasowaniu:
+- `Patient.objects.get(phone=normalize_phone(phone), date_of_birth=dob)` – phone jest UNIQUE, więc max 1 rekord
+- **Bez enumeracji:** jeśli brak dopasowania – zwrócić generyczną odpowiedź sukcesu (ten sam timing co przy sukcesie)
+- Przy dopasowaniu (w transakcji):
   - Wygenerować 6-cyfrowy OTP: `random.randint(100000, 999999)`
-  - Zapis: `PatientResultsOtpSession(patient_id=..., phone=..., otp_code_hash=sha256(otp).hexdigest(), expires_at=now+15min)`
-  - Wywołać `SmsAdapter.send_sms(to=phone, message=f"Kod Cogito: {otp}. Ważny 15 min.")
-  - Ograniczenie rate: max 3 OTP na ten numer w ciągu 1h (query `PatientResultsOtpSession` po `created_at`)
+  - Hash: `SHA-256(pepper + otp)` gdzie pepper z `PATIENT_RESULTS_OTP_PEPPER`
+  - Zapis: `PatientResultsOtpSession(patient_id=..., phone=..., otp_code_hash=..., expires_at=now+15min, verify_attempt_count=0)`
+  - Wywołać `SmsAdapter.send_sms(...)` – jeśli wyjątek: wycofać transakcję (usunąć sesję)
+  - Ograniczenie rate: max 3 OTP na ten numer w ciągu 1h
 - Zwracać zawsze ten sam typ odpowiedzi (np. `{"status": "ok"}`)
 
 ### 2.3 Serwis `verify_otp(phone: str, date_of_birth: date, otp_code: str) -> str | None`
 
-- Znaleźć pasującą sesję: `PatientResultsOtpSession.objects.filter(patient__phone=..., patient__date_of_birth=..., expires_at__gt=now, verified_at__isnull=True)`
-- Porównać hash `sha256(otp_code.strip()).hexdigest() == session.otp_code_hash`
-- Rate limit: max 5 prób na sesję (licznik w modelu lub osobnym polu)
-- Po sukcesie: `session.verified_at = now`, zapis; zwrócić token sesji (np. signed cookie value lub JWT z `patient_id`, `expires_at`)
-- Token: krótkotrwały (np. 1h), zawiera `patient_id` – używany do pobierania PDF
+- Znaleźć **najnowszą** pasującą sesję: `.filter(patient__phone=..., patient__date_of_birth=..., expires_at__gt=now, verified_at__isnull=True).order_by('-created_at').first()`
+- Sprawdzić `session.verify_attempt_count < 5` – jeśli przekroczone: błąd (sesja zablokowana)
+- Porównać hash `SHA-256(pepper + otp_code.strip()) == session.otp_code_hash`
+- Przy nieudanej próbie: `session.verify_attempt_count += 1`, zapis (atomowy)
+- Przy sukcesie: **atomowy** `UPDATE ... SET verified_at=now WHERE id=... AND verified_at IS NULL` (select_for_update lub raw UPDATE) – zapobiegamy ponownemu użyciu OTP i race conditions
+- Po sukcesie: zwrócić sesję Django (login jako „patient_results” – mechanizm identyczny jak w reszcie portalu)
+- Token: sesja Django (cookie), krótkotrwała (np. 1h)
 
 ---
 
@@ -145,36 +163,35 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 
 | Metoda | Ścieżka                                                   | Opis                                                                                                                                      |
 | ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/v1/patient-results/request-otp`                     | Body: `{"phone": "...", "date_of_birth": "YYYY-MM-DD"}`                                                                                   |
+| POST   | `/api/v1/patient-results/request-otp`                     | Body: `{"phone": "...", "date_of_birth": "YYYY-MM-DD", "captcha_token": "..."}`; walidacja CAPTCHA przed wysyłką OTP                          |
 | POST   | `/api/v1/patient-results/verify-otp`                      | Body: `{"phone": "...", "date_of_birth": "...", "otp_code": "123456"}`; Response: `{"session_token": "...", "expires_at": "..."}`         |
-| GET    | `/api/v1/patient-results/documents`                       | Header: `Authorization: Bearer <session_token>` lub cookie; Response: lista dokumentów `[{id, queue_date, document_id, version_id}, ...]` |
-| GET    | `/api/v1/patient-results/documents/<version_id>/download` | Zwraca PDF (FileResponse); wymaga session token                                                                                           |
+| GET    | `/api/v1/patient-results/documents`                       | Sesja Django (cookie); Response: lista dokumentów `[{id, queue_date, document_id, version_id}, ...]`                                       |
+| GET    | `/api/v1/patient-results/documents/<version_id>/download` | Zwraca PDF (FileResponse); wymaga sesji Django                                                                                            |
 
 
 ### 3.2 Logika listy dokumentów
 
-- Z tokena wyciągnąć `patient_id`
+- Z sesji Django wyciągnąć `patient_id` (patient_results session)
 - Zapytanie: `MedicalDocumentVersion` gdzie `version_status=PUBLISHED`, `pdf_generation_status=COMPLETED`, `medical_document__queue_entry__patient_id=patient_id`
-- Filtrowanie wycofanych: na razie bez pola `revoked_at` – dokument jest dostępny jeśli jest `PUBLISHED` i `doc.current_version_id == version.id` (aktualna opublikowana wersja). Opcjonalnie: dodać `version_status=WITHDRAWN` w przyszłości
+- **Aktualna wersja:** `version.version_no == doc.current_version_no` (model ma `current_version_no`, nie `current_version_id`)
+- **Retencja:** tylko dokumenty z `local_pdf_deleted_at IS NULL` – po 30 dniach plik i dane wrażliwe są usuwane; dokument jest niedostępny dla pacjenta
+- **Wycofanie:** tylko wersje z `revoked_at IS NULL`
 - Sortowanie: `-published_at`
 - Zwracać: `version_id`, `queue_date`, `document_id` (dla audytu)
 
 ### 3.3 Serwowanie PDF
 
-- Weryfikacja tokena → `patient_id`
+- Weryfikacja sesji Django → `patient_id`
 - Sprawdzenie: `version` należy do dokumentu, którego `queue_entry.patient_id == patient_id`
-- Sprawdzenie: `version.version_status == PUBLISHED`, `pdf_generation_status == COMPLETED`
-- Serwowanie:
-  - Jeśli `version.pdf_local_path` istnieje i plik na dysku: `FileResponse(open(path), content_type='application/pdf')`
-  - W przeciwnym razie: `build_befund_pdf_bytes(version)` → `HttpResponse(pdf_bytes, content_type='application/pdf')`
+- Sprawdzenie: `version.version_status == PUBLISHED`, `pdf_generation_status == COMPLETED`, `revoked_at IS NULL`
+- **Retencja:** tylko wersje z `local_pdf_deleted_at IS NULL` – po 30 dniach dokument niedostępny (plik usunięty, medical_payload wyczyszczony zgodnie z polityką danych wrażliwych)
+- Serwowanie: jeśli `version.pdf_local_path` istnieje i plik na dysku → `FileResponse(open(path), content_type='application/pdf')`. **Brak fallbacku** – nie można odtwarzać z medical_payload po retencji.
 - Nagłówki: `Content-Disposition: attachment; filename="befund-{queue_date}.pdf"`
-- **Audit:** `create_audit_event(event_type="PATIENT_RESULTS_PDF_DOWNLOAD", patient_id=..., medical_document_id=..., metadata={"version_id": ..., "client_ip": ..., "downloaded_at": ...})`
+- **Audit:** `create_audit_event(event_type="PATIENT_RESULTS_PDF_DOWNLOAD", ...)`
 
-### 3.4 Mechanizm sesji (token)
+### 3.4 Mechanizm sesji
 
-- Opcja A: **Signed cookie** – `patient_id` + `expires_at` w cookie, klucz z `SECRET_KEY`
-- Opcja B: **JWT** – `patient_id`, `expires_at`; weryfikacja w middleware lub w widoku
-- Zalecane: signed cookie (spójne z resztą aplikacji); domain np. `.cogitomedica.pl` dla wyniki.cogitomedica.pl
+- **Sesja Django** – taki sam mechanizm jak w reszcie portalu (tablet, recepcja, lekarz). Całość to jeden system. Po zweryfikowaniu OTP: `request.session['patient_results_patient_id'] = patient_id` (lub dedykowany backend sesji dla roli „patient_results"); cookie sesji standardowo.
 
 ---
 
@@ -185,11 +202,22 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 - `path("wyniki/", include("apps.patient_results.urls"))` w [cogitomedica/urls.py](cogitomedica/urls.py)
 - Szablony: `wyniki/login.html`, `wyniki/otp.html`, `wyniki/documents.html`
 - Flow:
-  1. `/wyniki/` – formularz phone + DOB → POST do API request-otp
+  1. `/wyniki/` – formularz phone + DOB + CAPTCHA → POST do API request-otp (z tokenem CAPTCHA)
   2. `/wyniki/otp/` – formularz 6 cyfr → POST do API verify-otp → redirect na listę
   3. `/wyniki/documents/` – lista dokumentów z linkami do download
 
-### 4.2 Styl i UX
+### 4.2 Mechanizm CAPTCHA
+
+- **Miejsce:** Przed `POST request-otp` – walidacja tokenu CAPTCHA przed wysłaniem OTP.
+- **Opcje:** Cloudflare Turnstile (darmowy, przyjazny prywatności) lub Google reCAPTCHA v3 (niewidoczny, score-based).
+- **Flow:**
+  1. Frontend: widget CAPTCHA na stronie logowania (`/wyniki/`); użytkownik wypełnia phone+DOB i przechodzi challenge.
+  2. Request: `POST /patient-results/request-otp` z body `{ "phone": "...", "date_of_birth": "...", "captcha_token": "..." }`.
+  3. Backend: przed logiką OTP wywołać API weryfikacji (np. `https://challenges.cloudflare.com/turnstile/v0/siteverify`) z tokenem i `SECRET_KEY`. Jeśli zwrot negatywny – `400` bez wysyłania SMS.
+- **Konfiguracja .env:** `TURNSTILE_SECRET_KEY` (lub `RECAPTCHA_SECRET_KEY`), `TURNSTILE_SITE_KEY` (lub `RECAPTCHA_SITE_KEY`) dla frontendu.
+- **Mock w dev:** Możliwość pominięcia CAPTCHA gdy `CAPTCHA_VERIFY_SKIP=1` (np. w testach E2E).
+
+### 4.3 Styl i UX
 
 - Prosty layout RWD (Tailwind jeśli w projekcie; inaczej minimalny CSS)
 - Tłumaczenia: DE/EN/PL z `translation_key` (jak tablet)
@@ -197,20 +225,22 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 
 ---
 
-## Faza 5: Zabezpieczenia i rate limiting
+## Faza 5: Zabezpieczenia, CAPTCHA i rate limiting
 
-- **Rate limit OTP:** max 3 request-otp na numer/h; max 5 verify-otp na sesję
-- **Rate limit brute force:** django-ratelimit lub cache (Redis/in-memory) na IP
-- **CORS:** jeśli front na innej domenie – konfiguracja `CORS_ALLOWED_ORIGINS` dla wyniki.cogitomedica.pl
-- **CSP / nagłówki:** `X-Content-Type-Options: nosniff` na PDF
+- **CAPTCHA:** Wymagane przy `request-otp` – walidacja tokenu przed wysyłką OTP (Cloudflare Turnstile lub reCAPTCHA v3). Ochrona przed botami i masowymi requestami.
+- **Rate limit OTP:** max 3 request-otp na numer/h; max 5 verify-otp na sesję (`verify_attempt_count`)
+- **Throttling:** django-ratelimit lub cache na IP (dodatkowa warstwa obrony)
+- **CORS:** jeśli front na innej domenie – `CORS_ALLOWED_ORIGINS` dla wyniki.cogitomedica.pl
+- **Nagłówki:** `X-Content-Type-Options: nosniff` na PDF
 
 ---
 
-## Faza 6: Wycofanie publikacji (opcjonalna)
+## Faza 6: Wycofanie publikacji (MVP – wymagane)
 
 - Dodać pole `MedicalDocumentVersion.revoked_at` (timestamptz NULL)
 - Endpoint w panelu lekarza: `POST /medical-documents/{id}/revoke` – ustawia `revoked_at` na bieżącej opublikowanej wersji
-- W portalu: przy liście i download wykluczać wersje z `revoked_at IS NOT NULL`
+- **Usunięcie PDF:** przy wycofaniu – usunąć plik lokalny (`pdf_local_path`), ustawić `pdf_local_path=NULL` (lub odpowiedni flag), aby pacjent nie mógł go pobrać
+- W portalu: przy liście i download wykluczać wersje z `revoked_at IS NOT NULL`; dokument wycofany nie jest widoczny ani pobieralny
 
 ---
 
@@ -225,8 +255,10 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 | 4         | Serwisy request_otp, verify_otp                              | Model, Adapter SMS |
 | 5         | API endpointy (request-otp, verify-otp, documents, download) | Serwisy            |
 | 6         | Widoki HTML / wyniki/                                        | API                |
-| 7         | Rate limiting, testy E2E                                     | Wszystko           |
-| 8         | (Opcjonalnie) Revocation                                     | -                  |
+| 7         | CAPTCHA (Turnstile/reCAPTCHA) przy request-otp               | API endpointy      |
+| 8         | Rate limiting, testy E2E                                     | Wszystko           |
+| 9         | Revocation (revoked_at, usunięcie PDF przy wycofaniu)       | -                  |
+| 10        | Migracja: UNIQUE(phone) na Patient, normalizacja przy imporcie | -                  |
 
 
 ---
@@ -238,8 +270,10 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 | ----------------------------------- | ------------------------------------------------------------- |
 | `apps/integrations/sms/client.py`   | Utworzyć                                                      |
 | `apps/integrations/sms/__init__.py` | Utworzyć                                                      |
-| `cogitomedica/settings.py`          | Dodać SMSAPI_*                                                |
-| `.env.example`                      | Dodać SMSAPI_*                                                |
+| `cogitomedica/settings.py`          | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
+| `.env.example`                      | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
+| `apps/reception/` (import, patient create) | Normalizacja phone przy zapisie                              |
+| Migracja `Patient`                  | UNIQUE(phone) – jedna osoba na numer                          |
 | `apps/outbox/services.py`           | Modyfikacja SMS_SEND                                          |
 | `apps/patient_results/`             | Nowa aplikacja (models, services, api_views, urls, templates) |
 | `cogitomedica/urls.py`              | path wyniki/                                                  |
@@ -251,11 +285,13 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 
 ## Definicja ukończenia
 
-- SMS logistyczny wysyłany przez SMSApi po publikacji (treść zgodna z PRD)
-- Pacjent może wejść na /wyniki/, podać phone+DOB, otrzymać OTP i zalogować się
-- Lista opublikowanych dokumentów pacjenta po zalogowaniu
-- Pobranie PDF przez HTTPS z logowaniem w audit_event
-- Rate limiting OTP i verify
-- Testy jednostkowe i integracyjne
-- Dokumentacja w api-plan.md (endpointy patient-results)
+- SMS logistyczny wysyłany przez SMSApi (SmsApiPlClient) po publikacji; treść „Nowa dokumentacja w CogitoMed" + link; język z form_locale pacjenta (DE/EN/PL)
+- Unikalność `phone` na Patient; normalizacja przy imporcie i tworzeniu
+- Pacjent może wejść na /wyniki/, podać phone+DOB, otrzymać OTP i zalogować się (sesja Django)
+- OTP: pepper w .env, throttling verify (max 5), atomowy UPDATE przy weryfikacji, najnowsza sesja ważna
+- CAPTCHA przy request-otp (Turnstile lub reCAPTCHA v3)
+- Lista dokumentów: tylko aktualne wersje (`current_version_no`), `local_pdf_deleted_at IS NULL`, `revoked_at IS NULL`
+- Pobranie PDF tylko gdy plik lokalny istnieje (brak odtwarzania po retencji)
+- Wycofanie publikacji: revoked_at, usunięcie pliku – pacjent nie widzi wycofanego dokumentu
+- Testy jednostkowe i integracyjne; dokumentacja w api-plan.md
 
