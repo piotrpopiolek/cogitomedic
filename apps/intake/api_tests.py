@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from uuid import uuid4
 
+from django.conf import settings
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -234,8 +235,6 @@ class IntakeDocumentsApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_preview_pdf_returns_inline_pdf_when_file_exists(self) -> None:
-        from django.conf import settings
-
         rel_path = f"pdfs/intake/2099/01/{uuid4()}.pdf"
         full_path = Path(settings.MEDIA_ROOT) / rel_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
