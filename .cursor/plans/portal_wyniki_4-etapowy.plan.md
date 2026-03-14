@@ -1,18 +1,18 @@
 ---
-name: Portal wyniki 4-etapowy
+name: Portal ergebnisse 4-etapowy
 overview: "Plan implementacji 4-etapowego procesu udostępniania wyników pacjentowi (US-018, PRD 3.4a): wysyłka SMS z linkiem do portalu (treść: Nowa dokumentacja w CogitoMed), integracja SMSApi, nowa aplikacja patient_results z logowaniem phone+DOB, OTP 15 min oraz serwowaniem PDF przez HTTPS."
 todos: []
 isProject: false
 ---
 
-# Plan implementacji – portal wyniki (4 etapy)
+# Plan implementacji – portal ergebnisse (4 etapy)
 
 ## Kontekst i zakres
 
 Proces udostępniania zgodnie z PRD 3.4a i US-018:
 
-1. **SMS logistyczny** – wysyłany po publikacji Befund; treść: „Nowa dokumentacja w CogitoMed" + link do portalu (np. [https://wyniki.cogitomedica.pl](https://wyniki.cogitomedica.pl))
-2. **Logowanie cross-verification** – pacjent na wyniki.cogitomedica.pl; phone + date_of_birth
+1. **SMS logistyczny** – wysyłany po publikacji Befund; treść: „Nowa dokumentacja w CogitoMed" + link do portalu (np. [https://ergebnisse.cogitomedica.pl](https://ergebnisse.cogitomedica.pl))
+2. **Logowanie cross-verification** – pacjent na ergebnisse.cogitomedica.pl; phone + date_of_birth
 3. **OTP 15 min** – 6-cyfrowy kod, MFA
 4. **Dostęp do PDF** – serwowanie przez HTTPS; logi audytowe; filtrowanie wycofanych publikacji
 
@@ -53,7 +53,7 @@ flowchart TB
         Resolve --> Adapter[SMSApi Adapter]
         Adapter --> Send["Send: 'Nowa dokumentacja w CogitoMed' + link do portalu"]
     end
-    subgraph portal [Portal wyniki]
+    subgraph portal [Portal ergebnisse]
         Login[POST request-otp: phone, dob]
         Login --> Match{Patient match?}
         Match -->|Yes| GenOTP[Generate OTP, save session]
@@ -84,7 +84,7 @@ flowchart TB
 ```
   SMSAPI_ACCESS_TOKEN=
   SMSAPI_USE_MOCK=1
-  PATIENT_RESULTS_BASE_URL=https://wyniki.cogitomedica.pl
+  PATIENT_RESULTS_BASE_URL=https://ergebnisse.cogitomedica.pl
   PATIENT_RESULTS_OTP_PEPPER=change-me-secret-pepper
   TURNSTILE_SECRET_KEY=
   TURNSTILE_SITE_KEY=
@@ -200,19 +200,19 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 
 ### 4.1 Widoki Django (SSR)
 
-- `path("wyniki/", include("apps.patient_results.urls"))` w [cogitomedica/urls.py](cogitomedica/urls.py)
-- Szablony: `wyniki/login.html`, `wyniki/otp.html`, `wyniki/documents.html`
+- `path("ergebnisse/", include("apps.patient_results.urls"))` w [cogitomedica/urls.py](cogitomedica/urls.py)
+- Szablony: `ergebnisse/login.html`, `ergebnisse/otp.html`, `ergebnisse/documents.html`
 - Flow:
-  1. `/wyniki/` – formularz phone + DOB + CAPTCHA → POST do API request-otp (z tokenem CAPTCHA)
-  2. `/wyniki/otp/` – formularz 6 cyfr → POST do API verify-otp → redirect na listę
-  3. `/wyniki/documents/` – lista dokumentów z linkami do download
+  1. `/ergebnisse/` – formularz phone + DOB + CAPTCHA → POST do API request-otp (z tokenem CAPTCHA)
+  2. `/ergebnisse/otp/` – formularz 6 cyfr → POST do API verify-otp → redirect na listę
+  3. `/ergebnisse/documents/` – lista dokumentów z linkami do download
 
 ### 4.2 Mechanizm CAPTCHA
 
 - **Miejsce:** Przed `POST request-otp` – walidacja tokenu CAPTCHA przed wysłaniem OTP.
 - **Opcje:** Cloudflare Turnstile (darmowy, przyjazny prywatności) lub Google reCAPTCHA v3 (niewidoczny, score-based).
 - **Flow:**
-  1. Frontend: widget CAPTCHA na stronie logowania (`/wyniki/`); użytkownik wypełnia phone+DOB i przechodzi challenge.
+  1. Frontend: widget CAPTCHA na stronie logowania (`/ergebnisse/`); użytkownik wypełnia phone+DOB i przechodzi challenge.
   2. Request: `POST /patient-results/request-otp` z body `{ "phone": "...", "date_of_birth": "...", "captcha_token": "..." }`.
   3. Backend: przed logiką OTP wywołać API weryfikacji (np. `https://challenges.cloudflare.com/turnstile/v0/siteverify`) z tokenem i `SECRET_KEY`. Jeśli zwrot negatywny – `400` bez wysyłania SMS.
 - **Konfiguracja .env:** `TURNSTILE_SECRET_KEY` (lub `RECAPTCHA_SECRET_KEY`), `TURNSTILE_SITE_KEY` (lub `RECAPTCHA_SITE_KEY`) dla frontendu.
@@ -231,7 +231,7 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 - **CAPTCHA:** Wymagane przy `request-otp` – walidacja tokenu przed wysyłką OTP (Cloudflare Turnstile lub reCAPTCHA v3). Ochrona przed botami i masowymi requestami.
 - **Rate limit OTP:** max 3 request-otp na numer/h; max 5 verify-otp na sesję (`verify_attempt_count`)
 - **Throttling:** django-ratelimit lub cache na IP (dodatkowa warstwa obrony)
-- **CORS:** jeśli front na innej domenie – `CORS_ALLOWED_ORIGINS` dla wyniki.cogitomedica.pl
+- **CORS:** jeśli front na innej domenie – `CORS_ALLOWED_ORIGINS` dla ergebnisse.cogitomedica.pl
 - **Nagłówki:** `X-Content-Type-Options: nosniff` na PDF
 
 ---
@@ -255,7 +255,7 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 | 3         | Model PatientResultsOtpSession + migracja                      | -                  |
 | 4         | Serwisy request_otp, verify_otp                                | Model, Adapter SMS |
 | 5         | API endpointy (request-otp, verify-otp, documents, download)   | Serwisy            |
-| 6         | Widoki HTML / wyniki/                                          | API                |
+| 6         | Widoki HTML / ergebnisse/                                      | API                |
 | 7         | CAPTCHA (Turnstile/reCAPTCHA) przy request-otp                 | API endpointy      |
 | 8         | Rate limiting, testy E2E                                       | Wszystko           |
 | 9         | Revocation (revoked_at, usunięcie PDF przy wycofaniu)          | -                  |
@@ -277,7 +277,7 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 | Migracja `Patient`                         | UNIQUE(phone) – jedna osoba na numer                                |
 | `apps/outbox/services.py`                  | Modyfikacja SMS_SEND                                                |
 | `apps/patient_results/`                    | Nowa aplikacja (models, services, api_views, urls, templates)       |
-| `cogitomedica/urls.py`                     | path wyniki/                                                        |
+| `cogitomedica/urls.py`                     | path ergebnisse/                                                    |
 | `cogitomedica/api_urls.py`                 | Ścieżki patient-results                                             |
 | `cogitomedica/openapi_extension.py`        | NO_AUTH dla patient-results                                         |
 
@@ -288,7 +288,7 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 
 - SMS logistyczny wysyłany przez SMSApi (SmsApiPlClient) po publikacji; treść „Nowa dokumentacja w CogitoMed" + link; język z form_locale pacjenta (DE/EN/PL)
 - Unikalność `phone` na Patient; normalizacja przy imporcie i tworzeniu
-- Pacjent może wejść na /wyniki/, podać phone+DOB, otrzymać OTP i zalogować się (sesja Django)
+- Pacjent może wejść na /ergebnisse/, podać phone+DOB, otrzymać OTP i zalogować się (sesja Django)
 - OTP: pepper w .env, throttling verify (max 5), atomowy UPDATE przy weryfikacji, najnowsza sesja ważna
 - CAPTCHA przy request-otp (Turnstile lub reCAPTCHA v3)
 - Lista dokumentów: tylko aktualne wersje (`current_version_no`), `local_pdf_deleted_at IS NULL`, `revoked_at IS NULL`
