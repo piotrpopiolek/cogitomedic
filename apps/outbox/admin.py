@@ -24,6 +24,7 @@ class OutboxEventAdmin(UnfoldModelAdmin):
         "created_at",
     )
     list_filter = ("event_type", "status")
+    ordering = ["-created_at"]
     search_fields = ("error_message",)
     raw_id_fields = ("medical_document_version",)
     readonly_fields = ("id", "aggregate_type", "aggregate_id", "payload", "payload_schema_version", "created_at", "updated_at")

@@ -15,6 +15,7 @@ from apps.operations.models import AuditEvent
 class AuditEventAdmin(UnfoldModelAdmin):
     list_display = ("id", "event_time", "event_type", "actor_user", "patient", "medical_document", "outbox_event")
     list_filter = ("event_type",)
+    ordering = ["-event_time"]
     raw_id_fields = ("actor_user", "patient", "medical_document", "outbox_event")
     readonly_fields = ("id", "event_time", "event_type", "actor_user", "patient", "medical_document", "outbox_event", "metadata")
     date_hierarchy = "event_time"
