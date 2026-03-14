@@ -91,6 +91,7 @@ INSTALLED_APPS += [
     "apps.outbox",
     "apps.integrations",
     "apps.operations",
+    "apps.patient_results",
 ]
 
 MIDDLEWARE = [
