@@ -1,0 +1,18 @@
+{% extends "ergebnisse/base.html" %}
+{% block title %}Ergebnisse – Dokumente{% endblock %}
+{% block content %}
+  <h1>Ihre Dokumente</h1>
+  {% if items %}
+    <ul>
+      {% for item in items %}
+        <li>
+          <strong>Befund vom {{ item.queue_date }}</strong>
+          <br>
+          <a href="{% url 'patient-results-download' version_id=item.version_id %}" class="btn">PDF herunterladen</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Es sind keine Dokumente verfügbar.</p>
+  {% endif %}
+{% endblock %}

@@ -37,6 +37,7 @@ urlpatterns = [
     ),
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
+    path("ergebnisse/", include("apps.patient_results.urls", namespace="ergebnisse")),
     path("doctor/", include("cogitomedica.doctor_urls")),
     path("api/schema/", cogito_openapi_schema_view, name="api-schema"),
     path("api/docs/", lambda request: redirect("api-swagger", permanent=False)),

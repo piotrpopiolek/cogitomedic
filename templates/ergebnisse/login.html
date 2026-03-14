@@ -1,0 +1,34 @@
+{% extends "ergebnisse/base.html" %}
+{% block title %}Ergebnisse – Anmeldung{% endblock %}
+{% block content %}
+  <h1>Ergebnisse – Anmeldung</h1>
+  <p>Bitte geben Sie Ihre Telefonnummer und Ihr Geburtsdatum ein.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="" id="ergebnisse-login-form">
+    {% csrf_token %}
+    <label for="phone">Telefonnummer</label>
+    <input id="phone" name="phone" type="tel" required placeholder="z.B. +49 123 456789" />
+    <label for="date_of_birth">Geburtsdatum (TT.MM.JJJJ)</label>
+    <input id="date_of_birth" name="date_of_birth" type="text" required placeholder="TT.MM.JJJJ" />
+    {% if turnstile_site_key %}
+    <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
+    {% endif %}
+    <input type="hidden" name="captcha_token" id="captcha_token" value="" />
+    <button type="submit">Code per SMS anfordern</button>
+  </form>
+  {% if turnstile_site_key %}
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% endif %}
+  <script>
+    (function() {
+      var form = document.getElementById('ergebnisse-login-form');
+      var tokenInput = document.getElementById('captcha_token');
+      form.addEventListener('submit', function(e) {
+        var tokenEl = document.querySelector('[name="cf-turnstile-response"]');
+        if (tokenEl && tokenEl.value) {
+          tokenInput.value = tokenEl.value;
+        }
+      });
+    })();
+  </script>
+{% endblock %}
