@@ -127,6 +127,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         intake_form = version.medical_document.intake_form
         if intake_form and intake_form.session_id:
             form_locale = intake_form.session.form_locale
+        sms_text = get_sms_patient_results_text(form_locale, base_url)
         adapter = get_sms_adapter()
         adapter.send_sms(to=patient.phone, message=sms_text)
 
