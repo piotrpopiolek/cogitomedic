@@ -25,6 +25,7 @@ Proces udostępniania zgodnie z PRD 3.4a i US-018:
 - PDF: `build_befund_pdf_bytes` w [apps/medical/pdf_builder.py](apps/medical/pdf_builder.py) – generuje z wersji; preview w [apps/medical/api_views.py](apps/medical/api_views.py) (linie 167–198)
 
 **Wymagania biznesowe:**
+
 - **Unikalność numeru telefonu:** W systemie nie mogą istnieć dwie osoby z tym samym numerem. Migracja: `UNIQUE(phone)` na `Patient` (lub walidacja przy tworzeniu/impicie).
 - **Normalizacja telefonu:** Przy imporcie i ręcznym dodawaniu pacjenta numer jest normalizowany (np. `re.sub(r'\D', '', v)` → tylko cyfry; ewentualnie prefix kraju). Kolumna `phone` lub `phone_normalized` – spójna całość.
 - **Weryfikacja danych:** Pacjent potwierdza numer i datę urodzenia w ankiecie na tablecie – dane są zweryfikowane.
@@ -161,12 +162,12 @@ flowchart TB
 Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/openapi_extension.py](cogitomedica/openapi_extension.py) (NO_AUTH_OPERATIONS):
 
 
-| Metoda | Ścieżka                                                   | Opis                                                                                                                                      |
-| ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/v1/patient-results/request-otp`                     | Body: `{"phone": "...", "date_of_birth": "YYYY-MM-DD", "captcha_token": "..."}`; walidacja CAPTCHA przed wysyłką OTP                          |
-| POST   | `/api/v1/patient-results/verify-otp`                      | Body: `{"phone": "...", "date_of_birth": "...", "otp_code": "123456"}`; Response: `{"session_token": "...", "expires_at": "..."}`         |
-| GET    | `/api/v1/patient-results/documents`                       | Sesja Django (cookie); Response: lista dokumentów `[{id, queue_date, document_id, version_id}, ...]`                                       |
-| GET    | `/api/v1/patient-results/documents/<version_id>/download` | Zwraca PDF (FileResponse); wymaga sesji Django                                                                                            |
+| Metoda | Ścieżka                                                   | Opis                                                                                                                              |
+| ------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/v1/patient-results/request-otp`                     | Body: `{"phone": "...", "date_of_birth": "YYYY-MM-DD", "captcha_token": "..."}`; walidacja CAPTCHA przed wysyłką OTP              |
+| POST   | `/api/v1/patient-results/verify-otp`                      | Body: `{"phone": "...", "date_of_birth": "...", "otp_code": "123456"}`; Response: `{"session_token": "...", "expires_at": "..."}` |
+| GET    | `/api/v1/patient-results/documents`                       | Sesja Django (cookie); Response: lista dokumentów `[{id, queue_date, document_id, version_id}, ...]`                              |
+| GET    | `/api/v1/patient-results/documents/<version_id>/download` | Zwraca PDF (FileResponse); wymaga sesji Django                                                                                    |
 
 
 ### 3.2 Logika listy dokumentów
@@ -247,17 +248,17 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 ## Kolejność wdrożenia
 
 
-| Kolejność | Zadanie                                                      | Zależności         |
-| --------- | ------------------------------------------------------------ | ------------------ |
-| 1         | Adapter SMS + konfiguracja                                   | -                  |
-| 2         | Modyfikacja SMS_SEND w outbox                                | Adapter SMS        |
-| 3         | Model PatientResultsOtpSession + migracja                    | -                  |
-| 4         | Serwisy request_otp, verify_otp                              | Model, Adapter SMS |
-| 5         | API endpointy (request-otp, verify-otp, documents, download) | Serwisy            |
-| 6         | Widoki HTML / wyniki/                                        | API                |
-| 7         | CAPTCHA (Turnstile/reCAPTCHA) przy request-otp               | API endpointy      |
-| 8         | Rate limiting, testy E2E                                     | Wszystko           |
-| 9         | Revocation (revoked_at, usunięcie PDF przy wycofaniu)       | -                  |
+| Kolejność | Zadanie                                                        | Zależności         |
+| --------- | -------------------------------------------------------------- | ------------------ |
+| 1         | Adapter SMS + konfiguracja                                     | -                  |
+| 2         | Modyfikacja SMS_SEND w outbox                                  | Adapter SMS        |
+| 3         | Model PatientResultsOtpSession + migracja                      | -                  |
+| 4         | Serwisy request_otp, verify_otp                                | Model, Adapter SMS |
+| 5         | API endpointy (request-otp, verify-otp, documents, download)   | Serwisy            |
+| 6         | Widoki HTML / wyniki/                                          | API                |
+| 7         | CAPTCHA (Turnstile/reCAPTCHA) przy request-otp                 | API endpointy      |
+| 8         | Rate limiting, testy E2E                                       | Wszystko           |
+| 9         | Revocation (revoked_at, usunięcie PDF przy wycofaniu)          | -                  |
 | 10        | Migracja: UNIQUE(phone) na Patient, normalizacja przy imporcie | -                  |
 
 
@@ -266,19 +267,19 @@ Dodać do [cogitomedica/api_urls.py](cogitomedica/api_urls.py) i [cogitomedica/o
 ## Pliki do utworzenia/modyfikacji
 
 
-| Plik                                | Akcja                                                         |
-| ----------------------------------- | ------------------------------------------------------------- |
-| `apps/integrations/sms/client.py`   | Utworzyć                                                      |
-| `apps/integrations/sms/__init__.py` | Utworzyć                                                      |
-| `cogitomedica/settings.py`          | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
-| `.env.example`                      | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
-| `apps/reception/` (import, patient create) | Normalizacja phone przy zapisie                              |
-| Migracja `Patient`                  | UNIQUE(phone) – jedna osoba na numer                          |
-| `apps/outbox/services.py`           | Modyfikacja SMS_SEND                                          |
-| `apps/patient_results/`             | Nowa aplikacja (models, services, api_views, urls, templates) |
-| `cogitomedica/urls.py`              | path wyniki/                                                  |
-| `cogitomedica/api_urls.py`          | Ścieżki patient-results                                       |
-| `cogitomedica/openapi_extension.py` | NO_AUTH dla patient-results                                   |
+| Plik                                       | Akcja                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `apps/integrations/sms/client.py`          | Utworzyć                                                            |
+| `apps/integrations/sms/__init__.py`        | Utworzyć                                                            |
+| `cogitomedica/settings.py`                 | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
+| `.env.example`                             | Dodać SMSAPI_*, PATIENT_RESULTS_*, TURNSTILE_*, CAPTCHA_VERIFY_SKIP |
+| `apps/reception/` (import, patient create) | Normalizacja phone przy zapisie                                     |
+| Migracja `Patient`                         | UNIQUE(phone) – jedna osoba na numer                                |
+| `apps/outbox/services.py`                  | Modyfikacja SMS_SEND                                                |
+| `apps/patient_results/`                    | Nowa aplikacja (models, services, api_views, urls, templates)       |
+| `cogitomedica/urls.py`                     | path wyniki/                                                        |
+| `cogitomedica/api_urls.py`                 | Ścieżki patient-results                                             |
+| `cogitomedica/openapi_extension.py`        | NO_AUTH dla patient-results                                         |
 
 
 ---
