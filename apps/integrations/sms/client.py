@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from typing import Protocol
 
 from django.conf import settings
@@ -10,6 +9,16 @@ from django.conf import settings
 from apps.core.translation_service import get_translation_map, normalize_language_code
 
 logger = logging.getLogger(__name__)
+
+
+def format_phone_for_smsapi(phone: str) -> str:
+    """Ensure phone has + prefix for international format (SMSAPI expects +48123456789)."""
+    digits = (phone or "").strip()
+    if not digits:
+        return ""
+    if digits.startswith("+"):
+        return digits
+    return "+" + digits
 
 SMS_PATIENT_RESULTS_KEY = "other.sms.patient_results"
 _DEFAULT_SMS_PATIENT_RESULTS = "Neue Dokumentation bei CogitoMed {url}"
@@ -43,8 +52,14 @@ class _SmsApiAdapter:
         self._client = SmsApiPlClient(access_token=token)
 
     def send_sms(self, to: str, message: str) -> None:
-        result = self._client.sms.send(to=to, message=message)
-        logger.info("SMS sent to %s, id=%s, status=%s", to[:4] + "***", getattr(result, "id", "?"), getattr(result, "status", "?"))
+        formatted = format_phone_for_smsapi(to)
+        result = self._client.sms.send(to=formatted, message=message)
+        logger.info(
+            "[SMSAPI] SMS sent to %s***, id=%s, status=%s",
+            formatted[: min(6, len(formatted))],
+            getattr(result, "id", "?"),
+            getattr(result, "status", "?"),
+        )
 
 
 class _MockSmsAdapter:
@@ -59,10 +74,11 @@ def _use_mock_sms() -> bool:
     return str(raw).lower() in ("1", "true", "yes")
 
 
-@lru_cache(maxsize=1)
 def get_sms_adapter() -> SmsAdapterProtocol:
-    """Return configured SMS adapter (singleton)."""
-    if _use_mock_sms():
+    """Return configured SMS adapter. No caching – ensures fresh SMSAPI_USE_MOCK after restart."""
+    use_mock = _use_mock_sms()
+    logger.debug("SMS adapter: %s", "MOCK" if use_mock else "SMSAPI (real)")
+    if use_mock:
         return _MockSmsAdapter()
     return _SmsApiAdapter()
 
