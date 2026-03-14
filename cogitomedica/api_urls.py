@@ -62,6 +62,12 @@ from apps.reception.api_views import (
     tablet_device_heartbeat_view,
     tablet_devices_view,
 )
+from apps.patient_results.api_views import (
+    patient_results_documents_view,
+    patient_results_download_view,
+    patient_results_request_otp_view,
+    patient_results_verify_otp_view,
+)
 from apps.users.api_views import (
     auth_login_view,
     auth_logout_view,
@@ -342,5 +348,25 @@ urlpatterns = [
         "intake-documents/<uuid:intake_document_version_id>/preview-pdf",
         intake_document_preview_pdf_view,
         name="intake-document-preview-pdf",
+    ),
+    path(
+        "patient-results/request-otp",
+        patient_results_request_otp_view,
+        name="patient-results-request-otp",
+    ),
+    path(
+        "patient-results/verify-otp",
+        patient_results_verify_otp_view,
+        name="patient-results-verify-otp",
+    ),
+    path(
+        "patient-results/documents",
+        patient_results_documents_view,
+        name="patient-results-documents",
+    ),
+    path(
+        "patient-results/documents/<uuid:version_id>/download",
+        patient_results_download_view,
+        name="patient-results-download",
     ),
 ]
