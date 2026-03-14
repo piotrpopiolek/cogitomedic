@@ -473,6 +473,19 @@ OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", 
 # Prawdopodobieństwo (0.0–1.0) losowego błędu w mockach HiDrive i SMS, aby testować retry. Domyślnie 0 (wyłączone).
 OUTBOX_MOCK_RANDOM_FAILURE_RATE = float(os.environ.get("OUTBOX_MOCK_RANDOM_FAILURE_RATE", "0"))
 
+# SMS (SMSApi smsapi.pl)
+SMSAPI_ACCESS_TOKEN = os.environ.get("SMSAPI_ACCESS_TOKEN", "")
+SMSAPI_USE_MOCK = os.environ.get("SMSAPI_USE_MOCK", "1")
+
+# Portal wyniki (patient results)
+PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "https://wyniki.cogitomedica.pl")
+PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
+
+# CAPTCHA (Cloudflare Turnstile)
+TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
+CAPTCHA_VERIFY_SKIP = os.environ.get("CAPTCHA_VERIFY_SKIP", "0").lower() in ("1", "true", "yes")
+
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
