@@ -1,10 +1,11 @@
 """API views for patient results portal (public + session-based)."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 
 from apps.core.api_utils import json_error, read_json_body
@@ -23,13 +24,19 @@ from apps.patient_results.services import (
 
 
 def _parse_date(s: str | None) -> date | None:
-    """Parse YYYY-MM-DD. Returns None on invalid."""
+    """Parse YYYY-MM-DD. Returns None on invalid or out-of-range (future, >120 years ago)."""
     if not s or not isinstance(s, str):
         return None
     try:
-        return datetime.strptime(s.strip()[:10], "%Y-%m-%d").date()
+        d = datetime.strptime(s.strip()[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+    today = timezone.now().date()
+    if d > today:
+        return None
+    if d < today - timedelta(days=120 * 365):
+        return None
+    return d
 
 
 @ratelimit(key="ip", rate="10/m", method="POST", block=True)
@@ -116,7 +123,7 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
     version = get_patient_pdf_version(version_id, patient_id)
     if not version:
         return json_error("Document not found or unavailable.", status=404)
-    path = get_patient_pdf_path(version_id, patient_id)
+    path = get_patient_pdf_path(version_id, patient_id, version=version)
     if not path:
         return json_error("Document not found or unavailable.", status=404)
     queue_date = version.medical_document.queue_entry.daily_queue.queue_date.isoformat()

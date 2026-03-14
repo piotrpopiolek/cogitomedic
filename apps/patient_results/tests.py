@@ -1,6 +1,7 @@
 """Tests for patient_results services."""
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -8,11 +9,8 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.patient_results.models import PatientResultsOtpSession
-from apps.patient_results.services import (
-    normalize_phone,
-    request_otp,
-    verify_otp,
-)
+from apps.patient_results.services import request_otp, verify_otp
+from apps.reception.phone_utils import normalize_phone
 from apps.reception.models import ClinicSite, ConsultingRoom, DailyQueue, Patient, QueueEntry, QueueStatus
 from apps.users.models import StaffUser
 
@@ -114,7 +112,6 @@ class VerifyOtpTests(TestCase):
     def _create_session_with_otp(self, otp: str) -> PatientResultsOtpSession:
         pepper = "test-pepper"
         payload = f"{pepper}{otp}"
-        import hashlib
         h = hashlib.sha256(payload.encode()).hexdigest()
         with patch.dict("django.conf.settings.__dict__", {"PATIENT_RESULTS_OTP_PEPPER": "test-pepper"}):
             return PatientResultsOtpSession.objects.create(
