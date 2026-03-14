@@ -131,7 +131,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 return
 
         patient = version.medical_document.queue_entry.patient
-        base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://wyniki.cogitomedica.pl")
+        base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
         form_locale = None
         if version.medical_document.intake_form_id:
             form_locale = version.medical_document.intake_form.form_locale
