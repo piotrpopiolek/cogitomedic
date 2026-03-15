@@ -27,7 +27,10 @@ from apps.intake.views import (
 )
 
 urlpatterns = [
-    path("", lambda request: redirect("admin:index", permanent=False)),
+    path("", include("apps.patient_results.urls", namespace="ergebnisse")),
+    path("ergebnisse/", lambda request: redirect("/", permanent=True)),
+    path("ergebnisse/otp/", lambda request: redirect("/otp/", permanent=True)),
+    path("ergebnisse/documents/", lambda request: redirect("/documents/", permanent=True)),
     path("admin/reception-dashboard/", reception_dashboard_view, name="admin_reception_dashboard"),
     path("admin/intake-documents/", intake_documents_list_view, name="admin_intake_documents"),
     path(
@@ -37,7 +40,6 @@ urlpatterns = [
     ),
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
-    path("ergebnisse/", include("apps.patient_results.urls", namespace="ergebnisse")),
     path("doctor/", include("cogitomedica.doctor_urls")),
     path("api/schema/", cogito_openapi_schema_view, name="api-schema"),
     path("api/docs/", lambda request: redirect("api-swagger", permanent=False)),
