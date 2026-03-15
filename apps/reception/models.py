@@ -297,6 +297,14 @@ class TabletDevice(models.Model):
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     last_seen_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_last_seen_at", "Last seen at"))
     created_at = models.DateTimeField(auto_now_add=True)
+    clinic_site = models.ForeignKey(
+        ClinicSite,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="tablet_devices",
+        verbose_name=db_gettext_lazy("administration.field_clinic_site", "Clinic site"),
+    )
 
     class Meta:
         db_table = "tablet_device"

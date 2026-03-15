@@ -7,6 +7,7 @@ from datetime import date
 from unittest.mock import patch
 from uuid import uuid4
 
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import Client, TestCase, TransactionTestCase
@@ -438,6 +439,62 @@ class TabletQueueScopeApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("assigned scope", response.json().get("error", ""))
 
+    def test_tablet_scope_from_device_in_session(self) -> None:
+        """When session has tablet_device_id and device has clinic_site, queues are filtered by device site.
+        We also assign user to clinic_a so that scope comes from either device (production) or user (test client)."""
+        self.client.login(username="tablet-queue-user", password="safe-password")
+        clinic_a = ClinicSite.objects.create(code="AX", name="Clinic A")
+        clinic_b = ClinicSite.objects.create(code="BX", name="Clinic B")
+        self.tablet_user.clinic_sites.add(clinic_a)
+        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
+        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        device = TabletDevice.objects.create(
+            android_id="tablet-scope-device",
+            is_active=True,
+            clinic_site=clinic_a,
+        )
+        queue_a = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic_a,
+            consulting_room=room_a,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic_b,
+            consulting_room=room_b,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        self.client.session["tablet_device_id"] = str(device.id)
+        self.client.session.save()
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = self.client.session.session_key
+        response = self.client.get("/api/v1/daily-queues")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["clinic_site_id"], str(clinic_a.id))
+
+    def test_tablet_device_without_site_sees_empty_queues(self) -> None:
+        """When session has tablet_device_id but device has no clinic_site, GET daily-queues returns empty."""
+        self.client.login(username="tablet-queue-user", password="safe-password")
+        clinic = ClinicSite.objects.create(code="CX", name="Clinic C")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        device = TabletDevice.objects.create(android_id="tablet-no-site", is_active=True)
+        self.client.session["tablet_device_id"] = str(device.id)
+        self.client.session.save()
+        response = self.client.get("/api/v1/daily-queues")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
 
 class DoctorAndTabletAuthorizationApiTests(TestCase):
     """DOCTOR can GET list + detail (in scope); TABLET cannot POST queues. PATCH/DELETE stay ADMIN-only."""
@@ -588,6 +645,21 @@ class TabletDevicesApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["android_id"], "device-TAB-001")
         self.assertTrue(payload["is_active"])
+        self.assertIsNone(payload.get("clinic_site_id"))
+
+    def test_post_tablet_device_with_clinic_site_id(self) -> None:
+        clinic = ClinicSite.objects.create(code="T1", name="Tablet Clinic")
+        response = self.client.post(
+            "/api/v1/tablet-devices",
+            data=json.dumps({
+                "android_id": "device-TAB-SITE",
+                "is_active": True,
+                "clinic_site_id": str(clinic.id),
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
 
     def test_post_tablet_device_duplicate_returns_409(self) -> None:
         TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
@@ -616,6 +688,18 @@ class TabletDevicesApiTests(TestCase):
         response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(device.id))
+        self.assertIn("clinic_site_id", response.json())
+
+    def test_get_tablet_device_detail_includes_clinic_site_id(self) -> None:
+        clinic = ClinicSite.objects.create(code="D1", name="Device Clinic")
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-SITE1",
+            is_active=True,
+            clinic_site=clinic,
+        )
+        response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
 
     def test_patch_tablet_device(self) -> None:
         device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
@@ -628,6 +712,19 @@ class TabletDevicesApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["android_id"], "device-TAB-001A")
         self.assertFalse(payload["is_active"])
+
+    def test_patch_tablet_device_clinic_site_id(self) -> None:
+        clinic = ClinicSite.objects.create(code="P1", name="Patch Clinic")
+        device = TabletDevice.objects.create(android_id="device-TAB-PATCH", is_active=True)
+        response = self.client.patch(
+            f"/api/v1/tablet-devices/{device.id}",
+            data=json.dumps({"clinic_site_id": str(clinic.id)}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
+        device.refresh_from_db()
+        self.assertEqual(device.clinic_site_id, clinic.id)
 
     def test_delete_tablet_device_soft_deactivates(self) -> None:
         device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)

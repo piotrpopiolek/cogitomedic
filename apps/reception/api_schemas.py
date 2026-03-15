@@ -67,6 +67,10 @@ class CreateTabletDeviceRequest(BaseModel):
 
     android_id: str = Field(..., min_length=1, max_length=128)
     is_active: bool = True
+    clinic_site_id: UUID | None = Field(
+        default=None,
+        description="Przypisana placówka (ClinicSite); tablet widzi tylko kolejki tej placówki. Bez przypisania tablet nie wyświetli kolejek.",
+    )
 
 
 class UpdateTabletDeviceRequest(BaseModel):
@@ -74,6 +78,10 @@ class UpdateTabletDeviceRequest(BaseModel):
 
     android_id: str | None = Field(default=None, min_length=1, max_length=128)
     is_active: bool | None = None
+    clinic_site_id: UUID | None = Field(
+        default=None,
+        description="Przypisana placówka; null = odpinanie od placówki.",
+    )
 
 
 class CreateClinicSiteRequest(BaseModel):

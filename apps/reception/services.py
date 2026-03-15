@@ -29,6 +29,14 @@ from apps.users.models import StaffUser
 CLINIC_SITE_FIELD_NOT_PROVIDED = object()
 
 
+def _not_provided():
+    """Sentinel for PATCH: field was not in request body."""
+    return object()
+
+
+NOT_PROVIDED = _not_provided()
+
+
 class InvalidLocaleError(DomainError):
     """Raised when locale for tablet session is unsupported."""
 
@@ -177,9 +185,18 @@ def deactivate_consulting_room(*, consulting_room_id: uuid.UUID) -> ConsultingRo
 
 
 @transaction.atomic
-def create_tablet_device(*, android_id: str, is_active: bool = True) -> TabletDevice:
-    """Create a tablet device (identified by android_id only)."""
-    return TabletDevice.objects.create(android_id=android_id, is_active=is_active)
+def create_tablet_device(
+    *,
+    android_id: str,
+    is_active: bool = True,
+    clinic_site_id: uuid.UUID | None = None,
+) -> TabletDevice:
+    """Create a tablet device (identified by android_id). Optionally assign to a clinic site."""
+    return TabletDevice.objects.create(
+        android_id=android_id,
+        is_active=is_active,
+        clinic_site_id=clinic_site_id,
+    )
 
 
 def get_or_create_tablet_device_by_android_id(*, android_id: str) -> tuple[TabletDevice, bool]:
@@ -197,8 +214,9 @@ def update_tablet_device(
     tablet_device_id: uuid.UUID,
     android_id: str | None = None,
     is_active: bool | None = None,
+    clinic_site_id: uuid.UUID | None = NOT_PROVIDED,
 ) -> TabletDevice:
-    """Update mutable tablet fields."""
+    """Update mutable tablet fields. Pass clinic_site_id=None to unassign from site."""
     device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
     update_fields: list[str] = []
     if android_id is not None:
@@ -207,6 +225,9 @@ def update_tablet_device(
     if is_active is not None:
         device.is_active = is_active
         update_fields.append("is_active")
+    if clinic_site_id is not NOT_PROVIDED:
+        device.clinic_site_id = clinic_site_id
+        update_fields.append("clinic_site_id")
     if not update_fields:
         raise DomainError("Provide at least one field to update.")
     device.save(update_fields=update_fields)
@@ -320,14 +341,6 @@ def update_daily_queue_status(
     queue.status = status
     queue.save(update_fields=["status", "updated_at"])
     return queue
-
-
-def _not_provided():
-    """Sentinel for PATCH: field was not in request body."""
-    return object()
-
-
-NOT_PROVIDED = _not_provided()
 
 
 @transaction.atomic
