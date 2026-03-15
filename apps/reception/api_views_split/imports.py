@@ -7,7 +7,7 @@ from django.http import HttpRequest, JsonResponse
 
 from apps.core.api_utils import json_error, parse_list_limit, require_auth, require_user_role
 from apps.reception.models import PatientImportBatch, PatientImportError
-from apps.reception.pdf_import import enqueue_patient_pdf_import
+# from apps.reception.pdf_import import enqueue_patient_pdf_import  # optional: pdfplumber
 
 
 def _serialize_batch(batch: PatientImportBatch) -> dict:
@@ -59,6 +59,14 @@ def patient_pdf_import_view(request: HttpRequest) -> JsonResponse:
         return json_error("Missing PDF file.", status=400)
     if not uploaded_file.name.lower().endswith(".pdf"):
         return json_error("Uploaded file must be a PDF.", status=400)
+
+    try:
+        from apps.reception.pdf_import import enqueue_patient_pdf_import
+    except ImportError:
+        return json_error(
+            "PDF import is not available (pdfplumber not installed).",
+            status=503,
+        )
 
     batch = enqueue_patient_pdf_import(
         uploaded_file=uploaded_file,
