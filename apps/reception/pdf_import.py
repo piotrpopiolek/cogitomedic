@@ -10,7 +10,10 @@ from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
 
-import pdfplumber
+try:
+    import pdfplumber
+except ImportError:  # pragma: no cover - optional (brak na mydevil/FreeBSD)
+    pdfplumber = None  # type: ignore[assignment]
 try:
     import fitz  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - optional dependency
@@ -364,6 +367,11 @@ class PdfTextExtractor:
         )
 
     def _extract_with_pdfplumber(self, file_path: str | Path) -> ExtractedPdfDocument:
+        if pdfplumber is None:
+            raise PatientPdfImportFailure(
+                PatientPdfImportErrorCode.PDF_PARSE_FAILED,
+                "pdfplumber is not installed.",
+            ) from None
         lines: list[ExtractedLine] = []
         full_text_parts: list[str] = []
         with pdfplumber.open(str(file_path)) as pdf:

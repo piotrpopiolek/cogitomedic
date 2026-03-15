@@ -19,7 +19,7 @@ except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
 from apps.core.translation_service import db_gettext_lazy
-from apps.reception.pdf_import import enqueue_patient_pdf_import
+# from apps.reception.pdf_import import enqueue_patient_pdf_import  # optional: pdfplumber
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -241,6 +241,15 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         if request.method == "POST":
             form = PatientPdfImportAdminForm(request.POST, request.FILES)
             if form.is_valid():
+                try:
+                    from apps.reception.pdf_import import enqueue_patient_pdf_import
+                except ImportError:
+                    self.message_user(
+                        request,
+                        "Import z PDF niedostępny (brak biblioteki pdfplumber).",
+                        level=messages.ERROR,
+                    )
+                    return redirect(next_url or reverse("admin:reception_dailyqueue_changelist"))
                 batch = enqueue_patient_pdf_import(
                     uploaded_file=form.cleaned_data["file"],
                     created_by_user=request.user,
