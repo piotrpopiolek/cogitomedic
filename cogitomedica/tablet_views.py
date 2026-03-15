@@ -17,7 +17,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
-from apps.reception.models import DailyQueue, QueueEntry
+from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
 from apps.reception.services import get_or_create_tablet_device_by_android_id, issue_tablet_session_latest_wins
 
 from apps.core.translation_service import get_form_ui_strings, get_staff_ui_strings
@@ -41,6 +41,23 @@ def _tablet_role_ok(request: HttpRequest) -> bool:
     user = request.user
     return user.is_authenticated and (user.is_tablet or user.is_reception or user.is_admin_role)
 
+
+def _get_tablet_device_from_session(request: HttpRequest) -> TabletDevice | None:
+    """Return active TabletDevice from session or None."""
+    device_id_str = request.session.get("tablet_device_id")
+    if not device_id_str:
+        return None
+    try:
+        device_id = UUID(device_id_str)
+    except (ValueError, TypeError):
+        return None
+    try:
+        return TabletDevice.objects.select_related("clinic_site").get(
+            id=device_id, is_active=True
+        )
+    except ObjectDoesNotExist:
+        return None
+
 @require_http_methods(["GET", "POST"])
 def tablet_login_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated and _tablet_role_ok(request):
@@ -53,7 +70,10 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
             login(request, user)
             android_id = (request.POST.get("android_id") or "").strip()
             if android_id:
-                get_or_create_tablet_device_by_android_id(android_id=android_id)
+                device, _ = get_or_create_tablet_device_by_android_id(android_id=android_id)
+                request.session["tablet_device_id"] = str(device.id)
+            else:
+                request.session.pop("tablet_device_id", None)
             next_url = (request.GET.get("next") or "").strip()
             if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
                 next_url = ""
@@ -66,6 +86,7 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
 
 @require_http_methods(["GET", "POST"])
 def tablet_logout_view(request: HttpRequest) -> HttpResponse:
+    request.session.pop("tablet_device_id", None)
     logout(request)
     return redirect("tablet:login")
 
@@ -75,10 +96,23 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
     today = timezone.now().date()
-    queues = DailyQueue.objects.filter(queue_date=today).select_related(
+    qs = DailyQueue.objects.filter(queue_date=today).select_related(
         "clinic_site", "consulting_room"
     ).order_by("clinic_site__name", "consulting_room__name")
-    ctx = {**_staff_context(request), "queues": queues, "today": today}
+    tablet_unassigned = False
+    device = _get_tablet_device_from_session(request)
+    if device is not None:
+        if device.clinic_site_id is not None:
+            qs = qs.filter(clinic_site_id=device.clinic_site_id)
+        else:
+            qs = qs.none()
+            tablet_unassigned = True
+    ctx = {
+        **_staff_context(request),
+        "queues": qs,
+        "today": today,
+        "tablet_unassigned": tablet_unassigned,
+    }
     return render(request, "tablet/home.html", ctx)
 
 
@@ -94,6 +128,11 @@ def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Htt
     except ObjectDoesNotExist:
         ctx = {**_staff_context(request), "message": "Kolejka nie istnieje."}
         return render(request, "tablet/error.html", ctx, status=404)
+    device = _get_tablet_device_from_session(request)
+    if device is not None and device.clinic_site_id is not None:
+        if queue.clinic_site_id != device.clinic_site_id:
+            ctx = {**_staff_context(request), "message": "Brak dostępu do tej kolejki."}
+            return render(request, "tablet/error.html", ctx, status=403)
     if queue.queue_date != today:
         ctx = {**_staff_context(request)}
         ctx["message"] = ctx["staff_ui"]["queue_not_today"]
@@ -124,6 +163,11 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
         ctx = {**_staff_context(request)}
         ctx["message"] = ctx["staff_ui"]["queue_not_today"]
         return render(request, "tablet/error.html", ctx, status=400)
+    device = _get_tablet_device_from_session(request)
+    if device is not None and device.clinic_site_id is not None:
+        if entry.daily_queue.clinic_site_id != device.clinic_site_id:
+            ctx = {**_staff_context(request), "message": "Brak dostępu do tego wpisu."}
+            return render(request, "tablet/error.html", ctx, status=403)
     if request.method == "POST":
         tablet_device_id = None
         tablet_device_id_raw = (request.POST.get("tablet_device_id") or "").strip()

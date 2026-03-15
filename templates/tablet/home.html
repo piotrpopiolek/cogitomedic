@@ -14,6 +14,10 @@
       {% endfor %}
     </ul>
   {% else %}
-    <p>{{ staff_ui.no_queues_today }}</p>
+    {% if tablet_unassigned %}
+      <p>{{ staff_ui.tablet_unassigned|default:"Tablet nie jest przypisany do placówki. Skontaktuj się z administratorem." }}</p>
+    {% else %}
+      <p>{{ staff_ui.no_queues_today }}</p>
+    {% endif %}
   {% endif %}
 {% endblock %}

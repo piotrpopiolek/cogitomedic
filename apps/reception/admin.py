@@ -331,10 +331,11 @@ class QueueEntryAdmin(UnfoldModelAdmin):
 
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(UnfoldModelAdmin):
-    list_display = ("android_id", "is_active", "last_seen_at", "created_at")
-    list_filter = ("is_active",)
+    list_display = ("android_id", "clinic_site", "is_active", "last_seen_at", "created_at")
+    list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
     search_fields = ("android_id",)
+    raw_id_fields = ("clinic_site",)
 
 
 @admin.register(PatientFormSession)

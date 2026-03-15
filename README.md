@@ -158,6 +158,8 @@ Translations are managed in Django Admin and loaded from the database as the sin
 
    The app will be available at `http://127.0.0.1:8000/`. Log in via `/accounts/login/`; admin at `/admin/`.
 
+8. **Tablet (waiting room):** To show queues on a tablet, assign the device to a clinic site: in Django Admin go to **Reception → Tablet devices**, edit the device and set **Clinic site**; or use the API (PATCH `/api/v1/tablet-devices/{id}` with `clinic_site_id`). Without assignment, the tablet displays an empty queue list and a message to contact the administrator.
+
 ### Static and media (production-like)
 
 - Collect static files: `python manage.py collectstatic`
