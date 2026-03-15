@@ -1,0 +1,72 @@
+# Audyt bezpieczeństwa – CogitoMedica
+
+Data: 2025-03  
+Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub rejestracji; luki w systemie.
+
+## Podsumowanie
+
+- **Panel lekarza (`/doctor/`)**: chroniony – wymaga logowania i roli DOCTOR lub ADMIN.
+- **Administracja (`/admin/`)**: chroniona – Django admin wymaga `is_staff`; widoki własne (reception-dashboard, intake-documents) używają `@staff_member_required` i roli RECEPTION/ADMIN.
+- **Rejestracja / tablet (`/tablet/`)**: chronione – wymaga roli TABLET, RECEPTION lub ADMIN.
+- **API v1**: endpointy wewnętrzne wymagają uwierzytelnienia i odpowiedniej roli (require_auth + require_user_role). Portal wyników pacjenta (request-otp, verify-otp, documents, download) jest oddzielony – sesja pacjenta (patient_results_patient_id) nie daje dostępu do żadnego panelu staff.
+
+## Wprowadzone poprawki
+
+### 1. Endpoint health (`/api/v1/observability/health`)
+
+- **Było**: Dla każdego (również anonimowego) zwracana była pełna odpowiedź z `checks: { db, hidrive, sms }`, co ujawniało stan wewnętrznych zależności.
+- **Jest**: Dla anonimowego użytkownika zwracany jest tylko `{"status": "ok"}` lub `{"status": "error"}` (bez `checks`). Kod HTTP 200/503 nadal odzwierciedla stan bazy (dla load balancera/Docker). Pełna odpowiedź z `checks` tylko dla: Bearer `PROMETHEUS_METRICS_TOKEN` lub zalogowanego użytkownika z rolą ADMIN.
+
+### 2. Dokumentacja API (`/api/schema/`, `/api/docs/swagger/`, `/api/docs/redoc/`)
+
+- **Było**: Dostępna bez logowania – możliwość enumeracji endpointów i parametrów.
+- **Jest**: Widoki opakowane w `staff_member_required` – dostęp tylko dla użytkowników z `is_staff=True` (przekierowanie do logowania admina).
+
+### 3. Metryki (`/api/v1/observability/metrics`)
+
+- Bez zmian w zachowaniu: nadal wymagany Bearer token lub sesja ADMIN (już wcześniej chronione).
+
+## Weryfikacja zabezpieczeń
+
+### Panel lekarza (`cogitomedica/doctor_views.py`)
+
+- Logowanie: `doctor_login_view` – tylko użytkownicy z `user.is_doctor` lub `user.is_admin_role` mogą się zalogować.
+- Wszystkie widoki chronione: `@login_required(login_url="doctor-login")` oraz na początku widoku `if not _doctor_role_ok(request): return redirect("doctor-login")`.
+- Pacjent (model `Patient`) nie ma konta w `StaffUser` – nie może zalogować się do panelu lekarza.
+
+### Tablet (`cogitomedica/tablet_views.py`)
+
+- Logowanie: tylko `user.is_tablet`, `user.is_reception` lub `user.is_admin_role`.
+- Widoki chronione: `@login_required(login_url="tablet:login")` oraz `_tablet_role_ok(request)`.
+
+### Admin i widoki pod `/admin/`
+
+- `path("admin/", admin.site.urls)` – standardowa ochrona Django (wymaga `is_staff`).
+- `reception_dashboard_view`: `@staff_member_required`.
+- `intake_documents_list_view`, `intake_document_detail_view`: `@staff_member_required` oraz `_is_reception_or_admin(request)` (redirect do admin:index przy braku roli).
+
+### API v1 (`cogitomedica/api_urls.py`, aplikacje)
+
+- Endpointy staff: używają `@require_auth` i `require_user_role(request, allowed_roles={...})` (DOCTOR, ADMIN, RECEPTION, TABLET w zależności od endpointu).
+- Portal wyników pacjenta:
+  - `patient-results/request-otp`, `verify-otp`: publiczne z rozsądnym rate limitem i CAPTCHA (Turnstile).
+  - `patient-results/documents`, `patient-results/documents/<id>/download`: dostęp tylko gdy w sesji jest `patient_results_patient_id` (ustawiane po poprawnym verify_otp). Pobieranie PDF sprawdza, że `version_id` należy do tego pacjenta (`get_patient_pdf_version(version_id, patient_id)`).
+
+### Sesje
+
+- Sesja pacjenta (portal wyników): tylko `patient_results_patient_id`. Brak `request.user` (AnonymousUser).
+- Sesja staff: `request.user` z rolami (groups). Oddzielny flow logowania (admin, doctor, tablet).
+- Ustawienia: `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, w prod `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`.
+
+## Zalecenia dla Dockera / produkcji
+
+1. **ALLOWED_HOSTS** – w produkcji ustawić jawnie (np. w .env), bez polegania na domyślnych wartości dev.
+2. **PROMETHEUS_METRICS_TOKEN** – ustawić w środowisku dla health/metrics (np. w docker-compose), żeby monitoring mógł odpytywać bez sesji użytkownika.
+3. **Rate limiting** – request-otp i verify-otp mają limit (ip, 10/m i 15/m); auth/login 5/m. RatelimitMiddleware włączone.
+4. **CORS** – `CORS_ALLOWED_ORIGINS` w prod ustawić tylko na zaufane fronty; `CORS_ALLOW_CREDENTIALS = True` – zachować ostrożność przy dodawaniu nowych originów.
+
+## Brak wykrytych luk
+
+- Pacjent nie może wejść na panel lekarza, admina ani rejestracji/tabletu (brak konta staff, osobne ścieżki logowania i sprawdzanie ról).
+- API staff jest chronione rolami; dokumenty pacjenta w portalu wyników są filtrowane po `patient_id` z sesji.
+- Health nie ujawnia już wewnętrznych checks anonimowo; docs/schema tylko dla staff.
