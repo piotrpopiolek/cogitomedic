@@ -15,6 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect
 from django.urls import include, path
 from drf_spectacular.views import SpectacularRedocView, SpectacularSwaggerView
@@ -41,9 +42,17 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),
     path("doctor/", include("cogitomedica.doctor_urls")),
-    path("api/schema/", cogito_openapi_schema_view, name="api-schema"),
+    path("api/schema/", staff_member_required(cogito_openapi_schema_view), name="api-schema"),
     path("api/docs/", lambda request: redirect("api-swagger", permanent=False)),
-    path("api/docs/swagger/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-swagger"),
-    path("api/docs/redoc/", SpectacularRedocView.as_view(url_name="api-schema"), name="api-redoc"),
+    path(
+        "api/docs/swagger/",
+        staff_member_required(SpectacularSwaggerView.as_view(url_name="api-schema")),
+        name="api-swagger",
+    ),
+    path(
+        "api/docs/redoc/",
+        staff_member_required(SpectacularRedocView.as_view(url_name="api-schema")),
+        name="api-redoc",
+    ),
     path("api/v1/", include("cogitomedica.api_urls")),
 ]
