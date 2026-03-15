@@ -1,11 +1,12 @@
 """HTML views for ergebnisse portal (patient results)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from django.conf import settings
 from django.shortcuts import redirect, render
+from django.urls import reverse
 
 from apps.core.translation_service import get_ergebnisse_ui_strings, normalize_language_code
 from apps.patient_results.document_services import list_patient_documents
@@ -54,6 +55,7 @@ def ergebnisse_login_view(request):
     """GET: show login form. POST: request OTP, redirect to otp on success."""
     ui = _ergebnisse_context(request)
     ui["turnstile_site_key"] = getattr(settings, "TURNSTILE_SITE_KEY", "") or ""
+    ui["today_iso"] = date.today().isoformat()
     if request.method == "GET":
         return render(request, "ergebnisse/login.html", ui)
     phone = (request.POST.get("phone") or "").strip()
@@ -69,7 +71,8 @@ def ergebnisse_login_view(request):
         return render(request, "ergebnisse/login.html", ui)
     request.session["ergebnisse_phone"] = phone
     request.session["ergebnisse_dob"] = dob_str
-    return redirect("ergebnisse:otp")
+    locale = _get_locale(request)
+    return redirect(f"{reverse('ergebnisse:otp')}?locale={locale}" if locale != "de" else "ergebnisse:otp")
 
 
 def ergebnisse_otp_view(request):
@@ -78,12 +81,14 @@ def ergebnisse_otp_view(request):
         phone = request.session.get("ergebnisse_phone")
         dob = request.session.get("ergebnisse_dob")
         if not phone or not dob:
-            return redirect("ergebnisse:login")
+            locale = _get_locale(request)
+            return redirect(f"{reverse('ergebnisse:login')}?locale={locale}" if locale != "de" else "ergebnisse:login")
         return render(request, "ergebnisse/otp.html", _ergebnisse_context(request))
     phone = request.session.get("ergebnisse_phone")
     dob_str = request.session.get("ergebnisse_dob")
     if not phone or not dob_str:
-        return redirect("ergebnisse:login")
+        locale = _get_locale(request)
+        return redirect(f"{reverse('ergebnisse:login')}?locale={locale}" if locale != "de" else "ergebnisse:login")
     dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
     otp_code = (request.POST.get("otp_code") or "").strip()
     ui = _ergebnisse_context(request)
@@ -97,13 +102,15 @@ def ergebnisse_otp_view(request):
     set_patient_results_session(request, result.patient_id or "")
     del request.session["ergebnisse_phone"]
     del request.session["ergebnisse_dob"]
-    return redirect("ergebnisse:documents")
+    locale = _get_locale(request)
+    return redirect(f"{reverse('ergebnisse:documents')}?locale={locale}" if locale != "de" else "ergebnisse:documents")
 
 
 def ergebnisse_documents_view(request):
     """GET: list documents for logged-in patient. Requires patient_results session."""
     patient_id = get_patient_id_from_session(request)
     if not patient_id:
-        return redirect("ergebnisse:login")
+        locale = _get_locale(request)
+        return redirect(f"{reverse('ergebnisse:login')}?locale={locale}" if locale != "de" else "ergebnisse:login")
     items = list_patient_documents(UUID(patient_id))
     return render(request, "ergebnisse/documents.html", _ergebnisse_context(request, items=items))
