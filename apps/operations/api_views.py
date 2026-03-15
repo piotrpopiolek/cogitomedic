@@ -124,46 +124,48 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
     )
 
 
+def _observability_authorized(request: HttpRequest) -> bool:
+    """True if request is authorized for detailed observability (Bearer token or ADMIN)."""
+    token = getattr(settings, "PROMETHEUS_METRICS_TOKEN", None)
+    if token and request.headers.get("Authorization") == f"Bearer {token}":
+        return True
+    if request.user.is_authenticated and require_user_role(request, allowed_roles={"ADMIN"}) is None:
+        return True
+    return False
+
+
 def observability_health_view(request: HttpRequest) -> JsonResponse:
+    """Health check for load balancers/Docker. Anonymous gets minimal response (no internal checks leak)."""
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
 
-    db_status = "ok"
     http_status = 200
-
     try:
         connection.ensure_connection()
     except DatabaseError:
-        db_status = "error"
         http_status = 503
 
-    payload = {
-        "status": "ok" if http_status == 200 else "error",
-        "checks": {
-            "db": db_status,
-            "hidrive": "unknown",
-            "sms": "unknown",
-        },
-    }
+    status_value = "ok" if http_status == 200 else "error"
+    if _observability_authorized(request):
+        payload = {
+            "status": status_value,
+            "checks": {
+                "db": "ok" if http_status == 200 else "error",
+                "hidrive": "unknown",
+                "sms": "unknown",
+            },
+        }
+    else:
+        payload = {"status": status_value}
     return JsonResponse(payload, status=http_status)
 
 
 def observability_metrics_view(request: HttpRequest) -> HttpResponse:
     if request.method != "GET":
         return json_error("Method not allowed.", status=405)
-        
-    auth_header = request.headers.get("Authorization", "")
-    token = getattr(settings, "PROMETHEUS_METRICS_TOKEN", None)
-    
-    if token and auth_header == f"Bearer {token}":
-        pass  # Token valid
-    else:
-        # Fallback to ADMIN session if token is not provided/invalid
-        if not request.user.is_authenticated:
-            return json_error("Unauthorized.", status=401)
-        role_error = require_user_role(request, allowed_roles={"ADMIN"})
-        if role_error:
-            return role_error
+
+    if not _observability_authorized(request):
+        return json_error("Unauthorized.", status=401)
 
     payload = build_metrics_payload()
     return HttpResponse(payload, content_type="text/plain; version=0.0.4; charset=utf-8")

@@ -115,9 +115,19 @@ class ObservabilityHealthApiTests(TestCase):
         response = self.client.get("/api/v1/observability/health")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("checks", payload)
         self.assertEqual(payload["checks"]["db"], "ok")
         self.assertEqual(payload["checks"]["hidrive"], "unknown")
         self.assertEqual(payload["checks"]["sms"], "unknown")
+
+    def test_health_anonymous_returns_minimal_payload(self) -> None:
+        anonymous = Client()
+        response = anonymous.get("/api/v1/observability/health")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertNotIn("checks", payload)
 
     def test_metrics_endpoint_returns_prometheus_payload(self) -> None:
         response = self.client.get("/api/v1/observability/metrics")
