@@ -36,6 +36,7 @@ def _serialize_tablet_device(device: TabletDevice) -> dict:
         "is_active": device.is_active,
         "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
         "created_at": device.created_at.isoformat(),
+        "clinic_site_id": str(device.clinic_site_id) if device.clinic_site_id else None,
     }
 
 
@@ -67,7 +68,11 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
-            device = create_tablet_device(android_id=body.android_id, is_active=body.is_active)
+            device = create_tablet_device(
+                android_id=body.android_id,
+                is_active=body.is_active,
+                clinic_site_id=body.clinic_site_id,
+            )
         except IntegrityError:
             return json_error("Tablet device with this android_id already exists.", status=409)
         return JsonResponse(_serialize_tablet_device(device), status=201)
@@ -103,12 +108,15 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
         return json_error("Invalid request encoding.", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+    update_kwargs = {
+        "tablet_device_id": tablet_device_id,
+        "android_id": body.android_id,
+        "is_active": body.is_active,
+    }
+    if "clinic_site_id" in body.model_fields_set:
+        update_kwargs["clinic_site_id"] = body.clinic_site_id
     try:
-        device = update_tablet_device(
-            tablet_device_id=tablet_device_id,
-            android_id=body.android_id,
-            is_active=body.is_active,
-        )
+        device = update_tablet_device(**update_kwargs)
     except ObjectDoesNotExist:
         return json_error("Tablet device not found.", status=404)
     except DomainError as exc:

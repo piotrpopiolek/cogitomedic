@@ -387,17 +387,20 @@
 ### 2.6 Tablet devices
 
 - **GET** `/tablet-devices`, **POST** `/tablet-devices`, **GET/PATCH/DELETE** `/tablet-devices/{id}`
-  - Description: Manage dedicated tablets. Model uses **only `android_id`** (unique device identifier); fields `name` and `device_code` have been removed (migration).
+  - Description: Manage dedicated tablets. Model uses **`android_id`** (unique device identifier) and **`clinic_site_id`** (optional FK to ClinicSite). Tablet sees only queues of the assigned site; unassigned tablet gets empty queue list. Fields `name` and `device_code` have been removed (migration).
   - Query params: `is_active`, `search`.
   - Request JSON (create):
     ```json
     {
       "android_id": "device-android-id-string",
-      "is_active": true
+      "is_active": true,
+      "clinic_site_id": "uuid-or-null"
     }
     ```
-  - Response JSON: tablet object (`id`, `android_id`, `is_active`, `last_seen_at`, `created_at`).
+  - Request JSON (PATCH): `clinic_site_id` optional; `null` unassigns device from site.
+  - Response JSON: tablet object (`id`, `android_id`, `is_active`, `last_seen_at`, `created_at`, `clinic_site_id`).
   - **Auto-registration:** If a tablet logs in (role TABLET) with an `android_id` not yet in the system, the backend may create a `TabletDevice` record automatically.
+  - **TABLET scope:** When session has `tablet_device_id` and device has `clinic_site_id`, GET daily-queues and GET daily-queues/{id}/entries return only queues of that site; without assignment, empty list.
   - Success: `200 OK`, `201 CREATED`.
   - Errors: `400 VALIDATION_ERROR`, `409 DUPLICATE_ANDROID_ID`.
 

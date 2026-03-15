@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
+    get_tablet_scope_clinic_site_ids,
     json_error,
     parse_list_limit,
     read_json_body,
@@ -84,7 +85,9 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
                 return json_error("TABLET role can only access queues for today.", status=403)
             queue_date = today.isoformat()
 
-        scope_ids = get_scoped_clinic_site_ids(request.user)
+        scope_ids = get_tablet_scope_clinic_site_ids(request)
+        if scope_ids is None:
+            scope_ids = get_scoped_clinic_site_ids(request.user)
         if scope_ids is not None:
             if not scope_ids:
                 return JsonResponse({"items": []})
@@ -198,7 +201,9 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     except ObjectDoesNotExist:
         return json_error("Daily queue not found.", status=404)
 
-    scope_ids = get_scoped_clinic_site_ids(request.user)
+    scope_ids = get_tablet_scope_clinic_site_ids(request)
+    if scope_ids is None:
+        scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
         return json_error("Daily queue is not in your assigned scope.", status=403)
     if request.user.is_tablet and queue.queue_date != timezone.now().date():
@@ -306,7 +311,9 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
     except ObjectDoesNotExist:
         return json_error("Queue entry not found.", status=404)
-    scope_ids = get_scoped_clinic_site_ids(request.user)
+    scope_ids = get_tablet_scope_clinic_site_ids(request)
+    if scope_ids is None:
+        scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
         return json_error("Queue entry is not in your assigned scope.", status=403)
     try:

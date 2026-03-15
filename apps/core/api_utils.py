@@ -134,6 +134,30 @@ def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
     return None
 
 
+def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
+    """
+    When the request has a tablet device in session, return scope from that device.
+    Returns [device.clinic_site_id] when device has a site; [] when device has no site (tablet sees nothing);
+    None when no device in session (caller should use get_scoped_clinic_site_ids(request.user)).
+    """
+    from apps.reception.models import TabletDevice
+
+    device_id_str = request.session.get("tablet_device_id")
+    if not device_id_str:
+        return None
+    try:
+        device_id = UUID(device_id_str)
+    except (ValueError, TypeError):
+        return None
+    try:
+        device = TabletDevice.objects.only("clinic_site_id").get(id=device_id, is_active=True)
+    except TabletDevice.DoesNotExist:
+        return None
+    if device.clinic_site_id is None:
+        return []
+    return [device.clinic_site_id]
+
+
 def require_actor_match(request: HttpRequest, actor_id: UUID | None) -> JsonResponse | None:
     """Return 403 when actor_id is not None and does not match request.user.id. Use for body/query actor fields."""
     if actor_id is not None and actor_id != request.user.id:

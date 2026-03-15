@@ -130,10 +130,11 @@
 #### `tablet_device`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `android_id` `varchar(128)` NOT NULL UNIQUE
+- `clinic_site_id` `uuid` NULL FK -> `clinic_site(id)` ON DELETE SET NULL
 - `is_active` `boolean` NOT NULL DEFAULT `true`
 - `last_seen_at` `timestamptz` NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
-- Uwaga: Pola `name` i `device_code` zostały usunięte (migracja). Identyfikacja urządzenia tylko przez `android_id`. Auto-dopisanie: przy pierwszym logowaniu tabletu z nieznanym `android_id` tworzony jest wpis.
+- Uwaga: Pola `name` i `device_code` zostały usunięte (migracja). Identyfikacja urządzenia tylko przez `android_id`. Przypisanie do placówki: `clinic_site_id` – tablet widzi tylko kolejki tej placówki; bez przypisania pusta lista. Auto-dopisanie: przy pierwszym logowaniu tabletu z nieznanym `android_id` tworzony jest wpis.
 
 #### `patient_form_session`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`

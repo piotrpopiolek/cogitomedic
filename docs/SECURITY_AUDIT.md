@@ -38,6 +38,7 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 - Logowanie: tylko `user.is_tablet`, `user.is_reception` lub `user.is_admin_role`.
 - Widoki chronione: `@login_required(login_url="tablet:login")` oraz `_tablet_role_ok(request)`.
+- **Scope kolejek:** jeśli w sesji jest `tablet_device_id` (ustawiane przy logowaniu z `android_id`), zakres kolejek wynika z przypisania urządzenia do placówki (`TabletDevice.clinic_site_id`). Tablet widzi wyłącznie kolejki swojej placówki; bez przypisania – pusta lista i komunikat. Przypisania dokonuje się w panelu admin (TabletDevice) lub przez API PATCH `/api/v1/tablet-devices/{id}`.
 
 ### Admin i widoki pod `/admin/`
 
