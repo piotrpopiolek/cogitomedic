@@ -198,12 +198,12 @@ def create_tablet_device(
         clinic_site_id=clinic_site_id,
     )
 
-
+# TODO: remove this after testing
 def get_or_create_tablet_device_by_android_id(*, android_id: str) -> tuple[TabletDevice, bool]:
     """Get or create a tablet device by android_id (auto-registration). Returns (device, created)."""
     device, created = TabletDevice.objects.get_or_create(
         android_id=android_id,
-        defaults={"is_active": True},
+        defaults={"is_active": True, "clinic_site_id": "52f81bf4-fbeb-477e-9498-e085e354c027"},
     )
     return device, created
 
