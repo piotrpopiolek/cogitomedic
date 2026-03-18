@@ -9,7 +9,7 @@ FORM_UI = {
     "phone": {"de": "Telefon:", "en": "Phone:", "pl": "Telefon:"},
     "email": {"de": "E-Mail:", "en": "E-mail:", "pl": "E-mail:"},
     "consents_title": {"de": "Einwilligungen", "en": "Consents", "pl": "Zgody"},
-    "consent_confirm": {"de": "Ich bestätige", "en": "I agree", "pl": "Akceptuję"},
+    "consent_confirm": {"de": "Ich bin einverstanden", "en": "I agree", "pl": "Akceptuję"},
     "save_consents": {"de": "Einwilligungen speichern", "en": "Save consents", "pl": "Zapisz zgody"},
     "body_map_title": {"de": "Körperschema", "en": "Body map", "pl": "Schemat ciała"},
     "body_map_hint": {"de": "Tippen Sie auf die Abbildung, um die Lage von Hautveränderungen (z. B. Muttermale) zu markieren. Links: Vorderansicht, rechts: Rückansicht.", "en": "Tap on the figure to mark the location of skin changes (e.g. moles). Left: front, right: back.", "pl": "Dotknij rysunku, aby zaznaczyć lokalizację zmian skórnych (np. znamion). Lewy: przód, prawy: tył."},
