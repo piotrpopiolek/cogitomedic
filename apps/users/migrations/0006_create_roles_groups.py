@@ -59,8 +59,12 @@ def revert_groups_and_users(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0005_staffuser_clinic_sites'),
-        ('auth', '0012_alter_user_first_name_max_length'), # Wymagamy auth, aby Group i Permission istniały
+        ("users", "0005_staffuser_clinic_sites"),
+        ("auth", "0012_alter_user_first_name_max_length"),
+        # Żeby Permission dla reception/medical/operations istniały przed przypisaniem do grup:
+        ("reception", "0001_initial"),
+        ("medical", "0001_initial"),
+        ("operations", "0001_initial"),
     ]
 
     operations = [

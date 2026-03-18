@@ -386,10 +386,13 @@ def get_intake_form_context(
                 {"code": "SMS", "label": "SMS"},
                 {"code": "PHONE", "label": ui.get("contact_method_phone", "Telefon")},
             ]
-        elif cd["code"] == "PRAEVENTIONS_ERINNERUNGEN_EINWILLIGUNG":
+        if cd["code"] == "DS_EINWILLIGUNG_ERGEBNISSES":
             confirm_label = ui.get(
-                "consent_contact_agree", 
-                "Ja, ich bin mit einer Kontaktaufnahme einverstanden."
+                "consent_result_portal_agree",
+            )
+        if cd["code"] == "PRAEVENTIONS_ERINNERUNGEN_EINWILLIGUNG":
+            confirm_label = ui.get(
+                "consent_contact_agree",
             )
 
         consents_payload.append({
