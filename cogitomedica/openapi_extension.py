@@ -397,30 +397,6 @@ COGITO_PATHS = {
         "delete": {"summary": "Deactivate consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
     },
-    f"{PREFIX}/imports/patients/pdf": {
-        "post": {
-            "summary": "Enqueue patient PDF import",
-            "tags": ["Reception – Imports"],
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "multipart/form-data": {
-                        "schema": {
-                            "type": "object",
-                            "required": ["file"],
-                            "properties": {
-                                "file": {
-                                    "type": "string",
-                                    "format": "binary",
-                                }
-                            },
-                        }
-                    }
-                },
-            },
-            "responses": {"202": {"description": "Import batch enqueued"}},
-        },
-    },
     f"{PREFIX}/imports/batches": {
         "get": {
             "summary": "List import batches",

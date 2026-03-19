@@ -7,7 +7,6 @@ from django.http import HttpRequest, JsonResponse
 
 from apps.core.api_utils import json_error, parse_list_limit, require_auth, require_user_role
 from apps.reception.models import PatientImportBatch, PatientImportError
-# from apps.reception.pdf_import import enqueue_patient_pdf_import  # optional: pdfplumber
 
 
 def _serialize_batch(batch: PatientImportBatch) -> dict:
@@ -44,41 +43,6 @@ def _visible_batches(request: HttpRequest):
     if request.user.is_admin_role:
         return qs
     return qs.filter(created_by_user=request.user)
-
-
-@require_auth
-def patient_pdf_import_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
-    if role_error:
-        return role_error
-    if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
-
-    uploaded_file = request.FILES.get("file")
-    if uploaded_file is None:
-        return json_error("Missing PDF file.", status=400)
-    if not uploaded_file.name.lower().endswith(".pdf"):
-        return json_error("Uploaded file must be a PDF.", status=400)
-
-    try:
-        from apps.reception.pdf_import import enqueue_patient_pdf_import
-    except ImportError:
-        return json_error(
-            "PDF import is not available (pdfplumber not installed).",
-            status=503,
-        )
-
-    batch = enqueue_patient_pdf_import(
-        uploaded_file=uploaded_file,
-        created_by_user=request.user,
-    )
-    return JsonResponse(
-        {
-            "batch": _serialize_batch(batch),
-            "message": "Patient PDF import enqueued.",
-        },
-        status=202,
-    )
 
 
 @require_auth

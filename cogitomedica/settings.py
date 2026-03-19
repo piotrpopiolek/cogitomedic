@@ -437,11 +437,19 @@ USE_I18N = True
 USE_TZ = True
 
 
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+# Ścieżki static/media. Na mydevil serwer serwuje z public_python/public/ → ustaw MYDEVIL_DEPLOY=1.
+if os.environ.get("MYDEVIL_DEPLOY", "").strip() in ("1", "true", "yes"):
+    STATIC_ROOT = BASE_DIR / "public" / "static"
+    MEDIA_ROOT = BASE_DIR / "public" / "media"
+    STATIC_URL = "/static/"
+    MEDIA_URL = "/media/"
+else:
+    STATIC_URL = "/static/"
+    STATIC_ROOT = BASE_DIR / "staticfiles"
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
+
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
 
 SECURE_SSL_REDIRECT = ENVIRONMENT == "prod"
 CSRF_COOKIE_SECURE = ENVIRONMENT == "prod"
@@ -527,10 +535,5 @@ LOGGING = {
             "class": "logging.StreamHandler",
         },
     },
-    "loggers": {
-        "apps.reception.pdf_import": {
-            "level": "INFO",
-            "handlers": ["console"],
-        },
-    },
+    "loggers": {},
 }

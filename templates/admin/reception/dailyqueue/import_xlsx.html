@@ -6,7 +6,7 @@
     <div class="max-w-3xl">
         <h1 class="text-2xl font-semibold mb-2">{{ title }}</h1>
         <p class="text-sm text-gray-500 mb-6">
-            Wgraj tekstowy plik PDF z eksportem Doctolib. Import uruchomi się w tle i utworzy nowy batch.
+            Wgraj plik Excel (.xlsx) z listą pacjentów. Import uruchomi się w tle i utworzy nowy batch.
         </p>
 
         <form method="post" enctype="multipart/form-data" class="bg-white rounded-default border border-base-200 p-6 dark:bg-base-900 dark:border-base-800">
@@ -36,7 +36,7 @@
             </div>
 
             <div class="text-sm text-gray-500 mb-6">
-                Uwaga: klinika z PDF musi być zmapowana po nazwie do `ClinicSite`, a klinika musi mieć ustawiony domyślny gabinet dla importów PDF.
+                Import odczyta z pliku datę kolejki i nazwę placówki (Standort). Szablon XLSX: pierwszy wiersz nagłówków z danymi pacjentów (np. Uhrzeit, Patient:in, Telefon, Data urodzenia, E-Mail-Adresse, Anschrift, Postleitzahl).
             </div>
 
             <div class="flex gap-3">
