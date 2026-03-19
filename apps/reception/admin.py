@@ -19,7 +19,6 @@ except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
 from apps.core.translation_service import db_gettext_lazy
-# from apps.reception.pdf_import import enqueue_patient_pdf_import  # optional: pdfplumber
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -32,14 +31,15 @@ from apps.reception.models import (
     QueueEntry,
     TabletDevice,
 )
+from apps.reception.xlsx_import import enqueue_patient_xlsx_import
 
 
-class PatientPdfImportAdminForm(forms.Form):
+class PatientXlsxImportAdminForm(forms.Form):
     file = forms.FileField(
-        label="Plik PDF",
+        label="Plik XLSX",
         widget=forms.ClearableFileInput(
             attrs={
-                "accept": ".pdf,application/pdf",
+                "accept": ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "class": "hidden",
             }
         ),
@@ -188,17 +188,17 @@ class DailyQueueAdmin(UnfoldModelAdmin):
                 name="reception_dailyqueue_master_detail",
             ),
             path(
-                "import-pdf/",
-                self.admin_site.admin_view(self.import_pdf_view),
-                name="reception_dailyqueue_import_pdf",
+                "import-xlsx/",
+                self.admin_site.admin_view(self.import_xlsx_view),
+                name="reception_dailyqueue_import_xlsx",
             ),
         ]
         return custom_urls + urls
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context["import_pdf_url"] = "{}?{}".format(
-            reverse("admin:reception_dailyqueue_import_pdf"),
+        extra_context["import_xlsx_url"] = "{}?{}".format(
+            reverse("admin:reception_dailyqueue_import_xlsx"),
             urlencode({"next": request.get_full_path()}),
         )
         return super().changelist_view(request, extra_context=extra_context)
@@ -233,50 +233,48 @@ class DailyQueueAdmin(UnfoldModelAdmin):
             context,
         )
 
-    def import_pdf_view(self, request: HttpRequest):
+    def import_xlsx_view(self, request: HttpRequest):
         if not (request.user.is_authenticated and (request.user.is_admin_role or request.user.is_reception or request.user.is_superuser)):
             raise PermissionDenied
 
         next_url = request.GET.get("next") or request.POST.get("next") or reverse("admin:reception_dailyqueue_changelist")
         if request.method == "POST":
-            form = PatientPdfImportAdminForm(request.POST, request.FILES)
+            form = PatientXlsxImportAdminForm(request.POST, request.FILES)
             if form.is_valid():
                 try:
-                    from apps.reception.pdf_import import enqueue_patient_pdf_import
-                except ImportError:
+                    batch = enqueue_patient_xlsx_import(
+                        uploaded_file=form.cleaned_data["file"],
+                        created_by_user=request.user,
+                    )
+                    batch_url = reverse("admin:reception_patientimportbatch_change", args=[batch.id])
                     self.message_user(
                         request,
-                        "Import z PDF niedostępny (brak biblioteki pdfplumber).",
+                        format_html(
+                            'Import XLSX został zakolejkowany. <a href="{}">Zobacz batch</a>.',
+                            batch_url,
+                        ),
+                        level=messages.SUCCESS,
+                    )
+                    return redirect(form.cleaned_data["next"] or reverse("admin:reception_dailyqueue_changelist"))
+                except Exception as e:
+                    self.message_user(
+                        request,
+                        f"Błąd importu: {e}",
                         level=messages.ERROR,
                     )
-                    return redirect(next_url or reverse("admin:reception_dailyqueue_changelist"))
-                batch = enqueue_patient_pdf_import(
-                    uploaded_file=form.cleaned_data["file"],
-                    created_by_user=request.user,
-                )
-                batch_url = reverse("admin:reception_patientimportbatch_change", args=[batch.id])
-                self.message_user(
-                    request,
-                    format_html(
-                        'Import PDF został zakolejkowany. <a href="{}">Zobacz batch</a>.',
-                        batch_url,
-                    ),
-                    level=messages.SUCCESS,
-                )
-                return redirect(form.cleaned_data["next"] or reverse("admin:reception_dailyqueue_changelist"))
         else:
-            form = PatientPdfImportAdminForm(initial={"next": next_url})
+            form = PatientXlsxImportAdminForm(initial={"next": next_url})
 
         context = {
             **self.admin_site.each_context(request),
             "opts": self.model._meta,
-            "title": "Import pacjentów z PDF",
+            "title": "Import pacjentów z pliku XLSX",
             "form": form,
             "next_url": next_url,
         }
         return TemplateResponse(
             request,
-            "admin/reception/dailyqueue/import_pdf.html",
+            "admin/reception/dailyqueue/import_xlsx.html",
             context,
         )
 
