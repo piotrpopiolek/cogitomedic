@@ -4,22 +4,22 @@ overview: Wycofanie kompletnego wsparcia importu pacjentów z PDF (kod, endpoint
 todos:
   - id: remove-pdf-deps
     content: "Zaktualizować `requirements.txt`: usunąć `pdfplumber` (oraz wszelkie inne PDF-only zależności, jeśli okażą się w repo)."
-    status: pending
+    status: completed
   - id: retire-pdf-import-module
     content: Usunąć/wycofać `apps/reception/pdf_import.py` oraz wyłączyć zadanie w tle `run_patient_pdf_import` w `apps/reception/tasks.py`.
-    status: pending
+    status: completed
   - id: remove-pdf-api-wiring
     content: "Usunąć endpoint i wiring dla `POST /imports/patients/pdf`: `apps/reception/api_views_split/imports.py`, `apps/reception/api_views.py`, `cogitomedica/api_urls.py`, `cogitomedica/openapi_extension.py`."
-    status: pending
+    status: completed
   - id: replace-admin-ui-pdf-with-xlsx
     content: "Przebudować admin upload UI tak, by obsługiwał `.xlsx` zamiast `.pdf`: `templates/admin/reception/dailyqueue/change_list.html`, `apps/reception/admin.py`, `templates/admin/reception/dailyqueue/import_pdf.html` (uogólnić jako szablon uploadu pliku pod xlsx) — z zachowaniem JS do wybranego pliku."
-    status: pending
+    status: completed
   - id: update-tests
     content: "Usunąć/zmienić testy PDF importu: `apps/reception/api_tests.py` (klasa `PatientPdfImportApiTests`) oraz testy admin importu PDF i parsera z `apps/reception/tests.py`. Utrzymać testy wspólne dla `PatientImportBatch`/`PatientImportError`."
-    status: pending
+    status: completed
   - id: docs-update
     content: "Zaktualizować dokumentację/planowanie: `.cursor/plans/import_pacjentow.plan.md` oraz dokumenty `.ai/api-plan*.md`, tak by odzwierciedlały wycofanie PDF i docelowy import `.xlsx`."
-    status: pending
+    status: completed
   - id: xlsx-import-next-steps-plan
     content: "W kolejnym iteracyjnym kroku: dodać `openpyxl` i nowy moduł `apps/reception/xlsx_import.py` z walidacją szablonu, normalizacją i usługą importu (reuse `create_or_update_patient_manual`, `create_daily_queue`, `create_queue_entry`)."
     status: pending

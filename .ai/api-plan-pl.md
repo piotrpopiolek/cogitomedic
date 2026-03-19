@@ -848,25 +848,9 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND` (dokument nie w scope, brak pliku lub status ≠ COMPLETED).
 
-### 2.11 Importy (manualny PDF, harmonogram, awaryjny)
+### 2.11 Importy (XLSX, harmonogram, awaryjny)
 
-- **POST** `/imports/patients/pdf`
-  - Opis: Upload tekstowego PDF Doctolib dla dziennego importu pacjentów. Request jedynie kolejkuje zadanie w tle w Django Tasks (`imports`).
-  - Parametry zapytania: brak.
-  - Request: `multipart/form-data` z plikiem.
-  - Response JSON:
-    ```json
-    {
-      "batch": {
-        "id": "uuid",
-        "status": "PROCESSING",
-        "source_system": "DOCTOLIB_EXPORT"
-      },
-      "message": "Patient PDF import enqueued."
-    }
-    ```
-  - Kody sukcesu: `202 ACCEPTED`.
-  - Kody błędów: `400 INVALID_FILE_FORMAT`, `403 FORBIDDEN`.
+- **POST** `/imports/patients/pdf` — **wycofany.** Import pacjentów z PDF Doctolib został usunięty. Użyj „Import z pliku” w adminie (XLSX) lub przyszłego `POST /imports/patients/xlsx` po wdrożeniu.
 
 - **POST** `/imports/patients/emergency`
   - Opis: Ścieżka awaryjnego importu ze sztywnego szablonu (US-017).
@@ -889,7 +873,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
     ```json
     {
       "id": "uuid",
-      "source_file_name": "export_20260308.pdf",
+      "source_file_name": "export_20260308.xlsx",
       "status": "COMPLETED_WITH_ERRORS",
       "total_rows": 120,
       "inserted_rows": 115,

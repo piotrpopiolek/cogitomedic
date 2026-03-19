@@ -845,25 +845,9 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND` (document out of scope, file missing, or status ≠ COMPLETED).
 
-### 2.11 Imports (manual PDF, scheduled, emergency)
+### 2.11 Imports (XLSX, scheduled, emergency)
 
-- **POST** `/imports/patients/pdf`
-  - Description: Upload a text-based Doctolib PDF for daily patient import. The request enqueues a background job on Django Tasks (`imports` queue).
-  - Query params: none.
-  - Request: `multipart/form-data` with file.
-  - Response JSON:
-    ```json
-    {
-      "batch": {
-        "id": "uuid",
-        "status": "PROCESSING",
-        "source_system": "DOCTOLIB_EXPORT"
-      },
-      "message": "Patient PDF import enqueued."
-    }
-    ```
-  - Success: `202 ACCEPTED`.
-  - Errors: `400 INVALID_FILE_FORMAT`, `403 FORBIDDEN`.
+- **POST** `/imports/patients/pdf` — **removed.** Patient import from Doctolib PDF was retired. Use admin "Import z pliku" (XLSX) or future `POST /imports/patients/xlsx` when implemented.
 
 - **POST** `/imports/patients/emergency`
   - Description: Emergency template import path (US-017).
@@ -886,7 +870,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
     ```json
     {
       "id": "uuid",
-      "source_file_name": "export_20260308.pdf",
+      "source_file_name": "export_20260308.xlsx",
       "status": "COMPLETED_WITH_ERRORS",
       "total_rows": 120,
       "inserted_rows": 115,

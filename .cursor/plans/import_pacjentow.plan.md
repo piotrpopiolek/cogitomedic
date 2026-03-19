@@ -1,11 +1,13 @@
 ---
 name: Import pacjentow
-overview: Plan wdrożenia importu pacjentów z tekstowego PDF Doctolib o jednym ustalonym układzie. Import ma czytać datę i nazwę kliniki z pliku, mapować klinikę po nazwie, tworzyć batch importu, pacjentów oraz wpisy kolejki zgodnie z uproszczonym modelem `Patient`.
+overview: Plan wdrożenia importu pacjentów (historycznie z PDF Doctolib). **Import z PDF został wycofany** (zob. `wycofaj-pdf-import.plan.md`). Docelowa ścieżka to import z pliku **XLSX** (szablon kolumn, openpyxl, reuse batch/PatientImportError i serwisów `create_or_update_patient_manual`, `create_daily_queue`, `create_queue_entry`).
 todos: []
 isProject: false
 ---
 
-# Plan importu pacjentów z PDF
+# Plan importu pacjentów (XLSX; PDF wycofany)
+
+**Uwaga:** Import z PDF Doctolib został usunięty z kodu. Obecny kierunek to import z pliku `.xlsx` (szablon, walidacja nagłówków, normalizacja danych).
 
 ## Założenia wejściowe
 
@@ -118,11 +120,10 @@ flowchart TD
 
 ## Kroki implementacyjne
 
-- Dodać kontrakt API dla importu PDF:
-  - `POST /imports/patients/pdf` albo spójny wariant pod `/imports/patients`,
-  - `GET /imports/batches`,
-  - `GET /imports/batches/{id}`,
-  - `GET /imports/batches/{id}/errors`.
+- Kontrakt API importu (PDF wycofany; docelowo XLSX):
+  - ~~`POST /imports/patients/pdf`~~ (usunięty),
+  - docelowo `POST /imports/patients/xlsx` lub `/imports/patients` z plikiem .xlsx,
+  - `GET /imports/batches`, `GET /imports/batches/{id}`, `GET /imports/batches/{id}/errors` (bez zmian).
 - Dodać parser PDF z etapami:
   - extract text,
   - parse header,

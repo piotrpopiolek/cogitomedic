@@ -55,7 +55,6 @@ from apps.reception.api_views import (
     import_batches_view,
     patient_contact_history_view,
     patient_detail_view,
-    patient_pdf_import_view,
     patients_view,
     queue_entry_detail_view,
     queue_entry_sessions_view,
@@ -239,11 +238,6 @@ urlpatterns = [
         "consulting-rooms/<uuid:consulting_room_id>",
         consulting_room_detail_view,
         name="consulting-room-detail",
-    ),
-    path(
-        "imports/patients/pdf",
-        patient_pdf_import_view,
-        name="patient-pdf-import",
     ),
     path(
         "imports/batches",

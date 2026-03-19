@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import os
-import tempfile
 from datetime import date
-from unittest.mock import patch
 
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -25,21 +21,12 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.core.api_utils import assign_group_to_test_user
-from apps.reception.pdf_import import (
-    DoctolibPdfParser,
-    normalize_patient_row,
-    ParsedPatientRow,
-    ParsedPdfImport,
-    PatientPdfImportErrorCode,
-    PatientPdfImportFailure,
-    process_patient_pdf_import_batch,
-    _resolve_clinic_site,
-)
 from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
     issue_tablet_session_latest_wins,
 )
+from apps.reception.xlsx_import import _cleanup_clinic_name, _parse_date, _split_full_name, _title_case_name
 from apps.users.models import StaffUser
 
 
@@ -231,351 +218,9 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(items[0]["id"], str(patient1.id))
 
 
-class FakePdfPage:
-    def __init__(self, *, text: str, words: list[dict]) -> None:
-        self._text = text
-        self._words = words
-
-    def extract_text(self) -> str:
-        return self._text
-
-    def extract_words(self, **kwargs) -> list[dict]:
-        return self._words
-
-
-class FakePdfDocument:
-    def __init__(self, pages: list[FakePdfPage]) -> None:
-        self.pages = pages
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        return None
-
-
-class PatientPdfParserTests(TestCase):
-    def test_parse_extracts_header_and_rows(self) -> None:
-        parser = DoctolibPdfParser()
-        fake_pdf = FakePdfDocument(
-            [
-                FakePdfPage(
-                    text=(
-                        "Clinic: Berlin Central\n"
-                        "Date: 08.03.2026\n"
-                        "Godzina Imie nazwisko Telefon Data urodzenia Email Adres Kod pocztowy\n"
-                        "08:30 Anna Nowak +49111111111 01.01.1990 anna@example.com Main 1 10115\n"
-                        "09:00 Jan Kowalski +49222222222 02.02.1985 jan@example.com Side 2 10999"
-                    ),
-                    words=[
-                        {"text": "Clinic:", "x0": 10, "x1": 30, "top": 10, "bottom": 12},
-                        {"text": "Berlin", "x0": 40, "x1": 70, "top": 10, "bottom": 12},
-                        {"text": "Central", "x0": 75, "x1": 110, "top": 10, "bottom": 12},
-                        {"text": "Date:", "x0": 10, "x1": 25, "top": 20, "bottom": 22},
-                        {"text": "08.03.2026", "x0": 40, "x1": 85, "top": 20, "bottom": 22},
-                        {"text": "Godzina", "x0": 10, "x1": 45, "top": 30, "bottom": 32},
-                        {"text": "Imie", "x0": 80, "x1": 100, "top": 30, "bottom": 32},
-                        {"text": "nazwisko", "x0": 105, "x1": 145, "top": 30, "bottom": 32},
-                        {"text": "Telefon", "x0": 200, "x1": 240, "top": 30, "bottom": 32},
-                        {"text": "Data", "x0": 300, "x1": 325, "top": 30, "bottom": 32},
-                        {"text": "urodzenia", "x0": 330, "x1": 385, "top": 30, "bottom": 32},
-                        {"text": "Email", "x0": 430, "x1": 455, "top": 30, "bottom": 32},
-                        {"text": "Adres", "x0": 520, "x1": 545, "top": 30, "bottom": 32},
-                        {"text": "Kod", "x0": 640, "x1": 660, "top": 30, "bottom": 32},
-                        {"text": "pocztowy", "x0": 665, "x1": 715, "top": 30, "bottom": 32},
-                        {"text": "08:30", "x0": 10, "x1": 35, "top": 40, "bottom": 42},
-                        {"text": "Anna", "x0": 80, "x1": 100, "top": 40, "bottom": 42},
-                        {"text": "Nowak", "x0": 105, "x1": 135, "top": 40, "bottom": 42},
-                        {"text": "+49111111111", "x0": 200, "x1": 255, "top": 40, "bottom": 42},
-                        {"text": "01.01.1990", "x0": 300, "x1": 350, "top": 40, "bottom": 42},
-                        {"text": "anna@example.com", "x0": 430, "x1": 500, "top": 40, "bottom": 42},
-                        {"text": "Main", "x0": 520, "x1": 545, "top": 40, "bottom": 42},
-                        {"text": "1", "x0": 548, "x1": 552, "top": 40, "bottom": 42},
-                        {"text": "10115", "x0": 640, "x1": 665, "top": 40, "bottom": 42},
-                        {"text": "09:00", "x0": 10, "x1": 35, "top": 50, "bottom": 52},
-                        {"text": "Jan", "x0": 80, "x1": 96, "top": 50, "bottom": 52},
-                        {"text": "Kowalski", "x0": 105, "x1": 150, "top": 50, "bottom": 52},
-                        {"text": "+49222222222", "x0": 200, "x1": 255, "top": 50, "bottom": 52},
-                        {"text": "02.02.1985", "x0": 300, "x1": 350, "top": 50, "bottom": 52},
-                        {"text": "jan@example.com", "x0": 430, "x1": 495, "top": 50, "bottom": 52},
-                        {"text": "Side", "x0": 520, "x1": 545, "top": 50, "bottom": 52},
-                        {"text": "2", "x0": 548, "x1": 552, "top": 50, "bottom": 52},
-                        {"text": "10999", "x0": 640, "x1": 665, "top": 50, "bottom": 52},
-                    ],
-                )
-            ]
-        )
-
-        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
-            parsed = parser.parse("dummy.pdf")
-
-        self.assertEqual(parsed.clinic_name, "Berlin Central")
-        self.assertEqual(parsed.import_date, date(2026, 3, 8))
-        self.assertEqual(len(parsed.rows), 2)
-        self.assertEqual(parsed.rows[0].full_name_raw, "Anna Nowak")
-
-    def test_parse_rejects_unsupported_layout(self) -> None:
-        parser = DoctolibPdfParser()
-        fake_pdf = FakePdfDocument(
-            [FakePdfPage(text="Unsupported content", words=[{"text": "Unsupported", "x0": 10, "x1": 50, "top": 10, "bottom": 12}])]
-        )
-
-        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
-            with self.assertRaises(PatientPdfImportFailure) as context:
-                parser.parse("dummy.pdf")
-
-        self.assertEqual(context.exception.error_code, PatientPdfImportErrorCode.PDF_UNSUPPORTED_LAYOUT)
-
-    def test_parse_supports_german_doctolib_headers(self) -> None:
-        parser = DoctolibPdfParser()
-        fake_pdf = FakePdfDocument(
-            [
-                FakePdfPage(
-                    text=(
-                        "Standort Kreutzigerstraße\n"
-                        "Montag, 9. März\n"
-                        "Uhrzeit Patient:in Telefon Geburtsdatum E-Mail-Adresse Anschrift Postleitzahl\n"
-                        "08:30 Anna Nowak +49111111111 01.01.1990 anna@example.com Main 1 10115"
-                    ),
-                    words=[
-                        {"text": "Standort", "x0": 10, "x1": 45, "top": 10, "bottom": 12},
-                        {"text": "Kreutzigerstraße", "x0": 50, "x1": 120, "top": 10, "bottom": 12},
-                        {"text": "Montag,", "x0": 10, "x1": 45, "top": 20, "bottom": 22},
-                        {"text": "9.", "x0": 50, "x1": 58, "top": 20, "bottom": 22},
-                        {"text": "März", "x0": 62, "x1": 84, "top": 20, "bottom": 22},
-                        {"text": "Uhrzeit", "x0": 10, "x1": 45, "top": 30, "bottom": 32},
-                        {"text": "Patient:in", "x0": 80, "x1": 130, "top": 30, "bottom": 32},
-                        {"text": "Telefon", "x0": 200, "x1": 240, "top": 30, "bottom": 32},
-                        {"text": "Geburtsdatum", "x0": 300, "x1": 365, "top": 30, "bottom": 32},
-                        {"text": "E-Mail-Adresse", "x0": 430, "x1": 505, "top": 30, "bottom": 32},
-                        {"text": "Anschrift", "x0": 520, "x1": 565, "top": 30, "bottom": 32},
-                        {"text": "Postleitzahl", "x0": 640, "x1": 700, "top": 30, "bottom": 32},
-                        {"text": "08:30", "x0": 10, "x1": 35, "top": 40, "bottom": 42},
-                        {"text": "Anna", "x0": 80, "x1": 100, "top": 40, "bottom": 42},
-                        {"text": "Nowak", "x0": 105, "x1": 135, "top": 40, "bottom": 42},
-                        {"text": "+49111111111", "x0": 200, "x1": 255, "top": 40, "bottom": 42},
-                        {"text": "01.01.1990", "x0": 300, "x1": 350, "top": 40, "bottom": 42},
-                        {"text": "anna@example.com", "x0": 430, "x1": 500, "top": 40, "bottom": 42},
-                        {"text": "Main", "x0": 520, "x1": 545, "top": 40, "bottom": 42},
-                        {"text": "1", "x0": 548, "x1": 552, "top": 40, "bottom": 42},
-                        {"text": "10115", "x0": 640, "x1": 665, "top": 40, "bottom": 42},
-                    ],
-                )
-            ]
-        )
-
-        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
-            parsed = parser.parse("dummy.pdf")
-
-        self.assertEqual(parsed.clinic_name, "Kreutzigerstraße")
-        self.assertEqual(parsed.import_date.month, 3)
-        self.assertEqual(parsed.import_date.day, 9)
-        self.assertEqual(len(parsed.rows), 1)
-
-    def test_parse_strips_textual_date_from_clinic_name(self) -> None:
-        parser = DoctolibPdfParser()
-        fake_pdf = FakePdfDocument(
-            [
-                FakePdfPage(
-                    text=(
-                        "Standort Kreutzigerstraße Montag, 9. März\n"
-                        "Uhrzeit Patient:in Telefon Geburtsdatum E-Mail-Adresse Anschrift Postleitzahl\n"
-                        "08:30 Anna Nowak +49111111111 01.01.1990 anna@example.com Main 1 10115"
-                    ),
-                    words=[
-                        {"text": "Standort", "x0": 10, "x1": 45, "top": 10, "bottom": 12},
-                        {"text": "Kreutzigerstraße", "x0": 50, "x1": 120, "top": 10, "bottom": 12},
-                        {"text": "Montag,", "x0": 150, "x1": 185, "top": 10, "bottom": 12},
-                        {"text": "9.", "x0": 190, "x1": 198, "top": 10, "bottom": 12},
-                        {"text": "März", "x0": 202, "x1": 224, "top": 10, "bottom": 12},
-                        {"text": "Uhrzeit", "x0": 10, "x1": 45, "top": 30, "bottom": 32},
-                        {"text": "Patient:in", "x0": 80, "x1": 130, "top": 30, "bottom": 32},
-                        {"text": "Telefon", "x0": 200, "x1": 240, "top": 30, "bottom": 32},
-                        {"text": "Geburtsdatum", "x0": 300, "x1": 365, "top": 30, "bottom": 32},
-                        {"text": "E-Mail-Adresse", "x0": 430, "x1": 505, "top": 30, "bottom": 32},
-                        {"text": "Anschrift", "x0": 520, "x1": 565, "top": 30, "bottom": 32},
-                        {"text": "Postleitzahl", "x0": 640, "x1": 700, "top": 30, "bottom": 32},
-                        {"text": "08:30", "x0": 10, "x1": 35, "top": 40, "bottom": 42},
-                        {"text": "Anna", "x0": 80, "x1": 100, "top": 40, "bottom": 42},
-                        {"text": "Nowak", "x0": 105, "x1": 135, "top": 40, "bottom": 42},
-                        {"text": "+49111111111", "x0": 200, "x1": 255, "top": 40, "bottom": 42},
-                        {"text": "01.01.1990", "x0": 300, "x1": 350, "top": 40, "bottom": 42},
-                        {"text": "anna@example.com", "x0": 430, "x1": 500, "top": 40, "bottom": 42},
-                        {"text": "Main", "x0": 520, "x1": 545, "top": 40, "bottom": 42},
-                        {"text": "1", "x0": 548, "x1": 552, "top": 40, "bottom": 42},
-                        {"text": "10115", "x0": 640, "x1": 665, "top": 40, "bottom": 42},
-                    ],
-                )
-            ]
-        )
-
-        with patch("apps.reception.pdf_import.pdfplumber.open", return_value=fake_pdf):
-            parsed = parser.parse("dummy.pdf")
-
-        self.assertEqual(parsed.clinic_name, "Kreutzigerstraße")
-
-    def test_normalize_patient_row_handles_honorific_age_and_missing_address(self) -> None:
-        normalized = normalize_patient_row(
-            parsed_row=ParsedPatientRow(
-                row_number=1,
-                appointment_time_raw="13:00",
-                full_name_raw="Herr PATIENT Christian",
-                phone_raw="0176(cid:182)2222222",
-                date_of_birth_raw="01.03.1960 (66 Jahre)",
-                email_raw="patient@example.com",
-                address_raw="",
-                postal_code_raw="",
-            ),
-            import_date=date(2026, 3, 9),
-        )
-
-        self.assertEqual(normalized.first_name, "Christian")
-        self.assertEqual(normalized.last_name, "PATIENT")
-        self.assertEqual(normalized.phone, "01762222222")
-        self.assertEqual(normalized.date_of_birth, date(1960, 3, 1))
-        self.assertIsNone(normalized.street)
-        self.assertIsNone(normalized.postal_code)
-
-    def test_normalize_patient_row_ignores_symbols_in_full_name(self) -> None:
-        normalized = normalize_patient_row(
-            parsed_row=ParsedPatientRow(
-                row_number=1,
-                appointment_time_raw="13:00",
-                full_name_raw="@ Herr PATIENT Christian",
-                phone_raw="01762222222",
-                date_of_birth_raw="01.03.1960",
-                email_raw="patient@example.com",
-                address_raw="",
-                postal_code_raw="",
-            ),
-            import_date=date(2026, 3, 9),
-        )
-
-        self.assertEqual(normalized.first_name, "Christian")
-        self.assertEqual(normalized.last_name, "PATIENT")
-
-
-class PatientPdfImportServiceTests(TestCase):
-    def setUp(self) -> None:
-        self.reception_user = StaffUser.objects.create_user(
-            username="import-user",
-            email="import-user@example.com",
-            password="safe-password",
-            is_staff=True,
-        )
-        assign_group_to_test_user(self.reception_user, "Reception")
-        self.clinic = ClinicSite.objects.create(
-            code="IMP",
-            name="Import Clinic",
-            pdf_import_shift_code="FULL_DAY",
-        )
-        self.room = ConsultingRoom.objects.create(
-            clinic_site=self.clinic,
-            code="IMP-R1",
-            name="Import Room",
-        )
-        self.clinic.pdf_import_default_consulting_room = self.room
-        self.clinic.save(update_fields=["pdf_import_default_consulting_room"])
-
-    def _create_batch(self, source_file_name: str) -> PatientImportBatch:
-        return PatientImportBatch.objects.create(
-            source_file_name=source_file_name,
-            source_file_sha256="a" * 64,
-            created_by_user=self.reception_user,
-        )
-
-    def test_process_patient_pdf_import_batch_creates_patient_and_queue_entry(self) -> None:
-        batch = self._create_batch("patients.pdf")
-        parsed_import = ParsedPdfImport(
-            import_date=date(2026, 3, 8),
-            clinic_name=self.clinic.name,
-            rows=(
-                ParsedPatientRow(
-                    row_number=1,
-                    appointment_time_raw="08:30",
-                    full_name_raw="Anna Nowak",
-                    phone_raw="+49 111 111 111",
-                    date_of_birth_raw="01.01.1990",
-                    email_raw="anna@example.com",
-                    address_raw="Main 1",
-                    postal_code_raw="10115",
-                ),
-            ),
-        )
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(b"%PDF-1.4")
-            temp_path = temp_file.name
-        try:
-            with patch("apps.reception.pdf_import.DoctolibPdfParser.parse", return_value=parsed_import):
-                process_patient_pdf_import_batch(batch_id=batch.id, stored_file_path=temp_path)
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-
-        batch.refresh_from_db()
-        self.assertEqual(batch.status, ImportStatus.COMPLETED)
-        self.assertEqual(batch.inserted_rows, 1)
-        self.assertEqual(batch.error_rows, 0)
-        self.assertTrue(Patient.objects.filter(first_name="Anna", last_name="Nowak").exists())
-        self.assertEqual(QueueEntry.objects.count(), 1)
-
-    def test_process_patient_pdf_import_batch_marks_duplicate_visit_as_error(self) -> None:
-        first_batch = self._create_batch("patients-1.pdf")
-        second_batch = self._create_batch("patients-2.pdf")
-        parsed_import = ParsedPdfImport(
-            import_date=date(2026, 3, 8),
-            clinic_name=self.clinic.name,
-            rows=(
-                ParsedPatientRow(
-                    row_number=1,
-                    appointment_time_raw="08:30",
-                    full_name_raw="Anna Nowak",
-                    phone_raw="+49 111 111 111",
-                    date_of_birth_raw="01.01.1990",
-                    email_raw="anna@example.com",
-                    address_raw="Main 1",
-                    postal_code_raw="10115",
-                ),
-            ),
-        )
-
-        for batch in (first_batch, second_batch):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                temp_file.write(b"%PDF-1.4")
-                temp_path = temp_file.name
-            try:
-                with patch("apps.reception.pdf_import.DoctolibPdfParser.parse", return_value=parsed_import):
-                    process_patient_pdf_import_batch(batch_id=batch.id, stored_file_path=temp_path)
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-
-        second_batch.refresh_from_db()
-        self.assertEqual(second_batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
-        self.assertEqual(second_batch.inserted_rows, 0)
-        self.assertEqual(second_batch.error_rows, 1)
-        self.assertEqual(
-            PatientImportError.objects.get(batch=second_batch).error_code,
-            PatientPdfImportErrorCode.DUPLICATE_VISIT,
-        )
-
-    def test_resolve_clinic_site_matches_normalized_name(self) -> None:
-        clinic = ClinicSite.objects.create(code="KREU", name="Standort   Kreutzigerstrasse")
-
-        resolved = _resolve_clinic_site("Standort Kreutzigerstraße")
-
-        self.assertEqual(resolved.id, clinic.id)
-
-    def test_resolve_clinic_site_matches_without_standort_prefix(self) -> None:
-        clinic = ClinicSite.objects.create(code="KREU2", name="Standort Kreutzigerstraße")
-
-        resolved = _resolve_clinic_site("Kreutzigerstraße")
-
-        self.assertEqual(resolved.id, clinic.id)
-
-
 class DailyQueueAdminImportTests(TestCase):
+    """Tests for admin import-from-file UI (XLSX upload)."""
+
     def setUp(self) -> None:
         self.client = Client()
         self.admin_user = StaffUser.objects.create_superuser(
@@ -590,23 +235,37 @@ class DailyQueueAdminImportTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Import z pliku")
-        self.assertContains(response, reverse("admin:reception_dailyqueue_import_pdf"))
+        self.assertContains(response, reverse("admin:reception_dailyqueue_import_xlsx"))
 
-    def test_import_pdf_admin_view_enqueues_batch(self) -> None:
-        batch = PatientImportBatch.objects.create(
-            source_file_name="patients.pdf",
-            source_file_sha256="b" * 64,
-            created_by_user=self.admin_user,
-        )
-        with patch("apps.reception.admin.enqueue_patient_pdf_import", return_value=batch) as enqueue_mock:
-            response = self.client.post(
-                reverse("admin:reception_dailyqueue_import_pdf"),
-                data={
-                    "file": SimpleUploadedFile("patients.pdf", b"%PDF-1.4"),
-                    "next": reverse("admin:reception_dailyqueue_changelist"),
-                },
-            )
+    def test_import_xlsx_admin_view_renders_form(self) -> None:
+        response = self.client.get(reverse("admin:reception_dailyqueue_import_xlsx"))
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("admin:reception_dailyqueue_changelist"))
-        enqueue_mock.assert_called_once()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import pacjentów z pliku XLSX")
+        self.assertContains(response, "Plik XLSX")
+        self.assertContains(response, "Import odczyta z pliku datę kolejki i nazwę placówki")
+
+
+class XlsxImportParsingTests(TestCase):
+    def test_cleanup_clinic_name_removes_trailing_weekday_and_date(self) -> None:
+        cleaned = _cleanup_clinic_name("Kreutzigerstraße Freitag, 6. März")
+        self.assertEqual(cleaned, "Kreutzigerstraße")
+
+    def test_parse_date_accepts_dob_with_age_suffix(self) -> None:
+        parsed = _parse_date("4.07.1996 (30 Jahre)")
+        self.assertEqual(parsed, date(1996, 7, 4))
+
+    def test_split_full_name_removes_title_and_symbol(self) -> None:
+        first_name, last_name = _split_full_name("Herr FRITSCHE Sebastian @")
+        self.assertEqual(first_name, "Sebastian")
+        self.assertEqual(last_name, "FRITSCHE")
+
+    def test_split_full_name_handles_frau_format(self) -> None:
+        first_name, last_name = _split_full_name("Frau JURGA Jolina")
+        self.assertEqual(first_name, "Jolina")
+        self.assertEqual(last_name, "JURGA")
+
+    def test_title_case_name_normalizes_case(self) -> None:
+        self.assertEqual(_title_case_name("aLeXanDra"), "Alexandra")
+        self.assertEqual(_title_case_name("nIzhENKO"), "Nizhenko")
+        self.assertEqual(_title_case_name("o'NEIL-smITH"), "O'Neil-Smith")
