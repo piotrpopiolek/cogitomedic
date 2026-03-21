@@ -82,7 +82,6 @@ Lekarz **musi** mieć dostęp do pacjentów w klinikach, do których jest przypi
 | --------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | GET `/patients`                                     | Tak (read)    | Wyszukiwanie pacjentów (np. `search`, `last_name`, `date_of_birth`). Wyniki ograniczone do pacjentów z przypisanych klinik. |
 | GET `/patients/{id}`                                | Tak (read)    | Szczegóły pacjenta – tylko jeśli pacjent należy do kliniki w zakresie lekarza.                                              |
-| GET `/patients/{id}/contact-history`                | Tak (read)    | Historia kontaktów – tylko dla pacjentów z zakresu klinik lekarza.                                                          |
 | POST/PATCH `/patients`, POST `/patients/{id}/merge` | Nie           | Tworzenie/edycja pacjentów i scalanie – RECEPTION/ADMIN.                                                                    |
 
 
@@ -378,7 +377,7 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth                 | login, logout, me                                                                                                                                                               |
 | Kolejki (read-only)  | daily-queues (GET), daily-queues/{id}/entries (GET), queue-entries/{id} (GET) – **tylko kolejki przypisane do lekarza (`assigned_doctor_id`)**                                  |
-| Pacjenci (read-only) | patients (GET), patients/{id} (GET), patients/{id}/contact-history (GET) – **pacjenci z przypisanych klinik lekarza (`patient_clinic_site`)**                                   |
+| Pacjenci (read-only) | patients (GET), patients/{id} (GET) – **pacjenci z przypisanych klinik lekarza (`patient_clinic_site`)**                                   |
 | Lokacje (read-only)  | clinic-sites (GET), consulting-rooms (GET)                                                                                                                                      |
 | Dokumenty medyczne   | medical-documents (GET, POST), medical-documents/{id} (GET), draft (PATCH), publish (POST), versions (GET); medical-document-versions/{id} (GET) – **AUTHOR OR ASSIGNED_QUEUE** |
 | Szablony lekarza     | doctor-text-templates (GET, POST, GET/PATCH/DELETE własne)                                                                                                                      |

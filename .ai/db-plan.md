@@ -65,15 +65,6 @@
   - `CHECK (phone ~ '^[0-9+() -]{7,20}$')`
   - `CHECK (date_of_birth <= current_date)`
 
-#### `patient_contact_history`
-- `id` `uuid` PK DEFAULT `gen_random_uuid()`
-- `patient_id` `uuid` NOT NULL FK -> `patient(id)` ON DELETE CASCADE
-- `phone` `varchar(20)` NULL
-- `email` `citext` NULL
-- `changed_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
-- `changed_at` `timestamptz` NOT NULL DEFAULT `now()`
-- `reason` `varchar(100)` NULL
-
 #### `clinic_site`
 - `id` `uuid` PK DEFAULT `gen_random_uuid()`
 - `code` `varchar(20)` NOT NULL UNIQUE
@@ -404,6 +395,7 @@
 - Ograniczenia:
   - `CHECK (jsonb_typeof(metadata) = 'object')`
 - Uwaga: W `metadata` zarezerwowany klucz `_ref` (obiekt) przechowuje niezmienną kopię ID encji (`patient_id`, `medical_document_id`, `context_clinic_site_id`, `actor_user_id`, `outbox_event_id`) w celu compliance po anonimizacji/usunięciu (gdy FK ulegnie SET NULL).
+- `event_type` (varchar): wartości definiuje kod aplikacji (brak osobnego enumu w DB). Przykładowe obszary: **portal wyników** (`PATIENT_RESULTS_*`), **auth staff API** (`STAFF_AUTH_*`), **operacje admina** (`OPERATIONS_*`, batch outbox/retencja/intake), **import XLSX** (`PATIENT_XLSX_IMPORT_*`), **dokumentacja medyczna / intake** (np. `MEDICAL_DOCUMENT_*`, `INTAKE_DOCUMENT_*`, `DOCUMENT_*`), **outbox** (retry, przetwarzanie) — pełna lista w implementacji (`create_audit_event`).
 
 ## 2. Relacje między tabelami
 
@@ -429,7 +421,6 @@
 - `translation_key` 1:N `translation_value`.
 - `translation_cache_version` przechowuje licznik wersji cache tłumaczeń dla pary `category+language_code`.
 - `patient_import_batch` 1:N `patient_import_error`.
-- `patient` 1:N `patient_contact_history`.
 - Relacje ról:
   - `staff_user.role='TABLET'`: dostęp tylko do wyboru kolejki, listy wpisów kolejki, POST sessions (bez tokenu), formularza intake (GET/PUT/POST).
   - `staff_user.role='RECEPTION'` zarządza `daily_queue`, importami i sesjami formularza (POST sessions).
@@ -570,7 +561,7 @@
 - Zamiast bezpośredniej integracji API z Doctolib, schema wspiera codzienny import plików eksportowanych z Doctolib (z audytem batchy i błędów wierszy), co upraszcza wdrożenie i utrzymanie.
 - Ograniczenie `UNIQUE(daily_queue_id, patient_id)` zostało celowo usunięte, aby dopuścić więcej niż jedną wizytę tego samego pacjenta w tym samym dniu i gabinecie.
 - Założono pełne odejście od modeli legacy; `staff_user` jest docelową tabelą użytkowników, a stary moduł wyników (`results_labresults`) nie jest częścią nowego schematu.
-- **Portal wyniki (US-018, PRD 3.4a):** Proces udostępniania 4-etapowy: SMS logistyczny („Nowa dokumentacja w Cogito"), logowanie pacjenta phone+DOB, OTP 6-cyfrowy 15 min, serwowanie PDF przez HTTPS. Implementacja wymagać może nowej tabeli sesji OTP (np. `patient_results_otp_session`) do przechowania kodu i ważności; audyt pobrań w `audit_event`.
+- **Portal wyniki (US-018, PRD 3.4a):** Proces udostępniania 4-etapowy: SMS logistyczny („Nowa dokumentacja w Cogito"), logowanie pacjenta phone+DOB, OTP 6-cyfrowy 15 min, serwowanie PDF przez HTTPS. Tabela `patient_results_otp_session` przechowuje kod i ważność; w `audit_event` zapisywane są m.in. żądania/weryfikacja OTP, lista dokumentów, udane i odmówione pobrania PDF (`PATIENT_RESULTS_*`, patrz api-plan §4.2).
 - Runtime backendu: Django 6 + natywne `django.tasks`; w projekcie obowiązuje jedno rozwiązanie asynchroniczne (Django Tasks + Outbox), a tabela `outbox_event` nadal jest źródłem prawdy o statusach procesu.
 - **Języki portalu:** interfejs jest dostępny w języku niemieckim, angielskim i polskim. Pole `staff_user.preferred_locale` (np. `de-DE`, `en-GB`, `pl-PL`) określa preferowany język panelu personelu; dla tabletu pacjenta język wybierany jest w kontekście sesji/formularza.
 

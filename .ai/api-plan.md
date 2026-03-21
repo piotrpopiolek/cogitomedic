@@ -22,7 +22,6 @@
 - `auth` -> `staff_user` (login, logout, current session, role access)
 - `staff-users` -> `staff_user`
 - `patients` -> `patient`
-- `patient-contact-history` -> `patient_contact_history`
 - `clinic-sites` -> `clinic_site`
 - `consulting-rooms` -> `consulting_room`
 - `daily-queues` -> `daily_queue`
@@ -237,28 +236,6 @@
   - Response JSON: patient object.
   - Success: `200 OK`.
   - Errors: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 UNIQUE_CONSTRAINT`.
-
-- **GET** `/patients/{id}/contact-history`
-  - Description: Contact changes timeline.
-  - Query params: pagination only.
-  - Request JSON: none.
-  - Response JSON:
-    ```json
-    {
-      "items": [
-        {
-          "id": "uuid",
-          "phone": "+49111111111",
-          "email": "old@example.com",
-          "changed_at": "2026-02-15T10:00:00Z",
-          "changed_by_user_id": "uuid",
-          "reason": "manual correction"
-        }
-      ]
-    }
-    ```
-  - Success: `200 OK`.
-  - Errors: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 ### 2.4 Clinic sites and consulting rooms
 
@@ -1141,7 +1118,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - SMS is strictly logistic; patient visits e.g. wyniki.cogitomedica.pl.
   - Login: phone + date_of_birth (verified at reception).
   - OTP: 6-digit code, 15 min validity; sent asynchronously when phone+DOB match.
-  - After valid OTP: serve PDF via HTTPS; audit logs (timestamp, IP).
+  - After valid OTP: serve PDF via HTTPS. **Audit (`audit_event`):** typed events such as `PATIENT_RESULTS_OTP_REQUEST`, `PATIENT_RESULTS_OTP_VERIFY`, `PATIENT_RESULTS_DOCUMENTS_LISTED`, `PATIENT_RESULTS_PDF_DOWNLOAD`, `PATIENT_RESULTS_PDF_DOWNLOAD_DENIED` with `event_time`, `patient_id` where applicable, and `metadata` including `client_ip` and outcomes (e.g. OTP request outcome, denied-download reason).
   - Doctor can revoke publication; patient will not see revoked file after OTP entry.
 
 - Republishing:

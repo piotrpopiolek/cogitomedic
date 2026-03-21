@@ -22,7 +22,6 @@
 - `auth` -> `staff_user` (logowanie, wylogowanie, bieżąca sesja, dostęp wg roli)
 - `staff-users` -> `staff_user`
 - `patients` -> `patient`
-- `patient-contact-history` -> `patient_contact_history`
 - `clinic-sites` -> `clinic_site`
 - `consulting-rooms` -> `consulting_room`
 - `daily-queues` -> `daily_queue`
@@ -237,28 +236,6 @@
   - Response JSON: obiekt pacjenta.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 UNIQUE_CONSTRAINT`.
-
-- **GET** `/patients/{id}/contact-history`
-  - Opis: Oś czasu zmian danych kontaktowych.
-  - Parametry zapytania: tylko paginacja.
-  - Request JSON: brak.
-  - Response JSON:
-    ```json
-    {
-      "items": [
-        {
-          "id": "uuid",
-          "phone": "+49111111111",
-          "email": "old@example.com",
-          "changed_at": "2026-02-15T10:00:00Z",
-          "changed_by_user_id": "uuid",
-          "reason": "manual correction"
-        }
-      ]
-    }
-    ```
-  - Kody sukcesu: `200 OK`.
-  - Kody błędów: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
 ### 2.4 Placówki i gabinety
 
@@ -1130,7 +1107,6 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 - Workflow lekarza:
   - Zapis szkicu aktualizuje/tworzy najnowszą wersję draft; lekarz wpisuje/edyuje tekst w `medical_payload` (np. `edited_text`, `summary_edited_text`).
   - Lekarz zapisuje w `medical_payload` finalne teksty edytowane (oraz opcjonalnie wygenerowane z szablonu).
-  - Każda modyfikacja `edited_text` emituje zdarzenie audytowe (`MEDICAL_TEXT_EDITED`) z aktorem i stemplem czasowym.
   - Request publikacji musi zawierać `publish_locale`; backend zapisuje je w `medical_document_version` i traktuje jako źródło prawdy dla języka PDF.
   - Publikacja używa locka wiersza na `medical_document` i kontroli idempotencji:
     - ten sam `publish_request_id` zwraca sukces-replay;
@@ -1146,7 +1122,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - SMS wyłącznie logistyczny; pacjent wchodzi na np. wyniki.cogitomedica.pl.
   - Logowanie: telefon + data urodzenia (zweryfikowane w recepcji).
   - OTP: 6-cyfrowy kod, ważność 15 min; wysyłany asynchronicznie gdy telefon+DOB się zgadzają.
-  - Po prawidłowym OTP: serwowanie PDF przez HTTPS; logi audytowe (timestamp, IP).
+  - Po prawidłowym OTP: serwowanie PDF przez HTTPS. **Audyt (`audit_event`):** typowane zdarzenia m.in. `PATIENT_RESULTS_OTP_REQUEST`, `PATIENT_RESULTS_OTP_VERIFY`, `PATIENT_RESULTS_DOCUMENTS_LISTED`, `PATIENT_RESULTS_PDF_DOWNLOAD`, `PATIENT_RESULTS_PDF_DOWNLOAD_DENIED` z `event_time`, `patient_id` (gdy dotyczy) oraz `metadata` (`client_ip`, wynik żądania OTP, powód odmowy pobrania itd.).
   - Lekarz może wycofać publikację; pacjent po wpisaniu OTP nie zobaczy wycofanego pliku.
 
 - Republikacja:

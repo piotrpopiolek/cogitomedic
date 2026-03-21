@@ -53,13 +53,7 @@ Priorytety: (1) Błędy logiczne i bugi, (2) Bezpieczeństwo, (3) Wydajność, (
 
 ## 3. Logika i przypadki brzegowe
 
-### 3.1 PatientContactHistory przy PATCH pacjenta
-
-**Lokalizacja:** `apps/reception/api_views_split/patients.py` – `patient_detail_view` (PATCH).
-
-**Obserwacja:** Wpis do `PatientContactHistory` tworzony jest, gdy zmieni się `phone` lub `email`; do rekordu trafia `body.change_reason` (może być `None`). To jest akceptowalne; warto w dokumentacji API opisać, że `change_reason` jest opcjonalne i służy do audytu zmiany kontaktu.
-
-### 3.2 Retry processing – puste body
+### 3.1 Retry processing – puste body
 
 **Lokalizacja:** `apps/medical/api_views.py` – `medical_document_retry_processing_view`.
 

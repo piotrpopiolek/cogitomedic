@@ -61,9 +61,8 @@ To jest główny moduł pracy rejestratora. Recepcja tworzy kolejki, dodaje pacj
 - `GET /patients/{id}`
 - `PATCH /patients/{id}`
 - `POST /patients/{id}/merge`
-- `GET /patients/{id}/contact-history`
 
-Recepcja ma dostęp do tworzenia i aktualizacji pacjentów, w tym do ścieżki manualnej z rekordem tymczasowym bez `Doctolib Patient ID`, do historii zmian kontaktowych oraz do operacji merge rekordów pacjentów w zakresie przypisanych placówek.
+Recepcja ma dostęp do tworzenia i aktualizacji pacjentów, w tym do ścieżki manualnej z rekordem tymczasowym bez `Doctolib Patient ID`, oraz do operacji merge rekordów pacjentów w zakresie przypisanych placówek.
 
 ### 4. Lokacje i gabinety
 
@@ -189,7 +188,6 @@ Recepcja nie powinna mieć dostępu do modułów administracyjnych, medycznych a
 - `staff_user`
 - `staff_user_clinic_site`
 - `patient`
-- `patient_contact_history`
 - `patient_clinic_site`
 - `clinic_site`
 - `consulting_room`

@@ -63,7 +63,7 @@ isProject: false
 - Zredukowano dług w zależnościach: aktualizacje krytycznych bibliotek HTTP/TLS, usunięcie duplikatu `dotenv`, usunięcie nieużywanych `django-select2`, `reportlab`, `PyPDF2`, dodanie `requirements-dev.txt` (pytest + QA), przejście na `psycopg`.
 - Zaimplementowano kluczowe serwisy domenowe i testy: Faza 1 (`reception` + `intake`), Faza 2 (`medical`), pipeline outbox oraz bazowy audit trail.
 - Decyzja wykonawcza: **API jest aktualnie najwyższym priorytetem**, a walidacja payloadów JSON ma być realizowana przez **Pydantic v2**.
-- Dowieziono endpointy API v1: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`), `**patients`** (list/search, create, detail/PATCH, contact-history, merge), `staff-users` (list/create/detail/update/deactivate) – z walidacją Pydantic i testami API.
+- Dowieziono endpointy API v1: `daily-queues`, `queue-entries`, `clinic-sites`, `consulting-rooms`, `tablet-devices` (+ `heartbeat`), `**patients`** (list/search, create, detail/PATCH, merge), `staff-users` (list/create/detail/update/deactivate) – z walidacją Pydantic i testami API. (Historia kontaktów `patient-contact-history` została wycofana z produktu.)
 - **Ostatnie zmiany (backend + docs):**
   - **Pacjenci:** walidacja Pydantic dla `phone` (regex zgodny z DB), walidacja `date_of_birth` w GET (PatientsListQuery, format YYYY-MM-DD); usunięcie `created_by_user_id` z body tworzenia pacjenta (aktor wyłącznie z sesji).
   - **RBAC:** endpointy recepcji i intake przyjmują także rolę **TABLET** tam, gdzie przewidziano w planie poczekalni (lista kolejek, lista wpisów, POST sessions, formularz intake – tylko odczyt danych pacjenta + anamneza/zgody/podpis/submit); RECEPTION/ADMIN bez zmian; medical – DOCTOR/ADMIN.
@@ -178,7 +178,7 @@ flowchart LR
 - Przygotuj dashboardy (recepcja i utrzymanie) i reguły alertów z progami PRD.
 - Dla outbox/import/integracji dodaj runbooki operacyjne do repo.
 - Dodaj audit trail zdarzeń domenowych i operacyjnych jako obowiązkowy kontrakt:
-  - `MEDICAL_TEXT_EDITED`, `DOCUMENT_PUBLISHED`, `DOCUMENT_REPUBLISHED`, `RETENTION_FILE_DELETED`,
+  - m.in. `DOCUMENT_DRAFT_SAVED`, `DOCUMENT_PUBLISHED`, `DOCUMENT_REPUBLISHED`, `RETENTION_FILE_DELETED` (edycje tekstu Befundu są audytowane przez zapis szkicu / publikację — bez osobnego typu `MEDICAL_TEXT_EDITED`),
   - spójne metadane (`actor`, `timestamp`, `entity_id`, `reason`) i testy integralności logowania.
 
 ## Etap 7: Hardening i gotowość produkcyjna

@@ -55,7 +55,7 @@ Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 Portal wyniki dla pacjenta (wyniki.cogitomedica.pl) korzysta z **osobnych endpointów**, bez sesji staff:
 - Logowanie: phone + date_of_birth (dane zweryfikowane w recepcji).
 - OTP 6-cyfrowy, ważność 15 min.
-- Po poprawnej OTP: serwowanie PDF przez HTTPS; logi audytowe.
+- Po poprawnej OTP: serwowanie PDF przez HTTPS; zdarzenia audytowe w `audit_event` (typy `PATIENT_RESULTS_*`: OTP, lista dokumentów, pobranie PDF / odmowa).
 - Szczegóły: PRD 3.4a, api-plan §4.2 (Patient results portal).
 
 ## 6. Historia zmian
