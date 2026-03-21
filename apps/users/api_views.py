@@ -12,6 +12,8 @@ from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
     json_error,
     parse_bool_query,
     read_json_body,
@@ -169,7 +171,11 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
         page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+        page_size = safe_parse_positive_int(
+            request.GET.get("page_size"),
+            default=DEFAULT_LIST_LIMIT,
+            maximum=MAX_LIST_LIMIT,
+        )
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size

@@ -9,7 +9,7 @@ from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
-from apps.core.api_utils import safe_parse_positive_int
+from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, safe_parse_positive_int
 from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
 from apps.medical.medical_payload_schemas import validate_medical_payload_complete_for_publish
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -22,7 +22,7 @@ from apps.reception.models import QueueEntry
 from apps.users.models import StaffUser
 
 
-def _assigned_doctor_metadata(medical_document: MedicalDocument) -> dict[str, str]:
+def assigned_doctor_audit_metadata(medical_document: MedicalDocument) -> dict[str, str]:
     """Expose assigned doctor in audit metadata for GET /audit-events doctor filter."""
     aid = medical_document.queue_entry.daily_queue.assigned_doctor_id
     if aid is None:
@@ -30,7 +30,7 @@ def _assigned_doctor_metadata(medical_document: MedicalDocument) -> dict[str, st
     return {"assigned_doctor_id": str(aid)}
 
 
-def _event_status_to_stage_status(event: OutboxEvent | None, completed: bool) -> str:
+def outbox_event_stage_status(event: OutboxEvent | None, completed: bool) -> str:
     if completed:
         return "COMPLETED"
     if event is None:
@@ -42,7 +42,7 @@ def _event_status_to_stage_status(event: OutboxEvent | None, completed: bool) ->
     return "FAILED"
 
 
-def _latest_retryable_event(version: MedicalDocumentVersion) -> OutboxEvent | None:
+def latest_retryable_outbox_event(version: MedicalDocumentVersion) -> OutboxEvent | None:
     """Return retryable event (FAILED/DEAD_LETTER) for version if no stage is currently running."""
     events_by_type = {e.event_type: e for e in version.outbox_events.all()}
     if any(
@@ -61,7 +61,7 @@ def _latest_retryable_event(version: MedicalDocumentVersion) -> OutboxEvent | No
     return None
 
 
-def _latest_error_message(version: MedicalDocumentVersion) -> str | None:
+def latest_version_processing_error_message(version: MedicalDocumentVersion) -> str | None:
     events = list(version.outbox_events.all())
     failed = [e for e in events if e.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER] and (e.error_message or "").strip()]
     if not failed:
@@ -119,7 +119,7 @@ def create_or_get_medical_document(
         meta = {
             "queue_entry_id": str(queue_entry_id),
             "intake_form_id": str(intake_form_id),
-            **_assigned_doctor_metadata(doc),
+            **assigned_doctor_audit_metadata(doc),
         }
         create_audit_event(
             event_type="MEDICAL_DOCUMENT_CREATED",
@@ -182,7 +182,7 @@ def save_draft_document_version(
                 "medical_document_version_id": str(latest_version.id),
                 "version_no": latest_version.version_no,
                 "mode": "update",
-                **_assigned_doctor_metadata(medical_document),
+                **assigned_doctor_audit_metadata(medical_document),
             },
         )
         return latest_version
@@ -224,7 +224,7 @@ def save_draft_document_version(
             "medical_document_version_id": str(created_version.id),
             "version_no": created_version.version_no,
             "mode": "create",
-            **_assigned_doctor_metadata(medical_document),
+            **assigned_doctor_audit_metadata(medical_document),
         },
     )
     return created_version
@@ -363,7 +363,7 @@ def publish_document_version(
             "version_no": draft_version.version_no,
             "publish_request_id": str(publish_request_id),
             "publish_locale": publish_locale,
-            **_assigned_doctor_metadata(medical_document),
+            **assigned_doctor_audit_metadata(medical_document),
         },
     )
     return draft_version
@@ -422,7 +422,7 @@ def revoke_document_version(
         metadata={
             "medical_document_version_id": str(current_version.id),
             "version_no": current_version.version_no,
-            **_assigned_doctor_metadata(medical_document),
+            **assigned_doctor_audit_metadata(medical_document),
         },
     )
     return current_version
@@ -445,7 +445,9 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
     patient_search = get_params.get("patient_search") or None
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(
-        get_params.get("page_size"), default=20, maximum=200
+        get_params.get("page_size"),
+        default=DEFAULT_LIST_LIMIT,
+        maximum=MAX_LIST_LIMIT,
     )
     return {
         "status": status,
@@ -463,7 +465,7 @@ def list_medical_documents(
     patient_search: str | None = None,
     user: Any = None,
     page: int = 1,
-    page_size: int = 20,
+    page_size: int = DEFAULT_LIST_LIMIT,
 ) -> tuple[list[MedicalDocument], int]:
     """
     List medical documents for doctor work queue.
@@ -513,7 +515,7 @@ def list_doctor_work_queue(
     patient_search: str | None = None,
     user: Any = None,
     page: int = 1,
-    page_size: int = 20,
+    page_size: int = DEFAULT_LIST_LIMIT,
 ) -> tuple[list[dict[str, Any]], int]:
     """
     List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
@@ -571,15 +573,15 @@ def list_doctor_work_queue(
         events_by_type = {}
         if latest:
             events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
-        hidrive_status = _event_status_to_stage_status(
+        hidrive_status = outbox_event_stage_status(
             events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
             completed=bool(latest and latest.hidrive_sent),
         ) if latest else None
-        sms_status = _event_status_to_stage_status(
+        sms_status = outbox_event_stage_status(
             events_by_type.get(OutboxEventType.SMS_SEND),
             completed=bool(latest and latest.sms_sent),
         ) if latest else None
-        retryable_event = _latest_retryable_event(latest) if latest else None
+        retryable_event = latest_retryable_outbox_event(latest) if latest else None
         list_items.append({
             "document_id": str(doc.id) if doc else None,
             "queue_entry_id": str(entry.id),
@@ -597,7 +599,7 @@ def list_doctor_work_queue(
             "sms_sent": latest.sms_sent if latest else False,
             "hidrive_status": hidrive_status,
             "sms_status": sms_status,
-            "processing_error_message": _latest_error_message(latest) if latest else None,
+            "processing_error_message": latest_version_processing_error_message(latest) if latest else None,
             "can_retry_processing": retryable_event is not None,
             "retry_event_status": retryable_event.status if retryable_event else None,
         })
@@ -661,7 +663,7 @@ def get_medical_document_context(
     current_version_payload: dict[str, Any] | None = None
     if current_version:
         events_by_type = {e.event_type: e for e in current_version.outbox_events.all()}
-        retryable_event = _latest_retryable_event(current_version)
+        retryable_event = latest_retryable_outbox_event(current_version)
         current_version_payload = {
             "version_no": current_version.version_no,
             "version_status": current_version.version_status,
@@ -672,15 +674,15 @@ def get_medical_document_context(
             "pdf_generation_status": current_version.pdf_generation_status,
             "hidrive_sent": current_version.hidrive_sent,
             "sms_sent": current_version.sms_sent,
-            "hidrive_status": _event_status_to_stage_status(
+            "hidrive_status": outbox_event_stage_status(
                 events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
                 completed=current_version.hidrive_sent,
             ),
-            "sms_status": _event_status_to_stage_status(
+            "sms_status": outbox_event_stage_status(
                 events_by_type.get(OutboxEventType.SMS_SEND),
                 completed=current_version.sms_sent,
             ),
-            "processing_error_message": _latest_error_message(current_version),
+            "processing_error_message": latest_version_processing_error_message(current_version),
             "can_retry_processing": retryable_event is not None
             and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
             "publish_locale": current_version.publish_locale,
@@ -722,7 +724,7 @@ def retry_latest_document_processing(
     )
     if latest_version is None:
         raise DomainError("No document version found.")
-    retryable = _latest_retryable_event(latest_version)
+    retryable = latest_retryable_outbox_event(latest_version)
     if retryable is None:
         raise DomainError("No retryable processing step found for latest version.")
     retried = retry_outbox_event(event=retryable, reason=reason, actor_user_id=actor.id)
@@ -737,7 +739,7 @@ def retry_latest_document_processing(
             "medical_document_version_id": str(latest_version.id),
             "event_type": retried.event_type,
             "reason": reason,
-            **_assigned_doctor_metadata(doc),
+            **assigned_doctor_audit_metadata(doc),
         },
     )
     return retried

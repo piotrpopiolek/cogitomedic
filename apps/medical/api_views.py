@@ -7,9 +7,17 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
+from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    json_error,
+    read_json_body,
+    require_auth,
+    require_user_role,
+    safe_parse_positive_int,
+)
 from apps.core.http_utils import get_client_ip
-from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.exceptions import DomainError, IdempotencyConflictError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
     DoctorTemplateCreateRequest,
@@ -24,20 +32,20 @@ from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
-    _assigned_doctor_metadata,
-    _event_status_to_stage_status,
-    _latest_error_message,
-    _latest_retryable_event,
+    assigned_doctor_audit_metadata,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
     get_medical_document_context,
+    latest_retryable_outbox_event,
+    latest_version_processing_error_message,
     list_medical_documents,
+    outbox_event_stage_status,
     parse_medical_documents_list_params,
     publish_document_version,
     revoke_document_version,
-    save_draft_document_version,
     retry_latest_document_processing,
+    save_draft_document_version,
 )
 from apps.medical.template_services import (
     TemplateListFilters,
@@ -75,20 +83,20 @@ def _serialize_medical_document_list_item(doc) -> dict:
         "pdf_generation_status": latest.pdf_generation_status if latest else None,
         "hidrive_sent": latest.hidrive_sent if latest else False,
         "sms_sent": latest.sms_sent if latest else False,
-        "hidrive_status": _event_status_to_stage_status(
+        "hidrive_status": outbox_event_stage_status(
             events_by_type.get("HIDRIVE_UPLOAD"),
             completed=bool(latest and latest.hidrive_sent),
         )
         if latest
         else None,
-        "sms_status": _event_status_to_stage_status(
+        "sms_status": outbox_event_stage_status(
             events_by_type.get("SMS_SEND"),
             completed=bool(latest and latest.sms_sent),
         )
         if latest
         else None,
-        "processing_error_message": _latest_error_message(latest) if latest else None,
-        "can_retry_processing": _latest_retryable_event(latest) is not None if latest else False,
+        "processing_error_message": latest_version_processing_error_message(latest) if latest else None,
+        "can_retry_processing": latest_retryable_outbox_event(latest) is not None if latest else False,
     }
 
 
@@ -184,7 +192,7 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
         metadata={
             "client_ip": get_client_ip(request),
-            **_assigned_doctor_metadata(doc),
+            **assigned_doctor_audit_metadata(doc),
         },
     )
     return JsonResponse(context, status=200)
@@ -225,7 +233,7 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
         metadata={
             "client_ip": get_client_ip(request),
             "version_no": version.version_no,
-            **_assigned_doctor_metadata(doc),
+            **assigned_doctor_audit_metadata(doc),
         },
     )
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -286,7 +294,7 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
         metadata={
             "client_ip": get_client_ip(request),
             "version_count": len(items),
-            **_assigned_doctor_metadata(doc),
+            **assigned_doctor_audit_metadata(doc),
         },
     )
     return JsonResponse({"items": items}, status=200)
@@ -381,6 +389,8 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         )
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
+    except IdempotencyConflictError as exc:
+        return json_error(str(exc), status=409)
     except DomainError as exc:
         return json_error(str(exc), status=400)
 
@@ -422,7 +432,7 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
             "client_ip": get_client_ip(request),
             "medical_document_version_id": str(version.id),
             "version_no": version.version_no,
-            **_assigned_doctor_metadata(mdoc),
+            **assigned_doctor_audit_metadata(mdoc),
         },
     )
     return JsonResponse(
@@ -698,7 +708,11 @@ def medical_document_audit_trail_view(request: HttpRequest, medical_document_id:
         return json_error("Medical document not found.", status=404)
 
     page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+    page_size = safe_parse_positive_int(
+        request.GET.get("page_size"),
+        default=DEFAULT_LIST_LIMIT,
+        maximum=MAX_LIST_LIMIT,
+    )
     qs = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by("-event_time")
     total = qs.count()
     start = (page - 1) * page_size
