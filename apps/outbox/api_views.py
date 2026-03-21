@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth, require_user_role
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
@@ -29,12 +29,11 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
         return role_error
 
     raw_retry_count_gte = request.GET.get("retry_count_gte")
-    raw_limit = request.GET.get("limit")
     try:
         retry_count_gte = int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
-        limit = int(raw_limit) if raw_limit not in (None, "") else 50
     except ValueError:
-        return json_error("retry_count_gte and limit must be integers.", status=400)
+        return json_error("retry_count_gte must be an integer.", status=400)
+    limit = parse_list_limit(request.GET.get("limit"))
 
     try:
         body = OutboxEventsQueryParams.model_validate(

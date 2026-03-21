@@ -22,6 +22,31 @@ from cogitomedica.openapi_schemas import (
 
 PREFIX = "/api/v1"
 
+# Staff list pagination — aligned with apps.core.api_utils (DEFAULT_LIST_LIMIT=20, MAX_LIST_LIMIT=100).
+_OPENAPI_PAGE_SCHEMA = {
+    "type": "integer",
+    "minimum": 1,
+    "default": 1,
+    "description": "Page number (1-based).",
+}
+_OPENAPI_PAGE_SIZE_SCHEMA = {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 100,
+    "default": 20,
+    "description": "Page size; default 20, maximum 100.",
+}
+_OPENAPI_LIST_LIMIT_SCHEMA = {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 100,
+    "default": 20,
+    "description": "Maximum items; default 20, maximum 100 (parse_list_limit; same as page_size).",
+}
+PAGE_Q = {"name": "page", "in": "query", "schema": _OPENAPI_PAGE_SCHEMA}
+PAGE_SIZE_Q = {"name": "page_size", "in": "query", "schema": _OPENAPI_PAGE_SIZE_SCHEMA}
+LIST_LIMIT_Q = {"name": "limit", "in": "query", "schema": _OPENAPI_LIST_LIMIT_SCHEMA}
+
 # Operations that do not require authentication (no lock icon in Swagger UI).
 NO_AUTH_OPERATIONS = {
     (f"{PREFIX}/observability/health", "get"),
@@ -129,7 +154,7 @@ COGITO_PATHS = {
             "summary": "List staff users",
             "description": "Paginated list. Admin only.",
             "tags": ["Staff users"],
-            "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}, {"name": "role", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}],
+            "parameters": [PAGE_Q, PAGE_SIZE_Q, {"name": "role", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}],
             "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
         },
         "post": {
@@ -181,7 +206,7 @@ COGITO_PATHS = {
         "get": {
             "summary": "List outbox events",
             "tags": ["Outbox"],
-            "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "event_type", "in": "query", "schema": {"type": "string"}}, {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}],
+            "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "event_type", "in": "query", "schema": {"type": "string"}}, {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}}, LIST_LIMIT_Q],
             "responses": {"200": {"description": "Results and count"}},
         },
     },
@@ -210,6 +235,30 @@ COGITO_PATHS = {
             "responses": {"202": {"description": "Candidates, deleted, skipped"}},
         },
     },
+    f"{PREFIX}/audit-events": {
+        "get": {
+            "summary": "List audit events",
+            "description": "ADMIN: full feed. DOCTOR: scoped. Pagination: page (default 1), page_size (default 20, max 100).",
+            "tags": ["Operations"],
+            "parameters": [
+                {"name": "event_type", "in": "query", "schema": {"type": "string"}},
+                {"name": "patient_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "medical_document_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "context_clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "actor_user_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "outbox_event_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {"name": "from", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+                {"name": "to", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+                PAGE_Q,
+                PAGE_SIZE_Q,
+            ],
+            "responses": {
+                "200": {"description": "items, pagination"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+            },
+        },
+    },
     f"{PREFIX}/intake-outbox-events": {
         "get": {
             "summary": "List intake outbox events",
@@ -219,7 +268,7 @@ COGITO_PATHS = {
                 {"name": "status", "in": "query", "schema": {"type": "string"}},
                 {"name": "event_type", "in": "query", "schema": {"type": "string"}},
                 {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}},
-                {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+                LIST_LIMIT_Q,
             ],
             "responses": {"200": {"description": "results, count"}},
         },
@@ -246,15 +295,15 @@ COGITO_PATHS = {
     f"{PREFIX}/intake-documents": {
         "get": {
             "summary": "List intake document versions (PDF)",
-            "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page, page_size.",
+            "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page (default 1), page_size (default 20, max 100).",
             "tags": ["Intake – Documents"],
             "parameters": [
                 {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
                 {"name": "pdf_generation_status", "in": "query", "schema": {"type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"]}},
                 {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
                 {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "page", "in": "query", "schema": {"type": "integer"}},
-                {"name": "page_size", "in": "query", "schema": {"type": "integer"}},
+                PAGE_Q,
+                PAGE_SIZE_Q,
             ],
             "responses": {"200": {"description": "items (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, …), pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden (e.g. DOCTOR)"}},
         },
@@ -280,14 +329,14 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents": {
         "get": {
             "summary": "List medical documents",
-            "description": "Doctor work queue. Filtered by consulting room of the current user. Paginated.",
+            "description": "Doctor work queue. Paginated: page (default 1), page_size (default 20, max 100).",
             "tags": ["Medical"],
             "parameters": [
                 {"name": "status", "in": "query", "schema": {"type": "string"}},
                 {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
                 {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
-                {"name": "page", "in": "query", "schema": {"type": "integer"}},
-                {"name": "page_size", "in": "query", "schema": {"type": "integer"}},
+                PAGE_Q,
+                PAGE_SIZE_Q,
             ],
             "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
         },
@@ -332,6 +381,19 @@ COGITO_PATHS = {
             "responses": {"200": {"description": "Items (version_no, version_status, pdf_generation_status, etc.)"}, "404": {"description": "Not found"}},
         },
     },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/audit-trail": {
+        "get": {
+            "summary": "List audit events for document",
+            "description": "DOCTOR/ADMIN. Pagination: page (default 1), page_size (default 20, max 100).",
+            "tags": ["Medical"],
+            "parameters": [
+                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                PAGE_Q,
+                PAGE_SIZE_Q,
+            ],
+            "responses": {"200": {"description": "items, pagination"}, "404": {"description": "Not found"}},
+        },
+    },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/retry-processing": {
         "post": {
             "summary": "Retry document processing",
@@ -366,11 +428,16 @@ COGITO_PATHS = {
             "tags": ["Medical"],
             "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "Version"}, "404": {"description": "Not found"}},
+            "responses": {
+                "200": {"description": "Version"},
+                "400": {"description": "Validation or domain error (e.g. no draft)"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"},
+            },
         },
     },
     f"{PREFIX}/clinic-sites": {
-        "get": {"summary": "List clinic sites", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List clinic sites", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
         },
         "post": {"summary": "Create clinic site", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
         },
@@ -384,7 +451,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/consulting-rooms": {
-        "get": {"summary": "List consulting rooms", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List consulting rooms", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
         },
         "post": {"summary": "Create consulting room", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
         },
@@ -401,7 +468,7 @@ COGITO_PATHS = {
         "get": {
             "summary": "List import batches",
             "tags": ["Reception – Imports"],
-            "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer"}}],
+            "parameters": [LIST_LIMIT_Q],
             "responses": {"200": {"description": "Items"}},
         },
     },
@@ -422,7 +489,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/patients": {
-        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items and pagination"}},
+        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, PAGE_Q, PAGE_SIZE_Q], "responses": {"200": {"description": "Items and pagination"}},
         },
         "post": {"summary": "Create or update patient (manual)", "tags": ["Reception – Patients"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "Patient"}, "201": {"description": "Created"}},
         },
@@ -436,7 +503,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/daily-queues": {
-        "get": {"summary": "List daily queues", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "consulting_room_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "shift_code", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List daily queues", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "consulting_room_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "shift_code", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
         },
         "post": {"summary": "Create daily queue", "tags": ["Reception – Queues"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
         },
@@ -448,7 +515,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/daily-queues/{{daily_queue_id}}/entries": {
-        "get": {"summary": "List queue entries", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
+        "get": {"summary": "List queue entries", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
         },
         "post": {"summary": "Create queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}, "404": {"description": "Not found"}},
         },
@@ -470,7 +537,7 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/tablet-devices": {
-        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at. Query: is_active, search (by android_id), limit.", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at. Query: is_active, search (by android_id), limit (default 20, max 100).", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
         },
         "post": {"summary": "Create tablet device", "description": "Body: android_id (required), is_active (default true). No name or device_code.", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created (id, android_id, is_active)"}},
         },

@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+
 
 class ConsentAcceptanceItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -76,7 +78,7 @@ class IntakeOutboxEventsQueryParams(BaseModel):
     status: str | None = None
     event_type: str | None = None
     retry_count_gte: int = Field(default=0, ge=0)
-    limit: int = Field(default=50, ge=1, le=200)
+    limit: int = Field(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT)
 
 
 class ProcessIntakeOutboxRequest(BaseModel):

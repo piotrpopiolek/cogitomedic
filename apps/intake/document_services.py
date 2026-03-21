@@ -12,7 +12,12 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.db.models import QuerySet
 
-from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
+from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    get_scoped_clinic_site_ids,
+    safe_parse_positive_int,
+)
 from apps.intake.models import IntakeDocumentVersion, IntakeOutboxEvent, IntakeOutboxStatus
 
 
@@ -45,7 +50,9 @@ def parse_intake_documents_list_params(get_params: Any) -> dict[str, Any]:
     clinic_site_id = get_params.get("clinic_site_id") or None
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(
-        get_params.get("page_size"), default=20, maximum=200
+        get_params.get("page_size"),
+        default=DEFAULT_LIST_LIMIT,
+        maximum=MAX_LIST_LIMIT,
     )
     return {
         "queue_date": queue_date,
@@ -78,7 +85,7 @@ def list_intake_documents(
     patient_search: str | None = None,
     clinic_site_id: UUID | None = None,
     page: int = 1,
-    page_size: int = 20,
+    page_size: int = DEFAULT_LIST_LIMIT,
 ) -> tuple[list[IntakeDocumentVersion], int]:
     """
     List intake document versions for RECEPTION/ADMIN.

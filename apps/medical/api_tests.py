@@ -660,7 +660,7 @@ class MedicalApiTests(TestCase):
         self.assertEqual(publish_response.status_code, 400)
         self.assertEqual(publish_response.json().get("error"), "Validation error.")
 
-    def test_publish_same_request_id_with_different_locale_returns_400(self) -> None:
+    def test_publish_same_request_id_with_different_locale_returns_409(self) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -722,7 +722,7 @@ class MedicalApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.assertEqual(second_publish.status_code, 400)
+        self.assertEqual(second_publish.status_code, 409)
         self.assertIn("different publish_locale", second_publish.json().get("error", ""))
 
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
