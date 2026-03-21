@@ -24,7 +24,6 @@ from apps.reception.models import (
     ConsultingRoom,
     DailyQueue,
     Patient,
-    PatientContactHistory,
     PatientFormSession,
     PatientImportBatch,
     PatientImportError,
@@ -49,7 +48,15 @@ class PatientXlsxImportAdminForm(forms.Form):
 
 @admin.register(Patient)
 class PatientAdmin(UnfoldModelAdmin):
-    list_display = ("last_name", "first_name", "date_of_birth", "doctolib_patient_id", "is_active", "created_at")
+    list_display = (
+        "last_name",
+        "first_name",
+        "date_of_birth",
+        "phone",
+        "postal_code",
+        "created_at",
+        "is_active",
+    )
     list_filter = ("is_active",)
     ordering = ["-created_at"]
     search_fields = ("first_name", "last_name", "email", "phone", "doctolib_patient_id")
@@ -82,35 +89,6 @@ def _initial_created_by_user(request, form, change: bool) -> None:
         form.base_fields["created_by_user"].initial = request.user.pk
 
 
-def _set_changed_by_user(request, obj) -> None:
-    """Set changed_by_user to session user when not set."""
-    if not request.user.is_authenticated or not hasattr(obj, "changed_by_user"):
-        return
-    if getattr(obj, "changed_by_user_id", None) is None:
-        obj.changed_by_user = request.user
-
-
-@admin.register(PatientContactHistory)
-class PatientContactHistoryAdmin(UnfoldModelAdmin):
-    list_display = ("patient", "phone", "email", "reason", "changed_at", "changed_by_user")
-    list_filter = ("reason",)
-    search_fields = ("patient__last_name", "patient__first_name", "phone", "email")
-    readonly_fields = ("id", "changed_at")
-    date_hierarchy = "changed_at"
-    raw_id_fields = ("patient", "changed_by_user")
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        # DOCTOR: only see history for patients from assigned clinics
-        if request.user.is_doctor and not request.user.is_superuser:
-            qs = qs.filter(patient__clinic_sites__in=request.user.clinic_sites.all()).distinct()
-        return qs
-
-    def save_model(self, request, obj, form, change):
-        _set_changed_by_user(request, obj)
-        super().save_model(request, obj, form, change)
-
-
 @admin.register(ClinicSite)
 class ClinicSiteAdmin(UnfoldModelAdmin):
     list_display = (
@@ -118,8 +96,8 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
         "name",
         "pdf_import_default_consulting_room",
         "pdf_import_shift_code",
-        "is_active",
         "created_at",
+        "is_active",
     )
     list_filter = ("is_active",)
     ordering = ["-created_at"]
@@ -139,7 +117,7 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
 
 @admin.register(ConsultingRoom)
 class ConsultingRoomAdmin(UnfoldModelAdmin):
-    list_display = ("code", "name", "clinic_site", "is_active", "created_at")
+    list_display = ("code", "name", "clinic_site", "created_at", "is_active")
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
     search_fields = ("code", "name")
@@ -338,7 +316,7 @@ class QueueEntryAdmin(UnfoldModelAdmin):
 
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(UnfoldModelAdmin):
-    list_display = ("android_id", "clinic_site", "is_active", "last_seen_at", "created_at")
+    list_display = ("android_id", "clinic_site", "last_seen_at", "created_at", "is_active")
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
     search_fields = ("android_id",)

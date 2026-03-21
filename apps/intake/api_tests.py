@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.operations.models import AuditEvent
 from apps.intake.models import (
     IntakeDocumentVersion,
     IntakePdfStatus,
@@ -274,3 +276,33 @@ class IntakeDocumentsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"], [])
         self.assertEqual(response.json()["pagination"]["total"], 0)
+
+
+class IntakeOutboxOperationsApiTests(TestCase):
+    """ADMIN batch intake outbox — audit for who triggered the tool."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin_user = StaffUser.objects.create_user(
+            username="intake-ops-admin",
+            email="intake.ops.admin@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin_user, "Admin")
+        self.client.login(username="intake-ops-admin", password="safe-password")
+
+    def test_intake_outbox_process_creates_batch_triggered_audit(self) -> None:
+        response = self.client.post(
+            "/api/v1/operations/intake-outbox/process",
+            data=json.dumps({"limit": 3}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 202)
+        ev = AuditEvent.objects.filter(
+            event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
+            actor_user_id=self.admin_user.id,
+        ).order_by("-event_time").first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("limit"), 3)
+        self.assertIn("client_ip", ev.metadata)

@@ -435,14 +435,6 @@ COGITO_PATHS = {
         "delete": {"summary": "Deactivate patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
     },
-    f"{PREFIX}/patients/{{patient_id}}/contact-history": {
-        "get": {
-            "summary": "Patient contact history",
-            "tags": ["Reception – Patients"],
-            "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "page", "in": "query", "schema": {"type": "integer"}}, {"name": "page_size", "in": "query", "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Items and pagination"}, "404": {"description": "Not found"}},
-        },
-    },
     f"{PREFIX}/daily-queues": {
         "get": {"summary": "List daily queues", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "consulting_room_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "shift_code", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Items"}},
         },

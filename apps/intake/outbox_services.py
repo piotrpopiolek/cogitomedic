@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -224,7 +225,12 @@ def process_intake_outbox_events(
 
 
 @transaction.atomic
-def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> IntakeOutboxEvent:
+def retry_intake_outbox_event(
+    *,
+    event: IntakeOutboxEvent,
+    reason: str,
+    actor_user_id: uuid.UUID | None = None,
+) -> IntakeOutboxEvent:
     """Move FAILED/DEAD_LETTER intake outbox event back to PENDING for manual retry."""
     event = (
         IntakeOutboxEvent.objects.select_for_update()
@@ -249,6 +255,7 @@ def retry_intake_outbox_event(*, event: IntakeOutboxEvent, reason: str) -> Intak
     patient_id = version.intake_form.queue_entry.patient_id
     create_audit_event(
         event_type="INTAKE_OUTBOX_EVENT_RETRY_REQUESTED",
+        actor_user_id=actor_user_id,
         patient_id=patient_id,
         context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
         metadata={

@@ -11,6 +11,8 @@ from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role
+from apps.core.http_utils import get_client_ip
+from apps.operations.services import create_audit_event
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
 from apps.intake.api_schemas import (
     IntakeOutboxEventsQueryParams,
@@ -336,7 +338,11 @@ def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id:
         return json_error("Intake outbox event not found.", status=404)
 
     try:
-        retried = retry_intake_outbox_event(event=event, reason=body.reason)
+        retried = retry_intake_outbox_event(
+            event=event,
+            reason=body.reason,
+            actor_user_id=request.user.id,
+        )
     except DomainError as exc:
         return json_error(str(exc), status=409)
 
@@ -368,6 +374,14 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
+    create_audit_event(
+        event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
+        actor_user_id=request.user.id,
+        metadata={
+            "limit": body.limit,
+            "client_ip": get_client_ip(request),
+        },
+    )
     result = process_intake_outbox_events(batch_size=body.limit)
     return JsonResponse(
         {

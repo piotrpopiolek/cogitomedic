@@ -193,12 +193,6 @@ if HAS_UNFOLD:
                             "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_historia_kontaktu", "Historia kontaktu"),
-                            "icon": "history",
-                            "link": lambda request: reverse_lazy("admin:reception_patientcontacthistory_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
-                        },
-                        {
                             "title": db_gettext_lazy("administration.side_placowki", "Placówki"),
                             "icon": "local_hospital",
                             "link": lambda request: reverse_lazy("admin:reception_clinicsite_changelist"),

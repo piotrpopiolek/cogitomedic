@@ -17,7 +17,7 @@ from apps.users.models import StaffUser
 
 @admin.register(StaffUser)
 class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
-    list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_active", "edit_link")
+    list_display = ("username", "email", "first_name", "last_name", "is_staff", "edit_link", "is_active")
     list_display_links = ("username",)
     list_filter = ("groups", "is_staff", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")

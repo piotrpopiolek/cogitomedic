@@ -106,31 +106,6 @@ class Patient(models.Model):
         return f"{self.last_name} {self.first_name} ({self.date_of_birth})"
 
 
-class PatientContactHistory(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="contact_history", verbose_name=db_gettext_lazy("administration.field_patient", "Patient"))
-    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_phone", "Phone"))
-    email = models.EmailField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_email", "Email"))
-    changed_by_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="changed_contacts",
-    )
-    changed_at = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_changed_at", "Changed at"))
-    reason = models.CharField(max_length=100, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_reason", "Reason"))
-
-    class Meta:
-        db_table = "patient_contact_history"
-
-    def __str__(self) -> str:
-        parts = [str(self.patient)]
-        if self.changed_at:
-            parts.append(self.changed_at.strftime("%Y-%m-%d %H:%M"))
-        return " – ".join(parts)
-
-
 class ClinicSite(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=20, unique=True, verbose_name=db_gettext_lazy("administration.field_code", "Code"))

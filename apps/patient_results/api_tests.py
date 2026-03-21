@@ -4,10 +4,12 @@ from __future__ import annotations
 import hashlib
 from datetime import date, timedelta
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.operations.models import AuditEvent
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import ClinicSite, ConsultingRoom, DailyQueue, Patient, QueueEntry, QueueEntryStatus, QueueStatus
 from apps.users.models import StaffUser
@@ -58,6 +60,11 @@ class PatientResultsRequestOtpApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
         self.assertTrue(PatientResultsOtpSession.objects.filter(patient=self.patient).exists())
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_REQUEST").order_by("-event_time").first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "sms_sent")
+        self.assertEqual(ev.patient_id, self.patient.id)
+        self.assertIn("client_ip", ev.metadata)
 
     @override_settings(CAPTCHA_VERIFY_SKIP=False)
     def test_request_otp_captcha_fail(self) -> None:
@@ -67,6 +74,10 @@ class PatientResultsRequestOtpApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_REQUEST").order_by("-event_time").first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "captcha_failed")
+        self.assertIsNone(ev.patient_id)
 
     @override_settings(CAPTCHA_VERIFY_SKIP=True)
     def test_request_otp_rejects_future_date_of_birth(self) -> None:
@@ -109,9 +120,30 @@ class PatientResultsVerifyOtpApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("sessionid", self.client.cookies)
+        verify_ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY").order_by("-event_time").first()
+        self.assertIsNotNone(verify_ev)
+        self.assertEqual(verify_ev.metadata.get("outcome"), "success")
+        self.assertEqual(verify_ev.patient_id, self.patient.id)
 
         docs_response = self.client.get("/api/v1/patient-results/documents")
         self.assertEqual(docs_response.status_code, 200)
+        listed = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_DOCUMENTS_LISTED", patient=self.patient)
+        self.assertEqual(listed.count(), 1)
+        self.assertEqual(listed.first().metadata.get("item_count"), 0)
+
+    @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
+    def test_verify_otp_wrong_code_creates_audit_event(self) -> None:
+        self._create_session("654321")
+        response = self.client.post(
+            "/api/v1/patient-results/verify-otp",
+            data={"phone": "01764444444", "date_of_birth": "1988-07-20", "otp_code": "000000"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY").order_by("-event_time").first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "invalid")
+        self.assertIsNone(ev.patient_id)
 
 
 class PatientResultsDocumentsApiTests(TestCase):
@@ -138,3 +170,18 @@ class PatientResultsDocumentsApiTests(TestCase):
         data = response.json()
         self.assertIn("items", data)
         self.assertIsInstance(data["items"], list)
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_DOCUMENTS_LISTED", patient_id=self.patient.id).first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("item_count"), len(data["items"]))
+
+    def test_download_unknown_version_creates_denied_audit(self) -> None:
+        session = self.client.session
+        session["patient_results_patient_id"] = str(self.patient.id)
+        session.save()
+        bad_id = uuid4()
+        response = self.client.get(f"/api/v1/patient-results/documents/{bad_id}/download")
+        self.assertEqual(response.status_code, 404)
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED", patient_id=self.patient.id).first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("version_id"), str(bad_id))
+        self.assertEqual(ev.metadata.get("reason"), "version_not_found")
