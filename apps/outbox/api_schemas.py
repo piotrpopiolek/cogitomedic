@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from apps.outbox.models import OutboxEventType, OutboxStatus
 
 
@@ -11,7 +12,7 @@ class OutboxEventsQueryParams(BaseModel):
     status: OutboxStatus | None = None
     event_type: OutboxEventType | None = None
     retry_count_gte: int = Field(default=0, ge=0)
-    limit: int = Field(default=50, ge=1, le=200)
+    limit: int = Field(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT)
 
 
 class ProcessOutboxRequest(BaseModel):

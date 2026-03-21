@@ -14,7 +14,14 @@ from django.utils.dateparse import parse_datetime
 from pydantic import BaseModel, ConfigDict
 
 from apps.operations.services import REF_KEY
-from apps.core.api_utils import json_error, parse_list_limit, require_auth, require_user_role, safe_parse_positive_int
+from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    json_error,
+    require_auth,
+    require_user_role,
+    safe_parse_positive_int,
+)
 from apps.operations.metrics import build_metrics_payload
 from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -50,7 +57,7 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
         return json_error("Method not allowed.", status=405)
 
     qs = AuditEvent.objects.all().order_by("-event_time")
-    
+
     if request.user.is_doctor:
         # DOCTOR: only events where metadata.assigned_doctor_id == current_user.id
         # OR actor_user_id == current_user.id
@@ -109,7 +116,11 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(event_time__lte=parsed)
 
     page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+    page_size = safe_parse_positive_int(
+        request.GET.get("page_size"),
+        default=DEFAULT_LIST_LIMIT,
+        maximum=MAX_LIST_LIMIT,
+    )
 
     total = qs.count()
     start = (page - 1) * page_size

@@ -10,6 +10,7 @@ from django.http import JsonResponse
 
 from apps.core.exceptions import InvalidRequestBodyEncoding
 
+# Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
 
@@ -78,7 +79,7 @@ def safe_parse_positive_int(
 
 
 def parse_list_limit(value: str | None) -> int:
-    """Parse limit query param for list endpoints. Safe: never raises."""
+    """Parse `limit` query param for reception-style list endpoints. Same default/max as page_size (20/100). Never raises."""
     return safe_parse_positive_int(
         value,
         default=DEFAULT_LIST_LIMIT,
@@ -94,11 +95,14 @@ def require_authenticated_user(request: HttpRequest) -> JsonResponse | None:
 
 
 def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonResponse | None:
-    """Return normalized 403 when authenticated user role is not allowed."""
+    """
+    Return 401 when not authenticated (same semantics as require_auth).
+    Return 403 when authenticated but role is not in allowed_roles.
+    """
     user = request.user
     if not user.is_authenticated:
-        return json_error("Forbidden.", status=403)
-        
+        return json_error("Authentication required.", status=401)
+
     has_role = False
     if "DOCTOR" in allowed_roles and user.is_doctor:
         has_role = True

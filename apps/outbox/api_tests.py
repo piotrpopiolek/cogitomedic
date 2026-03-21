@@ -133,7 +133,7 @@ class OutboxApiTests(TestCase):
     def test_outbox_events_list_returns_400_for_non_integer_query_params(self) -> None:
         response = self.client.get("/api/v1/outbox-events?retry_count_gte=abc&limit=10")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "retry_count_gte and limit must be integers.")
+        self.assertEqual(response.json()["error"], "retry_count_gte must be an integer.")
 
     def test_operations_outbox_process_endpoint(self) -> None:
         response = self.client.post(

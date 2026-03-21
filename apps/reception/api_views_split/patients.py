@@ -10,6 +10,8 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
     get_scoped_clinic_site_ids,
     json_error,
     parse_bool_query,
@@ -68,7 +70,14 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         if scope_ids is not None:
             if not scope_ids:
                 return JsonResponse(
-                    {"items": [], "pagination": {"page": 1, "page_size": 20, "total": 0}}
+                    {
+                        "items": [],
+                        "pagination": {
+                            "page": 1,
+                            "page_size": DEFAULT_LIST_LIMIT,
+                            "total": 0,
+                        },
+                    }
                 )
             qs = qs.filter(
                 Q(clinic_sites__id__in=scope_ids)
@@ -99,7 +108,11 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-        page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
+        page_size = safe_parse_positive_int(
+            request.GET.get("page_size"),
+            default=DEFAULT_LIST_LIMIT,
+            maximum=MAX_LIST_LIMIT,
+        )
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size
