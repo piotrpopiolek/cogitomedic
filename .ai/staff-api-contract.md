@@ -21,13 +21,15 @@ Dostęp: **wyłącznie rola ADMIN**. Dla RECEPTION/DOCTOR zwracane jest **403 Fo
 
 | Metoda | Ścieżka | Opis |
 |--------|---------|------|
-| **GET**  | `/api/v1/outbox-events` | Lista zdarzeń outbox (parametry: `status`, `event_type`, `retry_count_gte`, `limit`). |
+| **GET**  | `/api/v1/outbox-events` | Lista zdarzeń outbox (parametry: `status`, `event_type`, `retry_count_gte`, `limit` — jak inne listy: domyślnie **20**, maks. **100**, `parse_list_limit`). |
 | **POST** | `/api/v1/outbox-events/{id}/retry` | Wymuszenie ponowienia zdarzenia (body: `reason`). |
 | **POST** | `/api/v1/operations/outbox/process` | Ręczne uruchomienie cyklu przetwarzania outbox (body: `limit`). |
 | **POST** | `/api/v1/operations/retention/run` | Ręczny przebieg retencji (usuwanie lokalnych PDF; body: `older_than_days`, `dry_run`). |
 | **GET**  | `/api/v1/observability/metrics` | Metryki Prometheus (m.in. outbox, integracje). |
 
 **Health** (`GET /api/v1/observability/health`) – bez autentykacji (liveness/readiness).
+
+**Paginacja list staff:** Parametry `page` (domyślnie `1`) i `page_size` (domyślnie **20**, maks. **100**) — stałe `DEFAULT_LIST_LIMIT` / `MAX_LIST_LIMIT` w `apps.core.api_utils`. Wszystkie listy z parametrem `limit` (placówki, kolejki, batche importów, **GET outbox-events**, **GET intake-outbox-events**) używają `parse_list_limit` — te same domyślne i maksymalne wartości.
 
 ---
 

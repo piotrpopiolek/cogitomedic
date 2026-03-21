@@ -42,6 +42,7 @@ Translations are managed in Django Admin and loaded from the database as the sin
 ## API Documentation
 
 - **Interactive docs (OpenAPI/Swagger):** [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/) (Swagger UI) and [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/) (ReDoc). Schema: `/api/schema/`.
+- **List pagination (staff API):** offset lists use `page` (default `1`) and `page_size` (default **20**, max **100**). List endpoints that take `limit` (recepcja, outbox, intake-outbox, import batches, …) use the same defaults and cap via `parse_list_limit` → `DEFAULT_LIST_LIMIT` / `MAX_LIST_LIMIT` in `apps.core.api_utils`.
 - **Written plans:** Polish [`.ai/api-plan-pl.md`](.ai/api-plan-pl.md), English [`.ai/api-plan.md`](.ai/api-plan.md).
 
 ---

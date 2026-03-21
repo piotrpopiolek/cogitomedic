@@ -12,10 +12,12 @@
 - Domyślny format payloadu to JSON (`application/json`), z wyjątkiem endpointów uploadu plików (`multipart/form-data`).
 - Uwierzytelnianie: sesja dla panelu personelu (cookie Django + CSRF). Tablet (poczekalnia) korzysta z tej samej sesji z rolą **TABLET**; **brak tokenów jednorazowych i linków pacjenta**.
 - Format czasu: ISO 8601 UTC.
-- Wszystkie endpointy listujące wspierają paginację/filtrowanie/sortowanie przez wspólne parametry:
-  - `page` (domyślnie `1`)
-  - `page_size` (domyślnie `20`, maks. `100`)
-  - `ordering` (lista pól po przecinku, prefiks `-` dla malejąco)
+- **Paginacja offsetowa** (`page` / `page_size`): domyślne `page_size` **20**, maksimum **100** — stałe `DEFAULT_LIST_LIMIT` i `MAX_LIST_LIMIT` w `apps.core.api_utils` (m.in. pacjenci, staff-users, lista dokumentów medycznych, lista dokumentów intake, audyt globalny, audyt przy dokumencie).
+- **Limit listy** (`limit`): listy recepcji/słowników (placówki, gabinety, kolejki, wpisy, tablety, batche importów) używają parametru `limit` z **tym samym domyślnie 20 i maks. 100** (`parse_list_limit` w tym samym module).
+- **Lista outbox / intake-outbox** (`GET /outbox-events`, `GET /intake-outbox-events`): parametr `limit` przez **`parse_list_limit`** — ten sam domyślny rozmiar **20** i maks. **100** co pozostałe listy staff.
+- Inne wspólne parametry:
+  - `page` (domyślnie `1`), gdzie występuje paginacja offsetowa
+  - `ordering` (pola po przecinku, prefiks `-` dla malejąco), jeśli opisano przy endpoincie
   - parametry filtrowania specyficzne dla zasobu
 
 ## 1. Zasoby
@@ -633,7 +635,7 @@
 
 - **GET** `/medical-documents`
   - Opis: Lista robocza lekarza.
-  - Parametry zapytania: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`.
+  - Parametry zapytania: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).
   - Request JSON: brak.
   - Response JSON: stronicowana lista dokumentów z flagami statusu ostatniej wersji (`pdf_generation_status`, `hidrive_sent`, `sms_sent`).
   - Kody sukcesu: `200 OK`.
@@ -791,8 +793,8 @@
 
 - **GET** `/medical-documents/{id}/audit-trail`
   - Opis: Zdarzenia audytowe powiązane z danym dokumentem. Lekarz widzi tylko, jeśli jest autorem dokumentu lub dokument jest w zakresie jego przypisanych klinik/kolejek.
-  - Parametry zapytania: paginacja.
-  - Response JSON: lista zdarzeń audytowych.
+  - Parametry zapytania: `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
@@ -808,7 +810,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 - **GET** `/intake-documents`
   - Opis: Lista wersji dokumentów intake (wygenerowane PDF). Używane przez recepcję i admina do przeglądania/odtwarzania dokumentów.
-  - Parametry zapytania: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search` (nazwisko/imiona), `clinic_site_id`, `page`, `page_size`.
+  - Parametry zapytania: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search` (nazwisko/imiona), `clinic_site_id`, `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).
   - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. Każdy element: `id`, `version_no`, `form_locale`, `pdf_generation_status`, `created_at`, `queue_entry_id`, `intake_form_id`, `queue_date`, `clinic_site_id`, `clinic_site_name`, `patient` (id, first_name, last_name, date_of_birth), `pdf_available`, `hidrive_sent`, `processing_error_message`.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN` (np. rola DOCTOR).
@@ -839,7 +841,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 - **GET** `/imports/batches`
   - Opis: Lista batchy importu.
-  - Parametry zapytania: `limit`.
+  - Parametry zapytania: `limit` (domyślnie **20**, maks. **100**, jak inne listy `parse_list_limit`).
   - Response JSON: lista batchy.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
@@ -891,7 +893,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 - **GET** `/outbox-events`
   - Opis: Operacyjny widok kolejki outbox.
-  - Parametry zapytania: `status`, `event_type`, `available_before`, `retry_count_gte`.
+  - Parametry zapytania: `status`, `event_type`, `retry_count_gte`, `limit` (domyślnie **20**, maks. **100**; `parse_list_limit`).
   - Request JSON: brak.
   - Response JSON: lista zdarzeń outbox.
   - Kody sukcesu: `200 OK`.
@@ -952,8 +954,8 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 - **GET** `/audit-events`
   - Opis: Zapytania do śladu audytowego.
-  - Parametry zapytania: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUID dla identyfikatorów encji; ISO datetime dla `from`/`to`).
-  - Response JSON: lista zdarzeń audytowych. Po anonimizacji lub usunięciu encji FK może być NULL; API nadal zwraca ID z `metadata._ref` w celu compliance.
+  - Parametry zapytania: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUID dla identyfikatorów encji; ISO datetime dla `from`/`to`), `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. Po anonimizacji lub usunięciu encji FK może być NULL; API nadal zwraca ID z `metadata._ref` w celu compliance.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
 

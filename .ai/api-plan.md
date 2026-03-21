@@ -12,10 +12,12 @@
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
 - Authentication is session-based for staff web UI (Django auth cookie + CSRF). Tablet (poczekalnia) uses the same session auth with role **TABLET**; there are **no one-time tokens or patient links**.
 - Time format is ISO 8601 UTC.
-- All list endpoints support pagination/filtering/sorting with common parameters:
-  - `page` (default `1`)
-  - `page_size` (default `20`, max `100`)
-  - `ordering` (comma-separated fields, prefix `-` for desc)
+- **Offset pagination** (`page` / `page_size`): default `page_size` **20**, maximum **100** — implemented as `DEFAULT_LIST_LIMIT` and `MAX_LIST_LIMIT` in `apps.core.api_utils` (staff list endpoints: patients, staff-users, medical documents list, intake documents list, global audit feed, per-document audit trail, etc.).
+- **Capped list length** (`limit`): reception/dictionary-style lists (e.g. clinic-sites, consulting-rooms, daily-queues, queue entries, tablet-devices, import batches) use query param `limit` with the **same default 20 and max 100** via `parse_list_limit` in the same module.
+- **Outbox / intake-outbox listing** (`GET /outbox-events`, `GET /intake-outbox-events`): query param `limit` uses **`parse_list_limit`** — same default **20** and max **100** as other staff lists.
+- Other common list/query parameters:
+  - `page` (default `1`) where offset pagination applies
+  - `ordering` (comma-separated fields, prefix `-` for desc) where documented per endpoint
   - resource-specific filter params
 
 ## 1. Resources
@@ -636,7 +638,7 @@
 
 - **GET** `/medical-documents`
   - Description: List doctor work queue.
-  - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`.
+  - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (default `1`), `page_size` (default **20**, max **100**).
   - Request JSON: none.
   - Response JSON: paginated document list with latest version status flags (`pdf_generation_status`, `hidrive_sent`, `sms_sent`).
   - Success: `200 OK`.
@@ -788,8 +790,8 @@
 
 - **GET** `/medical-documents/{id}/audit-trail`
   - Description: Audit events related to the given document. Doctor can view only if document is authored by them or in their assigned clinic scope.
-  - Query params: pagination.
-  - Response JSON: list of audit events.
+  - Query params: `page` (default `1`), `page_size` (default **20**, max **100**).
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`.
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
@@ -805,7 +807,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - **GET** `/intake-documents`
   - Description: List intake document versions (generated PDFs). Used by reception and admin to browse/retrieve documents.
-  - Query params: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search`, `clinic_site_id`, `page`, `page_size`.
+  - Query params: `queue_date` (YYYY-MM-DD), `pdf_generation_status` (PENDING, IN_PROGRESS, COMPLETED, FAILED), `patient_search`, `clinic_site_id`, `page` (default `1`), `page_size` (default **20**, max **100**).
   - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. Each item: `id`, `version_no`, `form_locale`, `pdf_generation_status`, `created_at`, `queue_entry_id`, `intake_form_id`, `queue_date`, `clinic_site_id`, `clinic_site_name`, `patient` (id, first_name, last_name, date_of_birth), `pdf_available`, `hidrive_sent`, `processing_error_message`.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN` (e.g. DOCTOR role).
@@ -836,7 +838,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - **GET** `/imports/batches`
   - Description: List import batches.
-  - Query params: `limit`.
+  - Query params: `limit` (default **20**, max **100**, same as other `parse_list_limit` lists).
   - Response JSON: batch list.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
@@ -888,7 +890,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - **GET** `/outbox-events`
   - Description: Operational queue view.
-  - Query params: `status`, `event_type`, `available_before`, `retry_count_gte`.
+  - Query params: `status`, `event_type`, `retry_count_gte`, `limit` (default **20**, max **100**; `parse_list_limit`).
   - Request JSON: none.
   - Response JSON: outbox events list.
   - Success: `200 OK`.
@@ -949,8 +951,8 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - **GET** `/audit-events`
   - Description: Audit trail query.
-  - Query params: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUIDs for entity IDs; ISO datetime for `from`/`to`).
-  - Response JSON: audit events list. When an entity is anonymized or deleted, its FK may be NULL; the API still exposes the ID from `metadata._ref` for compliance.
+  - Query params: `event_type`, `actor_user_id`, `patient_id`, `medical_document_id`, `context_clinic_site_id`, `outbox_event_id`, `from`, `to` (UUIDs for entity IDs; ISO datetime for `from`/`to`), `page` (default `1`), `page_size` (default **20**, max **100**).
+  - Response JSON: `{ "items": [...], "pagination": { "page", "page_size", "total" } }`. When an entity is anonymized or deleted, its FK may be NULL; the API still exposes the ID from `metadata._ref` for compliance.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
