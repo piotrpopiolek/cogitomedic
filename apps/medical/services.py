@@ -19,6 +19,15 @@ from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry
+from apps.users.models import StaffUser
+
+
+def _assigned_doctor_metadata(medical_document: MedicalDocument) -> dict[str, str]:
+    """Expose assigned doctor in audit metadata for GET /audit-events doctor filter."""
+    aid = medical_document.queue_entry.daily_queue.assigned_doctor_id
+    if aid is None:
+        return {}
+    return {"assigned_doctor_id": str(aid)}
 
 
 def _event_status_to_stage_status(event: OutboxEvent | None, completed: bool) -> str:
@@ -97,7 +106,7 @@ def create_or_get_medical_document(
         raise DomainError("Intake form does not belong to this queue entry.")
     if intake_form.form_status != IntakeStatus.SUBMITTED:
         raise DomainError("Intake form must be submitted.")
-    medical_document, _ = MedicalDocument.objects.get_or_create(
+    medical_document, created = MedicalDocument.objects.get_or_create(
         queue_entry_id=queue_entry_id,
         defaults={
             "intake_form_id": intake_form_id,
@@ -105,7 +114,22 @@ def create_or_get_medical_document(
             "updated_by_user_id": created_by_user_id,
         },
     )
-    return medical_document
+    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document.id)
+    if created:
+        meta = {
+            "queue_entry_id": str(queue_entry_id),
+            "intake_form_id": str(intake_form_id),
+            **_assigned_doctor_metadata(doc),
+        }
+        create_audit_event(
+            event_type="MEDICAL_DOCUMENT_CREATED",
+            actor_user_id=created_by_user_id,
+            patient_id=doc.queue_entry.patient_id,
+            medical_document_id=doc.id,
+            context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+            metadata=meta,
+        )
+    return doc
 
 
 @transaction.atomic
@@ -158,6 +182,7 @@ def save_draft_document_version(
                 "medical_document_version_id": str(latest_version.id),
                 "version_no": latest_version.version_no,
                 "mode": "update",
+                **_assigned_doctor_metadata(medical_document),
             },
         )
         return latest_version
@@ -199,6 +224,7 @@ def save_draft_document_version(
             "medical_document_version_id": str(created_version.id),
             "version_no": created_version.version_no,
             "mode": "create",
+            **_assigned_doctor_metadata(medical_document),
         },
     )
     return created_version
@@ -337,6 +363,7 @@ def publish_document_version(
             "version_no": draft_version.version_no,
             "publish_request_id": str(publish_request_id),
             "publish_locale": publish_locale,
+            **_assigned_doctor_metadata(medical_document),
         },
     )
     return draft_version
@@ -395,6 +422,7 @@ def revoke_document_version(
         metadata={
             "medical_document_version_id": str(current_version.id),
             "version_no": current_version.version_no,
+            **_assigned_doctor_metadata(medical_document),
         },
     )
     return current_version
@@ -680,7 +708,9 @@ def retry_latest_document_processing(
 ) -> OutboxEvent:
     if not (actor.is_admin_role or actor.is_reception):
         raise DomainError("Only ADMIN or RECEPTION can retry processing.")
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    doc = MedicalDocument.objects.select_for_update().select_related(
+        "queue_entry__daily_queue"
+    ).get(id=medical_document_id)
     latest_version = (
         MedicalDocumentVersion.objects.select_for_update()
         .filter(medical_document_id=medical_document_id)
@@ -695,7 +725,7 @@ def retry_latest_document_processing(
     retryable = _latest_retryable_event(latest_version)
     if retryable is None:
         raise DomainError("No retryable processing step found for latest version.")
-    retried = retry_outbox_event(event=retryable, reason=reason)
+    retried = retry_outbox_event(event=retryable, reason=reason, actor_user_id=actor.id)
     create_audit_event(
         event_type="DOCUMENT_PROCESSING_RETRY_REQUESTED",
         actor_user_id=actor.id,
@@ -707,6 +737,7 @@ def retry_latest_document_processing(
             "medical_document_version_id": str(latest_version.id),
             "event_type": retried.event_type,
             "reason": reason,
+            **_assigned_doctor_metadata(doc),
         },
     )
     return retried

@@ -165,7 +165,6 @@ class UpdatePatientRequest(BaseModel):
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
     is_active: bool | None = None
     changed_by_user_id: UUID | None = None
-    change_reason: str | None = Field(default=None, max_length=100)
 
     @field_validator("phone", mode="after")
     @classmethod

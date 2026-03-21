@@ -15,7 +15,6 @@ from apps.reception.models import (
     ConsultingRoom,
     DailyQueue,
     Patient,
-    PatientContactHistory,
     PatientFormSession,
     QueueEntry,
     QueueEntryStatus,

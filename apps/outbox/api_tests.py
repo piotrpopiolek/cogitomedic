@@ -13,6 +13,7 @@ from apps.medical.services import create_or_get_medical_document, publish_docume
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
 from apps.core.api_utils import assign_group_to_test_user
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -104,7 +105,16 @@ class OutboxApiTests(TestCase):
             medical_document_id=medical_document.id,
             updated_by_user_id=self.doctor_user.id,
             medical_payload_schema_version=1,
-            medical_payload={"schema_version": 1, "authoring_locale": "de-DE"},
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "lesions": [],
+                "recommendations": ["FOLLOWUP_6_MONTHS"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         self.published_version = publish_document_version(
             medical_document_id=medical_document.id,
@@ -185,6 +195,13 @@ class OutboxApiTests(TestCase):
         )
         self.assertEqual(dry_run_response.status_code, 202)
         self.assertEqual(dry_run_response.json()["deleted"], 0)
+        ret_ev = AuditEvent.objects.filter(
+            event_type="OPERATIONS_RETENTION_RUN_TRIGGERED",
+            actor_user_id=self.admin_user.id,
+        ).order_by("-event_time").first()
+        self.assertIsNotNone(ret_ev)
+        self.assertTrue(ret_ev.metadata.get("dry_run"))
+        self.assertEqual(ret_ev.metadata.get("older_than_days"), 30)
 
         execute_response = self.client.post(
             "/api/v1/operations/retention/run",

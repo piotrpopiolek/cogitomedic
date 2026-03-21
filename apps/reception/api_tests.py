@@ -16,7 +16,6 @@ from apps.reception.models import (
     ConsultingRoom,
     DailyQueue,
     Patient,
-    PatientContactHistory,
     PatientImportBatch,
     PatientImportError,
     QueueEntry,
@@ -931,7 +930,7 @@ class PatientsApiTests(TestCase):
         self.assertEqual(payload["id"], str(patient.id))
         self.assertEqual(payload["doctolib_patient_id"], "DOC-123")
 
-    def test_patch_patient_updates_contact_and_creates_history(self) -> None:
+    def test_patch_patient_updates_contact(self) -> None:
         patient = Patient.objects.create(
             first_name="Anna",
             last_name="Nowak",
@@ -948,7 +947,6 @@ class PatientsApiTests(TestCase):
                     "phone": "+49999888777",
                     "email": "anna.new@example.com",
                     "changed_by_user_id": str(self.reception_user.id),
-                    "change_reason": "manual correction",
                 }
             ),
             content_type="application/json",
@@ -957,37 +955,6 @@ class PatientsApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["phone"], "+49999888777")
         self.assertEqual(payload["email"], "anna.new@example.com")
-
-        history_items = PatientContactHistory.objects.filter(patient=patient)
-        self.assertEqual(history_items.count(), 1)
-        history = history_items.first()
-        self.assertEqual(history.phone, "+49123456789")
-        self.assertEqual(history.email, "anna@example.com")
-        self.assertEqual(history.reason, "manual correction")
-
-    def test_get_patient_contact_history_returns_items(self) -> None:
-        patient = Patient.objects.create(
-            first_name="Anna",
-            last_name="Nowak",
-            date_of_birth=date(1990, 1, 1),
-            phone="+49123456789",
-            email="anna@example.com",
-            doctolib_patient_id="DOC-123",
-        )
-        patient.clinic_sites.add(self.clinic)
-        PatientContactHistory.objects.create(
-            patient=patient,
-            phone="+49111111111",
-            email="old@example.com",
-            changed_by_user=self.reception_user,
-            reason="manual correction",
-        )
-        response = self.client.get(f"/api/v1/patients/{patient.id}/contact-history")
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(len(payload["items"]), 1)
-        self.assertEqual(payload["items"][0]["email"], "old@example.com")
-        self.assertEqual(payload["pagination"]["total"], 1)
 
     def test_patch_patient_identity_uses_session_user_as_actor(self) -> None:
         """PATCH with identity/contact fields uses request.user.id as actor (body changed_by_user_id ignored)."""

@@ -7,6 +7,7 @@ from uuid import uuid4
 from django.test import Client, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.operations.models import AuditEvent
 from apps.users.models import StaffUser
 
 
@@ -31,6 +32,9 @@ class UsersAuthApiTests(TestCase):
         login_payload = login_response.json()
         self.assertEqual(login_payload["user"]["username"], "auth-user")
         self.assertEqual(login_payload["user"]["role"], "DOCTOR")
+        success_ev = AuditEvent.objects.filter(event_type="STAFF_AUTH_LOGIN_SUCCESS", actor_user_id=self.user.id).first()
+        self.assertIsNotNone(success_ev)
+        self.assertIn("client_ip", success_ev.metadata)
 
         me_response = self.client.get("/api/v1/auth/me")
         self.assertEqual(me_response.status_code, 200)
@@ -39,6 +43,8 @@ class UsersAuthApiTests(TestCase):
         logout_response = self.client.post("/api/v1/auth/logout", data="{}", content_type="application/json")
         self.assertEqual(logout_response.status_code, 200)
         self.assertTrue(logout_response.json()["ok"])
+        logout_ev = AuditEvent.objects.filter(event_type="STAFF_AUTH_LOGOUT", actor_user_id=self.user.id).first()
+        self.assertIsNotNone(logout_ev)
 
         me_after_logout = self.client.get("/api/v1/auth/me")
         self.assertEqual(me_after_logout.status_code, 401)
@@ -50,6 +56,10 @@ class UsersAuthApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 401)
+        fail_ev = AuditEvent.objects.filter(event_type="STAFF_AUTH_LOGIN_FAILED").order_by("-event_time").first()
+        self.assertIsNotNone(fail_ev)
+        self.assertEqual(fail_ev.metadata.get("reason"), "invalid_credentials")
+        self.assertEqual(fail_ev.metadata.get("username"), "auth-user")
 
     def test_login_rate_limit_returns_429(self) -> None:
         """After 5 POSTs to login per IP per minute, the 6th returns 429."""

@@ -21,6 +21,8 @@ from apps.core.api_utils import (
     safe_parse_positive_int,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.http_utils import get_client_ip
+from apps.operations.services import create_audit_event
 from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
 from apps.users.models import StaffUser
 from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
@@ -83,11 +85,35 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
+    client_ip = get_client_ip(request)
     user = authenticate(request, username=body.username, password=body.password)
-    if user is None or not user.is_active:
+    if user is None:
+        create_audit_event(
+            event_type="STAFF_AUTH_LOGIN_FAILED",
+            metadata={
+                "username": body.username,
+                "client_ip": client_ip,
+                "reason": "invalid_credentials",
+            },
+        )
+        return json_error("Invalid credentials.", status=401)
+    if not user.is_active:
+        create_audit_event(
+            event_type="STAFF_AUTH_LOGIN_FAILED",
+            metadata={
+                "username": body.username,
+                "client_ip": client_ip,
+                "reason": "inactive_user",
+            },
+        )
         return json_error("Invalid credentials.", status=401)
 
     login(request, user)
+    create_audit_event(
+        event_type="STAFF_AUTH_LOGIN_SUCCESS",
+        actor_user_id=user.id,
+        metadata={"client_ip": client_ip},
+    )
     return JsonResponse(
         {
             "user": _user_payload(request),
@@ -101,6 +127,13 @@ def auth_logout_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("Method not allowed.", status=405)
 
+    if request.user.is_authenticated:
+        uid = request.user.id
+        create_audit_event(
+            event_type="STAFF_AUTH_LOGOUT",
+            actor_user_id=uid,
+            metadata={"client_ip": get_client_ip(request)},
+        )
     logout(request)
     return JsonResponse({"ok": True}, status=200)
 
