@@ -9,6 +9,7 @@ from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 
 from apps.core.api_utils import json_error, read_json_body
+from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.patient_results.document_services import (
     get_patient_pdf_path,
@@ -59,6 +60,13 @@ def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     if not dob:
         return json_error("date_of_birth must be YYYY-MM-DD.", status=400)
     result = request_otp(phone=phone, date_of_birth=dob, captcha_token=captcha_token)
+    client_ip = get_client_ip(request)
+    meta = {"client_ip": client_ip, "outcome": result.audit_outcome}
+    create_audit_event(
+        event_type="PATIENT_RESULTS_OTP_REQUEST",
+        patient_id=result.patient_id,
+        metadata=meta,
+    )
     if result.status == "captcha_failed":
         return json_error("CAPTCHA verification failed.", status=400)
     return JsonResponse({"status": "ok"}, status=200)
@@ -86,8 +94,20 @@ def patient_results_verify_otp_view(request: HttpRequest) -> JsonResponse:
     if not otp_code:
         return json_error("otp_code is required.", status=400)
     result = verify_otp(phone=phone, date_of_birth=dob, otp_code=otp_code)
+    client_ip = get_client_ip(request)
     if not result.success:
+        outcome = result.error or "invalid"
+        create_audit_event(
+            event_type="PATIENT_RESULTS_OTP_VERIFY",
+            metadata={"client_ip": client_ip, "outcome": outcome},
+        )
         return json_error("Invalid or expired code.", status=400)
+    patient_uuid = UUID(result.patient_id or "")
+    create_audit_event(
+        event_type="PATIENT_RESULTS_OTP_VERIFY",
+        patient_id=patient_uuid,
+        metadata={"client_ip": client_ip, "outcome": "success"},
+    )
     set_patient_results_session(request, result.patient_id or "")
     return JsonResponse({"status": "ok"}, status=200)
 
@@ -109,6 +129,11 @@ def patient_results_documents_view(request: HttpRequest) -> JsonResponse:
         return check
     patient_id = UUID(check)
     items = list_patient_documents(patient_id)
+    create_audit_event(
+        event_type="PATIENT_RESULTS_DOCUMENTS_LISTED",
+        patient_id=patient_id,
+        metadata={"client_ip": get_client_ip(request), "item_count": len(items)},
+    )
     return JsonResponse({"items": items}, status=200)
 
 
@@ -122,9 +147,28 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
     patient_id = UUID(check)
     version = get_patient_pdf_version(version_id, patient_id)
     if not version:
+        create_audit_event(
+            event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED",
+            patient_id=patient_id,
+            metadata={
+                "client_ip": get_client_ip(request),
+                "version_id": str(version_id),
+                "reason": "version_not_found",
+            },
+        )
         return json_error("Document not found or unavailable.", status=404)
     path = get_patient_pdf_path(version_id, patient_id, version=version)
     if not path:
+        create_audit_event(
+            event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED",
+            patient_id=patient_id,
+            medical_document_id=version.medical_document_id,
+            metadata={
+                "client_ip": get_client_ip(request),
+                "version_id": str(version_id),
+                "reason": "file_missing",
+            },
+        )
         return json_error("Document not found or unavailable.", status=404)
     queue_date = version.medical_document.queue_entry.daily_queue.queue_date.isoformat()
     filename = f"befund-{queue_date}.pdf"
@@ -138,6 +182,9 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
         event_type="PATIENT_RESULTS_PDF_DOWNLOAD",
         patient_id=patient_id,
         medical_document_id=version.medical_document_id,
-        metadata={"version_id": str(version_id)},
+        metadata={
+            "version_id": str(version_id),
+            "client_ip": get_client_ip(request),
+        },
     )
     return response

@@ -5,6 +5,7 @@ import hashlib
 import logging
 import random
 import re
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
@@ -80,6 +81,8 @@ class RequestOtpResult:
 
     status: str  # "ok" | "captcha_failed"
     error: str | None = None  # "captcha_failed" when CAPTCHA invalid
+    audit_outcome: str = "silent_no_op"  # sms_sent | silent_no_op | captcha_failed
+    patient_id: uuid.UUID | None = None  # set when SMS was sent (audit only)
 
 
 @dataclass(frozen=True)
@@ -101,12 +104,15 @@ def request_otp(
     Always returns success-like response to prevent enumeration.
     """
     if not _verify_captcha(captcha_token):
-        return RequestOtpResult(status="captcha_failed", error="captcha_failed")
+        return RequestOtpResult(
+            status="captcha_failed",
+            error="captcha_failed",
+            audit_outcome="captcha_failed",
+        )
 
     phone_norm = normalize_phone(phone)
     if len(phone_norm) < 7:
-        return RequestOtpResult(status="ok")
-
+        return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     # Rate limit: max 3 OTP per number per hour
     since = timezone.now() - timedelta(hours=1)
@@ -115,7 +121,7 @@ def request_otp(
         created_at__gte=since,
     ).count()
     if recent_count >= OTP_RATE_LIMIT_PER_HOUR:
-        return RequestOtpResult(status="ok")  # Don't reveal rate limit
+        return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     patient = (
         Patient.objects.filter(
@@ -126,7 +132,7 @@ def request_otp(
         .first()
     )
     if not patient:
-        return RequestOtpResult(status="ok")  # Don't reveal patient existence
+        return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     pepper = (getattr(settings, "PATIENT_RESULTS_OTP_PEPPER", "") or "").strip()
     if not pepper and not getattr(settings, "DEBUG", True):
@@ -147,7 +153,11 @@ def request_otp(
         adapter = get_sms_adapter()
         adapter.send_sms(to=patient.phone, message=sms_text)
 
-    return RequestOtpResult(status="ok")  # OTP sent
+    return RequestOtpResult(
+        status="ok",
+        audit_outcome="sms_sent",
+        patient_id=patient.id,
+    )
 
 
 def verify_otp(

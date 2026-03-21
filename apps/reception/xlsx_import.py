@@ -18,6 +18,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError
+from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
     DailyQueue,
@@ -384,6 +385,31 @@ def _validate_headers(header_indices: dict[str, int]) -> None:
             )
 
 
+def _audit_xlsx_import_finished(
+    batch: PatientImportBatch,
+    *,
+    context_clinic_site_id: uuid.UUID | None,
+    status: str,
+    inserted_rows: int,
+    error_rows: int,
+    failure_reason: str | None = None,
+) -> None:
+    md: dict = {
+        "batch_id": str(batch.id),
+        "status": status,
+        "inserted_rows": inserted_rows,
+        "error_rows": error_rows,
+    }
+    if failure_reason:
+        md["failure_reason"] = failure_reason
+    create_audit_event(
+        event_type="PATIENT_XLSX_IMPORT_FINISHED",
+        actor_user_id=batch.created_by_user_id,
+        context_clinic_site_id=context_clinic_site_id,
+        metadata=md,
+    )
+
+
 def process_patient_xlsx_import_batch(
     *,
     batch_id: uuid.UUID,
@@ -559,6 +585,14 @@ def process_patient_xlsx_import_batch(
             error_message=str(e),
             raw_row=None,
         )
+        _audit_xlsx_import_finished(
+            batch,
+            context_clinic_site_id=clinic_site_id,
+            status=ImportStatus.FAILED.value,
+            inserted_rows=0,
+            error_rows=0,
+            failure_reason=str(e),
+        )
         return
     except DomainError as e:
         batch.status = ImportStatus.FAILED
@@ -570,6 +604,14 @@ def process_patient_xlsx_import_batch(
             error_code=XlsxImportErrorCode.TEMPLATE_HEADER_INVALID,
             error_message=str(e),
             raw_row=None,
+        )
+        _audit_xlsx_import_finished(
+            batch,
+            context_clinic_site_id=clinic_site_id,
+            status=ImportStatus.FAILED.value,
+            inserted_rows=0,
+            error_rows=0,
+            failure_reason=str(e),
         )
         return
     except Exception as e:
@@ -583,6 +625,14 @@ def process_patient_xlsx_import_batch(
             error_message=str(e),
             raw_row=None,
         )
+        _audit_xlsx_import_finished(
+            batch,
+            context_clinic_site_id=clinic_site_id,
+            status=ImportStatus.FAILED.value,
+            inserted_rows=0,
+            error_rows=0,
+            failure_reason=str(e),
+        )
         return
 
     batch.inserted_rows = inserted
@@ -590,6 +640,13 @@ def process_patient_xlsx_import_batch(
     batch.status = ImportStatus.COMPLETED if errors_count == 0 else ImportStatus.COMPLETED_WITH_ERRORS
     batch.finished_at = timezone.now()
     batch.save(update_fields=["inserted_rows", "error_rows", "status", "finished_at"])
+    _audit_xlsx_import_finished(
+        batch,
+        context_clinic_site_id=clinic_site_id,
+        status=batch.status,
+        inserted_rows=inserted,
+        error_rows=errors_count,
+    )
 
 
 def _store_uploaded_xlsx(uploaded_file) -> tuple[Path, str]:
@@ -632,5 +689,14 @@ def enqueue_patient_xlsx_import(
     run_patient_xlsx_import.enqueue(
         str(batch.id),
         str(path),
+    )
+    create_audit_event(
+        event_type="PATIENT_XLSX_IMPORT_ENQUEUED",
+        actor_user_id=batch.created_by_user_id,
+        metadata={
+            "batch_id": str(batch.id),
+            "source_file_name": batch.source_file_name,
+            "source_file_sha256": batch.source_file_sha256,
+        },
     )
     return batch

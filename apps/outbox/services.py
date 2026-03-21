@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -246,7 +247,12 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
 
 
 @transaction.atomic
-def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
+def retry_outbox_event(
+    *,
+    event: OutboxEvent,
+    reason: str,
+    actor_user_id: uuid.UUID | None = None,
+) -> OutboxEvent:
     """Move FAILED/DEAD_LETTER event back to PENDING for manual retry."""
     event = (
         OutboxEvent.objects.select_for_update()
@@ -266,6 +272,7 @@ def retry_outbox_event(*, event: OutboxEvent, reason: str) -> OutboxEvent:
 
     create_audit_event(
         event_type="OUTBOX_EVENT_RETRY_REQUESTED",
+        actor_user_id=actor_user_id,
         patient_id=event.medical_document_version.medical_document.queue_entry.patient_id,
         medical_document_id=event.medical_document_version.medical_document_id,
         outbox_event_id=event.id,

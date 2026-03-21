@@ -15,7 +15,6 @@ from apps.reception.api_views_split.dictionaries import (
     consulting_rooms_view,
 )
 from apps.reception.api_views_split.patients import (
-    patient_contact_history_view,
     patient_detail_view,
     patients_view,
 )
@@ -38,7 +37,6 @@ __all__ = [
     "import_batch_detail_view",
     "import_batch_errors_view",
     "import_batches_view",
-    "patient_contact_history_view",
     "patient_detail_view",
     "patients_view",
     "queue_entry_detail_view",

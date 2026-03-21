@@ -309,13 +309,24 @@ class LesionGroupFavoritesAdminTests(TestCase):
         self.assertIn('x-data="lesionGroupFavoritesWidget', html)
 
     def test_widget_render_includes_choices_data(self) -> None:
+        import base64
+        import json
+
         from apps.medical.widgets import LesionGroupFavoritesWidget
 
         w = LesionGroupFavoritesWidget()
         html = w.render("lesion_group_favorites", [], {"id": "id_lgf"})
-        self.assertIn("ASYMMETRY", html)
-        self.assertIn("CONTROL_NEEDED", html)
-        self.assertIn("NO_SUSPICION", html)
+        ctx = w.get_context("lesion_group_favorites", [], {"id": "id_lgf"})
+        wgt = ctx["widget"]
+        for key in ("dermatoscopic_b64", "clinical_b64", "malignancy_b64"):
+            blob = wgt[key]
+            self.assertIn(blob, html, msg=f"expected {key} payload in rendered HTML")
+        derm = json.loads(base64.b64decode(wgt["dermatoscopic_b64"]))
+        clinical = json.loads(base64.b64decode(wgt["clinical_b64"]))
+        malignancy = json.loads(base64.b64decode(wgt["malignancy_b64"]))
+        self.assertTrue(any(x["value"] == "ASYMMETRY" for x in derm))
+        self.assertTrue(any(x["value"] == "CONTROL_NEEDED" for x in clinical))
+        self.assertTrue(any(x["value"] == "NO_SUSPICION" for x in malignancy))
 
     def test_form_clean_lesion_group_favorites_valid_list_passes(self) -> None:
         from apps.medical.admin import DoctorTextTemplateForm

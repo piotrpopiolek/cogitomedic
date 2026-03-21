@@ -24,7 +24,7 @@ from apps.reception.api_schemas import (
     PatientsListQuery,
     UpdatePatientRequest,
 )
-from apps.reception.models import Patient, PatientContactHistory
+from apps.reception.models import Patient
 from apps.reception.services import create_or_update_patient_manual
 
 
@@ -45,17 +45,6 @@ def _serialize_patient(patient: Patient) -> dict:
         "is_active": patient.is_active,
         "created_at": patient.created_at.isoformat(),
         "updated_at": patient.updated_at.isoformat(),
-    }
-
-
-def _serialize_contact_history(item: PatientContactHistory) -> dict:
-    return {
-        "id": str(item.id),
-        "phone": item.phone,
-        "email": item.email,
-        "changed_at": item.changed_at.isoformat(),
-        "changed_by_user_id": str(item.changed_by_user_id) if item.changed_by_user_id else None,
-        "reason": item.reason,
     }
 
 
@@ -204,8 +193,6 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         "doctolib_patient_id",
     }
 
-    old_phone = patient.phone
-    old_email = patient.email
     try:
         if identity_or_contact_fields.intersection(fields_set):
             patient = create_or_update_patient_manual(
@@ -243,42 +230,4 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     except DomainError as exc:
         return json_error(str(exc), status=400)
 
-    if patient.phone != old_phone or patient.email != old_email:
-        PatientContactHistory.objects.create(
-            patient=patient,
-            phone=old_phone,
-            email=old_email,
-            changed_by_user_id=request.user.id,
-            reason=body.change_reason,
-        )
     return JsonResponse(_serialize_patient(patient))
-
-
-@require_auth
-def patient_contact_history_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
-    if role_error:
-        return role_error
-    if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
-    try:
-        qs = Patient.objects.all()
-        scope_ids = get_scoped_clinic_site_ids(request.user)
-        if scope_ids is not None:
-            if not scope_ids:
-                return json_error("Patient not found.", status=404)
-            qs = qs.filter(
-                Q(clinic_sites__id__in=scope_ids)
-                | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
-            ).distinct()
-        qs.get(id=patient_id)
-    except ObjectDoesNotExist:
-        return json_error("Patient not found.", status=404)
-    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(request.GET.get("page_size"), default=20, maximum=200)
-    qs = PatientContactHistory.objects.filter(patient_id=patient_id).order_by("-changed_at")
-    total = qs.count()
-    start = (page - 1) * page_size
-    end = start + page_size
-    items = [_serialize_contact_history(item) for item in qs[start:end]]
-    return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})

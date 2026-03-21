@@ -135,7 +135,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
 @admin.register(DoctorTextTemplate)
 class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     form = DoctorTextTemplateForm
-    list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "is_active", "created_at", "updated_at")
+    list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "updated_at", "created_at", "is_active")
     list_filter = ("template_locale", "is_global", "is_active")
     ordering = ["-created_at"]
     search_fields = ("name", "template_body")

@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import json_error, read_json_body, require_auth, require_user_role, safe_parse_positive_int
+from apps.core.http_utils import get_client_ip
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
@@ -23,6 +24,7 @@ from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    _assigned_doctor_metadata,
     _event_status_to_stage_status,
     _latest_error_message,
     _latest_retryable_event,
@@ -47,6 +49,7 @@ from apps.medical.template_services import (
     update_template,
 )
 from apps.operations.models import AuditEvent
+from apps.operations.services import create_audit_event
 
 
 def _serialize_medical_document_list_item(doc) -> dict:
@@ -99,6 +102,17 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         items, total = list_medical_documents(
             **list_params,
             user=request.user,
+        )
+        create_audit_event(
+            event_type="MEDICAL_DOCUMENTS_LISTED",
+            actor_user_id=request.user.id,
+            metadata={
+                "client_ip": get_client_ip(request),
+                "page": list_params["page"],
+                "page_size": list_params["page_size"],
+                "total": total,
+                "item_count": len(items),
+            },
         )
         return JsonResponse(
             {
@@ -161,6 +175,18 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
         )
     except ObjectDoesNotExist:
         return json_error("Medical document not found.", status=404)
+    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_VIEWED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "client_ip": get_client_ip(request),
+            **_assigned_doctor_metadata(doc),
+        },
+    )
     return JsonResponse(context, status=200)
 
 
@@ -190,6 +216,18 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
     form_locale = (request.GET.get("form_locale") or request.GET.get("authoring_locale") or "").strip()[:10]
     authoring_locale_override = form_locale if form_locale else None
     pdf_bytes = build_befund_pdf_bytes(version, authoring_locale_override=authoring_locale_override)
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "client_ip": get_client_ip(request),
+            "version_no": version.version_no,
+            **_assigned_doctor_metadata(doc),
+        },
+    )
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="befund-preview.pdf"'
     response["Cache-Control"] = "no-store, max-age=0"
@@ -239,6 +277,18 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
         }
         for v in versions
     ]
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_VERSIONS_LISTED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "client_ip": get_client_ip(request),
+            "version_count": len(items),
+            **_assigned_doctor_metadata(doc),
+        },
+    )
     return JsonResponse({"items": items}, status=200)
 
 
@@ -361,6 +411,20 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
         check_doctor_document_access(version.medical_document, request.user)
     except ObjectDoesNotExist:
         return json_error("Medical document version not found.", status=404)
+    mdoc = version.medical_document
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_VERSION_VIEWED",
+        actor_user_id=request.user.id,
+        patient_id=mdoc.queue_entry.patient_id,
+        medical_document_id=mdoc.id,
+        context_clinic_site_id=mdoc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "client_ip": get_client_ip(request),
+            "medical_document_version_id": str(version.id),
+            "version_no": version.version_no,
+            **_assigned_doctor_metadata(mdoc),
+        },
+    )
     return JsonResponse(
         {
             "id": str(version.id),

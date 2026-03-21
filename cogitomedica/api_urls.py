@@ -53,7 +53,6 @@ from apps.reception.api_views import (
     import_batch_detail_view,
     import_batch_errors_view,
     import_batches_view,
-    patient_contact_history_view,
     patient_detail_view,
     patients_view,
     queue_entry_detail_view,
@@ -263,11 +262,6 @@ urlpatterns = [
         "patients/<uuid:patient_id>",
         patient_detail_view,
         name="patient-detail",
-    ),
-    path(
-        "patients/<uuid:patient_id>/contact-history",
-        patient_contact_history_view,
-        name="patient-contact-history",
     ),
     path(
         "daily-queues",
