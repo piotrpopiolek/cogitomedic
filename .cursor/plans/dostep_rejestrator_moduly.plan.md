@@ -60,9 +60,8 @@ To jest główny moduł pracy rejestratora. Recepcja tworzy kolejki, dodaje pacj
 - `POST /patients`
 - `GET /patients/{id}`
 - `PATCH /patients/{id}`
-- `POST /patients/{id}/merge`
 
-Recepcja ma dostęp do tworzenia i aktualizacji pacjentów, w tym do ścieżki manualnej z rekordem tymczasowym bez `Doctolib Patient ID`, oraz do operacji merge rekordów pacjentów w zakresie przypisanych placówek.
+Recepcja ma dostęp do tworzenia i aktualizacji pacjentów w zakresie przypisanych placówek (w tym ścieżka manualna bez `Doctolib Patient ID`, zgodnie z regułami unikalności w modelu).
 
 ### 4. Lokacje i gabinety
 
@@ -125,7 +124,7 @@ Recepcja nie powinna mieć dostępu do modułów administracyjnych, medycznych a
 
 ## Granice między rolami
 
-- `RECEPTION` zarządza pacjentem, merge pacjentów, kolejką, importem i uruchomieniem procesu intake, ale wyłącznie w obrębie przypisanych placówek.
+- `RECEPTION` zarządza pacjentem, kolejką, importem i uruchomieniem procesu intake, ale wyłącznie w obrębie przypisanych placówek.
 - `TABLET` obsługuje wyłącznie wybór kolejki/pacjenta oraz sam formularz intake w zakresie aktualnej sesji.
 - `DOCTOR` pracuje wyłącznie na dokumencie medycznym i jego wersjach.
 - `ADMIN` zarządza konfiguracją, personelem, operacjami technicznymi i pełną obserwowalnością.
@@ -158,7 +157,6 @@ Recepcja nie powinna mieć dostępu do modułów administracyjnych, medycznych a
 
 - `ALLOW-READ`: pacjent należy do placówki obsługiwanej przez recepcję lub występuje w kolejce tej placówki.
 - `ALLOW-WRITE`: tworzenie i aktualizacja tylko w kontekście placówek obsługiwanych przez recepcję.
-- `ALLOW-MERGE`: merge dozwolony tylko wtedy, gdy zarówno rekord źródłowy, jak i docelowy należą do zakresu placówek recepcji albo są powiązane z kolejkami w tym zakresie.
 - `DENY`: pacjent poza zakresem placówek użytkownika.
 
 ### 6. `patient sessions`
@@ -177,11 +175,6 @@ Recepcja nie powinna mieć dostępu do modułów administracyjnych, medycznych a
 
 - `ALLOW`: batch uruchomiony przez recepcję lub dotyczący placówki z jej zakresem.
 - `DENY`: batch spoza zakresu użytkownika, jeśli system będzie wieloplacówkowy.
-
-### 9. `patient merge`
-
-- `ALLOW`: recepcja może wykonać `POST /patients/{id}/merge`, jeśli rekord źródłowy i docelowy mieszczą się w obrębie przypisanych placówek.
-- `DENY`: brak możliwości merge poza zakresem placówek użytkownika.
 
 ## Encje danych kluczowe dla roli RECEPTION
 
@@ -216,9 +209,8 @@ Kontrakty API jasno dają recepcji `POST /queue-entries/{id}/sessions`, ale czę
 
 ### 3. Rozjazd dokumentacja vs implementacja
 
-W bieżących materiałach i kodzie pojawiają się ślady szerszego dostępu `RECEPTION` do merge lub retry outboxu. Plan powinien przyjąć jako stan docelowy:
+W dokumentacji mogą pozostawać rozjazdy względem retry outboxu. Plan przyjmuje jako stan docelowy:
 
-- `merge` dla `RECEPTION` i `ADMIN`, ale zawsze w obrębie przypisanych placówek rejestracji,
 - surowy outbox i retry tylko dla `ADMIN`,
 - recepcja widzi jedynie bezpieczny status biznesowy w dashboardzie.
 
@@ -243,4 +235,4 @@ W bieżących materiałach i kodzie pojawiają się ślady szerszego dostępu `R
 
 ## Podsumowanie
 
-Docelowo `RECEPTION` powinna mieć pełny dostęp operacyjny do modułów recepcji i poczekalni w obrębie przypisanych placówek: pacjenci, merge pacjentów, kolejki, wpisy, sesje, tablety, importy i uproszczony monitoring. Nie powinna mieć dostępu do części medycznej, słowników administracyjnych ani narzędzi utrzymaniowych klasy outbox, retention i pełne metryki.
+Docelowo `RECEPTION` powinna mieć pełny dostęp operacyjny do modułów recepcji i poczekalni w obrębie przypisanych placówek: pacjenci, kolejki, wpisy, sesje, tablety, importy i uproszczony monitoring. Nie powinna mieć dostępu do części medycznej, słowników administracyjnych ani narzędzi utrzymaniowych klasy outbox, retention i pełne metryki.

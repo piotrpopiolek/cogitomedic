@@ -25,7 +25,7 @@ Określenie, do jakich modułów (zasobów, endpointów API i powiązanych encji
 | TABLET    | Kolejki (wybór), wpisy kolejki, sesje, formularz intake (GET/PATCH/PUT/POST submit). Bez CRUD kolejek, bez zarządzania użytkownikami. |
 | RECEPTION | Kolejki, wpisy, pacjenci (CRUD), sesje, import (odczyt/zapis).                                                                        |
 | DOCTOR    | Dokument medyczny (odczyt/zapis), publikacja/republikacja, wersje; podgląd danych w kontekście dokumentu.                             |
-| ADMIN     | Użytkownicy, słowniki (zgody, anamneza), scalanie pacjentów, outbox/operacje, pełny audit.                                            |
+| ADMIN     | Użytkownicy, słowniki (zgody, anamneza), outbox/operacje, pełny audit.                                                                |
 
 
 ---
@@ -82,7 +82,7 @@ Lekarz **musi** mieć dostęp do pacjentów w klinikach, do których jest przypi
 | --------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | GET `/patients`                                     | Tak (read)    | Wyszukiwanie pacjentów (np. `search`, `last_name`, `date_of_birth`). Wyniki ograniczone do pacjentów z przypisanych klinik. |
 | GET `/patients/{id}`                                | Tak (read)    | Szczegóły pacjenta – tylko jeśli pacjent należy do kliniki w zakresie lekarza.                                              |
-| POST/PATCH `/patients`, POST `/patients/{id}/merge` | Nie           | Tworzenie/edycja pacjentów i scalanie – RECEPTION/ADMIN.                                                                    |
+| POST/PATCH `/patients`                              | Nie           | Tworzenie/edycja pacjentów – RECEPTION/ADMIN.                                                                               |
 
 
 ---
@@ -183,8 +183,6 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 | Tablet devices (CRUD `/tablet-devices`)                                              | Nie           | RECEPTION/ADMIN.                                             |
 | Imports (POST `/imports/patients`, GET batches, emergency template)                  | Nie           | RECEPTION/ADMIN.                                             |
 | Operations: retention (POST `/operations/retention/run`)                             | Nie           | ADMIN.                                                       |
-| Merge patients (POST `/patients/{id}/merge`)                                         | Nie           | ADMIN.                                                       |
-
 
 ---
 
@@ -338,7 +336,7 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
   - audit po kluczach kontekstowych w `audit_event.metadata`.  
   Lekarz bez przypisanej kliniki/kolejki otrzymuje pustą listę. ADMIN może pomijać filtry object-level (pełna widoczność operacyjna).
 2. **Frontend (panel lekarza):**
-  Ukrycie nawigacji i akcji do modułów z sekcji 3.9; menu ograniczone do: work queue (dokumenty), wybór kolejki/daty (read-only), pacjenci (wyszukiwanie z przypisanych klinik), szablony tekstu, audit (dla dokumentów w zakresie lekarza), wylogowanie. Brak linków do: użytkownicy, słowniki zgód/anamnezy, import, outbox, retention, merge pacjentów.
+  Ukrycie nawigacji i akcji do modułów z sekcji 3.9; menu ograniczone do: work queue (dokumenty), wybór kolejki/daty (read-only), pacjenci (wyszukiwanie z przypisanych klinik), szablony tekstu, audit (dla dokumentów w zakresie lekarza), wylogowanie. Brak linków do: użytkownicy, słowniki zgód/anamnezy, import, outbox, retention.
 3. **Dashboard (US-014):**
   Widok „Status dokumentów” oparty o GET `/medical-documents` z `doctor_view=pending_review` / `published` / `failed` (wyniki już ograniczone do zakresu autoryzacji lekarza); alerty „wymagające interwencji” = dokumenty z `doctor_view=failed`.
 4. **Audit:**
@@ -385,4 +383,4 @@ Pełna lista audit-events (wszystkie typy zdarzeń, wszystkie podmioty) pozostaj
 | Observability        | status w ramach medical-documents; opcjonalnie GET /observability/health                                                                                                        |
 
 
-Wszystkie pozostałe moduły (staff-users, consent/anamnesis definitions, intake write, sessions, tablet devices, imports, outbox, operations, retention, pełna lista audit bez filtra, merge) – **bez dostępu** dla roli DOCTOR (zarezerwowane dla RECEPTION, ADMIN lub TABLET zgodnie z api-plan i db-plan).
+Wszystkie pozostałe moduły (staff-users, consent/anamnesis definitions, intake write, sessions, tablet devices, imports, outbox, operations, retention, pełna lista audit bez filtra) – **bez dostępu** dla roli DOCTOR (zarezerwowane dla RECEPTION, ADMIN lub TABLET zgodnie z api-plan i db-plan).

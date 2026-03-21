@@ -25,10 +25,7 @@ isProject: false
   - zostawić `doctolib_patient_id` jako pole opcjonalne i nadal unikalne,
   - usunąć `identity_status`, `identity_alert_created_at`, `identity_resolution_due_at`, `external_source`, `external_source_id`,
   - dodać nową regułę unikalności pacjenta: `(first_name, last_name, phone, date_of_birth)`.
-- Usunąć cały flow merge pacjentów oparty o `TEMPORARY/CONFIRMED`:
-  - endpoint `POST /patients/{id}/merge`,
-  - serwis `merge_temporary_patient_into_confirmed()` i wyjątki z nim związane w [C:\Users\piotr\Programming\cogitomedica\apps\reception\services.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\services.py),
-  - odpowiednie wpisy w OpenAPI i dokumentacji.
+- Flow scalania rekordów pacjenta (dawny model `TEMPORARY/CONFIRMED`) został usunięty z produktu — bez dedykowanego endpointu API ani serwisu merge w runtime.
 
 ## Kod aplikacji
 
@@ -38,7 +35,7 @@ isProject: false
   - dodać `UniqueConstraint` dla `first_name`, `last_name`, `phone`, `date_of_birth`.
 - Uprościć serwis tworzenia/aktualizacji pacjenta w [C:\Users\piotr\Programming\cogitomedica\apps\reception\services.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\services.py):
   - `create_or_update_patient_manual()` ma już tylko zapisywać dane pacjenta i `doctolib_patient_id`, bez logiki `TEMPORARY`, alertów i ich domykania,
-  - usunąć `_build_patient_identity_alert_window()`, `MergedPatientsResult`, `merge_temporary_patient_into_confirmed()`, `SourceNotTemporaryError`, `TargetNotConfirmedError`, `InvalidSourceActionError` jeśli po usunięciu merge nie będą już potrzebne.
+  - usunąć pomocnicze typy i funkcje związane ze starym modelem tożsamości i scalaniem rekordów (wykonane).
 - Uprościć admin w [C:\Users\piotr\Programming\cogitomedica\apps\reception\admin.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\admin.py):
   - usunąć `PatientAdminForm` i helper `_ensure_patient_temp_identity_alert()` jeśli po zmianie nie będą nic wnosiły,
   - z `list_display`, `list_filter`, `search_fields` usunąć zależności od `identity_status` i `external_source`,
@@ -47,14 +44,14 @@ isProject: false
   - `_serialize_patient()` ma przestać zwracać usuwane pola,
   - `GET /patients` ma przestać przyjmować filtr `identity_status`,
   - `POST /patients` i `PATCH /patients/{id}` mają przestać przyjmować/zwracać pola alertów i `external_source*`,
-  - usunąć widok `patient_merge_view` i powiązane importy,
+  - usunąć widok merge pacjenta i powiązane importy (wykonane),
   - zachować obsługę konfliktów unikalności, ale zaktualizować oczekiwane źródła konfliktu: nowa unikalność złożona plus nadal unikalny `doctolib_patient_id`.
 - Zaktualizować request models w [C:\Users\piotr\Programming\cogitomedica\apps\reception\api_schemas.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\api_schemas.py):
-  - usunąć `external_source`, `external_source_id`, `MergePatientRequest`,
+  - usunąć `external_source`, `external_source_id` oraz schemat żądania merge (wykonane),
   - zostawić `doctolib_patient_id` jako opcjonalne,
   - uprościć kontrakty create/update pacjenta.
 - Zaktualizować OpenAPI w [C:\Users\piotr\Programming\cogitomedica\cogitomedica\openapi_extension.py](C:\Users\piotr\Programming\cogitomedica\cogitomedica\openapi_extension.py):
-  - usunąć query param `identity_status` oraz opis/ścieżkę merge,
+  - usunąć query param `identity_status` oraz dokumentację ścieżek związanych ze scalaniem (wykonane),
   - odświeżyć opisy pacjenta tak, by nie obiecywały `identity_alert`, `TEMPORARY/CONFIRMED` ani `external_source*`.
 
 ## Baza danych i migracje
@@ -82,7 +79,7 @@ isProject: false
 ## Testy i weryfikacja
 
 - Zastąpić testy statusów/alertów testami nowej unikalności złożonej i nadal unikalnego `doctolib_patient_id`.
-- Usunąć testy merge oraz odpowiednio uprościć testy API tworzenia/edycji pacjenta.
+- Usunąć testy scenariusza scalania oraz odpowiednio uprościć testy API tworzenia/edycji pacjenta.
 - Dodać testy negatywne dla konfliktu na `(first_name, last_name, phone, date_of_birth)` oraz osobno dla konfliktu `doctolib_patient_id`.
 - Po wdrożeniu zmian uruchomić zestaw testów obejmujący `reception`, `intake`, `medical`, `outbox`, `operations`, bo wszystkie te obszary tworzą lub serializują `Patient`.
 
@@ -93,6 +90,6 @@ isProject: false
   - [C:\Users\piotr\Programming\cogitomedicaai\db-plan.md](C:\Users\piotr\Programming\cogitomedica.ai\db-plan.md),
   - [C:\Users\piotr\Programming\cogitomedicaai\api-plan.md](C:\Users\piotr\Programming\cogitomedica.ai\api-plan.md),
   - [C:\Users\piotr\Programming\cogitomedicaai\api-plan-pl.md](C:\Users\piotr\Programming\cogitomedica.ai\api-plan-pl.md).
-- Usunąć z dokumentów opis tymczasowej tożsamości, alertów administracyjnych i merge `TEMPORARY -> CONFIRMED`.
+- Usunąć z dokumentów opis tymczasowej tożsamości, alertów administracyjnych i ręcznego scalania rekordów `TEMPORARY -> CONFIRMED`.
 - Opisać nową regułę spójności: pacjent jest unikalny po `first_name + last_name + phone + date_of_birth`, a `doctolib_patient_id` pozostaje opcjonalnym, nadal unikalnym identyfikatorem pomocniczym.
 
