@@ -268,7 +268,7 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py test` | Run the test suite (Django `TestCase`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |
-| `python manage.py load_default_translations` | Idempotent seed from `apps/core/translation_data/*.json` (same data as migration `0024_seed_translations_from_json`) |
+| `python manage.py load_default_translations` | Idempotent seed from all `apps/core/translation_data/*.json` (baseline in migration `0024`; model field labels + login strings in `administration_fields.json`, applied in `0025`) |
 | `python manage.py check_translations_completeness` | Validate active translations completeness for `de/en/pl` |
 | `python manage.py enqueue_tasks` | Enqueue background tasks once (outbox, retention, import) |
 | `python manage.py run_periodic_tasks --interval-seconds 300` | Run periodic enqueue loop (every 5 minutes) |

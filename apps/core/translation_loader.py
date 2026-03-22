@@ -61,6 +61,12 @@ def description_for_key(full_key: str) -> str:
         return "Waiting room tablet form UI"
     if full_key.startswith("waiting_room.staff."):
         return "Waiting room staff UI"
+    if full_key.startswith("administration.field_"):
+        return "Model field label"
+    if full_key.startswith("administration.login_") or full_key.startswith("administration.logout_"):
+        return "Login/logout UI labels"
+    if full_key == "administration.return_to_site":
+        return "Login/logout UI labels"
     if full_key.startswith("administration."):
         return "Admin panel UI"
     return ""
@@ -135,9 +141,13 @@ def seed_from_translation_data_directory(
     *,
     directory: Path | None = None,
     apps: Any = None,
+    only_json_filenames: tuple[str, ...] | None = None,
 ) -> int:
     """
-    Load all ``*.json`` from *directory* (default: packaged translation_data/).
+    Load JSON translation files from *directory* (default: packaged translation_data/).
+
+    If *only_json_filenames* is set, only those basenames are loaded (must exist).
+    Otherwise every ``*.json`` in the directory is loaded.
 
     If *apps* is passed (migration RunPython), use historical models.
 
@@ -150,8 +160,16 @@ def seed_from_translation_data_directory(
     else:
         from apps.core.models import TranslationKey, TranslationValue
 
+    if only_json_filenames:
+        paths = [root / name for name in only_json_filenames]
+        for path in paths:
+            if not path.is_file():
+                raise FileNotFoundError(f"Translation seed file missing: {path}")
+    else:
+        paths = sorted(root.glob("*.json"))
+
     total_created = 0
-    for path in sorted(root.glob("*.json")):
+    for path in paths:
         payload = load_json_file(path)
         for full_key, langs in payload.items():
             total_created += _seed_entry(
