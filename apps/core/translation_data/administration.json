@@ -1,0 +1,317 @@
+{
+  "administration.admin_col_edycja": {
+    "de": "Bearbeiten",
+    "en": "Edit",
+    "pl": "Edycja"
+  },
+  "administration.admin_col_pacjenci": {
+    "de": "Patienten",
+    "en": "Patients",
+    "pl": "Pacjenci"
+  },
+  "administration.admin_col_pacjenci_dnia": {
+    "de": "Patienten des Tages",
+    "en": "Patients of the day",
+    "pl": "Pacjenci dnia"
+  },
+  "administration.admin_col_widok_wpisow": {
+    "de": "Einträge anzeigen",
+    "en": "View entries",
+    "pl": "Widok wpisów"
+  },
+  "administration.admin_col_wpisy": {
+    "de": "Einträge",
+    "en": "Entries",
+    "pl": "Wpisy"
+  },
+  "administration.btn_delete": {
+    "de": "Löschen",
+    "en": "Delete",
+    "pl": "Usuń"
+  },
+  "administration.btn_save": {
+    "de": "Speichern",
+    "en": "Save",
+    "pl": "Zapisz"
+  },
+  "administration.btn_save_and_add_another": {
+    "de": "Speichern und weiteren hinzufügen",
+    "en": "Save and add another",
+    "pl": "Zapisz i dodaj nowy"
+  },
+  "administration.btn_save_and_continue_editing": {
+    "de": "Speichern und weiter bearbeiten",
+    "en": "Save and continue editing",
+    "pl": "Zapisz i kontynuuj edycję"
+  },
+  "administration.model_clinicsite": {
+    "de": "Standort",
+    "en": "Clinic site",
+    "pl": "Placówka"
+  },
+  "administration.model_clinicsite_plural": {
+    "de": "Standorte",
+    "en": "Clinic sites",
+    "pl": "Placówki"
+  },
+  "administration.model_consultingroom": {
+    "de": "Praxisraum",
+    "en": "Consulting room",
+    "pl": "Gabinet"
+  },
+  "administration.model_consultingroom_plural": {
+    "de": "Praxisräume",
+    "en": "Consulting rooms",
+    "pl": "Gabinety"
+  },
+  "administration.model_dailyqueue": {
+    "de": "Tageswarteschlange",
+    "en": "Daily queue",
+    "pl": "Kolejka dzienna"
+  },
+  "administration.model_dailyqueue_plural": {
+    "de": "Tageswarteschlangen",
+    "en": "Daily queues",
+    "pl": "Kolejki dzienne"
+  },
+  "administration.model_doctortexttemplate": {
+    "de": "Arztvorlage",
+    "en": "Doctor template",
+    "pl": "Szablon lekarza"
+  },
+  "administration.model_doctortexttemplate_plural": {
+    "de": "Arztvorlagen",
+    "en": "Doctor templates",
+    "pl": "Szablony lekarza"
+  },
+  "administration.model_medicaldocument": {
+    "de": "Medizinisches Dokument",
+    "en": "Medical document",
+    "pl": "Dokument medyczny"
+  },
+  "administration.model_medicaldocument_plural": {
+    "de": "Medizinische Dokumente",
+    "en": "Medical documents",
+    "pl": "Dokumenty medyczne"
+  },
+  "administration.model_patient": {
+    "de": "Patient",
+    "en": "Patient",
+    "pl": "Pacjent"
+  },
+  "administration.model_patient_plural": {
+    "de": "Patienten",
+    "en": "Patients",
+    "pl": "Pacjenci"
+  },
+  "administration.model_queueentry": {
+    "de": "Warteschlangeneintrag",
+    "en": "Queue entry",
+    "pl": "Wpis kolejki"
+  },
+  "administration.model_queueentry_plural": {
+    "de": "Warteschlangeneinträge",
+    "en": "Queue entries",
+    "pl": "Wpisy kolejki"
+  },
+  "administration.model_staffuser": {
+    "de": "Mitarbeiter",
+    "en": "Staff user",
+    "pl": "Użytkownik staff"
+  },
+  "administration.model_staffuser_plural": {
+    "de": "Mitarbeiter",
+    "en": "Staff users",
+    "pl": "Użytkownicy staff"
+  },
+  "administration.side_admin": {
+    "de": "Admin",
+    "en": "Admin",
+    "pl": "Admin"
+  },
+  "administration.side_api_tools": {
+    "de": "API / Werkzeuge",
+    "en": "API / tools",
+    "pl": "API / narzędzia"
+  },
+  "administration.side_audit_events": {
+    "de": "Audit-Ereignisse",
+    "en": "Audit events",
+    "pl": "Audit events"
+  },
+  "administration.side_batch_importu": {
+    "de": "Patientenimport-Batch",
+    "en": "Patient import batch",
+    "pl": "Batch importu pacjentów"
+  },
+  "administration.side_bledy_importu": {
+    "de": "Importfehler",
+    "en": "Import errors",
+    "pl": "Błędy importu pacjentów"
+  },
+  "administration.side_definicje_zgod": {
+    "de": "Einwilligungsdefinitionen",
+    "en": "Consent definitions",
+    "pl": "Definicje zgód"
+  },
+  "administration.side_dokumenty_medyczne": {
+    "de": "Medizinische Dokumente",
+    "en": "Medical documents",
+    "pl": "Dokumenty medyczne"
+  },
+  "administration.side_formularze_intake": {
+    "de": "Intake-Formulare",
+    "en": "Intake forms",
+    "pl": "Formularze intake"
+  },
+  "administration.side_gabinety": {
+    "de": "Praxisräume",
+    "en": "Consulting rooms",
+    "pl": "Gabinety"
+  },
+  "administration.side_grupy": {
+    "de": "Gruppen",
+    "en": "Groups",
+    "pl": "Grupy"
+  },
+  "administration.side_historia_kontaktu": {
+    "de": "Kontaktverlauf",
+    "en": "Contact history",
+    "pl": "Historia kontaktu"
+  },
+  "administration.side_intake": {
+    "de": "Intake",
+    "en": "Intake",
+    "pl": "Intake"
+  },
+  "administration.side_kolejki_dzienne": {
+    "de": "Tageswarteschlangen",
+    "en": "Daily queues",
+    "pl": "Kolejki dzienne"
+  },
+  "administration.side_kolejki_master_detail": {
+    "de": "Warteschlangen Master/Detail",
+    "en": "Queues master/detail",
+    "pl": "Kolejki master/detail"
+  },
+  "administration.side_lekarz": {
+    "de": "Arzt",
+    "en": "Doctor",
+    "pl": "Lekarz"
+  },
+  "administration.side_medical": {
+    "de": "Medical",
+    "en": "Medical",
+    "pl": "Medical"
+  },
+  "administration.side_opcje_pytan": {
+    "de": "Antwortoptionen Anamnese",
+    "en": "Anamnesis options",
+    "pl": "Opcje pytań anamnezy"
+  },
+  "administration.side_outbox_events": {
+    "de": "Outbox-Ereignisse",
+    "en": "Outbox events",
+    "pl": "Outbox events"
+  },
+  "administration.side_outbox_ops": {
+    "de": "Outbox und Vorgänge",
+    "en": "Outbox and operations",
+    "pl": "Outbox i operacje"
+  },
+  "administration.side_pacjenci": {
+    "de": "Patienten",
+    "en": "Patients",
+    "pl": "Pacjenci"
+  },
+  "administration.side_panels": {
+    "de": "Bereiche",
+    "en": "Panels",
+    "pl": "Panele"
+  },
+  "administration.side_patients_readonly": {
+    "de": "Patienten und Kliniken (nur Leseansicht)",
+    "en": "Patients and clinics (read-only)",
+    "pl": "Pacjenci i kliniki (tylko odczyt)"
+  },
+  "administration.side_placowki": {
+    "de": "Standorte",
+    "en": "Clinic sites",
+    "pl": "Placówki"
+  },
+  "administration.side_pytania_anamnezy": {
+    "de": "Anamnese-Fragen",
+    "en": "Anamnesis questions",
+    "pl": "Pytania anamnezy"
+  },
+  "administration.side_reception_admin": {
+    "de": "Anmeldung (Admin)",
+    "en": "Reception (Admin)",
+    "pl": "Rejestracja (Admin)"
+  },
+  "administration.side_rejestracja": {
+    "de": "Anmeldung",
+    "en": "Reception",
+    "pl": "Rejestracja"
+  },
+  "administration.side_sesje_formularzy": {
+    "de": "Formularsitzungen",
+    "en": "Form sessions",
+    "pl": "Sesje formularzy"
+  },
+  "administration.side_staff_users": {
+    "de": "Mitarbeiter",
+    "en": "Staff users",
+    "pl": "Staff users"
+  },
+  "administration.side_swagger": {
+    "de": "Swagger",
+    "en": "Swagger",
+    "pl": "Swagger"
+  },
+  "administration.side_szablony_lekarza": {
+    "de": "Arztvorlagen",
+    "en": "Doctor templates",
+    "pl": "Szablony lekarza"
+  },
+  "administration.side_urzadzenia_tablet": {
+    "de": "Tablet-Geräte",
+    "en": "Tablet devices",
+    "pl": "Urządzenia tablet"
+  },
+  "administration.side_users_permissions": {
+    "de": "Benutzer und Berechtigungen",
+    "en": "Users and permissions",
+    "pl": "Użytkownicy i uprawnienia"
+  },
+  "administration.side_wersje_dokumentow": {
+    "de": "Dokumentversionen",
+    "en": "Document versions",
+    "pl": "Wersje dokumentów"
+  },
+  "administration.side_wpisy_kolejki": {
+    "de": "Warteschlangeneinträge",
+    "en": "Queue entries",
+    "pl": "Wpisy kolejki"
+  },
+  "administration.side_zgody_formularzy": {
+    "de": "Einwilligungen Intake",
+    "en": "Intake consents",
+    "pl": "Zgody formularzy intake"
+  },
+  "administration.site_header": {
+    "de": "Cogitomedica",
+    "en": "Cogitomedica",
+    "pl": "Cogitomedica"
+  },
+  "administration.site_subheader": {
+    "de": "Verwaltungspanel",
+    "en": "Administration panel",
+    "pl": "Panel administracyjny"
+  },
+  "administration.site_title": {
+    "de": "Cogitomedica Staff",
+    "en": "Cogitomedica Staff",
+    "pl": "Cogitomedica Staff"
+  }
+}
