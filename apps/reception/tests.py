@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib
 from datetime import date
 
+from django.apps import apps as django_apps
 from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -29,6 +31,11 @@ from apps.reception.services import (
 )
 from apps.reception.xlsx_import import _cleanup_clinic_name, _parse_date, _split_full_name, _title_case_name
 from apps.users.models import StaffUser
+
+
+def _purge_seed_clinic_data() -> None:
+    mod = importlib.import_module("apps.reception.migrations.0030_purge_seed_clinics_demo_muc")
+    mod.purge_seed_clinic_data(django_apps)
 
 
 class ReceptionServicesTests(TestCase):
@@ -295,3 +302,67 @@ class TabletWebLoginLastSeenTests(TestCase):
         self.assertEqual(response.status_code, 302)
         device.refresh_from_db()
         self.assertIsNotNone(device.last_seen_at)
+
+
+class PurgeSeedClinicDataTests(TestCase):
+    def setUp(self) -> None:
+        self.user = StaffUser.objects.create_user(
+            username="purge-tester",
+            email="purge-tester@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+
+    def test_purge_removes_demo_site_and_seed_patients(self) -> None:
+        demo = ClinicSite.objects.create(code="DEMO", name="Demo Seed")
+        room = ConsultingRoom.objects.create(clinic_site=demo, code="A1", name="R1")
+        dq = DailyQueue.objects.create(
+            queue_date=date(2026, 1, 1),
+            clinic_site=demo,
+            consulting_room=room,
+            created_by_user=self.user,
+        )
+        pat = Patient.objects.create(
+            first_name="S",
+            last_name="P",
+            date_of_birth=date(1990, 1, 1),
+            phone="111111111",
+            email="s@example.com",
+            doctolib_patient_id="DTL-2026-9999",
+        )
+        QueueEntry.objects.create(
+            daily_queue=dq,
+            patient=pat,
+            position_no=1,
+            created_by_user=self.user,
+        )
+        _purge_seed_clinic_data()
+        self.assertFalse(ClinicSite.objects.filter(code="DEMO").exists())
+        self.assertFalse(Patient.objects.filter(doctolib_patient_id="DTL-2026-9999").exists())
+
+    def test_purge_keeps_non_seed_clinic_and_patients(self) -> None:
+        real = ClinicSite.objects.create(code="BER", name="Real")
+        room = ConsultingRoom.objects.create(clinic_site=real, code="R1", name="R1")
+        dq = DailyQueue.objects.create(
+            queue_date=date(2026, 1, 2),
+            clinic_site=real,
+            consulting_room=room,
+            created_by_user=self.user,
+        )
+        pat = Patient.objects.create(
+            first_name="R",
+            last_name="E",
+            date_of_birth=date(1991, 1, 1),
+            phone="222222222",
+            email="r@example.com",
+            doctolib_patient_id="REAL-999",
+        )
+        QueueEntry.objects.create(
+            daily_queue=dq,
+            patient=pat,
+            position_no=1,
+            created_by_user=self.user,
+        )
+        _purge_seed_clinic_data()
+        self.assertTrue(ClinicSite.objects.filter(code="BER").exists())
+        self.assertTrue(Patient.objects.filter(doctolib_patient_id="REAL-999").exists())
