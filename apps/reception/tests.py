@@ -19,6 +19,7 @@ from apps.reception.models import (
     PatientFormSession,
     QueueEntry,
     QueueStatus,
+    TabletDevice,
 )
 from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.services import (
@@ -269,3 +270,28 @@ class XlsxImportParsingTests(TestCase):
         self.assertEqual(_title_case_name("aLeXanDra"), "Alexandra")
         self.assertEqual(_title_case_name("nIzhENKO"), "Nizhenko")
         self.assertEqual(_title_case_name("o'NEIL-smITH"), "O'Neil-Smith")
+
+
+class TabletWebLoginLastSeenTests(TestCase):
+    def test_tablet_login_with_android_id_sets_last_seen_at(self) -> None:
+        client = Client()
+        user = StaffUser.objects.create_user(
+            username="tablet-login-seen",
+            email="tablet-login-seen@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(user, "Tablet")
+        device = TabletDevice.objects.create(android_id="web-login-android-seen", is_active=True)
+        self.assertIsNone(device.last_seen_at)
+        response = client.post(
+            "/tablet/login/",
+            data={
+                "username": "tablet-login-seen",
+                "password": "safe-password",
+                "android_id": "web-login-android-seen",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        device.refresh_from_db()
+        self.assertIsNotNone(device.last_seen_at)

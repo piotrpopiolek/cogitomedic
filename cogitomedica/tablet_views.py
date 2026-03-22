@@ -18,7 +18,11 @@ from django.views.decorators.http import require_http_methods
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
-from apps.reception.services import get_or_create_tablet_device_by_android_id, issue_tablet_session_latest_wins
+from apps.reception.services import (
+    get_or_create_tablet_device_by_android_id,
+    issue_tablet_session_latest_wins,
+    record_tablet_login_for_android_id,
+)
 
 from apps.core.translation_service import get_form_ui_strings, get_staff_ui_strings
 
@@ -70,7 +74,7 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
             login(request, user)
             android_id = (request.POST.get("android_id") or "").strip()
             if android_id:
-                device, _ = get_or_create_tablet_device_by_android_id(android_id=android_id)
+                device = record_tablet_login_for_android_id(android_id=android_id)
                 request.session["tablet_device_id"] = str(device.id)
             else:
                 request.session.pop("tablet_device_id", None)
