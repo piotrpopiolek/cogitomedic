@@ -8,6 +8,7 @@ from django.test import Client, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.operations.models import AuditEvent
+from apps.reception.models import TabletDevice
 from apps.users.models import StaffUser
 
 
@@ -76,6 +77,62 @@ class UsersAuthApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 429)
         self.assertEqual(response.json().get("error"), "Too many requests. Try again later.")
+
+
+class AuthLoginAndroidIdTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.tablet_user = StaffUser.objects.create_user(
+            username="tablet-auth-android",
+            email="tablet-auth-android@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.tablet_user, "Tablet")
+        self.device = TabletDevice.objects.create(
+            android_id="api-login-android-seen",
+            is_active=True,
+        )
+
+    def test_login_with_android_id_sets_device_last_seen_at(self) -> None:
+        self.assertIsNone(self.device.last_seen_at)
+        response = self.client.post(
+            "/api/v1/auth/login",
+            data=json.dumps(
+                {
+                    "username": "tablet-auth-android",
+                    "password": "safe-password",
+                    "android_id": "api-login-android-seen",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.device.refresh_from_db()
+        self.assertIsNotNone(self.device.last_seen_at)
+
+    def test_login_with_android_id_ignored_for_doctor(self) -> None:
+        doctor = StaffUser.objects.create_user(
+            username="doctor-auth-android",
+            email="doctor-auth-android@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(doctor, "Doctor")
+        response = self.client.post(
+            "/api/v1/auth/login",
+            data=json.dumps(
+                {
+                    "username": "doctor-auth-android",
+                    "password": "safe-password",
+                    "android_id": "api-login-android-seen",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.device.refresh_from_db()
+        self.assertIsNone(self.device.last_seen_at)
 
 
 class StaffUsersApiTests(TestCase):

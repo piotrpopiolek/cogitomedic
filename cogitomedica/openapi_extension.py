@@ -127,9 +127,9 @@ COGITO_PATHS = {
     f"{PREFIX}/auth/login": {
         "post": {
             "summary": "Log in",
-            "description": "Authenticate with username and password. Sets session cookie.",
+            "description": "Authenticate with username and password. Sets session cookie. Optional android_id: for TABLET, RECEPTION, or ADMIN, updates that tablet device's last_seen_at (last login on device).",
             "tags": ["Auth"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"username": {"type": "string"}, "password": {"type": "string"}}, "required": ["username", "password"]}}}},
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"username": {"type": "string"}, "password": {"type": "string"}, "android_id": {"type": "string"}}, "required": ["username", "password"]}}}},
             "responses": {"200": {"description": "User and session expiry"}, "401": {"description": "Invalid credentials"}},
         },
     },
@@ -537,13 +537,13 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/tablet-devices": {
-        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at. Query: is_active, search (by android_id), limit (default 20, max 100).", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
+        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at (last tablet-area login for that android_id via /tablet/login or /auth/login with android_id, or manual POST …/heartbeat). Query: is_active, search (by android_id), limit (default 20, max 100).", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
         },
         "post": {"summary": "Create tablet device", "description": "Body: android_id (required), is_active (default true). No name or device_code.", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created (id, android_id, is_active)"}},
         },
     },
     f"{PREFIX}/tablet-devices/{{tablet_device_id}}": {
-        "get": {"summary": "Get tablet device", "description": "Returns id, android_id, is_active, last_seen_at.", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {"summary": "Get tablet device", "description": "Returns id, android_id, is_active, last_seen_at (last login on device or heartbeat).", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
         "patch": {"summary": "Update tablet device", "description": "Body: optional android_id, optional is_active.", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
         },
@@ -553,6 +553,7 @@ COGITO_PATHS = {
     f"{PREFIX}/tablet-devices/{{tablet_device_id}}/heartbeat": {
         "post": {
             "summary": "Tablet heartbeat",
+            "description": "Sets last_seen_at to now (operational refresh; same field as last login time from tablet auth). RECEPTION/ADMIN only.",
             "tags": ["Reception – Devices"],
             "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
             "responses": {"200": {"description": "last_seen_at"}, "404": {"description": "Not found"}},

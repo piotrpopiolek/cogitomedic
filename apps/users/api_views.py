@@ -25,6 +25,7 @@ from apps.core.api_utils import (
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
+from apps.reception.services import record_tablet_login_for_android_id
 from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
 from apps.users.models import StaffUser
 from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
@@ -111,6 +112,9 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
         return json_error("Invalid credentials.", status=401)
 
     login(request, user)
+    android_id = (body.android_id or "").strip()
+    if android_id and (user.is_tablet or user.is_reception or user.is_admin_role):
+        record_tablet_login_for_android_id(android_id=android_id)
     create_audit_event(
         event_type="STAFF_AUTH_LOGIN_SUCCESS",
         actor_user_id=user.id,
