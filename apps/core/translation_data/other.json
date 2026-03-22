@@ -1,0 +1,137 @@
+{
+  "other.ergebnisse.page_title": {
+    "de": "Ergebnisse – CogitoMed",
+    "en": "Results – CogitoMed",
+    "pl": "Wyniki – CogitoMed"
+  },
+  "other.ergebnisse.login_title": {
+    "de": "Ergebnisse – Anmeldung",
+    "en": "Results – Sign in",
+    "pl": "Wyniki – Logowanie"
+  },
+  "other.ergebnisse.login_intro": {
+    "de": "Bitte geben Sie Ihre Telefonnummer und Ihr Geburtsdatum ein.",
+    "en": "Please enter your phone number and date of birth.",
+    "pl": "Podaj numer telefonu i datę urodzenia."
+  },
+  "other.ergebnisse.phone_label": {
+    "de": "Telefonnummer",
+    "en": "Phone number",
+    "pl": "Numer telefonu"
+  },
+  "other.ergebnisse.phone_placeholder": {
+    "de": "z.B. +49 123 456789",
+    "en": "e.g. +49 123 456789",
+    "pl": "np. +48 123 456789"
+  },
+  "other.ergebnisse.dob_label": {
+    "de": "Geburtsdatum (TT.MM.JJJJ)",
+    "en": "Date of birth (DD.MM.YYYY)",
+    "pl": "Data urodzenia (DD.MM.RRRR)"
+  },
+  "other.ergebnisse.dob_placeholder": {
+    "de": "TT.MM.JJJJ",
+    "en": "DD.MM.YYYY",
+    "pl": "DD.MM.RRRR"
+  },
+  "other.ergebnisse.request_code_btn": {
+    "de": "Code per SMS anfordern",
+    "en": "Request code via SMS",
+    "pl": "Poproś o kod SMS"
+  },
+  "other.ergebnisse.otp_title": {
+    "de": "Ergebnisse – Code eingeben",
+    "en": "Results – Enter code",
+    "pl": "Wyniki – Wprowadź kod"
+  },
+  "other.ergebnisse.otp_intro": {
+    "de": "Bitte geben Sie den 6-stelligen Code ein, den Sie per SMS erhalten haben.",
+    "en": "Please enter the 6-digit code you received via SMS.",
+    "pl": "Wprowadź 6-cyfrowy kod otrzymany SMS-em."
+  },
+  "other.ergebnisse.otp_label": {
+    "de": "SMS-Code",
+    "en": "SMS code",
+    "pl": "Kod SMS"
+  },
+  "other.ergebnisse.otp_placeholder": {
+    "de": "123456",
+    "en": "123456",
+    "pl": "123456"
+  },
+  "other.ergebnisse.submit_btn": {
+    "de": "Bestätigen",
+    "en": "Confirm",
+    "pl": "Potwierdź"
+  },
+  "other.ergebnisse.back_to_login": {
+    "de": "Zurück zur Anmeldung",
+    "en": "Back to sign in",
+    "pl": "Powrót do logowania"
+  },
+  "other.ergebnisse.documents_title": {
+    "de": "Ihre Dokumente",
+    "en": "Your documents",
+    "pl": "Twoje dokumenty"
+  },
+  "other.ergebnisse.document_date_prefix": {
+    "de": "Befund vom",
+    "en": "Report from",
+    "pl": "Wynik z"
+  },
+  "other.ergebnisse.download_btn": {
+    "de": "PDF herunterladen",
+    "en": "Download PDF",
+    "pl": "Pobierz PDF"
+  },
+  "other.ergebnisse.no_documents": {
+    "de": "Es sind keine Dokumente verfügbar.",
+    "en": "No documents available.",
+    "pl": "Brak dostępnych dokumentów."
+  },
+  "other.ergebnisse.error_required": {
+    "de": "Telefonnummer und Geburtsdatum sind erforderlich.",
+    "en": "Phone number and date of birth are required.",
+    "pl": "Numer telefonu i data urodzenia są wymagane."
+  },
+  "other.ergebnisse.error_captcha": {
+    "de": "CAPTCHA konnte nicht bestätigt werden. Bitte versuchen Sie es erneut.",
+    "en": "CAPTCHA could not be verified. Please try again.",
+    "pl": "Nie można zweryfikować CAPTCHA. Spróbuj ponownie."
+  },
+  "other.ergebnisse.error_otp_required": {
+    "de": "Bitte geben Sie den Code ein.",
+    "en": "Please enter the code.",
+    "pl": "Wprowadź kod."
+  },
+  "other.ergebnisse.error_invalid_otp": {
+    "de": "Ungültiger oder abgelaufener Code. Bitte versuchen Sie es erneut.",
+    "en": "Invalid or expired code. Please try again.",
+    "pl": "Nieprawidłowy lub wygasły kod. Spróbuj ponownie."
+  },
+  "other.ergebnisse.lang_de": {
+    "de": "Deutsch",
+    "en": "Deutsch",
+    "pl": "Deutsch"
+  },
+  "other.ergebnisse.lang_en": {
+    "de": "English",
+    "en": "English",
+    "pl": "English"
+  },
+  "other.ergebnisse.lang_pl": {
+    "de": "Polski",
+    "en": "Polski",
+    "pl": "Polski"
+  },
+  "other.sms.patient_results": {
+    "de": "Neue Dokumentation bei CogitoMed {url}",
+    "en": "New documentation at CogitoMed {url}",
+    "pl": "Nowa dokumentacja w CogitoMed {url}"
+  },
+  "waiting_room.form.consent_result_portal_agree": {
+    "de": "Ich bin mit der elektronischen Bereitstellung meines Ergebnisses im Portal einverstanden.",
+    "en": "I agree to the electronic provision of my result in the portal.",
+    "pl": "Wyrażam zgodę na elektroniczne udostępnienie mojego wyniku w portalu."
+  }
+}

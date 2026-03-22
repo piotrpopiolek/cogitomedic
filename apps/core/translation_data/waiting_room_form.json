@@ -1,0 +1,237 @@
+{
+  "waiting_room.form.anamnesis_title": {
+    "de": "Anamnese",
+    "en": "Anamnesis",
+    "pl": "Wywiad"
+  },
+  "waiting_room.form.back_to_queues": {
+    "de": "Zurück zur Warteliste",
+    "en": "Back to queue list",
+    "pl": "Wróć do listy kolejek"
+  },
+  "waiting_room.form.back_to_waiting": {
+    "de": "← Wartezimmer",
+    "en": "← Waiting room",
+    "pl": "← Poczekalnia"
+  },
+  "waiting_room.form.body_map_alt": {
+    "de": "Körperschema – Vorder- und Rückansicht",
+    "en": "Body map – front and back",
+    "pl": "Schemat ciała – przód i tył"
+  },
+  "waiting_room.form.body_map_hint": {
+    "de": "Tippen Sie auf die Abbildung, um die Lage von Hautveränderungen (z. B. Muttermale) zu markieren. Links: Vorderansicht, rechts: Rückansicht.",
+    "en": "Tap on the figure to mark the location of skin changes (e.g. moles). Left: front, right: back.",
+    "pl": "Dotknij rysunku, aby zaznaczyć lokalizację zmian skórnych (np. znamion). Lewy: przód, prawy: tył."
+  },
+  "waiting_room.form.body_map_title": {
+    "de": "Körperschema",
+    "en": "Body map",
+    "pl": "Schemat ciała"
+  },
+  "waiting_room.form.body_map_undo_last": {
+    "de": "Letzten Punkt rückgängig",
+    "en": "Undo last point",
+    "pl": "Cofnij ostatni punkt"
+  },
+  "waiting_room.form.clear": {
+    "de": "Löschen",
+    "en": "Clear",
+    "pl": "Wyczyść"
+  },
+  "waiting_room.form.consent_confirm": {
+    "de": "Ich bestätige",
+    "en": "I agree",
+    "pl": "Akceptuję"
+  },
+  "waiting_room.form.consent_contact_agree": {
+    "de": "Ja, ich bin mit einer Kontaktaufnahme einverstanden.",
+    "en": "Yes, I agree to be contacted.",
+    "pl": "Tak, wyrażam zgodę na kontakt."
+  },
+  "waiting_room.form.consents_title": {
+    "de": "Einwilligungen",
+    "en": "Consents",
+    "pl": "Zgody"
+  },
+  "waiting_room.form.contact_method_phone": {
+    "de": "Telefon",
+    "en": "Phone",
+    "pl": "Telefon"
+  },
+  "waiting_room.form.date_of_birth": {
+    "de": "Geburtsdatum:",
+    "en": "Date of birth:",
+    "pl": "Data urodzenia:"
+  },
+  "waiting_room.form.email": {
+    "de": "E-Mail:",
+    "en": "E-mail:",
+    "pl": "E-mail:"
+  },
+  "waiting_room.form.form_submitted_title": {
+    "de": "Formular wurde abgesendet.",
+    "en": "Form has been submitted.",
+    "pl": "Formularz został wysłany."
+  },
+  "waiting_room.form.lang_de": {
+    "de": "Deutsch",
+    "en": "Deutsch",
+    "pl": "Deutsch"
+  },
+  "waiting_room.form.lang_en": {
+    "de": "English",
+    "en": "English",
+    "pl": "English"
+  },
+  "waiting_room.form.lang_pl": {
+    "de": "Polski",
+    "en": "Polski",
+    "pl": "Polski"
+  },
+  "waiting_room.form.msg_anamnesis_saved": {
+    "de": "Anamnese gespeichert.",
+    "en": "Anamnesis saved.",
+    "pl": "Wywiad zapisany."
+  },
+  "waiting_room.form.msg_body_map_saved": {
+    "de": "Schema gespeichert.",
+    "en": "Map saved.",
+    "pl": "Schemat zapisany."
+  },
+  "waiting_room.form.msg_connection_error": {
+    "de": "Verbindungsfehler.",
+    "en": "Connection error.",
+    "pl": "Błąd połączenia."
+  },
+  "waiting_room.form.msg_consents_saved": {
+    "de": "Einwilligungen gespeichert.",
+    "en": "Consents saved.",
+    "pl": "Zgody zapisane."
+  },
+  "waiting_room.form.msg_save_error": {
+    "de": "Fehler beim Speichern.",
+    "en": "Error saving.",
+    "pl": "Błąd zapisu."
+  },
+  "waiting_room.form.msg_signature_draw_first": {
+    "de": "Bitte zuerst unterschreiben.",
+    "en": "Please draw your signature first.",
+    "pl": "Najpierw narysuj podpis w polu."
+  },
+  "waiting_room.form.msg_signature_error": {
+    "de": "Fehler beim Speichern der Unterschrift.",
+    "en": "Error saving signature.",
+    "pl": "Błąd zapisu podpisu."
+  },
+  "waiting_room.form.msg_signature_required_before_submit": {
+    "de": "Unterschrift ist vor dem Absenden erforderlich.",
+    "en": "Signature is required before submitting.",
+    "pl": "Podpis jest wymagany przed wysłaniem formularza."
+  },
+  "waiting_room.form.msg_submit_error": {
+    "de": "Fehler beim Absenden.",
+    "en": "Error submitting.",
+    "pl": "Błąd wysyłania."
+  },
+  "waiting_room.form.msg_try_again": {
+    "de": "Erneut versuchen",
+    "en": "Try again",
+    "pl": "Spróbuj ponownie"
+  },
+  "waiting_room.form.notes": {
+    "de": "Anmerkungen:",
+    "en": "Notes:",
+    "pl": "Uwagi:"
+  },
+  "waiting_room.form.notes_placeholder": {
+    "de": "Optional",
+    "en": "Optional",
+    "pl": "Opcjonalnie"
+  },
+  "waiting_room.form.patient_data_title": {
+    "de": "Patientendaten (zur Überprüfung)",
+    "en": "Patient data (for verification)",
+    "pl": "Dane pacjenta (do weryfikacji)"
+  },
+  "waiting_room.form.phone": {
+    "de": "Telefon:",
+    "en": "Phone:",
+    "pl": "Telefon:"
+  },
+  "waiting_room.form.save_anamnesis": {
+    "de": "Anamnese speichern",
+    "en": "Save anamnesis",
+    "pl": "Zapisz wywiad"
+  },
+  "waiting_room.form.save_body_map": {
+    "de": "Schema speichern",
+    "en": "Save map",
+    "pl": "Zapisz schemat"
+  },
+  "waiting_room.form.save_consents": {
+    "de": "Einwilligungen speichern",
+    "en": "Save consents",
+    "pl": "Zapisz zgody"
+  },
+  "waiting_room.form.save_signature": {
+    "de": "Unterschrift speichern",
+    "en": "Save signature",
+    "pl": "Zapisz podpis"
+  },
+  "waiting_room.form.signature_saved": {
+    "de": "Unterschrift gespeichert.",
+    "en": "Signature saved.",
+    "pl": "Podpis zapisany."
+  },
+  "waiting_room.form.signature_title": {
+    "de": "Unterschrift",
+    "en": "Signature",
+    "pl": "Podpis"
+  },
+  "waiting_room.form.step_1_title": {
+    "de": "Teil 1: Einwilligungen",
+    "en": "Part 1: Consents",
+    "pl": "Część 1: Zgody"
+  },
+  "waiting_room.form.step_2_title": {
+    "de": "Teil 2: Anamnese",
+    "en": "Part 2: Anamnesis",
+    "pl": "Część 2: Wywiad"
+  },
+  "waiting_room.form.step_3_title": {
+    "de": "Teil 3: Unterschrift",
+    "en": "Part 3: Signature",
+    "pl": "Część 3: Podpis"
+  },
+  "waiting_room.form.step_back": {
+    "de": "Zurück",
+    "en": "Back",
+    "pl": "Wstecz"
+  },
+  "waiting_room.form.step_next": {
+    "de": "Weiter",
+    "en": "Next",
+    "pl": "Dalej"
+  },
+  "waiting_room.form.step_save_and_next": {
+    "de": "Speichern und weiter",
+    "en": "Save and continue",
+    "pl": "Zapisz i kontynuuj"
+  },
+  "waiting_room.form.submit_form": {
+    "de": "Formular absenden",
+    "en": "Submit form",
+    "pl": "Wyślij formularz"
+  },
+  "waiting_room.form.validation_anamnesis_required": {
+    "de": "Bitte beantworten Sie alle Pflichtfragen (mit * markiert).",
+    "en": "Please answer all required questions (marked with *).",
+    "pl": "Proszę odpowiedzieć na wszystkie pytania obowiązkowe (oznaczone *)."
+  },
+  "waiting_room.form.validation_consents_required": {
+    "de": "Bitte akzeptieren Sie alle erforderlichen Einwilligungen (mit * markiert).",
+    "en": "Please accept all required consents (marked with *).",
+    "pl": "Proszę zaakceptować wszystkie wymagane zgody (oznaczone *)."
+  }
+}

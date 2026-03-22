@@ -1,0 +1,147 @@
+{
+  "waiting_room.staff.appointment_time": {
+    "de": "Terminzeit",
+    "en": "Appointment time",
+    "pl": "Godzina wizyty"
+  },
+  "waiting_room.staff.back_to_patients": {
+    "de": "← Zurück zur Patientenliste",
+    "en": "← Back to patient list",
+    "pl": "← Wróć do listy pacjentów"
+  },
+  "waiting_room.staff.back_to_queues": {
+    "de": "← Zurück zur Warteschlangenliste",
+    "en": "← Back to queue list",
+    "pl": "← Wróć do listy kolejek"
+  },
+  "waiting_room.staff.cta_fill_form": {
+    "de": "Tablet dem Patienten übergeben – Formular ausfüllen",
+    "en": "Hand tablet to patient – Fill form",
+    "pl": "Przekaż tablet pacjentowi – wypełnij formularz"
+  },
+  "waiting_room.staff.date": {
+    "de": "Datum:",
+    "en": "Date:",
+    "pl": "Data:"
+  },
+  "waiting_room.staff.entry_start_title": {
+    "de": "Formular starten",
+    "en": "Start form",
+    "pl": "Start formularza"
+  },
+  "waiting_room.staff.entry_started_title": {
+    "de": "Formular vorbereitet",
+    "en": "Form ready",
+    "pl": "Formularz przygotowany"
+  },
+  "waiting_room.staff.error_home_link": {
+    "de": "Tablet-Startseite",
+    "en": "Tablet home",
+    "pl": "Strona główna tabletu"
+  },
+  "waiting_room.staff.error_title": {
+    "de": "Fehler",
+    "en": "Error",
+    "pl": "Błąd"
+  },
+  "waiting_room.staff.hand_tablet_msg": {
+    "de": "Tablet dem Patienten zum Ausfüllen der Anamnese (Einwilligungen, Anamnese, Unterschrift) übergeben.",
+    "en": "Hand the tablet to the patient to fill in the questionnaire (consents, anamnesis, signature).",
+    "pl": "Przekaż tablet pacjentowi do wypełnienia ankiety (zgody, anamneza, podpis)."
+  },
+  "waiting_room.staff.home_title": {
+    "de": "Wartezimmer – Warteschlange wählen",
+    "en": "Waiting room – Choose queue",
+    "pl": "Poczekalnia – wybór kolejki"
+  },
+  "waiting_room.staff.lang_de": {
+    "de": "Deutsch",
+    "en": "Deutsch",
+    "pl": "Deutsch"
+  },
+  "waiting_room.staff.lang_en": {
+    "de": "English",
+    "en": "English",
+    "pl": "English"
+  },
+  "waiting_room.staff.lang_pl": {
+    "de": "Polski",
+    "en": "Polski",
+    "pl": "Polski"
+  },
+  "waiting_room.staff.logged_in_as": {
+    "de": "Angemeldet:",
+    "en": "Logged in:",
+    "pl": "Zalogowany:"
+  },
+  "waiting_room.staff.login_btn": {
+    "de": "Anmelden",
+    "en": "Log in",
+    "pl": "Zaloguj"
+  },
+  "waiting_room.staff.login_error": {
+    "de": "Ungültige Anmeldung oder keine Tablet-Berechtigung.",
+    "en": "Invalid login or no tablet permission.",
+    "pl": "Nieprawidłowy login lub brak uprawnień tabletu."
+  },
+  "waiting_room.staff.login_title": {
+    "de": "Wartezimmer – Anmeldung",
+    "en": "Waiting room – Log in",
+    "pl": "Poczekalnia – logowanie"
+  },
+  "waiting_room.staff.logout": {
+    "de": "Abmelden",
+    "en": "Log out",
+    "pl": "Wyloguj"
+  },
+  "waiting_room.staff.no_patients": {
+    "de": "Keine Patienten in dieser Warteschlange.",
+    "en": "No patients in this queue.",
+    "pl": "Brak pacjentów w tej kolejce."
+  },
+  "waiting_room.staff.no_queues_today": {
+    "de": "Keine Warteschlangen für heute. Erstellen Sie eine in der Rezeption.",
+    "en": "No queues for today. Create one in reception.",
+    "pl": "Brak kolejek na dziś. Utwórz kolejkę w panelu recepcji."
+  },
+  "waiting_room.staff.open_form_btn": {
+    "de": "Intake-Formular öffnen",
+    "en": "Open intake form",
+    "pl": "Otwórz formularz intake"
+  },
+  "waiting_room.staff.page_title": {
+    "de": "Tablet – Wartezimmer",
+    "en": "Tablet – Waiting room",
+    "pl": "Tablet – Poczekalnia"
+  },
+  "waiting_room.staff.patient_label": {
+    "de": "Patient:",
+    "en": "Patient:",
+    "pl": "Pacjent:"
+  },
+  "waiting_room.staff.position_label": {
+    "de": "Position",
+    "en": "Position",
+    "pl": "Pozycja"
+  },
+  "waiting_room.staff.queue_entries_title": {
+    "de": "Patienten in der Warteschlange",
+    "en": "Patients in queue",
+    "pl": "Pacjenci w kolejce"
+  },
+  "waiting_room.staff.queue_not_today": {
+    "de": "Diese Warteschlange ist nicht von heute. Bitte wählen Sie eine Warteschlange von der heutigen Liste.",
+    "en": "This queue is not from today. Please choose a queue from today's list.",
+    "pl": "Ta kolejka nie jest z dzisiaj. Wybierz kolejkę z listy na dziś."
+  },
+  "waiting_room.staff.status_label": {
+    "de": "Status:",
+    "en": "Status:",
+    "pl": "Status:"
+  },
+  "waiting_room.staff.tablet_unassigned": {
+    "de": "Tablet ist keiner Standort zugeordnet. Bitte wenden Sie sich an den Administrator.",
+    "en": "Tablet is not assigned to a clinic site. Please contact the administrator.",
+    "pl": "Tablet nie jest przypisany do placówki. Skontaktuj się z administratorem."
+  }
+}

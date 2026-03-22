@@ -1,0 +1,137 @@
+{
+  "doctor.pdf_label.befund": {
+    "de": "Befund",
+    "en": "Befund",
+    "pl": "Befund"
+  },
+  "doctor.pdf_label.clinical_assessment": {
+    "de": "Klinisch-dermatoskopische Einschätzung",
+    "en": "Clinical assessment",
+    "pl": "Ocena kliniczno-dermatoskopowa"
+  },
+  "doctor.pdf_label.date_of_birth": {
+    "de": "Geburtsdatum",
+    "en": "Date of birth",
+    "pl": "Data urodzenia"
+  },
+  "doctor.pdf_label.dermatoscopic_features": {
+    "de": "Dermatoskopische Merkmale",
+    "en": "Dermatoscopic features",
+    "pl": "Cechy dermatoskopowe"
+  },
+  "doctor.pdf_label.diagnosis_code": {
+    "de": "Diagnosecode",
+    "en": "Diagnosis code",
+    "pl": "Kod rozpoznania"
+  },
+  "doctor.pdf_label.document_id": {
+    "de": "Dokument-ID",
+    "en": "Document ID",
+    "pl": "ID dokumentu"
+  },
+  "doctor.pdf_label.email": {
+    "de": "E-Mail",
+    "en": "Email",
+    "pl": "E-mail"
+  },
+  "doctor.pdf_label.examination_scope": {
+    "de": "Untersuchungsumfang",
+    "en": "Examination Scope",
+    "pl": "Zakres badania"
+  },
+  "doctor.pdf_label.final_assessment": {
+    "de": "Ärztliche Gesamteinschätzung",
+    "en": "Final assessment",
+    "pl": "Końcowa ocena lekarska"
+  },
+  "doctor.pdf_label.final_text": {
+    "de": "Text",
+    "en": "Final text",
+    "pl": "Tekst"
+  },
+  "doctor.pdf_label.fitzpatrick_type": {
+    "de": "Hauttyp (Fitzpatrick)",
+    "en": "Fitzpatrick type",
+    "pl": "Typ skóry (Fitzpatrick)"
+  },
+  "doctor.pdf_label.generated_at": {
+    "de": "Erstellt am",
+    "en": "Generated at",
+    "pl": "Wygenerowano"
+  },
+  "doctor.pdf_label.global_assessment": {
+    "de": "Gesamtbeurteilung",
+    "en": "Global Assessment",
+    "pl": "Ocena ogólna"
+  },
+  "doctor.pdf_label.group": {
+    "de": "Gruppe",
+    "en": "Group",
+    "pl": "Grupa"
+  },
+  "doctor.pdf_label.lesions": {
+    "de": "Läsionen",
+    "en": "Lesions",
+    "pl": "Zmiany"
+  },
+  "doctor.pdf_label.locale": {
+    "de": "Sprache",
+    "en": "Locale",
+    "pl": "Język"
+  },
+  "doctor.pdf_label.malignancy_risk": {
+    "de": "Malignitätsrisiko",
+    "en": "Malignancy risk",
+    "pl": "Ryzyko złośliwości"
+  },
+  "doctor.pdf_label.name": {
+    "de": "Name",
+    "en": "Name",
+    "pl": "Imię i nazwisko"
+  },
+  "doctor.pdf_label.no_lesions": {
+    "de": "Keine Läsionen angegeben.",
+    "en": "No lesions listed.",
+    "pl": "Brak wpisanych zmian."
+  },
+  "doctor.pdf_label.numbers": {
+    "de": "Nummern",
+    "en": "Numbers",
+    "pl": "Numery"
+  },
+  "doctor.pdf_label.overall_image_assessment": {
+    "de": "Gesamtbeurteilung Bildanalyse",
+    "en": "Overall image assessment",
+    "pl": "Ocena obrazu"
+  },
+  "doctor.pdf_label.patient": {
+    "de": "Patient",
+    "en": "Patient",
+    "pl": "Pacjent"
+  },
+  "doctor.pdf_label.phone": {
+    "de": "Telefon",
+    "en": "Phone",
+    "pl": "Telefon"
+  },
+  "doctor.pdf_label.procedure_code": {
+    "de": "Prozedurcode",
+    "en": "Procedure code",
+    "pl": "Kod procedury"
+  },
+  "doctor.pdf_label.recommendations": {
+    "de": "Empfehlungen",
+    "en": "Recommendations",
+    "pl": "Rekomendacje"
+  },
+  "doctor.pdf_label.summary": {
+    "de": "Zusammenfassung",
+    "en": "Summary",
+    "pl": "Podsumowanie"
+  },
+  "doctor.pdf_label.version": {
+    "de": "Version",
+    "en": "Version",
+    "pl": "Wersja"
+  }
+}

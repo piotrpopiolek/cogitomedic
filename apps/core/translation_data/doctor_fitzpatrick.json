@@ -1,0 +1,42 @@
+{
+  "doctor.fitzpatrick.TYPE_I": {
+    "de": "Hauttyp I nach Fitzpatrick",
+    "en": "Fitzpatrick skin type I",
+    "pl": "Typ I wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_II": {
+    "de": "Hauttyp II nach Fitzpatrick",
+    "en": "Fitzpatrick skin type II",
+    "pl": "Typ II wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_III": {
+    "de": "Hauttyp III nach Fitzpatrick",
+    "en": "Fitzpatrick skin type III",
+    "pl": "Typ III wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_IV": {
+    "de": "Hauttyp IV nach Fitzpatrick",
+    "en": "Fitzpatrick skin type IV",
+    "pl": "Typ IV wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_V": {
+    "de": "Hauttyp V nach Fitzpatrick",
+    "en": "Fitzpatrick skin type V",
+    "pl": "Typ V wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_VI": {
+    "de": "Hauttyp VI nach Fitzpatrick",
+    "en": "Fitzpatrick skin type VI",
+    "pl": "Typ VI wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.TYPE_II_III": {
+    "de": "Hauttyp II–III nach Fitzpatrick",
+    "en": "Fitzpatrick skin type II–III",
+    "pl": "Typ II–III wg Fitzpatricka"
+  },
+  "doctor.fitzpatrick.UNDETERMINED": {
+    "de": "Hauttyp nicht eindeutig bestimmbar",
+    "en": "Skin type not clearly determinable",
+    "pl": "Typ skóry nie do jednoznacznego określenia"
+  }
+}
