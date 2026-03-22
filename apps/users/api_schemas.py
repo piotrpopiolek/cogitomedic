@@ -8,6 +8,7 @@ class AuthLoginRequest(BaseModel):
 
     username: str = Field(min_length=1, max_length=150)
     password: str = Field(min_length=1, max_length=256)
+    android_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class CreateStaffUserRequest(BaseModel):

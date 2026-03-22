@@ -15,7 +15,7 @@ alwaysApply: false
 ## 2) Django/DRF + walidacja danych
 - Dla API używaj spójnych kontraktów wejścia/wyjścia (DRF serializers lub Pydantic, zależnie od kontekstu modułu).
 - Używaj poprawnych metod HTTP i jednoznacznych kodów odpowiedzi.
-- Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do crona.
+- Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do Django 6 Tasks.
 
 ## 3) ORM, transakcje i idempotencja
 - Używaj ORM Django jako podstawowego mechanizmu dostępu do danych.
@@ -32,9 +32,9 @@ alwaysApply: false
 
 ## 5) Outbox, zadania tła i integracje
 - Nie wykonuj kroków CPU/I/O ciężkich w żądaniu HTTP.
-- Dla zadań krytycznych i długich (PDF, upload, SMS, import) używaj crona.
+- Dla zadań krytycznych i długich (PDF, upload, SMS, import) używaj Django 6 Tasks.
 - Utrzymuj sekwencję outbox zgodną z PRD: `GENERATE_PDF -> HIDRIVE_UPLOAD -> SMS_SEND`.
-- Import z Doctolib realizuj przez pliki (`.xlsx`/`.csv`), bez bezpośredniej integracji API.
+- Import z Doctolib realizuj przez pliki (`.xlsx`), bez bezpośredniej integracji API.
 
 ## 6) Kontrakty JSON i wersjonowanie
 - Każdy JSON zapisany w DB (`body_map_data`, `anamnesis_payload`, `medical_payload`, payload outbox) musi mieć `schema_version`.

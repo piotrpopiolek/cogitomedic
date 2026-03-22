@@ -245,11 +245,18 @@ def deactivate_tablet_device(*, tablet_device_id: uuid.UUID) -> TabletDevice:
 
 @transaction.atomic
 def mark_tablet_heartbeat(*, tablet_device_id: uuid.UUID) -> TabletDevice:
-    """Update tablet last_seen_at timestamp."""
+    """Set ``last_seen_at`` to now (manual heartbeat from RECEPTION/ADMIN)."""
     device = TabletDevice.objects.select_for_update().get(id=tablet_device_id)
     device.last_seen_at = timezone.now()
     device.save(update_fields=["last_seen_at"])
     return device
+
+
+@transaction.atomic
+def record_tablet_login_for_android_id(*, android_id: str) -> TabletDevice:
+    """Set ``last_seen_at`` after a successful tablet-area login for this ``android_id``."""
+    device, _ = get_or_create_tablet_device_by_android_id(android_id=android_id)
+    return mark_tablet_heartbeat(tablet_device_id=device.id)
 
 
 def _is_supported_locale(locale: str) -> bool:
