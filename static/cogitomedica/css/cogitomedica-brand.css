@@ -1,0 +1,136 @@
+/**
+ * CogitoMedica brand — kolory jak na żywej witrynie (skompilowany CSS Breakdance, np. post-17.css):
+ * główny akcent sekcji/CTA to teal #075255 (setki wystąpień), nie „blue-500” z global-settings.css.
+ * Dodatkowo: jasne tło sekcji #f5f7f8; akcenty #457147 / #6DCE56 w layoutcie marketingowym (opcjonalnie).
+ */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap");
+
+:root {
+  --cm-brand-teal: #075255;
+  /* Hover: nieco jaśniejszy od #075255 (na jasnym tle; na stronie często używany jest #075255 z przezroczystością) */
+  --cm-brand-teal-hover: #0a686d;
+  --cm-grey-50: #f9fafb;
+  --cm-grey-200: #e5e7eb;
+  --cm-grey-600: #4b5563;
+  --cm-grey-700: #374151;
+  --cm-grey-900: #111827;
+
+  --cm-primary: var(--cm-brand-teal);
+  --cm-primary-hover: var(--cm-brand-teal-hover);
+  --cm-body: var(--cm-grey-700);
+  --cm-muted: #6b7280;
+  --cm-surface: #f5f7f8;
+  --cm-secondary: #6c757d;
+  --cm-danger: #b02a37;
+
+  --cm-font-sans: "Poppins", system-ui, -apple-system, sans-serif;
+  --cm-font-heading: "Manrope", var(--cm-font-sans);
+
+  --bs-primary: var(--cm-primary);
+  --bs-primary-rgb: 7, 82, 85;
+  --bs-link-color: var(--cm-primary);
+  --bs-link-hover-color: var(--cm-primary-hover);
+}
+
+body {
+  font-family: var(--cm-font-sans);
+  color: var(--cm-body);
+}
+
+/* Lab landing (index.html): ten sam odcień „jasnego tła” co w arkuszach strony marketingowej */
+nav.navbar.bg-light,
+footer.footer.bg-light {
+  background-color: var(--cm-surface) !important;
+}
+
+/* Bootstrap 5.2 — primary (root --bs-primary alone does not always cascade to .btn-primary) */
+.btn-primary {
+  background-color: var(--cm-primary);
+  border-color: var(--cm-primary);
+  color: #fff;
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--cm-primary-hover);
+  border-color: var(--cm-primary-hover);
+  color: #fff;
+}
+
+.btn-outline-primary {
+  color: var(--cm-primary);
+  border-color: var(--cm-primary);
+}
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+  background-color: var(--cm-primary);
+  border-color: var(--cm-primary);
+  color: #fff;
+}
+
+/* Doctor toolbar on Unfold — match marketing neutrals */
+.doctor-toolbar {
+  background: #fff;
+  border-color: var(--cm-grey-200);
+}
+
+/* Simple portals (ergebnisse / tablet) without full Bootstrap */
+body.cm-portal {
+  background: var(--cm-surface);
+}
+
+.cm-portal-tablet a.btn {
+  display: block;
+}
+
+.cm-portal h1,
+.cm-portal h2,
+.cm-portal h3 {
+  font-family: var(--cm-font-heading);
+  color: var(--cm-grey-900);
+}
+
+.cm-portal a.btn {
+  background: var(--cm-primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 6px;
+}
+.cm-portal a.btn:hover {
+  background: var(--cm-primary-hover);
+  color: #fff;
+}
+.cm-portal a.btn.secondary {
+  background: var(--cm-secondary);
+}
+.cm-portal a.btn.secondary:hover {
+  filter: brightness(0.95);
+}
+
+.cm-portal button[type="submit"],
+.cm-portal button.btn {
+  cursor: pointer;
+  background: var(--cm-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+}
+.cm-portal button[type="submit"]:hover,
+.cm-portal button.btn:hover {
+  background: var(--cm-primary-hover);
+}
+
+.cm-portal .error,
+.cm-portal .tablet-form-connection-error {
+  color: var(--cm-danger);
+}
+
+.cm-portal .user,
+.cm-portal .text-muted-portal {
+  color: var(--cm-muted);
+}
+
+.cm-portal a.link-primary {
+  color: var(--cm-primary);
+}
