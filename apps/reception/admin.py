@@ -31,6 +31,7 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.xlsx_import import enqueue_patient_xlsx_import
+from apps.users.models import StaffUser
 
 
 class PatientXlsxImportAdminForm(forms.Form):
@@ -154,7 +155,8 @@ class DailyQueueAdmin(UnfoldModelAdmin):
     list_filter = ("status", "source", "shift_code", "queue_date")
     ordering = ["-created_at"]
     search_fields = ("clinic_site__code", "consulting_room__code", "assigned_doctor__username")
-    raw_id_fields = ("clinic_site", "consulting_room", "created_by_user", "assigned_doctor")
+    raw_id_fields = ("created_by_user",)
+    autocomplete_fields = ("clinic_site", "consulting_room", "assigned_doctor")
     date_hierarchy = "queue_date"
 
     def get_urls(self):
@@ -285,6 +287,12 @@ class DailyQueueAdmin(UnfoldModelAdmin):
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
         super().save_model(request, obj, form, change)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "assigned_doctor":
+            formfield.queryset = StaffUser.objects.filter(groups__name="Doctor").distinct()
+        return formfield
 
 
 @admin.register(QueueEntry)
