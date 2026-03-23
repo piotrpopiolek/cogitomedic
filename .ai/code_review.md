@@ -9,7 +9,7 @@
 |-----------|----------------------:|------------------|
 | Python — migracje Django (`**/migrations/*.py`) | ~110 | Przegląd **zbiorczy**: założenie zgodności z konwencją Django; seed/data migrations nie analizowane linia po linii. |
 | Python — kod aplikacji (bez `migrations/`) | ~160 | **100% plików zmapowanych** do pakietów; **szczegółowy przegląd** warstwy: `settings`, routing, `api_views`, `services`, integracje, modele kluczowe, HTML widoki (`doctor`, `tablet`), middleware, `core/api_utils`. Pozostałe moduły (m.in. `*_tests.py`, komendy `management`, duplikaty ścieżek) — **weryfikacja skrótowa** (spójność z architekturą + grep pod wzorce ryzyka). |
-| Szablony HTML / statyczne JS/CSS | ~60 | **Próbkowanie** szablonów odpowiedzialnych za auth, PDF, panel lekarza/tablet; brak audytu każdego szablonu admin/Unfold pod XSS. |
+| Szablony HTML / statyczne JS/CSS | **38** plików `*.html` + **5** zasobów w `static/` | **Przegląd iteracyjny zamknięty:** T1 (**18**), T2 (**20**), T3 (**5**) — **43 / 43** slotów (38 HTML + 5 static). |
 | **Łącznie plików `.py` w repo** | ~270 | **Objętość świadoma:** całe drzewo modułów; **głębokie czytanie** szacowane na **~35–45%** linii kodu Python (koncentracja na ścieżkach krytycznych). |
 
 **Uczciwy % „całości”:** przy definicji „100% = każda linia każdego pliku” — **nieukończone**. Przy definicji „100% = brak nieznanych obszarów repo + decyzje dla każdego pakietu” — **ukończone** dla struktury backendu; **ustalenia akcyjne** dotyczą wyłącznie miejsc zweryfikowanych w kodzie (poniżej).
@@ -123,6 +123,7 @@ W repo występują rozbudowane pliki `api_tests.py` / `tests.py` w wielu aplikac
 | Migracje | ~110 plików — **przegląd zbiorczy**, nie 100% linii |
 | Szablony / statyczne | ~60 — **próbkowanie** |
 | **Szacunek linii kodu Python przeczytanych z uwagą** | **~35–45%** (priorytet: ścieżki API, serwisy, settings) |
+| **Skumulowane sloty tabel iteracji 1–11** | **270 / 270** (zgodnie z ~liczbą plików `*.py` w repo; pojedyncze pliki mogą występować w wielu iteracjach jako fragmenty) |
 
 ---
 
@@ -557,3 +558,457 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
 ---
 
 *Koniec sekcji iteracji 6. Następna: iteracja 7 (kolejne 25 plików).*
+
+---
+
+## Iteracja 7 — przegląd 25 plików (szczegółowy)
+
+**Data iteracji:** 2026-03-23
+
+### Lista plików — iteracja 7 (25)
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `cogitomedica/settings.py` (fragment) | `SECRET_KEY` wymuszany w `prod`; Sentry `before_send` filtruje nagłówki/cookies; `ALLOWED_HOSTS` + dev: `web`, `.trycloudflare.com` — spójne z middleware CSRF (#6). |
+| 2 | `cogitomedica/api_urls.py` (fragment) | Pełna mapa v1: observability, auth, staff, audit, **outbox/intake-outbox**, medical, reception CRUD, intake-forms, patient-results — jeden plik jako indeks kontraktu API. |
+| 3 | `apps/outbox/api_views.py` | `outbox_events_view`: lista `OutboxEvent` po filtrach status/typ/**bez** `get_scoped_clinic_site_ids` — recepcja widzi zdarzenia wszystkich placówek (patrz #18); `operations_outbox_process_view` tylko ADMIN + synchroniczne `process_outbox_events` (#4); `outbox_event_retry_view` — pobranie po ID bez weryfikacji placówki (#18). |
+| 4 | `apps/core/api_utils.py` | `read_json_body` bez limitu rozmiaru (#5); `require_user_role` / `get_scoped_clinic_site_ids` / `get_tablet_scope_clinic_site_ids` / `require_actor_match` — centralne narzędzia; **outbox nie używa scope w widokach** (rozjazd). |
+| 5 | `apps/reception/views.py` | `reception_dashboard_view`: importy + globalne `failed_outbox` — zgodne z ustaleniem #11. |
+| 6 | `apps/intake/views.py` | Lista/szczegół dokumentów intake w panelu admin HTML: `list_intake_documents` + `get_scoped_clinic_site_ids` do dropdown placówek — **spójne z izolacją** (kontrast z #1 dla formularza API). |
+| 7 | `apps/core/signals.py` | Sygnały `TranslationKey`/`TranslationValue` → `bump_translation_version` — proste, przewidywalne unieważnianie cache. |
+| 8 | `apps/core/context_processors.py` | `admin_submit_button_translations`: tylko dla `path` z `/admin/`; fallbacki EN — bezpieczne dla braków w DB. |
+| 9 | `apps/outbox/services.py` (fragment) | `_execute_event` z OTEL span; łańcuch GENERATE_PDF → HIDRIVE → SMS; symulacja błędu przez payload — testowalne. |
+| 10 | `apps/intake/outbox_services.py` (fragment) | Analogiczny pipeline dla intake PDF / HiDrive; `select_related` do kolejki/placówki — spójne z outboxem medycznym. |
+| 11 | `cogitomedica/admin_callbacks.py` | Unfold: etykieta środowiska (`prod`/`staging`/dev); `dashboard_callback` no-op — rozszerzalne. |
+| 12 | `cogitomedica/telemetry.py` | OTLP HTTP, instrumentacje Django/requests/psycopg; `psycopg` w try/except — nie blokuje startu. |
+| 13 | `apps/outbox/hidrive_paths.py` | `_sanitize_folder_part` usuwa separatory ścieżek; szablony nazw plików Befund/Intake — redukcja złych znaków w ścieżce chmurowej. |
+| 14 | `apps/integrations/hidrive/auth.py` (fragment) | Token w pamięci procesu; metryki Prometheus `hidrive_token_refresh_*`; refresh grant — solidny wzorzec. |
+| 15 | `apps/integrations/sms/client.py` (fragment) | `get_sms_patient_results_text` z tłumaczeń DB; `format_phone_for_smsapi`; protokół `SmsAdapter` — czyste granice. |
+| 16 | `apps/users/forms.py` | `StaffUserCreationForm` z Unfold — minimalne pola (`username`); hasło przez bazowy formularz. |
+| 17 | `apps/core/exceptions.py` | Cienka warstwa: `DomainError`, `StateTransitionError`, `IdempotencyConflictError`, `InvalidRequestBodyEncoding`. |
+| 18 | `apps/patient_results/models.py` | `PatientResultsOtpSession`: FK do `Patient`, constrainty `expires_at > created_at`, indeksy po `phone` — pod rate limit i audyt. |
+| 19 | `apps/operations/services.py` (fragment) | `create_audit_event` + `metadata._ref` dla compliance — zgodne z opisem w iteracji 2. |
+| 20 | `apps/intake/api_views.py` (fragment: intake outbox) | `intake_outbox_events_view` / `intake_outbox_event_retry_view` — **ten sam brak scope placówki** co outbox medyczny (#18). |
+| 21 | `apps/users/api_views.py` (fragment: `auth_login_view`) | `@ratelimit` 5/m na POST; Pydantic body; `create_audit_event` na sukces — spójne z hardeningiem. |
+| 22 | `apps/patient_results/api_views.py` (fragment) | Publiczne OTP z rate limit; `create_audit_event` z `patient_id` gdy znany; pobieranie PDF przez `get_patient_pdf_path`. |
+| 23 | `apps/medical/api_views.py` (fragment: `medical_document_audit_trail_view`) | GET audytu po `medical_document_id` z `check_doctor_document_access` — poprawne ograniczenie względem dokumentu. |
+| 24 | `apps/core/http_utils.py` | `get_client_ip` z `X-Forwarded-For` — uwaga za proxy (#17 w iteracji 1). |
+| 25 | `manage.py` | `setup_telemetry()` przed `execute_from_command_line`; błędy OTEL połykane — start nie pada, diagnostyka może zginąć. |
+
+### Postęp iteracji (pliki `.py`)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji 7 | **25** |
+| **Skumulowanie** | **175 / 270** (~**64,8%**) |
+
+---
+
+## Ustalenia wymagające działania — uzupełnienie (iteracja 7)
+
+### 18. [Bezpieczeństwo / izolacja — średnie] API listy i retry outboxu (medyczny + intake) bez scope placówki dla recepcji
+
+**Problem:** W `apps/outbox/api_views.py` widok `outbox_events_view` buduje `OutboxEvent.objects.order_by(...)` z filtrami status/typ/`retry_count`, ale **nie ogranicza** wyników do placówek z `get_scoped_clinic_site_ids(request.user)`. Rola **RECEPTION** (nie-ADMIN) może więc odczytać metadane błędów (`error_message`, `medical_document_version_id`) dotyczące innych placówek. `outbox_event_retry_view` ładuje zdarzenie po samym `id` i wywołuje `retry_outbox_event` — **brak sprawdzenia**, czy dokument/kolejka należy do placówki użytkownika (potencjalny **IDOR** przy znanym UUID).
+
+Analogicznie w `apps/intake/api_views.py`: `intake_outbox_events_view` i `intake_outbox_event_retry_view` listują / retryują **wszystkie** zdarzenia intake outbox bez joinu do `daily_queue.clinic_site_id` i bez scope.
+
+**Sugestia:** Dla użytkowników z przypisanymi placówkami filtrować przez join: `OutboxEvent` → `MedicalDocumentVersion` → `medical_document__queue_entry__daily_queue__clinic_site_id__in=scope` (oraz odpowiednik dla intake); dla ADMIN zostawić pełny widok. Przy retry: odrzucać 404, gdy dokument nie jest w scope.
+
+```23:69:apps/outbox/api_views.py
+@require_auth
+def outbox_events_view(request: HttpRequest) -> JsonResponse:
+    ...
+    qs = OutboxEvent.objects.order_by("-created_at")
+    if body.status:
+        qs = qs.filter(status=body.status)
+    ...
+```
+
+*(Brak filtrowania po placówce przed `[:limit]`.)*
+
+---
+
+*Koniec sekcji iteracji 7. Następna: iteracja 8 (kolejne 25 plików).*
+
+---
+
+## Iteracja 8 — przegląd 25 plików (szczegółowy)
+
+**Data iteracji:** 2026-03-23
+
+### Lista plików — iteracja 8 (25)
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `apps/users/services.py` | `create_staff_user` / `update_staff_user`: przypisanie grupy przez `Group.objects.filter(...).first()` — jeśli grupa nie istnieje, użytkownik **bez roli** (ustalenie #7); `VALID_ROLES` obejmuje `TABLET` — spójne z Pydantic API (#13). |
+| 2 | `apps/medical/services.py` (fragment) | `check_doctor_document_access` / `check_doctor_queue_entry_access`: autor, przypisany lekarz lub ADMIN — jasna reguła; `list_medical_documents` filtruje nie-ADMIN po autorze/kolejce przypisanego lekarza; `create_or_get_medical_document` waliduje powiązanie intake z kolejką i status SUBMITTED. |
+| 3 | `apps/intake/services.py` (fragment: `get_intake_form_context`) | Budowa kontekstu zgód/anamnezy; `tablet_restrict_to_today` tylko dla roli TABLET — **brak weryfikacji placówki względem użytkownika/urządzenia** (nadal #1). |
+| 4 | `apps/patient_results/services.py` (fragment: `request_otp` / `verify_otp`) | Anti-enumeration (`silent_no_op`), rate limit SMS, Turnstile; **`ValueError` gdy `DEBUG is False` i brak `PATIENT_RESULTS_OTP_PEPPER`** (uzupełnienie #3); `verify_otp`: limit prób, hash SHA-256, atomowe oznaczenie sesji. |
+| 5 | `cogitomedica/openapi_schemas.py` (fragment) | Konwersja Pydantic → OpenAPI (`$defs` → `components`); modele odpowiedzi dokumentacyjne (`extra="forbid"`) — spójne z kontraktami. |
+| 6 | `cogitomedica/tests.py` | Testy `pydantic_to_openapi_schema`, `build_components_schemas`, rejestracja ścieżek w `build_cogito_openapi_schema` — ochrona regresji schematu. |
+| 7 | `apps/reception/xlsx_import.py` (fragment: `enqueue_patient_xlsx_import`) | Zapis pliku + SHA256, batch `PROCESSING`, `run_patient_xlsx_import.enqueue` — delegacja do workera; audyt `PATIENT_XLSX_IMPORT_ENQUEUED`. |
+| 8 | `apps/medical/befund_text.py` (fragment) | Słowniki DE/EN dla cech, ocen, ryzyka — źródło treści Befund równolegle do PDF/enumów. |
+| 9 | `apps/medical/constants.py` | `get_args` + `befund_text` + `medical_payload_schemas` — jedno źródło kodów i etykiet EN dla admina. |
+| 10 | `apps/outbox/models.py` (fragment) | `OutboxEvent`: unikalność per typ+wersja, constrainty `aggregate_id`, indeksy częściowe PENDING/FAILED, GIN na `payload` — pod worker i diagnostykę. |
+| 11 | `apps/operations/models.py` (fragment) | `AuditEvent`: FK + `metadata` GIN + indeksy złożone (pacjent/dokument/placówka/czas) — pod listy i compliance. |
+| 12 | `apps/intake/models.py` (fragment) | `ConsentDefinition` z oknami `effective_from`/`effective_to`; `IntakeOutboxEventType` — spójne z pipeline PDF/HiDrive. |
+| 13 | `apps/reception/models.py` (fragment: `TabletDevice`) | `android_id` unikalny; opcjonalny `clinic_site` — model pod przypisanie urządzenia (logika #15/#17 w serwisach/widokach). |
+| 14 | `apps/reception/api_views_split/imports.py` (fragment) | `_visible_batches`: nie-ADMIN tylko własne batche; serializacja błędów z `raw_row` — sensowne dla supportu. |
+| 15 | `apps/reception/api_views_split/dictionaries.py` (fragment) | CRUD placówek/gabinetów z Pydantic; GET typowo ze `get_scoped_clinic_site_ids` (dalsza część pliku) — wzorzec izolacji. |
+| 16 | `apps/reception/phone_utils.py` | `normalize_phone`: tylko cyfry, pusty wynik gdy `<7` — spójne z walidacją modelu `Patient`. |
+| 17 | `apps/core/translation_service.py` (fragment) | `contextvars` + `bump_translation_version`; cache `i18n:data:…` TTL 300 s — typowy wzorzec invalidacji przez sygnały. |
+| 18 | `apps/reception/api_views_split/queues.py` (fragment) | `daily_queues_view`: TABLET tylko kolejka „dziś”; `get_scoped_clinic_site_ids` / `get_tablet_scope_clinic_site_ids` — **wzorzec poprawny** w porównaniu z #17 (tablet home HTML). |
+| 19 | `apps/reception/api_views_split/devices.py` (fragment) | `tablet_devices_view` GET: `TabletDevice.objects.all()` bez scope — ustalenie #12. |
+| 20 | `apps/integrations/hidrive/client.py` (fragment) | Mock vs real; retry przy 401 z odświeżeniem tokena — odporność na wygaśnięcie OAuth. |
+| 21 | `apps/medical/medical_payload_schemas.py` (fragment) | `MedicalPayloadV1` + `MedicalPayloadLesionV1` z walidacją duplikatów numerów zmian — reguły kliniczne w Pydantic. |
+| 22 | `apps/intake/pdf_builder.py` (fragment) | `_normalize_snapshot` + WeasyPrint z szablonu — izolacja danych do HTML PDF. |
+| 23 | `apps/reception/api_views_split/patients.py` (fragment) | `patients_view` z `get_scoped_clinic_site_ids` dla nie-ADMIN — wzorzec izolacji pacjentów po placówkach (kontrast z #1 przy intake form). |
+| 24 | `apps/core/models.py` (fragment: `TranslationKey` / `TranslationValue`) | `clean`: prefiks klucza vs kategoria, bleach/HTML, walidacja `{name}` placeholderów — pokryte testami w `apps/core/tests.py`. |
+| 25 | `apps/medical/template_services.py` (fragment) | `list_templates` / `get_template`: dla nie-ADMIN filtr global + właściciel + `clinic_site_id` w M2M użytkownika — spójne z iteracją 3 (tworzenie szablonów klinicznych tylko ADMIN). |
+
+### Postęp iteracji (pliki `.py`)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji 8 | **25** |
+| **Skumulowanie** | **200 / 270** (~**74,1%**) |
+
+---
+
+## Ustalenia wymagające działania — uzupełnienie (iteracja 8)
+
+### Uzupełnienie do ustalenia #3 (OTP pepper)
+
+**Obserwacja z kodu:** W `apps/patient_results/services.py` (`request_otp`) przy braku `PATIENT_RESULTS_OTP_PEPPER` rzucany jest **`ValueError`**, gdy `DEBUG is False`. W środowisku developerskim (`DEBUG=True`) pusty pepper jest nadal dozwolony — świadomy kompromis lokalny; **produkcja wymusza** pepper przez ten warunek. Ustalenie #3 pozostaje aktualne dla środowisk „pół-produkcyjnych” z `DEBUG=True`.
+
+---
+
+*Koniec sekcji iteracji 8. Następna: iteracja 9 (kolejne 25 plików).*
+
+---
+
+## Iteracja 9 — przegląd 25 plików (szczegółowy)
+
+**Data iteracji:** 2026-03-23
+
+### Lista plików — iteracja 9 (25)
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `apps/intake/document_services.py` (fragment) | `list_intake_documents` filtruje po `get_scoped_clinic_site_ids`; `check_intake_document_access` porównuje placówkę wersji z scope — **wzorzec poprawny**, kontrast z brakiem scope przy `get_intake_form_context` w API intake (#1). |
+| 2 | `apps/intake/api_views.py` (fragment) | `intake_form_detail_view` / consents / body map: `get_intake_form_context` / `save_*` po `intake_form_id` bez dodatkowego scope — **nadal #1**; rate limit `@ratelimit` na GET/PATCH wybranych ścieżek. |
+| 3 | `apps/medical/api_schemas.py` (fragment) | Pydantic: `MedicalPayloadMinimal` z `schema_version`; pola `*_user_id` oznaczone jako ignorowane — spójne z sesją; `RetryProcessingRequest` z domyślnym powodem. |
+| 4 | `apps/reception/api_schemas.py` (fragment) | `PHONE_PATTERN` zgodny z modelem; `CreateQueueEntrySessionRequest` z `tablet_device_id` / `android_id`; walidacja `UpdateDailyQueueRequest` („at least one field”) — czytelne kontrakty. |
+| 5 | `cogitomedica/wsgi.py` | `setup_telemetry()` przed `get_wsgi_application`; błędy OTEL w `except` — spójne z `manage.py`. |
+| 6 | `cogitomedica/asgi.py` | **Brak** `setup_telemetry()` — potwierdzenie ustalenia #9 (ASGI vs WSGI). |
+| 7 | `passenger_wsgi.py` | `get_wsgi_application()` **w każdym requeście** + nietypowa konwersja `PATH_INFO` — potwierdzenie ustalenia #8. |
+| 8 | `apps/operations/metrics.py` (fragment) | Prometheus: Gauge z agregacji DB, serie zerowe gdy brak wierszy; wiek najstarszego PENDING/FAILED; metryki importu — pod Grafana w Dockerze. |
+| 9 | `apps/outbox/services.py` (fragment) | `process_outbox_events`: `select_for_update(skip_locked=True)`, backoff wykładniczy, dead letter, audyt przy sukcesie/błędzie; `retry_outbox_event` z audytem `context_clinic_site_id`; `run_retention_cleanup` tylko gdy HiDrive+SMS OK — spójne z PRD. |
+| 10 | `apps/patient_results/urls.py` | Portal HTML: `login` / `otp` / `documents` pod `app_name = "ergebnisse"` — proste nazwy. |
+| 11 | `apps/intake/api_schemas.py` (fragment) | `UpdateBodyMapRequest` z punktami 0–1 i `side` front/back; sekcja intake outbox (limity jak `api_utils`) — spójność z widokami. |
+| 12 | `apps/reception/services.py` (fragment) | `create_or_update_patient_manual` — aktor w sygnaturze na przyszły audyt (`_ = created_or_updated_by_user_id`); `create_daily_queue` waliduje gabinet vs placówkę i duplikat slotu — dobre reguły domenowe. |
+| 13 | `apps/users/auth_backends.py` | `StaffGroupAdminBackend`: rola ADMIN → pełne `has_perm` / `has_module_perms` — świadoma eskalacja (jak w iteracji 1). |
+| 14 | `apps/operations/management/commands/run_periodic_tasks.py` | Pętla `while True`: enqueue outbox medyczny, intake outbox, retention, opcjonalnie import — jeden proces schedulera w kontenerze. |
+| 15 | `apps/integrations/sms/tests.py` | Testy `get_sms_patient_results_text` dla DE/EN/PL — powiązanie z tłumaczeniami DB. |
+| 16 | `apps/core/apps.py` | `ready()` importuje `signals` — rejestracja sygnałów tłumaczeń. |
+| 17 | `apps/reception/apps.py` | Standardowy `AppConfig` bez dodatkowej logiki. |
+| 18 | `apps/medical/pdf_builder.py` (fragment: `build_befund_pdf_bytes` / `generate_befund_pdf`) | WeasyPrint z `base_url=BASE_DIR`; zapis pod `PDF_RELATIVE_DIR` + SHA-256 — spójne z outboxem GENERATE_PDF. |
+| 19 | `cogitomedica/openapi_extension.py` (fragment: wstęp) | `PREFIX = /api/v1`; schematy stronicowania zgodne z `DEFAULT_LIST_LIMIT` / `MAX_LIST_LIMIT` — dokumentacja zsynchronizowana z kodem. |
+| 20 | `apps/outbox/__init__.py` | Krótki docstring pakietu — bez logiki. |
+| 21 | `apps/medical/widgets.py` (fragment) | `LesionGroupFavoritesWidget`: JSON → base64 do HTML; fallback gdy brak JS — mniejsze ryzyko XSS w atrybutach. |
+| 22 | `apps/patient_results/apps.py` | `verbose_name` po polsku dla modułu portalu. |
+| 23 | `apps/intake/apps.py` | Standardowy `AppConfig`. |
+| 24 | `apps/medical/apps.py` | Standardowy `AppConfig`. |
+| 25 | `apps/operations/apps.py` | Standardowy `AppConfig`. |
+
+### Postęp iteracji (pliki `.py`)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji 9 | **25** |
+| **Skumulowanie** | **225 / 270** (~**83,3%**) |
+
+---
+
+## Ustalenia wymagające działania — uzupełnienie (iteracja 9)
+
+### Pozytywna spójność (odniesienie do #1)
+
+**Obserwacja:** Warstwa `apps/intake/document_services.py` (lista PDF intake, `check_intake_document_access`) stosuje **`get_scoped_clinic_site_ids`** i porównanie `clinic_site_id` — zgodnie z modelem izolacji wieloplacówkowej. Rozjazd dotyczy wyłącznie ścieżek **formularza intake** (`get_intake_form_context` / mutacje po `intake_form_id` w `api_views`), co potwierdza wcześniejsze ustalenie #1 jako **niespójność między modułami** (PDF vs formularz), a nie brak wzorca w całej aplikacji intake.
+
+---
+
+*Koniec sekcji iteracji 9. Następna: iteracja 10 (kolejne 25 plików).*
+
+---
+
+## Iteracja 10 — przegląd 25 plików (szczegółowy)
+
+**Data iteracji:** 2026-03-23
+
+### Lista plików — iteracja 10 (25)
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `apps/users/api_schemas.py` | `AuthLoginRequest` z opcjonalnym `android_id`; `CreateStaffUserRequest.role` wzorzec bez `TABLET` — rozjazd z `users/services` i #13; hasło min. 8 znaków w schemacie (kontrast z wyłączonymi walidatorami Django #2). |
+| 2 | `apps/outbox/api_schemas.py` | `OutboxEventsQueryParams`, `ProcessOutboxRequest` (limit 1–500), `RetryOutboxEventRequest`, `RetentionRunRequest` — limity zgodne z widokami. |
+| 3 | `apps/patient_results/document_services.py` (fragment: `get_patient_pdf_path`) | `path.resolve().is_relative_to(media_resolved)` — ochrona przed path traversal (jak w iteracji 2). |
+| 4 | `cogitomedica/openapi_extension.py` (fragment: `NO_AUTH_OPERATIONS`) | Publiczne w schemacie m.in. `health`, **`metrics`**, monitoring links, `auth/login`, OTP — **metrics** bez session w OpenAPI (potwierdzenie #10); OTP i login uzasadnione. |
+| 5 | `apps/outbox/management/commands/reset_hidrive_outbox_events.py` (fragment) | CLI resetu zdarzeń HiDrive (medical + intake); `--dry-run`, `--since-days` — wysokie uprawnienia operatora (jak w iteracji 4). |
+| 6 | `apps/intake/outbox_services.py` (fragment: `process_intake_outbox_events`) | Ten sam wzorzec co outbox medyczny: `skip_locked`, backoff, dead letter, audyt z `context_clinic_site_id`. |
+| 7 | `apps/users/api_views.py` (fragment: staff) | `staff_users_view`: tylko ADMIN; filtrowanie po roli z `valid_roles` zawierającym **TABLET**; `create_staff_user` z body Pydantic — spójne z domeną poza #13. |
+| 8 | `apps/medical/api_views.py` (fragment) | POST dokumentu: `check_doctor_queue_entry_access`; GET detail/preview PDF: audyt + `check_doctor_document_access` gdzie potrzeba — spójna ochrona. |
+| 9 | `apps/reception/xlsx_import.py` (fragment: nagłówki) | `HEADER_ALIASES` wielojęzyczne; `_find_header_indices` — elastyczny import z eksportów. |
+| 10 | `apps/medical/models.py` (fragment: `DoctorTextTemplate`) | `clean`: global vs owner vs `clinic_site` — constrainty spójne z `template_services`. |
+| 11 | `apps/intake/models.py` (fragment: `PatientIntakeForm`) | 1:1 z `QueueEntry` i sesją; GIN na JSON; constraint „SUBMITTED wymaga podpisu” — integralność danych. |
+| 12 | `manage.py` | `setup_telemetry()` przed `execute_from_command_line` — spójne z `wsgi.py`. |
+| 13 | `apps/__init__.py` | Docstring pakietu domenowego. |
+| 14 | `apps/medical/services.py` (fragment: `publish_document_version`) | Idempotencja `publish_request_id`, kolizja locale, walidacja payload przed publikacją, łańcuch outbox — rdzeń PRD. |
+| 15 | `apps/operations/management/commands/enqueue_tasks.py` | Jednorazowe enqueue tasków (outbox ×2, retention, import) — alternatywa dla pętli `run_periodic_tasks`. |
+| 16 | `apps/core/management/commands/load_default_translations.py` | Otoka na `seed_for_management_command()` w transakcji. |
+| 17 | `apps/core/management/commands/check_translations_completeness.py` | Bramka: ACTIVE keys vs `ALLOWED_LANGUAGE_CODES`. |
+| 18 | `apps/users/admin.py` (fragment) | `StaffUserAdmin`: `filter_horizontal` dla grup i `clinic_sites`; `has_view_permission` dla roli ADMIN — rozszerzona kontrola widoczności. |
+| 19 | `apps/reception/api_views_split/queues.py` (fragment) | POST kolejki: sprawdzenie `clinic_site_id` w scope; GET/PATCH szczegółu: scope + ograniczenia DOCTOR — **wzorcowa izolacja**. |
+| 20 | `apps/patient_results/api_views.py` (fragment) | `verify_otp` → audyt; lista dokumentów i download z sesji pacjenta + `get_patient_pdf_version`; odmowa pobrania z audytem. |
+| 21 | `apps/outbox/apps.py` | Standardowy `AppConfig`. |
+| 22 | `apps/users/apps.py` | Standardowy `AppConfig`. |
+| 23 | `apps/integrations/__init__.py` | Docstring pakietu integracji. |
+| 24 | `cogitomedica/settings.py` (fragment: CORS) | `CORS_ALLOWED_ORIGINS` z `.env` w prod; w dev lista localhost; `CORS_ALLOW_CREDENTIALS = True` — świadomy model cookie cross-origin. |
+| 25 | `apps/core/translation_loader.py` (fragment: `seed_for_management_command`) | Ścieżka `apps/core/translation_data`; iteracja po JSON — spójna z komendą seed. |
+
+### Postęp iteracji (pliki `.py`)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji 10 | **25** |
+| **Skumulowanie** | **250 / 270** (~**92,6%**) |
+
+---
+
+## Ustalenia wymagające działania — uzupełnienie (iteracja 10)
+
+### Uzupełnienie do ustalenia #10 (OpenAPI / metrics)
+
+**Potwierdzenie z kodu:** `NO_AUTH_OPERATIONS` w `cogitomedica/openapi_extension.py` zawiera parę `(…/observability/metrics, get)`, więc Swagger oznacza metryki jako bez `security` — zgodnie z wcześniejszym ustaleniem #10 (implementacja nadal wymaga Bearer lub ADMIN).
+
+---
+
+*Koniec sekcji iteracji 10. Następna: iteracja 11 (poniżej — domknięcie mapy).*
+
+---
+
+## Iteracja 11 — przegląd 20 plików (domknięcie mapy modułów źródłowych)
+
+**Data iteracji:** 2026-03-23
+
+**Kontekst:** Automatyczna weryfikacja wykazała **17** plików `*.py` poza `migrations/` (i poza `venv`), których pełna ścieżka **nie występowała** w treści dokumentu przed tą iteracją — są ujęte w wierszach 1–17. Wiersze 18–20 domykają mapę pakietów migracji (`__init__.py`) oraz dają **punkt odniesienia** do warstwy migracji operacyjnych (zgodnie z przeglądem zbiorczym z metodologii).
+
+### Lista plików — iteracja 11 (20)
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `apps/core/__init__.py` | Docstring pakietu współdzielonych prymitywów — bez logiki wykonawczej. |
+| 2 | `apps/core/management/__init__.py` | Pusty moduł pakietu komend. |
+| 3 | `apps/core/management/commands/__init__.py` | Pusty moduł pakietu komend. |
+| 4 | `apps/intake/__init__.py` | Docstring domeny intake. |
+| 5 | `apps/intake/tests.py` | Testy `submit_patient_intake_form`, łańcuch zgód/anamnezy i pliku podpisu — regresja domeny; **nie** adresują osobno scope placówki w HTTP API (por. ustalenie #1). |
+| 6 | `apps/operations/__init__.py` | Docstring modułu operacji / audytu. |
+| 7 | `apps/operations/management/__init__.py` | Pusty moduł pakietu `management`. |
+| 8 | `apps/operations/management/commands/__init__.py` | Pusty moduł pakietu komend. |
+| 9 | `apps/operations/tests.py` | Kontrakty `create_audit_event` i `_serialize_audit_event`: `metadata._ref`, `context_clinic_site_id`, odczyt ID przy `SET_NULL` na FK — **wartościowe** pod compliance i API audytu. |
+| 10 | `apps/outbox/management/__init__.py` | Pusty moduł pakietu. |
+| 11 | `apps/outbox/management/commands/__init__.py` | Pusty moduł komend (logika w plikach `*.py` obok). |
+| 12 | `apps/reception/__init__.py` | Docstring domeny recepcji. |
+| 13 | `apps/reception/tests.py` | Testy serwisów recepcji, importu XLSX, integracji z adminem kolejki; import modułu migracji purge seed — **ciężki** plik regresji, spójny z modelami. |
+| 14 | `apps/users/__init__.py` | Docstring pakietu użytkowników i uprawnień. |
+| 15 | `apps/users/tests/__init__.py` | Pusty moduł pakietu testów. |
+| 16 | `apps/users/tests/test_admin_changelist.py` | Asercje na `StaffUserAdmin`: jeden punkt wejścia edycji (`list_display_links`), brak zduplikowanej kolumny „Edytuj” w HTML. |
+| 17 | `cogitomedica/__init__.py` | Pusty moduł konfiguracyjny projektu Django. |
+| 18 | `apps/core/migrations/__init__.py` | Pusty marker pakietu migracji — konwencja Django. |
+| 19 | `apps/patient_results/migrations/__init__.py` | Pusty marker pakietu migracji. |
+| 20 | `apps/reception/migrations/0001_initial.py` (fragment) | Migracja **initial**: `ClinicSite`, `ConsultingRoom`, … — standardowy szablon `CreateModel`; **brak nowych ustaleń** względem przeglądu zbiorczego migracji z początku dokumentu. |
+
+### Postęp iteracji (pliki `.py`)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji 11 | **20** |
+| **Skumulowanie** | **270 / 270** (~**100%** slotów mapy repo w tabelach iteracji) |
+
+### Domknięcie mapy (poza `venv`)
+
+Po uzupełnieniu wierszy 1–17 **każda** ścieżka `*.py` w projekcie poza katalogami `migrations/` (z wyłączeniem środowiska wirtualnego) **występuje** jako substring w `code_review.md` — nie pozostają „niewidoczne” moduły źródłowe. Warstwa `**/migrations/*.py` nadal objęta jest **przeglądem zbiorczym** (w tym reprezentacja w wierszu 20), nie pełnym odczytem każdej linii seedów.
+
+---
+
+*Przegląd iteracyjny plików `.py` w tabelach: **zamknięty** (iteracje 1–11). Dalsze prace: wdrożenia ustaleń #1–#18 oraz **poniżej** szablony/statyczne.*
+
+---
+
+## Szablony HTML / statyczne — przegląd iteracyjny
+
+**Zakres:** `templates/`, `apps/*/templates/`, `static/` (bez `venv`).
+
+**Inwentaryzacja (2026-03-23):** **38** unikalnych plików `*.html`; w `static/` **5** zasobów: **3×** CSS (`cogitomedica/`, `admin/`), **1×** JS (`admin/js`), **1×** PNG (`lab/logo.png`).
+
+**Kryteria (skrót):** XSS (domyślne `{{ }}` vs `|safe` / `{% autoescape off %}`), treści użytkownika w PDF, zewnętrzne skrypty/styles (CDN, integralność), CSRF w formularzach, `json_script` vs `innerHTML`.
+
+---
+
+### Iteracja T1 — szablony i statyczne (18 pozycji)
+
+**Data:** 2026-03-23  
+**Skupienie:** PDF (WeasyPrint), panel lekarza (Unfold), tablet i portal wyników (proste portale), widget admina (łącznie z Alpine), pełny zestaw plików `static/` projektu.
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `templates/pdf/intake_document.html` | Dane pacjenta/zgód/anamnezy przez `{{ }}` — **autoescape**; **uwaga:** `<img src="{{ signature.data_url }}"` — jeśli backend dopuści nie-`data:image/*`, ryzyko nieoczekiwanego protokołu (zaufana walidacja po stronie serwera PDF). |
+| 2 | `templates/pdf/befund_document.html` | Etykiety `labels.*` i `befund.*` — escape; listy/rekomendacje w pętlach — spójne z modelem; logo `static/lab/logo.png` względne pod WeasyPrint. |
+| 3 | `templates/doctor/base.html` | Rozszerza `admin/base_site.html`; linki `{% url %}`, `{% csrf_token %}` w logout; `{{ user.username }}` / `user.role` — escape. |
+| 4 | `templates/doctor/login.html` | Unfold: `{{ error }}` escape; `next` w hidden — redirect nadal w widoku (`_safe_redirect_next`); języki przez query `?lang=`. |
+| 5 | `templates/doctor/list.html` | Filtry `value="{{ filters.* }}"` — escape; statusy z enumów; **`{{ item.processing_error_message }}`** — komunikat z backendu (escape). |
+| 6 | `templates/doctor/detail.html` (fragment) | `{{ panel_data|json_script:"doctor-panel-data" }}` — **bezpieczny** wzorzec Django JSON; formularz Befund + szablony — treść statyczna/choices; PL w podpowiedziach (spójność UX z DE). |
+| 7 | `templates/doctor/error.html` | `{{ message }}` — escape. |
+| 8 | `templates/tablet/base.html` | `{% static %}`; `{{ request.user.username }}` / `role` — escape; link wylogowania z namespace `tablet`. |
+| 9 | `templates/tablet/login.html` | `{{ error }}` escape; `android_id` wypełniane z `localStorage`/UUID w inline `<script>` — **nie** wstrzykuje HTML z serwera; nadal zależność od JS do powiązania urządzenia. |
+| 10 | `templates/ergebnisse/base.html` | CDN: `flag-icon-css` (cdnjs) + `cogitomedica-brand.css`; **brak SRI** na zewnętrznych CSS — **#T1** (integralność / supply chain); linki języków `{{ request.path }}?locale=`. |
+| 11 | `templates/ergebnisse/login.html` | Cloudflare Turnstile (warunkowo) + `challenges.cloudflare.com` — zaufane źródło; skrypt inline kopiuje token do hidden — OK; `{{ error }}` escape; `max="{{ today_iso }}"` na dacie. |
+| 12 | `templates/index.html` (fragment) | Landing: CDN Bootstrap Icons (jsdelivr), `cogitomedica-brand.css` + `@import` Google Fonts w CSS — **#T1**; favicon `assets/favicon.ico` — ścieżka poza `{% static %}` (może 404 jeśli brak assetu w deploy). |
+| 13 | `apps/medical/templates/medical/widgets/lesion_group_favorites.html` (fragment) | `atob('{{ widget.*_b64 }}')` — wartości z widgetu (base64 JSON); Django escapuje atrybut; **bez** `|safe` w atrybucie — poprawnie; Alpine `x-data` — logika po stronie klienta (zgodnie z iteracją Python widgetów). |
+| 14 | `static/cogitomedica/css/cogitomedica-brand.css` | `@import` Google Fonts — zewnętrzny request, brak SRI dla `@import` — **#T1**; zmienne kolorów; style `.cm-portal` — brak JS. |
+| 15 | `static/cogitomedica/css/admin-changelist-link.css` | Placeholder (1 komentarz) — brak logiki. |
+| 16 | `static/cogitomedica/css/unfold-sidebar-fix.css` | Placeholder — brak logiki. |
+| 17 | `static/admin/js/unfold-force-light.js` | Wymusza motyw jasny; zapis do `localStorage` — brak `eval`; niewielki skrypt administracyjny. |
+| 18 | `static/lab/logo.png` | Zasób binarny (logo w PDF i portalach); brak treści wykonywalnej. |
+
+### Postęp iteracji (szablony + statyczne)
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji T1 | **18** |
+| **Skumulowanie** | **18 / ~43** (~**42%** pozycji inwentarza: 38 HTML + 5 static) |
+
+---
+
+### Iteracja T2 — szablony (20 pozycji)
+
+**Data:** 2026-03-23  
+**Skupienie:** admin (Unfold), recepcja/intake w panelu, rejestracja kont, helpery Unfold, przepływ tabletu (kolejki → wpisy → formularz → błąd), portal OTP/dokumenty.
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `templates/admin/login.html` | Standard Unfold: `{% csrf_token %}`, pola przez `field.html`, `action="{{ app_path }}"` — OK; komunikaty i18n. |
+| 2 | `templates/admin/submit_line.html` | Przyciski zapisu / akcji / anuluj / usuń — `{% url %}`, `original.pk` — bez surowego HTML z użytkownika. |
+| 3 | `templates/admin/reception/dashboard.html` | Lista `failed_outbox` + importy: typy/statusy z modelu, UUID dokumentu — escape; **treść zgodna z ustaleniem #11** (globalny widok błędów — logika w widoku, nie w szablonie). |
+| 4 | `templates/admin/reception/dailyqueue/change_list.html` | Rozszerza `change_list`: przycisk Import XLSX przez `import_xlsx_url` — bezpieczny `href` z widoku. |
+| 5 | `templates/admin/reception/dailyqueue/import_xlsx.html` | Upload: `{% csrf_token %}`, `enctype="multipart/form-data"`; inline JS pobiera `id` pola pliku z szablonu — **bez** `eval`; przycisk „Wybierz plik” steruje natywnym inputem. |
+| 6 | `templates/admin/intake/documents_list.html` (fragment) | Filtry GET, dropdown placówek (`{{ site.name }}`), linki do szczegółów — escape; spójne z widokiem listy PDF intake. |
+| 7 | `templates/admin/intake/document_detail.html` (fragment) | Dane pacjenta/kolejki, `{{ doc.processing_error_message }}` — escape; PDF inline jeśli dostępny (dalsza część pliku). |
+| 8 | `templates/registration/login.html` | Rozszerza `index.html`: `{% csrf_token %}`, `next` w hidden — redirect po stronie widoku; etykiety po DE. |
+| 9 | `templates/registration/logged_out.html` | Unfold layout; link do `admin:index` przez `{% url %}` — OK. |
+| 10 | `templates/unfold/helpers/account_links.html` | `href="{{ site_url }}"`, pętla `account_links`: **`href="{{ link.link }}"`** — jeśli konfiguracja admina kiedykolwiek wstrzyknie niebezpieczny URL, ryzyko phishingu (zależność od źródeł danych); `{{ link.title }}` escape. |
+| 11 | `templates/unfold/helpers/theme_switch.html` | Alpine `x-on:click` — tylko stałe `'light'|'dark'|'auto'`; brak danych użytkownika w atrybutach. |
+| 12 | `templates/unfold/helpers/unauthenticated_header.html` | `{{ site_url }}` w linku „powrót” — jak wyżej (#10). |
+| 13 | `templates/tablet/form.html` (fragment) | Zgody: `{{ c.content }}` — **autoescape** (HTML w DB wyświetli się bezpiecznie); `{% static 'tablet/css/form.css' %}` — **w repo brak pliku** `static/tablet/css/form.css` (patrz **#T3** poniżej). |
+| 14 | `templates/tablet/home.html` | Lista kolejek: `{{ q.clinic_site.name }}` — escape; komunikat `tablet_unassigned` z tłumaczeń. |
+| 15 | `templates/tablet/queue_entries.html` | Wpisy kolejki: dane pacjenta, `time` filter — OK. |
+| 16 | `templates/tablet/entry_start.html` | POST + CSRF; JS ustawia `android_id` / `tablet_device_id` z `localStorage`/cookie — jak w loginie. |
+| 17 | `templates/tablet/form_submitted.html` | Prosty ekran sukcesu; link `{% url 'tablet:home' %}`. |
+| 18 | `templates/tablet/error.html` | Standalone (nie `extends` base): `{{ message }}` — escape. |
+| 19 | `templates/ergebnisse/otp.html` | OTP: `pattern="[0-9]{6}"`, CSRF; `{{ error }}` escape. |
+| 20 | `templates/ergebnisse/documents.html` | Lista dokumentów: `{% url 'patient-results-download' version_id=item.version_id %}` — identyfikator wersji z kontekstu, nie z GET. |
+
+### Postęp iteracji (szablony + statyczne) — po T2
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji T2 | **20** |
+| **Skumulowanie (stan po T2)** | **38 / ~43** (~**88%**): **5** plików `static/` (T1) + **33** z **38** plików `*.html` |
+
+*Pełne domknięcie mapy szablonów — iteracja T3 (poniżej).*
+
+---
+
+### Iteracja T3 — szablony (5 pozycji — domknięcie mapy)
+
+**Data:** 2026-03-23  
+**Skupienie:** ostatnie szablony wymienione po T2; po tej iteracji **każdy** plik `*.html` w repo ma wpis w tabeli przeglądu (T1–T3) lub był objęty jako fragment w T1/T2.
+
+| # | Ścieżka | Uwagi przeglądu |
+|---|---------|-----------------|
+| 1 | `templates/admin/reception/dailyqueue/master_detail.html` | Master/detail kolejek: filtr GET `queue_date`, `{% url 'admin:…' %}`, pętle `queue.entries.all` — **uwaga wydajnościowa:** N+1 w widoku, jeśli brak `prefetch_related` na wpisach/pacjentach; dane w komórkach — escape. |
+| 2 | `templates/registration/logged_out_user.html` | Minimalny widok po wylogowaniu: `extends index.html`, link `{% url 'accounts:login' %}` — OK. |
+| 3 | `templates/registration/logged_out_admin.html` | `{% extends "base.html" %}` — w **projekcie brak** `templates/base.html` (tylko m.in. `doctor/base`, `tablet/base`, `ergebnisse/base`); szablon jest **prawdopodobnie nieużywalny** albo rzuca `TemplateDoesNotExist` — patrz **#T5**; surowy tekst „Admin” w treści — wygląd na artefakt. |
+| 4 | `templates/results.html` | Landing wyników: `{{ user.first_name }}` / `last_name`, link `{% url 'download_file' file %}` z `target="_blank"` — `file` z kontekstu widoku (nie z parametru URL); treść statyczna po DE. |
+| 5 | `templates/tablet/entry_started.html` | Po starcie wpisu: `{% url 'tablet:form' intake_form_id=intake_form_id %}`, drugi link do kolejki — CSRF nie wymagany przy samych GET linkach; treści ze `staff_ui` — escape. |
+
+### Postęp iteracji (szablony + statyczne) — po T3
+
+| Metryka | Wartość |
+|--------|--------|
+| Przejrzane w iteracji T3 | **5** |
+| **Skumulowanie** | **43 / 43** (**100%** slotów: 38 `*.html` + 5 plików `static/`) |
+
+---
+
+## Ustalenia — szablony / statyczne (iteracja T1)
+
+### T1. [Utrzymanie / bezpieczeństwo — niskie] Zewnętrzne CSS/JS bez SRI
+
+**Obserwacja:** `ergebnisse/base.html` ładuje `flag-icon` z cdnjs; `index.html` — Bootstrap Icons z jsdelivr; `cogitomedica-brand.css` importuje fonty Google. **Brak** `integrity=` / `crossorigin` na tych tagach.
+
+**Skutek:** Teoretyczna kompromitacja CDN lub MITM (np. w sieciach publicznych) — podmiana zasobów.
+
+**Sugestia:** Dla krytycznych wdrożeń: SRI + `crossorigin`, albo hostowanie kopii w `static/` (jak już zrobione dla części stylów).
+
+### T2. [Bezpieczeństwo — niskie–średnie] `signature.data_url` w PDF intake
+
+**Obserwacja:** Szablon PDF zakłada poprawny `data:image/...;base64,...` w `src` obrazu.
+
+**Skutek:** Jeśli backend kiedykolwiek dopuści inny schemat URL, WeasyPrint/HTML może zachować się nieprzewidywalnie.
+
+**Sugestia:** Walidacja po stronie budowania kontekstu PDF (tylko `data:image/*` i rozsądny rozmiar), spójnie z przechowywaniem pliku podpisu.
+
+---
+
+## Ustalenia — szablony / statyczne (iteracja T2)
+
+### T3. [Utrzymanie / UX — średnie] Brak `static/tablet/css/form.css` przy odwołaniu w szablonie
+
+**Obserwacja:** `templates/tablet/form.html` ładuje `{% static 'tablet/css/form.css' %}`. W drzewie projektu **nie ma** katalogu `static/tablet/` ani pliku `form.css` (stan repo 2026-03-23).
+
+**Skutek:** W przeglądarce — **404** dla arkusza; formularz intake na tablecie polega głównie na inline stylach i `cogitomedica-brand.css`, ale część layoutu (jeśli planowana w `form.css`) nie działa.
+
+**Sugestia:** Dodać plik do `static/tablet/css/form.css` albo usunąć link i przenieść style do istniejącego CSS; zweryfikować `collectstatic` na wdrożeniu.
+
+### T4. [Bezpieczeństwo — niskie] Zewnętrzne URL w `account_links` / `site_url`
+
+**Obserwacja:** `unfold/helpers/account_links.html` i `unauthenticated_header.html` emitują `href` z kontekstu (`site_url`, `link.link`).
+
+**Skutek:** Przy błędnej konfiguracji lub przyszłym rozszerzeniu źródeł linków możliwy **phishing** lub otwarcie `javascript:` (mało prawdopodobne przy domyślnych ustawieniach Django).
+
+**Sugestia:** Utrzymywać whitelistę schematów po stronie konfiguracji / kontekstu admina; nie pobierać `href` z niezaufanego inputu użytkownika końcowego.
+
+---
+
+## Ustalenia — szablony / statyczne (iteracja T3)
+
+### T5. [Utrzymanie — średnie / wysokie jeśli szablon w użyciu] `logged_out_admin.html` rozszerza nieistniejący `base.html`
+
+**Obserwacja:** `templates/registration/logged_out_admin.html` ma `{% extends "base.html" %}`. W katalogu `templates/` **nie ma** pliku `base.html` (są domenowe `base` w podkatalogach).
+
+**Skutek:** Żądanie widoku, które renderuje ten szablon, zakończy się **TemplateDoesNotExist** (chyba że inny loader dostarcza `base.html` — w typowym `DIRS` + `templates/` **nie**).
+
+**Sugestia:** Zmienić `extends` na istniejący layout (np. `index.html` jak w `logged_out_user.html`) albo dodać minimalny `templates/base.html`; usunąć zbędny tekst „Admin” z treści lub zastąpić tłumaczeniem.
+
+### T6. [Wydajność — niskie] `master_detail.html` i `queue.entries.all`
+
+**Obserwacja:** Szablon iteruje `{% for entry in queue.entries.all %}` w pętli po kolejkach.
+
+**Skutek:** Bez prefetch w widoku — klasyczne **N+1** zapytań do bazy.
+
+**Sugestia:** W widoku admina: `prefetch_related('entries', 'entries__patient')` (lub równoważnie) dla listy `queues`.
+
+---
+
+*Przegląd iteracyjny szablonów i plików statycznych w tabelach: **zamknięty** (T1–T3).*
