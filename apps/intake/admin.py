@@ -48,43 +48,57 @@ class ConsentDefinitionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(AnamnesisQuestionDefinition)
-class AnamnesisQuestionDefinitionAdmin(admin.ModelAdmin):
+class AnamnesisQuestionDefinitionAdmin(UnfoldModelAdmin):
     list_display = ("code", "version", "answer_type", "question_text_de", "question_text_pl", "is_required", "display_order", "created_at", "is_active")
+    list_display_links = ("code",)
     list_filter = ("answer_type", "is_required", "is_active")
     search_fields = ("code", "question_text_de", "question_text_en", "question_text_pl")
     ordering = ["-created_at"]
 
 
 @admin.register(AnamnesisOptionDefinition)
-class AnamnesisOptionDefinitionAdmin(admin.ModelAdmin):
+class AnamnesisOptionDefinitionAdmin(UnfoldModelAdmin):
     list_display = ("question", "code", "option_text_de", "option_text_pl", "display_order", "created_at", "is_active")
     list_display_links = ("question",)
     list_filter = ("is_active",)
     search_fields = ("code", "option_text_de", "option_text_en", "option_text_pl")
-    raw_id_fields = ("question",)
     ordering = ["-created_at"]
 
 
 @admin.register(PatientIntakeForm)
-class PatientIntakeFormAdmin(admin.ModelAdmin):
-    list_display = ("id", "queue_entry", "form_status", "submitted_at", "created_at", "updated_at")
-    list_display_links = ("id",)
+class PatientIntakeFormAdmin(UnfoldModelAdmin):
+    list_display = ("queue_entry", "form_status", "submitted_at", "created_at", "updated_at")
+    list_display_links = ("queue_entry",)
     list_filter = ("form_status",)
     ordering = ["-created_at"]
-    raw_id_fields = ("queue_entry", "session")
     readonly_fields = ("id", "created_at", "updated_at")
     date_hierarchy = "created_at"
+    fieldsets = (
+        (None, {"fields": ("queue_entry", "session", "form_status", "submitted_at")}),
+        ("Mapa ciała", {"fields": ("body_map_schema_version", "body_map_data")}),
+        ("Wywiad", {"fields": ("anamnesis_schema_version", "anamnesis_payload")}),
+        ("Podpis", {"fields": ("signature_file_path", "signature_sha256")}),
+        ("Metadane", {"fields": ("id", "created_at", "updated_at")}),
+    )
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("queue_entry", "queue_entry__patient", "session")
 
 
 @admin.register(PatientIntakeConsent)
-class PatientIntakeConsentAdmin(admin.ModelAdmin):
+class PatientIntakeConsentAdmin(UnfoldModelAdmin):
     list_display = ("intake_form", "consent_definition", "accepted", "accepted_at")
+    list_display_links = ("intake_form",)
     list_filter = ("accepted",)
-    raw_id_fields = ("intake_form", "consent_definition")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("intake_form", "consent_definition")
 
 
 @admin.register(IntakeDocumentVersion)
-class IntakeDocumentVersionAdmin(admin.ModelAdmin):
+class IntakeDocumentVersionAdmin(UnfoldModelAdmin):
     list_display = (
         "id",
         "intake_form",
@@ -110,7 +124,7 @@ class IntakeDocumentVersionAdmin(admin.ModelAdmin):
 
 
 @admin.register(IntakeOutboxEvent)
-class IntakeOutboxEventAdmin(admin.ModelAdmin):
+class IntakeOutboxEventAdmin(UnfoldModelAdmin):
     list_display = (
         "id",
         "event_type",

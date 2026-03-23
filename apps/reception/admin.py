@@ -15,8 +15,10 @@ from django.utils.http import urlencode
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
+    from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
+    UnfoldAdminSelectWidget = forms.Select
 
 from apps.core.translation_service import db_gettext_lazy
 from apps.reception.models import (
@@ -31,7 +33,7 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.xlsx_import import enqueue_patient_xlsx_import
-from apps.users.models import StaffUser
+from apps.users.models import StaffUser, StaffUserPreferredLocale
 
 
 class PatientXlsxImportAdminForm(forms.Form):
@@ -61,7 +63,8 @@ class PatientAdmin(UnfoldModelAdmin):
     list_display_links = ("last_name",)
     list_filter = ("is_active",)
     ordering = ["-created_at"]
-    search_fields = ("first_name", "last_name", "email", "phone", "doctolib_patient_id")
+    search_fields = ("first_name", "last_name", "email", "phone")
+    exclude = ("doctolib_patient_id",)
     readonly_fields = ("id", "created_at", "updated_at")
     date_hierarchy = "created_at"
 
@@ -105,7 +108,6 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
     list_filter = ("is_active",)
     ordering = ["-created_at"]
     search_fields = ("code", "name")
-    raw_id_fields = ("pdf_import_default_consulting_room",)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -124,7 +126,6 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
     search_fields = ("code", "name")
-    raw_id_fields = ("clinic_site",)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -313,7 +314,8 @@ class QueueEntryAdmin(UnfoldModelAdmin):
     list_filter = ("entry_status", "daily_queue__queue_date", "daily_queue__clinic_site", "daily_queue__consulting_room")
     ordering = ["-created_at"]
     search_fields = ("patient__last_name", "patient__first_name", "visit_external_id", "notes")
-    raw_id_fields = ("daily_queue", "patient", "active_session", "created_by_user")
+    raw_id_fields = ("active_session", "created_by_user")
+    exclude = ("visit_external_id",)
     date_hierarchy = "created_at"
 
     def get_form(self, request, obj=None, change=None, **kwargs):
@@ -341,12 +343,22 @@ class PatientFormSessionAdmin(UnfoldModelAdmin):
     list_display_links = ("id",)
     list_filter = ("form_locale",)
     ordering = ["-created_at"]
-    raw_id_fields = ("queue_entry", "tablet_device", "created_by_user")
+    raw_id_fields = ("created_by_user",)
     readonly_fields = ("id", "created_at")
     date_hierarchy = "created_at"
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
+        if "form_locale" in form.base_fields:
+            base_field = form.base_fields["form_locale"]
+            form.base_fields["form_locale"] = forms.ChoiceField(
+                choices=StaffUserPreferredLocale.choices,
+                required=base_field.required,
+                label=base_field.label,
+                help_text=base_field.help_text,
+                initial=base_field.initial,
+                widget=UnfoldAdminSelectWidget,
+            )
         _initial_created_by_user(request, form, bool(change))
         return form
 
@@ -358,7 +370,6 @@ class PatientFormSessionAdmin(UnfoldModelAdmin):
 @admin.register(PatientImportBatch)
 class PatientImportBatchAdmin(UnfoldModelAdmin):
     list_display = (
-        "id",
         "source_file_name",
         "import_type",
         "status",
@@ -368,7 +379,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
         "created_by_user",
         "created_at",
     )
-    list_display_links = ("id",)
+    list_display_links = ("source_file_name",)
     list_filter = ("status", "import_type", "source_system")
     ordering = ["-created_at"]
     raw_id_fields = ("created_by_user",)

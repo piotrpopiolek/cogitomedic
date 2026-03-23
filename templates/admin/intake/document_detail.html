@@ -1,5 +1,5 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n %}
+{% load i18n unfold %}
 
 {% block breadcrumbs %}
     <div class="px-4 py-3 sm:px-8">
@@ -22,7 +22,7 @@
     {% if not_found %}
     <h1 class="text-2xl font-bold mb-6 text-red-600">Nie znaleziono dokumentu</h1>
     <p class="text-gray-600 mb-4">Dokument nie istnieje lub nie masz do niego dostępu.</p>
-    <a href="{% url 'admin_intake_documents' %}" class="inline-flex items-center text-indigo-600 hover:text-indigo-900 font-medium">← Powrót do listy</a>
+    <a href="{% url 'admin_intake_documents' %}" class="inline-flex items-center text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">← Powrót do listy</a>
     {% else %}
     <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
 
@@ -59,17 +59,17 @@
         </dl>
     </div>
 
-    <div class="flex gap-3">
+    {% url 'admin_intake_documents' as admin_intake_documents_list_url %}
+    <div class="flex flex-wrap gap-3">
         {% if doc.pdf_available %}
-        <a href="/api/v1/intake-documents/{{ doc.id }}/preview-pdf" target="_blank" rel="noopener"
-           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-            <span class="material-symbols-outlined mr-2 text-lg">picture_as_pdf</span>
+        {% component "unfold/components/button.html" with href=preview_pdf_url variant="primary" extra_attrs='target="_blank" rel="noopener noreferrer"' %}
+            <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
             Podgląd PDF
-        </a>
+        {% endcomponent %}
         {% endif %}
-        <a href="{% url 'admin_intake_documents' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+        {% component "unfold/components/button.html" with href=admin_intake_documents_list_url variant="default" %}
             ← Powrót do listy
-        </a>
+        {% endcomponent %}
     </div>
     {% endif %}
 </div>

@@ -1,36 +1,36 @@
 {% load i18n %}
-<div id="lesion-group-favorites-{{ widget.attrs.id }}" class="lesion-group-favorites-widget" x-data="lesionGroupFavoritesWidget(
+<div id="lesion-group-favorites-{{ widget.attrs.id }}" class="lesion-group-favorites-widget group" x-data="lesionGroupFavoritesWidget(
   atob('{{ widget.value_b64 }}'),
   atob('{{ widget.dermatoscopic_b64 }}'),
   atob('{{ widget.clinical_b64 }}'),
   atob('{{ widget.malignancy_b64 }}')
 )">
   <textarea name="{{ widget.name }}" x-ref="textarea" id="{{ widget.attrs.id }}"
-    class="w-full font-mono text-sm border border-gray-300 dark:border-gray-600 rounded p-2 bg-gray-50 dark:bg-gray-800/50 mb-2"
+    class="{{ widget.textarea_json_class }}"
     rows="4"
     aria-label="{% translate 'Lesion group favorites (JSON)' %}"
   >{{ widget.value_json }}</textarea>
-  <p class="text-sm text-gray-500 mb-3">{% translate "With JavaScript enabled, use the visual editor below; it syncs to the JSON above. Without JavaScript, edit the JSON directly." %}</p>
-  <div class="space-y-4">
+  <p class="{{ widget.help_line_class }} mb-3">{% translate "With JavaScript enabled, use the visual editor below; it syncs to the JSON above. Without JavaScript, edit the JSON directly." %}</p>
+  <div class="space-y-4 max-w-4xl">
     <template x-for="(preset, index) in presets" :key="index">
-      <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 space-y-3">
-        <div class="flex justify-between items-center">
-          <span class="font-medium text-gray-700 dark:text-gray-300" x-text="'Preset ' + (index + 1)"></span>
+      <div class="{{ widget.preset_card_class }}">
+        <div class="flex justify-between items-center gap-2">
+          <span class="{{ widget.preset_heading_class }}" x-text="'Preset ' + (index + 1)"></span>
           <button type="button" @click="removePreset(index)"
-            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+            class="{{ widget.remove_button_class }}">
             {% translate "Remove" %}
           </button>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% translate "Name" %}</label>
+          <label class="{{ widget.label_class }}">{% translate "Name" %}</label>
           <input type="text" x-model="preset.name" maxlength="120"
-            class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm"
+            class="{{ widget.input_class }}"
             placeholder="e.g. Zmiana kontrolna">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% translate "Clinical assessment" %}</label>
+          <label class="{{ widget.label_class }}">{% translate "Clinical assessment" %}</label>
           <select x-model="preset.clinical_assessment"
-            class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm">
+            class="{{ widget.select_class }}">
             <option value="">{% translate "— Select —" %}</option>
             {% for value, label in widget.clinical_choices %}
             <option value="{{ value }}">{{ label }}</option>
@@ -38,9 +38,9 @@
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% translate "Malignancy risk" %}</label>
+          <label class="{{ widget.label_class }}">{% translate "Malignancy risk" %}</label>
           <select x-model="preset.malignancy_risk"
-            class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm">
+            class="{{ widget.select_class }}">
             <option value="">{% translate "— Select —" %}</option>
             {% for value, label in widget.malignancy_choices %}
             <option value="{{ value }}">{{ label }}</option>
@@ -48,28 +48,28 @@
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% translate "Dermatoscopic features" %}</label>
+          <label class="{{ widget.label_class }}">{% translate "Dermatoscopic features" %}</label>
           <div class="flex flex-wrap gap-x-4 gap-y-2">
             <template x-for="opt in dermatoscopicChoices" :key="opt.value">
-              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <label class="{{ widget.checkbox_row_label_class }}">
                 <input type="checkbox" :checked="preset.dermatoscopic_features.includes(opt.value)"
                   @change="toggleFeature(preset, opt.value)"
-                  class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary">
+                  class="{{ widget.checkbox_class }}">
                 <span x-text="opt.label"></span>
               </label>
             </template>
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% translate "Text (section 8)" %}</label>
+          <label class="{{ widget.label_class }}">{% translate "Text (section 8)" %}</label>
           <textarea x-model="preset.text" maxlength="5000" rows="3"
-            class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm"
+            class="{{ widget.textarea_body_class }}"
             placeholder="{% translate 'Text for section 8 (generiert / bearbeitet)' %}"></textarea>
         </div>
       </div>
     </template>
     <button type="button" @click="addPreset()"
-      class="inline-flex items-center gap-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+      class="{{ widget.add_preset_button_class }}">
       {% translate "Add preset" %}
     </button>
   </div>
