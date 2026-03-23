@@ -5,6 +5,7 @@ from django.utils import timezone
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client import Gauge
 
+from apps.integrations.hidrive.auth import get_hidrive_refresh_metrics
 from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.reception.models import PatientImportBatch, PatientImportError
 
@@ -118,5 +119,16 @@ def build_metrics_payload() -> bytes:
     )
     import_rows_total.labels(status="inserted").set(row_stats["total_inserted"] or 0)
     import_rows_total.labels(status="error").set(row_stats["total_error"] or 0)
+
+    # 6. HiDrive OAuth refresh metrics
+    hidrive_refresh_total = Gauge(
+        "cogitomedica_hidrive_token_refresh_total",
+        "Number of HiDrive token refresh attempts by outcome.",
+        labelnames=["outcome"],
+        registry=registry,
+    )
+    refresh_stats = get_hidrive_refresh_metrics()
+    hidrive_refresh_total.labels(outcome="attempt").set(refresh_stats.get("attempt", 0.0))
+    hidrive_refresh_total.labels(outcome="error").set(refresh_stats.get("error", 0.0))
 
     return generate_latest(registry)

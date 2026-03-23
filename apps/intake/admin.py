@@ -23,6 +23,7 @@ except ImportError:
 class ConsentDefinitionAdmin(UnfoldModelAdmin):
     show_add_link = True
     list_display = ("code", "version", "title_de", "title_en", "title_pl", "is_required", "display_order", "effective_from", "created_at", "is_active")
+    list_display_links = ("code",)
     list_filter = ("is_required", "is_active")
     search_fields = ("code", "title_de", "title_en", "title_pl")
     ordering = ["-created_at"]
@@ -57,6 +58,7 @@ class AnamnesisQuestionDefinitionAdmin(admin.ModelAdmin):
 @admin.register(AnamnesisOptionDefinition)
 class AnamnesisOptionDefinitionAdmin(admin.ModelAdmin):
     list_display = ("question", "code", "option_text_de", "option_text_pl", "display_order", "created_at", "is_active")
+    list_display_links = ("question",)
     list_filter = ("is_active",)
     search_fields = ("code", "option_text_de", "option_text_en", "option_text_pl")
     raw_id_fields = ("question",)
@@ -66,6 +68,7 @@ class AnamnesisOptionDefinitionAdmin(admin.ModelAdmin):
 @admin.register(PatientIntakeForm)
 class PatientIntakeFormAdmin(admin.ModelAdmin):
     list_display = ("id", "queue_entry", "form_status", "submitted_at", "created_at", "updated_at")
+    list_display_links = ("id",)
     list_filter = ("form_status",)
     ordering = ["-created_at"]
     raw_id_fields = ("queue_entry", "session")
@@ -91,6 +94,7 @@ class IntakeDocumentVersionAdmin(admin.ModelAdmin):
         "hidrive_sent",
         "created_at",
     )
+    list_display_links = ("id",)
     list_filter = ("pdf_generation_status", "hidrive_sent", "form_locale")
     ordering = ["-created_at"]
     raw_id_fields = ("intake_form",)
@@ -118,6 +122,7 @@ class IntakeOutboxEventAdmin(admin.ModelAdmin):
         "processed_at",
         "created_at",
     )
+    list_display_links = ("id",)
     list_filter = ("event_type", "status")
     ordering = ["-created_at"]
     search_fields = ("error_message",)

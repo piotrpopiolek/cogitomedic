@@ -23,6 +23,7 @@ class OutboxEventAdmin(UnfoldModelAdmin):
         "processed_at",
         "created_at",
     )
+    list_display_links = ("id",)
     list_filter = ("event_type", "status")
     ordering = ["-created_at"]
     search_fields = ("error_message",)

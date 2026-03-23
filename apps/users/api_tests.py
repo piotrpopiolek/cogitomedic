@@ -197,6 +197,26 @@ class StaffUsersApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 409)
 
+    def test_post_staff_user_invalid_preferred_locale_returns_400(self) -> None:
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "bad-locale",
+                    "email": "bad.locale@example.com",
+                    "first_name": "Bad",
+                    "last_name": "Locale",
+                    "role": "DOCTOR",
+                    "preferred_locale": "en-US",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_get_staff_user_detail(self) -> None:
         response = self.client.get(f"/api/v1/staff-users/{self.user.id}")
         self.assertEqual(response.status_code, 200)
@@ -212,6 +232,14 @@ class StaffUsersApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["first_name"], "Updated")
         self.assertEqual(payload["role"], "DOCTOR")
+
+    def test_patch_staff_user_invalid_preferred_locale_returns_400(self) -> None:
+        response = self.client.patch(
+            f"/api/v1/staff-users/{self.user.id}",
+            data=json.dumps({"preferred_locale": "en-US"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_delete_staff_user_soft_deactivates(self) -> None:
         response = self.client.delete(f"/api/v1/staff-users/{self.user.id}")

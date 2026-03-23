@@ -2,22 +2,20 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.urls import reverse
-from django.utils.html import format_html
-
-from apps.core.translation_service import db_gettext_lazy
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
+from apps.users.forms import StaffUserCreationForm
 from apps.users.models import StaffUser
 
 
 @admin.register(StaffUser)
 class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
-    list_display = ("username", "email", "first_name", "last_name", "is_staff", "edit_link", "is_active")
+    add_form = StaffUserCreationForm
+    list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_active")
     list_display_links = ("username",)
     list_filter = ("groups", "is_staff", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
@@ -76,11 +74,6 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
         if role in {"RECEPTION", "DOCTOR", "ADMIN", "TABLET"}:
             qs = qs.filter(groups__name=role.capitalize()).distinct()
         return qs
-
-    @admin.display(description=db_gettext_lazy("administration.admin_col_edycja", "Edycja"))
-    def edit_link(self, obj):
-        url = reverse("admin:users_staffuser_change", args=[obj.pk])
-        return format_html('<a class="button" href="{}">Edytuj</a>', url)
 
     def save_model(self, request, obj, form, change):
         # ADMIN role must always be staff to access Django/Unfold admin.

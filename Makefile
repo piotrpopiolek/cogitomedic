@@ -33,4 +33,4 @@ check-translations:
 	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness"
 
 test-ci:
-	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && python manage.py test apps.core.tests apps.medical.api_tests apps.outbox.tests apps.operations.api_tests apps.patient_results.tests apps.patient_results.api_tests"
+	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && python manage.py test apps.core.tests apps.integrations.hidrive.tests apps.medical.api_tests apps.outbox.tests apps.operations.api_tests apps.patient_results.tests apps.patient_results.api_tests"

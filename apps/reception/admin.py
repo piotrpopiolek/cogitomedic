@@ -58,6 +58,7 @@ class PatientAdmin(UnfoldModelAdmin):
         "created_at",
         "is_active",
     )
+    list_display_links = ("last_name",)
     list_filter = ("is_active",)
     ordering = ["-created_at"]
     search_fields = ("first_name", "last_name", "email", "phone", "doctolib_patient_id")
@@ -100,6 +101,7 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
         "created_at",
         "is_active",
     )
+    list_display_links = ("code",)
     list_filter = ("is_active",)
     ordering = ["-created_at"]
     search_fields = ("code", "name")
@@ -152,6 +154,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         "view_day_patients",
         "created_at",
     )
+    list_display_links = ("queue_date",)
     list_filter = ("status", "source", "shift_code", "queue_date")
     ordering = ["-created_at"]
     search_fields = ("clinic_site__code", "consulting_room__code", "assigned_doctor__username")
@@ -306,6 +309,7 @@ class QueueEntryAdmin(UnfoldModelAdmin):
         "appointment_time",
         "created_at",
     )
+    list_display_links = ("position_no",)
     list_filter = ("entry_status", "daily_queue__queue_date", "daily_queue__clinic_site", "daily_queue__consulting_room")
     ordering = ["-created_at"]
     search_fields = ("patient__last_name", "patient__first_name", "visit_external_id", "notes")
@@ -325,15 +329,16 @@ class QueueEntryAdmin(UnfoldModelAdmin):
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(UnfoldModelAdmin):
     list_display = ("android_id", "clinic_site", "last_seen_at", "created_at", "is_active")
+    list_display_links = ("android_id",)
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
     search_fields = ("android_id",)
-    raw_id_fields = ("clinic_site",)
 
 
 @admin.register(PatientFormSession)
 class PatientFormSessionAdmin(UnfoldModelAdmin):
     list_display = ("id", "queue_entry", "tablet_device", "form_locale", "expires_at", "consumed_at", "created_at")
+    list_display_links = ("id",)
     list_filter = ("form_locale",)
     ordering = ["-created_at"]
     raw_id_fields = ("queue_entry", "tablet_device", "created_by_user")
@@ -363,6 +368,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
         "created_by_user",
         "created_at",
     )
+    list_display_links = ("id",)
     list_filter = ("status", "import_type", "source_system")
     ordering = ["-created_at"]
     raw_id_fields = ("created_by_user",)
@@ -382,6 +388,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
 @admin.register(PatientImportError)
 class PatientImportErrorAdmin(UnfoldModelAdmin):
     list_display = ("batch", "row_number", "error_code", "error_message", "created_at")
+    list_display_links = ("batch",)
     list_filter = ("error_code",)
     ordering = ["-created_at"]
     search_fields = ("error_message", "error_code")

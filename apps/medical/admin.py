@@ -94,6 +94,7 @@ def _set_medical_document_users(request, obj, change: bool) -> None:
 @admin.register(MedicalDocument)
 class MedicalDocumentAdmin(UnfoldModelAdmin):
     list_display = ("id", "queue_entry", "intake_form", "status", "current_version_no", "last_published_at", "created_by_user", "created_at")
+    list_display_links = ("id",)
     list_filter = ("status",)
     ordering = ["-created_at"]
     raw_id_fields = ("queue_entry", "intake_form", "created_by_user", "updated_by_user")
@@ -125,6 +126,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
         "procedure_code",
         "created_at",
     )
+    list_display_links = ("id",)
     list_filter = ("version_status", "publish_locale", "pdf_generation_status")
     ordering = ["-created_at"]
     raw_id_fields = ("medical_document", "publish_requested_by_user", "published_by_user")
@@ -136,6 +138,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
 class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     form = DoctorTextTemplateForm
     list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "updated_at", "created_at", "is_active")
+    list_display_links = ("name",)
     list_filter = ("template_locale", "is_global", "is_active")
     ordering = ["-created_at"]
     search_fields = ("name", "template_body")

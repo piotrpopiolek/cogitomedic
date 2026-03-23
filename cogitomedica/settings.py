@@ -363,6 +363,7 @@ if HAS_UNFOLD:
         },
         "STYLES": [
             lambda request: static("cogitomedica/css/unfold-sidebar-fix.css"),
+            lambda request: static("cogitomedica/css/admin-changelist-link.css"),
         ],
         "SCRIPTS": [
             lambda request: static("admin/js/unfold-force-light.js"),
@@ -477,6 +478,30 @@ OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", 
 # SMS (SMSApi smsapi.pl)
 SMSAPI_ACCESS_TOKEN = os.environ.get("SMSAPI_ACCESS_TOKEN", "")
 SMSAPI_USE_MOCK = os.environ.get("SMSAPI_USE_MOCK", "1")
+
+# HiDrive (Strato)
+HIDRIVE_USE_MOCK = os.environ.get("HIDRIVE_USE_MOCK", "0")
+HIDRIVE_CLIENT_ID = os.environ.get("HIDRIVE_CLIENT_ID", "")
+HIDRIVE_CLIENT_SECRET = os.environ.get("HIDRIVE_CLIENT_SECRET", "")
+HIDRIVE_REFRESH_TOKEN = os.environ.get("HIDRIVE_REFRESH_TOKEN", "")
+HIDRIVE_TOKEN_URL = os.environ.get("HIDRIVE_TOKEN_URL", "https://my.hidrive.com/oauth2/token")
+HIDRIVE_API_BASE_URL = os.environ.get("HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1")
+HIDRIVE_TIMEOUT_SECONDS = int(os.environ.get("HIDRIVE_TIMEOUT_SECONDS", "30"))
+if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", "yes"):
+    missing_hidrive = [
+        key
+        for key, value in {
+            "HIDRIVE_CLIENT_ID": HIDRIVE_CLIENT_ID,
+            "HIDRIVE_CLIENT_SECRET": HIDRIVE_CLIENT_SECRET,
+            "HIDRIVE_REFRESH_TOKEN": HIDRIVE_REFRESH_TOKEN,
+        }.items()
+        if not str(value or "").strip()
+    ]
+    if missing_hidrive:
+        raise ImproperlyConfigured(
+            "Missing required HiDrive settings in production when HIDRIVE_USE_MOCK is disabled: "
+            + ", ".join(missing_hidrive)
+        )
 
 # Portal wyniki (patient results)
 PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
