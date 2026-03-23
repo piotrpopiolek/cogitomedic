@@ -10,8 +10,10 @@ from pydantic import ValidationError as PydanticValidationError
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
+    from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
+    UnfoldAdminSelectWidget = forms.Select
 
 from apps.medical.api_schemas import FavoriteLesionGroupPreset
 from apps.medical.constants import (
@@ -21,6 +23,7 @@ from apps.medical.constants import (
 )
 from apps.medical.models import DoctorTextTemplate, MedicalDocument, MedicalDocumentVersion
 from apps.medical.widgets import LesionGroupFavoritesWidget
+from apps.users.models import StaffUserPreferredLocale
 
 _ALLOWED_CLINICAL = {v for v, _ in CLINICAL_ASSESSMENT_CHOICES}
 _ALLOWED_MALIGNANCY = {v for v, _ in MALIGNANCY_RISK_CHOICES}
@@ -93,13 +96,22 @@ def _set_medical_document_users(request, obj, change: bool) -> None:
 
 @admin.register(MedicalDocument)
 class MedicalDocumentAdmin(UnfoldModelAdmin):
-    list_display = ("id", "queue_entry", "intake_form", "status", "current_version_no", "last_published_at", "created_by_user", "created_at")
-    list_display_links = ("id",)
+    list_display = ("queue_entry", "intake_form", "status", "current_version_no", "last_published_at", "created_by_user", "created_at")
+    list_display_links = ("queue_entry",)
     list_filter = ("status",)
     ordering = ["-created_at"]
-    raw_id_fields = ("queue_entry", "intake_form", "created_by_user", "updated_by_user")
     readonly_fields = ("id", "created_at", "updated_at")
     date_hierarchy = "created_at"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related(
+            "queue_entry",
+            "queue_entry__patient",
+            "intake_form",
+            "created_by_user",
+            "updated_by_user",
+        )
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
@@ -116,7 +128,6 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
 @admin.register(MedicalDocumentVersion)
 class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
     list_display = (
-        "id",
         "medical_document",
         "version_no",
         "version_status",
@@ -126,24 +137,62 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
         "procedure_code",
         "created_at",
     )
-    list_display_links = ("id",)
+    list_display_links = ("medical_document",)
     list_filter = ("version_status", "publish_locale", "pdf_generation_status")
     ordering = ["-created_at"]
-    raw_id_fields = ("medical_document", "publish_requested_by_user", "published_by_user")
     readonly_fields = ("id", "created_at")
     date_hierarchy = "created_at"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__patient",
+            "medical_document__intake_form",
+            "publish_requested_by_user",
+            "published_by_user",
+        )
+
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        if "publish_locale" in form.base_fields:
+            base = form.base_fields["publish_locale"]
+            form.base_fields["publish_locale"] = forms.ChoiceField(
+                choices=[("", "---------")] + list(StaffUserPreferredLocale.choices),
+                required=base.required,
+                label=base.label,
+                help_text=base.help_text,
+                initial=base.initial,
+                widget=UnfoldAdminSelectWidget,
+            )
+        return form
 
 
 @admin.register(DoctorTextTemplate)
 class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     form = DoctorTextTemplateForm
-    list_display = ("name", "template_locale", "owner_user", "clinic_site", "is_global", "updated_at", "created_at", "is_active")
+    list_display = ("name", "template_locale", "owner_user", "clinic_site", "updated_at", "created_at", "is_active")
     list_display_links = ("name",)
-    list_filter = ("template_locale", "is_global", "is_active")
+    list_filter = ("template_locale", "is_active")
     ordering = ["-created_at"]
     search_fields = ("name", "template_body")
     raw_id_fields = ("owner_user", "clinic_site")
     readonly_fields = ("id", "created_at", "updated_at")
+
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        if "template_locale" in form.base_fields:
+            base = form.base_fields["template_locale"]
+            form.base_fields["template_locale"] = forms.ChoiceField(
+                choices=StaffUserPreferredLocale.choices,
+                required=base.required,
+                label=base.label,
+                help_text=base.help_text,
+                initial=base.initial,
+                widget=UnfoldAdminSelectWidget,
+            )
+        return form
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

@@ -10,6 +10,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.contrib import admin
+from django.urls import reverse
 
 from apps.core.api_utils import get_scoped_clinic_site_ids
 from apps.intake.document_services import (
@@ -125,10 +126,15 @@ def intake_document_detail_view(request: HttpRequest, version_id: UUID) -> HttpR
         return TemplateResponse(request, "admin/intake/document_detail.html", context, status=404)
 
     detail = get_intake_document_detail(version)
+    preview_pdf_url = reverse(
+        "intake-document-preview-pdf",
+        kwargs={"intake_document_version_id": version_id},
+    )
     context = {
         **admin.site.each_context(request),
         "title": f"Dokument intake – {detail['patient']['last_name']} {detail['patient']['first_name']}",
         "doc": detail,
         "not_found": False,
+        "preview_pdf_url": preview_pdf_url,
     }
     return TemplateResponse(request, "admin/intake/document_detail.html", context)

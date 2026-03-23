@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.contrib.postgres.indexes import GinIndex
 
 from apps.core.translation_service import db_gettext_lazy
+from apps.users.models import StaffUserPreferredLocale
 
 
 class MedicalDocStatus(models.TextChoices):
@@ -114,7 +115,13 @@ class MedicalDocumentVersion(models.Model):
         null=True,
         related_name="requested_medical_publications",
     )
-    publish_locale = models.CharField(max_length=10, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_publish_locale", "Publish locale"))
+    publish_locale = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        choices=StaffUserPreferredLocale.choices,
+        verbose_name=db_gettext_lazy("administration.field_publish_locale", "Publish locale"),
+    )
     published_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -217,7 +224,12 @@ class DoctorTextTemplate(models.Model):
         related_name="doctor_templates",
     )
     name = models.CharField(max_length=120, verbose_name=db_gettext_lazy("administration.field_name", "Name"))
-    template_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_template_locale", "Template locale"))
+    template_locale = models.CharField(
+        max_length=10,
+        default=StaffUserPreferredLocale.DE_DE,
+        choices=StaffUserPreferredLocale.choices,
+        verbose_name=db_gettext_lazy("administration.field_template_locale", "Template locale"),
+    )
     template_body = models.TextField(verbose_name=db_gettext_lazy("administration.field_template_body", "Template body"))
     lesion_group_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_lesion_group_favorites", "Lesion group favorites"))
     is_global = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"))

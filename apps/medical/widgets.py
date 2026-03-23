@@ -16,6 +16,27 @@ from apps.medical.constants import (
     MALIGNANCY_RISK_CHOICES,
 )
 
+try:
+    from unfold.widgets import (
+        CHECKBOX_CLASSES,
+        INPUT_CLASSES,
+        LABEL_CLASSES,
+        SELECT_CLASSES,
+        TEXTAREA_CLASSES,
+    )
+except ImportError:
+    CHECKBOX_CLASSES = INPUT_CLASSES = LABEL_CLASSES = SELECT_CLASSES = TEXTAREA_CLASSES = ()
+
+
+def _join_unfold_classes(*parts: object) -> str:
+    out: list[str] = []
+    for p in parts:
+        if isinstance(p, (list, tuple)):
+            out.extend(x for x in p if x)
+        elif p:
+            out.append(p)
+    return " ".join(out)
+
 
 def _safe_json_b64(value: list) -> str:
     """Encode JSON as base64 for safe embedding in HTML/script."""
@@ -56,6 +77,39 @@ class LesionGroupFavoritesWidget(Textarea):
         context["widget"]["dermatoscopic_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in DERMATOSCOPIC_FEATURE_CHOICES])
         context["widget"]["clinical_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in CLINICAL_ASSESSMENT_CHOICES])
         context["widget"]["malignancy_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in MALIGNANCY_RISK_CHOICES])
+        # Match native Unfold admin fields (bundled Tailwind tokens: base-*, font-important, etc.)
+        w = context["widget"]
+        w["label_class"] = _join_unfold_classes(LABEL_CLASSES)
+        w["input_class"] = _join_unfold_classes(INPUT_CLASSES)
+        w["select_class"] = _join_unfold_classes(SELECT_CLASSES)
+        w["textarea_json_class"] = _join_unfold_classes(
+            ["vLargeTextField"],
+            TEXTAREA_CLASSES,
+            ["font-mono", "text-sm", "mb-2"],
+        )
+        w["textarea_body_class"] = _join_unfold_classes(["vLargeTextField"], TEXTAREA_CLASSES)
+        w["checkbox_class"] = _join_unfold_classes(CHECKBOX_CLASSES)
+        w["checkbox_row_label_class"] = (
+            "inline-flex items-center gap-2 text-sm font-normal "
+            "text-font-default-light dark:text-font-default-dark"
+        )
+        w["preset_card_class"] = (
+            "border border-base-200 dark:border-base-700 rounded-default p-4 "
+            "bg-base-50 dark:bg-base-900/50 space-y-3"
+        )
+        w["preset_heading_class"] = (
+            "font-semibold text-sm text-font-important-light dark:text-font-important-dark"
+        )
+        w["help_line_class"] = "leading-relaxed mt-2 text-xs"
+        w["remove_button_class"] = (
+            "text-sm font-medium text-red-600 hover:text-red-700 "
+            "dark:text-red-400 dark:hover:text-red-300"
+        )
+        w["add_preset_button_class"] = (
+            "font-medium inline-flex items-center gap-2 rounded-default justify-center whitespace-nowrap "
+            "cursor-pointer px-3 py-2 border border-base-200 bg-white shadow-xs text-important "
+            "dark:border-base-700 dark:bg-transparent hover:bg-base-100/80 dark:hover:bg-base-800/80"
+        )
         return context
 
     def render(self, name, value, attrs=None, renderer=None):
