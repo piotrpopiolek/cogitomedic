@@ -101,7 +101,7 @@ class OutboxProcessingTests(TestCase):
             publish_locale="de-DE",
         )
 
-    @override_settings(SMSAPI_USE_MOCK="1")
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
     def test_process_outbox_events_runs_full_chain(self) -> None:
         first = process_outbox_events()
         second = process_outbox_events()
@@ -115,6 +115,8 @@ class OutboxProcessingTests(TestCase):
         self.assertTrue(self.version.hidrive_sent)
         self.assertTrue(self.version.sms_sent)
         self.assertIsNotNone(self.version.pdf_local_path)
+        self.assertIn("/hidrive/patients/Patient Outbox/", self.version.hidrive_path or "")
+        self.assertTrue((self.version.hidrive_path or "").endswith("/Befund_v1.pdf"))
 
         self.assertEqual(
             OutboxEvent.objects.filter(medical_document_version=self.version, status=OutboxStatus.PROCESSED).count(),

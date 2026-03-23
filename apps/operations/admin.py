@@ -14,6 +14,7 @@ from apps.operations.models import AuditEvent
 @admin.register(AuditEvent)
 class AuditEventAdmin(UnfoldModelAdmin):
     list_display = ("event_time", "event_type", "actor_user", "patient", "medical_document", "outbox_event")
+    list_display_links = ("event_time",)
     list_filter = ("event_type",)
     ordering = ["-event_time"]
     raw_id_fields = ("actor_user", "patient", "medical_document", "outbox_event")

@@ -30,7 +30,7 @@
 - **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links; browse generated intake PDFs (list, filters, detail, inline preview) in the panel at `/admin/intake-documents/`
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
-- **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive (mock then API) archiving, SMS (logistic-only: „Nowa dokumentacja w Cogito“) via SMSApi, 30-day retention policy for local PDFs
+- **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive API archiving (OAuth2 refresh token; mock switchable), SMS (logistic-only: „Nowa dokumentacja w Cogito“) via SMSApi, 30-day retention policy for local PDFs
 - **Patient results portal (planned):** 4-step process: SMS logistic → portal (wyniki.cogitomedica.pl) login by phone+DOB → OTP 15 min → PDF download via HTTPS (RODO/BÄK compliant; doctor can revoke publication)
 
 The user interface and translation layer support **German**, **English**, and **Polish**.
@@ -124,6 +124,10 @@ Translations are managed in Django Admin and loaded from the database as the sin
    | `DB_PORT` | Database port (e.g. `5432`) |
    | `ALLOWED_HOSTS` | Comma-separated list of allowed `Host` header values. **Mandatory in production** – if empty, Django rejects all requests. In dev, set e.g. `localhost,127.0.0.1`. |
    | `SENTRY_DSN` | (Optional) Sentry DSN for error tracking |
+| `HIDRIVE_USE_MOCK` | HiDrive switch (`0` = real API, `1` = mock/no HTTP). |
+| `HIDRIVE_CLIENT_ID` | HiDrive OAuth client id (required in production when `HIDRIVE_USE_MOCK=0`). |
+| `HIDRIVE_CLIENT_SECRET` | HiDrive OAuth client secret (required in production when `HIDRIVE_USE_MOCK=0`). |
+| `HIDRIVE_REFRESH_TOKEN` | HiDrive refresh token obtained via OAuth code flow (required in production when `HIDRIVE_USE_MOCK=0`). |
 
    Example (replace with your values):
 
@@ -315,7 +319,7 @@ The product is developed in **three phases**:
 | **2** | Doctor panel for medical data and document approval; automated archive upload and SMS |
 | **3** | Improved daily import process for files exported from Doctolib + HiDrive API (archiving) |
 
-Current implementation includes Django backend, PostgreSQL, PDF generation, SMS (SMSApi), Sentry, and Django 6 Tasks as the single background-processing solution. Further features (e.g. daily file import from Doctolib exports, HiDrive API, full tablet UI) are defined in the product and implementation plans.
+Current implementation includes Django backend, PostgreSQL, PDF generation, HiDrive API integration (with optional mock mode), SMS (SMSApi), Sentry, and Django 6 Tasks as the single background-processing solution. Further features (e.g. daily file import from Doctolib exports, full tablet UI) are defined in the product and implementation plans.
 
 ---
 

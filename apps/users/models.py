@@ -8,6 +8,12 @@ from django.db import models
 from apps.core.translation_service import db_gettext_lazy
 
 
+class StaffUserPreferredLocale(models.TextChoices):
+    DE_DE = "de-DE", "Deutsch (Deutschland)"
+    EN_GB = "en-GB", "English (United Kingdom)"
+    PL_PL = "pl-PL", "Polski (Polska)"
+
+
 class StaffUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     password = models.CharField(max_length=128, verbose_name=db_gettext_lazy("administration.field_password", "Password"))
@@ -20,7 +26,12 @@ class StaffUser(AbstractUser):
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_date_joined", "Date joined"))
     code = models.CharField(max_length=50, default="", verbose_name=db_gettext_lazy("administration.field_code", "Code"))
-    preferred_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_preferred_locale", "Preferred locale"))
+    preferred_locale = models.CharField(
+        max_length=10,
+        choices=StaffUserPreferredLocale.choices,
+        default=StaffUserPreferredLocale.DE_DE,
+        verbose_name=db_gettext_lazy("administration.field_preferred_locale", "Preferred locale"),
+    )
     consulting_room = models.ForeignKey(
         "reception.ConsultingRoom",
         on_delete=models.SET_NULL,

@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.exceptions import DomainError
+from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
 from apps.medical.pdf_builder import generate_befund_pdf
 from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
@@ -93,7 +94,13 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == OutboxEventType.HIDRIVE_UPLOAD:
-        version.hidrive_path = build_befund_hidrive_path(version)
+        if not version.pdf_local_path:
+            raise RuntimeError("PDF local path is missing for HiDrive upload.")
+        hidrive_path = build_befund_hidrive_path(version)
+        full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path
+        adapter = get_hidrive_adapter()
+        adapter.upload(remote_path=hidrive_path, local_path=full_path)
+        version.hidrive_path = hidrive_path
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
