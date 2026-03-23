@@ -1,16 +1,18 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="{{ locale_param|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% if locale_param == 'en' %}Form submitted{% else %}Formular abgesendet{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
-    body { font-family: sans-serif; max-width: 480px; margin: 2rem auto; padding: 1rem; }
+    body { max-width: 480px; margin: 2rem auto; padding: 1rem; }
     .ok { color: #0a0; font-weight: bold; }
-    a.btn { display: inline-block; padding: 1rem; margin-top: 1rem; background: #0d6efd; color: #fff; text-align: center; text-decoration: none; border-radius: 6px; }
+    a.btn { display: inline-block; padding: 1rem; margin-top: 1rem; text-align: center; }
   </style>
 </head>
-<body>
+<body class="cm-portal">
   <p class="ok">{% if ui.form_submitted_title %}{{ ui.form_submitted_title }}{% else %}Formular wurde abgesendet.{% endif %}</p>
   <a class="btn" href="{% url 'tablet:home' %}">{% if ui.back_to_queues %}{{ ui.back_to_queues }}{% else %}Zurück zur Warteliste{% endif %}</a>
 </body>

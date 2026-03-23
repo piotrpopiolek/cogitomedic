@@ -1,18 +1,19 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="{{ staff_locale|default:'pl' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ staff_ui.login_title|default:"Tablet – logowanie" }}</title>
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
-    body { font-family: sans-serif; max-width: 360px; margin: 2rem auto; padding: 0 1rem; }
+    body { max-width: 360px; margin: 2rem auto; padding: 0 1rem; }
     h1 { font-size: 1.25rem; }
     input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; box-sizing: border-box; font-size: 1rem; }
-    button { width: 100%; padding: 1rem; margin-top: 0.5rem; font-size: 1rem; cursor: pointer; background: #0d6efd; color: #fff; border: none; border-radius: 6px; }
-    .error { color: #b02a37; margin: 0.5rem 0; }
+    button { width: 100%; padding: 1rem; margin-top: 0.5rem; font-size: 1rem; }
   </style>
 </head>
-<body>
+<body class="cm-portal">
   <h1>{{ staff_ui.login_title|default:"Poczekalnia – logowanie" }}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   <form method="post" action="" id="tablet-login-form">
