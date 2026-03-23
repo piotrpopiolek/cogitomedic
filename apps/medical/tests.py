@@ -307,6 +307,7 @@ class LesionGroupFavoritesAdminTests(TestCase):
         self.assertIn("lesionGroupFavoritesWidget", html)
         self.assertIn("lesion-group-favorites-", html)
         self.assertIn('x-data="lesionGroupFavoritesWidget', html)
+        self.assertIn("border-base-200", html)
 
     def test_widget_render_includes_choices_data(self) -> None:
         import base64
