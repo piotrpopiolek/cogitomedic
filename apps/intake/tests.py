@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.intake.models import (
@@ -220,6 +220,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         with self.assertRaises(IntakeSessionValidationError):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
+    @override_settings(HIDRIVE_USE_MOCK="1")
     def test_process_intake_outbox_events_generates_pdf_and_hidrive_upload(self) -> None:
         self._accept_all_required_consents_effective_today()
         self._ensure_all_required_questions_answered_today()
@@ -237,6 +238,8 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertTrue(version.hidrive_sent)
         self.assertIsNotNone(version.pdf_local_path)
         self.assertIn("/hidrive/patients/", version.hidrive_path or "")
+        self.assertIn("/hidrive/patients/Patient Intake/", version.hidrive_path or "")
+        self.assertTrue((version.hidrive_path or "").endswith("/Intake_v1.pdf"))
 
     def test_submit_is_idempotent_for_already_submitted_form(self) -> None:
         self._accept_all_required_consents_effective_today()

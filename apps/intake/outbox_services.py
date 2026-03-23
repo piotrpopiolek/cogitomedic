@@ -4,6 +4,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
@@ -18,6 +19,7 @@ from apps.intake.models import (
 )
 from apps.intake.pdf_builder import generate_intake_pdf
 from apps.core.exceptions import DomainError
+from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
 
@@ -74,7 +76,13 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
         return
 
     if event.event_type == IntakeOutboxEventType.HIDRIVE_UPLOAD_INTAKE_PDF:
-        version.hidrive_path = build_intake_hidrive_path(version, now=now)
+        if not version.pdf_local_path:
+            raise RuntimeError("Intake PDF local path is missing for HiDrive upload.")
+        hidrive_path = build_intake_hidrive_path(version)
+        full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path
+        adapter = get_hidrive_adapter()
+        adapter.upload(remote_path=hidrive_path, local_path=full_path)
+        version.hidrive_path = hidrive_path
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
