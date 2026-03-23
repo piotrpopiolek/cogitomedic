@@ -70,6 +70,13 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
             return True
         return super().has_delete_permission(request, obj=obj)
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        role = (request.GET.get("role") or "").upper()
+        if role in {"RECEPTION", "DOCTOR", "ADMIN", "TABLET"}:
+            qs = qs.filter(groups__name=role.capitalize()).distinct()
+        return qs
+
     @admin.display(description=db_gettext_lazy("administration.admin_col_edycja", "Edycja"))
     def edit_link(self, obj):
         url = reverse("admin:users_staffuser_change", args=[obj.pk])

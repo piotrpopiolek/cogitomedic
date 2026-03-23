@@ -3,13 +3,16 @@ from __future__ import annotations
 import importlib
 from datetime import date
 
+from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
 from django.db import IntegrityError
-from django.test import Client, TestCase
+from django.db.models import Q
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.intake.models import PatientIntakeForm
+from apps.reception.admin import DailyQueueAdmin
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -253,6 +256,45 @@ class DailyQueueAdminImportTests(TestCase):
         self.assertContains(response, "Plik XLSX")
         self.assertContains(response, "Import odczyta z pliku datę kolejki i nazwę placówki")
 
+
+class DailyQueueAdminDoctorFilterTests(TestCase):
+    def test_dailyqueue_admin_uses_autocomplete_for_doctor_clinic_and_room(self) -> None:
+        admin_obj = DailyQueueAdmin(DailyQueue, AdminSite())
+        self.assertEqual(
+            admin_obj.autocomplete_fields,
+            ("clinic_site", "consulting_room", "assigned_doctor"),
+        )
+
+    def test_assigned_doctor_field_has_doctor_limit_choices_to(self) -> None:
+        field = DailyQueue._meta.get_field("assigned_doctor")
+        self.assertEqual(field.get_limit_choices_to(), Q(groups__name="Doctor"))
+
+    def test_assigned_doctor_field_shows_only_doctors(self) -> None:
+        doctor = StaffUser.objects.create_user(
+            username="doctor-filter",
+            email="doctor-filter@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        receptionist = StaffUser.objects.create_user(
+            username="reception-filter",
+            email="reception-filter@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(doctor, "Doctor")
+        assign_group_to_test_user(receptionist, "Reception")
+
+        admin_obj = DailyQueueAdmin(DailyQueue, AdminSite())
+        request = RequestFactory().get("/admin/reception/dailyqueue/add/")
+        request.user = doctor
+        db_field = DailyQueue._meta.get_field("assigned_doctor")
+
+        formfield = admin_obj.formfield_for_foreignkey(db_field, request)
+        user_ids = set(formfield.queryset.values_list("id", flat=True))
+
+        self.assertIn(doctor.id, user_ids)
+        self.assertNotIn(receptionist.id, user_ids)
 
 class XlsxImportParsingTests(TestCase):
     def test_cleanup_clinic_name_removes_trailing_weekday_and_date(self) -> None:
