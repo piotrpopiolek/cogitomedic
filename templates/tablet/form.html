@@ -5,9 +5,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% if locale_param == 'en' %}Intake form – {{ patient.last_name }}{% elif locale_param == 'pl' %}Formularz intake – {{ patient.last_name }}{% else %}Formularz intake – {{ patient.last_name }}{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <link rel="stylesheet" href="{% static 'tablet/css/form.css' %}" />
 </head>
-<body>
+<body class="cm-portal">
   {% csrf_token %}
   <div id="tablet-form-connection-error" class="tablet-form-connection-error" role="alert" aria-live="assertive">
     <span class="tablet-form-connection-error-text"></span>
@@ -55,7 +56,7 @@
       <div id="consents-msg" class="error" style="display:none;"></div>
       {% for c in consents %}
       <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
-        <h3>{{ c.title }}{% if c.is_required %} <span style="color:#b02a37">*</span>{% endif %}</h3>
+        <h3>{{ c.title }}{% if c.is_required %} <span style="color:var(--cm-danger)">*</span>{% endif %}</h3>
         <div class="consent-content">{{ c.content }}</div>
         {% if c.is_multi %}
           {% for opt in c.options %}
@@ -85,7 +86,7 @@
   <div class="form-step" id="step-2" role="group" aria-labelledby="step-indicator" aria-hidden="true">
     <section id="body-map-section">
     <h2>{{ ui.body_map_title }}</h2>
-    <p style="font-size:0.9rem; color:#666;">{{ ui.body_map_hint }}</p>
+    <p class="text-muted-portal" style="font-size:0.9rem;">{{ ui.body_map_hint }}</p>
     <div id="body-map-msg" class="error" style="display:none;"></div>
     <div class="body-map-wrap" id="body-map-wrap">
       <img src="{% static 'tablet/body.jpg' %}" alt="{{ ui.body_map_alt }}" id="body-map-img" />

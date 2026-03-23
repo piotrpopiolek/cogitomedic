@@ -5,162 +5,160 @@
 {% endblock %}
 {% block content_inner %}
 {{ panel_data|json_script:"doctor-panel-data" }}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h4 mb-0">Befund – {% if ui %}{{ ui.patient_label }}{% else %}Patient{% endif %}: <span id="patient-name"></span></h1>
-  <a href="{% url 'doctor-list' %}" class="btn btn-outline-secondary btn-sm">{% if ui %}{{ ui.back_to_list }}{% else %}← Zurück zur Liste{% endif %}</a>
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+  <h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-0">Befund – {% if ui %}{{ ui.patient_label }}{% else %}Patient{% endif %}: <span id="patient-name"></span></h1>
+  <a href="{% url 'doctor-list' %}" class="inline-flex items-center justify-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800 shrink-0">{% if ui %}{{ ui.back_to_list }}{% else %}← Zurück zur Liste{% endif %}</a>
 </div>
 
 <div id="alert-placeholder"></div>
 
-<!-- Intake summary (read-only) -->
-<section class="card mb-4">
-  <div class="card-header">{% if ui %}{{ ui.intake_header }}{% else %}Anamnese / Intake{% endif %}</div>
-  <div class="card-body small">
+<section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+  <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.intake_header }}{% else %}Anamnese / Intake{% endif %}</div>
+  <div class="p-4 text-sm text-base-900 dark:text-base-100">
     <div id="intake-summary"></div>
   </div>
 </section>
 
-<!-- Befund form -->
 <form id="befund-form" class="mb-4">{% csrf_token %}
   <input type="hidden" name="schema_version" value="1" />
   <input type="hidden" name="authoring_locale" value="de-DE" />
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_1 }}{% else %}1. Untersuchungsumfang (Mehrfachauswahl){% endif %}</div>
-    <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="INTIMATE_AREA_NOT_EXAMINED" id="ex1" /><label class="form-check-label" for="ex1">{% if ui %}{{ ui.examination_intimate }}{% else %}Intimbereich nicht untersucht{% endif %}</label></div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="examination_scope" value="ORAL_MUCOSA_NOT_EXAMINED" id="ex2" /><label class="form-check-label" for="ex2">{% if ui %}{{ ui.examination_oral }}{% else %}Mundschleimhaut nicht untersucht{% endif %}</label></div>
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_1 }}{% else %}1. Untersuchungsumfang (Mehrfachauswahl){% endif %}</div>
+    <div class="p-4 text-sm">
+      <div class="flex items-start gap-2 mb-2"><input class="mt-1 rounded border-base-300 text-primary-600 focus:ring-primary-500 dark:border-base-600 dark:bg-base-900" type="checkbox" name="examination_scope" value="INTIMATE_AREA_NOT_EXAMINED" id="ex1" /><label class="text-base-900 dark:text-base-100" for="ex1">{% if ui %}{{ ui.examination_intimate }}{% else %}Intimbereich nicht untersucht{% endif %}</label></div>
+      <div class="flex items-start gap-2 mb-2"><input class="mt-1 rounded border-base-300 text-primary-600 focus:ring-primary-500 dark:border-base-600 dark:bg-base-900" type="checkbox" name="examination_scope" value="ORAL_MUCOSA_NOT_EXAMINED" id="ex2" /><label class="text-base-900 dark:text-base-100" for="ex2">{% if ui %}{{ ui.examination_oral }}{% else %}Mundschleimhaut nicht untersucht{% endif %}</label></div>
     </div>
   </section>
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_2 }}{% else %}2. Hauttyp nach Fitzpatrick{% endif %}</div>
-    <div class="card-body">
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_2 }}{% else %}2. Hauttyp nach Fitzpatrick{% endif %}</div>
+    <div class="p-4 text-sm">
       {% for val, label in fitzpatrick_choices %}
-      <div class="form-check"><input class="form-check-input" type="radio" name="fitzpatrick_type" value="{{ val }}" id="fp_{{ val }}" /><label class="form-check-label" for="fp_{{ val }}">{{ label }}</label></div>
+      <div class="flex items-start gap-2 mb-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 focus:ring-primary-500 dark:border-base-600 dark:bg-base-900" type="radio" name="fitzpatrick_type" value="{{ val }}" id="fp_{{ val }}" /><label class="text-base-900 dark:text-base-100" for="fp_{{ val }}">{{ label }}</label></div>
       {% endfor %}
     </div>
   </section>
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_3 }}{% else %}3. Gesamtbeurteilung der Bildanalyse{% endif %}</div>
-    <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="form-check-label" for="oa1">{% if ui %}{{ ui.overall_no_control }}{% else %}Keine kontrollbedürftigen Hautveränderungen erkennbar{% endif %}</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="form-check-label" for="oa2">{% if ui %}{{ ui.overall_control }}{% else %}Kontrollbedürftige Hautveränderungen erkennbar{% endif %}</label></div>
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_3 }}{% else %}3. Gesamtbeurteilung der Bildanalyse{% endif %}</div>
+    <div class="p-4 text-sm">
+      <div class="flex items-start gap-2 mb-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 focus:ring-primary-500 dark:border-base-600 dark:bg-base-900" type="radio" name="overall_image_assessment" value="NO_CONTROL_NEEDED" id="oa1" checked /><label class="text-base-900 dark:text-base-100" for="oa1">{% if ui %}{{ ui.overall_no_control }}{% else %}Keine kontrollbedürftigen Hautveränderungen erkennbar{% endif %}</label></div>
+      <div class="flex items-start gap-2 mb-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 focus:ring-primary-500 dark:border-base-600 dark:bg-base-900" type="radio" name="overall_image_assessment" value="CONTROL_NEEDED" id="oa2" /><label class="text-base-900 dark:text-base-100" for="oa2">{% if ui %}{{ ui.overall_control }}{% else %}Kontrollbedürftige Hautveränderungen erkennbar{% endif %}</label></div>
       <div class="mt-3">
-        <label class="form-label small mb-1" for="doctor-template-select">{% if ui %}{{ ui.template_select_label }}{% else %}Textvorlage{% endif %}</label>
-        <select class="form-select form-select-sm" id="doctor-template-select">
+        <label class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1" for="doctor-template-select">{% if ui %}{{ ui.template_select_label }}{% else %}Textvorlage{% endif %}</label>
+        <select class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" id="doctor-template-select">
           <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
         </select>
-        <p class="small text-muted mb-0 mt-1">{% if ui %}{{ ui.template_select_hint }}{% else %}Vorlage wählen – danach erscheinen die Favoriten in Abschnitt 8 und 9.{% endif %}</p>
+        <p class="text-sm text-base-500 dark:text-base-400 mb-0 mt-1">{% if ui %}{{ ui.template_select_hint }}{% else %}Vorlage wählen – danach erscheinen die Favoriten in Abschnitt 8 und 9.{% endif %}</p>
       </div>
     </div>
   </section>
 
-  <section class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100 flex flex-wrap items-center justify-between gap-2">
       <span>{% if ui %}{{ ui.section_4 }}{% else %}4. Läsionen (Wideodermatoskop – Gruppierung){% endif %}</span>
-      <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-lesion-group">{% if ui %}{{ ui.add_group|default:"+ Gruppe hinzufügen" }}{% else %}+ Gruppe hinzufügen{% endif %}</button>
+      <button type="button" class="inline-flex items-center rounded-default border border-primary-600/40 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/50 dark:text-primary-400 dark:hover:bg-primary-500/10" id="btn-add-lesion-group">{% if ui %}{{ ui.add_group|default:"+ Gruppe hinzufügen" }}{% else %}+ Gruppe hinzufügen{% endif %}</button>
     </div>
-    <div class="card-body">
-      <p class="small text-muted">Numery zmian z urządzenia wpisuj w pole „Numery w grupie” (np. 2, 3, 13). Jedna grupa = jeden wspólny opis.</p>
+    <div class="p-4 text-sm">
+      <p class="text-base-500 dark:text-base-400">Numery zmian z urządzenia wpisuj w pole „Numery w grupie” (np. 2, 3, 13). Jedna grupa = jeden wspólny opis.</p>
       <div id="lesion-groups-container"></div>
     </div>
   </section>
 
   <template id="lesion-group-tpl">
-    <section class="card mb-3 lesion-group" data-group-index="">
-      <div class="card-header d-flex justify-content-between align-items-center">
+    <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs lesion-group" data-group-index="">
+      <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100 flex flex-wrap items-center justify-between gap-2">
         <span class="lesion-group-title">{% if ui %}{{ ui.lesion_no }}{% else %}Läsion Nr.{% endif %} – {% if ui %}{{ ui.lesion_header }}{% else %}Merkmale und Einschätzung{% endif %}</span>
-        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-group">{% if ui %}{{ ui.remove_group|default:"Gruppe entfernen" }}{% else %}Gruppe entfernen{% endif %}</button>
+        <button type="button" class="inline-flex items-center rounded-default border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-500/10 btn-remove-group">{% if ui %}{{ ui.remove_group|default:"Gruppe entfernen" }}{% else %}Gruppe entfernen{% endif %}</button>
       </div>
-      <div class="card-body">
-        <label class="form-label small">Numery w grupie (z Wideodermatoskopu, np. 2, 3, 13)</label>
-        <input type="text" class="form-control form-control-sm lesion-numbers-input mb-2" placeholder="2, 3, 13" />
-        <p class="small text-muted mb-1">5. Dermatoskopische Merkmale (Mehrfachauswahl)</p>
-        <div class="row small lesion-features-row">
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ASYMMETRY" /> Asymmetrie</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_BORDER" /> Unregelmäßige Begrenzung</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="INHOMOGENEOUS_PIGMENTATION" /> Inhomogene Pigmentierung</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="MULTICOLOR" /> Mehrfarbigkeit</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ATYPICAL_PIGMENT_NETWORK" /> Atypisches Pigmentnetz</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_GLOBULES" /> Unregelmäßige Globuli</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="IRREGULAR_DOTS" /> Unregelmäßige Punkte</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="STRUCTURELESS_AREAS" /> Strukturlose Areale</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="ATYPICAL_VASCULAR_STRUCTURES" /> Atypische Gefäßstrukturen</div></div>
-          <div class="col-md-6"><div class="form-check"><input class="form-check-input lesion-feature" type="checkbox" value="REGRESSION_AREAS" /> Regressionsareale</div></div>
+      <div class="p-4 text-sm">
+        <label class="block text-sm font-medium text-base-700 dark:text-base-300">Numery w grupie (z Wideodermatoskopu, np. 2, 3, 13)</label>
+        <input type="text" class="w-full border border-base-200 bg-white rounded-default px-3 py-1.5 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100 lesion-numbers-input mb-2" placeholder="2, 3, 13" />
+        <p class="text-base-500 dark:text-base-400 mb-1">5. Dermatoskopische Merkmale (Mehrfachauswahl)</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm lesion-features-row">
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="ASYMMETRY" /> <span class="text-base-900 dark:text-base-100">Asymmetrie</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="IRREGULAR_BORDER" /> <span class="text-base-900 dark:text-base-100">Unregelmäßige Begrenzung</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="INHOMOGENEOUS_PIGMENTATION" /> <span class="text-base-900 dark:text-base-100">Inhomogene Pigmentierung</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="MULTICOLOR" /> <span class="text-base-900 dark:text-base-100">Mehrfarbigkeit</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="ATYPICAL_PIGMENT_NETWORK" /> <span class="text-base-900 dark:text-base-100">Atypisches Pigmentnetz</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="IRREGULAR_GLOBULES" /> <span class="text-base-900 dark:text-base-100">Unregelmäßige Globuli</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="IRREGULAR_DOTS" /> <span class="text-base-900 dark:text-base-100">Unregelmäßige Punkte</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="STRUCTURELESS_AREAS" /> <span class="text-base-900 dark:text-base-100">Strukturlose Areale</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="ATYPICAL_VASCULAR_STRUCTURES" /> <span class="text-base-900 dark:text-base-100">Atypische Gefäßstrukturen</span></div>
+          <div class="flex items-start gap-2"><input class="mt-0.5 rounded border-base-300 text-primary-600 lesion-feature" type="checkbox" value="REGRESSION_AREAS" /> <span class="text-base-900 dark:text-base-100">Regressionsareale</span></div>
         </div>
-        <p class="small text-muted mt-2">6. Klinisch-dermatoskopische Einschätzung</p>
-        <div class="lesion-clinical-row">
-          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="UNREMARKABLE" name="_grp_clinical_" /><label class="form-check-label">Unauffällige Läsion</label></div>
-          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="SLIGHTLY_ATYPICAL" name="_grp_clinical_" /><label class="form-check-label">Leicht atypische Läsion</label></div>
-          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="CONTROL_NEEDED" name="_grp_clinical_" /><label class="form-check-label">Kontrollbedürftige Läsion</label></div>
-          <div class="form-check"><input class="form-check-input lesion-clinical" type="radio" value="SUSPICIOUS" name="_grp_clinical_" /><label class="form-check-label">Suspekte Läsion</label></div>
+        <p class="text-base-500 dark:text-base-400 mt-2">6. Klinisch-dermatoskopische Einschätzung</p>
+        <div class="lesion-clinical-row space-y-2">
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-clinical" type="radio" value="UNREMARKABLE" name="_grp_clinical_" /><label class="text-base-900 dark:text-base-100">Unauffällige Läsion</label></div>
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-clinical" type="radio" value="SLIGHTLY_ATYPICAL" name="_grp_clinical_" /><label class="text-base-900 dark:text-base-100">Leicht atypische Läsion</label></div>
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-clinical" type="radio" value="CONTROL_NEEDED" name="_grp_clinical_" /><label class="text-base-900 dark:text-base-100">Kontrollbedürftige Läsion</label></div>
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-clinical" type="radio" value="SUSPICIOUS" name="_grp_clinical_" /><label class="text-base-900 dark:text-base-100">Suspekte Läsion</label></div>
         </div>
-        <p class="small text-muted mt-2">7. Einschätzung des Malignitätsrisikos</p>
-        <div class="lesion-malignancy-row">
-          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="NO_SUSPICION" name="_grp_malignancy_" checked /><label class="form-check-label">Kein Malignitätsverdacht</label></div>
-          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="LOW_SUSPICION" name="_grp_malignancy_" /><label class="form-check-label">Niedriger Malignitätsverdacht</label></div>
-          <div class="form-check"><input class="form-check-input lesion-malignancy" type="radio" value="CANNOT_EXCLUDE" name="_grp_malignancy_" /><label class="form-check-label">Malignitätsverdacht kann nicht ausgeschlossen werden</label></div>
+        <p class="text-base-500 dark:text-base-400 mt-2">7. Einschätzung des Malignitätsrisikos</p>
+        <div class="lesion-malignancy-row space-y-2">
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-malignancy" type="radio" value="NO_SUSPICION" name="_grp_malignancy_" checked /><label class="text-base-900 dark:text-base-100">Kein Malignitätsverdacht</label></div>
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-malignancy" type="radio" value="LOW_SUSPICION" name="_grp_malignancy_" /><label class="text-base-900 dark:text-base-100">Niedriger Malignitätsverdacht</label></div>
+          <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600 lesion-malignancy" type="radio" value="CANNOT_EXCLUDE" name="_grp_malignancy_" /><label class="text-base-900 dark:text-base-100">Malignitätsverdacht kann nicht ausgeschlossen werden</label></div>
         </div>
-        <div class="row g-2 align-items-end mt-1">
-          <div class="col-md-8">
-            <label class="form-label small mb-1">{% if ui %}{{ ui.favorite_lesion_label }}{% else %}Favorit für Läsionsgruppe{% endif %}</label>
-            <select class="form-select form-select-sm lesion-favorite-select">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mt-2">
+          <div class="md:col-span-8">
+            <label class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.favorite_lesion_label }}{% else %}Favorit für Läsionsgruppe{% endif %}</label>
+            <select class="w-full border border-base-200 bg-white rounded-default px-3 py-1.5 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100 lesion-favorite-select">
               <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
             </select>
           </div>
-          <div class="col-md-4">
-            <button type="button" class="btn btn-sm btn-outline-secondary w-100 btn-apply-lesion-favorite">{% if ui %}{{ ui.btn_apply_favorite }}{% else %}Anwenden{% endif %}</button>
+          <div class="md:col-span-4">
+            <button type="button" class="w-full inline-flex justify-center items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800 btn-apply-lesion-favorite">{% if ui %}{{ ui.btn_apply_favorite }}{% else %}Anwenden{% endif %}</button>
           </div>
         </div>
-        <label class="form-label small mt-2">8. Text (generiert / bearbeitet)</label>
-        <textarea class="form-control form-control-sm lesion-text" rows="3" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
+        <label class="block text-sm font-medium text-base-700 dark:text-base-300 mt-2">8. Text (generiert / bearbeitet)</label>
+        <textarea class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100 lesion-text" rows="3" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
       </div>
     </section>
   </template>
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_9 }}{% else %}9. Zusammenfassung Gesamtbefund (editierbar){% endif %}</div>
-    <div class="card-body">
-      <div class="row g-2 align-items-end mb-2">
-        <div class="col-md-8">
-          <label class="form-label small mb-1" for="summary-favorite-select">{% if ui %}{{ ui.favorite_summary_label }}{% else %}Favorit für Abschnitt 9{% endif %}</label>
-          <select class="form-select form-select-sm" id="summary-favorite-select">
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_9 }}{% else %}9. Zusammenfassung Gesamtbefund (editierbar){% endif %}</div>
+    <div class="p-4 text-sm">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
+        <div class="md:col-span-8">
+          <label class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1" for="summary-favorite-select">{% if ui %}{{ ui.favorite_summary_label }}{% else %}Favorit für Abschnitt 9{% endif %}</label>
+          <select class="w-full border border-base-200 bg-white rounded-default px-3 py-1.5 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" id="summary-favorite-select">
             <option value="">{% if ui %}{{ ui.template_select_placeholder }}{% else %}Vorlage wählen…{% endif %}</option>
           </select>
         </div>
-        <div class="col-md-4">
-          <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="btn-apply-summary-favorite">{% if ui %}{{ ui.btn_apply_favorite }}{% else %}Anwenden{% endif %}</button>
+        <div class="md:col-span-4">
+          <button type="button" class="w-full inline-flex justify-center items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800" id="btn-apply-summary-favorite">{% if ui %}{{ ui.btn_apply_favorite }}{% else %}Anwenden{% endif %}</button>
         </div>
       </div>
-      <textarea class="form-control" id="summary_text" name="summary_text" rows="4" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
+      <textarea class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" id="summary_text" name="summary_text" rows="4" placeholder="{% if ui %}{{ ui.text_placeholder }}{% else %}Text hier anzeigen und bearbeiten{% endif %}"></textarea>
     </div>
   </section>
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_10 }}{% else %}10. Ärztliche Empfehlung (Mehrfachauswahl){% endif %}</div>
-    <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_3_MONTHS" /> {% if ui %}{{ ui.rec_followup_3 }}{% else %}Dermatologische Verlaufskontrolle in 3 Monaten empfohlen{% endif %}</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="FOLLOWUP_6_MONTHS" /> {% if ui %}{{ ui.rec_followup_6 }}{% else %}Dermatologische Verlaufskontrolle in 6 Monaten empfohlen{% endif %}</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="PROMPT_VISIT_ON_CHANGE" /> {% if ui %}{{ ui.rec_prompt_visit }}{% else %}Bei klinischer Veränderung zeitnahe persönliche dermatologische Vorstellung empfohlen{% endif %}</div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="recommendations" value="NO_SHORT_TERM_FOLLOWUP_REQUIRED" /> {% if ui %}{{ ui.rec_no_short }}{% else %}Aktuell keine kurzfristige Kontrolle erforderlich{% endif %}</div>
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_10 }}{% else %}10. Ärztliche Empfehlung (Mehrfachauswahl){% endif %}</div>
+    <div class="p-4 text-sm space-y-2">
+      <div class="flex items-start gap-2"><input class="mt-1 rounded border-base-300 text-primary-600" type="checkbox" name="recommendations" value="FOLLOWUP_3_MONTHS" /> <span class="text-base-900 dark:text-base-100">{% if ui %}{{ ui.rec_followup_3 }}{% else %}Dermatologische Verlaufskontrolle in 3 Monaten empfohlen{% endif %}</span></div>
+      <div class="flex items-start gap-2"><input class="mt-1 rounded border-base-300 text-primary-600" type="checkbox" name="recommendations" value="FOLLOWUP_6_MONTHS" /> <span class="text-base-900 dark:text-base-100">{% if ui %}{{ ui.rec_followup_6 }}{% else %}Dermatologische Verlaufskontrolle in 6 Monaten empfohlen{% endif %}</span></div>
+      <div class="flex items-start gap-2"><input class="mt-1 rounded border-base-300 text-primary-600" type="checkbox" name="recommendations" value="PROMPT_VISIT_ON_CHANGE" /> <span class="text-base-900 dark:text-base-100">{% if ui %}{{ ui.rec_prompt_visit }}{% else %}Bei klinischer Veränderung zeitnahe persönliche dermatologische Vorstellung empfohlen{% endif %}</span></div>
+      <div class="flex items-start gap-2"><input class="mt-1 rounded border-base-300 text-primary-600" type="checkbox" name="recommendations" value="NO_SHORT_TERM_FOLLOWUP_REQUIRED" /> <span class="text-base-900 dark:text-base-100">{% if ui %}{{ ui.rec_no_short }}{% else %}Aktuell keine kurzfristige Kontrolle erforderlich{% endif %}</span></div>
     </div>
   </section>
 
-  <section class="card mb-3">
-    <div class="card-header">{% if ui %}{{ ui.section_11 }}{% else %}11. Ärztliche Gesamteinschätzung{% endif %}</div>
-    <div class="card-body">
-      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="NO_HIGH_GRADE_SUSPICION" id="fa1" checked /><label class="form-check-label" for="fa1">{% if ui %}{{ ui.final_no_suspicion }}{% else %}Aktuell kein höhergradiger Malignitätsverdacht{% endif %}</label></div>
-      <div class="form-check"><input class="form-check-input" type="radio" name="final_assessment" value="HIGH_GRADE_CANNOT_BE_EXCLUDED" id="fa2" /><label class="form-check-label" for="fa2">{% if ui %}{{ ui.final_high_grade }}{% else %}Ein höhergradiger Malignitätsverdacht kann nicht sicher ausgeschlossen werden{% endif %}</label></div>
+  <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{% if ui %}{{ ui.section_11 }}{% else %}11. Ärztliche Gesamteinschätzung{% endif %}</div>
+    <div class="p-4 text-sm space-y-2">
+      <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600" type="radio" name="final_assessment" value="NO_HIGH_GRADE_SUSPICION" id="fa1" checked /><label class="text-base-900 dark:text-base-100" for="fa1">{% if ui %}{{ ui.final_no_suspicion }}{% else %}Aktuell kein höhergradiger Malignitätsverdacht{% endif %}</label></div>
+      <div class="flex items-start gap-2"><input class="mt-1 rounded-full border-base-300 text-primary-600" type="radio" name="final_assessment" value="HIGH_GRADE_CANNOT_BE_EXCLUDED" id="fa2" /><label class="text-base-900 dark:text-base-100" for="fa2">{% if ui %}{{ ui.final_high_grade }}{% else %}Ein höhergradiger Malignitätsverdacht kann nicht sicher ausgeschlossen werden{% endif %}</label></div>
     </div>
   </section>
 
-  <div class="d-flex gap-2 flex-wrap">
-    <button type="button" class="btn btn-secondary" id="btn-save-draft">{% if ui %}{{ ui.btn_save_draft }}{% else %}Zapisz szkic{% endif %}</button>
-    <a class="btn btn-outline-info" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{% if ui %}{{ ui.btn_preview_pdf }}{% else %}Podgląd PDF{% endif %}</a>
-    <button type="button" class="btn btn-success" id="btn-publish">{% if ui %}{{ ui.btn_publish }}{% else %}Zatwierdź i wyślij{% endif %}</button>
-    <label class="align-middle ms-2"><input type="checkbox" id="resend_sms" /> {% if ui %}{{ ui.resend_sms }}{% else %}SMS erneut senden{% endif %}</label>
+  <div class="flex flex-wrap items-center gap-3">
+    <button type="button" class="inline-flex items-center justify-center rounded-default border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-800 hover:bg-base-200 dark:bg-base-800 dark:border-base-600 dark:text-base-100 dark:hover:bg-base-700" id="btn-save-draft">{% if ui %}{{ ui.btn_save_draft }}{% else %}Zapisz szkic{% endif %}</button>
+    <a class="inline-flex items-center justify-center rounded-default border border-primary-600/40 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/50 dark:text-primary-400" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{% if ui %}{{ ui.btn_preview_pdf }}{% else %}Podgląd PDF{% endif %}</a>
+    <button type="button" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600" id="btn-publish">{% if ui %}{{ ui.btn_publish }}{% else %}Zatwierdź i wyślij{% endif %}</button>
+    <label class="inline-flex items-center gap-2 text-sm text-base-700 dark:text-base-300"><input type="checkbox" id="resend_sms" class="rounded border-base-300 text-primary-600 dark:border-base-600 dark:bg-base-900" /> {% if ui %}{{ ui.resend_sms }}{% else %}SMS erneut senden{% endif %}</label>
   </div>
 </form>
 {% endblock %}

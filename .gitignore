@@ -135,7 +135,14 @@ db.sqlite3
 db.sqlite3-journal
 media/
 staticfiles/
-static/
+# Root static/ is mostly local/collect output; versioned brand + admin helpers are tracked.
+/static/*
+!/static/cogitomedica/
+!/static/cogitomedica/**
+!/static/admin/
+!/static/admin/**
+!/static/lab/
+!/static/lab/**
 
 # Project specific
 pdf_files/

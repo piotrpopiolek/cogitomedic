@@ -83,7 +83,9 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
             request,
             "doctor/login.html",
             {
+                **admin.site.each_context(request),
                 "error": "Ungültige Anmeldung oder keine Berechtigung.",
+                "next": (request.POST.get("next") or "").strip(),
                 "ui": ui,
                 "lang": lang,
             },
@@ -94,7 +96,7 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "doctor/login.html",
-        {"next": next_val, "ui": ui, "lang": lang},
+        {**admin.site.each_context(request), "next": next_val, "ui": ui, "lang": lang},
     )
 
 

@@ -361,6 +361,43 @@ if HAS_UNFOLD:
         "LOGIN": {
             "redirect_after": lambda request: reverse_lazy("admin:index"),
         },
+        # Primary: teal #075255 jak w skompilowanym CSS witryny (post-17.css / post-33.css), nie blue z global-settings.
+        "COLORS": {
+            "base": {
+                "50": "oklch(98.5% .002 247.839)",
+                "100": "oklch(96.7% .003 264.542)",
+                "200": "oklch(92.8% .006 264.531)",
+                "300": "oklch(87.2% .01 258.338)",
+                "400": "oklch(70.7% .022 261.325)",
+                "500": "oklch(55.1% .027 264.364)",
+                "600": "oklch(44.6% .03 256.802)",
+                "700": "oklch(37.3% .034 259.733)",
+                "800": "oklch(27.8% .033 256.848)",
+                "900": "oklch(21% .034 264.665)",
+                "950": "oklch(13% .028 261.692)",
+            },
+            "primary": {
+                "50": "oklch(96.5% .022 196)",
+                "100": "oklch(92% .045 196)",
+                "200": "oklch(84% .07 196)",
+                "300": "oklch(72% .09 196)",
+                "400": "oklch(58% .095 196)",
+                "500": "oklch(48% .088 196)",
+                "600": "oklch(35.5% .082 196.2)",
+                "700": "oklch(30% .072 196)",
+                "800": "oklch(24% .058 196)",
+                "900": "oklch(19% .045 196)",
+                "950": "oklch(14% .035 196)",
+            },
+            "font": {
+                "subtle-light": "var(--color-base-500)",
+                "subtle-dark": "var(--color-base-400)",
+                "default-light": "var(--color-base-600)",
+                "default-dark": "var(--color-base-300)",
+                "important-light": "var(--color-base-900)",
+                "important-dark": "var(--color-base-100)",
+            },
+        },
         "STYLES": [
             lambda request: static("cogitomedica/css/unfold-sidebar-fix.css"),
             lambda request: static("cogitomedica/css/admin-changelist-link.css"),
