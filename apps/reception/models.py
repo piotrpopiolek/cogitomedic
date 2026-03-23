@@ -181,6 +181,7 @@ class DailyQueue(models.Model):
         blank=True,
         null=True,
         related_name="assigned_queues",
+        limit_choices_to=Q(groups__name="Doctor"),
     )
     created_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="created_queues"
