@@ -1,0 +1,2 @@
+# Skrypty shell w repozytorium muszą mieć LF (Docker/Linux).
+*.sh text eol=lf
