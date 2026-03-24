@@ -827,17 +827,9 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND` (dokument nie w scope, brak pliku lub status ≠ COMPLETED).
 
-### 2.11 Importy (XLSX, harmonogram, awaryjny)
+### 2.11 Importy (XLSX, harmonogram)
 
 - **POST** `/imports/patients/pdf` — **wycofany.** Import pacjentów z PDF Doctolib został usunięty. Użyj „Import z pliku” w adminie (XLSX) lub przyszłego `POST /imports/patients/xlsx` po wdrożeniu.
-
-- **POST** `/imports/patients/emergency`
-  - Opis: Ścieżka awaryjnego importu ze sztywnego szablonu (US-017).
-  - Parametry zapytania: brak.
-  - Request: `multipart/form-data` z plikiem zgodnym ze szablonem.
-  - Response JSON: obiekt batcha.
-  - Kody sukcesu: `202 ACCEPTED`.
-  - Kody błędów: `400 INVALID_TEMPLATE`, `422 MISSING_DOCTOLIB_ID`, `403 FORBIDDEN`.
 
 - **GET** `/imports/batches`
   - Opis: Lista batchy importu.
@@ -880,14 +872,6 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
     ```
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`.
-
-- **GET** `/imports/templates/emergency.xlsx`
-  - Opis: Pobiera awaryjny szablon importu.
-  - Parametry zapytania: brak.
-  - Request JSON: brak.
-  - Response: plik binarny.
-  - Kody sukcesu: `200 OK`.
-  - Kody błędów: `404 TEMPLATE_NOT_FOUND`.
 
 ### 2.12 Outbox i operacje (Admin/Ops)
 

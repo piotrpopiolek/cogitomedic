@@ -325,7 +325,7 @@ Kryteria akceptacji:
 - Walidacja blokuje finalizację formularza, jeśli nie udzielono odpowiedzi na pytania oznaczone jako wymagane.
 - Po finalizacji formularza lekarz widzi odpowiedzi anamnestyczne razem ze zgodami i schematem ciała.
 
-ID: US-018
+ID: US-017
 Tytuł: Portal wyniki – dostęp pacjenta do dokumentacji (4 etapy)
 Opis: Jako pacjent, chcę bezpiecznie pobrać moją dokumentację medyczną po otrzymaniu SMS, logując się numerem telefonu i datą urodzenia, a następnie weryfikując tożsamość kodem OTP.
 Kryteria akceptacji:
@@ -336,16 +336,6 @@ Kryteria akceptacji:
 - Po poprawnym OTP pacjent otrzymuje PDF przez HTTPS; logi audytowe (data, godzina, IP).
 - Lekarz może wycofać publikację – pacjent po OTP nie zobaczy już wycofanego pliku.
 - Brak linków w SMS; treść wyłącznie: „Nowa dokumentacja w Cogito”.
-
-ID: US-017
-Tytuł: Awaryjny import z szablonu (Excel Template Fallback)
-Opis: Jako administrator, chcę mieć możliwość pobrania awaryjnego szablonu Excel i zaimportowania go, aby utrzymać ciągłość pracy recepcji w przypadku nagłej zmiany formatu pliku Doctolib.
-Kryteria akceptacji:
-
-- System udostępnia do pobrania stały szablon `.xlsx` z kolumnami: `doctolib_id`, `first_name`, `last_name`, `dob`, `phone`, `email`.
-- Dostępny jest dedykowany importer "Awaryjny", który akceptuje wyłącznie pliki zgodne z tym szablonem (sztywna walidacja).
-- Procedura awaryjna (kopiuj-wklej z zepsutego pliku do szablonu) jest udokumentowana w runbooku dla administratora/recepcji.
-- Użycie importera awaryjnego jest logowane jako incydent operacyjny.
 
 ## 6. Metryki sukcesu
 

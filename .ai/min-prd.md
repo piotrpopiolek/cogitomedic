@@ -13,7 +13,7 @@ Aplikacja webowa do cyfryzacji przyjęć pacjentów, zgód i dokumentacji medycz
 
 ## Główne obszary
 
-1. **Recepcja:** lista dzienna (Poczekalnia), CRUD pacjentów, **import z PDF** (format Doctolib) lub awaryjny Excel; unikalność pacjenta: `first_name` + `last_name` + `phone` + `date_of_birth`; `Doctolib Patient ID` opcjonalny, ale jeśli jest – unikalny.
+1. **Recepcja:** lista dzienna (Poczekalnia), CRUD pacjentów, **import z PDF** (format Doctolib); unikalność pacjenta: `first_name` + `last_name` + `phone` + `date_of_birth`; `Doctolib Patient ID` opcjonalny, ale jeśli jest – unikalny.
 2. **Tablet (pacjent):** recepcja wybiera kolejkę i pacjenta (sesja, **bez linków z tokenem**). Pacjent: dane do weryfikacji, ankieta anamnestyczna (Anamnesebogen), zgody, schemat ciała, podpis. Tylko w poczekalni na tablecie.
 3. **Lekarz:** formularz medyczny (Befund) – grupy zmian (numery z Wideodermatoskopu), cechy dermatoskopowe, ocena, ryzyko; tekst **generowany z checkboxów, ale edytowalny** („baza, nie klatka”). Szkic vs Opublikowany; publikacja idempotentna (sprawdzenie „publikacja w toku” / `publish_request_id`).
 4. **Archiwizacja:** Outbox → generowanie PDF → upload HiDrive (mock F1–2, API F3) → SMS (SMSApi). Retencja: usuwanie PDF z serwera po 30 dniach **tylko gdy** `hidrive_sent` i `sms_sent` true.

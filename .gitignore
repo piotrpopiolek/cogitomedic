@@ -71,6 +71,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Złożony PDF / pliki pośrednie z scripts/build_manual_pdf.py
+docs/manual/_build/
+
 # PyBuilder
 target/
 

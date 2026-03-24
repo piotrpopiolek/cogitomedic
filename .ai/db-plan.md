@@ -496,7 +496,7 @@
 - `pdf_status_enum`: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
 - `outbox_event_type_enum`: `GENERATE_PDF`, `HIDRIVE_UPLOAD`, `SMS_SEND`
 - `outbox_status_enum`: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`, `DEAD_LETTER`
-- `import_type_enum`: `DAILY_FILE_IMPORT`, `EMERGENCY_TEMPLATE_IMPORT`
+- `import_type_enum`: `DAILY_FILE_IMPORT`
 - `import_source_system_enum`: `DOCTOLIB_EXPORT`, `OTHER`
 - `import_status_enum`: `PROCESSING`, `COMPLETED`, `COMPLETED_WITH_ERRORS`, `FAILED`
 

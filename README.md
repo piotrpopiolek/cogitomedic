@@ -25,6 +25,8 @@
 - Ensure data security and compliance
 - Automate archiving and patient notifications
 
+**User manuals (Polish):** step-by-step guides for Reception, Tablet, Doctor, Admin, and the patient results portal — see [`docs/manual/README.md`](docs/manual/README.md).
+
 **Main capabilities:**
 
 - **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links; browse generated intake PDFs (list, filters, detail, inline preview) in the panel at `/admin/intake-documents/`

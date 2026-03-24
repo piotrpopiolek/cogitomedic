@@ -58,6 +58,42 @@ services:
       db:
         condition: service_healthy
 
+  # One-off: zrzuty ekranu do docs/manual (wymaga działającego web + DB)
+  # Uruchomienie: docker compose --profile screenshots run --rm screenshots
+  screenshots:
+    build:
+      context: .
+      dockerfile: Dockerfile.screenshots
+    profiles:
+      - screenshots
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      SMSAPI_USE_MOCK: "1"
+      CAPTCHA_VERIFY_SKIP: "1"
+      SCREENSHOT_BASE_URL: http://web:8000
+    # Inline sh (bez pliku .sh z Windows CRLF, który psuje `set -e` w kontenerze)
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        until python -c "import urllib.request; urllib.request.urlopen('http://web:8000/admin/login/')" 2>/dev/null; do
+          i=$$((i+1))
+          if [ "$$i" -gt 90 ]; then echo "screenshots: web nie odpowiada po 3 minutach" >&2; exit 1; fi
+          sleep 2
+        done
+        exec python scripts/capture_manual_screenshots.py --base-url http://web:8000
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped

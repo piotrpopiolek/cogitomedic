@@ -824,17 +824,9 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND` (document out of scope, file missing, or status ≠ COMPLETED).
 
-### 2.11 Imports (XLSX, scheduled, emergency)
+### 2.11 Imports (XLSX, scheduled)
 
 - **POST** `/imports/patients/pdf` — **removed.** Patient import from Doctolib PDF was retired. Use admin "Import z pliku" (XLSX) or future `POST /imports/patients/xlsx` when implemented.
-
-- **POST** `/imports/patients/emergency`
-  - Description: Emergency template import path (US-017).
-  - Query params: none.
-  - Request: `multipart/form-data` with strict template file.
-  - Response JSON: batch object.
-  - Success: `202 ACCEPTED`.
-  - Errors: `400 INVALID_TEMPLATE`, `422 MISSING_DOCTOLIB_ID`, `403 FORBIDDEN`.
 
 - **GET** `/imports/batches`
   - Description: List import batches.
@@ -877,14 +869,6 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
     ```
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`.
-
-- **GET** `/imports/templates/emergency.xlsx`
-  - Description: Download emergency fallback template.
-  - Query params: none.
-  - Request JSON: none.
-  - Response: binary file.
-  - Success: `200 OK`.
-  - Errors: `404 TEMPLATE_NOT_FOUND`.
 
 ### 2.12 Outbox and operations (Admin/Ops)
 
