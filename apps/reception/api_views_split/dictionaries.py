@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
+    json_domain_error,
     json_error,
     parse_bool_query,
     parse_list_limit,
@@ -80,7 +81,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(id__in=scope_ids)
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("Invalid is_active query parameter.", status=400)
+            return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
@@ -91,13 +92,13 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
 
     if request.method == "POST":
         if not request.user.is_admin_role:
-            return json_error("Only ADMIN can create clinic sites.", status=403)
+            return json_error("other.api.only_admin_create_clinic_site", status=403)
         try:
             body = CreateClinicSiteRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -109,12 +110,12 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
                 pdf_import_shift_code=body.pdf_import_shift_code,
             )
         except IntegrityError:
-            return json_error("Clinic site code already exists.", status=409)
+            return json_error("other.api.clinic_site_code_already_exists", status=409)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         return JsonResponse(_serialize_clinic_site(site), status=201)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -123,32 +124,32 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         site = ClinicSite.objects.get(id=clinic_site_id)
     except ObjectDoesNotExist:
-        return json_error("Clinic site not found.", status=404)
+        return json_error("other.api.clinic_site_not_found", status=404)
 
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and site.id not in scope_ids:
-        return json_error("Clinic site is not in your assigned scope.", status=403)
+        return json_error("other.api.clinic_site_not_in_scope", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_clinic_site(site))
     if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
-        return json_error("Only ADMIN can update or deactivate clinic sites.", status=403)
+        return json_error("other.api.only_admin_update_clinic_site", status=403)
     if request.method == "DELETE":
         try:
             site = deactivate_clinic_site(clinic_site_id=clinic_site_id)
         except ObjectDoesNotExist:
-            return json_error("Clinic site not found.", status=404)
+            return json_error("other.api.clinic_site_not_found", status=404)
         return JsonResponse(_serialize_clinic_site(site))
 
     try:
         body = UpdateClinicSiteRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     fields_set = body.model_fields_set
@@ -170,11 +171,11 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
             ),
         )
     except ObjectDoesNotExist:
-        return json_error("Clinic site not found.", status=404)
+        return json_error("other.api.clinic_site_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     except IntegrityError:
-        return json_error("Clinic site code already exists.", status=409)
+        return json_error("other.api.clinic_site_code_already_exists", status=409)
     return JsonResponse(_serialize_clinic_site(site))
 
 
@@ -196,7 +197,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(clinic_site_id=clinic_site_id)
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("Invalid is_active query parameter.", status=400)
+            return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
@@ -207,13 +208,13 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
 
     if request.method == "POST":
         if not request.user.is_admin_role:
-            return json_error("Only ADMIN can create consulting rooms.", status=403)
+            return json_error("other.api.only_admin_create_consulting_room", status=403)
         try:
             body = CreateConsultingRoomRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -224,12 +225,12 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
                 is_active=body.is_active,
             )
         except ObjectDoesNotExist:
-            return json_error("Clinic site not found.", status=404)
+            return json_error("other.api.clinic_site_not_found", status=404)
         except IntegrityError:
-            return json_error("Consulting room code already exists for this clinic site.", status=409)
+            return json_error("other.api.consulting_room_code_exists", status=409)
         return JsonResponse(_serialize_consulting_room(room), status=201)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -238,31 +239,31 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         room = ConsultingRoom.objects.get(id=consulting_room_id)
     except ObjectDoesNotExist:
-        return json_error("Consulting room not found.", status=404)
+        return json_error("other.api.consulting_room_not_found", status=404)
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and room.clinic_site_id not in scope_ids:
-        return json_error("Consulting room is not in your assigned scope.", status=403)
+        return json_error("other.api.consulting_room_not_in_scope", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_consulting_room(room))
     if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
-        return json_error("Only ADMIN can update or deactivate consulting rooms.", status=403)
+        return json_error("other.api.only_admin_update_consulting_room", status=403)
     if request.method == "DELETE":
         try:
             room = deactivate_consulting_room(consulting_room_id=consulting_room_id)
         except ObjectDoesNotExist:
-            return json_error("Consulting room not found.", status=404)
+            return json_error("other.api.consulting_room_not_found", status=404)
         return JsonResponse(_serialize_consulting_room(room))
 
     try:
         body = UpdateConsultingRoomRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -274,9 +275,9 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
-        return json_error("Clinic site or consulting room not found.", status=404)
+        return json_error("other.api.clinic_site_or_consulting_room_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     except IntegrityError:
-        return json_error("Consulting room code already exists for this clinic site.", status=409)
+        return json_error("other.api.consulting_room_code_exists", status=409)
     return JsonResponse(_serialize_consulting_room(room))

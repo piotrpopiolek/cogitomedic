@@ -13,6 +13,7 @@ from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
     get_scoped_clinic_site_ids,
+    json_domain_error,
     json_error,
     parse_bool_query,
     read_json_body,
@@ -104,7 +105,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(doctolib_patient_id=doctolib_patient_id)
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("Invalid is_active query parameter.", status=400)
+            return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
@@ -123,9 +124,9 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         try:
             body = CreatePatientRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -149,12 +150,12 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             update_fields.append("country_code")
             patient.save(update_fields=update_fields)
         except IntegrityError:
-            return json_error("Patient uniqueness conflict.", status=409)
+            return json_error("other.api.patient_uniqueness_conflict", status=409)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         return JsonResponse({"patient": _serialize_patient(patient)}, status=201)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -163,24 +164,24 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     
     if request.method == "PATCH" and request.user.is_doctor:
-        return json_error("Method not allowed for this role.", status=403)
+        return json_error("other.api.method_not_allowed_for_role", status=403)
 
     try:
         qs = Patient.objects.all()
         scope_ids = get_scoped_clinic_site_ids(request.user)
         if scope_ids is not None:
             if not scope_ids:
-                return json_error("Patient not found.", status=404)
+                return json_error("other.api.patient_not_found", status=404)
             qs = qs.filter(
                 Q(clinic_sites__id__in=scope_ids)
                 | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
             ).distinct()
         patient = qs.get(id=patient_id)
     except ObjectDoesNotExist:
-        return json_error("Patient not found.", status=404)
+        return json_error("other.api.patient_not_found", status=404)
 
     if request.method == "GET":
         return JsonResponse(_serialize_patient(patient))
@@ -188,15 +189,15 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     try:
         body = UpdatePatientRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     fields_set = body.model_fields_set
     if not fields_set:
-        return json_error("Provide at least one field to update.", status=400)
+        return json_error("other.api.provide_field_to_update", status=400)
     identity_or_contact_fields = {
         "first_name",
         "last_name",
@@ -239,8 +240,8 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         if len(update_fields) > 1:
             patient.save(update_fields=update_fields)
     except IntegrityError:
-        return json_error("Patient uniqueness conflict.", status=409)
+        return json_error("other.api.patient_uniqueness_conflict", status=409)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(_serialize_patient(patient))

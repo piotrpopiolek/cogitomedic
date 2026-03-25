@@ -53,6 +53,8 @@ class OutboxApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.admin_user, "Admin")
+        self.admin_user.preferred_locale = "en-GB"
+        self.admin_user.save(update_fields=["preferred_locale"])
         self.client.login(username="api-admin-outbox", password="safe-password")
         clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="O1", name="O1")

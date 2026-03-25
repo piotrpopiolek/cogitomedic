@@ -10,6 +10,7 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    json_domain_error,
     json_error,
     parse_bool_query,
     parse_list_limit,
@@ -49,7 +50,7 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         qs = TabletDevice.objects.all().order_by("android_id")
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("Invalid is_active query parameter.", status=400)
+            return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
@@ -62,9 +63,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         try:
             body = CreateTabletDeviceRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -74,10 +75,10 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
                 clinic_site_id=body.clinic_site_id,
             )
         except IntegrityError:
-            return json_error("Tablet device with this android_id already exists.", status=409)
+            return json_error("other.api.tablet_android_id_exists", status=409)
         return JsonResponse(_serialize_tablet_device(device), status=201)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -86,26 +87,26 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         device = TabletDevice.objects.get(id=tablet_device_id)
     except ObjectDoesNotExist:
-        return json_error("Tablet device not found.", status=404)
+        return json_error("other.api.tablet_device_not_found", status=404)
     if request.method == "GET":
         return JsonResponse(_serialize_tablet_device(device))
     if request.method == "DELETE":
         try:
             device = deactivate_tablet_device(tablet_device_id=tablet_device_id)
         except ObjectDoesNotExist:
-            return json_error("Tablet device not found.", status=404)
+            return json_error("other.api.tablet_device_not_found", status=404)
         return JsonResponse(_serialize_tablet_device(device))
 
     try:
         body = UpdateTabletDeviceRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     update_kwargs = {
@@ -118,11 +119,11 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     try:
         device = update_tablet_device(**update_kwargs)
     except ObjectDoesNotExist:
-        return json_error("Tablet device not found.", status=404)
+        return json_error("other.api.tablet_device_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     except IntegrityError:
-        return json_error("Tablet device with this android_id already exists.", status=409)
+        return json_error("other.api.tablet_android_id_exists", status=409)
     return JsonResponse(_serialize_tablet_device(device))
 
 
@@ -132,9 +133,9 @@ def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         device = mark_tablet_heartbeat(tablet_device_id=tablet_device_id)
     except ObjectDoesNotExist:
-        return json_error("Tablet device not found.", status=404)
+        return json_error("other.api.tablet_device_not_found", status=404)
     return JsonResponse({"last_seen_at": device.last_seen_at.isoformat()})

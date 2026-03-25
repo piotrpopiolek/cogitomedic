@@ -28,7 +28,7 @@ def intake_documents_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     params = parse_intake_documents_list_params(request.GET)
     clinic_site_id = None
@@ -83,7 +83,7 @@ def intake_document_detail_view(
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         version = (
@@ -97,11 +97,11 @@ def intake_document_detail_view(
             .get(id=intake_document_version_id)
         )
     except ObjectDoesNotExist:
-        return json_error("Intake document not found.", status=404)
+        return json_error("other.api.intake_document_not_found", status=404)
     try:
         check_intake_document_access(version, request.user)
     except ObjectDoesNotExist:
-        return json_error("Intake document not found.", status=404)
+        return json_error("other.api.intake_document_not_found", status=404)
     qe = version.intake_form.queue_entry
     create_audit_event(
         event_type="INTAKE_DOCUMENT_VIEWED",
@@ -125,7 +125,7 @@ def intake_document_preview_pdf_view(
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         version = (
@@ -137,18 +137,18 @@ def intake_document_preview_pdf_view(
             .get(id=intake_document_version_id)
         )
     except ObjectDoesNotExist:
-        return json_error("Intake document not found.", status=404)
+        return json_error("other.api.intake_document_not_found", status=404)
     try:
         check_intake_document_access(version, request.user)
     except ObjectDoesNotExist:
-        return json_error("Intake document not found.", status=404)
+        return json_error("other.api.intake_document_not_found", status=404)
 
     if version.pdf_generation_status != IntakePdfStatus.COMPLETED or not version.pdf_local_path:
-        return json_error("PDF not yet generated or unavailable.", status=404)
+        return json_error("other.api.pdf_not_generated", status=404)
     try:
         pdf_bytes = read_intake_pdf_bytes(version)
     except FileNotFoundError:
-        return json_error("PDF file not found.", status=404)
+        return json_error("other.api.pdf_file_not_found", status=404)
 
     qe = version.intake_form.queue_entry
     create_audit_event(

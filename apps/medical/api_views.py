@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
+    json_domain_error,
     json_error,
     read_json_body,
     require_auth,
@@ -137,9 +138,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         try:
             body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -152,9 +153,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
                 created_by_user_id=request.user.id,
             )
         except ObjectDoesNotExist:
-            return json_error("Queue entry or intake form not found.", status=404)
+            return json_error("other.api.queue_entry_or_intake_not_found", status=404)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         return JsonResponse(
             {
                 "medical_document_id": str(document.id),
@@ -163,7 +164,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             },
             status=201,
         )
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -173,7 +174,7 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     form_locale = (request.GET.get("form_locale") or "de-DE")[:10]
     try:
         context = get_medical_document_context(
@@ -182,7 +183,7 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
             user=request.user,
         )
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
     doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VIEWED",
@@ -205,12 +206,12 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
 
     version = (
         MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
@@ -219,7 +220,7 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
         .first()
     )
     if not version:
-        return json_error("No version to preview. Save a draft first.", status=404)
+        return json_error("other.api.no_version_to_preview", status=404)
 
     form_locale = (request.GET.get("form_locale") or request.GET.get("authoring_locale") or "").strip()[:10]
     authoring_locale_override = form_locale if form_locale else None
@@ -251,12 +252,12 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
 
     versions = (
         MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
@@ -306,24 +307,24 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     if role_error:
         return role_error
     if request.method != "PUT":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         body = SaveDraftMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
-        return json_error("medical_payload.schema_version must match medical_payload_schema_version.", status=400)
+        return json_error("other.api.medical_payload_schema_mismatch", status=400)
 
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
 
     payload_dict = body.medical_payload.model_dump()
     if body.medical_payload_schema_version == 1:
@@ -343,9 +344,9 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
             procedure_code=body.procedure_code,
         )
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(
         {
@@ -363,13 +364,13 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -377,7 +378,7 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
 
     try:
         version = publish_document_version(
@@ -388,11 +389,11 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             resend_sms=body.resend_sms,
         )
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
     except IdempotencyConflictError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(
         {
@@ -413,14 +414,14 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         version = MedicalDocumentVersion.objects.select_related(
             "medical_document", "medical_document__queue_entry__daily_queue"
         ).get(id=version_id)
         check_doctor_document_access(version.medical_document, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document version not found.", status=404)
+        return json_error("other.api.medical_document_version_not_found", status=404)
     mdoc = version.medical_document
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VERSION_VIEWED",
@@ -466,13 +467,13 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         body = RetryProcessingRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         body = RetryProcessingRequest()
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -485,9 +486,9 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
             reason=body.reason,
         )
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
 
     return JsonResponse(
         {
@@ -507,7 +508,7 @@ def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
@@ -516,9 +517,9 @@ def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID
             revoked_by_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     return JsonResponse(
         {
             "medical_document_version_id": str(version.id),
@@ -554,9 +555,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 )
             )
         except ObjectDoesNotExist:
-            return json_error("Actor user not found.", status=404)
+            return json_error("other.api.actor_user_not_found", status=404)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
 
         return JsonResponse(
             {
@@ -582,9 +583,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         try:
             body = DoctorTemplateCreateRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -600,11 +601,11 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 is_active=body.is_active,
             )
         except ObjectDoesNotExist:
-            return json_error("Actor user not found.", status=404)
+            return json_error("other.api.actor_user_not_found", status=404)
         except TemplatePermissionError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
 
         return JsonResponse(
             {
@@ -620,7 +621,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             status=201,
         )
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -632,7 +633,7 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         try:
             template = get_template(template_id=template_id, actor_user_id=request.user.id)
         except TemplateNotFoundError:
-            return json_error("Template not found.", status=404)
+            return json_error("other.api.template_not_found", status=404)
         return JsonResponse(
             {
                 "id": str(template.id),
@@ -648,14 +649,14 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             status=200,
         )
     if request.method != "PATCH":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = DoctorTemplateUpdateRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -672,13 +673,13 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
-        return json_error("Actor user not found.", status=404)
+        return json_error("other.api.actor_user_not_found", status=404)
     except TemplateNotFoundError as exc:
-        return json_error(str(exc), status=404)
+        return json_domain_error(exc, status=404)
     except TemplatePermissionError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(
         {
@@ -700,12 +701,12 @@ def medical_document_audit_trail_view(request: HttpRequest, medical_document_id:
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
-        return json_error("Medical document not found.", status=404)
+        return json_error("other.api.medical_document_not_found", status=404)
 
     page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(

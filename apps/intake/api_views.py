@@ -10,7 +10,14 @@ from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import (
+    json_domain_error,
+    json_error,
+    parse_list_limit,
+    read_json_body,
+    require_auth,
+    require_user_role,
+)
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding, StateTransitionError
@@ -49,7 +56,7 @@ def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> Jso
     form_locale = request.GET.get("form_locale", "de-DE")[:10]
     
     if not LOCALE_PATTERN.match(form_locale):
-        return json_error("Invalid form_locale format.", status=400)
+        return json_error("other.api.invalid_form_locale_format", status=400)
         
     context = get_intake_form_context(
         intake_form_id=intake_form_id,
@@ -70,14 +77,14 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         try:
             return _intake_form_context_json(intake_form_id, request)
         except ObjectDoesNotExist:
-            return json_error("Intake form not found.", status=404)
+            return json_error("other.api.intake_form_not_found", status=404)
     if request.method == "PATCH":
         try:
             body = UpdateBodyMapRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -88,7 +95,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
                 body_map_data=body_map_data,
             )
         except ObjectDoesNotExist:
-            return json_error("Intake form not found.", status=404)
+            return json_error("other.api.intake_form_not_found", status=404)
         except StateTransitionError as exc:
             return json_error(str(exc), status=409)
         return JsonResponse({
@@ -96,7 +103,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
             "body_map_schema_version": intake_form.body_map_schema_version,
             "body_map_data": intake_form.body_map_data,
         })
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -110,9 +117,9 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
     try:
         body = UpdateConsentsRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -121,7 +128,7 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
             consents_payload=[c.model_dump() for c in body.consents],
         )
     except ObjectDoesNotExist:
-        return json_error("Intake form not found.", status=404)
+        return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=409)
     except ConsentNotActiveError as exc:
@@ -160,9 +167,9 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
     try:
         body = SignatureUploadRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -171,7 +178,7 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
             signature_base64=body.signature_base64,
         )
     except ObjectDoesNotExist:
-        return json_error("Intake form not found.", status=404)
+        return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=409)
     except InvalidSignatureError as exc:
@@ -190,14 +197,14 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
     if role_error:
         return role_error
     if request.method != "PUT":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = UpdateAnamnesisPayloadRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -208,7 +215,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
             answers_payload=[answer.model_dump() for answer in body.answers],
         )
     except ObjectDoesNotExist:
-        return json_error("Intake form not found.", status=404)
+        return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=409)
 
@@ -229,14 +236,14 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = SubmitIntakeFormRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -246,11 +253,11 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
             submitted_by_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
-        return json_error("Intake form not found.", status=404)
+        return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=400)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(
         {
@@ -266,7 +273,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
 def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
     """GET list of intake outbox events (ADMIN, RECEPTION)."""
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
@@ -275,7 +282,7 @@ def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
     try:
         retry_count_gte = int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
     except ValueError:
-        return json_error("retry_count_gte must be an integer.", status=400)
+        return json_error("other.api.retry_count_gte_integer", status=400)
     limit = parse_list_limit(request.GET.get("limit"))
 
     try:
@@ -317,7 +324,7 @@ def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
 def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id: UUID) -> JsonResponse:
     """POST retry a single intake outbox event (ADMIN, RECEPTION)."""
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
@@ -325,16 +332,16 @@ def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id:
     try:
         body = RetryIntakeOutboxEventRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     try:
         event = IntakeOutboxEvent.objects.get(id=intake_outbox_event_id)
     except ObjectDoesNotExist:
-        return json_error("Intake outbox event not found.", status=404)
+        return json_error("other.api.intake_outbox_event_not_found", status=404)
 
     try:
         retried = retry_intake_outbox_event(
@@ -343,7 +350,7 @@ def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id:
             actor_user_id=request.user.id,
         )
     except DomainError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
 
     return JsonResponse(
         {
@@ -359,7 +366,7 @@ def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id:
 def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
     """POST process a batch of intake outbox events (ADMIN)."""
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
@@ -367,9 +374,9 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
     try:
         body = ProcessIntakeOutboxRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

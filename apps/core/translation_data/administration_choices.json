@@ -1,0 +1,292 @@
+{
+  "administration.choice_queue_shift_full_day": {
+    "de": "Ganzer Tag",
+    "en": "Full day",
+    "pl": "Cały dzień"
+  },
+  "administration.choice_queue_shift_morning": {
+    "de": "Vormittag",
+    "en": "Morning",
+    "pl": "Zmiana poranna"
+  },
+  "administration.choice_queue_shift_afternoon": {
+    "de": "Nachmittag",
+    "en": "Afternoon",
+    "pl": "Zmiana popołudniowa"
+  },
+  "administration.choice_queue_shift_evening": {
+    "de": "Abend",
+    "en": "Evening",
+    "pl": "Zmiana wieczorna"
+  },
+  "administration.choice_queue_source_manual": {
+    "de": "Manuell",
+    "en": "Manual",
+    "pl": "Ręczna"
+  },
+  "administration.choice_queue_source_import": {
+    "de": "Import",
+    "en": "Import",
+    "pl": "Import"
+  },
+  "administration.choice_queue_status_open": {
+    "de": "Offen",
+    "en": "Open",
+    "pl": "Otwarta"
+  },
+  "administration.choice_queue_status_closed": {
+    "de": "Geschlossen",
+    "en": "Closed",
+    "pl": "Zamknięta"
+  },
+  "administration.choice_queue_entry_status_waiting": {
+    "de": "Wartend",
+    "en": "Waiting",
+    "pl": "Oczekuje"
+  },
+  "administration.choice_queue_entry_status_in_progress": {
+    "de": "In Bearbeitung",
+    "en": "In progress",
+    "pl": "W trakcie"
+  },
+  "administration.choice_queue_entry_status_patient_completed": {
+    "de": "Patient abgeschlossen",
+    "en": "Patient completed",
+    "pl": "Pacjent zakończył"
+  },
+  "administration.choice_queue_entry_status_doctor_in_progress": {
+    "de": "Arzt in Bearbeitung",
+    "en": "Doctor in progress",
+    "pl": "Lekarz w trakcie"
+  },
+  "administration.choice_queue_entry_status_published": {
+    "de": "Veröffentlicht",
+    "en": "Published",
+    "pl": "Opublikowano"
+  },
+  "administration.choice_queue_entry_status_cancelled": {
+    "de": "Storniert",
+    "en": "Cancelled",
+    "pl": "Anulowano"
+  },
+  "administration.choice_import_type_daily_file_import": {
+    "de": "Täglicher Dateiimport",
+    "en": "Daily file import",
+    "pl": "Import pliku dziennego"
+  },
+  "administration.choice_import_type_emergency_template_import": {
+    "de": "Notfall-Vorlagenimport",
+    "en": "Emergency template import",
+    "pl": "Import szablonu awaryjnego"
+  },
+  "administration.choice_import_source_doctolib_export": {
+    "de": "Doctolib-Export",
+    "en": "Doctolib export",
+    "pl": "Eksport Doctolib"
+  },
+  "administration.choice_import_source_other": {
+    "de": "Sonstiges",
+    "en": "Other",
+    "pl": "Inne"
+  },
+  "administration.choice_import_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "administration.choice_import_status_completed": {
+    "de": "Abgeschlossen",
+    "en": "Completed",
+    "pl": "Zakończono"
+  },
+  "administration.choice_import_status_completed_with_errors": {
+    "de": "Abgeschlossen mit Fehlern",
+    "en": "Completed with errors",
+    "pl": "Zakończono z błędami"
+  },
+  "administration.choice_import_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "administration.choice_intake_status_in_progress": {
+    "de": "In Bearbeitung",
+    "en": "In progress",
+    "pl": "W trakcie"
+  },
+  "administration.choice_intake_status_submitted": {
+    "de": "Eingereicht",
+    "en": "Submitted",
+    "pl": "Przesłano"
+  },
+  "administration.choice_intake_pdf_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "administration.choice_intake_pdf_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "administration.choice_intake_pdf_status_completed": {
+    "de": "Abgeschlossen",
+    "en": "Completed",
+    "pl": "Zakończono"
+  },
+  "administration.choice_intake_pdf_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "administration.choice_intake_outbox_event_generate_intake_pdf": {
+    "de": "Intake-PDF erzeugen",
+    "en": "Generate intake PDF",
+    "pl": "Generuj PDF intake"
+  },
+  "administration.choice_intake_outbox_event_hidrive_upload_intake_pdf": {
+    "de": "HiDrive-Upload Intake-PDF",
+    "en": "HiDrive upload intake PDF",
+    "pl": "Wysyłka PDF intake do HiDrive"
+  },
+  "administration.choice_intake_outbox_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "administration.choice_intake_outbox_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "administration.choice_intake_outbox_status_processed": {
+    "de": "Verarbeitet",
+    "en": "Processed",
+    "pl": "Przetworzono"
+  },
+  "administration.choice_intake_outbox_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "administration.choice_intake_outbox_status_dead_letter": {
+    "de": "Dead Letter",
+    "en": "Dead letter",
+    "pl": "Dead letter"
+  },
+  "administration.choice_anamnesis_answer_single_choice": {
+    "de": "Einzelauswahl",
+    "en": "Single choice",
+    "pl": "Jednokrotny wybór"
+  },
+  "administration.choice_anamnesis_answer_multi_choice": {
+    "de": "Mehrfachauswahl",
+    "en": "Multi choice",
+    "pl": "Wielokrotny wybór"
+  },
+  "administration.choice_anamnesis_answer_boolean": {
+    "de": "Ja/Nein",
+    "en": "Boolean",
+    "pl": "Tak/Nie"
+  },
+  "administration.choice_anamnesis_answer_text_optional": {
+    "de": "Text optional",
+    "en": "Text optional",
+    "pl": "Tekst opcjonalny"
+  },
+  "administration.choice_medical_doc_status_draft": {
+    "de": "Entwurf",
+    "en": "Draft",
+    "pl": "Szkic"
+  },
+  "administration.choice_medical_doc_status_published": {
+    "de": "Veröffentlicht",
+    "en": "Published",
+    "pl": "Opublikowano"
+  },
+  "administration.choice_doc_version_status_draft": {
+    "de": "Entwurf",
+    "en": "Draft",
+    "pl": "Szkic"
+  },
+  "administration.choice_doc_version_status_published": {
+    "de": "Veröffentlicht",
+    "en": "Published",
+    "pl": "Opublikowano"
+  },
+  "administration.choice_medical_pdf_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "administration.choice_medical_pdf_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "administration.choice_medical_pdf_status_completed": {
+    "de": "Abgeschlossen",
+    "en": "Completed",
+    "pl": "Zakończono"
+  },
+  "administration.choice_medical_pdf_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "administration.choice_outbox_event_generate_pdf": {
+    "de": "PDF erzeugen",
+    "en": "Generate PDF",
+    "pl": "Generuj PDF"
+  },
+  "administration.choice_outbox_event_hidrive_upload": {
+    "de": "HiDrive-Upload",
+    "en": "HiDrive upload",
+    "pl": "Wysyłka HiDrive"
+  },
+  "administration.choice_outbox_event_sms_send": {
+    "de": "SMS-Versand",
+    "en": "SMS send",
+    "pl": "Wysyłka SMS"
+  },
+  "administration.choice_outbox_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "administration.choice_outbox_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "administration.choice_outbox_status_processed": {
+    "de": "Verarbeitet",
+    "en": "Processed",
+    "pl": "Przetworzono"
+  },
+  "administration.choice_outbox_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "administration.choice_outbox_status_dead_letter": {
+    "de": "Dead Letter",
+    "en": "Dead letter",
+    "pl": "Dead letter"
+  },
+  "administration.choice_staff_locale_de_de": {
+    "de": "Deutsch (Deutschland)",
+    "en": "German (Germany)",
+    "pl": "Niemiecki (Niemcy)"
+  },
+  "administration.choice_staff_locale_en_gb": {
+    "de": "Englisch (Vereinigtes Königreich)",
+    "en": "English (United Kingdom)",
+    "pl": "Angielski (Wielka Brytania)"
+  },
+  "administration.choice_staff_locale_pl_pl": {
+    "de": "Polnisch (Polen)",
+    "en": "Polish (Poland)",
+    "pl": "Polski (Polska)"
+  }
+}

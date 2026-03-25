@@ -12,20 +12,20 @@ from apps.users.models import StaffUserPreferredLocale
 
 
 class MedicalDocStatus(models.TextChoices):
-    DRAFT = "DRAFT", "Draft"
-    PUBLISHED = "PUBLISHED", "Published"
+    DRAFT = "DRAFT", db_gettext_lazy("administration.choice_medical_doc_status_draft", "Draft")
+    PUBLISHED = "PUBLISHED", db_gettext_lazy("administration.choice_medical_doc_status_published", "Published")
 
 
 class DocVersionStatus(models.TextChoices):
-    DRAFT = "DRAFT", "Draft"
-    PUBLISHED = "PUBLISHED", "Published"
+    DRAFT = "DRAFT", db_gettext_lazy("administration.choice_doc_version_status_draft", "Draft")
+    PUBLISHED = "PUBLISHED", db_gettext_lazy("administration.choice_doc_version_status_published", "Published")
 
 
 class PdfStatus(models.TextChoices):
-    PENDING = "PENDING", "Pending"
-    PROCESSING = "PROCESSING", "Processing"
-    COMPLETED = "COMPLETED", "Completed"
-    FAILED = "FAILED", "Failed"
+    PENDING = "PENDING", db_gettext_lazy("administration.choice_medical_pdf_status_pending", "Pending")
+    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_medical_pdf_status_processing", "Processing")
+    COMPLETED = "COMPLETED", db_gettext_lazy("administration.choice_medical_pdf_status_completed", "Completed")
+    FAILED = "FAILED", db_gettext_lazy("administration.choice_medical_pdf_status_failed", "Failed")
 
 
 class MedicalDocument(models.Model):

@@ -571,7 +571,11 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(publish_response.status_code, 400)
-        self.assertIn("No draft version available", publish_response.json().get("error", ""))
+        err = publish_response.json().get("error", "")
+        self.assertTrue(
+            "draft" in err.lower() or "entwurf" in err.lower() or "szkic" in err.lower(),
+            f"Expected draft-related publish error, got: {err!r}",
+        )
 
     def test_publish_with_incomplete_draft_returns_400(self) -> None:
         """Draft bez wypełnionego Untersuchungsumfang lub Fitzpatrick nie może być opublikowany."""

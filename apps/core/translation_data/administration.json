@@ -125,9 +125,9 @@
     "pl": "Użytkownicy staff"
   },
   "administration.side_admin": {
-    "de": "Admin",
+    "de": "Verwaltung",
     "en": "Admin",
-    "pl": "Admin"
+    "pl": "Administracja"
   },
   "administration.side_api_tools": {
     "de": "API / Werkzeuge",
@@ -137,7 +137,7 @@
   "administration.side_audit_events": {
     "de": "Audit-Ereignisse",
     "en": "Audit events",
-    "pl": "Audit events"
+    "pl": "Zdarzenia audytu"
   },
   "administration.side_batch_importu": {
     "de": "Patientenimport-Batch",
@@ -200,9 +200,9 @@
     "pl": "Lekarz"
   },
   "administration.side_medical": {
-    "de": "Medical",
+    "de": "Medizin",
     "en": "Medical",
-    "pl": "Medical"
+    "pl": "Medycyna"
   },
   "administration.side_opcje_pytan": {
     "de": "Antwortoptionen Anamnese",
@@ -212,7 +212,7 @@
   "administration.side_outbox_events": {
     "de": "Outbox-Ereignisse",
     "en": "Outbox events",
-    "pl": "Outbox events"
+    "pl": "Zdarzenia outbox"
   },
   "administration.side_outbox_ops": {
     "de": "Outbox und Vorgänge",
@@ -262,7 +262,7 @@
   "administration.side_staff_users": {
     "de": "Mitarbeiter",
     "en": "Staff users",
-    "pl": "Staff users"
+    "pl": "Personel"
   },
   "administration.side_swagger": {
     "de": "Swagger",
@@ -310,8 +310,8 @@
     "pl": "Panel administracyjny"
   },
   "administration.site_title": {
-    "de": "Cogitomedica Staff",
+    "de": "Cogitomedica Mitarbeiter",
     "en": "Cogitomedica Staff",
-    "pl": "Cogitomedica Staff"
+    "pl": "Cogitomedica Personel"
   }
 }
