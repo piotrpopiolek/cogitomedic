@@ -648,5 +648,195 @@
     "de": "Widerrufen am",
     "en": "Revoked at",
     "pl": "Data unieważnienia"
+  },
+  "administration.field_updated_at": {
+    "de": "Aktualisiert am",
+    "en": "Updated at",
+    "pl": "Zaktualizowano"
+  },
+  "administration.field_translation_category": {
+    "de": "Übersetzungskategorie",
+    "en": "Translation category",
+    "pl": "Kategoria tłumaczenia"
+  },
+  "administration.field_key_status": {
+    "de": "Schlüsselstatus",
+    "en": "Key status",
+    "pl": "Status klucza"
+  },
+  "administration.field_translation_key": {
+    "de": "Übersetzungsschlüssel",
+    "en": "Translation key",
+    "pl": "Klucz tłumaczenia"
+  },
+  "administration.field_updated_by": {
+    "de": "Aktualisiert von",
+    "en": "Updated by",
+    "pl": "Zaktualizował"
+  },
+  "administration.field_anamnesis_question": {
+    "de": "Anamnese-Frage",
+    "en": "Anamnesis question",
+    "pl": "Pytanie anamnezy"
+  },
+  "administration.field_answer_type": {
+    "de": "Antworttyp",
+    "en": "Answer type",
+    "pl": "Typ odpowiedzi"
+  },
+  "administration.field_intake_form": {
+    "de": "Intake-Formular",
+    "en": "Intake form",
+    "pl": "Formularz intake"
+  },
+  "administration.field_patient_form_session": {
+    "de": "Formularsitzung",
+    "en": "Patient form session",
+    "pl": "Sesja formularza"
+  },
+  "administration.field_form_status": {
+    "de": "Formularstatus",
+    "en": "Form status",
+    "pl": "Status formularza"
+  },
+  "administration.field_queue_entry": {
+    "de": "Warteschlangeneintrag",
+    "en": "Queue entry",
+    "pl": "Wpis kolejki"
+  },
+  "administration.field_consulting_room": {
+    "de": "Praxisraum",
+    "en": "Consulting room",
+    "pl": "Gabinet"
+  },
+  "administration.field_assigned_doctor": {
+    "de": "Zugewiesener Arzt",
+    "en": "Assigned doctor",
+    "pl": "Przypisany lekarz"
+  },
+  "administration.field_created_by_user": {
+    "de": "Erstellt von",
+    "en": "Created by",
+    "pl": "Utworzył"
+  },
+  "administration.field_clinic_sites": {
+    "de": "Standorte",
+    "en": "Clinic sites",
+    "pl": "Placówki"
+  },
+  "administration.field_active_session": {
+    "de": "Aktive Sitzung",
+    "en": "Active session",
+    "pl": "Aktywna sesja"
+  },
+  "administration.field_entry_status": {
+    "de": "Eintragsstatus",
+    "en": "Entry status",
+    "pl": "Status wpisu"
+  },
+  "administration.field_medical_document": {
+    "de": "Medizinisches Dokument",
+    "en": "Medical document",
+    "pl": "Dokument medyczny"
+  },
+  "administration.field_intake_document_version": {
+    "de": "Intake-Dokumentversion",
+    "en": "Intake document version",
+    "pl": "Wersja dokumentu intake"
+  },
+  "administration.field_pdf_generation_status": {
+    "de": "PDF-Generierungsstatus",
+    "en": "PDF generation status",
+    "pl": "Status generowania PDF"
+  },
+  "administration.field_aggregate_id": {
+    "de": "Aggregat-ID",
+    "en": "Aggregate ID",
+    "pl": "Identyfikator agregatu"
+  },
+  "administration.field_medical_document_version": {
+    "de": "Medizinische Dokumentversion",
+    "en": "Medical document version",
+    "pl": "Wersja dokumentu medycznego"
+  },
+  "administration.field_owner_user": {
+    "de": "Besitzer",
+    "en": "Owner user",
+    "pl": "Właściciel (użytkownik)"
+  },
+  "administration.field_publish_request_id": {
+    "de": "Veröffentlichungsanfrage-ID",
+    "en": "Publish request ID",
+    "pl": "ID żądania publikacji"
+  },
+  "administration.field_version_status": {
+    "de": "Versionsstatus",
+    "en": "Version status",
+    "pl": "Status wersji"
+  },
+  "administration.field_publish_requested_by_user": {
+    "de": "Veröffentlichung angefordert von",
+    "en": "Publish requested by",
+    "pl": "Prośba o publikację (użytkownik)"
+  },
+  "administration.field_published_by_user": {
+    "de": "Veröffentlicht von",
+    "en": "Published by",
+    "pl": "Opublikował"
+  },
+  "administration.field_actor_user": {
+    "de": "Akteur",
+    "en": "Actor user",
+    "pl": "Użytkownik (wykonawca)"
+  },
+  "administration.field_outbox_event": {
+    "de": "Outbox-Ereignis",
+    "en": "Outbox event",
+    "pl": "Zdarzenie outbox"
+  },
+  "administration.field_context_clinic_site": {
+    "de": "Kontext-Standort",
+    "en": "Context clinic site",
+    "pl": "Placówka (kontekst)"
+  },
+  "administration.field_tablet_device": {
+    "de": "Tablet-Gerät",
+    "en": "Tablet device",
+    "pl": "Urządzenie tablet"
+  },
+  "administration.field_import_type": {
+    "de": "Importtyp",
+    "en": "Import type",
+    "pl": "Typ importu"
+  },
+  "administration.field_source_system": {
+    "de": "Quellsystem",
+    "en": "Source system",
+    "pl": "System źródłowy"
+  },
+  "administration.field_import_batch": {
+    "de": "Import-Batch",
+    "en": "Import batch",
+    "pl": "Partia importu"
+  },
+  "administration.field_consent_definition": {
+    "de": "Einwilligungsdefinition",
+    "en": "Consent definition",
+    "pl": "Definicja zgody"
+  },
+  "administration.field_otp_code_hash": {
+    "de": "OTP-Code-Hash",
+    "en": "OTP code hash",
+    "pl": "Skrót kodu OTP"
+  },
+  "administration.field_verify_attempt_count": {
+    "de": "Verifizierungsversuche",
+    "en": "Verify attempt count",
+    "pl": "Liczba prób weryfikacji"
+  },
+  "administration.field_verified_at": {
+    "de": "Verifiziert am",
+    "en": "Verified at",
+    "pl": "Zweryfikowano"
   }
 }
