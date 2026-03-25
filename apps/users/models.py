@@ -38,15 +38,23 @@ class StaffUser(AbstractUser):
         blank=True,
         null=True,
         related_name="staff_users",
+        verbose_name=db_gettext_lazy("administration.field_consulting_room", "Consulting room"),
     )
     clinic_sites = models.ManyToManyField(
         "reception.ClinicSite",
         db_table="staff_user_clinic_site",
         related_name="staff_users",
         blank=True,
+        verbose_name=db_gettext_lazy("administration.field_clinic_sites", "Clinic sites"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "staff_user"

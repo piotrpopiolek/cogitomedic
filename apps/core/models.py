@@ -14,8 +14,14 @@ class TimeStampedUUIDModel(models.Model):
     """Base model with UUID key and audit timestamps."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         abstract = True
@@ -56,6 +62,7 @@ class TranslationKey(TimeStampedUUIDModel):
     category = models.CharField(
         max_length=32,
         choices=TranslationCategory.choices,
+        verbose_name=db_gettext_lazy("administration.field_translation_category", "Translation category"),
     )
     description = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_description", "Description"))
     is_html_allowed = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_html_allowed", "Is html allowed"))
@@ -64,6 +71,7 @@ class TranslationKey(TimeStampedUUIDModel):
         max_length=16,
         choices=TranslationKeyStatus.choices,
         default=TranslationKeyStatus.ACTIVE,
+        verbose_name=db_gettext_lazy("administration.field_key_status", "Key status"),
     )
 
     def clean(self) -> None:
@@ -108,6 +116,7 @@ class TranslationValue(TimeStampedUUIDModel):
         "core.TranslationKey",
         on_delete=models.CASCADE,
         related_name="values",
+        verbose_name=db_gettext_lazy("administration.field_translation_key", "Translation key"),
     )
     language_code = models.CharField(
         max_length=5,
@@ -121,6 +130,7 @@ class TranslationValue(TimeStampedUUIDModel):
         blank=True,
         null=True,
         related_name="updated_translation_values",
+        verbose_name=db_gettext_lazy("administration.field_updated_by", "Updated by"),
     )
 
     def clean(self) -> None:
@@ -180,6 +190,7 @@ class TranslationCacheVersion(TimeStampedUUIDModel):
     category = models.CharField(
         max_length=32,
         choices=TranslationCategory.choices,
+        verbose_name=db_gettext_lazy("administration.field_translation_category", "Translation category"),
     )
     language_code = models.CharField(
         max_length=5,

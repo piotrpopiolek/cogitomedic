@@ -34,11 +34,13 @@ class MedicalDocument(models.Model):
         "reception.QueueEntry",
         on_delete=models.RESTRICT,
         related_name="medical_document",
+        verbose_name=db_gettext_lazy("administration.field_queue_entry", "Queue entry"),
     )
     intake_form = models.OneToOneField(
         "intake.PatientIntakeForm",
         on_delete=models.RESTRICT,
         related_name="medical_document",
+        verbose_name=db_gettext_lazy("administration.field_intake_form", "Intake form"),
     )
     status = models.CharField(max_length=20, choices=MedicalDocStatus.choices, default=MedicalDocStatus.DRAFT, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
     current_version_no = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_current_version_no", "Current version no"))
@@ -47,6 +49,7 @@ class MedicalDocument(models.Model):
         "users.StaffUser",
         on_delete=models.RESTRICT,
         related_name="created_medical_documents",
+        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
     )
     updated_by_user = models.ForeignKey(
         "users.StaffUser",
@@ -54,9 +57,16 @@ class MedicalDocument(models.Model):
         blank=True,
         null=True,
         related_name="updated_medical_documents",
+        verbose_name=db_gettext_lazy("administration.field_updated_by", "Updated by"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "medical_document"
@@ -83,18 +93,25 @@ class MedicalDocumentVersion(models.Model):
         MedicalDocument,
         on_delete=models.CASCADE,
         related_name="versions",
+        verbose_name=db_gettext_lazy("administration.field_medical_document", "Medical document"),
     )
     version_no = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_version_no", "Version no"))
     version_status = models.CharField(
         max_length=20,
         choices=DocVersionStatus.choices,
         default=DocVersionStatus.DRAFT,
+        verbose_name=db_gettext_lazy("administration.field_version_status", "Version status"),
     )
-    publish_request_id = models.UUIDField(blank=True, null=True)
+    publish_request_id = models.UUIDField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_publish_request_id", "Publish request ID"),
+    )
     pdf_generation_status = models.CharField(
         max_length=20,
         choices=PdfStatus.choices,
         default=PdfStatus.PENDING,
+        verbose_name=db_gettext_lazy("administration.field_pdf_generation_status", "PDF generation status"),
     )
     medical_payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_medical_payload_schema_version", "Medical payload schema version"))
     medical_payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_medical_payload", "Medical payload"))
@@ -114,6 +131,7 @@ class MedicalDocumentVersion(models.Model):
         blank=True,
         null=True,
         related_name="requested_medical_publications",
+        verbose_name=db_gettext_lazy("administration.field_publish_requested_by_user", "Publish requested by"),
     )
     publish_locale = models.CharField(
         max_length=10,
@@ -128,10 +146,14 @@ class MedicalDocumentVersion(models.Model):
         blank=True,
         null=True,
         related_name="published_medical_documents",
+        verbose_name=db_gettext_lazy("administration.field_published_by_user", "Published by"),
     )
     published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_published_at", "Published at"))
     revoked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_revoked_at", "Revoked at"))
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
 
     class Meta:
         db_table = "medical_document_version"
@@ -215,6 +237,7 @@ class DoctorTextTemplate(models.Model):
         blank=True,
         null=True,
         related_name="doctor_templates",
+        verbose_name=db_gettext_lazy("administration.field_owner_user", "Owner user"),
     )
     clinic_site = models.ForeignKey(
         "reception.ClinicSite",
@@ -222,6 +245,7 @@ class DoctorTextTemplate(models.Model):
         blank=True,
         null=True,
         related_name="doctor_templates",
+        verbose_name=db_gettext_lazy("administration.field_clinic_site", "Clinic site"),
     )
     name = models.CharField(max_length=120, verbose_name=db_gettext_lazy("administration.field_name", "Name"))
     template_locale = models.CharField(
@@ -234,8 +258,14 @@ class DoctorTextTemplate(models.Model):
     lesion_group_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_lesion_group_favorites", "Lesion group favorites"))
     is_global = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"))
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     def clean(self):
         super().clean()
