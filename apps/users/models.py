@@ -9,9 +9,9 @@ from apps.core.translation_service import db_gettext_lazy
 
 
 class StaffUserPreferredLocale(models.TextChoices):
-    DE_DE = "de-DE", "Deutsch (Deutschland)"
-    EN_GB = "en-GB", "English (United Kingdom)"
-    PL_PL = "pl-PL", "Polski (Polska)"
+    DE_DE = "de-DE", db_gettext_lazy("administration.choice_staff_locale_de_de", "German (Germany)")
+    EN_GB = "en-GB", db_gettext_lazy("administration.choice_staff_locale_en_gb", "English (United Kingdom)")
+    PL_PL = "pl-PL", db_gettext_lazy("administration.choice_staff_locale_pl_pl", "Polish (Poland)")
 
 
 class StaffUser(AbstractUser):

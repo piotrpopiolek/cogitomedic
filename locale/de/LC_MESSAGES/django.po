@@ -1,0 +1,44 @@
+# German translations (gettext) — app labels and common admin UI strings.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Core"
+msgstr "Kern"
+
+msgid "Users"
+msgstr "Benutzer"
+
+msgid "Reception"
+msgstr "Anmeldung"
+
+msgid "Intake"
+msgstr "Intake"
+
+msgid "Medical"
+msgstr "Medizin"
+
+msgid "Outbox"
+msgstr "Outbox"
+
+msgid "Integrations"
+msgstr "Integrationen"
+
+msgid "Operations"
+msgstr "Vorgänge"
+
+msgid "Patient results (portal wyniki)"
+msgstr "Patientenergebnisse (Portal)"
+
+msgid "Search"
+msgstr "Suchen"
+
+msgid "Filters"
+msgstr "Filter"
+
+msgid "Filter"
+msgstr "Filter"
+
+msgid "Type to search"
+msgstr "Suchbegriff eingeben"

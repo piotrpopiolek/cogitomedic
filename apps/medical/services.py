@@ -298,7 +298,8 @@ def publish_document_version(
     )
     if not draft_version:
         raise DomainError(
-            "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing."
+            "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing.",
+            api_message_key="other.api.no_draft_before_publish",
         )
 
     validate_medical_payload_complete_for_publish(draft_version.medical_payload, locale=publish_locale)

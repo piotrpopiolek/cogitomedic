@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
+    from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
+    UnfoldAdminSelectWidget = forms.Select
 
 from apps.core.models import TranslationCacheVersion, TranslationKey, TranslationValue
+from apps.users.models import StaffUserPreferredLocale
 
 
 @admin.register(TranslationKey)
@@ -28,6 +32,20 @@ class TranslationValueAdmin(UnfoldModelAdmin):
     search_fields = ("translation_key__key", "value")
     raw_id_fields = ("translation_key", "updated_by")
     readonly_fields = ("id", "created_at", "updated_at")
+
+    def get_form(self, request, obj=None, change=None, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        if "language_code" in form.base_fields:
+            base = form.base_fields["language_code"]
+            form.base_fields["language_code"] = forms.ChoiceField(
+                choices=StaffUserPreferredLocale.choices,
+                required=base.required,
+                label=base.label,
+                help_text=base.help_text,
+                initial=base.initial,
+                widget=UnfoldAdminSelectWidget,
+            )
+        return form
 
     def save_model(self, request, obj, form, change):
         if request.user.is_authenticated:

@@ -7,7 +7,14 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, parse_list_limit, read_json_body, require_auth, require_user_role
+from apps.core.api_utils import (
+    json_domain_error,
+    json_error,
+    parse_list_limit,
+    read_json_body,
+    require_auth,
+    require_user_role,
+)
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
@@ -23,7 +30,7 @@ from apps.outbox.services import process_outbox_events, retry_outbox_event, run_
 @require_auth
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
@@ -32,7 +39,7 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
     try:
         retry_count_gte = int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
     except ValueError:
-        return json_error("retry_count_gte must be an integer.", status=400)
+        return json_error("other.api.retry_count_gte_integer", status=400)
     limit = parse_list_limit(request.GET.get("limit"))
 
     try:
@@ -73,7 +80,7 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
 @require_auth
 def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
@@ -81,9 +88,9 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     try:
         body = ProcessOutboxRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -109,7 +116,7 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 @require_auth
 def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
@@ -117,16 +124,16 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
     try:
         body = RetryOutboxEventRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     try:
         event = OutboxEvent.objects.get(id=outbox_event_id)
     except ObjectDoesNotExist:
-        return json_error("Outbox event not found.", status=404)
+        return json_error("other.api.outbox_event_not_found", status=404)
 
     try:
         retried = retry_outbox_event(
@@ -135,7 +142,7 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
             actor_user_id=request.user.id,
         )
     except DomainError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
 
     return JsonResponse(
         {
@@ -150,7 +157,7 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
 @require_auth
 def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
@@ -158,9 +165,9 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     try:
         body = RetentionRunRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -179,7 +186,7 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
             dry_run=body.dry_run,
         )
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
 
     return JsonResponse(
         {
