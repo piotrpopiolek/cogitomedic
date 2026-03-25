@@ -54,7 +54,7 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     qs = AuditEvent.objects.all().order_by("-event_time")
 
@@ -148,7 +148,7 @@ def _observability_authorized(request: HttpRequest) -> bool:
 def observability_health_view(request: HttpRequest) -> JsonResponse:
     """Health check for load balancers/Docker. Anonymous gets minimal response (no internal checks leak)."""
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     http_status = 200
     try:
@@ -173,10 +173,10 @@ def observability_health_view(request: HttpRequest) -> JsonResponse:
 
 def observability_metrics_view(request: HttpRequest) -> HttpResponse:
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     if not _observability_authorized(request):
-        return json_error("Unauthorized.", status=401)
+        return json_error("other.api.unauthorized", status=401)
 
     payload = build_metrics_payload()
     return HttpResponse(payload, content_type="text/plain; version=0.0.4; charset=utf-8")

@@ -12,6 +12,20 @@ from typing import Any
 from django.conf import settings
 
 REQUIRED_LANGS = ("de", "en", "pl")
+LOCALE_BY_LANG = {"de": "de-DE", "en": "en-GB", "pl": "pl-PL"}
+
+
+def _storage_language_code(TranslationValue: Any, lang: str) -> str:
+    """
+    Return language code matching current model schema:
+    - historical migrations use short codes (de/en/pl)
+    - current schema uses locale codes from StaffUserPreferredLocale.
+    """
+    field = TranslationValue._meta.get_field("language_code")
+    choices = [c[0] for c in (getattr(field, "choices", None) or [])]
+    if choices and "de-DE" in choices:
+        return LOCALE_BY_LANG[lang]
+    return lang
 
 # Keys that need non-default TranslationKey fields (match historical migrations).
 _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
@@ -48,6 +62,8 @@ def category_for_key(full_key: str) -> str:
 def description_for_key(full_key: str) -> str:
     if full_key in _KEY_DESCRIPTIONS:
         return _KEY_DESCRIPTIONS[full_key]
+    if full_key.startswith("other.api."):
+        return "REST API error message"
     if full_key.startswith("other.ergebnisse."):
         short = full_key.removeprefix("other.ergebnisse.")
         return f"Ergebnisse portal: {short}"
@@ -61,6 +77,8 @@ def description_for_key(full_key: str) -> str:
         return "Waiting room tablet form UI"
     if full_key.startswith("waiting_room.staff."):
         return "Waiting room staff UI"
+    if full_key.startswith("administration.choice_"):
+        return "Enum choice label (admin)"
     if full_key.startswith("administration.field_"):
         return "Model field label"
     if full_key.startswith("administration.login_") or full_key.startswith("administration.logout_"):
@@ -115,9 +133,10 @@ def _seed_entry(
     )
     created = 0
     for lang in REQUIRED_LANGS:
+        storage_lang = _storage_language_code(TranslationValue, lang)
         _, was_created = TranslationValue.objects.get_or_create(
             translation_key=key,
-            language_code=lang,
+            language_code=storage_lang,
             defaults={"value": values[lang]},
         )
         if was_created:

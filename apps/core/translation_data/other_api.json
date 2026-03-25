@@ -1,0 +1,357 @@
+{
+  "other.api.actor_mismatch": {
+    "de": "Akteur stimmt nicht überein.",
+    "en": "Actor mismatch.",
+    "pl": "Niezgodność identyfikatora wykonawcy."
+  },
+  "other.api.actor_user_not_found": {
+    "de": "Akteur-Benutzer nicht gefunden.",
+    "en": "Actor user not found.",
+    "pl": "Nie znaleziono użytkownika wykonawcy."
+  },
+  "other.api.authentication_required": {
+    "de": "Authentifizierung erforderlich.",
+    "en": "Authentication required.",
+    "pl": "Wymagane uwierzytelnienie."
+  },
+  "other.api.captcha_verification_failed": {
+    "de": "CAPTCHA-Überprüfung fehlgeschlagen.",
+    "en": "CAPTCHA verification failed.",
+    "pl": "Weryfikacja CAPTCHA nie powiodła się."
+  },
+  "other.api.clinic_site_code_already_exists": {
+    "de": "Standortcode existiert bereits.",
+    "en": "Clinic site code already exists.",
+    "pl": "Kod placówki już istnieje."
+  },
+  "other.api.clinic_site_not_found": {
+    "de": "Standort nicht gefunden.",
+    "en": "Clinic site not found.",
+    "pl": "Nie znaleziono placówki."
+  },
+  "other.api.clinic_site_not_in_scope": {
+    "de": "Standort liegt außerhalb Ihres Zuweisungsbereichs.",
+    "en": "Clinic site is not in your assigned scope.",
+    "pl": "Placówka poza zakresem Twojego przypisania."
+  },
+  "other.api.clinic_site_or_consulting_room_not_found": {
+    "de": "Standort oder Praxisraum nicht gefunden.",
+    "en": "Clinic site or consulting room not found.",
+    "pl": "Nie znaleziono placówki lub gabinetu."
+  },
+  "other.api.consulting_room_code_exists": {
+    "de": "Praxisraumcode existiert bereits für diesen Standort.",
+    "en": "Consulting room code already exists for this clinic site.",
+    "pl": "Kod gabinetu już istnieje dla tej placówki."
+  },
+  "other.api.consulting_room_not_found": {
+    "de": "Praxisraum nicht gefunden.",
+    "en": "Consulting room not found.",
+    "pl": "Nie znaleziono gabinetu."
+  },
+  "other.api.consulting_room_not_in_scope": {
+    "de": "Praxisraum liegt außerhalb Ihres Zuweisungsbereichs.",
+    "en": "Consulting room is not in your assigned scope.",
+    "pl": "Gabinet poza zakresem Twojego przypisania."
+  },
+  "other.api.daily_queue_not_found": {
+    "de": "Tageswarteschlange nicht gefunden.",
+    "en": "Daily queue not found.",
+    "pl": "Nie znaleziono kolejki dziennej."
+  },
+  "other.api.daily_queue_not_in_scope": {
+    "de": "Tageswarteschlange liegt außerhalb Ihres Zuweisungsbereichs.",
+    "en": "Daily queue is not in your assigned scope.",
+    "pl": "Kolejka dzienna poza zakresem Twojego przypisania."
+  },
+  "other.api.date_of_birth_format": {
+    "de": "Geburtsdatum muss JJJJ-MM-TT sein.",
+    "en": "date_of_birth must be YYYY-MM-DD.",
+    "pl": "Data urodzenia musi być w formacie RRRR-MM-DD."
+  },
+  "other.api.date_of_birth_required": {
+    "de": "Geburtsdatum ist erforderlich.",
+    "en": "date_of_birth is required.",
+    "pl": "Data urodzenia jest wymagana."
+  },
+  "other.api.doctor_entries_own_queues": {
+    "de": "Arzt kann nur Einträge aus eigenen Warteschlangen abrufen.",
+    "en": "Doctor can only access entries from own queues.",
+    "pl": "Lekarz może przeglądać wpisy tylko z własnych kolejek."
+  },
+  "other.api.doctor_own_assigned_queues": {
+    "de": "Arzt kann nur zugewiesene eigene Warteschlangen abrufen.",
+    "en": "Doctor can only access own assigned queues.",
+    "pl": "Lekarz może przeglądać tylko przypisane sobie kolejki."
+  },
+  "other.api.doctor_own_queues": {
+    "de": "Arzt kann nur eigene Warteschlangen abrufen.",
+    "en": "Doctor can only access own queues.",
+    "pl": "Lekarz może przeglądać tylko własne kolejki."
+  },
+  "other.api.document_not_found": {
+    "de": "Dokument nicht gefunden oder nicht verfügbar.",
+    "en": "Document not found or unavailable.",
+    "pl": "Nie znaleziono dokumentu lub jest niedostępny."
+  },
+  "other.api.duplicate_queue_slot": {
+    "de": "Doppelte Warteschlange für Datum/Standort/Raum/Schicht.",
+    "en": "Duplicate queue for this date/site/room/shift.",
+    "pl": "Zduplikowana kolejka dla tej daty/placówki/gabinetu/zmiany."
+  },
+  "other.api.duplicate_visit_external_id": {
+    "de": "Doppelte visit_external_id in dieser Warteschlange.",
+    "en": "Duplicate visit_external_id in this queue.",
+    "pl": "Zduplikowany visit_external_id w tej kolejce."
+  },
+  "other.api.forbidden": {
+    "de": "Verboten.",
+    "en": "Forbidden.",
+    "pl": "Brak uprawnień."
+  },
+  "other.api.import_batch_not_found": {
+    "de": "Import-Batch nicht gefunden.",
+    "en": "Import batch not found.",
+    "pl": "Nie znaleziono partii importu."
+  },
+  "other.api.intake_document_not_found": {
+    "de": "Intake-Dokument nicht gefunden.",
+    "en": "Intake document not found.",
+    "pl": "Nie znaleziono dokumentu intake."
+  },
+  "other.api.intake_form_not_found": {
+    "de": "Intake-Formular nicht gefunden.",
+    "en": "Intake form not found.",
+    "pl": "Nie znaleziono formularza intake."
+  },
+  "other.api.intake_outbox_event_not_found": {
+    "de": "Intake-Outbox-Ereignis nicht gefunden.",
+    "en": "Intake outbox event not found.",
+    "pl": "Nie znaleziono zdarzenia outbox intake."
+  },
+  "other.api.invalid_credentials": {
+    "de": "Ungültige Anmeldedaten.",
+    "en": "Invalid credentials.",
+    "pl": "Nieprawidłowe dane logowania."
+  },
+  "other.api.invalid_form_locale_format": {
+    "de": "Ungültiges form_locale-Format.",
+    "en": "Invalid form_locale format.",
+    "pl": "Nieprawidłowy format form_locale."
+  },
+  "other.api.invalid_is_active": {
+    "de": "Ungültiger is_active-Abfrageparameter.",
+    "en": "Invalid is_active query parameter.",
+    "pl": "Nieprawidłowy parametr zapytania is_active."
+  },
+  "other.api.invalid_json_body": {
+    "de": "Ungültiger JSON-Body.",
+    "en": "Invalid JSON body.",
+    "pl": "Nieprawidłowe ciało JSON."
+  },
+  "other.api.invalid_json_payload": {
+    "de": "Ungültige JSON-Nutzlast.",
+    "en": "Invalid JSON payload.",
+    "pl": "Nieprawidłowy ładunek JSON."
+  },
+  "other.api.invalid_or_expired_code": {
+    "de": "Ungültiger oder abgelaufener Code.",
+    "en": "Invalid or expired code.",
+    "pl": "Nieprawidłowy lub wygasły kod."
+  },
+  "other.api.invalid_request_encoding": {
+    "de": "Ungültige Anfragekodierung.",
+    "en": "Invalid request encoding.",
+    "pl": "Nieprawidłowe kodowanie żądania."
+  },
+  "other.api.invalid_role_query": {
+    "de": "Ungültiger rollen-Abfrageparameter.",
+    "en": "Invalid role query parameter.",
+    "pl": "Nieprawidłowy parametr zapytania roli."
+  },
+  "other.api.medical_document_not_found": {
+    "de": "Medizinisches Dokument nicht gefunden.",
+    "en": "Medical document not found.",
+    "pl": "Nie znaleziono dokumentu medycznego."
+  },
+  "other.api.medical_document_version_not_found": {
+    "de": "Medizinische Dokumentversion nicht gefunden.",
+    "en": "Medical document version not found.",
+    "pl": "Nie znaleziono wersji dokumentu medycznego."
+  },
+  "other.api.medical_payload_schema_mismatch": {
+    "de": "medical_payload.schema_version muss mit medical_payload_schema_version übereinstimmen.",
+    "en": "medical_payload.schema_version must match medical_payload_schema_version.",
+    "pl": "medical_payload.schema_version musi być zgodne z medical_payload_schema_version."
+  },
+  "other.api.method_not_allowed": {
+    "de": "Methode nicht erlaubt.",
+    "en": "Method not allowed.",
+    "pl": "Metoda niedozwolona."
+  },
+  "other.api.method_not_allowed_for_role": {
+    "de": "Methode für diese Rolle nicht erlaubt.",
+    "en": "Method not allowed for this role.",
+    "pl": "Metoda niedozwolona dla tej roli."
+  },
+  "other.api.no_draft_before_publish": {
+    "de": "Kein Entwurf verfügbar. Speichern Sie zuerst einen Entwurf (PUT .../draft) mit validierter Nutzlast.",
+    "en": "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing.",
+    "pl": "Brak wersji roboczej. Najpierw zapisz szkic (PUT .../draft) ze zweryfikowanym ładunkiem przed publikacją."
+  },
+  "other.api.no_version_to_preview": {
+    "de": "Keine Version zur Vorschau. Zuerst Entwurf speichern.",
+    "en": "No version to preview. Save a draft first.",
+    "pl": "Brak wersji do podglądu. Najpierw zapisz szkic."
+  },
+  "other.api.only_admin_create_clinic_site": {
+    "de": "Nur Admin kann Standorte anlegen.",
+    "en": "Only Admin can create clinic sites.",
+    "pl": "Tylko Admin może tworzyć placówki."
+  },
+  "other.api.only_admin_create_consulting_room": {
+    "de": "Nur Admin kann Praxisräume anlegen.",
+    "en": "Only Admin can create consulting rooms.",
+    "pl": "Tylko Admin może tworzyć gabinety."
+  },
+  "other.api.only_admin_update_clinic_site": {
+    "de": "Nur Admin kann Standorte ändern oder deaktivieren.",
+    "en": "Only Admin can update or deactivate clinic sites.",
+    "pl": "Tylko Admin może aktualizować lub dezaktywować placówki."
+  },
+  "other.api.only_admin_update_consulting_room": {
+    "de": "Nur Admin kann Praxisräume ändern oder deaktivieren.",
+    "en": "Only Admin can update or deactivate consulting rooms.",
+    "pl": "Tylko Admin może aktualizować lub dezaktywować gabinety."
+  },
+  "other.api.only_reception_admin_update_queue": {
+    "de": "Nur Rezeption oder Admin kann die Tageswarteschlange aktualisieren.",
+    "en": "Only Reception or Admin can update daily queue.",
+    "pl": "Tylko Recepcja lub Admin może aktualizować kolejkę dzienną."
+  },
+  "other.api.otp_code_required": {
+    "de": "Der OTP-Code ist erforderlich.",
+    "en": "The OTP code is required.",
+    "pl": "Wymagany jest kod OTP."
+  },
+  "other.api.outbox_event_not_found": {
+    "de": "Outbox-Ereignis nicht gefunden.",
+    "en": "Outbox event not found.",
+    "pl": "Nie znaleziono zdarzenia outbox."
+  },
+  "other.api.patient_not_found": {
+    "de": "Patient nicht gefunden.",
+    "en": "Patient not found.",
+    "pl": "Nie znaleziono pacjenta."
+  },
+  "other.api.patient_uniqueness_conflict": {
+    "de": "Eindeutigkeitskonflikt Patient.",
+    "en": "Patient uniqueness conflict.",
+    "pl": "Konflikt unikalności pacjenta."
+  },
+  "other.api.pdf_file_not_found": {
+    "de": "PDF-Datei nicht gefunden.",
+    "en": "PDF file not found.",
+    "pl": "Nie znaleziono pliku PDF."
+  },
+  "other.api.pdf_not_generated": {
+    "de": "PDF noch nicht erzeugt oder nicht verfügbar.",
+    "en": "PDF not yet generated or unavailable.",
+    "pl": "PDF jeszcze nie wygenerowane lub niedostępne."
+  },
+  "other.api.phone_required": {
+    "de": "Telefon ist erforderlich.",
+    "en": "phone is required.",
+    "pl": "Numer telefonu jest wymagany."
+  },
+  "other.api.provide_entry_status_or_notes": {
+    "de": "entry_status und/oder notes angeben.",
+    "en": "Provide entry_status and/or notes.",
+    "pl": "Podaj entry_status i/lub notes."
+  },
+  "other.api.provide_field_to_update": {
+    "de": "Mindestens ein zu aktualisierendes Feld angeben.",
+    "en": "Provide at least one field to update.",
+    "pl": "Podaj co najmniej jedno pole do aktualizacji."
+  },
+  "other.api.queue_entry_not_found": {
+    "de": "Warteschlangeneintrag nicht gefunden.",
+    "en": "Queue entry not found.",
+    "pl": "Nie znaleziono wpisu kolejki."
+  },
+  "other.api.queue_entry_not_in_scope": {
+    "de": "Warteschlangeneintrag liegt außerhalb Ihres Zuweisungsbereichs.",
+    "en": "Queue entry is not in your assigned scope.",
+    "pl": "Wpis kolejki poza zakresem Twojego przypisania."
+  },
+  "other.api.queue_entry_or_intake_not_found": {
+    "de": "Warteschlangeneintrag oder Intake-Formular nicht gefunden.",
+    "en": "Queue entry or intake form not found.",
+    "pl": "Nie znaleziono wpisu kolejki lub formularza intake."
+  },
+  "other.api.queue_entry_or_tablet_not_found": {
+    "de": "Warteschlangeneintrag oder Tablet-Gerät nicht gefunden.",
+    "en": "Queue entry or tablet device not found.",
+    "pl": "Nie znaleziono wpisu kolejki lub urządzenia tablet."
+  },
+  "other.api.queue_or_patient_not_found": {
+    "de": "Warteschlange oder Patient nicht gefunden.",
+    "en": "Queue or patient not found.",
+    "pl": "Nie znaleziono kolejki lub pacjenta."
+  },
+  "other.api.retry_count_gte_integer": {
+    "de": "retry_count_gte muss eine Ganzzahl sein.",
+    "en": "retry_count_gte must be an integer.",
+    "pl": "retry_count_gte musi być liczbą całkowitą."
+  },
+  "other.api.session_otp_required": {
+    "de": "Sitzung erforderlich. Bitte zuerst OTP bestätigen.",
+    "en": "Session required. Please verify OTP first.",
+    "pl": "Wymagana sesja. Najpierw zweryfikuj kod OTP."
+  },
+  "other.api.staff_user_not_found": {
+    "de": "Mitarbeiter nicht gefunden.",
+    "en": "Staff user not found.",
+    "pl": "Nie znaleziono użytkownika personelu."
+  },
+  "other.api.tablet_android_id_exists": {
+    "de": "Tablet mit dieser android_id existiert bereits.",
+    "en": "Tablet device with this android_id already exists.",
+    "pl": "Urządzenie tablet z tym android_id już istnieje."
+  },
+  "other.api.tablet_device_not_found": {
+    "de": "Tablet-Gerät nicht gefunden.",
+    "en": "Tablet device not found.",
+    "pl": "Nie znaleziono urządzenia tablet."
+  },
+  "other.api.tablet_entries_today_only": {
+    "de": "Tablet-Rolle: nur Einträge heutiger Warteschlangen.",
+    "en": "Tablet role can only access entries of today's queues.",
+    "pl": "Rola Tablet: tylko wpisy z kolejek na dziś."
+  },
+  "other.api.tablet_queues_today_only": {
+    "de": "Tablet-Rolle: nur Warteschlangen für heute.",
+    "en": "Tablet role can only access queues for today.",
+    "pl": "Rola Tablet: tylko kolejki na dziś."
+  },
+  "other.api.template_not_found": {
+    "de": "Vorlage nicht gefunden.",
+    "en": "Template not found.",
+    "pl": "Nie znaleziono szablonu."
+  },
+  "other.api.too_many_requests": {
+    "de": "Zu viele Anfragen. Später erneut versuchen.",
+    "en": "Too many requests. Try again later.",
+    "pl": "Zbyt wiele żądań. Spróbuj później."
+  },
+  "other.api.unauthorized": {
+    "de": "Nicht autorisiert.",
+    "en": "Unauthorized.",
+    "pl": "Brak autoryzacji."
+  },
+  "other.api.username_or_email_exists": {
+    "de": "Benutzername oder E-Mail existiert bereits.",
+    "en": "Username or email already exists.",
+    "pl": "Nazwa użytkownika lub e-mail już istnieje."
+  }
+}

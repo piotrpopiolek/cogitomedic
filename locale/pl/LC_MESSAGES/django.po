@@ -1,0 +1,44 @@
+# Polish translations (gettext) — app labels in admin breadcrumbs and optional Django/Unfold UI.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Core"
+msgstr "Rdzeń"
+
+msgid "Users"
+msgstr "Użytkownicy"
+
+msgid "Reception"
+msgstr "Rejestracja"
+
+msgid "Intake"
+msgstr "Intake"
+
+msgid "Medical"
+msgstr "Medycyna"
+
+msgid "Outbox"
+msgstr "Skrzynka wyjściowa"
+
+msgid "Integrations"
+msgstr "Integracje"
+
+msgid "Operations"
+msgstr "Operacje"
+
+msgid "Patient results (portal wyniki)"
+msgstr "Wyniki pacjentów (portal)"
+
+msgid "Search"
+msgstr "Szukaj"
+
+msgid "Filters"
+msgstr "Filtry"
+
+msgid "Filter"
+msgstr "Filtr"
+
+msgid "Type to search"
+msgstr "Wpisz, aby szukać"

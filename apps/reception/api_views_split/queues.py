@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     get_tablet_scope_clinic_site_ids,
+    json_domain_error,
     json_error,
     parse_list_limit,
     read_json_body,
@@ -82,7 +83,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         if is_tablet:
             today = timezone.now().date()
             if queue_date and queue_date != today.isoformat():
-                return json_error("TABLET role can only access queues for today.", status=403)
+                return json_error("other.api.tablet_queues_today_only", status=403)
             queue_date = today.isoformat()
 
         scope_ids = get_tablet_scope_clinic_site_ids(request)
@@ -116,14 +117,14 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         try:
             body = CreateDailyQueueRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         scope_ids = get_scoped_clinic_site_ids(request.user)
         if scope_ids is not None and str(body.clinic_site_id) not in {str(sid) for sid in scope_ids}:
-            return json_error("Clinic site is not in your assigned scope.", status=403)
+            return json_error("other.api.clinic_site_not_in_scope", status=403)
         try:
             queue = create_daily_queue(
                 queue_date=body.queue_date,
@@ -135,15 +136,15 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
                 source=body.source,
             )
         except ObjectDoesNotExist:
-            return json_error("Clinic site or consulting room not found.", status=404)
+            return json_error("other.api.clinic_site_or_consulting_room_not_found", status=404)
         except (DomainError, StateTransitionError) as exc:
             if "Duplicate queue" in str(exc):
-                return json_error("Duplicate queue for this date/site/room/shift.", status=409)
-            return json_error(str(exc), status=400)
+                return json_error("other.api.duplicate_queue_slot", status=409)
+            return json_domain_error(exc, status=400)
         except IntegrityError:
-            return json_error("Duplicate queue for this date/site/room/shift.", status=409)
+            return json_error("other.api.duplicate_queue_slot", status=409)
         return JsonResponse(_serialize_queue(queue), status=201)
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -152,27 +153,27 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
-        return json_error("Daily queue not found.", status=404)
+        return json_error("other.api.daily_queue_not_found", status=404)
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
-        return json_error("Daily queue is not in your assigned scope.", status=403)
+        return json_error("other.api.daily_queue_not_in_scope", status=403)
     if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
-        return json_error("DOCTOR can only access own assigned queues.", status=403)
+        return json_error("other.api.doctor_own_assigned_queues", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_queue(queue))
     if request.user.is_doctor:
-        return json_error("Only RECEPTION or ADMIN can update daily queue.", status=403)
+        return json_error("other.api.only_reception_admin_update_queue", status=403)
     try:
         raw = read_json_body(request)
         body = UpdateDailyQueueRequest.model_validate(raw)
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -182,9 +183,9 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
             assigned_doctor_id=body.assigned_doctor_id if "assigned_doctor_id" in raw else NOT_PROVIDED,
         )
     except ObjectDoesNotExist:
-        return json_error("Daily queue not found.", status=404)
+        return json_error("other.api.daily_queue_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     return JsonResponse(_serialize_queue(queue))
 
 
@@ -195,22 +196,22 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     if role_error:
         return role_error
     if request.method not in ("GET", "POST"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         queue = DailyQueue.objects.get(id=daily_queue_id)
     except ObjectDoesNotExist:
-        return json_error("Daily queue not found.", status=404)
+        return json_error("other.api.daily_queue_not_found", status=404)
 
     scope_ids = get_tablet_scope_clinic_site_ids(request)
     if scope_ids is None:
         scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
-        return json_error("Daily queue is not in your assigned scope.", status=403)
+        return json_error("other.api.daily_queue_not_in_scope", status=403)
     if request.user.is_tablet and queue.queue_date != timezone.now().date():
-        return json_error("TABLET role can only access entries of today's queues.", status=403)
+        return json_error("other.api.tablet_entries_today_only", status=403)
         
     if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
-        return json_error("DOCTOR can only access own queues.", status=403)
+        return json_error("other.api.doctor_own_queues", status=403)
         
     if request.method == "GET":
         qs = QueueEntry.objects.filter(daily_queue_id=daily_queue_id).select_related("patient").order_by("position_no")
@@ -229,9 +230,9 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     try:
         body = CreateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -244,11 +245,11 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
             notes=body.notes,
         )
     except ObjectDoesNotExist:
-        return json_error("Queue or patient not found.", status=404)
+        return json_error("other.api.queue_or_patient_not_found", status=404)
     except StateTransitionError as exc:
         return json_error(str(exc), status=409)
     except IntegrityError:
-        return json_error("Duplicate visit_external_id in this queue.", status=409)
+        return json_error("other.api.duplicate_visit_external_id", status=409)
     return JsonResponse(_serialize_entry(entry), status=201)
 
 
@@ -259,17 +260,17 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
     except ObjectDoesNotExist:
-        return json_error("Queue entry not found.", status=404)
+        return json_error("other.api.queue_entry_not_found", status=404)
 
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
-        return json_error("Queue entry is not in your assigned scope.", status=403)
+        return json_error("other.api.queue_entry_not_in_scope", status=403)
     if request.user.is_doctor and entry.daily_queue.assigned_doctor_id != request.user.id:
-        return json_error("DOCTOR can only access entries from own queues.", status=403)
+        return json_error("other.api.doctor_entries_own_queues", status=403)
         
     if request.method == "GET":
         return JsonResponse(_serialize_entry(entry))
@@ -277,26 +278,26 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         try:
             entry = update_queue_entry(queue_entry_id, entry_status="CANCELLED")
         except ObjectDoesNotExist:
-            return json_error("Queue entry not found.", status=404)
+            return json_error("other.api.queue_entry_not_found", status=404)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         return JsonResponse(_serialize_entry(entry))
     try:
         body = UpdateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     if body.entry_status is None and body.notes is None:
-        return json_error("Provide entry_status and/or notes.", status=400)
+        return json_error("other.api.provide_entry_status_or_notes", status=400)
     try:
         entry = update_queue_entry(queue_entry_id, entry_status=body.entry_status, notes=body.notes)
     except ObjectDoesNotExist:
-        return json_error("Queue entry not found.", status=404)
+        return json_error("other.api.queue_entry_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     return JsonResponse(_serialize_entry(entry))
 
 
@@ -306,22 +307,22 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
     if role_error:
         return role_error
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
     except ObjectDoesNotExist:
-        return json_error("Queue entry not found.", status=404)
+        return json_error("other.api.queue_entry_not_found", status=404)
     scope_ids = get_tablet_scope_clinic_site_ids(request)
     if scope_ids is None:
         scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
-        return json_error("Queue entry is not in your assigned scope.", status=403)
+        return json_error("other.api.queue_entry_not_in_scope", status=403)
     try:
         body = CreateQueueEntrySessionRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     tablet_device_id = body.tablet_device_id
@@ -337,9 +338,9 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
             tablet_device_id=tablet_device_id,
         )
     except ObjectDoesNotExist:
-        return json_error("Queue entry or tablet device not found.", status=404)
+        return json_error("other.api.queue_entry_or_tablet_not_found", status=404)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     return JsonResponse(
         {
             "session_id": str(issued.session_id),

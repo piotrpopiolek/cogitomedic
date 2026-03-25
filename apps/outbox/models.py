@@ -9,17 +9,17 @@ from django.db.models import F, Q
 
 
 class OutboxEventType(models.TextChoices):
-    GENERATE_PDF = "GENERATE_PDF", "Generate PDF"
-    HIDRIVE_UPLOAD = "HIDRIVE_UPLOAD", "HiDrive upload"
-    SMS_SEND = "SMS_SEND", "SMS send"
+    GENERATE_PDF = "GENERATE_PDF", db_gettext_lazy("administration.choice_outbox_event_generate_pdf", "Generate PDF")
+    HIDRIVE_UPLOAD = "HIDRIVE_UPLOAD", db_gettext_lazy("administration.choice_outbox_event_hidrive_upload", "HiDrive upload")
+    SMS_SEND = "SMS_SEND", db_gettext_lazy("administration.choice_outbox_event_sms_send", "SMS send")
 
 
 class OutboxStatus(models.TextChoices):
-    PENDING = "PENDING", "Pending"
-    PROCESSING = "PROCESSING", "Processing"
-    PROCESSED = "PROCESSED", "Processed"
-    FAILED = "FAILED", "Failed"
-    DEAD_LETTER = "DEAD_LETTER", "Dead letter"
+    PENDING = "PENDING", db_gettext_lazy("administration.choice_outbox_status_pending", "Pending")
+    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_outbox_status_processing", "Processing")
+    PROCESSED = "PROCESSED", db_gettext_lazy("administration.choice_outbox_status_processed", "Processed")
+    FAILED = "FAILED", db_gettext_lazy("administration.choice_outbox_status_failed", "Failed")
+    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy("administration.choice_outbox_status_dead_letter", "Dead letter")
 
 
 class OutboxEvent(models.Model):

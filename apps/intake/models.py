@@ -9,28 +9,34 @@ from django.db.models import F, Q
 
 
 class IntakeStatus(models.TextChoices):
-    IN_PROGRESS = "IN_PROGRESS", "In progress"
-    SUBMITTED = "SUBMITTED", "Submitted"
+    IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy("administration.choice_intake_status_in_progress", "In progress")
+    SUBMITTED = "SUBMITTED", db_gettext_lazy("administration.choice_intake_status_submitted", "Submitted")
 
 
 class IntakePdfStatus(models.TextChoices):
-    PENDING = "PENDING", "Pending"
-    PROCESSING = "PROCESSING", "Processing"
-    COMPLETED = "COMPLETED", "Completed"
-    FAILED = "FAILED", "Failed"
+    PENDING = "PENDING", db_gettext_lazy("administration.choice_intake_pdf_status_pending", "Pending")
+    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_intake_pdf_status_processing", "Processing")
+    COMPLETED = "COMPLETED", db_gettext_lazy("administration.choice_intake_pdf_status_completed", "Completed")
+    FAILED = "FAILED", db_gettext_lazy("administration.choice_intake_pdf_status_failed", "Failed")
 
 
 class IntakeOutboxEventType(models.TextChoices):
-    GENERATE_INTAKE_PDF = "GENERATE_INTAKE_PDF", "Generate intake PDF"
-    HIDRIVE_UPLOAD_INTAKE_PDF = "HIDRIVE_UPLOAD_INTAKE_PDF", "HiDrive upload intake PDF"
+    GENERATE_INTAKE_PDF = "GENERATE_INTAKE_PDF", db_gettext_lazy(
+        "administration.choice_intake_outbox_event_generate_intake_pdf",
+        "Generate intake PDF",
+    )
+    HIDRIVE_UPLOAD_INTAKE_PDF = "HIDRIVE_UPLOAD_INTAKE_PDF", db_gettext_lazy(
+        "administration.choice_intake_outbox_event_hidrive_upload_intake_pdf",
+        "HiDrive upload intake PDF",
+    )
 
 
 class IntakeOutboxStatus(models.TextChoices):
-    PENDING = "PENDING", "Pending"
-    PROCESSING = "PROCESSING", "Processing"
-    PROCESSED = "PROCESSED", "Processed"
-    FAILED = "FAILED", "Failed"
-    DEAD_LETTER = "DEAD_LETTER", "Dead letter"
+    PENDING = "PENDING", db_gettext_lazy("administration.choice_intake_outbox_status_pending", "Pending")
+    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_intake_outbox_status_processing", "Processing")
+    PROCESSED = "PROCESSED", db_gettext_lazy("administration.choice_intake_outbox_status_processed", "Processed")
+    FAILED = "FAILED", db_gettext_lazy("administration.choice_intake_outbox_status_failed", "Failed")
+    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy("administration.choice_intake_outbox_status_dead_letter", "Dead letter")
 
 
 class ConsentDefinition(models.Model):
@@ -69,10 +75,19 @@ class ConsentDefinition(models.Model):
 
 class AnamnesisQuestionDefinition(models.Model):
     class AnswerType(models.TextChoices):
-        SINGLE_CHOICE = "SINGLE_CHOICE", "Single choice"
-        MULTI_CHOICE = "MULTI_CHOICE", "Multi choice"
-        BOOLEAN = "BOOLEAN", "Boolean"
-        TEXT_OPTIONAL = "TEXT_OPTIONAL", "Text optional"
+        SINGLE_CHOICE = "SINGLE_CHOICE", db_gettext_lazy(
+            "administration.choice_anamnesis_answer_single_choice",
+            "Single choice",
+        )
+        MULTI_CHOICE = "MULTI_CHOICE", db_gettext_lazy(
+            "administration.choice_anamnesis_answer_multi_choice",
+            "Multi choice",
+        )
+        BOOLEAN = "BOOLEAN", db_gettext_lazy("administration.choice_anamnesis_answer_boolean", "Boolean")
+        TEXT_OPTIONAL = "TEXT_OPTIONAL", db_gettext_lazy(
+            "administration.choice_anamnesis_answer_text_optional",
+            "Text optional",
+        )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=80, verbose_name=db_gettext_lazy("administration.field_code", "Code"))

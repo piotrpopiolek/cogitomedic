@@ -368,6 +368,8 @@ class TabletQueueScopeApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.tablet_user, "Tablet")
+        self.tablet_user.preferred_locale = "en-GB"
+        self.tablet_user.save(update_fields=["preferred_locale"])
 
     def test_tablet_with_no_clinic_sites_sees_empty_queues(self) -> None:
         """TABLET with no clinic_sites assigned gets empty list, not all queues."""
@@ -518,6 +520,9 @@ class DoctorAndTabletAuthorizationApiTests(TestCase):
         )
         self.doctor.clinic_sites.add(self.clinic)
         self.tablet_user.clinic_sites.add(self.clinic)
+        self.doctor.preferred_locale = "en-GB"
+        self.tablet_user.preferred_locale = "en-GB"
+        StaffUser.objects.bulk_update([self.doctor, self.tablet_user], ["preferred_locale"])
 
     def test_doctor_can_get_clinic_site_detail_when_in_scope(self) -> None:
         self.client.login(username="doctor-auth", password="safe-password")

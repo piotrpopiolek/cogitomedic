@@ -8,7 +8,9 @@ from django.contrib.auth.models import Group
 from django.http import HttpRequest
 from django.http import JsonResponse
 
-from apps.core.exceptions import InvalidRequestBodyEncoding
+from apps.core.api_error_i18n import API_ERROR_KEY_DEFAULT_EN
+from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.translation_service import get_current_request, get_translation_map, resolve_api_error_message
 
 # Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
 DEFAULT_LIST_LIMIT = 20
@@ -20,8 +22,22 @@ def assign_group_to_test_user(user, group_name: str) -> None:
     user.groups.add(group)
 
 def json_error(message: str, *, status: int) -> JsonResponse:
-    """Build a normalized JSON error response payload."""
+    """Build a normalized JSON error payload; ``other.api.*`` messages resolve from DB (category other)."""
+    if message.startswith("other.api."):
+        default = API_ERROR_KEY_DEFAULT_EN.get(message, message)
+        request = get_current_request()
+        if request is not None:
+            message = resolve_api_error_message(request, message, default)
+        else:
+            message = get_translation_map("other", "en-GB").get(message, default)
     return JsonResponse({"error": message}, status=status)
+
+
+def json_domain_error(exc: BaseException, *, status: int) -> JsonResponse:
+    """Like ``json_error`` but honors ``DomainError.api_message_key`` when set."""
+    if isinstance(exc, DomainError) and exc.api_message_key:
+        return json_error(exc.api_message_key, status=status)
+    return json_error(str(exc), status=status)
 
 
 def read_json_body(request: HttpRequest) -> dict:
@@ -90,7 +106,7 @@ def parse_list_limit(value: str | None) -> int:
 def require_authenticated_user(request: HttpRequest) -> JsonResponse | None:
     """Return normalized 401 error response when user is not authenticated."""
     if not request.user.is_authenticated:
-        return json_error("Authentication required.", status=401)
+        return json_error("other.api.authentication_required", status=401)
     return None
 
 
@@ -101,7 +117,7 @@ def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonR
     """
     user = request.user
     if not user.is_authenticated:
-        return json_error("Authentication required.", status=401)
+        return json_error("other.api.authentication_required", status=401)
 
     has_role = False
     if "DOCTOR" in allowed_roles and user.is_doctor:
@@ -114,7 +130,7 @@ def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonR
         has_role = True
 
     if not has_role:
-        return json_error("Forbidden.", status=403)
+        return json_error("other.api.forbidden", status=403)
     return None
 
 
@@ -165,7 +181,7 @@ def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
 def require_actor_match(request: HttpRequest, actor_id: UUID | None) -> JsonResponse | None:
     """Return 403 when actor_id is not None and does not match request.user.id. Use for body/query actor fields."""
     if actor_id is not None and actor_id != request.user.id:
-        return json_error("Actor mismatch.", status=403)
+        return json_error("other.api.actor_mismatch", status=403)
     return None
 
 

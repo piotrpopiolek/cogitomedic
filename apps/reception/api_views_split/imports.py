@@ -51,7 +51,7 @@ def import_batches_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     limit = parse_list_limit(request.GET.get("limit"))
     items = [_serialize_batch(batch) for batch in _visible_batches(request)[:limit]]
@@ -64,12 +64,12 @@ def import_batch_detail_view(request: HttpRequest, batch_id: UUID) -> JsonRespon
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         batch = _visible_batches(request).get(id=batch_id)
     except ObjectDoesNotExist:
-        return json_error("Import batch not found.", status=404)
+        return json_error("other.api.import_batch_not_found", status=404)
     return JsonResponse(_serialize_batch(batch))
 
 
@@ -79,12 +79,12 @@ def import_batch_errors_view(request: HttpRequest, batch_id: UUID) -> JsonRespon
     if role_error:
         return role_error
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         batch = _visible_batches(request).get(id=batch_id)
     except ObjectDoesNotExist:
-        return json_error("Import batch not found.", status=404)
+        return json_error("other.api.import_batch_not_found", status=404)
 
     items = [
         _serialize_error(error)

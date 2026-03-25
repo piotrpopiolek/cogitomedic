@@ -7,6 +7,7 @@ import bleach
 from django.core.exceptions import ValidationError
 from django.db import models
 from apps.core.translation_service import db_gettext_lazy
+from apps.users.models import StaffUserPreferredLocale
 
 
 class TimeStampedUUIDModel(models.Model):
@@ -108,7 +109,11 @@ class TranslationValue(TimeStampedUUIDModel):
         on_delete=models.CASCADE,
         related_name="values",
     )
-    language_code = models.CharField(max_length=5, verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"))
+    language_code = models.CharField(
+        max_length=5,
+        choices=StaffUserPreferredLocale.choices,
+        verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"),
+    )
     value = models.TextField(verbose_name=db_gettext_lazy("administration.field_value", "Value"))
     updated_by = models.ForeignKey(
         "users.StaffUser",
@@ -120,8 +125,10 @@ class TranslationValue(TimeStampedUUIDModel):
 
     def clean(self) -> None:
         super().clean()
-        if self.language_code not in {"de", "en", "pl"}:
-            raise ValidationError({"language_code": "Allowed values: de, en, pl."})
+        if self.language_code not in StaffUserPreferredLocale.values:
+            raise ValidationError(
+                {"language_code": f"Allowed values: {', '.join(StaffUserPreferredLocale.values)}."}
+            )
         if _FORBIDDEN_PLACEHOLDER_FORMAT_RE.search(self.value or ""):
             raise ValidationError(
                 {"value": "Only {placeholder_name} format is allowed; %s/%(name)s/format specifiers are forbidden."}
@@ -157,7 +164,7 @@ class TranslationValue(TimeStampedUUIDModel):
                 name="translation_value_key_language_unique",
             ),
             models.CheckConstraint(
-                condition=models.Q(language_code__in=["de", "en", "pl"]),
+                condition=models.Q(language_code__in=list(StaffUserPreferredLocale.values)),
                 name="translation_value_language_allowed",
             ),
         ]
@@ -174,7 +181,11 @@ class TranslationCacheVersion(TimeStampedUUIDModel):
         max_length=32,
         choices=TranslationCategory.choices,
     )
-    language_code = models.CharField(max_length=5, verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"))
+    language_code = models.CharField(
+        max_length=5,
+        choices=StaffUserPreferredLocale.choices,
+        verbose_name=db_gettext_lazy("administration.field_language_code", "Language code"),
+    )
     version = models.BigIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_version", "Version"))
 
     class Meta:
@@ -185,7 +196,7 @@ class TranslationCacheVersion(TimeStampedUUIDModel):
                 name="translation_cache_version_category_language_unique",
             ),
             models.CheckConstraint(
-                condition=models.Q(language_code__in=["de", "en", "pl"]),
+                condition=models.Q(language_code__in=list(StaffUserPreferredLocale.values)),
                 name="translation_cache_version_language_allowed",
             ),
         ]

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
+    json_domain_error,
     json_error,
     parse_bool_query,
     read_json_body,
@@ -77,14 +78,14 @@ def _serialize_staff_user(user: StaffUser) -> dict:
 @ratelimit(key="ip", rate="5/m", method="POST", block=True)
 def auth_login_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = AuthLoginRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -99,7 +100,7 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
                 "reason": "invalid_credentials",
             },
         )
-        return json_error("Invalid credentials.", status=401)
+        return json_error("other.api.invalid_credentials", status=401)
     if not user.is_active:
         create_audit_event(
             event_type="STAFF_AUTH_LOGIN_FAILED",
@@ -109,7 +110,7 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
                 "reason": "inactive_user",
             },
         )
-        return json_error("Invalid credentials.", status=401)
+        return json_error("other.api.invalid_credentials", status=401)
 
     login(request, user)
     android_id = (body.android_id or "").strip()
@@ -131,7 +132,7 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
 
 def auth_logout_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
 
     if request.user.is_authenticated:
         uid = request.user.id
@@ -147,7 +148,7 @@ def auth_logout_view(request: HttpRequest) -> JsonResponse:
 @require_auth
 def auth_me_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     return JsonResponse({"user": _user_payload(request)}, status=200)
 
 
@@ -163,12 +164,12 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         if role:
             valid_roles = {"RECEPTION", "DOCTOR", "ADMIN", "TABLET"}
             if role not in valid_roles:
-                return json_error("Invalid role query parameter.", status=400)
+                return json_error("other.api.invalid_role_query", status=400)
             group_name = role.capitalize()
             qs = qs.filter(groups__name=group_name).distinct()
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("Invalid is_active query parameter.", status=400)
+            return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
         search = request.GET.get("search")
@@ -190,9 +191,9 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         try:
             body = CreateStaffUserRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -209,12 +210,12 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
                 password=body.password,
             )
         except IntegrityError:
-            return json_error("Username or email already exists.", status=409)
+            return json_error("other.api.username_or_email_exists", status=409)
         except DomainError as exc:
-            return json_error(str(exc), status=400)
+            return json_domain_error(exc, status=400)
         return JsonResponse(_serialize_staff_user(user), status=201)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)
 
 
 @require_auth
@@ -224,11 +225,11 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
         return role_error
 
     if request.method not in ("GET", "PATCH", "DELETE"):
-        return json_error("Method not allowed.", status=405)
+        return json_error("other.api.method_not_allowed", status=405)
     try:
         user = StaffUser.objects.get(id=staff_user_id)
     except ObjectDoesNotExist:
-        return json_error("Staff user not found.", status=404)
+        return json_error("other.api.staff_user_not_found", status=404)
 
     if request.method == "GET":
         return JsonResponse(_serialize_staff_user(user))
@@ -236,15 +237,15 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
         try:
             user = deactivate_staff_user(staff_user_id=staff_user_id)
         except ObjectDoesNotExist:
-            return json_error("Staff user not found.", status=404)
+            return json_error("other.api.staff_user_not_found", status=404)
         return JsonResponse({"message": "User deactivated", "user": _serialize_staff_user(user)}, status=200)
 
     try:
         body = UpdateStaffUserRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        return json_error("Invalid JSON payload.", status=400)
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding:
-        return json_error("Invalid request encoding.", status=400)
+        return json_error("other.api.invalid_request_encoding", status=400)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -262,11 +263,11 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
             password=body.password,
         )
     except ObjectDoesNotExist:
-        return json_error("Staff user not found.", status=404)
+        return json_error("other.api.staff_user_not_found", status=404)
     except IntegrityError:
-        return json_error("Username or email already exists.", status=409)
+        return json_error("other.api.username_or_email_exists", status=409)
     except DomainError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     return JsonResponse(_serialize_staff_user(user), status=200)
 
 
@@ -285,7 +286,7 @@ def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> J
     try:
         user = StaffUser.objects.prefetch_related("clinic_sites").get(id=staff_user_id)
     except ObjectDoesNotExist:
-        return json_error("Staff user not found.", status=404)
+        return json_error("other.api.staff_user_not_found", status=404)
 
     if request.method == "GET":
         items = [
@@ -303,9 +304,9 @@ def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> J
         try:
             body = UpdateStaffUserClinicSitesRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
-            return json_error("Invalid JSON payload.", status=400)
+            return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding:
-            return json_error("Invalid request encoding.", status=400)
+            return json_error("other.api.invalid_request_encoding", status=400)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -321,4 +322,4 @@ def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> J
         ]
         return JsonResponse({"items": items}, status=200)
 
-    return json_error("Method not allowed.", status=405)
+    return json_error("other.api.method_not_allowed", status=405)

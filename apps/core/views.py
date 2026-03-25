@@ -9,4 +9,4 @@ from apps.core.api_utils import json_error
 
 def ratelimited_view(request: HttpRequest, exception: Exception) -> JsonResponse:
     """Return 429 JSON when rate limit is exceeded. Used by RATELIMIT_VIEW."""
-    return json_error("Too many requests. Try again later.", status=429)
+    return json_error("other.api.too_many_requests", status=429)

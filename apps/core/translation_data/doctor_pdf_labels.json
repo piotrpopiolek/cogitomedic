@@ -2,7 +2,7 @@
   "doctor.pdf_label.befund": {
     "de": "Befund",
     "en": "Befund",
-    "pl": "Befund"
+    "pl": "Wynik badania"
   },
   "doctor.pdf_label.clinical_assessment": {
     "de": "Klinisch-dermatoskopische Einschätzung",
@@ -130,7 +130,7 @@
     "pl": "Podsumowanie"
   },
   "doctor.pdf_label.version": {
-    "de": "Version",
+    "de": "Versionsnummer",
     "en": "Version",
     "pl": "Wersja"
   }

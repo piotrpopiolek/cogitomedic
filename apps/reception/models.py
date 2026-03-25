@@ -13,46 +13,64 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 class QueueShift(models.TextChoices):
-    FULL_DAY = "FULL_DAY", "Full day"
-    MORNING = "MORNING", "Morning"
-    AFTERNOON = "AFTERNOON", "Afternoon"
-    EVENING = "EVENING", "Evening"
+    FULL_DAY = "FULL_DAY", db_gettext_lazy("administration.choice_queue_shift_full_day", "Full day")
+    MORNING = "MORNING", db_gettext_lazy("administration.choice_queue_shift_morning", "Morning")
+    AFTERNOON = "AFTERNOON", db_gettext_lazy("administration.choice_queue_shift_afternoon", "Afternoon")
+    EVENING = "EVENING", db_gettext_lazy("administration.choice_queue_shift_evening", "Evening")
 
 
 class QueueSource(models.TextChoices):
-    MANUAL = "MANUAL", "Manual"
-    IMPORT = "IMPORT", "Import"
+    MANUAL = "MANUAL", db_gettext_lazy("administration.choice_queue_source_manual", "Manual")
+    IMPORT = "IMPORT", db_gettext_lazy("administration.choice_queue_source_import", "Import")
 
 
 class QueueStatus(models.TextChoices):
-    OPEN = "OPEN", "Open"
-    CLOSED = "CLOSED", "Closed"
+    OPEN = "OPEN", db_gettext_lazy("administration.choice_queue_status_open", "Open")
+    CLOSED = "CLOSED", db_gettext_lazy("administration.choice_queue_status_closed", "Closed")
 
 
 class QueueEntryStatus(models.TextChoices):
-    WAITING = "WAITING", "Waiting"
-    IN_PROGRESS = "IN_PROGRESS", "In progress"
-    PATIENT_COMPLETED = "PATIENT_COMPLETED", "Patient completed"
-    DOCTOR_IN_PROGRESS = "DOCTOR_IN_PROGRESS", "Doctor in progress"
-    PUBLISHED = "PUBLISHED", "Published"
-    CANCELLED = "CANCELLED", "Cancelled"
+    WAITING = "WAITING", db_gettext_lazy("administration.choice_queue_entry_status_waiting", "Waiting")
+    IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy("administration.choice_queue_entry_status_in_progress", "In progress")
+    PATIENT_COMPLETED = "PATIENT_COMPLETED", db_gettext_lazy(
+        "administration.choice_queue_entry_status_patient_completed",
+        "Patient completed",
+    )
+    DOCTOR_IN_PROGRESS = "DOCTOR_IN_PROGRESS", db_gettext_lazy(
+        "administration.choice_queue_entry_status_doctor_in_progress",
+        "Doctor in progress",
+    )
+    PUBLISHED = "PUBLISHED", db_gettext_lazy("administration.choice_queue_entry_status_published", "Published")
+    CANCELLED = "CANCELLED", db_gettext_lazy("administration.choice_queue_entry_status_cancelled", "Cancelled")
 
 
 class ImportType(models.TextChoices):
-    DAILY_FILE_IMPORT = "DAILY_FILE_IMPORT", "Daily file import"
-    EMERGENCY_TEMPLATE_IMPORT = "EMERGENCY_TEMPLATE_IMPORT", "Emergency template import"
+    DAILY_FILE_IMPORT = "DAILY_FILE_IMPORT", db_gettext_lazy(
+        "administration.choice_import_type_daily_file_import",
+        "Daily file import",
+    )
+    EMERGENCY_TEMPLATE_IMPORT = "EMERGENCY_TEMPLATE_IMPORT", db_gettext_lazy(
+        "administration.choice_import_type_emergency_template_import",
+        "Emergency template import",
+    )
 
 
 class ImportSourceSystem(models.TextChoices):
-    DOCTOLIB_EXPORT = "DOCTOLIB_EXPORT", "Doctolib export"
-    OTHER = "OTHER", "Other"
+    DOCTOLIB_EXPORT = "DOCTOLIB_EXPORT", db_gettext_lazy(
+        "administration.choice_import_source_doctolib_export",
+        "Doctolib export",
+    )
+    OTHER = "OTHER", db_gettext_lazy("administration.choice_import_source_other", "Other")
 
 
 class ImportStatus(models.TextChoices):
-    PROCESSING = "PROCESSING", "Processing"
-    COMPLETED = "COMPLETED", "Completed"
-    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS", "Completed with errors"
-    FAILED = "FAILED", "Failed"
+    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_import_status_processing", "Processing")
+    COMPLETED = "COMPLETED", db_gettext_lazy("administration.choice_import_status_completed", "Completed")
+    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS", db_gettext_lazy(
+        "administration.choice_import_status_completed_with_errors",
+        "Completed with errors",
+    )
+    FAILED = "FAILED", db_gettext_lazy("administration.choice_import_status_failed", "Failed")
 
 
 class Patient(models.Model):

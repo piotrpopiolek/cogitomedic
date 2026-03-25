@@ -4,6 +4,7 @@ import contextvars
 from typing import Any
 
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import F
 from django.utils.functional import lazy
@@ -11,7 +12,7 @@ from django.utils.functional import lazy
 # Models imported lazily inside functions to avoid AppRegistryNotReady when this
 # module is imported from other apps' models.py during Django startup.
 
-ALLOWED_LANGUAGE_CODES = {"de", "en", "pl"}
+ALLOWED_LANGUAGE_CODES = {"de-DE", "en-GB", "pl-PL"}
 ADMINISTRATION_CATEGORY = "administration"
 
 _current_request: contextvars.ContextVar[Any] = contextvars.ContextVar(
@@ -31,13 +32,13 @@ def get_current_request() -> Any:
 
 def normalize_language_code(value: str) -> str:
     if not value:
-        return "de"
+        return "de-DE"
     low = value.lower()
     if low.startswith("en"):
-        return "en"
+        return "en-GB"
     if low.startswith("pl"):
-        return "pl"
-    return "de"
+        return "pl-PL"
+    return "de-DE"
 
 
 def _ensure_cache_version(category: str, language_code: str):
@@ -56,10 +57,9 @@ def _ensure_cache_version(category: str, language_code: str):
 def bump_translation_version(category: str, language_code: str) -> None:
     from apps.core.models import TranslationCacheVersion, TranslationCategory
 
-    normalized = normalize_language_code(language_code)
     if category not in TranslationCategory.values:
         return
-    _ensure_cache_version(category, normalized)
+    normalized = _ensure_cache_version(category, language_code).language_code
     TranslationCacheVersion.objects.filter(
         category=category,
         language_code=normalized,
@@ -69,10 +69,10 @@ def bump_translation_version(category: str, language_code: str) -> None:
 def get_translation_map(category: str, language_code: str) -> dict[str, str]:
     from apps.core.models import TranslationCategory, TranslationKeyStatus, TranslationValue
 
-    normalized = normalize_language_code(language_code)
     if category not in TranslationCategory.values:
         return {}
-    version_obj = _ensure_cache_version(category, normalized)
+    version_obj = _ensure_cache_version(category, language_code)
+    normalized = version_obj.language_code
     cache_key = f"i18n:data:{category}:{normalized}:v{version_obj.version}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -90,7 +90,7 @@ def get_translation_map(category: str, language_code: str) -> dict[str, str]:
 def _get_admin_map_for_request(request: Any) -> dict[str, str]:
     """Return administration translation map for request language; cache on request."""
     if not request:
-        return get_translation_map(ADMINISTRATION_CATEGORY, "de")
+        return get_translation_map(ADMINISTRATION_CATEGORY, "de-DE")
     cache_attr = "_admin_i18n_map"
     if getattr(request, cache_attr, None) is not None:
         return getattr(request, cache_attr)
@@ -101,7 +101,7 @@ def _get_admin_map_for_request(request: Any) -> dict[str, str]:
     elif getattr(request, "LANGUAGE_CODE", None):
         lang = normalize_language_code(request.LANGUAGE_CODE)
     else:
-        lang = "de"
+        lang = "de-DE"
     data = get_translation_map(ADMINISTRATION_CATEGORY, lang)
     setattr(request, cache_attr, data)
     return data
@@ -195,6 +195,28 @@ def get_staff_ui_strings(locale: str) -> dict[str, str]:
         if full_key.startswith(prefix):
             ui[full_key[len(prefix) :]] = value
     return ui
+
+
+def resolve_api_error_message(request: Any, key: str, default: str) -> str:
+    """
+    Resolve a REST API error string from DB (category ``other``) using the active
+    request language: staff ``preferred_locale`` when authenticated, else
+    ``request.LANGUAGE_CODE`` / Django active locale.
+    """
+    from django.utils import translation
+
+    lang: str | None = None
+    user = getattr(request, "user", None)
+    if user and getattr(user, "is_authenticated", False) and user.is_authenticated:
+        loc = getattr(user, "preferred_locale", None) or ""
+        if loc:
+            lang = normalize_language_code(loc)
+    if lang is None:
+        lang = normalize_language_code(
+            getattr(request, "LANGUAGE_CODE", None) or translation.get_language() or "de-DE"
+        )
+    data = get_translation_map("other", lang)
+    return data.get(key, default)
 
 
 def get_ergebnisse_ui_strings(locale: str) -> dict[str, str]:

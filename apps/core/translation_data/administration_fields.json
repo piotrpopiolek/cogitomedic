@@ -200,7 +200,7 @@
     "pl": "Wygasa"
   },
   "administration.field_version": {
-    "de": "Version",
+    "de": "Versionsnummer",
     "en": "Version",
     "pl": "Wersja"
   },
@@ -395,7 +395,7 @@
     "pl": "Wersja schematu danych"
   },
   "administration.field_name": {
-    "de": "Name",
+    "de": "Bezeichnung",
     "en": "Name",
     "pl": "Nazwa"
   },
@@ -623,5 +623,30 @@
     "de": "An HiDrive gesendet am",
     "en": "HiDrive sent at",
     "pl": "Wysłano do HiDrive (czas)"
+  },
+  "administration.field_clinicsite": {
+    "de": "Standort",
+    "en": "Clinic site",
+    "pl": "Placówka"
+  },
+  "administration.field_created_at": {
+    "de": "Erstellt am",
+    "en": "Created at",
+    "pl": "Utworzono"
+  },
+  "administration.field_pdf_import_default_consulting_room": {
+    "de": "Standard-Behandlungsraum für PDF-Import",
+    "en": "PDF import default consulting room",
+    "pl": "Domyślny gabinet przy imporcie PDF"
+  },
+  "administration.field_pdf_import_shift_code": {
+    "de": "Schichtcode für PDF-Import",
+    "en": "PDF import shift code",
+    "pl": "Kod zmiany importu PDF"
+  },
+  "administration.field_revoked_at": {
+    "de": "Widerrufen am",
+    "en": "Revoked at",
+    "pl": "Data unieważnienia"
   }
 }
