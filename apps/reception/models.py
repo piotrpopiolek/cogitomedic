@@ -90,10 +90,17 @@ class Patient(models.Model):
         db_table="patient_clinic_site",
         related_name="patients",
         blank=True,
+        verbose_name=db_gettext_lazy("administration.field_clinic_sites", "Clinic sites"),
     )
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "patient"
@@ -188,7 +195,10 @@ class DailyQueue(models.Model):
     queue_date = models.DateField(verbose_name=db_gettext_lazy("administration.field_queue_date", "Queue date"))
     clinic_site = models.ForeignKey(ClinicSite, on_delete=models.RESTRICT, related_name="daily_queues", verbose_name=db_gettext_lazy("administration.field_clinic_site", "Clinic site"))
     consulting_room = models.ForeignKey(
-        ConsultingRoom, on_delete=models.RESTRICT, related_name="daily_queues"
+        ConsultingRoom,
+        on_delete=models.RESTRICT,
+        related_name="daily_queues",
+        verbose_name=db_gettext_lazy("administration.field_consulting_room", "Consulting room"),
     )
     shift_code = models.CharField(max_length=20, choices=QueueShift.choices, default=QueueShift.FULL_DAY, verbose_name=db_gettext_lazy("administration.field_shift_code", "Shift code"))
     source = models.CharField(max_length=20, choices=QueueSource.choices, default=QueueSource.MANUAL, verbose_name=db_gettext_lazy("administration.field_source", "Source"))
@@ -200,12 +210,22 @@ class DailyQueue(models.Model):
         null=True,
         related_name="assigned_queues",
         limit_choices_to=Q(groups__name="Doctor"),
+        verbose_name=db_gettext_lazy("administration.field_assigned_doctor", "Assigned doctor"),
     )
     created_by_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="created_queues"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name="created_queues",
+        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "daily_queue"
@@ -237,11 +257,13 @@ class QueueEntry(models.Model):
         blank=True,
         null=True,
         related_name="+",
+        verbose_name=db_gettext_lazy("administration.field_active_session", "Active session"),
     )
     entry_status = models.CharField(
         max_length=30,
         choices=QueueEntryStatus.choices,
         default=QueueEntryStatus.WAITING,
+        verbose_name=db_gettext_lazy("administration.field_entry_status", "Entry status"),
     )
     position_no = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_position_no", "Position no"))
     visit_external_id = models.CharField(max_length=100, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_visit_external_id", "Visit external id"))
@@ -251,9 +273,16 @@ class QueueEntry(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.RESTRICT,
         related_name="created_queue_entries",
+        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "queue_entry"
@@ -290,7 +319,10 @@ class TabletDevice(models.Model):
     android_id = models.CharField(max_length=128, unique=True, verbose_name=db_gettext_lazy("administration.field_android_id", "Android id"))
     is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
     last_seen_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_last_seen_at", "Last seen at"))
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
     clinic_site = models.ForeignKey(
         ClinicSite,
         on_delete=models.SET_NULL,
@@ -310,7 +342,10 @@ class TabletDevice(models.Model):
 class PatientFormSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     queue_entry = models.ForeignKey(
-        QueueEntry, on_delete=models.CASCADE, related_name="form_sessions"
+        QueueEntry,
+        on_delete=models.CASCADE,
+        related_name="form_sessions",
+        verbose_name=db_gettext_lazy("administration.field_queue_entry", "Queue entry"),
     )
     tablet_device = models.ForeignKey(
         TabletDevice,
@@ -318,6 +353,7 @@ class PatientFormSession(models.Model):
         blank=True,
         null=True,
         related_name="sessions",
+        verbose_name=db_gettext_lazy("administration.field_tablet_device", "Tablet device"),
     )
     form_locale = models.CharField(max_length=10, default="de-DE", verbose_name=db_gettext_lazy("administration.field_form_locale", "Form locale"))
     expires_at = models.DateTimeField(verbose_name=db_gettext_lazy("administration.field_expires_at", "Expires at"))
@@ -326,8 +362,12 @@ class PatientFormSession(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.RESTRICT,
         related_name="created_form_sessions",
+        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
 
     class Meta:
         db_table = "patient_form_session"
@@ -387,20 +427,28 @@ class PatientImportBatch(models.Model):
         max_length=40,
         choices=ImportType.choices,
         default=ImportType.DAILY_FILE_IMPORT,
+        verbose_name=db_gettext_lazy("administration.field_import_type", "Import type"),
     )
     source_system = models.CharField(
         max_length=40,
         choices=ImportSourceSystem.choices,
         default=ImportSourceSystem.DOCTOLIB_EXPORT,
+        verbose_name=db_gettext_lazy("administration.field_source_system", "Source system"),
     )
     status = models.CharField(max_length=30, choices=ImportStatus.choices, default=ImportStatus.PROCESSING, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
     total_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_total_rows", "Total rows"))
     inserted_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_inserted_rows", "Inserted rows"))
     error_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_error_rows", "Error rows"))
     created_by_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name="import_batches"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name="import_batches",
+        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
     finished_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_finished_at", "Finished at"))
 
     class Meta:
@@ -425,13 +473,19 @@ class PatientImportBatch(models.Model):
 class PatientImportError(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch = models.ForeignKey(
-        PatientImportBatch, on_delete=models.CASCADE, related_name="errors"
+        PatientImportBatch,
+        on_delete=models.CASCADE,
+        related_name="errors",
+        verbose_name=db_gettext_lazy("administration.field_import_batch", "Import batch"),
     )
     row_number = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_row_number", "Row number"))
     error_code = models.CharField(max_length=50, verbose_name=db_gettext_lazy("administration.field_error_code", "Error code"))
     error_message = models.TextField(verbose_name=db_gettext_lazy("administration.field_error_message", "Error message"))
     raw_row = models.JSONField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_raw_row", "Raw row"))
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
 
     class Meta:
         db_table = "patient_import_error"

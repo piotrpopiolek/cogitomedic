@@ -18,6 +18,7 @@ class AuditEvent(models.Model):
         blank=True,
         null=True,
         related_name="audit_events",
+        verbose_name=db_gettext_lazy("administration.field_actor_user", "Actor user"),
     )
     patient = models.ForeignKey(
         "reception.Patient",
@@ -25,6 +26,7 @@ class AuditEvent(models.Model):
         blank=True,
         null=True,
         related_name="audit_events",
+        verbose_name=db_gettext_lazy("administration.field_patient", "Patient"),
     )
     medical_document = models.ForeignKey(
         "medical.MedicalDocument",
@@ -32,6 +34,7 @@ class AuditEvent(models.Model):
         blank=True,
         null=True,
         related_name="audit_events",
+        verbose_name=db_gettext_lazy("administration.field_medical_document", "Medical document"),
     )
     outbox_event = models.ForeignKey(
         "outbox.OutboxEvent",
@@ -39,6 +42,7 @@ class AuditEvent(models.Model):
         blank=True,
         null=True,
         related_name="audit_events",
+        verbose_name=db_gettext_lazy("administration.field_outbox_event", "Outbox event"),
     )
     context_clinic_site = models.ForeignKey(
         "reception.ClinicSite",
@@ -46,6 +50,7 @@ class AuditEvent(models.Model):
         blank=True,
         null=True,
         related_name="audit_events",
+        verbose_name=db_gettext_lazy("administration.field_context_clinic_site", "Context clinic site"),
     )
     metadata = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_metadata", "Metadata"))
 

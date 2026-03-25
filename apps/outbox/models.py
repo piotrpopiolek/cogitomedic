@@ -28,9 +28,10 @@ class OutboxEvent(models.Model):
         "medical.MedicalDocumentVersion",
         on_delete=models.CASCADE,
         related_name="outbox_events",
+        verbose_name=db_gettext_lazy("administration.field_medical_document_version", "Medical document version"),
     )
     aggregate_type = models.CharField(max_length=50, default="MEDICAL_DOCUMENT_VERSION", verbose_name=db_gettext_lazy("administration.field_aggregate_type", "Aggregate type"))
-    aggregate_id = models.UUIDField()
+    aggregate_id = models.UUIDField(verbose_name=db_gettext_lazy("administration.field_aggregate_id", "Aggregate ID"))
     event_type = models.CharField(max_length=30, choices=OutboxEventType.choices, verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"))
     payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_payload_schema_version", "Payload schema version"))
     payload = models.JSONField(verbose_name=db_gettext_lazy("administration.field_payload", "Payload"))
@@ -41,8 +42,14 @@ class OutboxEvent(models.Model):
     locked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"))
     processed_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_processed_at", "Processed at"))
     error_message = models.TextField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_error_message", "Error message"))
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
 
     class Meta:
         db_table = "outbox_event"
