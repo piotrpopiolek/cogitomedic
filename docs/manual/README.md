@@ -43,4 +43,6 @@ Skrypt zamienia ścieżki obrazów z formy `/docs/manual/assets/...` na względn
 
 Zrzuty ekranu: katalog [assets/screenshots/](/docs/manual/assets/screenshots/README.md) — **komplet plików z checklisty** generuje się skryptem [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py) (np. w Dockerze: `docker compose --profile screenshots run --rm screenshots`). Nazewnictwo: `rola-NN-opis.png`; dane demo (`screenshot_*`) są tylko do dokumentacji.
 
+**Filmy WebM (instruktaż ekranu):** katalog [assets/videos/](/docs/manual/assets/videos/README.md) — skrypt [`scripts/record_manual_videos.py`](../../scripts/record_manual_videos.py); Docker: `docker compose --profile manual-videos run --rm manual-videos`. Pliki `.webm` nie są wersjonowane w git (`.gitignore`).
+
 **Wersja treści:** 2026-03-23 (dopasuj datę przy aktualizacji UI).
