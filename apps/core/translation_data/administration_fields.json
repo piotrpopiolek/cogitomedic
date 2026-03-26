@@ -838,5 +838,15 @@
     "de": "Verifiziert am",
     "en": "Verified at",
     "pl": "Zweryfikowano"
+  },
+  "administration.field_groups": {
+    "de": "Gruppen",
+    "en": "Groups",
+    "pl": "Grupy"
+  },
+  "administration.error_at_least_one_group": {
+    "de": "Mindestens eine Gruppe auswählen.",
+    "en": "Select at least one group.",
+    "pl": "Wybierz co najmniej jedną grupę."
   }
 }

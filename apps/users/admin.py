@@ -8,12 +8,13 @@ try:
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
-from apps.users.forms import StaffUserCreationForm
+from apps.users.forms import StaffUserChangeForm, StaffUserCreationForm
 from apps.users.models import StaffUser
 
 
 @admin.register(StaffUser)
 class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
+    form = StaffUserChangeForm
     add_form = StaffUserCreationForm
     list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_active")
     list_display_links = ("username",)
