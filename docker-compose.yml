@@ -25,8 +25,10 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       SMSAPI_USE_MOCK: "1"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318/v1/traces"
-      OTEL_SERVICE_NAME: "cogitomedica-web"
+      # Domyślnie puste — bez działającego otel-collector eksport OTLP timeoutuje i zaśmieca logi (np. przy nagraniach manual).
+      # Włącz: dopisz do .env OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces i uruchom `otel-collector` (+ tempo).
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: cogitomedica-web
     command: >
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
@@ -48,8 +50,8 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       SMSAPI_USE_MOCK: "1"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318/v1/traces"
-      OTEL_SERVICE_NAME: "cogitomedica-scheduler"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: cogitomedica-scheduler
     command: >
       sh -c "python manage.py run_periodic_tasks --interval-seconds 300 --skip-import"
     volumes:
@@ -86,6 +88,41 @@ services:
           sleep 2
         done
         exec python scripts/capture_manual_screenshots.py --base-url http://web:8000
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  # One-off: nagrania WebM per rola (docs/manual) — ten sam obraz co screenshots
+  # Uruchomienie: docker compose --profile manual-videos run --rm manual-videos
+  manual-videos:
+    build:
+      context: .
+      dockerfile: Dockerfile.screenshots
+    profiles:
+      - manual-videos
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      SMSAPI_USE_MOCK: "1"
+      CAPTCHA_VERIFY_SKIP: "1"
+      SCREENSHOT_BASE_URL: http://web:8000
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        until python -c "import urllib.request; urllib.request.urlopen('http://web:8000/admin/login/')" 2>/dev/null; do
+          i=$$((i+1))
+          if [ "$$i" -gt 90 ]; then echo "manual-videos: web nie odpowiada po 3 minutach" >&2; exit 1; fi
+          sleep 2
+        done
+        exec python scripts/record_manual_videos.py --base-url http://web:8000 --role all --out-dir /app/docs/manual/assets/videos
     volumes:
       - .:/app
     depends_on:
