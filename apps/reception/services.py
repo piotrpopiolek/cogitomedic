@@ -197,12 +197,14 @@ def create_tablet_device(
         clinic_site_id=clinic_site_id,
     )
 
-# TODO: remove this after testing
 def get_or_create_tablet_device_by_android_id(*, android_id: str) -> tuple[TabletDevice, bool]:
-    """Get or create a tablet device by android_id (auto-registration). Returns (device, created)."""
+    """Get or create a tablet device by android_id (auto-registration). Returns (device, created).
+
+    New devices have ``clinic_site`` unset; assign a site in admin when isolating queues per site.
+    """
     device, created = TabletDevice.objects.get_or_create(
         android_id=android_id,
-        defaults={"is_active": True, "clinic_site_id": "52f81bf4-fbeb-477e-9498-e085e354c027"},
+        defaults={"is_active": True},
     )
     return device, created
 

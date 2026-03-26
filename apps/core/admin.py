@@ -26,8 +26,8 @@ class TranslationKeyAdmin(UnfoldModelAdmin):
 
 @admin.register(TranslationValue)
 class TranslationValueAdmin(UnfoldModelAdmin):
-    list_display = ("translation_key", "language_code", "updated_by", "updated_at")
-    list_filter = ("language_code", "translation_key__category")
+    list_display = ("translation_key", "language_code", "value_preview", "updated_by", "updated_at")
+    list_filter = ("language_code", "translation_key__category", "value")
     ordering = ["-created_at"]
     search_fields = ("translation_key__key", "value")
     raw_id_fields = ("translation_key", "updated_by")
@@ -51,6 +51,13 @@ class TranslationValueAdmin(UnfoldModelAdmin):
         if request.user.is_authenticated:
             obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+    @admin.display(description="Translation")
+    def value_preview(self, obj: TranslationValue) -> str:
+        value = (obj.value or "").strip()
+        if len(value) <= 120:
+            return value
+        return f"{value[:117]}..."
 
 
 @admin.register(TranslationCacheVersion)
