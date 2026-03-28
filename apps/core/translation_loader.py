@@ -35,6 +35,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.invalid_queue_entry_status": ["value"],
     "other.domain.unsupported_form_locale": ["locale"],
     "other.domain.invalid_staff_role": ["role"],
+    "other.domain.staff_role_group_missing": ["role", "group_name"],
     "other.domain.consent_definition_not_active": ["consent_id", "date"],
     "other.domain.signature_payload_too_large": ["max_bytes"],
     "other.api.request_body_too_large": ["max_bytes"],

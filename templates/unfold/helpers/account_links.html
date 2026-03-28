@@ -1,14 +1,14 @@
-{% load i18n %}
+{% load i18n safe_urls %}
 
 {% if site_url %}
-    <a href="{{ site_url }}" target="_blank" class="mx-1 px-3 py-2 rounded-default hover:bg-base-100 hover:text-base-700 dark:hover:bg-base-700 dark:hover:text-base-200">
+    <a href="{{ site_url|safe_href }}" target="_blank" rel="noopener noreferrer" class="mx-1 px-3 py-2 rounded-default hover:bg-base-100 hover:text-base-700 dark:hover:bg-base-700 dark:hover:text-base-200">
         {{ admin_menu_view_site|default:"View site" }}
     </a>
 {% endif %}
 
 {% if account_links %}
     {% for link in account_links %}
-        <a href="{{ link.link }}" class="mx-1 px-3 py-2 rounded-default hover:bg-base-100 hover:text-base-700 dark:hover:bg-base-700 dark:hover:text-base-200">
+        <a href="{{ link.link|safe_href }}" class="mx-1 px-3 py-2 rounded-default hover:bg-base-100 hover:text-base-700 dark:hover:bg-base-700 dark:hover:text-base-200">
             {{ link.title }}
         </a>
     {% endfor %}

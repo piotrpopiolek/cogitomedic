@@ -60,9 +60,14 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",
 if ENVIRONMENT == "dev" or DEBUG:
     if "web" not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append("web")
-    # Quick Tunnel (trycloudflare.com) – dowolna subdomena
-    if ".trycloudflare.com" not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(".trycloudflare.com")
+_extra_allowed_hosts = [
+    host.strip()
+    for host in os.environ.get("EXTRA_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+for _host in _extra_allowed_hosts:
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
 
 HAS_UNFOLD = importlib.util.find_spec("unfold") is not None
 
@@ -100,7 +105,6 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "apps.core.middleware.CsrfTrustTunnelOriginMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "apps.core.middleware.TranslationRequestMiddleware",
@@ -543,6 +547,10 @@ if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", 
 # Portal wyniki (patient results)
 PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
 PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
+if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
+    raise ImproperlyConfigured(
+        "PATIENT_RESULTS_OTP_PEPPER must be set outside development environments."
+    )
 
 # CAPTCHA (Cloudflare Turnstile)
 TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
@@ -579,7 +587,9 @@ else:
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://sentimentless-lourie-predesirously.ngrok-free.dev",
+    origin.strip()
+    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
 ]
 
 # PDF import: INFO logs (completed import, extracted text preview) visible in console/Docker.

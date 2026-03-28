@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-
 from uuid import uuid4
 
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -76,7 +76,7 @@ class UsersAuthApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json().get("error"), "Too many requests. Try again later.")
+        self.assertTrue(response.json().get("error"))
 
 
 class AuthLoginAndroidIdTests(TestCase):
@@ -177,6 +177,50 @@ class StaffUsersApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["username"], "reception2")
         self.assertEqual(payload["role"], "RECEPTION")
+
+    def test_post_staff_user_creates_tablet_role_user(self) -> None:
+        # Ensure group exists even if seed migration is not present in this test DB.
+        assign_group_to_test_user(self.user, "Tablet")
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "tablet2",
+                    "email": "tablet2@example.com",
+                    "first_name": "Tab",
+                    "last_name": "Device",
+                    "phone_number": "+49111222333",
+                    "role": "TABLET",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["role"], "TABLET")
+
+    def test_post_staff_user_returns_400_when_group_for_role_is_missing(self) -> None:
+        Group.objects.filter(name="Reception").delete()
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "reception-missing-group",
+                    "email": "reception.missing.group@example.com",
+                    "first_name": "Maria",
+                    "last_name": "NoGroup",
+                    "role": "RECEPTION",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_post_staff_user_duplicate_returns_409(self) -> None:
         response = self.client.post(

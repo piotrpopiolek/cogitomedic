@@ -104,6 +104,11 @@
     "en": "Invalid role: {role}.",
     "pl": "Nieprawidłowa rola: {role}."
   },
+  "other.domain.staff_role_group_missing": {
+    "de": "Die Gruppe '{group_name}' für Rolle {role} fehlt.",
+    "en": "Group '{group_name}' for role {role} is missing.",
+    "pl": "Brakuje grupy '{group_name}' dla roli {role}."
+  },
   "other.domain.intake_contact_method_required": {
     "de": "Mindestens eine Kontaktmethode ist erforderlich (E-MAIL, SMS, TELEFON).",
     "en": "At least one contact method is required (EMAIL, SMS, PHONE).",

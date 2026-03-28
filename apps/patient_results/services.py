@@ -135,8 +135,9 @@ def request_otp(
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     pepper = (getattr(settings, "PATIENT_RESULTS_OTP_PEPPER", "") or "").strip()
-    if not pepper and not getattr(settings, "DEBUG", True):
-        raise ValueError("PATIENT_RESULTS_OTP_PEPPER must be set when DEBUG is False.")
+    environment = (getattr(settings, "ENVIRONMENT", "dev") or "dev").strip().lower()
+    if not pepper and environment != "dev":
+        raise ValueError("PATIENT_RESULTS_OTP_PEPPER must be set outside development environments.")
 
     otp_code = f"{random.randint(100000, 999999)}"
     otp_hash = _hash_otp(otp_code)

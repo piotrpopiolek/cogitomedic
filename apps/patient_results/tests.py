@@ -97,6 +97,17 @@ class RequestOtpTests(TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
 
+    @override_settings(CAPTCHA_VERIFY_SKIP=True, ENVIRONMENT="staging", PATIENT_RESULTS_OTP_PEPPER="")
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_requires_pepper_outside_dev_environment(self, mock_get_adapter) -> None:
+        with self.assertRaises(ValueError):
+            request_otp(
+                phone="01762222222",
+                date_of_birth=date(1990, 5, 15),
+                captcha_token="skip",
+            )
+        mock_get_adapter.return_value.send_sms.assert_not_called()
+
 
 class VerifyOtpTests(TestCase):
     def setUp(self) -> None:
