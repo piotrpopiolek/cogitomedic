@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
@@ -97,14 +97,37 @@ def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
             domain_message("other.domain.intake_signature_file_empty"),
             api_message_key="other.domain.intake_signature_file_empty",
         )
+    if len(raw) > SIGNATURE_MAX_SIZE:
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE),
+            api_message_key="other.domain.signature_payload_too_large",
+            api_message_params={"max_bytes": SIGNATURE_MAX_SIZE},
+        )
     checksum = hashlib.sha256(raw).hexdigest()
     if (intake_form.signature_sha256 or "") and intake_form.signature_sha256 != checksum:
         raise InvalidSignatureError(
             domain_message("other.domain.intake_signature_checksum_mismatch"),
             api_message_key="other.domain.intake_signature_checksum_mismatch",
         )
-    encoded = base64.b64encode(raw).decode("ascii")
     suffix = file_path.suffix.lower()
+    is_png = raw.startswith(b"\x89PNG\r\n\x1a\n")
+    is_jpeg = raw.startswith(b"\xff\xd8\xff")
+    if suffix not in {".png", ".jpg", ".jpeg"}:
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_image_format_invalid"),
+            api_message_key="other.domain.signature_image_format_invalid",
+        )
+    if suffix == ".png" and not is_png:
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_image_format_invalid"),
+            api_message_key="other.domain.signature_image_format_invalid",
+        )
+    if suffix in {".jpg", ".jpeg"} and not is_jpeg:
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_image_format_invalid"),
+            api_message_key="other.domain.signature_image_format_invalid",
+        )
+    encoded = base64.b64encode(raw).decode("ascii")
     mime = "image/jpeg" if suffix in {".jpg", ".jpeg"} else "image/png"
     return f"data:{mime};base64,{encoded}"
 
@@ -322,11 +345,25 @@ def _effective_question_filter(today: date):
     return Q(is_active=True) & Q(effective_from__lte=today) & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
 
 
+def _assert_intake_form_clinic_scope(
+    *,
+    intake_form: PatientIntakeForm,
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None,
+) -> None:
+    if allowed_clinic_site_ids is None:
+        return
+    allowed = set(allowed_clinic_site_ids)
+    clinic_site_id = intake_form.queue_entry.daily_queue.clinic_site_id
+    if clinic_site_id not in allowed:
+        raise ObjectDoesNotExist("Intake form is outside clinic scope.")
+
+
 def get_intake_form_context(
     *,
     intake_form_id: uuid.UUID,
     form_locale: str = "de-DE",
     tablet_restrict_to_today: bool = False,
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """
     Build intake form context for tablet/verification screen.
@@ -345,6 +382,10 @@ def get_intake_form_context(
             "queue_entry__daily_queue",
         )
         .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
     if tablet_restrict_to_today and intake_form.queue_entry.daily_queue.queue_date != today:
         raise ObjectDoesNotExist("Intake form queue is not from today.")
@@ -500,13 +541,22 @@ def save_intake_body_map(
     intake_form_id: uuid.UUID,
     body_map_schema_version: int,
     body_map_data: list[dict],
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
     """
     Update body map data for an in-progress intake form.
 
     body_map_data: list of {x, y, side, label?} with x,y in [0,1], side in ('front','back').
     """
-    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    intake_form = (
+        PatientIntakeForm.objects.select_for_update()
+        .select_related("queue_entry__daily_queue")
+        .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
+    )
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
         raise StateTransitionError(
             domain_message("other.domain.intake_body_map_in_progress_only"),
@@ -529,6 +579,7 @@ def save_intake_consents(
     *,
     intake_form_id: uuid.UUID,
     consents_payload: list[dict],
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
     """
     Replace consent acceptance set for an in-progress intake form.
@@ -544,7 +595,15 @@ def save_intake_consents(
     consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
     now = timezone.now()
 
-    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    intake_form = (
+        PatientIntakeForm.objects.select_for_update()
+        .select_related("queue_entry__daily_queue")
+        .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
+    )
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
         raise StateTransitionError(
             domain_message("other.domain.intake_consents_in_progress_only"),
@@ -615,6 +674,7 @@ def save_intake_signature(
     *,
     intake_form_id: uuid.UUID,
     signature_base64: str,
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
     """
     Decode base64 signature, store file under MEDIA_ROOT/signatures/YYYY/MM/<uuid>.png,
@@ -622,7 +682,15 @@ def save_intake_signature(
     Raises InvalidSignatureError if payload is invalid or too large.
     Raises StateTransitionError if form is not IN_PROGRESS.
     """
-    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    intake_form = (
+        PatientIntakeForm.objects.select_for_update()
+        .select_related("queue_entry__daily_queue")
+        .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
+    )
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
         raise StateTransitionError(
             domain_message("other.domain.intake_signature_in_progress_only"),
@@ -692,6 +760,7 @@ def submit_patient_intake_form(
     intake_form_id: uuid.UUID,
     submitted_at: datetime | None = None,
     submitted_by_user_id: uuid.UUID | None = None,
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
     """
     Submit intake form with required consent/anamnesis validation.
@@ -704,8 +773,17 @@ def submit_patient_intake_form(
     - updates queue entry state to PATIENT_COMPLETED.
     """
     intake_form = (
-        PatientIntakeForm.objects.select_related("session", "queue_entry", "queue_entry__patient")
+        PatientIntakeForm.objects.select_related(
+            "session",
+            "queue_entry",
+            "queue_entry__patient",
+            "queue_entry__daily_queue",
+        )
         .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
     session = intake_form.session
     queue_entry = QueueEntry.objects.select_for_update().get(id=intake_form.queue_entry_id)
@@ -857,9 +935,18 @@ def save_intake_anamnesis_payload(
     intake_form_id: uuid.UUID,
     anamnesis_schema_version: int,
     answers_payload: list[dict],
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
     """Persist validated anamnesis payload for in-progress intake form."""
-    intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
+    intake_form = (
+        PatientIntakeForm.objects.select_for_update()
+        .select_related("queue_entry__daily_queue")
+        .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
+    )
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
         raise StateTransitionError(
             domain_message("other.domain.intake_anamnesis_in_progress_only"),

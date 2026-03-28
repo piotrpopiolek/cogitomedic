@@ -37,6 +37,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.invalid_staff_role": ["role"],
     "other.domain.consent_definition_not_active": ["consent_id", "date"],
     "other.domain.signature_payload_too_large": ["max_bytes"],
+    "other.api.request_body_too_large": ["max_bytes"],
     "other.sms.patient_results": ["url"],
     "administration.error_lesion_favorites_preset_not_object": ["preset_no"],
     "administration.error_lesion_favorites_preset_invalid": ["preset_no", "details"],

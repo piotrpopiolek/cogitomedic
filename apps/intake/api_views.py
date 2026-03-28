@@ -11,6 +11,8 @@ from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
+    get_tablet_scope_clinic_site_ids,
     json_domain_error,
     json_error,
     parse_list_limit,
@@ -55,6 +57,15 @@ _INTAKE_SIGNATURE_PAYLOAD_TOO_LARGE_KEYS = frozenset({
 LOCALE_PATTERN = re.compile(r"^(de|en|pl)(-[A-Z]{2})?$")
 
 
+def _resolve_request_clinic_scope_ids(request: HttpRequest) -> list[UUID] | None:
+    scoped_ids = get_scoped_clinic_site_ids(request.user)
+    if request.user.is_tablet:
+        tablet_scope_ids = get_tablet_scope_clinic_site_ids(request)
+        if tablet_scope_ids is not None:
+            return tablet_scope_ids
+    return scoped_ids
+
+
 def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> JsonResponse:
     """Build and return GET intake form context (shared by view and PATCH response)."""
     is_tablet = request.user.is_tablet
@@ -67,6 +78,7 @@ def _intake_form_context_json(intake_form_id: UUID, request: HttpRequest) -> Jso
         intake_form_id=intake_form_id,
         form_locale=form_locale,
         tablet_restrict_to_today=is_tablet,
+        allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
     )
     return JsonResponse(context)
 
@@ -88,8 +100,8 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
             body = UpdateBodyMapRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -98,6 +110,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
                 intake_form_id=intake_form_id,
                 body_map_schema_version=body.body_map_schema_version,
                 body_map_data=body_map_data,
+                allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
             )
         except ObjectDoesNotExist:
             return json_error("other.api.intake_form_not_found", status=404)
@@ -123,14 +136,15 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
         body = UpdateConsentsRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
         intake_form = save_intake_consents(
             intake_form_id=intake_form_id,
             consents_payload=[c.model_dump() for c in body.consents],
+            allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
@@ -173,14 +187,15 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
         body = SignatureUploadRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
         intake_form = save_intake_signature(
             intake_form_id=intake_form_id,
             signature_base64=body.signature_base64,
+            allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
@@ -212,8 +227,8 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
         body = UpdateAnamnesisPayloadRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -222,6 +237,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
             intake_form_id=intake_form_id,
             anamnesis_schema_version=body.anamnesis_schema_version,
             answers_payload=[answer.model_dump() for answer in body.answers],
+            allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
@@ -251,8 +267,8 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         body = SubmitIntakeFormRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -260,6 +276,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         intake_form = submit_patient_intake_form(
             intake_form_id=intake_form_id,
             submitted_by_user_id=request.user.id,
+            allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
@@ -306,7 +323,14 @@ def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
-    qs = IntakeOutboxEvent.objects.order_by("-created_at")
+    qs = IntakeOutboxEvent.objects.select_related(
+        "intake_document_version__intake_form__queue_entry__daily_queue"
+    ).order_by("-created_at")
+    scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
+    if scoped_clinic_site_ids is not None:
+        qs = qs.filter(
+            intake_document_version__intake_form__queue_entry__daily_queue__clinic_site_id__in=scoped_clinic_site_ids
+        )
     if body.status:
         qs = qs.filter(status=body.status)
     if body.event_type:
@@ -342,14 +366,22 @@ def intake_outbox_event_retry_view(request: HttpRequest, intake_outbox_event_id:
         body = RetryIntakeOutboxEventRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     try:
-        event = IntakeOutboxEvent.objects.get(id=intake_outbox_event_id)
+        event = IntakeOutboxEvent.objects.select_related(
+            "intake_document_version__intake_form__queue_entry__daily_queue"
+        ).get(id=intake_outbox_event_id)
     except ObjectDoesNotExist:
+        return json_error("other.api.intake_outbox_event_not_found", status=404)
+    scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
+    if (
+        scoped_clinic_site_ids is not None
+        and event.intake_document_version.intake_form.queue_entry.daily_queue.clinic_site_id not in scoped_clinic_site_ids
+    ):
         return json_error("other.api.intake_outbox_event_not_found", status=404)
 
     try:
@@ -384,8 +416,8 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
         body = ProcessIntakeOutboxRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

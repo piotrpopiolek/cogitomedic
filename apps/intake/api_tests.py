@@ -15,6 +15,9 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.operations.models import AuditEvent
 from apps.intake.models import (
     IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxEventType,
+    IntakeOutboxStatus,
     IntakePdfStatus,
     PatientIntakeForm,
 )
@@ -306,3 +309,135 @@ class IntakeOutboxOperationsApiTests(TestCase):
         self.assertIsNotNone(ev)
         self.assertEqual(ev.metadata.get("limit"), 3)
         self.assertIn("client_ip", ev.metadata)
+
+
+class IntakeFormsClinicScopeApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="intake-form-reception",
+            email="intake.form.reception@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.admin_user = StaffUser.objects.create_user(
+            username="intake-form-admin",
+            email="intake.form.admin@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin_user, "Admin")
+        self.clinic_a = ClinicSite.objects.create(code="IFA", name="Intake Form A")
+        self.clinic_b = ClinicSite.objects.create(code="IFB", name="Intake Form B")
+        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="IFA-1", name="A1")
+        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="IFB-1", name="B1")
+        self.reception_user.clinic_sites.add(self.clinic_a)
+
+        self.form_a = _make_intake_document_version(
+            clinic_site=self.clinic_a,
+            consulting_room=self.room_a,
+            created_by_user=self.reception_user,
+        )[0].intake_form
+        self.form_b = _make_intake_document_version(
+            clinic_site=self.clinic_b,
+            consulting_room=self.room_b,
+            created_by_user=self.admin_user,
+        )[0].intake_form
+
+    def test_reception_cannot_get_intake_form_outside_assigned_clinic(self) -> None:
+        self.client.login(username="intake-form-reception", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-forms/{self.form_b.id}")
+        self.assertEqual(response.status_code, 404)
+
+    def test_reception_cannot_patch_intake_form_outside_assigned_clinic(self) -> None:
+        self.client.login(username="intake-form-reception", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{self.form_b.id}",
+            data=json.dumps({"body_map_schema_version": 1, "body_map_data": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_admin_can_get_intake_form_in_any_clinic(self) -> None:
+        self.client.login(username="intake-form-admin", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-forms/{self.form_b.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["intake_form_id"], str(self.form_b.id))
+
+
+class IntakeOutboxClinicScopeApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="intake-outbox-scope-reception",
+            email="intake.outbox.scope.reception@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.admin_user = StaffUser.objects.create_user(
+            username="intake-outbox-scope-admin",
+            email="intake.outbox.scope.admin@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin_user, "Admin")
+        self.clinic_a = ClinicSite.objects.create(code="IOA", name="Intake Outbox A")
+        self.clinic_b = ClinicSite.objects.create(code="IOB", name="Intake Outbox B")
+        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="IOA-1", name="A1")
+        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="IOB-1", name="B1")
+        self.reception_user.clinic_sites.add(self.clinic_a)
+
+        self.version_a, _, _ = _make_intake_document_version(
+            clinic_site=self.clinic_a,
+            consulting_room=self.room_a,
+            created_by_user=self.reception_user,
+        )
+        self.version_b, _, _ = _make_intake_document_version(
+            clinic_site=self.clinic_b,
+            consulting_room=self.room_b,
+            created_by_user=self.admin_user,
+        )
+        self.event_a = IntakeOutboxEvent.objects.create(
+            intake_document_version=self.version_a,
+            aggregate_id=self.version_a.id,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+            status=IntakeOutboxStatus.FAILED,
+            payload={"x": "a"},
+            error_message="A failed",
+        )
+        self.event_b = IntakeOutboxEvent.objects.create(
+            intake_document_version=self.version_b,
+            aggregate_id=self.version_b.id,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+            status=IntakeOutboxStatus.FAILED,
+            payload={"x": "b"},
+            error_message="B failed",
+        )
+
+    def test_reception_outbox_list_contains_only_scoped_intake_events(self) -> None:
+        self.client.login(username="intake-outbox-scope-reception", password="safe-password")
+        response = self.client.get("/api/v1/intake-outbox-events?status=FAILED&limit=20")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["id"], str(self.event_a.id))
+
+    def test_reception_cannot_retry_intake_outbox_event_outside_scope(self) -> None:
+        self.client.login(username="intake-outbox-scope-reception", password="safe-password")
+        response = self.client.post(
+            f"/api/v1/intake-outbox-events/{self.event_b.id}/retry",
+            data=json.dumps({"reason": "retry test"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_admin_can_retry_intake_outbox_event_in_any_clinic(self) -> None:
+        self.client.login(username="intake-outbox-scope-admin", password="safe-password")
+        response = self.client.post(
+            f"/api/v1/intake-outbox-events/{self.event_b.id}/retry",
+            data=json.dumps({"reason": "retry test"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)

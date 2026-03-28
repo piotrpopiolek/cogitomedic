@@ -36,7 +36,48 @@ Pozostałe pliki `.py` w `apps/*` i `cogitomedica/*` są **uwzględnione w przeg
 
 ---
 
-## Ustalenia wymagające działania (tylko istotne)
+## Priorytety zgłoszeń do realizacji (od najważniejszych do najmniej ważnych)
+
+Kolejność poniżej jest globalna (cały dokument: #1-#18 oraz T1-T6) i uwzględnia wpływ na bezpieczeństwo danych medycznych, izolację wieloplacówkową, zgodność z PRD oraz reguły `.cursor/rules/backend-django-cogitomedica.mdc`.
+
+1. **[#1] Brak scope'u `clinic_site` przy dostępie do intake (API + tablet HTML)** - ryzyko IDOR i naruszenia izolacji danych między placówkami.
+2. **[#18] API listy/retry outboxu bez scope placówki (medyczny + intake)** - możliwy odczyt i retry zdarzeń innych placówek (IDOR).
+3. **[#15] Twardy UUID placówki przy auto-rejestracji tabletu** - błędne przypisanie urządzeń i naruszenie separacji tenantów.
+4. **[#17] Tablet home bez urządzenia pokazuje kolejki wszystkich placówek** - wyciek metadanych operacyjnych cross-clinic.
+5. **[#12] Lista urządzeń tabletów bez scope placówki** - recepcja widzi urządzenia spoza własnego zakresu.
+6. **[#2] Wyłączone walidatory haseł Django** - osłabienie bezpieczeństwa kont personelu.
+7. **[#5] Brak limitu rozmiaru body w `read_json_body`** - ryzyko DoS przez duże payloady JSON.
+8. **[#4] Ciężkie przetwarzanie outbox synchronicznie w HTTP** - naruszenie architektury async i ryzyko timeoutów.
+9. **[#16] Retry dokumentu: niespójne uprawnienia RECEPTION (API vs serwis)** - błąd logiki dostępu i operacyjności.
+10. **[#11] Dashboard recepcji pokazuje globalne błędy outbox** - nadmiarowa ekspozycja metadanych między placówkami.
+11. **[T2] `signature.data_url` w PDF intake bez twardej walidacji schematu/rozmiaru** - potencjalny wektor nieprzewidywalnego renderowania.
+12. **[#7] Tworzenie/aktualizacja staff bez gwarancji przypisania grupy** - możliwe "puste" konta bez roli.
+13. **[#3] `PATIENT_RESULTS_OTP_PEPPER` bywa pusty poza twardym prod** - niższy priorytet, bo w `DEBUG=False` jest już wymuszany.
+14. **[T5] `logged_out_admin.html` rozszerza nieistniejący `base.html`** - możliwy runtime `TemplateDoesNotExist`.
+15. **[T3] Brak `static/tablet/css/form.css` używanego w szablonie** - 404 CSS i degradacja UX formularza.
+16. **[#8] `passenger_wsgi.py` inicjalizuje Django per request** - koszt wydajnościowy (wysoki tylko przy użyciu Passenger).
+17. **[#9] Brak `setup_telemetry()` w `asgi.py`** - ryzyko utraty instrumentacji przy wdrożeniu ASGI.
+18. **[T6] Potencjalne N+1 w `master_detail.html` (`queue.entries.all`)** - degradacja wydajności widoków.
+19. **[T1] Zewnętrzne CSS/JS bez SRI** - ryzyko supply-chain, ograniczone przez kontekst wdrożenia.
+20. **[T4] Zewnętrzne URL w `account_links`/`site_url` bez whitelisty** - potencjalny phishing przy złej konfiguracji.
+21. **[#10] OpenAPI pokazuje metrics jako publiczne** - głównie niespójność dokumentacji z implementacją.
+22. **[#13] Kontrakt API roli `TABLET` niespójny z serwisem** - dług kontraktu i ryzyko niejasności integracyjnych.
+23. **[#14] Model Pydantic osadzony w `users/api_views.py`** - problem stylu/utrzymania.
+24. **[#6] Hardcoded dev origins (`CSRF_TRUSTED_ORIGINS`, tunel)** - niska pilność, głównie higiena konfiguracji.
+
+### Status realizacji (2026-03-28)
+
+Poniższe zgłoszenia zostały zaadresowane kodem i testami regresyjnymi uruchomionymi w Dockerze:
+
+- [x] **#1** Brak scope'u `clinic_site` przy dostępie do intake (API + tablet HTML)
+- [x] **#18** API listy/retry outboxu bez scope placówki (medyczny + intake)
+- [x] **#15** Twardy UUID placówki przy auto-rejestracji tabletu
+- [x] **#17** Tablet home bez urządzenia pokazuje kolejki wszystkich placówek
+- [x] **#12** Lista urządzeń tabletów bez scope placówki
+- [x] **#5** Brak limitu rozmiaru body w `read_json_body`
+- [x] **T2** `signature.data_url` w PDF intake bez twardej walidacji schematu/rozmiaru
+
+### Szczegóły (ustalenia #1-#6 z pierwszej części raportu)
 
 ### 1. [Bezpieczeństwo — wysokie] Brak scope’u placówki (`clinic_site`) przy dostępie do intake (API + tablet HTML)
 

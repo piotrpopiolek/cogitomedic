@@ -56,15 +56,16 @@ class OutboxApiTests(TestCase):
         self.admin_user.preferred_locale = "en-GB"
         self.admin_user.save(update_fields=["preferred_locale"])
         self.client.login(username="api-admin-outbox", password="safe-password")
-        clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="O1", name="O1")
+        self.clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
+        room = ConsultingRoom.objects.create(clinic_site=self.clinic, code="O1", name="O1")
         queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
-            clinic_site=clinic,
+            clinic_site=self.clinic,
             consulting_room=room,
             status=QueueStatus.OPEN,
             created_by_user=self.reception_user,
         )
+        self.reception_user.clinic_sites.add(self.clinic)
         patient = Patient.objects.create(
             first_name="Outbox",
             last_name="Api",
@@ -216,3 +217,165 @@ class OutboxApiTests(TestCase):
         self.published_version.refresh_from_db()
         self.assertIsNotNone(self.published_version.local_pdf_deleted_at)
         self.assertIsNone(self.published_version.pdf_local_path)
+
+    def test_reception_outbox_list_contains_only_events_from_assigned_clinics(self) -> None:
+        other_clinic = ClinicSite.objects.create(code="API-OUT-2", name="API Outbox 2")
+        other_room = ConsultingRoom.objects.create(clinic_site=other_clinic, code="O2", name="O2")
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin_user,
+        )
+        other_patient = Patient.objects.create(
+            first_name="Outbox2",
+            last_name="Api",
+            date_of_birth=date(1991, 1, 1),
+            phone="+48999111333",
+            email="outbox2.api@example.com",
+            doctolib_patient_id="DOC-OUT-2",
+        )
+        other_entry = QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.admin_user,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.admin_user,
+        )
+        other_entry.active_session = other_session
+        other_entry.save(update_fields=["active_session", "updated_at"])
+        other_intake_form = PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_file_path="/tmp/signature2.png",
+            signature_sha256="b" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"schema_version": 1, "answers": []},
+        )
+        other_document = create_or_get_medical_document(
+            queue_entry_id=other_entry.id,
+            intake_form_id=other_intake_form.id,
+            created_by_user_id=self.doctor_user.id,
+        )
+        save_draft_document_version(
+            medical_document_id=other_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload_schema_version=1,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "lesions": [],
+                "recommendations": ["FOLLOWUP_6_MONTHS"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        other_published_version = publish_document_version(
+            medical_document_id=other_document.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+
+        self.client.logout()
+        self.client.login(username="api-reception-outbox", password="safe-password")
+        response = self.client.get("/api/v1/outbox-events?status=PENDING&limit=20")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        returned_version_ids = {item["medical_document_version_id"] for item in payload["results"]}
+        self.assertIn(str(self.published_version.id), returned_version_ids)
+        self.assertNotIn(str(other_published_version.id), returned_version_ids)
+
+    def test_reception_cannot_retry_outbox_event_outside_assigned_clinics(self) -> None:
+        other_clinic = ClinicSite.objects.create(code="API-OUT-3", name="API Outbox 3")
+        other_room = ConsultingRoom.objects.create(clinic_site=other_clinic, code="O3", name="O3")
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin_user,
+        )
+        other_patient = Patient.objects.create(
+            first_name="Outbox3",
+            last_name="Api",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48999111444",
+            email="outbox3.api@example.com",
+            doctolib_patient_id="DOC-OUT-3",
+        )
+        other_entry = QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.admin_user,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.admin_user,
+        )
+        other_entry.active_session = other_session
+        other_entry.save(update_fields=["active_session", "updated_at"])
+        other_intake_form = PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_file_path="/tmp/signature3.png",
+            signature_sha256="c" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"schema_version": 1, "answers": []},
+        )
+        other_document = create_or_get_medical_document(
+            queue_entry_id=other_entry.id,
+            intake_form_id=other_intake_form.id,
+            created_by_user_id=self.doctor_user.id,
+        )
+        save_draft_document_version(
+            medical_document_id=other_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload_schema_version=1,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "lesions": [],
+                "recommendations": ["FOLLOWUP_6_MONTHS"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        other_published_version = publish_document_version(
+            medical_document_id=other_document.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+        other_event = OutboxEvent.objects.get(
+            medical_document_version=other_published_version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+
+        self.client.logout()
+        self.client.login(username="api-reception-outbox", password="safe-password")
+        response = self.client.post(
+            f"/api/v1/outbox-events/{other_event.id}/retry",
+            data=json.dumps({"reason": "manual retry"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)

@@ -84,8 +84,8 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
         body = AuthLoginRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -192,8 +192,8 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
             body = CreateStaffUserRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -244,8 +244,8 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
         body = UpdateStaffUserRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -305,8 +305,8 @@ def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> J
             body = UpdateStaffUserClinicSitesRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

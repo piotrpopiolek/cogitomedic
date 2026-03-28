@@ -118,8 +118,8 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             body = CreateDailyQueueRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         scope_ids = get_scoped_clinic_site_ids(request.user)
@@ -172,8 +172,8 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
         body = UpdateDailyQueueRequest.model_validate(raw)
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -231,8 +231,8 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
         body = CreateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:
@@ -286,8 +286,8 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         body = UpdateQueueEntryRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     if body.entry_status is None and body.notes is None:
@@ -321,8 +321,8 @@ def queue_entry_sessions_view(request: HttpRequest, queue_entry_id: UUID) -> Jso
         body = CreateQueueEntrySessionRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     tablet_device_id = body.tablet_device_id

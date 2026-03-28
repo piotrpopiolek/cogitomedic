@@ -24,4 +24,19 @@ class IdempotencyConflictError(DomainError):
 
 
 class InvalidRequestBodyEncoding(Exception):
-    """Raised when request body cannot be decoded as UTF-8."""
+    """Raised when the request body is too large or cannot be decoded as UTF-8."""
+
+    __slots__ = ("api_message_key", "api_message_params", "http_status")
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        api_message_key: str | None = None,
+        api_message_params: dict[str, object] | None = None,
+        http_status: int = 400,
+    ) -> None:
+        super().__init__(message)
+        self.api_message_key = api_message_key
+        self.api_message_params = api_message_params
+        self.http_status = http_status
