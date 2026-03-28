@@ -33,7 +33,7 @@
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
 - **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive API archiving (OAuth2 refresh token; mock switchable), SMS (logistic-only: „Nowa dokumentacja w Cogito“) via SMSApi, 30-day retention policy for local PDFs
-- **Patient results portal (planned):** 4-step process: SMS logistic → portal (wyniki.cogitomedica.pl) login by phone+DOB → OTP 15 min → PDF download via HTTPS (RODO/BÄK compliant; doctor can revoke publication)
+- **Patient results portal:** 4-step process implemented in `apps/patient_results`: SMS logistic → portal login by phone+DOB → OTP (15 min) → PDF download via HTTPS (RODO/BÄK compliant; doctor can revoke publication)
 
 The user interface and translation layer support **German**, **English**, and **Polish**.
 
@@ -295,8 +295,8 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 - Doctor module: medical section, draft/publish, edit and resend
 - PDF generation (consents, body map, signature)
 - HiDrive mock (Phases 1–2) and HiDrive API integration (Phase 3)
-- Daily import of patient/visit lists from files exported from Doctolib (no direct Doctolib API integration)
-- SMS notifications (link to download document)
+- Daily patient/visit list import from **XLSX** (admin upload + background batch via Django Tasks); optional `doctolib_patient_id` field when present in data (no external queue-system API)
+- SMS notifications (logistic text only; patient retrieves PDF via the results portal, not via SMS link)
 - Audit trail (operations): event log with immutable entity refs in `metadata._ref` for compliance after anonymization; filters by patient, document, clinic site, actor, outbox event, and time range
 - Logging (e.g. OpenTelemetry as per PRD)
 - Operational dashboards: simplified reception/doctor view in Django + advanced maintenance view in Grafana OSS
@@ -306,7 +306,7 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 
 - Patients filling the full medical questionnaire
 - Complex business reporting (BI)
-- Direct API integration with Doctolib
+- Direct API integration with external queueing/EMR systems (import uses **XLSX**, not vendor PDF exports)
 - Integrations other than HiDrive and SMSApi
 
 ---
@@ -319,9 +319,9 @@ The product is developed in **three phases**:
 |-------|--------|
 | **1** | Tablets, digital consents, body schema, patient e-signature; waiting room managed manually or via daily file import |
 | **2** | Doctor panel for medical data and document approval; automated archive upload and SMS |
-| **3** | Improved daily import process for files exported from Doctolib + HiDrive API (archiving) |
+| **3** | Scheduled daily import (when implemented) + **XLSX** import path + HiDrive API (archiving) |
 
-Current implementation includes Django backend, PostgreSQL, PDF generation, HiDrive API integration (with optional mock mode), SMS (SMSApi), Sentry, and Django 6 Tasks as the single background-processing solution. Further features (e.g. daily file import from Doctolib exports, full tablet UI) are defined in the product and implementation plans.
+Current implementation includes Django backend, PostgreSQL, PDF generation, HiDrive API integration (with optional mock mode), SMS (SMSApi), **XLSX import** (`run_patient_xlsx_import`), patient results portal, observability stack (Prometheus/Grafana/Alertmanager/Tempo) documented in `docs/observability-setup.md`, Sentry, and Django 6 Tasks as the single background-processing solution. **Not yet implemented:** automatic daily scheduler hook (`run_daily_import` is still a placeholder in `apps/reception/tasks.py`).
 
 ---
 
