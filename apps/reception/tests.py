@@ -31,6 +31,7 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
+    get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
 )
 from apps.reception.xlsx_import import _cleanup_clinic_name, _parse_date, _split_full_name, _title_case_name
@@ -390,6 +391,49 @@ class TabletWebLoginLastSeenTests(TestCase):
         self.assertEqual(response.status_code, 302)
         device.refresh_from_db()
         self.assertIsNotNone(device.last_seen_at)
+
+
+class TabletDeviceAutoRegistrationTests(TestCase):
+    def test_auto_registered_tablet_device_has_no_default_clinic_site(self) -> None:
+        device, created = get_or_create_tablet_device_by_android_id(android_id="auto-reg-no-clinic")
+        self.assertTrue(created)
+        self.assertIsNone(device.clinic_site_id)
+
+
+class TabletHomeClinicScopeTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.tablet_user = StaffUser.objects.create_user(
+            username="tablet-home-scope",
+            email="tablet-home-scope@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.tablet_user, "Tablet")
+        self.clinic_a = ClinicSite.objects.create(code="TH-A", name="Tablet Home A")
+        self.clinic_b = ClinicSite.objects.create(code="TH-B", name="Tablet Home B")
+        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="THA-1", name="A1")
+        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="THB-1", name="B1")
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic_a,
+            consulting_room=self.room_a,
+            created_by_user=self.tablet_user,
+        )
+        DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic_b,
+            consulting_room=self.room_b,
+            created_by_user=self.tablet_user,
+        )
+        self.tablet_user.clinic_sites.add(self.clinic_a)
+
+    def test_tablet_home_without_device_session_is_scoped_to_assigned_clinics(self) -> None:
+        self.client.force_login(self.tablet_user)
+        response = self.client.get("/tablet/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tablet Home A")
+        self.assertNotContains(response, "Tablet Home B")
 
 
 class PurgeSeedClinicDataTests(TestCase):

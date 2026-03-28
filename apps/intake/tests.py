@@ -22,9 +22,12 @@ from apps.intake.models import (
 )
 from apps.intake.outbox_services import process_intake_outbox_events
 from apps.intake.services import (
+    InvalidSignatureError,
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
     IntakeSessionValidationError,
+    SIGNATURE_MAX_SIZE,
+    _read_signature_data_url,
     _effective_consent_filter,
     _effective_question_filter,
     submit_patient_intake_form,
@@ -88,7 +91,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
         signature_dir.mkdir(parents=True, exist_ok=True)
         signature_path = signature_dir / f"{self.queue_entry.id}.png"
-        signature_bytes = b"fake-png-signature"
+        signature_bytes = b"\x89PNG\r\n\x1a\n" + b"valid-test-signature"
         signature_path.write_bytes(signature_bytes)
 
         self.intake_form = PatientIntakeForm.objects.create(
@@ -247,3 +250,28 @@ class SubmitPatientIntakeFormTests(TestCase):
         submit_patient_intake_form(intake_form_id=self.intake_form.id)
         submit_patient_intake_form(intake_form_id=self.intake_form.id)
         self.assertEqual(IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(), 1)
+
+    def test_read_signature_data_url_rejects_file_extension_content_mismatch(self) -> None:
+        signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
+        signature_dir.mkdir(parents=True, exist_ok=True)
+        bad_signature_path = signature_dir / f"{self.queue_entry.id}-bad.jpg"
+        png_bytes = b"\x89PNG\r\n\x1a\n" + b"fakepng"
+        bad_signature_path.write_bytes(png_bytes)
+        self.intake_form.signature_file_path = str(bad_signature_path)
+        self.intake_form.signature_sha256 = hashlib.sha256(png_bytes).hexdigest()
+        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256", "updated_at"])
+
+        with self.assertRaises(InvalidSignatureError):
+            _read_signature_data_url(self.intake_form)
+
+    def test_read_signature_data_url_rejects_oversized_signature_file(self) -> None:
+        signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
+        signature_dir.mkdir(parents=True, exist_ok=True)
+        huge_signature_path = signature_dir / f"{self.queue_entry.id}-huge.png"
+        huge_signature_path.write_bytes(b"\x89PNG\r\n\x1a\n" + (b"a" * (SIGNATURE_MAX_SIZE + 1)))
+        self.intake_form.signature_file_path = str(huge_signature_path)
+        self.intake_form.signature_sha256 = hashlib.sha256(huge_signature_path.read_bytes()).hexdigest()
+        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256", "updated_at"])
+
+        with self.assertRaises(InvalidSignatureError):
+            _read_signature_data_url(self.intake_form)

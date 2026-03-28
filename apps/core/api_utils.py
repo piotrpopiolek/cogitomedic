@@ -9,6 +9,7 @@ from django.http import HttpRequest
 from django.http import JsonResponse
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.translation_service import (
     get_current_request,
@@ -20,6 +21,7 @@ from apps.core.translation_service import (
 # Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
+MAX_JSON_BODY_BYTES = 1024 * 1024
 
 def assign_group_to_test_user(user, group_name: str) -> None:
     """Helper for testing to replace `user = StaffUser.objects.create(..., role=StaffRole.XXX)`."""
@@ -39,23 +41,45 @@ def json_error(message: str, *, status: int) -> JsonResponse:
     return JsonResponse({"error": message}, status=status)
 
 
-def json_domain_error(exc: BaseException, *, status: int) -> JsonResponse:
-    """Like ``json_error`` but honors ``DomainError.api_message_key`` and ``api_message_params``."""
-    if isinstance(exc, DomainError) and exc.api_message_key:
+def json_domain_error(exc: BaseException, *, status: int | None = None) -> JsonResponse:
+    """Resolve error text from DB when ``api_message_key`` is set (``DomainError``, ``InvalidRequestBodyEncoding``)."""
+    key: str | None = None
+    params: dict[str, object] = {}
+    effective_status: int
+    if isinstance(exc, InvalidRequestBodyEncoding) and exc.api_message_key:
+        key = exc.api_message_key
         params = exc.api_message_params or {}
-        default = OTHER_I18N_KEY_DEFAULT_EN.get(exc.api_message_key, str(exc))
-        request = get_current_request()
-        message = resolve_other_message(request, exc.api_message_key, default, **params)
-        return JsonResponse({"error": message}, status=status)
-    return json_error(str(exc), status=status)
+        effective_status = exc.http_status
+    elif isinstance(exc, DomainError) and exc.api_message_key:
+        key = exc.api_message_key
+        params = exc.api_message_params or {}
+        effective_status = 400 if status is None else status
+    else:
+        effective_status = 400 if status is None else status
+        return json_error(str(exc), status=effective_status)
+
+    default = OTHER_I18N_KEY_DEFAULT_EN.get(key, str(exc))
+    request = get_current_request()
+    message = resolve_other_message(request, key, default, **params)
+    return JsonResponse({"error": message}, status=effective_status)
 
 
 def read_json_body(request: HttpRequest) -> dict:
     """Decode JSON body for API views. Raises JSONDecodeError or InvalidRequestBodyEncoding on invalid input."""
+    if len(request.body) > MAX_JSON_BODY_BYTES:
+        raise InvalidRequestBodyEncoding(
+            domain_message("other.api.request_body_too_large", max_bytes=MAX_JSON_BODY_BYTES),
+            api_message_key="other.api.request_body_too_large",
+            api_message_params={"max_bytes": MAX_JSON_BODY_BYTES},
+            http_status=413,
+        )
     try:
         raw = request.body.decode("utf-8")
     except UnicodeDecodeError:
-        raise InvalidRequestBodyEncoding("Request body is not valid UTF-8.")
+        raise InvalidRequestBodyEncoding(
+            domain_message("other.api.invalid_request_encoding"),
+            api_message_key="other.api.invalid_request_encoding",
+        )
     return json.loads(raw or "{}")
 
 

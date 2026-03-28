@@ -97,8 +97,8 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
             body = CreateClinicSiteRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -148,8 +148,8 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
         body = UpdateClinicSiteRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     fields_set = body.model_fields_set
@@ -213,8 +213,8 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
             body = CreateConsultingRoomRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
         try:
@@ -262,8 +262,8 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
         body = UpdateConsultingRoomRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
     try:

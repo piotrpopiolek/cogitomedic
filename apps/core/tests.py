@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from io import StringIO
 
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
+from apps.core.api_utils import MAX_JSON_BODY_BYTES, read_json_body
+from apps.core.exceptions import InvalidRequestBodyEncoding
 from apps.core.models import (
     TranslationCacheVersion,
     TranslationCategory,
@@ -213,3 +216,18 @@ class TranslationCompletenessCommandTests(TestCase):
         out = StringIO()
         call_command("check_translations_completeness", stdout=out)
         self.assertIn("passed", out.getvalue().lower())
+
+
+class ReadJsonBodyTests(TestCase):
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+    def test_read_json_body_rejects_payload_larger_than_limit(self) -> None:
+        too_large_payload = {"payload": "a" * (MAX_JSON_BODY_BYTES + 1)}
+        request = self.factory.post(
+            "/api/v1/intake-forms/00000000-0000-0000-0000-000000000000",
+            data=json.dumps(too_large_payload),
+            content_type="application/json",
+        )
+        with self.assertRaises(InvalidRequestBodyEncoding):
+            read_json_body(request)
