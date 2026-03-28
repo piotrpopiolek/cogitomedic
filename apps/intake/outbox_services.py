@@ -18,6 +18,7 @@ from apps.intake.models import (
     IntakePdfStatus,
 )
 from apps.intake.pdf_builder import generate_intake_pdf
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.operations.services import create_audit_event
@@ -251,7 +252,10 @@ def retry_intake_outbox_event(
         .get(id=event.id)
     )
     if event.status not in [IntakeOutboxStatus.FAILED, IntakeOutboxStatus.DEAD_LETTER]:
-        raise IntakeOutboxEventNotRetryableError("Event is not retryable in current status.")
+        raise IntakeOutboxEventNotRetryableError(
+            domain_message("other.domain.outbox_event_not_retryable"),
+            api_message_key="other.domain.outbox_event_not_retryable",
+        )
 
     event.status = IntakeOutboxStatus.PENDING
     event.available_at = timezone.now()

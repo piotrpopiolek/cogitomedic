@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
@@ -241,6 +242,34 @@ class DailyQueue(models.Model):
                 name="daily_queue_unique_slot",
             )
         ]
+
+    def clean(self) -> None:
+        super().clean()
+        if not self.clinic_site_id or not self.consulting_room_id:
+            return
+        room_site_id = (
+            ConsultingRoom.objects.filter(pk=self.consulting_room_id)
+            .values_list("clinic_site_id", flat=True)
+            .first()
+        )
+        if room_site_id is None:
+            raise ValidationError(
+                {
+                    "consulting_room": db_gettext_lazy(
+                        "administration.error_daily_queue_consulting_room_not_found",
+                        "The selected consulting room does not exist.",
+                    )
+                }
+            )
+        if room_site_id != self.clinic_site_id:
+            raise ValidationError(
+                {
+                    "consulting_room": db_gettext_lazy(
+                        "administration.error_daily_queue_consulting_room_site_mismatch",
+                        "Consulting room must belong to the selected clinic site.",
+                    ),
+                }
+            )
 
     def __str__(self) -> str:
         room = str(self.consulting_room) if self.consulting_room_id else "?"

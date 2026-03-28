@@ -8,9 +8,14 @@ from django.contrib.auth.models import Group
 from django.http import HttpRequest
 from django.http import JsonResponse
 
-from apps.core.api_error_i18n import API_ERROR_KEY_DEFAULT_EN
+from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
-from apps.core.translation_service import get_current_request, get_translation_map, resolve_api_error_message
+from apps.core.translation_service import (
+    get_current_request,
+    get_translation_map,
+    resolve_other_message,
+    translation_category_for_message_key,
+)
 
 # Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
 DEFAULT_LIST_LIMIT = 20
@@ -22,21 +27,26 @@ def assign_group_to_test_user(user, group_name: str) -> None:
     user.groups.add(group)
 
 def json_error(message: str, *, status: int) -> JsonResponse:
-    """Build a normalized JSON error payload; ``other.api.*`` messages resolve from DB (category other)."""
-    if message.startswith("other.api."):
-        default = API_ERROR_KEY_DEFAULT_EN.get(message, message)
+    """Build a normalized JSON error payload; keyed ``other.*`` / ``doctor.*`` strings resolve from DB."""
+    if message.startswith(("other.api.", "other.domain.", "doctor.")):
+        default = OTHER_I18N_KEY_DEFAULT_EN.get(message, message)
         request = get_current_request()
         if request is not None:
-            message = resolve_api_error_message(request, message, default)
+            message = resolve_other_message(request, message, default)
         else:
-            message = get_translation_map("other", "en-GB").get(message, default)
+            cat = translation_category_for_message_key(message)
+            message = get_translation_map(cat, "en-GB").get(message, default)
     return JsonResponse({"error": message}, status=status)
 
 
 def json_domain_error(exc: BaseException, *, status: int) -> JsonResponse:
-    """Like ``json_error`` but honors ``DomainError.api_message_key`` when set."""
+    """Like ``json_error`` but honors ``DomainError.api_message_key`` and ``api_message_params``."""
     if isinstance(exc, DomainError) and exc.api_message_key:
-        return json_error(exc.api_message_key, status=status)
+        params = exc.api_message_params or {}
+        default = OTHER_I18N_KEY_DEFAULT_EN.get(exc.api_message_key, str(exc))
+        request = get_current_request()
+        message = resolve_other_message(request, exc.api_message_key, default, **params)
+        return JsonResponse({"error": message}, status=status)
     return json_error(str(exc), status=status)
 
 

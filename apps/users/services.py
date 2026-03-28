@@ -5,6 +5,7 @@ import uuid
 from django.contrib.auth.models import Group
 from django.db import transaction
 
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.users.models import StaffUser
 
@@ -25,8 +26,12 @@ def create_staff_user(
 ) -> StaffUser:
     VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
     if role not in VALID_ROLES:
-        raise DomainError(f"Invalid role: {role}.")
-    
+        raise DomainError(
+            domain_message("other.domain.invalid_staff_role", role=role),
+            api_message_key="other.domain.invalid_staff_role",
+            api_message_params={"role": role},
+        )
+
     user = StaffUser.objects.create_user(
         username=username,
         email=email,
@@ -76,7 +81,11 @@ def update_staff_user(
     if role is not None:
         VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
         if role not in VALID_ROLES:
-            raise DomainError(f"Invalid role: {role}.")
+            raise DomainError(
+                domain_message("other.domain.invalid_staff_role", role=role),
+                api_message_key="other.domain.invalid_staff_role",
+                api_message_params={"role": role},
+            )
         group_name = role.capitalize()
         group = Group.objects.filter(name=group_name).first()
         if group:
@@ -95,7 +104,10 @@ def update_staff_user(
         user.set_password(password)
         update_fields.append("password")
     if not update_fields and role is None:
-        raise DomainError("Provide at least one field to update.")
+        raise DomainError(
+            domain_message("other.api.provide_field_to_update"),
+            api_message_key="other.api.provide_field_to_update",
+        )
     if update_fields:
         user.save(update_fields=update_fields)
     return user

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import models
 from django.db.models import Q
 from django.contrib.postgres.indexes import GinIndex
@@ -274,9 +274,27 @@ class DoctorTextTemplate(models.Model):
             self.owner_user = None
             return
         if self.owner_user_id is None and self.clinic_site_id is None:
-            raise ValidationError("Private or clinic template requires owner_user or clinic_site.")
+            raise ValidationError(
+                {
+                    NON_FIELD_ERRORS: [
+                        db_gettext_lazy(
+                            "administration.error_doctor_template_requires_owner_or_site",
+                            "A non-global template must have either an owner user or a clinic site.",
+                        )
+                    ]
+                }
+            )
         if self.owner_user_id is not None and self.clinic_site_id is not None:
-            raise ValidationError("Template cannot have both owner_user and clinic_site.")
+            raise ValidationError(
+                {
+                    NON_FIELD_ERRORS: [
+                        db_gettext_lazy(
+                            "administration.error_doctor_template_owner_and_site_exclusive",
+                            "A template cannot have both an owner user and a clinic site.",
+                        )
+                    ]
+                }
+            )
 
     class Meta:
         db_table = "doctor_text_template"

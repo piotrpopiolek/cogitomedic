@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import uuid
+
 from django import forms
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -94,6 +96,32 @@ def _initial_created_by_user(request, form, change: bool) -> None:
         form.base_fields["created_by_user"].initial = request.user.pk
 
 
+def _admin_resolve_dailyqueue_clinic_site_id(request: HttpRequest, obj: DailyQueue | None) -> uuid.UUID | None:
+    """Prefer POSTed clinic_site (user may switch site on change); else persisted obj."""
+    if request.method == "POST":
+        raw = (request.POST.get("clinic_site") or "").strip()
+        if raw:
+            try:
+                return uuid.UUID(raw)
+            except (ValueError, TypeError):
+                return None
+    if obj is not None and getattr(obj, "clinic_site_id", None):
+        return obj.clinic_site_id
+    return None
+
+
+def _consulting_rooms_for_clinic_site_queryset(
+    clinic_site_id: uuid.UUID,
+    *,
+    current_room_id: uuid.UUID | None,
+) -> QuerySet[ConsultingRoom]:
+    qs = ConsultingRoom.objects.filter(clinic_site_id=clinic_site_id)
+    active = qs.filter(is_active=True)
+    if current_room_id and not active.filter(pk=current_room_id).exists():
+        return qs.filter(Q(is_active=True) | Q(pk=current_room_id)).order_by("code", "name")
+    return active.order_by("code", "name")
+
+
 @admin.register(ClinicSite)
 class ClinicSiteAdmin(UnfoldModelAdmin):
     list_display = (
@@ -160,7 +188,8 @@ class DailyQueueAdmin(UnfoldModelAdmin):
     ordering = ["-created_at"]
     search_fields = ("clinic_site__code", "consulting_room__code", "assigned_doctor__username")
     raw_id_fields = ("created_by_user",)
-    autocomplete_fields = ("clinic_site", "consulting_room", "assigned_doctor")
+    # consulting_room: nie autocomplete — queryset z formfield_for_foreignkey jest wtedy respektowany (placówka → gabinety).
+    autocomplete_fields = ("clinic_site", "assigned_doctor")
     date_hierarchy = "queue_date"
 
     def get_urls(self):
@@ -293,6 +322,13 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         super().save_model(request, obj, form, change)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "consulting_room":
+            clinic_site_id = _admin_resolve_dailyqueue_clinic_site_id(request, kwargs.get("obj"))
+            if clinic_site_id is not None:
+                kwargs["queryset"] = _consulting_rooms_for_clinic_site_queryset(
+                    clinic_site_id,
+                    current_room_id=getattr(kwargs.get("obj"), "consulting_room_id", None),
+                )
         formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
         if db_field.name == "assigned_doctor":
             formfield.queryset = StaffUser.objects.filter(groups__name="Doctor").distinct()

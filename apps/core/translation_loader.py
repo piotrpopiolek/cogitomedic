@@ -29,7 +29,20 @@ def _storage_language_code(TranslationValue: Any, lang: str) -> str:
 
 # Keys that need non-default TranslationKey fields (match historical migrations).
 _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
+    "other.domain.invalid_shift_code": ["value"],
+    "other.domain.invalid_queue_source": ["value"],
+    "other.domain.invalid_queue_status": ["value"],
+    "other.domain.invalid_queue_entry_status": ["value"],
+    "other.domain.unsupported_form_locale": ["locale"],
+    "other.domain.invalid_staff_role": ["role"],
+    "other.domain.consent_definition_not_active": ["consent_id", "date"],
+    "other.domain.signature_payload_too_large": ["max_bytes"],
     "other.sms.patient_results": ["url"],
+    "administration.error_lesion_favorites_preset_not_object": ["preset_no"],
+    "administration.error_lesion_favorites_preset_invalid": ["preset_no", "details"],
+    "administration.error_lesion_favorites_preset_bad_feature": ["preset_no", "code", "allowed"],
+    "administration.error_lesion_favorites_preset_bad_clinical": ["preset_no", "value", "allowed"],
+    "administration.error_lesion_favorites_preset_bad_malignancy": ["preset_no", "value", "allowed"],
 }
 
 _KEY_DESCRIPTIONS: dict[str, str] = {
@@ -62,6 +75,8 @@ def category_for_key(full_key: str) -> str:
 def description_for_key(full_key: str) -> str:
     if full_key in _KEY_DESCRIPTIONS:
         return _KEY_DESCRIPTIONS[full_key]
+    if full_key.startswith("other.domain."):
+        return "Domain/service validation message (REST)"
     if full_key.startswith("other.api."):
         return "REST API error message"
     if full_key.startswith("other.ergebnisse."):
@@ -79,6 +94,8 @@ def description_for_key(full_key: str) -> str:
         return "Waiting room staff UI"
     if full_key.startswith("administration.choice_"):
         return "Enum choice label (admin)"
+    if full_key.startswith("administration.error_"):
+        return "Admin validation or form error message"
     if full_key.startswith("administration.field_"):
         return "Model field label"
     if full_key.startswith("administration.login_") or full_key.startswith("administration.logout_"):

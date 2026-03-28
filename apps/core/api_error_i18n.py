@@ -1,6 +1,32 @@
-"""Canonical English fallbacks for ``other.api.*`` REST error keys (DB category: other)."""
+"""Canonical English fallbacks for API / domain message keys (DB categories: other, doctor, …)."""
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
+
+_DATA_DIR = Path(__file__).resolve().parent / "translation_data"
+
+
+def _en_map_from_translation_json(filename: str) -> dict[str, str]:
+    path = _DATA_DIR / filename
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {k: v["en"] for k, v in raw.items() if isinstance(v, dict) and "en" in v}
+
+
+_DOCTOR_PUBLISH_VALIDATION_KEYS = (
+    "doctor.msg_validation_examination_scope_required",
+    "doctor.msg_validation_final_assessment_required",
+    "doctor.msg_validation_fitzpatrick_required",
+    "doctor.msg_validation_overall_assessment_required",
+    "doctor.msg_validation_recommendations_required",
+)
+
+
+def _doctor_publish_validation_en() -> dict[str, str]:
+    doc = json.loads((_DATA_DIR / "doctor_ui.json").read_text(encoding="utf-8"))
+    return {k: doc[k]["en"] for k in _DOCTOR_PUBLISH_VALIDATION_KEYS}
+
 
 API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.actor_mismatch": "Actor mismatch.",
@@ -60,6 +86,8 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.pdf_file_not_found": "PDF file not found.",
     "other.api.pdf_not_generated": "PDF not yet generated or unavailable.",
     "other.api.phone_required": "phone is required.",
+    "other.api.publish_request_id_locale_conflict": "publish_request_id already used with different publish_locale.",
+    "other.api.publish_request_id_required": "publish_request_id is required for publish.",
     "other.api.provide_entry_status_or_notes": "Provide entry_status and/or notes.",
     "other.api.provide_field_to_update": "Provide at least one field to update.",
     "other.api.queue_entry_not_found": "Queue entry not found.",
@@ -78,4 +106,12 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.too_many_requests": "Too many requests. Try again later.",
     "other.api.unauthorized": "Unauthorized.",
     "other.api.username_or_email_exists": "Username or email already exists.",
+}
+
+OTHER_DOMAIN_KEY_DEFAULT_EN: dict[str, str] = _en_map_from_translation_json("other_domain.json")
+
+OTHER_I18N_KEY_DEFAULT_EN: dict[str, str] = {
+    **API_ERROR_KEY_DEFAULT_EN,
+    **OTHER_DOMAIN_KEY_DEFAULT_EN,
+    **_doctor_publish_validation_en(),
 }

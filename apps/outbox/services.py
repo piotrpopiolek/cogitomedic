@@ -10,6 +10,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
@@ -131,7 +132,10 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
 
         patient = version.medical_document.queue_entry.patient
         if not (patient.phone or "").strip():
-            raise DomainError("Patient has no phone number; cannot send SMS.")
+            raise DomainError(
+                domain_message("other.domain.patient_phone_required_sms"),
+                api_message_key="other.domain.patient_phone_required_sms",
+            )
         base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
         form_locale = None
         intake_form = version.medical_document.intake_form
@@ -269,7 +273,10 @@ def retry_outbox_event(
         .get(id=event.id)
     )
     if event.status not in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]:
-        raise OutboxEventNotRetryableError("Event is not retryable in current status.")
+        raise OutboxEventNotRetryableError(
+            domain_message("other.domain.outbox_event_not_retryable"),
+            api_message_key="other.domain.outbox_event_not_retryable",
+        )
 
     event.status = OutboxStatus.PENDING
     event.available_at = timezone.now()
@@ -303,7 +310,10 @@ def _try_delete_file(path_value: str | None) -> None:
 def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) -> RetentionCleanupResult:
     """Delete local PDFs for safe, old published versions."""
     if older_than_days <= 0:
-        raise DomainError("older_than_days must be positive.")
+        raise DomainError(
+            domain_message("other.domain.retention_days_positive"),
+            api_message_key="other.domain.retention_days_positive",
+        )
 
     threshold = timezone.now() - timedelta(days=older_than_days)
     candidates = list(

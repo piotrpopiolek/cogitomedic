@@ -14,6 +14,7 @@ from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import (
     AnamnesisOptionDefinition,
@@ -78,18 +79,30 @@ def _localized_text(*, value_de: str, value_en: str, value_pl: str, locale: str)
 
 def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
     if not intake_form.signature_file_path:
-        raise InvalidSignatureError("Signature path is missing.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.intake_signature_path_missing"),
+            api_message_key="other.domain.intake_signature_path_missing",
+        )
     file_path = Path(intake_form.signature_file_path)
     if not file_path.is_absolute():
         file_path = Path(settings.MEDIA_ROOT) / file_path
     if not file_path.exists() or not file_path.is_file():
-        raise InvalidSignatureError("Signature file does not exist.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.intake_signature_file_missing"),
+            api_message_key="other.domain.intake_signature_file_missing",
+        )
     raw = file_path.read_bytes()
     if not raw:
-        raise InvalidSignatureError("Signature file is empty.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.intake_signature_file_empty"),
+            api_message_key="other.domain.intake_signature_file_empty",
+        )
     checksum = hashlib.sha256(raw).hexdigest()
     if (intake_form.signature_sha256 or "") and intake_form.signature_sha256 != checksum:
-        raise InvalidSignatureError("Signature checksum mismatch.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.intake_signature_checksum_mismatch"),
+            api_message_key="other.domain.intake_signature_checksum_mismatch",
+        )
     encoded = base64.b64encode(raw).decode("ascii")
     suffix = file_path.suffix.lower()
     mime = "image/jpeg" if suffix in {".jpg", ".jpeg"} else "image/png"
@@ -495,7 +508,10 @@ def save_intake_body_map(
     """
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
-        raise StateTransitionError("Body map can be edited only for IN_PROGRESS intake form.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_body_map_in_progress_only"),
+            api_message_key="other.domain.intake_body_map_in_progress_only",
+        )
     raw = []
     for p in body_map_data:
         pt = {"x": float(p["x"]), "y": float(p["y"]), "side": str(p["side"])}
@@ -530,13 +546,20 @@ def save_intake_consents(
 
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
-        raise StateTransitionError("Consents can be edited only for IN_PROGRESS intake form.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_consents_in_progress_only"),
+            api_message_key="other.domain.intake_consents_in_progress_only",
+        )
 
     for item in consents_payload:
         cdef_id = item.get("consent_definition_id")
         if cdef_id not in effective_ids:
+            cid = str(cdef_id)
+            d = str(today)
             raise ConsentNotActiveError(
-                f"Consent definition {cdef_id} is not active for date {today}."
+                domain_message("other.domain.consent_definition_not_active", consent_id=cid, date=d),
+                api_message_key="other.domain.consent_definition_not_active",
+                api_message_params={"consent_id": cid, "date": d},
             )
         accepted = bool(item.get("accepted"))
         consent_code = consent_code_by_id.get(cdef_id)
@@ -552,10 +575,16 @@ def save_intake_consents(
             selected_option_codes.append(fallback_one)
         if consent_code == CONTACT_METHOD_CONSENT_CODE and accepted:
             if not selected_option_codes:
-                raise DomainError("At least one contact method is required (EMAIL, SMS, PHONE).")
+                raise DomainError(
+                    domain_message("other.domain.intake_contact_method_required"),
+                    api_message_key="other.domain.intake_contact_method_required",
+                )
             invalid = [x for x in selected_option_codes if x not in CONTACT_METHOD_ALLOWED_OPTIONS]
             if invalid:
-                raise DomainError("Selected contact methods are invalid. Allowed: EMAIL, SMS, PHONE.")
+                raise DomainError(
+                    domain_message("other.domain.intake_contact_method_invalid"),
+                    api_message_key="other.domain.intake_contact_method_invalid",
+                )
         else:
             selected_option_codes = []
         pic, _ = PatientIntakeConsent.objects.get_or_create(
@@ -595,7 +624,10 @@ def save_intake_signature(
     """
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
-        raise StateTransitionError("Signature can be set only for IN_PROGRESS intake form.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_signature_in_progress_only"),
+            api_message_key="other.domain.intake_signature_in_progress_only",
+        )
 
     # Strip data URL prefix if present
     data = signature_base64
@@ -603,22 +635,38 @@ def save_intake_signature(
         data = data.split(",", 1)[1]
         
     if len(data) > SIGNATURE_MAX_SIZE * 1.4:
-        raise InvalidSignatureError(f"Signature payload exceeds max size before decoding.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_payload_too_large_before_decode"),
+            api_message_key="other.domain.signature_payload_too_large_before_decode",
+        )
         
     try:
         raw = base64.b64decode(data, validate=True)
     except Exception:
-        raise InvalidSignatureError("Invalid base64 in signature payload.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_invalid_base64"),
+            api_message_key="other.domain.signature_invalid_base64",
+        )
     if len(raw) == 0:
-        raise InvalidSignatureError("Signature payload is empty.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_payload_empty"),
+            api_message_key="other.domain.signature_payload_empty",
+        )
     if len(raw) > SIGNATURE_MAX_SIZE:
-        raise InvalidSignatureError(f"Signature payload exceeds max size ({SIGNATURE_MAX_SIZE} bytes).")
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE),
+            api_message_key="other.domain.signature_payload_too_large",
+            api_message_params={"max_bytes": SIGNATURE_MAX_SIZE},
+        )
 
     # Dodana walidacja formatu za pomocą magic bytes
     is_png = raw.startswith(b"\x89PNG\r\n\x1a\n")
     is_jpeg = raw.startswith(b"\xff\xd8\xff")
     if not (is_png or is_jpeg):
-        raise InvalidSignatureError("Invalid image format. Only PNG and JPEG files are supported.")
+        raise InvalidSignatureError(
+            domain_message("other.domain.signature_image_format_invalid"),
+            api_message_key="other.domain.signature_image_format_invalid",
+        )
 
     sha256_hash = hashlib.sha256(raw).hexdigest()
     now = timezone.now()
@@ -666,16 +714,31 @@ def submit_patient_intake_form(
     if intake_form.form_status == IntakeStatus.SUBMITTED:
         return intake_form
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
-        raise StateTransitionError("Only IN_PROGRESS intake form can be submitted.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_submit_in_progress_only"),
+            api_message_key="other.domain.intake_submit_in_progress_only",
+        )
     if not intake_form.signature_file_path:
-        raise StateTransitionError("Signature is required before intake submission.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_submit_signature_required"),
+            api_message_key="other.domain.intake_submit_signature_required",
+        )
 
     if queue_entry.active_session_id != session.id:
-        raise IntakeSessionValidationError("Session is not active for this queue entry.")
+        raise IntakeSessionValidationError(
+            domain_message("other.domain.intake_session_not_active"),
+            api_message_key="other.domain.intake_session_not_active",
+        )
     if session.consumed_at is not None:
-        raise IntakeSessionValidationError("Session has already been consumed.")
+        raise IntakeSessionValidationError(
+            domain_message("other.domain.intake_session_consumed"),
+            api_message_key="other.domain.intake_session_consumed",
+        )
     if session.expires_at <= now:
-        raise IntakeSessionValidationError("Session has expired.")
+        raise IntakeSessionValidationError(
+            domain_message("other.domain.intake_session_expired"),
+            api_message_key="other.domain.intake_session_expired",
+        )
 
     today = now.date()
     required_consent_ids = set(
@@ -692,7 +755,10 @@ def submit_patient_intake_form(
     )
     missing_consent_ids = required_consent_ids - accepted_required_consent_ids
     if missing_consent_ids:
-        raise RequiredConsentMissingError("Required active consents are not accepted.")
+        raise RequiredConsentMissingError(
+            domain_message("other.domain.required_consents_not_accepted"),
+            api_message_key="other.domain.required_consents_not_accepted",
+        )
 
     required_question_codes = set(
         AnamnesisQuestionDefinition.objects.filter(
@@ -702,7 +768,10 @@ def submit_patient_intake_form(
     answered_question_codes = _extract_answered_question_codes(intake_form.anamnesis_payload)
     missing_question_codes = required_question_codes - answered_question_codes
     if missing_question_codes:
-        raise RequiredAnamnesisMissingError("Required active anamnesis questions are not answered.")
+        raise RequiredAnamnesisMissingError(
+            domain_message("other.domain.required_anamnesis_not_answered"),
+            api_message_key="other.domain.required_anamnesis_not_answered",
+        )
 
     # Optimistic lock style transition: only one concurrent submit wins.
     updated_rows = PatientIntakeForm.objects.filter(
@@ -717,7 +786,10 @@ def submit_patient_intake_form(
         refreshed = PatientIntakeForm.objects.get(id=intake_form.id)
         if refreshed.form_status == IntakeStatus.SUBMITTED:
             return refreshed
-        raise StateTransitionError("Only IN_PROGRESS intake form can be submitted.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_submit_in_progress_only"),
+            api_message_key="other.domain.intake_submit_in_progress_only",
+        )
 
     snapshot_payload = _build_intake_snapshot_payload(intake_form=intake_form, now=now)
     latest_version_no = (
@@ -789,7 +861,10 @@ def save_intake_anamnesis_payload(
     """Persist validated anamnesis payload for in-progress intake form."""
     intake_form = PatientIntakeForm.objects.select_for_update().get(id=intake_form_id)
     if intake_form.form_status != IntakeStatus.IN_PROGRESS:
-        raise StateTransitionError("Anamnesis can be edited only for IN_PROGRESS intake form.")
+        raise StateTransitionError(
+            domain_message("other.domain.intake_anamnesis_in_progress_only"),
+            api_message_key="other.domain.intake_anamnesis_in_progress_only",
+        )
 
     intake_form.anamnesis_schema_version = anamnesis_schema_version
     intake_form.anamnesis_payload = {
