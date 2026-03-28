@@ -10,6 +10,22 @@ from apps.core.exceptions import DomainError
 from apps.users.models import StaffUser
 
 
+def _get_required_role_group(*, role: str) -> Group:
+    group_name = role.capitalize()
+    group = Group.objects.filter(name=group_name).first()
+    if group is None:
+        raise DomainError(
+            domain_message(
+                "other.domain.staff_role_group_missing",
+                role=role,
+                group_name=group_name,
+            ),
+            api_message_key="other.domain.staff_role_group_missing",
+            api_message_params={"role": role, "group_name": group_name},
+        )
+    return group
+
+
 @transaction.atomic
 def create_staff_user(
     *,
@@ -43,10 +59,8 @@ def create_staff_user(
         is_staff=is_staff,
         is_active=is_active,
     )
-    group_name = role.capitalize()
-    group = Group.objects.filter(name=group_name).first()
-    if group:
-        user.groups.add(group)
+    group = _get_required_role_group(role=role)
+    user.groups.add(group)
     return user
 
 
@@ -86,11 +100,9 @@ def update_staff_user(
                 api_message_key="other.domain.invalid_staff_role",
                 api_message_params={"role": role},
             )
-        group_name = role.capitalize()
-        group = Group.objects.filter(name=group_name).first()
-        if group:
-            user.groups.clear()
-            user.groups.add(group)
+        group = _get_required_role_group(role=role)
+        user.groups.clear()
+        user.groups.add(group)
     if preferred_locale is not None:
         user.preferred_locale = preferred_locale
         update_fields.append("preferred_locale")

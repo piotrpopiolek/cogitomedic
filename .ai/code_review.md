@@ -76,6 +76,18 @@ Poniższe zgłoszenia zostały zaadresowane kodem i testami regresyjnymi uruchom
 - [x] **#12** Lista urządzeń tabletów bez scope placówki
 - [x] **#5** Brak limitu rozmiaru body w `read_json_body`
 - [x] **T2** `signature.data_url` w PDF intake bez twardej walidacji schematu/rozmiaru
+- [x] **#11** Dashboard recepcji pokazuje globalne błędy outbox
+- [x] **#7** Tworzenie/aktualizacja staff bez gwarancji przypisania grupy
+- [x] **#3** `PATIENT_RESULTS_OTP_PEPPER` wymuszony poza środowiskiem dev
+- [x] **T5** `logged_out_admin.html` nie rozszerza już nieistniejącego `base.html`
+- [x] **T3** `static/tablet/css/form.css` obecny i podłączony (potwierdzenie/utrzymanie)
+- [x] **#9** `setup_telemetry()` dodane do `asgi.py`
+- [x] **T1** Usunięte zewnętrzne CSS/JS bez SRI z krytycznych szablonów (portal/index)
+- [x] **T4** Zewnętrzne URL w `account_links`/`site_url` filtrowane przez whitelistę schematu
+- [x] **#10** OpenAPI nie oznacza już `/observability/metrics` jako publicznego
+- [x] **#13** Kontrakt API roli `TABLET` ujednolicony ze serwisem users
+- [x] **#14** `UpdateStaffUserClinicSitesRequest` przeniesiony do `users/api_schemas.py`
+- [x] **#6** Usunięte hardcoded dev origins z `settings.py` + wycofana mutacja CSRF w runtime
 
 ### Szczegóły (ustalenia #1-#6 z pierwszej części raportu)
 

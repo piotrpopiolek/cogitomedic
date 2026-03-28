@@ -78,3 +78,8 @@ class OpenAPISchemaIntegrationTests(TestCase):
 
     def test_get_request_body_schema_for_returns_none_for_unregistered(self) -> None:
         self.assertIsNone(get_request_body_schema_for("/api/v1/observability/health", "get"))
+
+    def test_metrics_endpoint_is_marked_as_authenticated_in_openapi(self) -> None:
+        schema = build_cogito_openapi_schema()
+        metrics = schema["paths"].get("/api/v1/observability/metrics", {}).get("get", {})
+        self.assertEqual(metrics.get("security"), [{"sessionCookie": []}])

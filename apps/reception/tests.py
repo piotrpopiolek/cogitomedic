@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
@@ -12,7 +12,9 @@ from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.intake.models import PatientIntakeForm
+from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.models import MedicalDocument, MedicalDocumentVersion
+from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.admin import DailyQueueAdmin, _admin_resolve_dailyqueue_clinic_site_id
 from apps.reception.models import (
     ClinicSite,
@@ -434,6 +436,90 @@ class TabletHomeClinicScopeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Tablet Home A")
         self.assertNotContains(response, "Tablet Home B")
+
+
+class ReceptionDashboardScopeTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin_user = StaffUser.objects.create_user(
+            username="dashboard-admin",
+            email="dashboard-admin@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin_user, "Admin")
+        self.reception_user = StaffUser.objects.create_user(
+            username="dashboard-reception",
+            email="dashboard-reception@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.clinic_a = ClinicSite.objects.create(code="RDSA", name="Reception Dashboard A")
+        self.clinic_b = ClinicSite.objects.create(code="RDSB", name="Reception Dashboard B")
+        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="RA", name="Room A")
+        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="RB", name="Room B")
+        self.reception_user.clinic_sites.add(self.clinic_a)
+
+    def _create_failed_outbox_event(self, *, clinic: ClinicSite, room: ConsultingRoom, suffix: str) -> OutboxEvent:
+        patient = Patient.objects.create(
+            first_name=f"Dash{suffix}",
+            last_name="Patient",
+            date_of_birth=date(1990, 1, 1),
+            phone=f"49999{suffix}",
+            email=f"dash-{suffix}@example.com",
+            doctolib_patient_id=f"DASH-{suffix}",
+        )
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            created_by_user=self.admin_user,
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            position_no=1,
+            created_by_user=self.admin_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=60),
+            created_by_user=self.admin_user,
+        )
+        intake_form = PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
+        medical_document = MedicalDocument.objects.create(
+            queue_entry=entry,
+            intake_form=intake_form,
+            created_by_user=self.admin_user,
+        )
+        version = MedicalDocumentVersion.objects.create(
+            medical_document=medical_document,
+            version_no=1,
+            medical_payload={"schema_version": 1},
+        )
+        return OutboxEvent.objects.create(
+            medical_document_version=version,
+            aggregate_id=version.id,
+            event_type=OutboxEventType.GENERATE_PDF,
+            payload={"schema_version": 1},
+            status=OutboxStatus.FAILED,
+            error_message="failed",
+        )
+
+    def test_reception_dashboard_outbox_errors_are_scoped_to_assigned_clinics(self) -> None:
+        event_in_scope = self._create_failed_outbox_event(clinic=self.clinic_a, room=self.room_a, suffix="11")
+        event_out_of_scope = self._create_failed_outbox_event(clinic=self.clinic_b, room=self.room_b, suffix="22")
+        self.client.force_login(self.reception_user)
+        response = self.client.get(reverse("admin_reception_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(event_in_scope.medical_document_version.medical_document_id))
+        self.assertNotContains(response, str(event_out_of_scope.medical_document_version.medical_document_id))
 
 
 class PurgeSeedClinicDataTests(TestCase):

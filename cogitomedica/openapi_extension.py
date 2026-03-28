@@ -50,7 +50,6 @@ LIST_LIMIT_Q = {"name": "limit", "in": "query", "schema": _OPENAPI_LIST_LIMIT_SC
 # Operations that do not require authentication (no lock icon in Swagger UI).
 NO_AUTH_OPERATIONS = {
     (f"{PREFIX}/observability/health", "get"),
-    (f"{PREFIX}/observability/metrics", "get"),
     (f"{PREFIX}/observability/monitoring/grafana", "get"),
     (f"{PREFIX}/observability/monitoring/prometheus", "get"),
     (f"{PREFIX}/observability/monitoring/alertmanager", "get"),
