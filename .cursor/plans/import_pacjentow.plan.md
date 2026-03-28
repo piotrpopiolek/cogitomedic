@@ -1,185 +1,118 @@
 ---
-name: Import pacjentow
-overview: Plan wdrożenia importu pacjentów (historycznie z PDF Doctolib). **Import z PDF został wycofany** (zob. `wycofaj-pdf-import.plan.md`). Docelowa ścieżka to import z pliku **XLSX** (szablon kolumn, openpyxl, reuse batch/PatientImportError i serwisów `create_or_update_patient_manual`, `create_daily_queue`, `create_queue_entry`).
-todos: []
+name: wycofaj-pdf-import
+overview: Wycofanie kompletnego wsparcia importu pacjentów z PDF (kod, endpointy, admin UI, testy i zależności) z zachowaniem wspólnego UI uploadu pliku do kolejnych importów `.xlsx`. Następnie przygotowanie kierunku dla nowej ścieżki importu XLSX w oparciu o bibliotekę do odczytu arkuszy. Wszelkie testy i migracje wykonuj na Dockerze.
+todos:
+  - id: remove-pdf-deps
+    content: "Zaktualizować `requirements.txt`: usunąć `pdfplumber` (oraz wszelkie inne PDF-only zależności, jeśli okażą się w repo)."
+    status: completed
+  - id: retire-pdf-import-module
+    content: Usunąć/wycofać `apps/reception/pdf_import.py` oraz wyłączyć zadanie w tle `run_patient_pdf_import` w `apps/reception/tasks.py`.
+    status: completed
+  - id: remove-pdf-api-wiring
+    content: "Usunąć endpoint i wiring dla `POST /imports/patients/pdf`: `apps/reception/api_views_split/imports.py`, `apps/reception/api_views.py`, `cogitomedica/api_urls.py`, `cogitomedica/openapi_extension.py`."
+    status: completed
+  - id: replace-admin-ui-pdf-with-xlsx
+    content: "Przebudować admin upload UI tak, by obsługiwał `.xlsx` zamiast `.pdf`: `templates/admin/reception/dailyqueue/change_list.html`, `apps/reception/admin.py`, `templates/admin/reception/dailyqueue/import_pdf.html` (uogólnić jako szablon uploadu pliku pod xlsx) — z zachowaniem JS do wybranego pliku."
+    status: completed
+  - id: update-tests
+    content: "Usunąć/zmienić testy PDF importu: `apps/reception/api_tests.py` (klasa `PatientPdfImportApiTests`) oraz testy admin importu PDF i parsera z `apps/reception/tests.py`. Utrzymać testy wspólne dla `PatientImportBatch`/`PatientImportError`."
+    status: completed
+  - id: docs-update
+    content: "Zaktualizować dokumentację/planowanie: `.cursor/plans/import_pacjentow.plan.md` oraz dokumenty `.ai/api-plan*.md`, tak by odzwierciedlały wycofanie PDF i docelowy import `.xlsx`."
+    status: completed
+  - id: xlsx-import-next-steps-plan
+    content: "W kolejnym iteracyjnym kroku: dodać `openpyxl` i nowy moduł `apps/reception/xlsx_import.py` z walidacją szablonu, normalizacją i usługą importu (reuse `create_or_update_patient_manual`, `create_daily_queue`, `create_queue_entry`)."
+    status: pending
 isProject: false
 ---
 
-# Plan importu pacjentów (XLSX; PDF wycofany)
+# Wycofanie importu PDF, przygotowanie importu XLSX
 
-**Uwaga:** Import z PDF Doctolib został usunięty z kodu. Obecny kierunek to import z pliku `.xlsx` (szablon, walidacja nagłówków, normalizacja danych).
+## 1) Kontekst: gdzie dziś jest import z PDF
 
-## Założenia wejściowe
+- Backend znajduje się w `apps/reception/pdf_import.py` i opiera się o `pdfplumber` (opcjonalnie fallback do `fitz`/PyMuPDF).
+- API ma endpoint `POST /imports/patients/pdf` w `apps/reception/api_views_split/imports.py`, podpinany w `cogitomedica/api_urls.py` oraz dokumentowany w `cogitomedica/openapi_extension.py`.
+- Admin ma akcję „Import z pliku” na liście kolejek w `templates/admin/reception/dailyqueue/change_list.html`, link generowany w `apps/reception/admin.py`, oraz formularz uploadu w `templates/admin/reception/dailyqueue/import_pdf.html`.
 
-- Źródłem jest tekstowy, machine-readable PDF z jednym ustalonym układem Doctolib.
-- PDF zawiera co najmniej:
-  - datę,
-  - nazwę kliniki,
-  - rekordy pacjentów z polami: `godzina`, `imię i nazwisko`, `telefon`, `data urodzenia`, `email`, `adres`, `kod pocztowy`.
-- Klinika jest mapowana po nazwie na `ClinicSite`.
-- Data kolejki jest pobierana z PDF.
-- Parser ma wspierać jeden ustalony układ tekstowego PDF Doctolib, bez OCR.
-- Import ma działać zgodnie z uproszczonym modelem `Patient`:
-  - unikalność pacjenta: `first_name + last_name + phone + date_of_birth`,
-  - `doctolib_patient_id` pozostaje opcjonalne i nie jest wymagane w imporcie PDF.
+## 2) Plan wycofania PDF (kod + zależności + wiring)
 
-## Co już istnieje
+### A. Backend i zależności
 
-- Modele batch/error importu są gotowe w `apps/reception/models.py`: `PatientImportBatch`, `PatientImportError`.
-- Serwisy, które importer powinien wykorzystać, istnieją w `apps/reception/services.py`: `create_daily_queue()`, `create_queue_entry()`, `create_or_update_patient_manual()`.
-- Dokumentacja importów istnieje, ale runtime endpointów `/imports/*` jeszcze nie ma.
+1. Usunąć zależność biblioteki odczytu PDF z `requirements.txt` (aktualnie `pdfplumber==0.11.9`).
+2. Usunąć/wyłączyć całą logikę importu PDF:
+  - plik `apps/reception/pdf_import.py` (lub wyraźnie „retire” jako nieużywany moduł, jeśli potrzebujesz tymczasowo utrzymać kod w gałęzi),
+  - zadanie w tle `run_patient_pdf_import` z `apps/reception/tasks.py` (bo wywołuje `process_patient_pdf_import_batch`).
+3. Usunąć konfigurację loggera specyficzną dla modułu `apps.reception.pdf_import` z `cogitomedica/settings.py`.
 
-## Zakres planowanej funkcji
+### B. API i dokumentacja
 
-- Dodać rzeczywistą ścieżkę importu PDF dla recepcji/admina:
-  - upload pliku PDF,
-  - utworzenie `PatientImportBatch`,
-  - parsowanie nagłówka PDF: data + nazwa kliniki,
-  - parsowanie wierszy pacjentów,
-  - mapowanie kliniki po nazwie,
-  - znalezienie lub utworzenie odpowiedniej kolejki dziennej,
-  - utworzenie/aktualizacja pacjentów,
-  - dodanie `QueueEntry` z `appointment_time`,
-  - zapis błędów per wiersz do `PatientImportError`.
-- Zachować częściowy sukces importu: błędne wiersze są raportowane, poprawne są importowane.
-- Oprzeć idempotencję na danych dostępnych w PDF:
-  - pacjent: `first_name + last_name + phone + date_of_birth`,
-  - wizyta: pochodny klucz z `queue_date + clinic_site + appointment_time + patient identity`, jeśli PDF nie dostarcza stabilnego `visit_external_id`.
+1. Usunąć endpoint `patient_pdf_import_view` oraz jego wiring:
+  - `apps/reception/api_views_split/imports.py` (funkcja `patient_pdf_import_view` sprawdza `.endswith(".pdf")` i łapie `ImportError` od `pdfplumber`).
+  - eksport widoków w `apps/reception/api_views.py`.
+  - ścieżkę w `cogitomedica/api_urls.py` (`imports/patients/pdf`).
+  - definicję OpenAPI w `cogitomedica/openapi_extension.py` dla `/imports/patients/pdf`.
 
-## Architektura parsera PDF
+### C. Admin UI (zachować „frontend upload” jako wspólny element)
 
-- Zbudować parser w czterech warstwach:
-  - `PdfTextExtractor`: otwarcie PDF przez `pdfplumber`, pobranie tekstu i linii/wordów z pozycjami,
-  - `DoctolibPdfLayoutDetector`: weryfikacja, czy PDF pasuje do oczekiwanego layoutu,
-  - `DoctolibPdfParser`: odczyt daty, nazwy kliniki i surowych wierszy pacjentów,
-  - `PatientPdfImportService`: mapowanie na domenę i zapis do bazy.
-- Parser nie powinien zapisywać nic do DB; zapis należy wyłącznie do warstwy serwisowej.
-- Preferowana biblioteka do odczytu: `pdfplumber`.
+1. W `templates/admin/reception/dailyqueue/change_list.html` zmienić przycisk tak, żeby nadal korzystał z tej samej mechaniki uploadu (tylko zmieniona etykieta i docelowy link), tj. zastąpić `import_pdf_url` nowym `import_xlsx_url`.
+2. W `apps/reception/admin.py`:
+  - usunąć custom URL `import-pdf/` i metodę `import_pdf_view`,
+  - zamiast niej przygotować widok `import_xlsx_view` (na razie tylko „UI wiring” — bez logiki importu), który będzie korzystał z tego samego formularza/uploadu i podmieni akceptowane rozszerzenie.
+3. W `templates/admin/reception/dailyqueue/import_pdf.html` uogólnić pod upload xlsx:
+  - podmienić opis/etykietę oraz atrybut `accept` na `.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+  - zachować JavaScript do podglądu wybranego pliku (żeby rzeczywiście nie wyrzucać „frontend upload” z PDF).
+
+### D. Testy
+
+1. Wycofać testy PDF importu:
+  - `apps/reception/api_tests.py` – klasę `PatientPdfImportApiTests`.
+  - `apps/reception/tests.py` – testy admin importu (`DailyQueueAdminImportTests`) i testy parsera/normalizacji w `pdf_import.py`.
+2. Utrzymać wspólne testy „batch/errors API” (ponieważ model `PatientImportBatch` i `PatientImportError` jest niezależny od formatu pliku).
+
+## 3) Następny krok: nowa ścieżka importu `.xlsx` (adapter zamiast PDF)
+
+### A. Architektura (reuse batch + upsert)
+
+- Zostawić model batch i per-wiersz błędy (te elementy już istnieją).
+- Dodać nowy moduł analogiczny do `apps/reception/pdf_import.py`, np. `apps/reception/xlsx_import.py`, z:
+  - walidacją sztywnego formatu wejścia (kolumny i typy),
+  - normalizacją danych do domeny `create_or_update_patient_manual` + `create_daily_queue` + `create_queue_entry`.
+
+### B. Proponowana biblioteka do XLSX
+
+- Propozycja: `openpyxl` do odczytu `.xlsx`.
+  - Daje przewidywalny i wystarczająco szybki odczyt wiersz-po-wierszu,
+  - pozwala na twardą walidację nagłówków i typów komórek (dob/same day, phone normalization itd.),
+  - minimalizuje „magiczne” konwersje typów w porównaniu do high-level bibliotek.
+- W kolejnym kroku dodać `openpyxl` do `requirements.txt` i stworzyć sztywny importer XLSX pod ustalony template.
+
+### C. Mapping kolumn XLSX -> `Patient`
+
+- Wymagane ustalenie konkretnego szablonu `.xlsx` (kolumny/arkusz) zgodnie z docelowym workflow, np.:
+  - `first_name`, `last_name`, `dob`, `phone`, `email`.
+- W importerze mapping powinien prowadzić do:
+  - `dob` -> `date_of_birth`
+  - `phone` -> `phone` po normalizacji (reuse `apps/reception/phone_utils.normalize_phone`)
+  - oraz wstawienie `QueueEntry` zgodnie z wymaganiami trybu (np. `appointment_time=None` jeśli template nie zawiera czasu).
+
+## 4) Diagram przepływu (dla XLSX zamiast PDF)
 
 ```mermaid
 flowchart TD
-    upload[PDFUpload] --> extract[PdfTextExtractor]
-    extract --> detect[DoctolibPdfLayoutDetector]
-    detect --> parse[DoctolibPdfParser]
-    parse --> normalize[RowNormalizer]
-    normalize --> domain[PatientPdfImportService]
-    domain --> batch[PatientImportBatch]
-    domain --> patient[PatientUpsert]
-    domain --> queue[DailyQueueResolve]
-    domain --> entry[QueueEntryCreate]
-    domain --> errors[PatientImportError]
+  upload[XLSXUpload] --> extract[XlsxRowExtractor]
+  extract --> detect[TemplateHeaderValidator]
+  detect --> parse[RowNormalizer]
+  parse --> domain[PatientImportService]
+  domain --> batch[PatientImportBatch + PatientImportError]
+  domain --> patient[Upsert Patient]
+  domain --> dailyQueue[Resolve/create DailyQueue]
+  domain --> entry[Create QueueEntry]
 ```
 
-## Modele pośrednie
 
-- Dodać model pośredni surowego rekordu, np.:
-  - `ParsedPatientRow(row_number, appointment_time_raw, full_name_raw, phone_raw, date_of_birth_raw, email_raw, address_raw, postal_code_raw)`
-- Dodać model wyniku parsera PDF:
-  - `ParsedPdfImport(import_date, clinic_name, rows[])`
-- Dodać model po normalizacji:
-  - `NormalizedPatientRow(row_number, appointment_time, first_name, last_name, phone, date_of_birth, email, street, postal_code, city, country_code)`
 
-## Główne decyzje projektowe
+## Ryzyka i decyzje do potwierdzenia
 
-- Parsowanie PDF:
-  - użyć `pdfplumber`,
-  - główna ścieżka parsowania powinna bazować na `extract_words(...)` i grupowaniu po pozycjach,
-  - `extract_text()` może służyć pomocniczo do debugowania i fallbacku,
-  - błędny lub nieoczekiwany układ ma kończyć się jawnym błędem importu, nie heurystyką wielowariantową.
-- Nazwa kliniki:
-  - w MVP dopasowanie dokładne do `ClinicSite.name`,
-  - jeśli dopasowanie się nie powiedzie, batch kończy się błędem `UNKNOWN_CLINIC`.
-- Rozbicie `imię i nazwisko`:
-  - przyjąć deterministyczną regułę splitu zgodną z jednym formatem Doctolib,
-  - przypadki nieparsowalne raportować jako błąd wiersza.
-- Adres:
-  - mapować `adres` do `street`, `kod pocztowy` do `postal_code`,
-  - jeśli w PDF nie ma osobnego miasta, pozostawić `city=None`,
-  - `country_code` domyślnie ustawiać na `DE`.
+- Nazewnictwo i logika docelowego trybu kolejek: czy XLSX dostarcza `appointment_time` i `clinic_name` jak PDF, czy import XLSX zakłada inny zestaw pól (np. bez czasu wizyty).
+- Pola w modelu mają nazwy `pdf_import_*` (w `apps/reception/models.py`) – plan zakłada na tym etapie niezmienianie ich (żeby uniknąć migracji), ale później warto je zrefaktorować do neutralnych nazw. Przed zakończeniem pracy zmień je na neutralne ale upewnić się że to nie wpłynie na działanie systemu, w razie problemów rozwiąż je. 
 
-## Najważniejsza zależność domenowa
-
-- Obecny model `DailyQueue` nadal wymaga `clinic_site`, `consulting_room`, `shift_code`.
-- Ponieważ PDF daje tylko datę i nazwę kliniki, implementacja importu musi przewidzieć regułę wykonawczą:
-  - konfigurację domyślnego `consulting_room` i `shift_code` dla importów PDF per klinika, albo
-  - jawny fallback operacyjny, jeśli klinika nie ma pełnej konfiguracji.
-- To powinien być pierwszy element implementacji technicznej importu, bo bez niego nie da się utworzyć `DailyQueue`.
-
-## Proponowane miejsca zmian
-
-- Serwis importu PDF w warstwie recepcji, np. nowy moduł w `apps/reception/` lub rozszerzenie `apps/reception/services.py`.
-- Kontrakty request/response w `apps/reception/api_schemas.py`.
-- Endpointy importowe i batch detail/errors w:
-  - `apps/reception/api_views.py`,
-  - `cogitomedica/api_urls.py`,
-  - `cogitomedica/openapi_extension.py`,
-  - `cogitomedica/openapi_schemas.py`.
-- Opcjonalnie admin/dashboard dla podglądu wyników importu w:
-  - `apps/reception/admin.py`,
-  - `templates/admin/reception/dashboard.html`.
-
-## Kroki implementacyjne
-
-- Kontrakt API importu (PDF wycofany; docelowo XLSX):
-  - ~~`POST /imports/patients/pdf`~~ (usunięty),
-  - docelowo `POST /imports/patients/xlsx` lub `/imports/patients` z plikiem .xlsx,
-  - `GET /imports/batches`, `GET /imports/batches/{id}`, `GET /imports/batches/{id}/errors` (bez zmian).
-- Dodać parser PDF z etapami:
-  - extract text,
-  - parse header,
-  - parse rows,
-  - normalize row data.
-- Zaimplementować serwis importu:
-  - obliczenie SHA256 pliku,
-  - utworzenie `PatientImportBatch`,
-  - mapowanie `ClinicSite` po nazwie,
-  - znalezienie/utworzenie `DailyQueue` dla daty z PDF,
-  - upsert pacjenta zgodnie z nową unikalnością,
-  - bezpieczne tworzenie `QueueEntry` bez duplikacji przy ponownym imporcie,
-  - zapis `PatientImportError` dla błędów parsera i walidacji,
-  - zamknięcie batcha statusem `COMPLETED`, `COMPLETED_WITH_ERRORS` albo `FAILED`.
-
-## Kody błędów importu PDF
-
-- `PDF_PARSE_FAILED`
-- `PDF_UNSUPPORTED_LAYOUT`
-- `MISSING_IMPORT_DATE`
-- `MISSING_CLINIC_NAME`
-- `UNKNOWN_CLINIC`
-- `INVALID_ROW_FORMAT`
-- `INVALID_APPOINTMENT_TIME`
-- `INVALID_DATE_OF_BIRTH`
-- `AMBIGUOUS_FULL_NAME`
-- `PATIENT_UNIQUENESS_CONFLICT`
-- `DUPLICATE_VISIT`
-
-## Ryzyka i luki do pokrycia
-
-- Największa luka to brak reguły domyślnego `consulting_room` i `shift_code` dla kliniki przy imporcie PDF.
-- PDF nie zawiera stabilnego identyfikatora wizyty, więc idempotencję trzeba zdefiniować po danych pochodnych.
-- Brak osobnego miasta w wejściu oznacza niepełne mapowanie adresu.
-- Parser zależy od jednego layoutu Doctolib; każda zmiana formatu PDF wymaga aktualizacji parsera i fixture testowych.
-
-## Testy i weryfikacja
-
-- Dodać testy parsera PDF dla:
-  - poprawnego odczytu daty,
-  - poprawnego odczytu nazwy kliniki,
-  - poprawnego odczytu wielu rekordów,
-  - nieobsługiwanego layoutu,
-  - brakujących pól nagłówka i wierszy.
-- Dodać testy integracyjne importu dla:
-  - utworzenia `PatientImportBatch` i `PatientImportError`,
-  - utworzenia pacjentów,
-  - utworzenia `QueueEntry` z `appointment_time`,
-  - ponownego importu tego samego PDF bez duplikacji wpisów.
-- Uruchomić testy w Dockerze przynajmniej dla `reception` oraz obszarów zależnych od `Patient` i kolejek.
-
-## Dokumentacja do aktualizacji
-
-- Zmienić dokumentację importów z `.csv/.xlsx` na PDF albo opisać PDF jako nowy docelowy kanał importu w:
-  - `.ai/prd.md`,
-  - `.ai/api-plan.md`,
-  - `.ai/api-plan-pl.md`,
-  - `.ai/db-plan.md`.
-- Uspójnić dokumentację importu z nową semantyką `Patient`: bez `TEMPORARY`, bez alertów, bez wymogu `doctolib_patient_id` dla importu PDF.
