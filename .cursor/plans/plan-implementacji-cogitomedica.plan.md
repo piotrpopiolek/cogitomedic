@@ -24,7 +24,7 @@ todos:
     content: Spisać kontrakt endpointów staff (recepcja/lekarz/ops) i uzupełnić luki przed frontem Unfold – rekomendowany następny krok.
     status: pending
   - id: phase3-import-hidrive-api
-    content: Dowieźć import dzienny i awaryjny oraz integrację API HiDrive (Faza 3).
+    content: Dowieźć import dzienny (XLSX) oraz integrację API HiDrive (Faza 3).
     status: pending
   - id: patient-results-portal
     content: "Portal wyniki (US-018): 4-etapowy proces – SMS logistyczny, logowanie phone+DOB, OTP 15 min, serwowanie PDF przez HTTPS. Zgodność RODO/BÄK."
@@ -165,7 +165,7 @@ flowchart LR
   - sekwencja `GENERATE_PDF -> HIDRIVE_UPLOAD -> SMS_SEND`,
   - lockowanie `FOR UPDATE SKIP LOCKED`, retry/backoff, `DEAD_LETTER`.
 - Faza 1-2: adapter HiDrive mock zgodny z docelowym kontraktem.
-- Faza 3: adapter API HiDrive + import dzienny `.xlsx/.csv` (manual + harmonogram), w tym importer awaryjny.
+- Faza 3: adapter API HiDrive + import dzienny `.xlsx/.csv` (manual + harmonogram).
 - Dodaj retencję 30 dni: usuń lokalny PDF tylko gdy `hidrive_sent=true && sms_sent=true` + audit event.
 
 ## Etap 6: Observability, alerting i runbooki
