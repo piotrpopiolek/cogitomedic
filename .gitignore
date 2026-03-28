@@ -74,9 +74,10 @@ docs/_build/
 # Złożony PDF / pliki pośrednie z scripts/build_manual_pdf.py
 docs/manual/_build/
 
-# Filmy WebM (Playwright) — nie commituj dużych binariów
-docs/manual/assets/videos/*.webm
+# Filmy WebM (Playwright / nagrania ról) — nie commituj dużych binariów
+docs/manual/assets/videos/**/*.webm
 !docs/manual/assets/videos/README.md
+!docs/manual/assets/videos/**/README.md
 
 # PyBuilder
 target/
