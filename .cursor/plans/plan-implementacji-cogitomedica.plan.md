@@ -9,41 +9,41 @@ todos:
     content: Zaimplementować modele i migracje zgodnie z .ai/db-plan.md wraz z indeksami i constraintami.
     status: completed
   - id: phase1-reception-tablet
-    content: "API recepcji i tablet (pacjenci, kolejki, słowniki, urządzenia, intake) z RBAC i testami – wdrożone; ewentualnie dalsze testy E2E. Do uzupełnienia: rola TABLET, wycofanie tokenu (migracja patient_form_session), TabletDevice tylko android_id (migracja), endpointy poczekalni (wybór kolejki, lista wpisów, POST sessions bez tokenu) – zob. .ai/proces-poczekalni.md."
-    status: in_progress
+    content: "Recepcja + tablet + API (kolejki, wpisy, pacjenci, intake, TABLET, sesja bez tokenu, TabletDevice z android_id) — wdrożone w kodzie i migracjach. Opcjonalnie: szersze testy E2E Playwright, statyczne assety `static/tablet/*` dla formularza, twardejsze zabezpieczenie dostępu do `/tablet/form/<uuid>/` (np. token podpisany — zob. .ai/tablet-form-security.md)."
+    status: completed
   - id: phase2-medical-publish
-    content: API medical (draft, publish, szablony) + pipeline outbox – wdrożone; GET lista dokumentów medycznych do dodania dla panelu lekarza.
-    status: in_progress
+    content: "API medical (GET lista `/medical-documents`, POST, draft, publish, wersje, szablony) + outbox — wdrożone."
+    status: completed
   - id: outbox-integrations
-    content: Uruchomić pipeline outbox + Django Tasks + PDF + HiDrive/SMS + retencję 30 dni.
-    status: in_progress
+    content: "Pipeline GENERATE_PDF (WeasyPrint) → HIDRIVE_UPLOAD → SMS_SEND, retencja, adaptery mock/API przez env — wdrożone w `apps/outbox/services.py`."
+    status: completed
   - id: api-contracts-priority
-    content: Zamrożenie kontraktu API dla panelu staff (dokument .ai/staff-api-contract.md), RBAC operations (ADMIN), GET medical-documents.
-    status: in_progress
+    content: "Kontrakt staff + RBAC operacji (ADMIN) opisane w `.ai/staff-api-contract.md`; GET medical-documents w kodzie."
+    status: completed
   - id: staff-api-contract
-    content: Spisać kontrakt endpointów staff (recepcja/lekarz/ops) i uzupełnić luki przed frontem Unfold – rekomendowany następny krok.
-    status: pending
+    content: "Dokument `.ai/staff-api-contract.md` utrzymywany jako skrót kontraktu względem `api-plan.md`."
+    status: completed
   - id: phase3-import-hidrive-api
-    content: Dowieźć import dzienny (XLSX) oraz integrację API HiDrive (Faza 3).
-    status: pending
+    content: "Import XLSX (admin + `run_patient_xlsx_import`) i HiDrive API — wdrożone. Brak: automatyczny harmonogram `run_daily_import` (placeholder w `apps/reception/tasks.py`)."
+    status: in_progress
   - id: patient-results-portal
-    content: "Portal wyniki (US-018): 4-etapowy proces – SMS logistyczny, logowanie phone+DOB, OTP 15 min, serwowanie PDF przez HTTPS. Zgodność RODO/BÄK."
-    status: pending
+    content: "Portal wyników (logowanie phone+DOB, OTP, lista dokumentów, pobranie PDF) — wdrożone w `apps/patient_results` + szablony. Do ewentualnej doszlifowania: audyt zewnętrzny, konfiguracja CAPTCHA/pepper w prod."
+    status: completed
   - id: observability-alerting
-    content: Wdrożyć metryki, dashboardy, alerting i runbooki dla outbox/import/integracji.
-    status: pending
+    content: "Metryki Prometheus, endpoint `/observability/metrics`, stack Docker (Prometheus/Grafana/Alertmanager/Tempo), dashboard-as-code, runbooki w `docs/runbooks/` — wdrożone w repo; konfiguracja receiverów alertów na produkcji pozostaje po stronie operacji."
+    status: completed
   - id: hardening-release
-    content: Wykonać hardening bezpieczeństwa, testy E2E i checklistę gotowości produkcyjnej.
+    content: Wykonać hardening bezpieczeństwa (m.in. walidatory haseł prod, limity body, scope intake/tablet z code review), testy E2E i checklistę release — nadal otwarte.
     status: pending
   - id: doctor-templates-us019
-    content: ""
-    status: pending
+    content: "API `doctor-text-templates` (CRUD, szablony globalne/klinika/lekarz) — wdrożone w `apps/medical`."
+    status: completed
   - id: auth-session-hardening
-    content: ""
-    status: pending
-  - id: domain-audit-trail
-    content: Dodać pełny audit trail zdarzeń domenowych (edycja tekstu, publikacja/republikacja, retencja) i włączyć go do DoD.
+    content: "Podstawowe ustawienia sesji/cookies w prod (Secure, HttpOnly, SameSite); brak dedykowanego pakietu testów US-001 / rotacji sesji — rozważyć przed release."
     status: in_progress
+  - id: domain-audit-trail
+    content: "Model `AuditEvent`, `create_audit_event`, API listy audytu, testy kontraktu — wdrożone; możliwe rozszerzanie typów zdarzeń wg potrzeb produktu."
+    status: completed
 isProject: false
 ---
 
@@ -71,7 +71,7 @@ isProject: false
   - **OpenAPI/Swagger:** dodane `components.securitySchemes` (session cookie) oraz `security` na operacjach – w dokumentacji widoczna **ikona kłódki** przy endpointach wymagających logowania; wyjątki: health, metrics, auth/login.
   - `.ai/api-plan.md` i `.ai/api-plan-pl.md` zaktualizowane (date_of_birth GET, POST patients bez created_by_user_id, błędy walidacji).
 - Zweryfikowano uruchamianie testów w środowisku Docker; testy modułowe i API recepcji/medical przechodzą.
-- **Następny krok (propozycja poniżej):** zamrożenie kontraktu API dla panelu staff i/lub uzupełnienie luk (np. GET lista dokumentów medycznych) przed frontem Django Staff (Unfold).
+- **Stan vs plan:** GET `/medical-documents`, szablony `doctor-text-templates`, portal wyników (`patient_results`), pełny pipeline outbox (WeasyPrint → HiDrive → SMS), audyt (`AuditEvent` + API), stack observability i runbooki — **wdrożone**. **Otwarte:** harmonogram `run_daily_import`, hardening release (US-001/testy E2E), ewentualne assety `static/tablet/*`.
 - **Proces poczekalni (uproszczony):** tablet na wyposażeniu rejestracji, zalogowany na rolę **TABLET**. Recepcja na tablecie **wybiera kolejkę** z listy dzisiejszych kolejek (brak twardego przypisania w panelu), potem pacjenta z listy → ekran weryfikacji danych → formularz intake. **Bez tokenu** – sesja formularza bez pola token; migracje: usunięcie `token_hash` z `patient_form_session`, zastąpienie w `tablet_device` pól `name`/`device_code` przez **tylko `android_id`**. Szczegóły: **[.ai/proces-poczekalni.md](../../.ai/proces-poczekalni.md)**.
 
 ## Docelowa architektura modułów
@@ -214,17 +214,13 @@ flowchart LR
 
 ## Proponowany kolejny krok
 
-**Zamrożenie kontraktu API dla panelu staff + ewentualne uzupełnienie luk (przed frontem Django Staff).**
+**Priorytet operacyjny:** domknięcie **Fazy 3 importu** — zaimplementować realną logikę w `run_daily_import` (np. pobranie pliku z ustalonej ścieżki / integracja z procesem biznesowym) albo jawnie usunąć/zastąpić zadanie, jeśli import ma pozostać wyłącznie ręczny z admina.
 
-1. **Staff API contract (zalecane jako pierwsze)**
-  Spisać w jednym miejscu (np. `.ai/staff-api-contract.md`) listę endpointów używanych przez panel staff (recepcja, lekarz, admin/ops), z metodami, payloadami i kodami błędów – na podstawie **obecnej implementacji** w kodzie (source of truth). To pozwoli budować front bez rozjazdów z backendem.
-2. **Luki do rozstrzygnięcia przed lub równolegle z frontem**
-  - **GET lista dokumentów medycznych:** w `.ai/api-plan.md` jest `GET /medical-documents` z filtrami (status, queue_date, doctor_view, patient_search), w kodzie jest tylko **POST** (tworzenie). Panel lekarza potrzebuje listy pracy – dodać endpoint GET z paginacją i filtrami albo uzgodnić alternatywną ścieżkę (np. lista po queue_entry / dacie).  
-  - **Operacje admin/ops:** endpointy `operations/outbox/process` i `operations/retention/run` są obecnie dostępne dla dowolnego zalogowanego użytkownika. Przed produkcją dodać `require_user_role(..., allowed_roles={"ADMIN"})` (lub osobną rolę ops), zgodnie z planem frontu staff.
-3. **Alternatywa / równolegle**
-  Po (lub zamiast) punktu 1 można od razu przejść do **planu frontu staff** (`.cursor/plans/plan_django_staff_frontend.plan.md`): integracja Django Unfold, shell SSR pod `/staff/`, recepcja MVP, lekarz MVP, ops MVP. Kontrakt z punktu 1 można uzupełniać w trakcie.
+**Równolegle / release:** Etap 7 — hardening (sesje, limity, testy E2E krytycznych ścieżek), checklista produkcyjna.
 
-**Rekomendacja:** wykonać punkt 1 (dokument kontraktu staff), rozstrzygnąć GET medical-documents i RBAC dla operations, a następnie uruchomić fazę Unfold + shell staff.
+**Uwaga historyczna (już zrobione w kodzie):** `.ai/staff-api-contract.md` istnieje; GET lista dokumentów medycznych i RBAC dla `operations/outbox/process` oraz `operations/retention/run` (**tylko ADMIN**) są w `apps/medical/api_views.py` i `apps/outbox/api_views.py`.
+
+**Front staff (Unfold):** dalsza praca według `.cursor/plans/plan_django_staff_frontend.plan.md` — backend pod podstawowe ekrany jest w dużej mierze gotowy.
 
 ---
 

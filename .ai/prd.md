@@ -8,7 +8,7 @@ Projekt realizowany jest w trzech fazach:
 
 - Faza 1: Obsługa tabletów, cyfrowe zgody, ankieta anamnestyczna (Anamnesebogen), schemat ciała i podpis elektroniczny pacjenta. Zarządzanie kolejką (Poczekalnia) odbywa się ręcznie lub przez import.
 - Faza 2: Panel lekarza do uzupełniania danych medycznych, zatwierdzanie dokumentów oraz automatyzacja wysyłki (zapis do archiwum i powiadomienie SMS).
-- Faza 3: Usprawnienie procesu codziennego importu plików eksportowanych z Doctolib oraz integracja z API HiDrive (docelowe API archiwizacji).
+- Faza 3: Usprawnienie procesu codziennego importu (harmonogram + ewentualne rozszerzenia formatu XLSX) oraz integracja z API HiDrive (docelowe API archiwizacji).
 
 Głównym celem jest usprawnienie pracy recepcji i lekarzy, zapewnienie bezpieczeństwa danych oraz automatyzacja archiwizacji dokumentacji przy zachowaniu zgodności z wymogami operacyjnymi placówki. Językami interfejsu portalu są niemiecki, angielski i polski (użytkownik może wybrać preferowany język).
 
@@ -38,7 +38,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 
 - System umożliwia ręczne dodawanie pacjenta do listy dziennej (Poczekalni).
 - Obsługa importu listy pacjentów z pliku (format zdefiniowany: imię, nazwisko, data urodzenia, telefon, e-mail).
-- W Fazie 3 lista dzienna jest uzupełniana codziennym importem plików eksportowanych z Doctolib (bez bezpośredniej integracji API).
+- W Fazie 3 lista dzienna może być uzupełniana **zautomatyzowanym** importem (harmonogram); obecna implementacja: import **XLSX** z panelu admin + batch w tle (bez integracji API z zewnętrznym systemem kolejkowym).
 - **Proces poczekalni (tablet):** Tablety są na wyposażeniu rejestracji. Na tablecie recepcja wybiera kolejkę (z listy dzisiejszych kolejek), potem pacjenta z listy; przekazuje tablet pacjentowi do wypełnienia ankiety. **Brak linków z tokenem** – tablet zalogowany na rolę TABLET (sesja); sesja formularza tworzona bez tokenu. Pacjent wypełnia ankietę wyłącznie w poczekalni na tablecie (brak dostępu z zewnątrz).
 - `Doctolib Patient ID` pozostaje polem opcjonalnym; jeśli jest podane, musi być unikalne.
 - Unikalność rekordu pacjenta jest pilnowana przez zestaw pól: `first_name`, `last_name`, `phone`, `date_of_birth`.
@@ -86,7 +86,7 @@ Proces udostępniania podzielony jest na kilka ściśle zabezpieczonych etapów,
 
 - **Krok 1 – Powiadomienie SMS o charakterze logistycznym:** Gdy lekarz publikuje Befund, architektura Transactional Outbox wysyła zadanie do bramki SMSApi. Pacjent otrzymuje wyłącznie krótką wiadomość: „Nowa dokumentacja w Cogito”. Taka konstrukcja jest w 100% zgodna z prawem – nie zdradza faktu, jakie badanie zostało przeprowadzone (brak słów o znamionach czy dermatologii) ani jaki jest jego wynik.
 
-- **Krok 2 – Logowanie oparte na danych historycznych (Cross-Verification):** Pacjent samodzielnie wchodzi na bezpieczny adres internetowy (np. wyniki.cogitomedica.pl). Loginem w systemie nie jest ustalany wcześniej ciąg znaków, a zweryfikowany numer telefonu komórkowego skojarzony z datą urodzenia. Dane te były szczegółowo walidowane w recepcji podczas cyfryzacji (integracja z Doctolib/Tablet) i stanowią silny punkt weryfikacji tożsamości („Something you are / Something you know”).
+- **Krok 2 – Logowanie oparte na danych historycznych (Cross-Verification):** Pacjent samodzielnie wchodzi na bezpieczny adres internetowy (np. wyniki.cogitomedica.pl). Loginem w systemie nie jest ustalany wcześniej ciąg znaków, a zweryfikowany numer telefonu komórkowego skojarzony z datą urodzenia. Dane te były szczegółowo walidowane w recepcji podczas cyfryzacji (tablet / ręczny wpis / import) i stanowią silny punkt weryfikacji tożsamości („Something you are / Something you know”).
 
 - **Krok 3 – Emisja dynamicznego OTP (One-Time Password):** Jeżeli wprowadzony numer telefonu i data urodzenia korelują z wpisem w bazie PostgreSQL Django, system asynchronicznie generuje i wysyła na podany numer telefonu 6-cyfrowy kod OTP. Kod ten jest ważny wyłącznie przez 15 minut. Jest to mechanizm logowania dwukanałowego (Out-of-Band Authentication) i MFA. Nawet jeśli cyberprzestępca zna datę urodzenia i numer telefonu pacjenta (np. z wycieku innej bazy), nie przejdzie etapu autoryzacji bez fizycznego dostępu do karty SIM w konkretnym oknie 15-minutowym.
 
@@ -129,7 +129,7 @@ Proces udostępniania podzielony jest na kilka ściśle zabezpieczonych etapów,
 
 - Swobodny opis medyczny (narracyjny) tworzony przez pacjenta bez struktury pytań.
 - Skomplikowane raportowanie biznesowe (BI).
-- Bezpośrednia integracja API z Doctolib.
+- Bezpośrednia integracja API z zewnętrznymi systemami kolejkowymi (np. historycznie rozważany eksport PDF); bieżący import listy — **XLSX**.
 - Integracja z innymi systemami niż HiDrive i SMSApi.
 
 ## 5. Historyjki użytkowników
@@ -163,8 +163,8 @@ Tytuł: Import pacjentów
 Opis: Jako recepcjonista, chcę zaimportować listę pacjentów z pliku, aby przyspieszyć tworzenie listy dziennej.
 Kryteria akceptacji:
 
-- System przyjmuje tekstowy, machine-readable plik PDF z jednym ustalonym układem eksportu Doctolib.
-- System odczytuje z PDF datę importu, nazwę kliniki oraz rekordy z kolumnami `godzina`, `imię i nazwisko`, `telefon`, `data urodzenia`, `email`, `adres`, `kod pocztowy`.
+- System przyjmuje plik **XLSX** o formacie obsługiwanym przez moduł importu (nagłówki / wiersze zgodne z `apps/reception/xlsx_import.py`).
+- System odczytuje z pliku metadane (m.in. data kolejki, nazwa kliniki) oraz rekordy pacjentów i wizyt zgodnie z walidacją importu.
 - System mapuje klinikę po nazwie na `ClinicSite`, a kolejkę tworzy/uzupełnia z użyciem skonfigurowanego per klinika domyślnego `consulting_room` i `shift_code`.
 - `Doctolib Patient ID` może występować w rekordzie importowanym jako opcjonalny identyfikator pomocniczy; jeśli jest podany, musi być unikalny.
 - Import jest uruchamiany asynchronicznie w tle przez Django Tasks; request HTTP tylko kolejkue batch.
@@ -262,13 +262,13 @@ Kryteria akceptacji:
 
 ID: US-011
 Tytuł: Codzienny import plików z listą wizyt (Faza 3)
-Opis: System codziennie importuje listę wizyt z plików eksportowanych z Doctolib, aby wyeliminować ręczne wprowadzanie danych.
+Opis: System importuje listę wizyt z pliku **XLSX**, aby ograniczyć ręczne wprowadzanie danych; docelowo możliwy harmonogram dzienny.
 Kryteria akceptacji:
 
-- System przyjmuje tekstowy PDF Doctolib o jednym wspieranym układzie.
-- Import może być uruchamiany ręcznie przez recepcję oraz automatycznie według harmonogramu dziennego.
+- System przyjmuje plik **XLSX** zgodny z implementacją importu (patrz kod recepcji).
+- Import jest uruchamiany z panelu administracyjnego i przetwarzany wsadowo (**wdrożone**); **automatyczny harmonogram dzienny** (`run_daily_import`) — jeszcze placeholder w kodzie.
 - `Doctolib Patient ID` jest polem opcjonalnym i pomocniczym; jeśli występuje w danych importowanych lub ręcznych, musi być unikalne.
-- Dane z PDF (w tym godzina wizyty i adres) są mapowane do struktury pacjenta i wpisu kolejki.
+- Dane z arkusza (w tym godzina wizyty i adres) są mapowane do struktury pacjenta i wpisu kolejki.
 - Błędy importu są raportowane na poziomie wiersza.
 
 ID: US-012
