@@ -464,7 +464,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "de-de"
 LANGUAGES = [("de", "German"), ("en", "English"), ("pl", "Polish")]
 LOCALE_PATHS = [BASE_DIR / "locale"]
-TIME_ZONE = "UTC"
+TIME_ZONE = os.environ.get("DJANGO_TIME_ZONE", "Europe/Warsaw")
 USE_I18N = True
 USE_TZ = True
 
