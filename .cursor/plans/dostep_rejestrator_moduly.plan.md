@@ -90,13 +90,11 @@ Recepcja może przygotować formularz dla pacjenta i przekazać tablet do wypeł
 ### 7. Importy
 
 - `POST /imports/patients`
-- `POST /imports/patients/emergency`
 - `GET /imports/batches`
 - `GET /imports/batches/{id}`
 - `GET /imports/batches/{id}/errors`
-- `GET /imports/templates/emergency.xlsx`
 
-Recepcja ma pełny dostęp operacyjny do importów dziennych i awaryjnych oraz do przeglądu wyników importu.
+Recepcja ma pełny dostęp operacyjny do importów dziennych oraz do przeglądu wyników importu.
 
 ### 8. Uproszczony dashboard operacyjny
 
@@ -205,7 +203,6 @@ Kontrakty API jasno dają recepcji `POST /queue-entries/{id}/sessions`, ale czę
 
 - panel recepcji nie wystawia pełnej edycji intake,
 - głównym klientem dla endpointów intake jest `TABLET`,
-- ewentualny tryb awaryjny dla `RECEPTION/ADMIN` musi być jawnie opisany jako fallback operacyjny, a nie standardowa ścieżka UI.
 
 ### 3. Rozjazd dokumentacja vs implementacja
 

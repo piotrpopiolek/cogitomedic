@@ -84,13 +84,12 @@ isProject: false
   - Daje przewidywalny i wystarczająco szybki odczyt wiersz-po-wierszu,
   - pozwala na twardą walidację nagłówków i typów komórek (dob/same day, phone normalization itd.),
   - minimalizuje „magiczne” konwersje typów w porównaniu do high-level bibliotek.
-- W kolejnym kroku dodać `openpyxl` do `requirements.txt` i stworzyć sztywny importer „awaryjny” pod ustalony template.
+- W kolejnym kroku dodać `openpyxl` do `requirements.txt` i stworzyć sztywny importer XLSX pod ustalony template.
 
 ### C. Mapping kolumn XLSX -> `Patient`
 
-- Wymagane ustalenie konkretnego szablonu `.xlsx` (kolumny/arkusz) zgodnie z docelowym workflow. W dokumentacji produktowej pojawia się szablon Excel fallback z kolumnami:
-  - `first_name`, `last_name`, `dob`, `phone`, `email` (z  `.ai/prd.md`).
-  Godzina Pacjent Telefon Data urodzenia Email Adres Kod pocztowy
+- Wymagane ustalenie konkretnego szablonu `.xlsx` (kolumny/arkusz) zgodnie z docelowym workflow, np.:
+  - `first_name`, `last_name`, `dob`, `phone`, `email`.
 - W importerze mapping powinien prowadzić do:
   - `dob` -> `date_of_birth`
   - `phone` -> `phone` po normalizacji (reuse `apps/reception/phone_utils.normalize_phone`)
@@ -114,6 +113,6 @@ flowchart TD
 
 ## Ryzyka i decyzje do potwierdzenia
 
-- Nazewnictwo i logika docelowego trybu kolejek: czy XLSX dostarcza `appointment_time` i `clinic_name` jak PDF, czy jest to tryb „fallback” bez tych danych.
+- Nazewnictwo i logika docelowego trybu kolejek: czy XLSX dostarcza `appointment_time` i `clinic_name` jak PDF, czy import XLSX zakłada inny zestaw pól (np. bez czasu wizyty).
 - Pola w modelu mają nazwy `pdf_import_*` (w `apps/reception/models.py`) – plan zakłada na tym etapie niezmienianie ich (żeby uniknąć migracji), ale później warto je zrefaktorować do neutralnych nazw. Przed zakończeniem pracy zmień je na neutralne ale upewnić się że to nie wpłynie na działanie systemu, w razie problemów rozwiąż je. 
 
