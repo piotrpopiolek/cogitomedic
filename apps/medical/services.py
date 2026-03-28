@@ -10,6 +10,7 @@ from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
 from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, safe_parse_positive_int
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
 from apps.medical.medical_payload_schemas import validate_medical_payload_complete_for_publish
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -103,9 +104,15 @@ def create_or_get_medical_document(
     QueueEntry.objects.get(id=queue_entry_id)
     intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
     if intake_form.queue_entry_id != queue_entry_id:
-        raise DomainError("Intake form does not belong to this queue entry.")
+        raise DomainError(
+            domain_message("other.domain.intake_form_wrong_queue_entry"),
+            api_message_key="other.domain.intake_form_wrong_queue_entry",
+        )
     if intake_form.form_status != IntakeStatus.SUBMITTED:
-        raise DomainError("Intake form must be submitted.")
+        raise DomainError(
+            domain_message("other.domain.intake_form_must_be_submitted"),
+            api_message_key="other.domain.intake_form_must_be_submitted",
+        )
     medical_document, created = MedicalDocument.objects.get_or_create(
         queue_entry_id=queue_entry_id,
         defaults={
@@ -249,9 +256,15 @@ def publish_document_version(
     - otherwise publish latest draft and enqueue `GENERATE_PDF`.
     """
     if not publish_request_id:
-        raise IdempotencyConflictError("publish_request_id is required for publish.")
+        raise IdempotencyConflictError(
+            domain_message("other.api.publish_request_id_required"),
+            api_message_key="other.api.publish_request_id_required",
+        )
     if not publish_locale:
-        raise DomainError("publish_locale is required for publish.")
+        raise DomainError(
+            domain_message("other.domain.publish_locale_required"),
+            api_message_key="other.domain.publish_locale_required",
+        )
 
     requested_at = now or timezone.now()
     medical_document = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
@@ -266,7 +279,10 @@ def publish_document_version(
     )
     if same_request_version:
         if same_request_version.publish_locale and same_request_version.publish_locale != publish_locale:
-            raise IdempotencyConflictError("publish_request_id already used with different publish_locale.")
+            raise IdempotencyConflictError(
+                domain_message("other.api.publish_request_id_locale_conflict"),
+                api_message_key="other.api.publish_request_id_locale_conflict",
+            )
         return same_request_version
 
     in_progress_version = (
@@ -298,7 +314,7 @@ def publish_document_version(
     )
     if not draft_version:
         raise DomainError(
-            "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing.",
+            domain_message("other.api.no_draft_before_publish"),
             api_message_key="other.api.no_draft_before_publish",
         )
 
@@ -396,7 +412,10 @@ def revoke_document_version(
         .first()
     )
     if not current_version:
-        raise DomainError("No published version to revoke.")
+        raise DomainError(
+            domain_message("other.domain.no_published_version_to_revoke"),
+            api_message_key="other.domain.no_published_version_to_revoke",
+        )
 
     if current_version.revoked_at:
         return current_version
@@ -710,7 +729,10 @@ def retry_latest_document_processing(
     reason: str,
 ) -> OutboxEvent:
     if not (actor.is_admin_role or actor.is_reception):
-        raise DomainError("Only ADMIN or RECEPTION can retry processing.")
+        raise DomainError(
+            domain_message("other.domain.document_processing_retry_role"),
+            api_message_key="other.domain.document_processing_retry_role",
+        )
     doc = MedicalDocument.objects.select_for_update().select_related(
         "queue_entry__daily_queue"
     ).get(id=medical_document_id)
@@ -724,10 +746,16 @@ def retry_latest_document_processing(
         .first()
     )
     if latest_version is None:
-        raise DomainError("No document version found.")
+        raise DomainError(
+            domain_message("other.domain.medical_document_no_version"),
+            api_message_key="other.domain.medical_document_no_version",
+        )
     retryable = latest_retryable_outbox_event(latest_version)
     if retryable is None:
-        raise DomainError("No retryable processing step found for latest version.")
+        raise DomainError(
+            domain_message("other.domain.no_retryable_processing_step"),
+            api_message_key="other.domain.no_retryable_processing_step",
+        )
     retried = retry_outbox_event(event=retryable, reason=reason, actor_user_id=actor.id)
     create_audit_event(
         event_type="DOCUMENT_PROCESSING_RETRY_REQUESTED",

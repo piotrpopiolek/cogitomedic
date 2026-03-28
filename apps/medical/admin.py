@@ -21,6 +21,7 @@ from apps.medical.constants import (
     DERMATOSCOPIC_FEATURE_CHOICES,
     MALIGNANCY_RISK_CHOICES,
 )
+from apps.core.translation_service import format_administration_message
 from apps.medical.models import DoctorTextTemplate, MedicalDocument, MedicalDocumentVersion
 from apps.medical.widgets import LesionGroupFavoritesWidget
 from apps.users.models import StaffUserPreferredLocale
@@ -28,6 +29,11 @@ from apps.users.models import StaffUserPreferredLocale
 _ALLOWED_CLINICAL = {v for v, _ in CLINICAL_ASSESSMENT_CHOICES}
 _ALLOWED_MALIGNANCY = {v for v, _ in MALIGNANCY_RISK_CHOICES}
 _ALLOWED_FEATURES = {v for v, _ in DERMATOSCOPIC_FEATURE_CHOICES}
+
+
+def _escape_curly_for_format(s: str) -> str:
+    """Allow arbitrary text in str.format ``{details}`` without KeyError from braces."""
+    return s.replace("{", "{{").replace("}", "}}")
 
 
 class DoctorTextTemplateForm(forms.ModelForm):
@@ -43,6 +49,7 @@ class DoctorTextTemplateForm(forms.ModelForm):
         )
 
     def clean_lesion_group_favorites(self):
+        req = getattr(self, "_admin_request", None)
         value = self.cleaned_data.get("lesion_group_favorites")
         if value is None:
             return []
@@ -50,33 +57,73 @@ class DoctorTextTemplateForm(forms.ModelForm):
             try:
                 value = json.loads(value) if isinstance(value, str) else list(value)
             except (TypeError, ValueError):
-                raise ValidationError("Invalid JSON list.")
+                raise ValidationError(
+                    format_administration_message(
+                        "administration.error_lesion_favorites_invalid_json_list",
+                        "Invalid JSON list for lesion group favorites.",
+                        request=req,
+                    )
+                )
         for i, item in enumerate(value):
+            preset_no = i + 1
             if not isinstance(item, dict):
-                raise ValidationError(f"Preset {i + 1}: must be an object.")
+                raise ValidationError(
+                    format_administration_message(
+                        "administration.error_lesion_favorites_preset_not_object",
+                        "Preset {preset_no}: must be an object.",
+                        request=req,
+                        preset_no=preset_no,
+                    )
+                )
             try:
                 FavoriteLesionGroupPreset.model_validate(item)
             except PydanticValidationError as e:
                 errs = e.errors()
                 msg = "; ".join(f"{x.get('loc', [])}: {x.get('msg', '')}" for x in errs[:3])
-                raise ValidationError(f"Preset {i + 1}: {msg}")
+                raise ValidationError(
+                    format_administration_message(
+                        "administration.error_lesion_favorites_preset_invalid",
+                        "Preset {preset_no}: {details}",
+                        request=req,
+                        preset_no=preset_no,
+                        details=_escape_curly_for_format(msg),
+                    )
+                )
             for code in item.get("dermatoscopic_features") or []:
                 if code not in _ALLOWED_FEATURES:
                     raise ValidationError(
-                        f"Preset {i + 1}: invalid dermatoscopic_features value '{code}'. "
-                        f"Allowed: {', '.join(sorted(_ALLOWED_FEATURES))}."
+                        format_administration_message(
+                            "administration.error_lesion_favorites_preset_bad_feature",
+                            "Preset {preset_no}: invalid dermatoscopic_features value '{code}'. Allowed: {allowed}.",
+                            request=req,
+                            preset_no=preset_no,
+                            code=code,
+                            allowed=", ".join(sorted(_ALLOWED_FEATURES)),
+                        )
                     )
             ca = item.get("clinical_assessment")
             if ca and ca not in _ALLOWED_CLINICAL:
                 raise ValidationError(
-                    f"Preset {i + 1}: invalid clinical_assessment '{ca}'. "
-                    f"Allowed: {', '.join(sorted(_ALLOWED_CLINICAL))}."
+                    format_administration_message(
+                        "administration.error_lesion_favorites_preset_bad_clinical",
+                        "Preset {preset_no}: invalid clinical_assessment '{value}'. Allowed: {allowed}.",
+                        request=req,
+                        preset_no=preset_no,
+                        value=ca,
+                        allowed=", ".join(sorted(_ALLOWED_CLINICAL)),
+                    )
                 )
             mr = item.get("malignancy_risk")
             if mr and mr not in _ALLOWED_MALIGNANCY:
                 raise ValidationError(
-                    f"Preset {i + 1}: invalid malignancy_risk '{mr}'. "
-                    f"Allowed: {', '.join(sorted(_ALLOWED_MALIGNANCY))}."
+                    format_administration_message(
+                        "administration.error_lesion_favorites_preset_bad_malignancy",
+                        "Preset {preset_no}: invalid malignancy_risk '{value}'. Allowed: {allowed}.",
+                        request=req,
+                        preset_no=preset_no,
+                        value=mr,
+                        allowed=", ".join(sorted(_ALLOWED_MALIGNANCY)),
+                    )
                 )
         return value
 
@@ -181,10 +228,10 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     readonly_fields = ("id", "created_at", "updated_at")
 
     def get_form(self, request, obj=None, change=None, **kwargs):
-        form = super().get_form(request, obj, change, **kwargs)
-        if "template_locale" in form.base_fields:
-            base = form.base_fields["template_locale"]
-            form.base_fields["template_locale"] = forms.ChoiceField(
+        form_class = super().get_form(request, obj, change, **kwargs)
+        if "template_locale" in form_class.base_fields:
+            base = form_class.base_fields["template_locale"]
+            form_class.base_fields["template_locale"] = forms.ChoiceField(
                 choices=StaffUserPreferredLocale.choices,
                 required=base.required,
                 label=base.label,
@@ -192,7 +239,14 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
                 initial=base.initial,
                 widget=UnfoldAdminSelectWidget,
             )
-        return form
+        _req = request
+
+        class DoctorTextTemplateFormWithRequest(form_class):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._admin_request = _req
+
+        return DoctorTextTemplateFormWithRequest
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

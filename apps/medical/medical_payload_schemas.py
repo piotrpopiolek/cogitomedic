@@ -107,6 +107,7 @@ def validate_medical_payload_complete_for_publish(payload: dict | None, locale: 
     (walidowane przy zapisie draftu).
     Raises DomainError z komunikatem w języku zgodnym z locale (de/en/pl).
     """
+    from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
     from apps.core.exceptions import DomainError
     from apps.core.translation_service import get_translation_map, normalize_language_code
 
@@ -114,35 +115,26 @@ def validate_medical_payload_complete_for_publish(payload: dict | None, locale: 
         return
     lang = normalize_language_code(locale or "en")
     ui = get_translation_map(category="doctor", language_code=lang)
-    def _msg(key: str, fallback: str) -> str:
-        return ui.get(key, fallback)
+
+    def _msg(full_key: str) -> str:
+        return ui.get(full_key) or OTHER_I18N_KEY_DEFAULT_EN.get(full_key, full_key)
 
     examination_scope = payload.get("examination_scope") or []
     if len(examination_scope) < 1:
-        raise DomainError(_msg(
-            "msg_validation_examination_scope_required",
-            "Before publishing, please fill in section \"1. Scope of examination (multiple choice)\": select at least one option.",
-        ))
+        k = "doctor.msg_validation_examination_scope_required"
+        raise DomainError(_msg(k), api_message_key=k)
     if payload.get("fitzpatrick_type") is None:
-        raise DomainError(_msg(
-            "msg_validation_fitzpatrick_required",
-            "Before publishing, please select Fitzpatrick skin type (section 2).",
-        ))
+        k = "doctor.msg_validation_fitzpatrick_required"
+        raise DomainError(_msg(k), api_message_key=k)
     overall = payload.get("overall_image_assessment")
     if overall not in _VALID_OVERALL:
-        raise DomainError(_msg(
-            "msg_validation_overall_assessment_required",
-            "Before publishing, please select overall image assessment (section 3).",
-        ))
+        k = "doctor.msg_validation_overall_assessment_required"
+        raise DomainError(_msg(k), api_message_key=k)
     recommendations = payload.get("recommendations") or []
     if len(recommendations) < 1:
-        raise DomainError(_msg(
-            "msg_validation_recommendations_required",
-            "Before publishing, please select at least one medical recommendation (section 10).",
-        ))
+        k = "doctor.msg_validation_recommendations_required"
+        raise DomainError(_msg(k), api_message_key=k)
     final = payload.get("final_assessment")
     if final not in _VALID_FINAL:
-        raise DomainError(_msg(
-            "msg_validation_final_assessment_required",
-            "Before publishing, please select final medical assessment (section 11).",
-        ))
+        k = "doctor.msg_validation_final_assessment_required"
+        raise DomainError(_msg(k), api_message_key=k)

@@ -247,7 +247,7 @@ def daily_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Json
     except ObjectDoesNotExist:
         return json_error("other.api.queue_or_patient_not_found", status=404)
     except StateTransitionError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
     except IntegrityError:
         return json_error("other.api.duplicate_visit_external_id", status=409)
     return JsonResponse(_serialize_entry(entry), status=201)

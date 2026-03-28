@@ -118,6 +118,34 @@ def get_admin_translation(request: Any, key: str, default: str = "") -> str:
     return mapping.get(key, default)
 
 
+def format_administration_message(
+    key: str,
+    default: str,
+    request: Any | None = None,
+    **params: Any,
+) -> str:
+    """
+    Load an administration string from DB and apply ``str.format`` placeholders
+    (e.g. ``{preset_no}``). Used for admin form validation messages where the
+    template is stored in ``translation_data`` with allowed placeholders.
+    """
+    req = request if request is not None else get_current_request()
+    if req:
+        mapping = _get_admin_map_for_request(req)
+    else:
+        mapping = get_translation_map(ADMINISTRATION_CATEGORY, "de-DE")
+    template = mapping.get(key, default)
+    if not params:
+        return template
+    try:
+        return template.format(**params)
+    except (KeyError, ValueError):
+        try:
+            return default.format(**params)
+        except (KeyError, ValueError):
+            return default
+
+
 def _resolve_db_gettext(key: str, default: str) -> str:
     """Resolve a single admin translation key; used by db_gettext_lazy."""
     request = get_current_request()
@@ -197,26 +225,59 @@ def get_staff_ui_strings(locale: str) -> dict[str, str]:
     return ui
 
 
-def resolve_api_error_message(request: Any, key: str, default: str) -> str:
+def translation_category_for_message_key(key: str) -> str:
+    """Map full translation key prefix to ``TranslationCategory`` value."""
+    if key.startswith("administration."):
+        return "administration"
+    if key.startswith("doctor."):
+        return "doctor"
+    if key.startswith("waiting_room."):
+        return "waiting_room"
+    return "other"
+
+
+def resolve_other_message(
+    request: Any | None,
+    key: str,
+    default: str,
+    **params: Any,
+) -> str:
     """
-    Resolve a REST API error string from DB (category ``other``) using the active
-    request language: staff ``preferred_locale`` when authenticated, else
-    ``request.LANGUAGE_CODE`` / Django active locale.
+    Resolve a message from DB using the key's category (``other``, ``doctor``, …) and
+    active request language; apply ``str.format`` when *params* are provided.
     """
     from django.utils import translation
 
     lang: str | None = None
-    user = getattr(request, "user", None)
-    if user and getattr(user, "is_authenticated", False) and user.is_authenticated:
-        loc = getattr(user, "preferred_locale", None) or ""
-        if loc:
-            lang = normalize_language_code(loc)
-    if lang is None:
-        lang = normalize_language_code(
-            getattr(request, "LANGUAGE_CODE", None) or translation.get_language() or "de-DE"
-        )
-    data = get_translation_map("other", lang)
-    return data.get(key, default)
+    if request is not None:
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False) and user.is_authenticated:
+            loc = getattr(user, "preferred_locale", None) or ""
+            if loc:
+                lang = normalize_language_code(loc)
+        if lang is None:
+            lang = normalize_language_code(
+                getattr(request, "LANGUAGE_CODE", None) or translation.get_language() or "de-DE"
+            )
+    else:
+        lang = normalize_language_code(translation.get_language() or "de-DE")
+    category = translation_category_for_message_key(key)
+    data = get_translation_map(category, lang)
+    template = data.get(key, default)
+    if not params:
+        return template
+    try:
+        return template.format(**params)
+    except (KeyError, ValueError):
+        try:
+            return default.format(**params)
+        except (KeyError, ValueError):
+            return default
+
+
+def resolve_api_error_message(request: Any, key: str, default: str) -> str:
+    """Resolve ``other.api.*`` (or any keyed message) from DB for *request*."""
+    return resolve_other_message(request, key, default)
 
 
 def get_ergebnisse_ui_strings(locale: str) -> dict[str, str]:

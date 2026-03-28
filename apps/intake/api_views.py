@@ -47,6 +47,11 @@ from apps.intake.services import (
     submit_patient_intake_form,
 )
 
+_INTAKE_SIGNATURE_PAYLOAD_TOO_LARGE_KEYS = frozenset({
+    "other.domain.signature_payload_too_large_before_decode",
+    "other.domain.signature_payload_too_large",
+})
+
 LOCALE_PATTERN = re.compile(r"^(de|en|pl)(-[A-Z]{2})?$")
 
 
@@ -97,7 +102,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         except ObjectDoesNotExist:
             return json_error("other.api.intake_form_not_found", status=404)
         except StateTransitionError as exc:
-            return json_error(str(exc), status=409)
+            return json_domain_error(exc, status=409)
         return JsonResponse({
             "intake_form_id": str(intake_form.id),
             "body_map_schema_version": intake_form.body_map_schema_version,
@@ -130,9 +135,9 @@ def intake_form_consents_view(request: HttpRequest, intake_form_id: UUID) -> Jso
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
     except ConsentNotActiveError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
     # Return updated consents (accepted + accepted_at for accepted ones)
     updated = list(
         PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id).values(
@@ -180,10 +185,14 @@ def intake_form_signature_view(request: HttpRequest, intake_form_id: UUID) -> Js
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
     except InvalidSignatureError as exc:
-        status = 413 if "exceeds max size" in str(exc).lower() else 400
-        return json_error(str(exc), status=status)
+        st = (
+            413
+            if (exc.api_message_key or "") in _INTAKE_SIGNATURE_PAYLOAD_TOO_LARGE_KEYS
+            else 400
+        )
+        return json_domain_error(exc, status=st)
     return JsonResponse({
         "signature_file_path": intake_form.signature_file_path,
         "signature_sha256": intake_form.signature_sha256,
@@ -217,7 +226,7 @@ def intake_form_anamnesis_view(request: HttpRequest, intake_form_id: UUID) -> Js
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
-        return json_error(str(exc), status=409)
+        return json_domain_error(exc, status=409)
 
     return JsonResponse(
         {
@@ -255,7 +264,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
     except ObjectDoesNotExist:
         return json_error("other.api.intake_form_not_found", status=404)
     except StateTransitionError as exc:
-        return json_error(str(exc), status=400)
+        return json_domain_error(exc, status=400)
     except DomainError as exc:
         return json_domain_error(exc, status=400)
 

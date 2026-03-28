@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
 from apps.reception.models import (
@@ -60,9 +61,16 @@ def create_clinic_site(
 ) -> ClinicSite:
     """Create a clinic site."""
     if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
-        raise DomainError(f"Invalid shift_code: {pdf_import_shift_code}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_shift_code", value=pdf_import_shift_code),
+            api_message_key="other.domain.invalid_shift_code",
+            api_message_params={"value": pdf_import_shift_code},
+        )
     if pdf_import_default_consulting_room_id is not None:
-        raise DomainError("Default PDF import consulting room can be configured after clinic creation.")
+        raise DomainError(
+            domain_message("other.domain.pdf_import_room_after_clinic_create"),
+            api_message_key="other.domain.pdf_import_room_after_clinic_create",
+        )
     return ClinicSite.objects.create(
         code=code,
         name=name,
@@ -100,16 +108,26 @@ def update_clinic_site(
         else:
             room = ConsultingRoom.objects.get(id=pdf_import_default_consulting_room_id)
             if room.clinic_site_id != site.id:
-                raise DomainError("Consulting room does not belong to the given clinic site.")
+                raise DomainError(
+                    domain_message("other.domain.consulting_room_wrong_clinic_site"),
+                    api_message_key="other.domain.consulting_room_wrong_clinic_site",
+                )
             site.pdf_import_default_consulting_room = room
         update_fields.append("pdf_import_default_consulting_room")
     if pdf_import_shift_code is not CLINIC_SITE_FIELD_NOT_PROVIDED:
         if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
-            raise DomainError(f"Invalid shift_code: {pdf_import_shift_code}.")
+            raise DomainError(
+                domain_message("other.domain.invalid_shift_code", value=pdf_import_shift_code),
+                api_message_key="other.domain.invalid_shift_code",
+                api_message_params={"value": pdf_import_shift_code},
+            )
         site.pdf_import_shift_code = pdf_import_shift_code
         update_fields.append("pdf_import_shift_code")
     if not update_fields:
-        raise DomainError("Provide at least one field to update.")
+        raise DomainError(
+            domain_message("other.api.provide_field_to_update"),
+            api_message_key="other.api.provide_field_to_update",
+        )
     site.save(update_fields=update_fields)
     return site
 
@@ -168,7 +186,10 @@ def update_consulting_room(
         room.is_active = is_active
         update_fields.append("is_active")
     if not update_fields:
-        raise DomainError("Provide at least one field to update.")
+        raise DomainError(
+            domain_message("other.api.provide_field_to_update"),
+            api_message_key="other.api.provide_field_to_update",
+        )
     room.save(update_fields=update_fields)
     return room
 
@@ -230,7 +251,10 @@ def update_tablet_device(
         device.clinic_site_id = clinic_site_id
         update_fields.append("clinic_site_id")
     if not update_fields:
-        raise DomainError("Provide at least one field to update.")
+        raise DomainError(
+            domain_message("other.api.provide_field_to_update"),
+            api_message_key="other.api.provide_field_to_update",
+        )
     device.save(update_fields=update_fields)
     return device
 
@@ -310,11 +334,22 @@ def create_daily_queue(
     ClinicSite.objects.get(id=clinic_site_id)
     room = ConsultingRoom.objects.get(id=consulting_room_id)
     if str(room.clinic_site_id) != str(clinic_site_id):
-        raise DomainError("Consulting room does not belong to the given clinic site.")
+        raise DomainError(
+            domain_message("other.domain.consulting_room_wrong_clinic_site"),
+            api_message_key="other.domain.consulting_room_wrong_clinic_site",
+        )
     if shift_code not in [c[0] for c in QueueShift.choices]:
-        raise DomainError(f"Invalid shift_code: {shift_code}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_shift_code", value=shift_code),
+            api_message_key="other.domain.invalid_shift_code",
+            api_message_params={"value": shift_code},
+        )
     if source not in [c[0] for c in QueueSource.choices]:
-        raise DomainError(f"Invalid source: {source}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_queue_source", value=source),
+            api_message_key="other.domain.invalid_queue_source",
+            api_message_params={"value": source},
+        )
     if assigned_doctor_id is not None:
         StaffUser.objects.get(id=assigned_doctor_id)
     if DailyQueue.objects.filter(
@@ -323,7 +358,10 @@ def create_daily_queue(
         consulting_room_id=consulting_room_id,
         shift_code=shift_code,
     ).exists():
-        raise StateTransitionError("Duplicate queue for this date/site/room/shift.")
+        raise StateTransitionError(
+            domain_message("other.api.duplicate_queue_slot"),
+            api_message_key="other.api.duplicate_queue_slot",
+        )
     return DailyQueue.objects.create(
         queue_date=queue_date,
         clinic_site_id=clinic_site_id,
@@ -344,7 +382,11 @@ def update_daily_queue_status(
 ) -> DailyQueue:
     """Update queue status (OPEN/CLOSED)."""
     if status not in [c[0] for c in QueueStatus.choices]:
-        raise DomainError(f"Invalid status: {status}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_queue_status", value=status),
+            api_message_key="other.domain.invalid_queue_status",
+            api_message_params={"value": status},
+        )
     queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     queue.status = status
     queue.save(update_fields=["status", "updated_at"])
@@ -360,9 +402,16 @@ def update_daily_queue(
 ) -> DailyQueue:
     """Update queue status and/or assigned doctor. At least one must be provided."""
     if status is None and assigned_doctor_id is NOT_PROVIDED:
-        raise DomainError("At least one of status or assigned_doctor_id must be provided.")
+        raise DomainError(
+            domain_message("other.domain.daily_queue_update_requires_fields"),
+            api_message_key="other.domain.daily_queue_update_requires_fields",
+        )
     if status is not None and status not in [c[0] for c in QueueStatus.choices]:
-        raise DomainError(f"Invalid status: {status}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_queue_status", value=status),
+            api_message_key="other.domain.invalid_queue_status",
+            api_message_params={"value": status},
+        )
     if assigned_doctor_id is not NOT_PROVIDED and assigned_doctor_id is not None:
         StaffUser.objects.get(id=assigned_doctor_id)
     queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
@@ -386,7 +435,11 @@ def update_queue_entry(
 ) -> QueueEntry:
     """Update queue entry status and/or notes. DELETE semantic = set CANCELLED."""
     if entry_status is not None and entry_status not in [c[0] for c in QueueEntryStatus.choices]:
-        raise DomainError(f"Invalid entry_status: {entry_status}.")
+        raise DomainError(
+            domain_message("other.domain.invalid_queue_entry_status", value=entry_status),
+            api_message_key="other.domain.invalid_queue_entry_status",
+            api_message_params={"value": entry_status},
+        )
     entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
     update_fields: list[str] = ["updated_at"]
     if entry_status is not None:
@@ -412,7 +465,10 @@ def create_queue_entry(
     """Create queue entry and auto-assign next position for the queue."""
     daily_queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     if daily_queue.status != QueueStatus.OPEN:
-        raise StateTransitionError("Cannot add patient to closed queue.")
+        raise StateTransitionError(
+            domain_message("other.domain.queue_closed_cannot_add_patient"),
+            api_message_key="other.domain.queue_closed_cannot_add_patient",
+        )
 
     next_position = (
         QueueEntry.objects.select_for_update()
@@ -449,9 +505,16 @@ def issue_tablet_session_latest_wins(
     atomically to the newly created session.
     """
     if expires_in_minutes <= 0:
-        raise DomainError("expires_in_minutes must be positive.")
+        raise DomainError(
+            domain_message("other.domain.expires_in_minutes_positive"),
+            api_message_key="other.domain.expires_in_minutes_positive",
+        )
     if not _is_supported_locale(form_locale):
-        raise InvalidLocaleError(f"Unsupported locale '{form_locale}'.")
+        raise InvalidLocaleError(
+            domain_message("other.domain.unsupported_form_locale", locale=form_locale),
+            api_message_key="other.domain.unsupported_form_locale",
+            api_message_params={"locale": form_locale},
+        )
 
     queue_entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
 

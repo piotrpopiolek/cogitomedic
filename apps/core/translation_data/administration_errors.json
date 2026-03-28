@@ -1,0 +1,52 @@
+{
+  "administration.error_daily_queue_consulting_room_not_found": {
+    "de": "Der ausgewählte Praxisraum ist nicht vorhanden oder wurde entfernt.",
+    "en": "The selected consulting room does not exist.",
+    "pl": "Wybrany gabinet nie istnieje lub został usunięty."
+  },
+  "administration.error_daily_queue_consulting_room_site_mismatch": {
+    "de": "Der Praxisraum muss zum ausgewählten Standort gehören.",
+    "en": "Consulting room must belong to the selected clinic site.",
+    "pl": "Gabinet musi należeć do wybranej placówki."
+  },
+  "administration.error_doctor_template_requires_owner_or_site": {
+    "de": "Eine nicht-globale Vorlage benötigt entweder einen besitzenden Benutzer oder einen Standort.",
+    "en": "A non-global template must have either an owner user or a clinic site.",
+    "pl": "Szablon inny niż globalny wymaga właściciela (użytkownika) albo przypisania do placówki."
+  },
+  "administration.error_doctor_template_owner_and_site_exclusive": {
+    "de": "Eine Vorlage kann nicht gleichzeitig einen Besitzer und einen Standort haben.",
+    "en": "A template cannot have both an owner user and a clinic site.",
+    "pl": "Szablon nie może jednocześnie mieć właściciela i przypisania do placówki."
+  },
+  "administration.error_lesion_favorites_invalid_json_list": {
+    "de": "Ungültige JSON-Liste für Läsionsgruppen-Favoriten.",
+    "en": "Invalid JSON list for lesion group favorites.",
+    "pl": "Nieprawidłowa lista JSON dla ulubionych grup zmian."
+  },
+  "administration.error_lesion_favorites_preset_not_object": {
+    "de": "Voreinstellung {preset_no}: Es muss ein JSON-Objekt sein.",
+    "en": "Preset {preset_no}: must be an object.",
+    "pl": "Preset {preset_no}: wymagany jest obiekt JSON."
+  },
+  "administration.error_lesion_favorites_preset_invalid": {
+    "de": "Voreinstellung {preset_no}: {details}",
+    "en": "Preset {preset_no}: {details}",
+    "pl": "Preset {preset_no}: {details}"
+  },
+  "administration.error_lesion_favorites_preset_bad_feature": {
+    "de": "Voreinstellung {preset_no}: ungültiger Wert „{code}“ für dermatoskopische Merkmale. Zulässig: {allowed}.",
+    "en": "Preset {preset_no}: invalid dermatoscopic_features value '{code}'. Allowed: {allowed}.",
+    "pl": "Preset {preset_no}: niedozwolona wartość „{code}” w polu cech dermatoskopowych. Dozwolone: {allowed}."
+  },
+  "administration.error_lesion_favorites_preset_bad_clinical": {
+    "de": "Voreinstellung {preset_no}: ungültige klinisch-dermatoskopische Einschätzung „{value}“. Zulässig: {allowed}.",
+    "en": "Preset {preset_no}: invalid clinical_assessment '{value}'. Allowed: {allowed}.",
+    "pl": "Preset {preset_no}: niedozwolona ocena kliniczno-dermatoskopowa „{value}”. Dozwolone: {allowed}."
+  },
+  "administration.error_lesion_favorites_preset_bad_malignancy": {
+    "de": "Voreinstellung {preset_no}: ungültiges Malignitätsrisiko „{value}“. Zulässig: {allowed}.",
+    "en": "Preset {preset_no}: invalid malignancy_risk '{value}'. Allowed: {allowed}.",
+    "pl": "Preset {preset_no}: niedozwolone ryzyko złośliwości „{value}”. Dozwolone: {allowed}."
+  }
+}

@@ -5,6 +5,7 @@ from datetime import date
 
 from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models import Q
 from django.test import Client, RequestFactory, TestCase
@@ -12,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.intake.models import PatientIntakeForm
-from apps.reception.admin import DailyQueueAdmin
+from apps.reception.admin import DailyQueueAdmin, _admin_resolve_dailyqueue_clinic_site_id
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -258,11 +259,11 @@ class DailyQueueAdminImportTests(TestCase):
 
 
 class DailyQueueAdminDoctorFilterTests(TestCase):
-    def test_dailyqueue_admin_uses_autocomplete_for_doctor_clinic_and_room(self) -> None:
+    def test_dailyqueue_admin_autocomplete_excludes_consulting_room(self) -> None:
         admin_obj = DailyQueueAdmin(DailyQueue, AdminSite())
         self.assertEqual(
             admin_obj.autocomplete_fields,
-            ("clinic_site", "consulting_room", "assigned_doctor"),
+            ("clinic_site", "assigned_doctor"),
         )
 
     def test_assigned_doctor_field_has_doctor_limit_choices_to(self) -> None:
@@ -295,6 +296,51 @@ class DailyQueueAdminDoctorFilterTests(TestCase):
 
         self.assertIn(doctor.id, user_ids)
         self.assertNotIn(receptionist.id, user_ids)
+
+    def test_daily_queue_clean_requires_consulting_room_same_clinic_site(self) -> None:
+        site_a = ClinicSite.objects.create(code="A", name="Site A")
+        site_b = ClinicSite.objects.create(code="B", name="Site B")
+        room_b = ConsultingRoom.objects.create(clinic_site=site_b, code="RB", name="Room B")
+        user = StaffUser.objects.create_user(
+            username="dq-clean",
+            email="dq-clean@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        dq = DailyQueue(
+            queue_date=date(2026, 4, 1),
+            clinic_site=site_a,
+            consulting_room=room_b,
+            created_by_user=user,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            dq.full_clean()
+        self.assertIn("consulting_room", ctx.exception.error_dict)
+
+    def test_admin_resolve_clinic_site_prefers_post_over_obj(self) -> None:
+        site_a = ClinicSite.objects.create(code="PA", name="Post A")
+        site_b = ClinicSite.objects.create(code="PB", name="Post B")
+        user = StaffUser.objects.create_user(
+            username="dq-post",
+            email="dq-post@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        dq = DailyQueue.objects.create(
+            queue_date=date(2026, 4, 2),
+            clinic_site=site_b,
+            consulting_room=ConsultingRoom.objects.create(clinic_site=site_b, code="RPB", name="R B"),
+            created_by_user=user,
+        )
+        request = RequestFactory().post(
+            "/admin/reception/dailyqueue/change/",
+            {"clinic_site": str(site_a.id)},
+        )
+        self.assertEqual(_admin_resolve_dailyqueue_clinic_site_id(request, dq), site_a.id)
+
+        get_req = RequestFactory().get("/admin/reception/dailyqueue/change/")
+        self.assertEqual(_admin_resolve_dailyqueue_clinic_site_id(get_req, dq), site_b.id)
+
 
 class XlsxImportParsingTests(TestCase):
     def test_cleanup_clinic_name_removes_trailing_weekday_and_date(self) -> None:

@@ -264,6 +264,16 @@
     "en": "phone is required.",
     "pl": "Numer telefonu jest wymagany."
   },
+  "other.api.publish_request_id_locale_conflict": {
+    "de": "publish_request_id wurde bereits mit anderem publish_locale verwendet.",
+    "en": "publish_request_id already used with different publish_locale.",
+    "pl": "publish_request_id zostało już użyte z innym publish_locale."
+  },
+  "other.api.publish_request_id_required": {
+    "de": "publish_request_id ist für die Veröffentlichung erforderlich.",
+    "en": "publish_request_id is required for publish.",
+    "pl": "publish_request_id jest wymagane przy publikacji."
+  },
   "other.api.provide_entry_status_or_notes": {
     "de": "entry_status und/oder notes angeben.",
     "en": "Provide entry_status and/or notes.",
