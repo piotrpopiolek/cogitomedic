@@ -139,8 +139,8 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             body = CreateMedicalDocumentRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -312,8 +312,8 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         body = SaveDraftMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -369,8 +369,8 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
         body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -472,8 +472,8 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
         body = RetryProcessingRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         body = RetryProcessingRequest()
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -584,8 +584,8 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             body = DoctorTemplateCreateRequest.model_validate(read_json_body(request))
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
-        except InvalidRequestBodyEncoding:
-            return json_error("other.api.invalid_request_encoding", status=400)
+        except InvalidRequestBodyEncoding as exc:
+            return json_domain_error(exc)
         except ValidationError as exc:
             return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -655,8 +655,8 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
         body = DoctorTemplateUpdateRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

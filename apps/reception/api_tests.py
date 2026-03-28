@@ -628,6 +628,9 @@ class TabletDevicesApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
+        self.clinic_a = ClinicSite.objects.create(code="TD-A", name="Tablet Device A")
+        self.clinic_b = ClinicSite.objects.create(code="TD-B", name="Tablet Device B")
+        self.reception_user.clinic_sites.add(self.clinic_a)
         self.client.login(username="tablet-api", password="safe-password")
 
     def test_get_tablet_devices_empty(self) -> None:
@@ -648,18 +651,17 @@ class TabletDevicesApiTests(TestCase):
         self.assertIsNone(payload.get("clinic_site_id"))
 
     def test_post_tablet_device_with_clinic_site_id(self) -> None:
-        clinic = ClinicSite.objects.create(code="T1", name="Tablet Clinic")
         response = self.client.post(
             "/api/v1/tablet-devices",
             data=json.dumps({
                 "android_id": "device-TAB-SITE",
                 "is_active": True,
-                "clinic_site_id": str(clinic.id),
+                "clinic_site_id": str(self.clinic_a.id),
             }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
+        self.assertEqual(response.json()["clinic_site_id"], str(self.clinic_a.id))
 
     def test_post_tablet_device_duplicate_returns_409(self) -> None:
         TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
@@ -671,8 +673,21 @@ class TabletDevicesApiTests(TestCase):
         self.assertEqual(response.status_code, 409)
 
     def test_get_tablet_devices_filter_and_search(self) -> None:
-        TabletDevice.objects.create(android_id="device-TAB-ACT", is_active=True)
-        TabletDevice.objects.create(android_id="device-TAB-OFF", is_active=False)
+        TabletDevice.objects.create(
+            android_id="device-TAB-ACT",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
+        TabletDevice.objects.create(
+            android_id="device-TAB-OFF",
+            is_active=False,
+            clinic_site=self.clinic_a,
+        )
+        TabletDevice.objects.create(
+            android_id="device-TAB-OTHER",
+            is_active=True,
+            clinic_site=self.clinic_b,
+        )
         response = self.client.get("/api/v1/tablet-devices?is_active=true&search=TAB-ACT")
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]
@@ -684,25 +699,32 @@ class TabletDevicesApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_get_tablet_device_detail(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-001",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
         response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(device.id))
         self.assertIn("clinic_site_id", response.json())
 
     def test_get_tablet_device_detail_includes_clinic_site_id(self) -> None:
-        clinic = ClinicSite.objects.create(code="D1", name="Device Clinic")
         device = TabletDevice.objects.create(
             android_id="device-TAB-SITE1",
             is_active=True,
-            clinic_site=clinic,
+            clinic_site=self.clinic_a,
         )
         response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
+        self.assertEqual(response.json()["clinic_site_id"], str(self.clinic_a.id))
 
     def test_patch_tablet_device(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-001",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
         response = self.client.patch(
             f"/api/v1/tablet-devices/{device.id}",
             data=json.dumps({"android_id": "device-TAB-001A", "is_active": False}),
@@ -714,20 +736,27 @@ class TabletDevicesApiTests(TestCase):
         self.assertFalse(payload["is_active"])
 
     def test_patch_tablet_device_clinic_site_id(self) -> None:
-        clinic = ClinicSite.objects.create(code="P1", name="Patch Clinic")
-        device = TabletDevice.objects.create(android_id="device-TAB-PATCH", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-PATCH",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
         response = self.client.patch(
             f"/api/v1/tablet-devices/{device.id}",
-            data=json.dumps({"clinic_site_id": str(clinic.id)}),
+            data=json.dumps({"clinic_site_id": str(self.clinic_a.id)}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["clinic_site_id"], str(clinic.id))
+        self.assertEqual(response.json()["clinic_site_id"], str(self.clinic_a.id))
         device.refresh_from_db()
-        self.assertEqual(device.clinic_site_id, clinic.id)
+        self.assertEqual(device.clinic_site_id, self.clinic_a.id)
 
     def test_delete_tablet_device_soft_deactivates(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-001",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
         response = self.client.delete(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -736,7 +765,11 @@ class TabletDevicesApiTests(TestCase):
         self.assertFalse(device.is_active)
 
     def test_post_tablet_heartbeat_updates_last_seen_at(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-001", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-001",
+            is_active=True,
+            clinic_site=self.clinic_a,
+        )
         self.assertIsNone(device.last_seen_at)
         response = self.client.post(
             f"/api/v1/tablet-devices/{device.id}/heartbeat",
@@ -751,6 +784,49 @@ class TabletDevicesApiTests(TestCase):
 
     def test_tablet_device_not_found_returns_404(self) -> None:
         response = self.client.get(f"/api/v1/tablet-devices/{uuid4()}")
+        self.assertEqual(response.status_code, 404)
+
+    def test_reception_list_sees_only_devices_from_assigned_clinics(self) -> None:
+        TabletDevice.objects.create(android_id="device-TAB-IN", is_active=True, clinic_site=self.clinic_a)
+        TabletDevice.objects.create(android_id="device-TAB-OUT", is_active=True, clinic_site=self.clinic_b)
+        response = self.client.get("/api/v1/tablet-devices")
+        self.assertEqual(response.status_code, 200)
+        android_ids = {item["android_id"] for item in response.json()["items"]}
+        self.assertIn("device-TAB-IN", android_ids)
+        self.assertNotIn("device-TAB-OUT", android_ids)
+
+    def test_reception_gets_404_for_tablet_device_outside_scope(self) -> None:
+        device = TabletDevice.objects.create(android_id="device-TAB-OUT-DETAIL", is_active=True, clinic_site=self.clinic_b)
+        response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
+        self.assertEqual(response.status_code, 404)
+
+    def test_reception_gets_404_for_tablet_device_retry_actions_outside_scope(self) -> None:
+        device = TabletDevice.objects.create(android_id="device-TAB-OUT-PATCH", is_active=True, clinic_site=self.clinic_b)
+        patch_response = self.client.patch(
+            f"/api/v1/tablet-devices/{device.id}",
+            data=json.dumps({"is_active": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_response.status_code, 404)
+        heartbeat_response = self.client.post(
+            f"/api/v1/tablet-devices/{device.id}/heartbeat",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(heartbeat_response.status_code, 404)
+
+    def test_reception_cannot_create_tablet_device_for_unassigned_clinic(self) -> None:
+        response = self.client.post(
+            "/api/v1/tablet-devices",
+            data=json.dumps(
+                {
+                    "android_id": "device-TAB-OUT-CREATE",
+                    "is_active": True,
+                    "clinic_site_id": str(self.clinic_b.id),
+                }
+            ),
+            content_type="application/json",
+        )
         self.assertEqual(response.status_code, 404)
 
 
@@ -1048,12 +1124,18 @@ class ListLimitApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
+        self.clinic = ClinicSite.objects.create(code="LL-A", name="List Limit Clinic")
+        self.reception_user.clinic_sites.add(self.clinic)
         self.client.login(username="listlimit-api", password="safe-password")
 
     def test_tablet_devices_list_uses_default_limit(self) -> None:
         """Without limit param, list returns DEFAULT_LIST_LIMIT (20) items."""
         for idx in range(120):
-            TabletDevice.objects.create(android_id=f"device-TAB-{idx}", is_active=True)
+            TabletDevice.objects.create(
+                android_id=f"device-TAB-{idx}",
+                is_active=True,
+                clinic_site=self.clinic,
+            )
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 20)

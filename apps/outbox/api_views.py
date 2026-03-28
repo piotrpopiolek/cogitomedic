@@ -8,6 +8,7 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
     parse_list_limit,
@@ -54,7 +55,14 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
-    qs = OutboxEvent.objects.order_by("-created_at")
+    qs = OutboxEvent.objects.select_related(
+        "medical_document_version__medical_document__queue_entry__daily_queue"
+    ).order_by("-created_at")
+    scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
+    if scoped_clinic_site_ids is not None:
+        qs = qs.filter(
+            medical_document_version__medical_document__queue_entry__daily_queue__clinic_site_id__in=scoped_clinic_site_ids
+        )
     if body.status:
         qs = qs.filter(status=body.status)
     if body.event_type:
@@ -89,8 +97,8 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
         body = ProcessOutboxRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
@@ -125,14 +133,23 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
         body = RetryOutboxEventRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 
     try:
-        event = OutboxEvent.objects.get(id=outbox_event_id)
+        event = OutboxEvent.objects.select_related(
+            "medical_document_version__medical_document__queue_entry__daily_queue"
+        ).get(id=outbox_event_id)
     except ObjectDoesNotExist:
+        return json_error("other.api.outbox_event_not_found", status=404)
+    scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
+    if (
+        scoped_clinic_site_ids is not None
+        and event.medical_document_version.medical_document.queue_entry.daily_queue.clinic_site_id
+        not in scoped_clinic_site_ids
+    ):
         return json_error("other.api.outbox_event_not_found", status=404)
 
     try:
@@ -166,8 +183,8 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
         body = RetentionRunRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
-    except InvalidRequestBodyEncoding:
-        return json_error("other.api.invalid_request_encoding", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
     except ValidationError as exc:
         return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
 

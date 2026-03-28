@@ -160,9 +160,9 @@
     "pl": "Nieprawidłowy lub wygasły kod."
   },
   "other.api.invalid_request_encoding": {
-    "de": "Ungültige Anfragekodierung.",
-    "en": "Invalid request encoding.",
-    "pl": "Nieprawidłowe kodowanie żądania."
+    "de": "Der Anfragetext ist kein gültiges UTF-8.",
+    "en": "Request body is not valid UTF-8.",
+    "pl": "Treść żądania nie jest prawidłowym UTF-8."
   },
   "other.api.invalid_role_query": {
     "de": "Ungültiger rollen-Abfrageparameter.",
@@ -308,6 +308,11 @@
     "de": "Warteschlange oder Patient nicht gefunden.",
     "en": "Queue or patient not found.",
     "pl": "Nie znaleziono kolejki lub pacjenta."
+  },
+  "other.api.request_body_too_large": {
+    "de": "Der Anfragetext überschreitet die maximale Größe ({max_bytes} Bytes).",
+    "en": "Request body exceeds maximum size ({max_bytes} bytes).",
+    "pl": "Treść żądania przekracza maksymalny rozmiar ({max_bytes} bajtów)."
   },
   "other.api.retry_count_gte_integer": {
     "de": "retry_count_gte muss eine Ganzzahl sein.",

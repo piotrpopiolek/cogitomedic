@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
+from apps.core.api_utils import get_scoped_clinic_site_ids, get_tablet_scope_clinic_site_ids
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
@@ -62,6 +63,16 @@ def _get_tablet_device_from_session(request: HttpRequest) -> TabletDevice | None
     except ObjectDoesNotExist:
         return None
 
+
+def _resolve_tablet_area_scope_ids(request: HttpRequest) -> list[UUID] | None:
+    """Resolve clinic scope for tablet-area pages: ADMIN sees all, others are scoped."""
+    scoped_ids = get_scoped_clinic_site_ids(request.user)
+    if request.user.is_tablet:
+        tablet_scope_ids = get_tablet_scope_clinic_site_ids(request)
+        if tablet_scope_ids is not None:
+            return tablet_scope_ids
+    return scoped_ids
+
 @require_http_methods(["GET", "POST"])
 def tablet_login_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated and _tablet_role_ok(request):
@@ -104,6 +115,11 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
         "clinic_site", "consulting_room"
     ).order_by("clinic_site__name", "consulting_room__name")
     tablet_unassigned = False
+    scope_ids = _resolve_tablet_area_scope_ids(request)
+    if scope_ids is not None:
+        qs = qs.filter(clinic_site_id__in=scope_ids)
+        if request.user.is_tablet and not scope_ids:
+            tablet_unassigned = True
     device = _get_tablet_device_from_session(request)
     if device is not None:
         if device.clinic_site_id is not None:
@@ -133,6 +149,10 @@ def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> Htt
         ctx = {**_staff_context(request), "message": "Kolejka nie istnieje."}
         return render(request, "tablet/error.html", ctx, status=404)
     device = _get_tablet_device_from_session(request)
+    scope_ids = _resolve_tablet_area_scope_ids(request)
+    if scope_ids is not None and queue.clinic_site_id not in scope_ids:
+        ctx = {**_staff_context(request), "message": "Brak dostępu do tej kolejki."}
+        return render(request, "tablet/error.html", ctx, status=403)
     if device is not None and device.clinic_site_id is not None:
         if queue.clinic_site_id != device.clinic_site_id:
             ctx = {**_staff_context(request), "message": "Brak dostępu do tej kolejki."}
@@ -168,6 +188,10 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
         ctx["message"] = ctx["staff_ui"]["queue_not_today"]
         return render(request, "tablet/error.html", ctx, status=400)
     device = _get_tablet_device_from_session(request)
+    scope_ids = _resolve_tablet_area_scope_ids(request)
+    if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
+        ctx = {**_staff_context(request), "message": "Brak dostępu do tego wpisu."}
+        return render(request, "tablet/error.html", ctx, status=403)
     if device is not None and device.clinic_site_id is not None:
         if entry.daily_queue.clinic_site_id != device.clinic_site_id:
             ctx = {**_staff_context(request), "message": "Brak dostępu do tego wpisu."}
@@ -233,6 +257,7 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             intake_form_id=intake_form_id,
             form_locale=form_locale,
             tablet_restrict_to_today=is_tablet,
+            allowed_clinic_site_ids=_resolve_tablet_area_scope_ids(request),
         )
     except ObjectDoesNotExist:
         ctx = {**_staff_context(request), "message": "Formularz nie istnieje lub brak dostępu."}
