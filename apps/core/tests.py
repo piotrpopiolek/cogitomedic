@@ -31,18 +31,19 @@ class TranslationServiceTests(TestCase):
         )
 
     def test_signal_bumps_version_on_value_save(self) -> None:
+        get_translation_map("doctor", "pl-PL")
         before = TranslationCacheVersion.objects.get(
             category=TranslationCategory.DOCTOR,
-            language_code="pl",
+            language_code="pl-PL",
         ).version
         TranslationValue.objects.create(
             translation_key=self.key,
-            language_code="pl",
+            language_code="pl-PL",
             value="Wartosc",
         )
         after = TranslationCacheVersion.objects.get(
             category=TranslationCategory.DOCTOR,
-            language_code="pl",
+            language_code="pl-PL",
         ).version
         self.assertEqual(after, before + 1)
 
@@ -57,12 +58,12 @@ class TranslationServiceTests(TestCase):
         )
         TranslationValue.objects.create(
             translation_key=self.key,
-            language_code="de",
+            language_code="de-DE",
             value="Aktiv",
         )
         TranslationValue.objects.create(
             translation_key=deprecated_key,
-            language_code="de",
+            language_code="de-DE",
             value="Legacy",
         )
         result = get_translation_map("doctor", "de-DE")
@@ -72,22 +73,22 @@ class TranslationServiceTests(TestCase):
     def test_get_translation_map_refreshes_after_value_update(self) -> None:
         value = TranslationValue.objects.create(
             translation_key=self.key,
-            language_code="de",
+            language_code="de-DE",
             value="Old value",
         )
-        first = get_translation_map("doctor", "de")
+        first = get_translation_map("doctor", "de-DE")
         self.assertEqual(first.get("doctor.test_key"), "Old value")
 
         value.value = "New value"
         value.save()
 
-        second = get_translation_map("doctor", "de")
+        second = get_translation_map("doctor", "de-DE")
         self.assertEqual(second.get("doctor.test_key"), "New value")
 
     def test_value_clean_rejects_html_when_not_allowed(self) -> None:
         value = TranslationValue(
             translation_key=self.key,
-            language_code="de",
+            language_code="de-DE",
             value="<b>x</b>",
         )
         with self.assertRaises(ValidationError):
@@ -104,7 +105,7 @@ class TranslationServiceTests(TestCase):
         )
         value = TranslationValue(
             translation_key=html_key,
-            language_code="de",
+            language_code="de-DE",
             value='<b>ok</b><script>alert("x")</script>',
         )
         value.full_clean()
@@ -121,7 +122,7 @@ class TranslationServiceTests(TestCase):
         )
         value = TranslationValue(
             translation_key=placeholder_key,
-            language_code="de",
+            language_code="de-DE",
             value="Hallo %s",
         )
         with self.assertRaises(ValidationError):
@@ -138,7 +139,7 @@ class TranslationServiceTests(TestCase):
         )
         value = TranslationValue(
             translation_key=placeholder_key,
-            language_code="de",
+            language_code="de-DE",
             value="Hallo %(name)s",
         )
         with self.assertRaises(ValidationError):
@@ -155,7 +156,7 @@ class TranslationServiceTests(TestCase):
         )
         value = TranslationValue(
             translation_key=placeholder_key,
-            language_code="de",
+            language_code="de-DE",
             value="Kwota {amount:.2f}",
         )
         with self.assertRaises(ValidationError):
@@ -172,7 +173,7 @@ class TranslationServiceTests(TestCase):
         )
         value = TranslationValue(
             translation_key=placeholder_key,
-            language_code="de",
+            language_code="de-DE",
             value="Hallo {surname}",
         )
         with self.assertRaises(ValidationError):
@@ -194,7 +195,7 @@ class TranslationCompletenessCommandTests(TestCase):
     def test_command_fails_on_missing_languages(self) -> None:
         TranslationValue.objects.create(
             translation_key=self.key,
-            language_code="de",
+            language_code="de-DE",
             value="DE",
         )
         with self.assertRaises(CommandError):
@@ -206,9 +207,9 @@ class TranslationCompletenessCommandTests(TestCase):
             call_command("check_translations_completeness")
 
     def test_command_passes_when_all_languages_present(self) -> None:
-        TranslationValue.objects.create(translation_key=self.key, language_code="de", value="DE")
-        TranslationValue.objects.create(translation_key=self.key, language_code="en", value="EN")
-        TranslationValue.objects.create(translation_key=self.key, language_code="pl", value="PL")
+        TranslationValue.objects.create(translation_key=self.key, language_code="de-DE", value="DE")
+        TranslationValue.objects.create(translation_key=self.key, language_code="en-GB", value="EN")
+        TranslationValue.objects.create(translation_key=self.key, language_code="pl-PL", value="PL")
         out = StringIO()
         call_command("check_translations_completeness", stdout=out)
         self.assertIn("passed", out.getvalue().lower())

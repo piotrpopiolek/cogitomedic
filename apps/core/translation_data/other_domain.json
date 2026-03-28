@@ -1,0 +1,222 @@
+{
+  "other.domain.invalid_shift_code": {
+    "de": "Ungültiger Schichtcode: {value}.",
+    "en": "Invalid shift code: {value}.",
+    "pl": "Nieprawidłowy kod zmiany: {value}."
+  },
+  "other.domain.pdf_import_room_after_clinic_create": {
+    "de": "Der Standard-Raum für den PDF-Import kann nach der Klinikerstellung konfiguriert werden.",
+    "en": "Default PDF import consulting room can be configured after clinic creation.",
+    "pl": "Domyślna sala importu PDF może być skonfigurowana po utworzeniu placówki."
+  },
+  "other.domain.consulting_room_wrong_clinic_site": {
+    "de": "Die Sprechstunde gehört nicht zur angegebenen Klinik.",
+    "en": "Consulting room does not belong to the given clinic site.",
+    "pl": "Gabinet nie należy do wskazanej placówki."
+  },
+  "other.domain.invalid_queue_source": {
+    "de": "Ungültige Warteschlangenquelle: {value}.",
+    "en": "Invalid queue source: {value}.",
+    "pl": "Nieprawidłowe źródło kolejki: {value}."
+  },
+  "other.domain.invalid_queue_status": {
+    "de": "Ungültiger Warteschlangenstatus: {value}.",
+    "en": "Invalid queue status: {value}.",
+    "pl": "Nieprawidłowy status kolejki: {value}."
+  },
+  "other.domain.daily_queue_update_requires_fields": {
+    "de": "Mindestens eines der Felder status oder assigned_doctor_id muss angegeben werden.",
+    "en": "At least one of status or assigned_doctor_id must be provided.",
+    "pl": "Należy podać co najmniej jedno pole: status lub assigned_doctor_id."
+  },
+  "other.domain.invalid_queue_entry_status": {
+    "de": "Ungültiger Eintragsstatus: {value}.",
+    "en": "Invalid queue entry status: {value}.",
+    "pl": "Nieprawidłowy status wpisu kolejki: {value}."
+  },
+  "other.domain.queue_closed_cannot_add_patient": {
+    "de": "Patient kann nicht zu einer geschlossenen Warteschlange hinzugefügt werden.",
+    "en": "Cannot add patient to closed queue.",
+    "pl": "Nie można dodać pacjenta do zamkniętej kolejki."
+  },
+  "other.domain.expires_in_minutes_positive": {
+    "de": "expires_in_minutes muss positiv sein.",
+    "en": "expires_in_minutes must be positive.",
+    "pl": "expires_in_minutes musi być dodatnie."
+  },
+  "other.domain.unsupported_form_locale": {
+    "de": "Nicht unterstützte Sprachumgebung: {locale}.",
+    "en": "Unsupported locale '{locale}'.",
+    "pl": "Nieobsługiwany język formularza: '{locale}'."
+  },
+  "other.domain.intake_form_wrong_queue_entry": {
+    "de": "Die Anamnese gehört nicht zu diesem Warteschlangeneintrag.",
+    "en": "Intake form does not belong to this queue entry.",
+    "pl": "Ankieta nie należy do tego wpisu kolejki."
+  },
+  "other.domain.intake_form_must_be_submitted": {
+    "de": "Die Anamnese muss eingereicht sein.",
+    "en": "Intake form must be submitted.",
+    "pl": "Ankieta musi być złożona."
+  },
+  "other.domain.publish_locale_required": {
+    "de": "publish_locale ist für die Veröffentlichung erforderlich.",
+    "en": "publish_locale is required for publish.",
+    "pl": "publish_locale jest wymagane przy publikacji."
+  },
+  "other.domain.no_published_version_to_revoke": {
+    "de": "Keine veröffentlichte Version zum Widerrufen.",
+    "en": "No published version to revoke.",
+    "pl": "Brak opublikowanej wersji do cofnięcia."
+  },
+  "other.domain.document_processing_retry_role": {
+    "de": "Nur ADMIN oder RECEPTION können die Verarbeitung erneut anstoßen.",
+    "en": "Only ADMIN or RECEPTION can retry processing.",
+    "pl": "Tylko ADMIN lub RECEPCJA mogą ponowić przetwarzanie."
+  },
+  "other.domain.medical_document_no_version": {
+    "de": "Keine Dokumentversion gefunden.",
+    "en": "No document version found.",
+    "pl": "Nie znaleziono wersji dokumentu."
+  },
+  "other.domain.no_retryable_processing_step": {
+    "de": "Für die neueste Version ist kein wiederholbarer Verarbeitungsschritt vorhanden.",
+    "en": "No retryable processing step found for latest version.",
+    "pl": "Brak kroku przetwarzania do ponowienia dla najnowszej wersji."
+  },
+  "other.domain.patient_phone_required_sms": {
+    "de": "Patient hat keine Telefonnummer; SMS kann nicht gesendet werden.",
+    "en": "Patient has no phone number; cannot send SMS.",
+    "pl": "Pacjent nie ma numeru telefonu; nie można wysłać SMS."
+  },
+  "other.domain.retention_days_positive": {
+    "de": "older_than_days muss positiv sein.",
+    "en": "older_than_days must be positive.",
+    "pl": "older_than_days musi być dodatnie."
+  },
+  "other.domain.outbox_event_not_retryable": {
+    "de": "Ereignis ist im aktuellen Status nicht wiederholbar.",
+    "en": "Event is not retryable in current status.",
+    "pl": "Zdarzenie nie może być ponowione w bieżącym statusie."
+  },
+  "other.domain.invalid_staff_role": {
+    "de": "Ungültige Rolle: {role}.",
+    "en": "Invalid role: {role}.",
+    "pl": "Nieprawidłowa rola: {role}."
+  },
+  "other.domain.intake_contact_method_required": {
+    "de": "Mindestens eine Kontaktmethode ist erforderlich (E-MAIL, SMS, TELEFON).",
+    "en": "At least one contact method is required (EMAIL, SMS, PHONE).",
+    "pl": "Wymagana jest co najmniej jedna metoda kontaktu (EMAIL, SMS, TELEFON)."
+  },
+  "other.domain.intake_contact_method_invalid": {
+    "de": "Ausgewählte Kontaktmethoden sind ungültig. Erlaubt: E-MAIL, SMS, TELEFON.",
+    "en": "Selected contact methods are invalid. Allowed: EMAIL, SMS, PHONE.",
+    "pl": "Wybrane metody kontaktu są niedozwolone. Dozwolone: EMAIL, SMS, PHONE."
+  },
+  "other.domain.intake_signature_path_missing": {
+    "de": "Signaturpfad fehlt.",
+    "en": "Signature path is missing.",
+    "pl": "Brak ścieżki pliku podpisu."
+  },
+  "other.domain.intake_signature_file_missing": {
+    "de": "Signaturdatei existiert nicht.",
+    "en": "Signature file does not exist.",
+    "pl": "Plik podpisu nie istnieje."
+  },
+  "other.domain.intake_signature_file_empty": {
+    "de": "Signaturdatei ist leer.",
+    "en": "Signature file is empty.",
+    "pl": "Plik podpisu jest pusty."
+  },
+  "other.domain.intake_signature_checksum_mismatch": {
+    "de": "Signatur-Prüfsumme stimmt nicht überein.",
+    "en": "Signature checksum mismatch.",
+    "pl": "Niezgodna suma kontrolna podpisu."
+  },
+  "other.domain.intake_body_map_in_progress_only": {
+    "de": "Die Körperkarte kann nur bei Anamnese mit Status IN_PROGRESS bearbeitet werden.",
+    "en": "Body map can be edited only for IN_PROGRESS intake form.",
+    "pl": "Mapę ciała można edytować tylko dla ankiety w stanie IN_PROGRESS."
+  },
+  "other.domain.intake_consents_in_progress_only": {
+    "de": "Einwilligungen können nur bei Anamnese mit Status IN_PROGRESS bearbeitet werden.",
+    "en": "Consents can be edited only for IN_PROGRESS intake form.",
+    "pl": "Zgody można edytować tylko dla ankiety w stanie IN_PROGRESS."
+  },
+  "other.domain.consent_definition_not_active": {
+    "de": "Die Einwilligungsdefinition {consent_id} ist am {date} nicht aktiv.",
+    "en": "Consent definition {consent_id} is not active for date {date}.",
+    "pl": "Definicja zgody {consent_id} nie jest aktywna w dniu {date}."
+  },
+  "other.domain.intake_signature_in_progress_only": {
+    "de": "Die Signatur kann nur bei Anamnese mit Status IN_PROGRESS gesetzt werden.",
+    "en": "Signature can be set only for IN_PROGRESS intake form.",
+    "pl": "Podpis można zapisać tylko dla ankiety w stanie IN_PROGRESS."
+  },
+  "other.domain.signature_payload_too_large_before_decode": {
+    "de": "Signaturdaten überschreiten die maximale Größe vor der Dekodierung.",
+    "en": "Signature payload exceeds max size before decoding.",
+    "pl": "Ładunek podpisu przekracza maksymalny rozmiar przed dekodowaniem."
+  },
+  "other.domain.signature_invalid_base64": {
+    "de": "Ungültiges Base64 in den Signaturdaten.",
+    "en": "Invalid base64 in signature payload.",
+    "pl": "Nieprawidłowe dane Base64 w ładunku podpisu."
+  },
+  "other.domain.signature_payload_empty": {
+    "de": "Signaturdaten sind leer.",
+    "en": "Signature payload is empty.",
+    "pl": "Ładunek podpisu jest pusty."
+  },
+  "other.domain.signature_payload_too_large": {
+    "de": "Signaturdaten überschreiten die maximale Größe ({max_bytes} Bytes).",
+    "en": "Signature payload exceeds max size ({max_bytes} bytes).",
+    "pl": "Ładunek podpisu przekracza maksymalny rozmiar ({max_bytes} bajtów)."
+  },
+  "other.domain.signature_image_format_invalid": {
+    "de": "Ungültiges Bildformat. Nur PNG und JPEG sind erlaubt.",
+    "en": "Invalid image format. Only PNG and JPEG files are supported.",
+    "pl": "Nieprawidłowy format obrazu. Obsługiwane są tylko PNG i JPEG."
+  },
+  "other.domain.intake_submit_in_progress_only": {
+    "de": "Nur Anamnese mit Status IN_PROGRESS kann eingereicht werden.",
+    "en": "Only IN_PROGRESS intake form can be submitted.",
+    "pl": "Złożyć można tylko ankietę w stanie IN_PROGRESS."
+  },
+  "other.domain.intake_submit_signature_required": {
+    "de": "Vor dem Einreichen der Anamnese ist eine Signatur erforderlich.",
+    "en": "Signature is required before intake submission.",
+    "pl": "Przed złożeniem ankiety wymagany jest podpis."
+  },
+  "other.domain.intake_session_not_active": {
+    "de": "Sitzung ist für diesen Warteschlangeneintrag nicht aktiv.",
+    "en": "Session is not active for this queue entry.",
+    "pl": "Sesja nie jest aktywna dla tego wpisu kolejki."
+  },
+  "other.domain.intake_session_consumed": {
+    "de": "Sitzung wurde bereits verwendet.",
+    "en": "Session has already been consumed.",
+    "pl": "Sesja została już wykorzystana."
+  },
+  "other.domain.intake_session_expired": {
+    "de": "Sitzung ist abgelaufen.",
+    "en": "Session has expired.",
+    "pl": "Sesja wygasła."
+  },
+  "other.domain.required_consents_not_accepted": {
+    "de": "Erforderliche aktive Einwilligungen wurden nicht akzeptiert.",
+    "en": "Required active consents are not accepted.",
+    "pl": "Wymagane aktywne zgody nie zostały zaakceptowane."
+  },
+  "other.domain.required_anamnesis_not_answered": {
+    "de": "Erforderliche aktive Anamnesefragen sind nicht beantwortet.",
+    "en": "Required active anamnesis questions are not answered.",
+    "pl": "Wymagane aktywne pytania anamnezy pozostają bez odpowiedzi."
+  },
+  "other.domain.intake_anamnesis_in_progress_only": {
+    "de": "Die Anamnese kann nur bei Status IN_PROGRESS bearbeitet werden.",
+    "en": "Anamnesis can be edited only for IN_PROGRESS intake form.",
+    "pl": "Anamnezę można edytować tylko dla ankiety w stanie IN_PROGRESS."
+  }
+}
