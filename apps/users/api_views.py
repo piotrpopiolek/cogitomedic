@@ -27,7 +27,12 @@ from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.reception.services import record_tablet_login_for_android_id
-from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
+from apps.users.api_schemas import (
+    AuthLoginRequest,
+    CreateStaffUserRequest,
+    UpdateStaffUserClinicSitesRequest,
+    UpdateStaffUserRequest,
+)
 from apps.users.models import StaffUser
 from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
 
@@ -269,13 +274,6 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
     except DomainError as exc:
         return json_domain_error(exc, status=400)
     return JsonResponse(_serialize_staff_user(user), status=200)
-
-
-from pydantic import BaseModel, ConfigDict
-
-class UpdateStaffUserClinicSitesRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    clinic_site_ids: list[UUID]
 
 
 @require_auth

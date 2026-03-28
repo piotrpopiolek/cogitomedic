@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 
 from apps.core.api_utils import MAX_JSON_BODY_BYTES, read_json_body
@@ -231,3 +232,15 @@ class ReadJsonBodyTests(TestCase):
         )
         with self.assertRaises(InvalidRequestBodyEncoding):
             read_json_body(request)
+
+
+class SafeHrefTemplateFilterTests(TestCase):
+    def test_safe_href_allows_http_https_and_relative_urls(self) -> None:
+        tpl = Template("{% load safe_urls %}{{ url|safe_href }}")
+        self.assertEqual(tpl.render(Context({"url": "https://example.com/a"})), "https://example.com/a")
+        self.assertEqual(tpl.render(Context({"url": "http://example.com/a"})), "http://example.com/a")
+        self.assertEqual(tpl.render(Context({"url": "/admin/"})), "/admin/")
+
+    def test_safe_href_blocks_javascript_urls(self) -> None:
+        tpl = Template("{% load safe_urls %}{{ url|safe_href }}")
+        self.assertEqual(tpl.render(Context({"url": "javascript:alert(1)"})), "#")

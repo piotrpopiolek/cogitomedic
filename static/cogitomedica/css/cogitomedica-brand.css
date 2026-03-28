@@ -3,8 +3,6 @@
  * główny akcent sekcji/CTA to teal #075255 (setki wystąpień), nie „blue-500” z global-settings.css.
  * Dodatkowo: jasne tło sekcji #f5f7f8; akcenty #457147 / #6DCE56 w layoutcie marketingowym (opcjonalnie).
  */
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap");
-
 :root {
   --cm-brand-teal: #075255;
   /* Hover: nieco jaśniejszy od #075255 (na jasnym tle; na stronie często używany jest #075255 z przezroczystością) */
@@ -23,8 +21,8 @@
   --cm-secondary: #6c757d;
   --cm-danger: #b02a37;
 
-  --cm-font-sans: "Poppins", system-ui, -apple-system, sans-serif;
-  --cm-font-heading: "Manrope", var(--cm-font-sans);
+  --cm-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --cm-font-heading: var(--cm-font-sans);
 
   --bs-primary: var(--cm-primary);
   --bs-primary-rgb: 7, 82, 85;
