@@ -42,7 +42,7 @@ todos:
     content: "W get_medical_document_context (apps/medical/services.py): gdy local_pdf_deleted_at IS NOT NULL zwróć retention_expired=True + timestampy archiwum zamiast medical_payload/diagnosis_code/procedure_code"
     status: pending
   - id: anonymization-api
-    content: POST /api/v1/patients/<id>/anonymize (ADMIN only) + test API
+    content: POST /api/v1/patients/<id>/anonymize (ADMIN only) + test API; blokada gdy aktywne wizyty (DomainError + klucz other.domain.anonymization_patient_has_active_visits w other_domain.json)
     status: pending
   - id: unit-tests-befund-retention
     content: "Testy jednostkowe run_retention_cleanup: skip, dry_run, delete, already_deleted, days_guard, per-record lock (nowait)"
@@ -436,8 +436,23 @@ Nowy plik `**[apps/reception/anonymization.py](apps/reception/anonymization.py)*
 Podział na trzy funkcje eliminuje ryzyko partial failure (FS nie jest transakcyjny):
 
 ```python
+_TERMINAL_STATUSES = {QueueEntryStatus.PUBLISHED, QueueEntryStatus.CANCELLED}
+
 def anonymize_patient(patient_id: uuid.UUID, *, actor_user_id: uuid.UUID) -> Patient:
     """Punkt wejścia — orkiestruje trzy fazy."""
+    # Pre-check poza transakcją: blokada jeśli pacjent ma aktywne wizyty w kolejce.
+    # Statusy terminalne (PUBLISHED, CANCELLED) nie blokują.
+    active_count = QueueEntry.objects.filter(
+        patient_id=patient_id,
+    ).exclude(
+        entry_status__in=_TERMINAL_STATUSES,
+    ).count()
+    if active_count > 0:
+        raise DomainError(
+            domain_message("other.domain.anonymization_patient_has_active_visits"),
+            api_message_key="other.domain.anonymization_patient_has_active_visits",
+        )
+
     patient, should_continue = _phase1_begin(patient_id)
     if not should_continue:
         return patient                   # już zanonimizowany — idempotentne
@@ -531,10 +546,10 @@ def _phase3_finalize(patient_id: uuid.UUID, *, actor_user_id: uuid.UUID) -> Pati
     Patient.objects.filter(id=patient_id).update(
         first_name="ANONYMIZED",
         last_name="ANONYMIZED",
-        # phone: 32 znaki hex UUID bez myślników, pierwsze 20 — cyfry hex spełniają
-        # CheckConstraint ^[0-9]{7,20}$ po normalize_phone (strip non-digits);
-        # używamy update() żeby ominąć normalize_phone w save()
-        phone=str(patient_id).replace("-", "")[:20],
+        # UUID.int = 128-bit integer, dziesiętnie zawsze 38-39 cyfr [0-9].
+        # Pierwsze 20 cyfr spełnia CHECK constraint ^[0-9]{7,20}$ deterministycznie.
+        # update() omija normalize_phone i Django validation; constraint DB jest spełniony.
+        phone=str(patient_id.int)[:20],
         email=f"anon-{patient_id}@deleted.invalid",
         date_of_birth=None,             # nullable po migracji
         street=None,
@@ -552,15 +567,26 @@ def _phase3_finalize(patient_id: uuid.UUID, *, actor_user_id: uuid.UUID) -> Pati
     return Patient.objects.get(id=patient_id)
 ```
 
-**Uwaga o `phone` i constraintach**: `normalize_phone` usuwa z wartości znaki niebędące cyframi, więc hex UUID po `replace('-','')` jest poprawny. Jednak `save()` wywołuje `normalize_phone` globalnie — użycie `update()` omija to jawnie, bo anonimizowany pacjent nie powinien przechodzić przez operacyjną walidację. Constraint `patient_phone_format` (`^[0-9]{7,20}$`) jest spełniony — UUID hex bez myślników to 32 znaki szesnastkowe, `[:20]` daje 20 znaków, wszystkie są `[0-9a-f]` — cyfry `[0-9]` są podzbiorem hex, więc po ewentualnym `normalize_phone` zostanie minimum 8+ cyfr dziesiętnych z 20 znaków hex (statystycznie ~62%). Jeśli wynik byłby za krótki, fallback: `str(abs(hash(str(patient_id))))[:20]`.
+**Uwaga o `phone` i constraintach**: `save()` wywołuje `normalize_phone`, który usuwa znaki niebędące cyframi — użycie `update()` omija to jawnie. Constraint DB `patient_phone_format` (`^[0-9]{7,20}$`) jest spełniony bezwarunkowo: `uuid.UUID.int` to 128-bit integer, którego reprezentacja dziesiętna ma zawsze 38-39 cyfr (`0-9`). Pierwsze 20 cyfr jest unikalne per-pacjent (UUID są unikalne), więc spełniony jest też `patient_phone_unique`.
 
 ### 2c. API endpoint
 
 `POST /api/v1/patients/<patient_id>/anonymize` — ADMIN only:
 
 - Wywołuje `anonymize_patient(patient_id, actor_user_id=request.user.id)`
+- Gdy pacjent ma aktywne wizyty: `DomainError` → HTTP 422 z kluczem `other.domain.anonymization_patient_has_active_visits`
 - Dodatkowy audit: `PATIENT_ANONYMIZE_REQUESTED` z `client_ip`
 - Odpowiedź: `{"patient_id": "...", "anonymized_at": "..."}`
+
+Klucz tłumaczenia blokady anonimizacji do `[apps/core/translation_data/other_domain.json](apps/core/translation_data/other_domain.json)`:
+
+```json
+"other.domain.anonymization_patient_has_active_visits": {
+  "de": "Der Patient kann nicht anonymisiert werden, da er aktive Einträge in der Warteschlange hat.",
+  "en": "Patient cannot be anonymized because they have active queue entries.",
+  "pl": "Pacjent nie może zostać zanonimizowany, ponieważ ma aktywne wpisy w kolejce."
+}
+```
 
 ---
 
@@ -680,7 +706,7 @@ Każdy PR ma własne testy i może być deployowany niezależnie. Pary, które s
 ### Anonimizacja (`apps/reception/tests.py` lub nowy plik)
 
 - `test_anonymize_clears_pii` — po anonimizacji pola PII wyczyszczone (`first_name="ANONYMIZED"`, `street=None`, `date_of_birth=None`), `anonymized_at` ustawiony
-- `test_anonymize_phone_sentinel_passes_constraint` — sentinel `phone` po anonimizacji spełnia `patient_phone_format` i `patient_phone_unique`
+- `test_anonymize_phone_sentinel_passes_constraint` — sentinel `phone` po anonimizacji (`str(patient_id.int)[:20]`) zawiera wyłącznie cyfry dziesiętne, ma długość 20, spełnia `patient_phone_format` (`^[0-9]{7,20}$`) i `patient_phone_unique`
 - `test_anonymize_preserves_consent_summary` — `consent_summary` zawiera kody zgód i wartości `accepted`
 - `test_anonymize_does_not_need_to_clear_medical_payload` — po anonimizacji `medical_payload` już `{"cleared_at_retention": true}` (retencja to zrobiła wcześniej)
 - `test_anonymize_deletes_signature_file` — plik podpisu usunięty z FS (jeśli nie wcześniej przez outbox)
@@ -690,6 +716,7 @@ Każdy PR ma własne testy i może być deployowany niezależnie. Pary, które s
 - `test_anonymize_partial_failure_recovery` — symulacja partial failure: po `_phase1_begin` (ustawiony `anonymization_started_at`, brak `anonymized_at`) ponowne wywołanie `anonymize_patient` omija fazę 1, usuwa pliki (faza 2) i finalizuje (faza 3); weryfikacja że `_extract_consent_summary` **nie** jest wołany ponownie
 - `test_anonymize_creates_audit_event` — `AuditEvent` z `event_type=PATIENT_ANONYMIZED` i `_ref.patient_id`
 - `test_anonymize_portal_access_denied` — po anonimizacji `get_patient_pdf_version` zwraca `None` dla wersji z `anonymization_deleted_at` ustawionym
+- `test_anonymize_blocked_when_patient_has_active_queue_entry` — pacjent z `entry_status=WAITING` → `anonymize_patient` rzuca `DomainError`; pacjent z `entry_status=PUBLISHED` → anonimizacja przechodzi normalnie
 
 ---
 

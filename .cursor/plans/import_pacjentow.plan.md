@@ -4,28 +4,28 @@ overview: "Modyfikacja istniejącego importu XLSX: dodanie lookup pacjenta po te
 todos:
   - id: find-patient-by-phone
     content: "Dodać find_patient_for_import(phone) w services.py lub xlsx_import.py: Patient.objects.get(phone=phone) → jeśli anonymized_at → None (traktuj jak nowy), jeśli nie istnieje → None, jeśli istnieje → Patient"
-    status: pending
+    status: completed
   - id: import-lookup-logic
     content: "xlsx_import.py process_patient_xlsx_import_batch: przed create_or_update_patient_manual sprawdzić find_patient_for_import; jeśli znaleziony → reuse (pomiń create), jeśli nie → create"
-    status: pending
+    status: completed
   - id: import-stats-matched
     content: Dodać licznik matched_rows (istniejący pacjent, tylko nowy QueueEntry) obok inserted_rows w batch; uwzględnić w audycie PATIENT_XLSX_IMPORT_FINISHED
-    status: pending
+    status: completed
   - id: deduplicate-in-file
     content: W trakcie przetwarzania pliku śledzić set seen_phones; jeśli telefon już widziany w tym batchu → DUPLICATE_IN_FILE error (nowy kod błędu), nie próbuj create_queue_entry drugi raz
-    status: pending
+    status: completed
   - id: error-code-existing-patient
     content: Dodać XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD (info-level) gdy lookup trafił na anonymized_at IS NOT NULL — pacjent zanonimizowany, tworzony nowy rekord
-    status: pending
+    status: completed
   - id: error-code-duplicate-in-file
     content: Dodać XlsxImportErrorCode.DUPLICATE_IN_FILE — wiersz z tym samym numerem telefonu pojawia się drugi raz w tym samym pliku
-    status: pending
+    status: completed
   - id: dependency-anonymized-at
     content: "Uzależnić obsługę anonymized_at od migracji z planu retencja_pdf_us-013 (pole Patient.anonymized_at); do czasu wdrożenia: fallback na patient.first_name == 'ANONYMIZED'"
-    status: pending
+    status: completed
   - id: tests-import-existing-patient
     content: "Testy: istniejący pacjent → tylko QueueEntry dodany, Patient.objects.count() nie rośnie; zanonimizowany pacjent → nowy rekord Patient; duplikat w pliku → DUPLICATE_IN_FILE error na drugim wierszu"
-    status: pending
+    status: completed
 isProject: false
 ---
 

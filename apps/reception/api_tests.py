@@ -580,7 +580,7 @@ class DoctorAndTabletAuthorizationApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
-        self.assertIn("ADMIN", response.json().get("error", ""))
+        self.assertIn("admin", response.json().get("error", "").lower())
 
     def test_doctor_gets_403_for_patch_daily_queue(self) -> None:
         queue = DailyQueue.objects.create(
@@ -598,7 +598,11 @@ class DoctorAndTabletAuthorizationApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
-        self.assertIn("RECEPTION", response.json().get("error", ""))
+        err_lower = response.json().get("error", "").lower()
+        self.assertTrue(
+            "reception" in err_lower or "rezeption" in err_lower,
+            response.json().get("error"),
+        )
 
     def test_tablet_gets_403_for_post_daily_queue(self) -> None:
         self.client.login(username="tablet-auth", password="safe-password")
@@ -1034,7 +1038,7 @@ class PatientsApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["phone"], "+49999888777")
+        self.assertEqual(payload["phone"], "49999888777")
         self.assertEqual(payload["email"], "anna.new@example.com")
 
     def test_patch_patient_identity_uses_session_user_as_actor(self) -> None:
@@ -1055,7 +1059,7 @@ class PatientsApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         patient.refresh_from_db()
-        self.assertEqual(patient.phone, "+49999000111")
+        self.assertEqual(patient.phone, "49999000111")
 
     def test_patient_detail_not_found_returns_404(self) -> None:
         response = self.client.get(f"/api/v1/patients/{uuid4()}")
@@ -1175,7 +1179,9 @@ class ImportBatchesApiTests(TestCase):
 
         detail_response = self.client.get(f"/api/v1/imports/batches/{batch.id}")
         self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.json()["id"], str(batch.id))
+        body = detail_response.json()
+        self.assertEqual(body["id"], str(batch.id))
+        self.assertEqual(body["matched_rows"], 0)
 
         errors_response = self.client.get(f"/api/v1/imports/batches/{batch.id}/errors")
         self.assertEqual(errors_response.status_code, 200)

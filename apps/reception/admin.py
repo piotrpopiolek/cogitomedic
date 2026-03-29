@@ -411,6 +411,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
         "status",
         "total_rows",
         "inserted_rows",
+        "matched_rows",
         "error_rows",
         "created_by_user",
         "created_at",

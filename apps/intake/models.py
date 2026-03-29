@@ -225,7 +225,10 @@ class PatientIntakeForm(models.Model):
                 condition=Q(form_status=IntakeStatus.IN_PROGRESS)
                 | (
                     Q(submitted_at__isnull=False)
-                    & Q(signature_file_path__isnull=False)
+                    & (
+                        Q(signature_file_path__isnull=False)
+                        | (Q(signature_sha256__isnull=False) & ~Q(signature_sha256=""))
+                    )
                 ),
                 name="intake_submitted_requires_signature",
             ),
@@ -297,6 +300,16 @@ class IntakeDocumentVersion(models.Model):
     hidrive_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_path", "Hidrive path"))
     hidrive_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_hidrive_sent", "Hidrive sent"))
     hidrive_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_sent_at", "Hidrive sent at"))
+    local_pdf_deleted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_local_pdf_deleted_at", "Local pdf deleted at"),
+    )
+    anonymization_deleted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_anonymization_deleted_at", "Anonymization deleted at"),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -318,8 +331,10 @@ class IntakeDocumentVersion(models.Model):
                 name="intake_document_locale_format",
             ),
             models.CheckConstraint(
-                condition=Q(pdf_generation_status=IntakePdfStatus.COMPLETED, pdf_local_path__isnull=False)
-                | ~Q(pdf_generation_status=IntakePdfStatus.COMPLETED),
+                condition=~Q(pdf_generation_status=IntakePdfStatus.COMPLETED)
+                | Q(pdf_local_path__isnull=False)
+                | Q(local_pdf_deleted_at__isnull=False)
+                | Q(anonymization_deleted_at__isnull=False),
                 name="intake_document_pdf_completed_requires_path",
             ),
             models.CheckConstraint(
@@ -327,11 +342,20 @@ class IntakeDocumentVersion(models.Model):
                 | (Q(hidrive_sent=True) & Q(hidrive_sent_at__isnull=False)),
                 name="intake_document_hidrive_sent_requires_time",
             ),
+            models.CheckConstraint(
+                condition=Q(local_pdf_deleted_at__isnull=True) | Q(hidrive_sent=True),
+                name="intake_document_local_pdf_deletion_guard",
+            ),
         ]
         indexes = [
             models.Index(fields=["intake_form", "-version_no"]),
             models.Index(fields=["pdf_generation_status", "-created_at"]),
             models.Index(fields=["hidrive_sent", "-created_at"]),
+            models.Index(
+                fields=["created_at"],
+                name="intake_document_retention_idx",
+                condition=Q(hidrive_sent=True, local_pdf_deleted_at__isnull=True),
+            ),
             GinIndex(
                 fields=["snapshot_payload"],
                 name="intake_snap_gin_idx",

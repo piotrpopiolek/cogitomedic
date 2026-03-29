@@ -164,6 +164,13 @@ def save_draft_document_version(
         .first()
     )
 
+    if latest_version and latest_version.version_status == DocVersionStatus.PUBLISHED:
+        if latest_version.local_pdf_deleted_at is not None:
+            raise DomainError(
+                domain_message("other.domain.republish_after_retention_not_allowed"),
+                api_message_key="other.domain.republish_after_retention_not_allowed",
+            )
+
     if latest_version and latest_version.version_status == DocVersionStatus.DRAFT:
         latest_version.medical_payload_schema_version = medical_payload_schema_version
         latest_version.medical_payload = medical_payload
@@ -684,30 +691,56 @@ def get_medical_document_context(
     if current_version:
         events_by_type = {e.event_type: e for e in current_version.outbox_events.all()}
         retryable_event = latest_retryable_outbox_event(current_version)
-        current_version_payload = {
-            "version_no": current_version.version_no,
-            "version_status": current_version.version_status,
-            "medical_payload_schema_version": current_version.medical_payload_schema_version,
-            "medical_payload": current_version.medical_payload,
-            "diagnosis_code": current_version.diagnosis_code,
-            "procedure_code": current_version.procedure_code,
-            "pdf_generation_status": current_version.pdf_generation_status,
-            "hidrive_sent": current_version.hidrive_sent,
-            "sms_sent": current_version.sms_sent,
-            "hidrive_status": outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
-                completed=current_version.hidrive_sent,
-            ),
-            "sms_status": outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.SMS_SEND),
-                completed=current_version.sms_sent,
-            ),
-            "processing_error_message": latest_version_processing_error_message(current_version),
-            "can_retry_processing": retryable_event is not None
-            and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
-            "publish_locale": current_version.publish_locale,
-            "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
-        }
+        if current_version.local_pdf_deleted_at:
+            current_version_payload = {
+                "version_no": current_version.version_no,
+                "version_status": current_version.version_status,
+                "retention_expired": True,
+                "local_pdf_deleted_at": current_version.local_pdf_deleted_at.isoformat(),
+                "hidrive_path": current_version.hidrive_path,
+                "pdf_checksum_sha256": current_version.pdf_checksum_sha256,
+                "pdf_generation_status": current_version.pdf_generation_status,
+                "hidrive_sent": current_version.hidrive_sent,
+                "sms_sent": current_version.sms_sent,
+                "hidrive_status": outbox_event_stage_status(
+                    events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                    completed=current_version.hidrive_sent,
+                ),
+                "sms_status": outbox_event_stage_status(
+                    events_by_type.get(OutboxEventType.SMS_SEND),
+                    completed=current_version.sms_sent,
+                ),
+                "processing_error_message": latest_version_processing_error_message(current_version),
+                "can_retry_processing": retryable_event is not None
+                and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
+                "publish_locale": current_version.publish_locale,
+                "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
+            }
+        else:
+            current_version_payload = {
+                "version_no": current_version.version_no,
+                "version_status": current_version.version_status,
+                "medical_payload_schema_version": current_version.medical_payload_schema_version,
+                "medical_payload": current_version.medical_payload,
+                "diagnosis_code": current_version.diagnosis_code,
+                "procedure_code": current_version.procedure_code,
+                "pdf_generation_status": current_version.pdf_generation_status,
+                "hidrive_sent": current_version.hidrive_sent,
+                "sms_sent": current_version.sms_sent,
+                "hidrive_status": outbox_event_stage_status(
+                    events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                    completed=current_version.hidrive_sent,
+                ),
+                "sms_status": outbox_event_stage_status(
+                    events_by_type.get(OutboxEventType.SMS_SEND),
+                    completed=current_version.sms_sent,
+                ),
+                "processing_error_message": latest_version_processing_error_message(current_version),
+                "can_retry_processing": retryable_event is not None
+                and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
+                "publish_locale": current_version.publish_locale,
+                "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
+            }
 
     return {
         "id": str(doc.id),

@@ -48,6 +48,7 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.doctor_own_assigned_queues": "Doctor can only access own assigned queues.",
     "other.api.doctor_own_queues": "Doctor can only access own queues.",
     "other.api.document_not_found": "Document not found or unavailable.",
+    "other.api.document_retention_expired": "Your results are no longer available online. Please contact the clinic.",
     "other.api.duplicate_queue_slot": "Duplicate queue for this date/site/room/shift.",
     "other.api.duplicate_visit_external_id": "Duplicate visit_external_id in this queue.",
     "other.api.forbidden": "Forbidden.",

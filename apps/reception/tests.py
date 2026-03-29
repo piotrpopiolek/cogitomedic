@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import tempfile
 from datetime import date, timedelta
+from pathlib import Path
 
 from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
@@ -36,7 +38,16 @@ from apps.reception.services import (
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
 )
-from apps.reception.xlsx_import import _cleanup_clinic_name, _parse_date, _split_full_name, _title_case_name
+from apps.reception.phone_utils import normalize_phone
+from apps.reception.xlsx_import import (
+    XlsxImportErrorCode,
+    _cleanup_clinic_name,
+    _parse_date,
+    _split_full_name,
+    _title_case_name,
+    find_patient_for_import,
+    process_patient_xlsx_import_batch,
+)
 from apps.users.models import StaffUser
 
 
@@ -520,6 +531,186 @@ class ReceptionDashboardScopeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, str(event_in_scope.medical_document_version.medical_document_id))
         self.assertNotContains(response, str(event_out_of_scope.medical_document_version.medical_document_id))
+
+
+def _write_minimal_patient_xlsx(
+    path: Path,
+    *,
+    queue_date: date,
+    standort_name: str,
+    data_rows: list[tuple[str, str, str, str, str]],
+) -> None:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws["A1"] = queue_date.strftime("%d.%m.%Y")
+    ws["A2"] = f"Standort: {standort_name}"
+    header_row = 4
+    for col, title in enumerate(
+        ("first_name", "last_name", "date_of_birth", "phone", "email"),
+        start=1,
+    ):
+        ws.cell(header_row, col, title)
+    r = header_row + 1
+    for data in data_rows:
+        for col, val in enumerate(data, start=1):
+            ws.cell(r, col, val)
+        r += 1
+    wb.save(path)
+    wb.close()
+
+
+class PatientXlsxImportTests(TestCase):
+    """Integration tests for process_patient_xlsx_import_batch (import plan)."""
+
+    def setUp(self) -> None:
+        _purge_seed_clinic_data()
+        self.user = StaffUser.objects.create_user(
+            username="xlsx-import-tester",
+            email="xlsx-import@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        self.clinic = ClinicSite.objects.create(code="XIIMP", name="Xlsx Import Test Clinic München")
+        self.room = ConsultingRoom.objects.create(clinic_site=self.clinic, code="XI1", name="Import room")
+        self.clinic.pdf_import_default_consulting_room = self.room
+        self.clinic.save(update_fields=["pdf_import_default_consulting_room"])
+        self.import_day = date(2026, 6, 10)
+
+    def _run_import(self, data_rows: list[tuple[str, str, str, str, str]]) -> PatientImportBatch:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            path = Path(tmp.name)
+        try:
+            _write_minimal_patient_xlsx(
+                path,
+                queue_date=self.import_day,
+                standort_name=self.clinic.name,
+                data_rows=data_rows,
+            )
+            batch = PatientImportBatch.objects.create(
+                source_file_name="rows.xlsx",
+                source_file_sha256="a" * 64,
+                created_by_user=self.user,
+            )
+            process_patient_xlsx_import_batch(batch_id=batch.id, stored_file_path=str(path))
+            batch.refresh_from_db()
+            return batch
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_find_patient_for_import_none_for_anonymized(self) -> None:
+        p = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1980, 1, 1),
+            phone="48111222301",
+            email="anon@example.com",
+        )
+        Patient.objects.filter(pk=p.pk).update(anonymized_at=timezone.now())
+        p.refresh_from_db()
+        self.assertIsNone(find_patient_for_import(phone="48111222301"))
+
+    def test_find_patient_for_import_returns_active(self) -> None:
+        p = Patient.objects.create(
+            first_name="Ewa",
+            last_name="K",
+            date_of_birth=date(1980, 1, 1),
+            phone="48111222302",
+            email="ewa@example.com",
+        )
+        found = find_patient_for_import(phone="48111222302")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, p.id)
+
+    def test_import_new_patient(self) -> None:
+        batch = self._run_import(
+            [("Nina", "Nowa", "01.01.1992", "+48 777 888 901", "nina901@example.com")],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 0)
+        self.assertEqual(batch.error_rows, 0)
+        norm = normalize_phone("+48 777 888 901")
+        self.assertEqual(Patient.objects.filter(phone=norm).count(), 1)
+
+    def test_import_existing_patient_reuses_record(self) -> None:
+        Patient.objects.create(
+            first_name="Stary",
+            last_name="Pacjent",
+            date_of_birth=date(1990, 1, 1),
+            phone="48777888902",
+            email="stary@example.com",
+        )
+        batch = self._run_import(
+            [("Inny", "Import", "15.05.1995", "+48 777 888 902", "nowyemail@example.com")],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(batch.inserted_rows, 0)
+        self.assertEqual(batch.matched_rows, 1)
+        p = Patient.objects.get()
+        self.assertEqual(p.first_name, "Stary")
+        self.assertEqual(QueueEntry.objects.filter(patient=p).count(), 1)
+
+    def test_import_anonymized_patient_creates_new(self) -> None:
+        old = Patient.objects.create(
+            first_name="Jan",
+            last_name="Doe",
+            date_of_birth=date(1985, 3, 3),
+            phone="48777888903",
+            email="jan@example.com",
+        )
+        sentinel = str(old.id.int)[:20]
+        Patient.objects.filter(pk=old.pk).update(
+            phone=sentinel,
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=None,
+            anonymized_at=timezone.now(),
+        )
+        batch = self._run_import(
+            [("Powrot", "Pacjent", "10.10.1988", "+48 777 888 903", "powrot@example.com")],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 0)
+        self.assertEqual(Patient.objects.count(), 2)
+        self.assertTrue(Patient.objects.filter(phone=normalize_phone("+48 777 888 903")).exists())
+
+    def test_import_duplicate_in_file(self) -> None:
+        row = ("A", "B", "01.01.1991", "+48 777 888 904", "dup@example.com")
+        batch = self._run_import([row, row])
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 0)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
+        )
+
+    def test_import_stale_anonymized_same_phone_errors(self) -> None:
+        p = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1970, 1, 1),
+            phone="48777888905",
+            email="z@z.com",
+        )
+        Patient.objects.filter(pk=p.pk).update(anonymized_at=timezone.now())
+        batch = self._run_import(
+            [("X", "Y", "01.01.1990", "+48 777 888 905", "x@y.com")],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.inserted_rows, 0)
+        self.assertEqual(batch.matched_rows, 0)
+        self.assertEqual(batch.error_rows, 1)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD,
+        )
+        self.assertEqual(Patient.objects.count(), 1)
 
 
 class PurgeSeedClinicDataTests(TestCase):

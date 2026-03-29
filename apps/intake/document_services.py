@@ -116,6 +116,7 @@ def list_intake_documents(
                 intake_form__queue_entry__patient__first_name__icontains=patient_search
             )
         )
+    qs = qs.filter(anonymization_deleted_at__isnull=True)
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
@@ -168,7 +169,7 @@ def get_intake_document_detail(version: IntakeDocumentVersion) -> dict[str, Any]
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat(),
+            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
         },
         "processing_error_message": _latest_processing_error(version),
     }
@@ -195,7 +196,7 @@ def get_intake_document_list_item(version: IntakeDocumentVersion) -> dict[str, A
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat(),
+            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
         },
         "pdf_available": (
             version.pdf_generation_status == "COMPLETED"

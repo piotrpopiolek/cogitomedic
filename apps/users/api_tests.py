@@ -64,16 +64,19 @@ class UsersAuthApiTests(TestCase):
 
     def test_login_rate_limit_returns_429(self) -> None:
         """After 5 POSTs to login per IP per minute, the 6th returns 429."""
+        isolated_ip = "203.0.113.55"
         for _ in range(5):
             self.client.post(
                 "/api/v1/auth/login",
                 data=json.dumps({"username": "auth-user", "password": "wrong"}),
                 content_type="application/json",
+                REMOTE_ADDR=isolated_ip,
             )
         response = self.client.post(
             "/api/v1/auth/login",
             data=json.dumps({"username": "auth-user", "password": "wrong"}),
             content_type="application/json",
+            REMOTE_ADDR=isolated_ip,
         )
         self.assertEqual(response.status_code, 429)
         self.assertTrue(response.json().get("error"))

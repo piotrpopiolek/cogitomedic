@@ -94,6 +94,11 @@
     "en": "Document not found or unavailable.",
     "pl": "Nie znaleziono dokumentu lub jest niedostępny."
   },
+  "other.api.document_retention_expired": {
+    "de": "Ihre Ergebnisse sind online nicht mehr verfügbar. Bitte kontaktieren Sie die Klinik.",
+    "en": "Your results are no longer available online. Please contact the clinic.",
+    "pl": "Wyniki nie są już dostępne online. Prosimy o kontakt z kliniką."
+  },
   "other.api.duplicate_queue_slot": {
     "de": "Doppelte Warteschlange für Datum/Standort/Raum/Schicht.",
     "en": "Duplicate queue for this date/site/room/shift.",

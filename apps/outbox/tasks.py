@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.tasks import task
 
 from apps.outbox.services import process_outbox_events as process_outbox_events_service
@@ -13,4 +14,7 @@ def process_outbox_events() -> None:
 
 @task(queue_name="retention")
 def run_retention_cleanup() -> None:
-    run_retention_cleanup_service(older_than_days=30, dry_run=False)
+    run_retention_cleanup_service(
+        older_than_days=settings.PDF_RETENTION_DAYS,
+        dry_run=False,
+    )

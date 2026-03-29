@@ -53,6 +53,7 @@ from apps.reception.api_views import (
     import_batch_detail_view,
     import_batch_errors_view,
     import_batches_view,
+    patient_anonymize_view,
     patient_detail_view,
     patients_view,
     queue_entry_detail_view,
@@ -257,6 +258,11 @@ urlpatterns = [
         "patients",
         patients_view,
         name="patients",
+    ),
+    path(
+        "patients/<uuid:patient_id>/anonymize",
+        patient_anonymize_view,
+        name="patient-anonymize",
     ),
     path(
         "patients/<uuid:patient_id>",
