@@ -35,9 +35,9 @@ def list_templates(*, filters: TemplateListFilters) -> list[DoctorTextTemplate]:
 
     if not actor.is_admin_role:
         queryset = queryset.filter(
-            Q(is_global=True) | 
-            Q(owner_user_id=actor.id) | 
-            Q(clinic_site_id__in=actor.clinic_sites.all())
+            Q(is_global=True)
+            | Q(owner_user_id=actor.id)
+            | Q(clinic_site_id__in=actor.clinic_sites.all())
         )
         queryset = queryset.distinct()
     if filters.template_locale:
@@ -54,7 +54,9 @@ def list_templates(*, filters: TemplateListFilters) -> list[DoctorTextTemplate]:
     return list(queryset)
 
 
-def get_template(*, template_id: uuid.UUID, actor_user_id: uuid.UUID) -> DoctorTextTemplate:
+def get_template(
+    *, template_id: uuid.UUID, actor_user_id: uuid.UUID
+) -> DoctorTextTemplate:
     """Return a single template by id if it exists and actor is allowed to see it. Raises TemplateNotFoundError."""
     actor = _get_actor(actor_user_id)
     try:
@@ -65,7 +67,10 @@ def get_template(*, template_id: uuid.UUID, actor_user_id: uuid.UUID) -> DoctorT
     if not actor.is_admin_role:
         if not template.is_global and template.owner_user_id != actor.id:
             # Check clinic sites
-            if template.clinic_site_id and not actor.clinic_sites.filter(id=template.clinic_site_id).exists():
+            if (
+                template.clinic_site_id
+                and not actor.clinic_sites.filter(id=template.clinic_site_id).exists()
+            ):
                 raise TemplateNotFoundError("Template not found.")
             elif not template.clinic_site_id:
                 raise TemplateNotFoundError("Template not found.")
@@ -124,7 +129,9 @@ def update_template(
     if template.is_global and not actor.is_admin_role:
         raise TemplatePermissionError("Only ADMIN can modify global templates.")
     if not template.is_global and template.owner_user_id != actor.id:
-        raise TemplatePermissionError("Only template owner can modify private template.")
+        raise TemplatePermissionError(
+            "Only template owner can modify private template."
+        )
 
     if name is not None:
         template.name = name

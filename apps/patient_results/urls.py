@@ -1,4 +1,5 @@
 """URL configuration for ergebnisse portal."""
+
 from django.urls import path
 
 from apps.patient_results.views import (

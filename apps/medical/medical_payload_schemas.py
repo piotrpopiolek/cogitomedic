@@ -14,22 +14,41 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ExaminationScopeCode = Literal["INTIMATE_AREA_NOT_EXAMINED", "ORAL_MUCOSA_NOT_EXAMINED"]
 FitzpatrickTypeCode = Literal[
-    "TYPE_I", "TYPE_II", "TYPE_III", "TYPE_IV", "TYPE_V", "TYPE_VI",
-    "TYPE_II_III", "UNDETERMINED",
+    "TYPE_I",
+    "TYPE_II",
+    "TYPE_III",
+    "TYPE_IV",
+    "TYPE_V",
+    "TYPE_VI",
+    "TYPE_II_III",
+    "UNDETERMINED",
 ]
 OverallImageAssessmentCode = Literal["NO_CONTROL_NEEDED", "CONTROL_NEEDED"]
 DermatoscopicFeatureCode = Literal[
-    "ASYMMETRY", "IRREGULAR_BORDER", "INHOMOGENEOUS_PIGMENTATION", "MULTICOLOR",
-    "ATYPICAL_PIGMENT_NETWORK", "IRREGULAR_GLOBULES", "IRREGULAR_DOTS",
-    "STRUCTURELESS_AREAS", "ATYPICAL_VASCULAR_STRUCTURES", "REGRESSION_AREAS",
+    "ASYMMETRY",
+    "IRREGULAR_BORDER",
+    "INHOMOGENEOUS_PIGMENTATION",
+    "MULTICOLOR",
+    "ATYPICAL_PIGMENT_NETWORK",
+    "IRREGULAR_GLOBULES",
+    "IRREGULAR_DOTS",
+    "STRUCTURELESS_AREAS",
+    "ATYPICAL_VASCULAR_STRUCTURES",
+    "REGRESSION_AREAS",
 ]
-ClinicalAssessmentCode = Literal["UNREMARKABLE", "SLIGHTLY_ATYPICAL", "CONTROL_NEEDED", "SUSPICIOUS"]
+ClinicalAssessmentCode = Literal[
+    "UNREMARKABLE", "SLIGHTLY_ATYPICAL", "CONTROL_NEEDED", "SUSPICIOUS"
+]
 MalignancyRiskCode = Literal["NO_SUSPICION", "LOW_SUSPICION", "CANNOT_EXCLUDE"]
 RecommendationCode = Literal[
-    "FOLLOWUP_3_MONTHS", "FOLLOWUP_6_MONTHS",
-    "PROMPT_VISIT_ON_CHANGE", "NO_SHORT_TERM_FOLLOWUP_REQUIRED",
+    "FOLLOWUP_3_MONTHS",
+    "FOLLOWUP_6_MONTHS",
+    "PROMPT_VISIT_ON_CHANGE",
+    "NO_SHORT_TERM_FOLLOWUP_REQUIRED",
 ]
-FinalAssessmentCode = Literal["NO_HIGH_GRADE_SUSPICION", "HIGH_GRADE_CANNOT_BE_EXCLUDED"]
+FinalAssessmentCode = Literal[
+    "NO_HIGH_GRADE_SUSPICION", "HIGH_GRADE_CANNOT_BE_EXCLUDED"
+]
 
 
 class MedicalPayloadLesionV1(BaseModel):
@@ -37,9 +56,12 @@ class MedicalPayloadLesionV1(BaseModel):
     One lesion group: lesion_numbers from Wideodermatoskop + one shared description.
     lesion_numbers must be non-empty and contain no duplicates.
     """
+
     model_config = ConfigDict(extra="allow")
 
-    lesion_numbers: list[int] = Field(..., min_length=1, description="Wideodermatoskop lesion numbers in this group")
+    lesion_numbers: list[int] = Field(
+        ..., min_length=1, description="Wideodermatoskop lesion numbers in this group"
+    )
     dermatoscopic_features: list[DermatoscopicFeatureCode] = Field(default_factory=list)
     clinical_assessment: ClinicalAssessmentCode
     malignancy_risk: MalignancyRiskCode
@@ -65,13 +87,16 @@ class MedicalPayloadV1(BaseModel):
     """
     Full medical_payload v1. lesions may be empty only when overall_image_assessment=NO_CONTROL_NEEDED.
     """
+
     model_config = ConfigDict(extra="allow")
 
     schema_version: Literal[1] = 1
     authoring_locale: str = Field(default="de-DE", min_length=2, max_length=10)
     examination_scope: list[ExaminationScopeCode] = Field(default_factory=list)
     fitzpatrick_type: FitzpatrickTypeCode | None = None
-    overall_image_assessment: OverallImageAssessmentCode = Field(default="NO_CONTROL_NEEDED")
+    overall_image_assessment: OverallImageAssessmentCode = Field(
+        default="NO_CONTROL_NEEDED"
+    )
     lesions: list[MedicalPayloadLesionV1] = Field(default_factory=list)
     recommendations: list[RecommendationCode] = Field(default_factory=list)
     final_assessment: FinalAssessmentCode = Field(default="NO_HIGH_GRADE_SUSPICION")
@@ -82,7 +107,9 @@ class MedicalPayloadV1(BaseModel):
     @model_validator(mode="after")
     def lesions_empty_only_when_no_control_needed(self) -> "MedicalPayloadV1":
         if self.overall_image_assessment == "CONTROL_NEEDED" and len(self.lesions) == 0:
-            raise ValueError("lesions must not be empty when overall_image_assessment is CONTROL_NEEDED")
+            raise ValueError(
+                "lesions must not be empty when overall_image_assessment is CONTROL_NEEDED"
+            )
         return self
 
 
@@ -99,7 +126,9 @@ _VALID_OVERALL = ("NO_CONTROL_NEEDED", "CONTROL_NEEDED")
 _VALID_FINAL = ("NO_HIGH_GRADE_SUSPICION", "HIGH_GRADE_CANNOT_BE_EXCLUDED")
 
 
-def validate_medical_payload_complete_for_publish(payload: dict | None, locale: str = "") -> None:
+def validate_medical_payload_complete_for_publish(
+    payload: dict | None, locale: str = ""
+) -> None:
     """
     Sprawdza, czy medical_payload jest kompletny do publikacji (wszystkie wymagane pola wypełnione).
     Wymagane: sekcje 1–3, 10, 11 (examination_scope, fitzpatrick_type, overall_image_assessment,
@@ -109,7 +138,10 @@ def validate_medical_payload_complete_for_publish(payload: dict | None, locale: 
     """
     from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
     from apps.core.exceptions import DomainError
-    from apps.core.translation_service import get_translation_map, normalize_language_code
+    from apps.core.translation_service import (
+        get_translation_map,
+        normalize_language_code,
+    )
 
     if not payload or payload.get("schema_version") != 1:
         return

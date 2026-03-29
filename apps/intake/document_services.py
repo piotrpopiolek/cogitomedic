@@ -18,7 +18,11 @@ from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     safe_parse_positive_int,
 )
-from apps.intake.models import IntakeDocumentVersion, IntakeOutboxEvent, IntakeOutboxStatus
+from apps.intake.models import (
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxStatus,
+)
 
 
 def _latest_processing_error(version: IntakeDocumentVersion) -> str | None:
@@ -65,16 +69,13 @@ def parse_intake_documents_list_params(get_params: Any) -> dict[str, Any]:
 
 
 def _intake_documents_queryset() -> QuerySet[IntakeDocumentVersion]:
-    return (
-        IntakeDocumentVersion.objects.select_related(
-            "intake_form",
-            "intake_form__queue_entry",
-            "intake_form__queue_entry__patient",
-            "intake_form__queue_entry__daily_queue",
-            "intake_form__queue_entry__daily_queue__clinic_site",
-        )
-        .order_by("-created_at")
-    )
+    return IntakeDocumentVersion.objects.select_related(
+        "intake_form",
+        "intake_form__queue_entry",
+        "intake_form__queue_entry__patient",
+        "intake_form__queue_entry__daily_queue",
+        "intake_form__queue_entry__daily_queue__clinic_site",
+    ).order_by("-created_at")
 
 
 def list_intake_documents(
@@ -100,9 +101,7 @@ def list_intake_documents(
             intake_form__queue_entry__daily_queue__clinic_site_id__in=scope_ids
         )
     if queue_date is not None:
-        qs = qs.filter(
-            intake_form__queue_entry__daily_queue__queue_date=queue_date
-        )
+        qs = qs.filter(intake_form__queue_entry__daily_queue__queue_date=queue_date)
     if pdf_generation_status:
         qs = qs.filter(pdf_generation_status=pdf_generation_status)
     if clinic_site_id is not None:
@@ -112,9 +111,7 @@ def list_intake_documents(
     if patient_search:
         qs = qs.filter(
             Q(intake_form__queue_entry__patient__last_name__icontains=patient_search)
-            | Q(
-                intake_form__queue_entry__patient__first_name__icontains=patient_search
-            )
+            | Q(intake_form__queue_entry__patient__first_name__icontains=patient_search)
         )
     qs = qs.filter(anonymization_deleted_at__isnull=True)
     total = qs.count()
@@ -130,9 +127,7 @@ def check_intake_document_access(version: IntakeDocumentVersion, user: Any) -> N
     scope_ids = get_scoped_clinic_site_ids(user)
     if scope_ids is None:
         return
-    clinic_site_id = (
-        version.intake_form.queue_entry.daily_queue.clinic_site_id
-    )
+    clinic_site_id = version.intake_form.queue_entry.daily_queue.clinic_site_id
     if clinic_site_id not in scope_ids:
         raise ObjectDoesNotExist("Intake document not found.")
 
@@ -169,7 +164,9 @@ def get_intake_document_detail(version: IntakeDocumentVersion) -> dict[str, Any]
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+            "date_of_birth": (
+                patient.date_of_birth.isoformat() if patient.date_of_birth else None
+            ),
         },
         "processing_error_message": _latest_processing_error(version),
     }
@@ -196,7 +193,9 @@ def get_intake_document_list_item(version: IntakeDocumentVersion) -> dict[str, A
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+            "date_of_birth": (
+                patient.date_of_birth.isoformat() if patient.date_of_birth else None
+            ),
         },
         "pdf_available": (
             version.pdf_generation_status == "COMPLETED"

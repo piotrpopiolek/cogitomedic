@@ -13,14 +13,23 @@ from typing import Any
 DERMATOSCOPIC_LABELS: dict[str, tuple[str, str]] = {
     "ASYMMETRY": ("Asymmetrie", "Asymmetry"),
     "IRREGULAR_BORDER": ("Unregelmäßige Begrenzung", "Irregular border"),
-    "INHOMOGENEOUS_PIGMENTATION": ("inhomogene Pigmentierung", "Inhomogeneous pigmentation"),
+    "INHOMOGENEOUS_PIGMENTATION": (
+        "inhomogene Pigmentierung",
+        "Inhomogeneous pigmentation",
+    ),
     "MULTICOLOR": ("Mehrfarbigkeit", "Multicolor pattern"),
     "ATYPICAL_PIGMENT_NETWORK": ("atypisches Pigmentnetz", "Atypical pigment network"),
     "IRREGULAR_GLOBULES": ("unregelmäßige Globuli", "Irregular globules"),
     "IRREGULAR_DOTS": ("unregelmäßige Punkte", "Irregular dots"),
     "STRUCTURELESS_AREAS": ("strukturlose Areale", "Structureless areas"),
-    "ATYPICAL_VASCULAR_STRUCTURES": ("atypische Gefäßstrukturen", "Atypical vascular structures"),
-    "REGRESSION_AREAS": ("Regressionsareale (weißlich/narbig)", "Regression areas (whitish/scar-like)"),
+    "ATYPICAL_VASCULAR_STRUCTURES": (
+        "atypische Gefäßstrukturen",
+        "Atypical vascular structures",
+    ),
+    "REGRESSION_AREAS": (
+        "Regressionsareale (weißlich/narbig)",
+        "Regression areas (whitish/scar-like)",
+    ),
 }
 
 CLINICAL_ASSESSMENT_LABELS: dict[str, tuple[str, str]] = {
@@ -75,7 +84,11 @@ def _join_features(feature_codes: list[str], locale_de: bool) -> str:
         return labels[0]
     # DE: "Asymmetrie sowie eine inhomogene Pigmentierung"; EN: "Asymmetry and inhomogeneous pigmentation"
     if locale_de:
-        return " sowie eine ".join(labels) if len(labels) == 2 else ", ".join(labels[:-1]) + " sowie " + labels[-1]
+        return (
+            " sowie eine ".join(labels)
+            if len(labels) == 2
+            else ", ".join(labels[:-1]) + " sowie " + labels[-1]
+        )
     return " and ".join(labels)
 
 
@@ -101,11 +114,19 @@ def _lesion_sentence(
     if clinical_assessment not in CLINICAL_ASSESSMENT_LABELS:
         clinical_str = "—"
     else:
-        clinical_str = (CLINICAL_ASSESSMENT_LABELS[clinical_assessment][0] if locale_de else CLINICAL_ASSESSMENT_LABELS[clinical_assessment][1]).capitalize()
+        clinical_str = (
+            CLINICAL_ASSESSMENT_LABELS[clinical_assessment][0]
+            if locale_de
+            else CLINICAL_ASSESSMENT_LABELS[clinical_assessment][1]
+        ).capitalize()
     if malignancy_risk not in MALIGNANCY_RISK_LABELS:
         malignancy_str = ""
     else:
-        malignancy_str = MALIGNANCY_RISK_LABELS[malignancy_risk][0] if locale_de else MALIGNANCY_RISK_LABELS[malignancy_risk][1]
+        malignancy_str = (
+            MALIGNANCY_RISK_LABELS[malignancy_risk][0]
+            if locale_de
+            else MALIGNANCY_RISK_LABELS[malignancy_risk][1]
+        )
 
     nums_label = _format_lesion_numbers(lesion_numbers, locale_de)
     if locale_de:
@@ -134,7 +155,11 @@ def _summary_sentence(
     """Summary sentence: each item is (lesion_numbers for group, clinical_assessment)."""
     if not lesions_with_assessments:
         if final_assessment in FINAL_ASSESSMENT_LABELS:
-            return (FINAL_ASSESSMENT_LABELS[final_assessment][0] if locale_de else FINAL_ASSESSMENT_LABELS[final_assessment][1])
+            return (
+                FINAL_ASSESSMENT_LABELS[final_assessment][0]
+                if locale_de
+                else FINAL_ASSESSMENT_LABELS[final_assessment][1]
+            )
         return ""
 
     def nums_str(nums: list[int]) -> str:
@@ -169,7 +194,11 @@ def _summary_sentence(
                 parts.append(f"lesion no. {ns} (unremarkable)")
         text = intro + " and ".join(parts) + "."
     if final_assessment in FINAL_ASSESSMENT_LABELS:
-        fin = FINAL_ASSESSMENT_LABELS[final_assessment][0] if locale_de else FINAL_ASSESSMENT_LABELS[final_assessment][1]
+        fin = (
+            FINAL_ASSESSMENT_LABELS[final_assessment][0]
+            if locale_de
+            else FINAL_ASSESSMENT_LABELS[final_assessment][1]
+        )
         text += " " + fin
     return text
 
@@ -188,7 +217,9 @@ def generate_befund_text(
     """
     locale_de = _locale_is_de(authoring_locale)
     lesions_in = medical_payload.get("lesions") or []
-    final_assessment = medical_payload.get("final_assessment") or "NO_HIGH_GRADE_SUSPICION"
+    final_assessment = (
+        medical_payload.get("final_assessment") or "NO_HIGH_GRADE_SUSPICION"
+    )
 
     result_lesions: list[dict[str, Any]] = []
     lesions_for_summary: list[tuple[list[int], str]] = []
@@ -219,8 +250,12 @@ def generate_befund_text(
         clinical = L.get("clinical_assessment") or ""
         malignancy = L.get("malignancy_risk") or ""
 
-        text = _lesion_sentence(lesion_numbers, features, clinical, malignancy, locale_de)
-        result_lesions.append({"lesion_numbers": lesion_numbers, "generated_text": text})
+        text = _lesion_sentence(
+            lesion_numbers, features, clinical, malignancy, locale_de
+        )
+        result_lesions.append(
+            {"lesion_numbers": lesion_numbers, "generated_text": text}
+        )
         lesions_for_summary.append((lesion_numbers, clinical))
 
     summary_text = _summary_sentence(lesions_for_summary, final_assessment, locale_de)

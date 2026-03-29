@@ -1,4 +1,5 @@
 """API views for patient results portal (public + session-based)."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
@@ -13,7 +14,6 @@ from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
 from apps.patient_results.document_services import (
     get_patient_pdf_path,
-    get_patient_pdf_version,
     list_patient_documents,
     resolve_patient_befund_download,
 )
@@ -138,7 +138,9 @@ def patient_results_documents_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"items": items}, status=200)
 
 
-def patient_results_download_view(request: HttpRequest, version_id: UUID) -> HttpResponse | JsonResponse:
+def patient_results_download_view(
+    request: HttpRequest, version_id: UUID
+) -> HttpResponse | JsonResponse:
     """GET: Download PDF for version. Requires patient_results session."""
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
@@ -170,6 +172,7 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
             },
         )
         return json_error("other.api.document_retention_expired", status=410)
+    assert version is not None
     path = get_patient_pdf_path(version_id, patient_id, version=version)
     if not path:
         create_audit_event(

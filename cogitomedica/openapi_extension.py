@@ -7,9 +7,11 @@ We serve the full schema from cogito_openapi_schema_view so /api/docs works with
 Request/response body schemas are generated from Pydantic models (openapi_schemas) so the
 documentation stays in sync with api_schemas in each app.
 """
+
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -71,7 +73,10 @@ COGITO_PATHS = {
             "summary": "Health check",
             "description": "Returns service and dependency status (DB, outbox). No auth.",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "OK or degraded"}, "503": {"description": "Service unavailable"}},
+            "responses": {
+                "200": {"description": "OK or degraded"},
+                "503": {"description": "Service unavailable"},
+            },
         },
     },
     f"{PREFIX}/observability/metrics": {
@@ -79,7 +84,10 @@ COGITO_PATHS = {
             "summary": "Prometheus metrics",
             "description": "Eksport metryk w formacie Prometheus. Wymaga nagłówka `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub zalogowanej sesji z rolą ADMIN.",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Metrics text"}, "401": {"description": "Unauthorized"}},
+            "responses": {
+                "200": {"description": "Metrics text"},
+                "401": {"description": "Unauthorized"},
+            },
         },
     },
     # Adresy usług monitorowania (Docker) – tylko w dokumentacji, nie są obsługiwane przez API
@@ -88,7 +96,11 @@ COGITO_PATHS = {
             "summary": "Grafana",
             "description": "Zewnętrzny adres: http://localhost:3000 — dashboardy (metryki, trace'y). Logowanie: admin / admin.",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+            "responses": {
+                "200": {
+                    "description": "Usługa zewnętrzna – otwórz adres w przeglądarce."
+                }
+            },
         },
     },
     f"{PREFIX}/observability/monitoring/prometheus": {
@@ -96,7 +108,11 @@ COGITO_PATHS = {
             "summary": "Prometheus",
             "description": "Zewnętrzny adres: http://localhost:9090 — UI PromQL, targety: http://localhost:9090/targets",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+            "responses": {
+                "200": {
+                    "description": "Usługa zewnętrzna – otwórz adres w przeglądarce."
+                }
+            },
         },
     },
     f"{PREFIX}/observability/monitoring/alertmanager": {
@@ -104,7 +120,11 @@ COGITO_PATHS = {
             "summary": "Alertmanager",
             "description": "Zewnętrzny adres: http://localhost:9093 — zarządzanie alertami i powiadomieniami.",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+            "responses": {
+                "200": {
+                    "description": "Usługa zewnętrzna – otwórz adres w przeglądarce."
+                }
+            },
         },
     },
     f"{PREFIX}/observability/monitoring/tempo": {
@@ -112,7 +132,11 @@ COGITO_PATHS = {
             "summary": "Grafana Tempo",
             "description": "Zewnętrzny adres: http://localhost:3200 — backend trace'ów; dostęp z Grafany (Explore → Tempo).",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Usługa zewnętrzna – otwórz adres w przeglądarce."}},
+            "responses": {
+                "200": {
+                    "description": "Usługa zewnętrzna – otwórz adres w przeglądarce."
+                }
+            },
         },
     },
     f"{PREFIX}/observability/monitoring/otel-collector": {
@@ -120,7 +144,11 @@ COGITO_PATHS = {
             "summary": "OpenTelemetry Collector",
             "description": "Zewnętrzne adresy: localhost:4317 (gRPC), localhost:4318 (HTTP) — odbiera trace'y z aplikacji (brak UI).",
             "tags": ["Observability"],
-            "responses": {"200": {"description": "Usługa zewnętrzna – używana wewnętrznie przez aplikację."}},
+            "responses": {
+                "200": {
+                    "description": "Usługa zewnętrzna – używana wewnętrznie przez aplikację."
+                }
+            },
         },
     },
     f"{PREFIX}/auth/login": {
@@ -128,8 +156,26 @@ COGITO_PATHS = {
             "summary": "Log in",
             "description": "Authenticate with username and password. Sets session cookie. Optional android_id: for TABLET, RECEPTION, or ADMIN, updates that tablet device's last_seen_at (last login on device).",
             "tags": ["Auth"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"username": {"type": "string"}, "password": {"type": "string"}, "android_id": {"type": "string"}}, "required": ["username", "password"]}}}},
-            "responses": {"200": {"description": "User and session expiry"}, "401": {"description": "Invalid credentials"}},
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "username": {"type": "string"},
+                                "password": {"type": "string"},
+                                "android_id": {"type": "string"},
+                            },
+                            "required": ["username", "password"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {"description": "User and session expiry"},
+                "401": {"description": "Invalid credentials"},
+            },
         },
     },
     f"{PREFIX}/auth/logout": {
@@ -145,7 +191,10 @@ COGITO_PATHS = {
             "summary": "Current user",
             "description": "Returns authenticated user. Requires session.",
             "tags": ["Auth"],
-            "responses": {"200": {"description": "User payload"}, "401": {"description": "Authentication required"}},
+            "responses": {
+                "200": {"description": "User payload"},
+                "401": {"description": "Authentication required"},
+            },
         },
     },
     f"{PREFIX}/staff-users": {
@@ -153,59 +202,180 @@ COGITO_PATHS = {
             "summary": "List staff users",
             "description": "Paginated list. Admin only.",
             "tags": ["Staff users"],
-            "parameters": [PAGE_Q, PAGE_SIZE_Q, {"name": "role", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
+            "parameters": [
+                PAGE_Q,
+                PAGE_SIZE_Q,
+                {"name": "role", "in": "query", "schema": {"type": "string"}},
+                {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},
+                {"name": "search", "in": "query", "schema": {"type": "string"}},
+            ],
+            "responses": {
+                "200": {"description": "Items and pagination"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+            },
         },
         "post": {
             "summary": "Create staff user",
             "description": "Admin only.",
             "tags": ["Staff users"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"201": {"description": "Created"}, "400": {"description": "Validation error"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "409": {"description": "Username or email exists"}},
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "400": {"description": "Validation error"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+                "409": {"description": "Username or email exists"},
+            },
         },
     },
     f"{PREFIX}/staff-users/{{staff_user_id}}": {
-        "get": {"summary": "Get staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get staff user",
+            "tags": ["Staff users"],
+            "parameters": [
+                {
+                    "name": "staff_user_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+        "patch": {
+            "summary": "Update staff user",
+            "tags": ["Staff users"],
+            "parameters": [
+                {
+                    "name": "staff_user_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Conflict"},
+            },
         },
-        "delete": {"summary": "Deactivate staff user", "tags": ["Staff users"], "parameters": [{"name": "staff_user_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "Deactivated"}, "404": {"description": "Not found"}},
+        "delete": {
+            "summary": "Deactivate staff user",
+            "tags": ["Staff users"],
+            "parameters": [
+                {
+                    "name": "staff_user_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "Deactivated"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/doctor-text-templates": {
         "get": {
             "summary": "List doctor text templates",
             "tags": ["Doctor templates"],
-            "parameters": [{"name": "actor_user_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "template_locale", "in": "query", "schema": {"type": "string"}}, {"name": "include_inactive", "in": "query", "schema": {"type": "boolean"}}],
+            "parameters": [
+                {
+                    "name": "actor_user_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "template_locale",
+                    "in": "query",
+                    "schema": {"type": "string"},
+                },
+                {
+                    "name": "include_inactive",
+                    "in": "query",
+                    "schema": {"type": "boolean"},
+                },
+            ],
             "responses": {"200": {"description": "Results"}},
         },
         "post": {
             "summary": "Create doctor text template",
             "tags": ["Doctor templates"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"201": {"description": "Created"}, "400": {"description": "Validation error"}},
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "400": {"description": "Validation error"},
+            },
         },
     },
     f"{PREFIX}/doctor-text-templates/{{template_id}}": {
         "get": {
             "summary": "Get doctor text template",
             "tags": ["Doctor templates"],
-            "parameters": [{"name": "template_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Template (name, template_body, lesion_group_favorites, etc.)"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "template_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Template (name, template_body, lesion_group_favorites, etc.)"
+                },
+                "404": {"description": "Not found"},
+            },
         },
         "patch": {
             "summary": "Update doctor text template",
             "tags": ["Doctor templates"],
-            "parameters": [{"name": "template_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "template_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/outbox-events": {
         "get": {
             "summary": "List outbox events",
             "tags": ["Outbox"],
-            "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "event_type", "in": "query", "schema": {"type": "string"}}, {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}}, LIST_LIMIT_Q],
+            "parameters": [
+                {"name": "status", "in": "query", "schema": {"type": "string"}},
+                {"name": "event_type", "in": "query", "schema": {"type": "string"}},
+                {
+                    "name": "retry_count_gte",
+                    "in": "query",
+                    "schema": {"type": "integer"},
+                },
+                LIST_LIMIT_Q,
+            ],
             "responses": {"200": {"description": "Results and count"}},
         },
     },
@@ -213,24 +383,67 @@ COGITO_PATHS = {
         "post": {
             "summary": "Retry outbox event",
             "tags": ["Outbox"],
-            "parameters": [{"name": "outbox_event_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}},
-            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+            "parameters": [
+                {
+                    "name": "outbox_event_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {"reason": {"type": "string"}},
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Conflict"},
+            },
         },
     },
     f"{PREFIX}/operations/outbox/process": {
         "post": {
             "summary": "Process outbox batch",
             "tags": ["Operations"],
-            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"limit": {"type": "integer"}}}}}},
-            "responses": {"202": {"description": "Accepted (processed, failed, dead_lettered)"}},
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {"limit": {"type": "integer"}},
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "202": {"description": "Accepted (processed, failed, dead_lettered)"}
+            },
         },
     },
     f"{PREFIX}/operations/retention/run": {
         "post": {
             "summary": "Run retention cleanup",
             "tags": ["Operations"],
-            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"older_than_days": {"type": "integer"}, "dry_run": {"type": "boolean"}}}}}},
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "older_than_days": {"type": "integer"},
+                                "dry_run": {"type": "boolean"},
+                            },
+                        }
+                    }
+                }
+            },
             "responses": {
                 "202": {
                     "description": "Per stream: befund + intake each with candidates, deleted, skipped_not_safe",
@@ -245,13 +458,41 @@ COGITO_PATHS = {
             "tags": ["Operations"],
             "parameters": [
                 {"name": "event_type", "in": "query", "schema": {"type": "string"}},
-                {"name": "patient_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "medical_document_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "context_clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "actor_user_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "outbox_event_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
-                {"name": "from", "in": "query", "schema": {"type": "string", "format": "date-time"}},
-                {"name": "to", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+                {
+                    "name": "patient_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "medical_document_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "context_clinic_site_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "actor_user_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "outbox_event_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "from",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date-time"},
+                },
+                {
+                    "name": "to",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date-time"},
+                },
                 PAGE_Q,
                 PAGE_SIZE_Q,
             ],
@@ -270,7 +511,11 @@ COGITO_PATHS = {
             "parameters": [
                 {"name": "status", "in": "query", "schema": {"type": "string"}},
                 {"name": "event_type", "in": "query", "schema": {"type": "string"}},
-                {"name": "retry_count_gte", "in": "query", "schema": {"type": "integer"}},
+                {
+                    "name": "retry_count_gte",
+                    "in": "query",
+                    "schema": {"type": "integer"},
+                },
                 LIST_LIMIT_Q,
             ],
             "responses": {"200": {"description": "results, count"}},
@@ -281,9 +526,23 @@ COGITO_PATHS = {
             "summary": "Retry intake outbox event",
             "description": "Move FAILED/DEAD_LETTER event back to PENDING. ADMIN, RECEPTION.",
             "tags": ["Intake – Outbox"],
-            "parameters": [{"name": "intake_outbox_event_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "id, status, retry_count"}, "404": {"description": "Not found"}, "409": {"description": "Event not retryable"}},
+            "parameters": [
+                {
+                    "name": "intake_outbox_event_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "id, status, retry_count"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Event not retryable"},
+            },
         },
     },
     f"{PREFIX}/operations/intake-outbox/process": {
@@ -291,7 +550,9 @@ COGITO_PATHS = {
             "summary": "Process intake outbox batch",
             "description": "Process pending/failed intake outbox events (PDF generation, HiDrive upload). ADMIN only.",
             "tags": ["Intake – Outbox"],
-            "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}},
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
             "responses": {"202": {"description": "processed, failed, dead_lettered"}},
         },
     },
@@ -301,14 +562,35 @@ COGITO_PATHS = {
             "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page (default 1), page_size (default 20, max 100).",
             "tags": ["Intake – Documents"],
             "parameters": [
-                {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
-                {"name": "pdf_generation_status", "in": "query", "schema": {"type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"]}},
+                {
+                    "name": "queue_date",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date"},
+                },
+                {
+                    "name": "pdf_generation_status",
+                    "in": "query",
+                    "schema": {
+                        "type": "string",
+                        "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"],
+                    },
+                },
                 {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
-                {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+                {
+                    "name": "clinic_site_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
                 PAGE_Q,
                 PAGE_SIZE_Q,
             ],
-            "responses": {"200": {"description": "items (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, …), pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden (e.g. DOCTOR)"}},
+            "responses": {
+                "200": {
+                    "description": "items (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, …), pagination"
+                },
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden (e.g. DOCTOR)"},
+            },
         },
     },
     f"{PREFIX}/intake-documents/{{intake_document_version_id}}": {
@@ -316,8 +598,22 @@ COGITO_PATHS = {
             "summary": "Get intake document version detail",
             "description": "Detail of one intake document version. RECEPTION/ADMIN only; scope by clinic_site.",
             "tags": ["Intake – Documents"],
-            "parameters": [{"name": "intake_document_version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Detail (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, pdf_local_path, …)"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "intake_document_version_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Detail (id, version_no, pdf_generation_status, patient, queue_date, clinic_site_name, pdf_available, pdf_local_path, …)"
+                },
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/intake-documents/{{intake_document_version_id}}/preview-pdf": {
@@ -325,8 +621,22 @@ COGITO_PATHS = {
             "summary": "Preview intake PDF",
             "description": "Returns the generated intake PDF file (Content-Disposition: inline). Only when pdf_generation_status is COMPLETED and file exists. RECEPTION/ADMIN only; scope by clinic_site.",
             "tags": ["Intake – Documents"],
-            "parameters": [{"name": "intake_document_version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "application/pdf (inline)"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}, "404": {"description": "Not found (out of scope, file missing, or status ≠ COMPLETED)"}},
+            "parameters": [
+                {
+                    "name": "intake_document_version_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "application/pdf (inline)"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+                "404": {
+                    "description": "Not found (out of scope, file missing, or status ≠ COMPLETED)"
+                },
+            },
         },
     },
     f"{PREFIX}/medical-documents": {
@@ -336,19 +646,47 @@ COGITO_PATHS = {
             "tags": ["Medical"],
             "parameters": [
                 {"name": "status", "in": "query", "schema": {"type": "string"}},
-                {"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                {
+                    "name": "queue_date",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date"},
+                },
                 {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
                 PAGE_Q,
                 PAGE_SIZE_Q,
             ],
-            "responses": {"200": {"description": "Items and pagination"}, "401": {"description": "Authentication required"}, "403": {"description": "Forbidden"}},
+            "responses": {
+                "200": {"description": "Items and pagination"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden"},
+            },
         },
         "post": {
             "summary": "Create medical document",
             "description": "Doctor or Admin. Links queue entry and intake form.",
             "tags": ["Medical"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"queue_entry_id": {"type": "string", "format": "uuid"}, "intake_form_id": {"type": "string", "format": "uuid"}, "created_by_user_id": {"type": "string", "format": "uuid"}}}}}},
-            "responses": {"201": {"description": "Created"}, "404": {"description": "Queue entry or intake form not found"}},
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "queue_entry_id": {"type": "string", "format": "uuid"},
+                                "intake_form_id": {"type": "string", "format": "uuid"},
+                                "created_by_user_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                },
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "404": {"description": "Queue entry or intake form not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}": {
@@ -357,10 +695,18 @@ COGITO_PATHS = {
             "description": "Full document context for doctor panel: intake summary and current version (draft or published).",
             "tags": ["Medical"],
             "parameters": [
-                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
                 {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
             ],
-            "responses": {"200": {"description": "Context (intake, version, patient, etc.)"}, "404": {"description": "Not found"}},
+            "responses": {
+                "200": {"description": "Context (intake, version, patient, etc.)"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/preview-pdf": {
@@ -369,19 +715,43 @@ COGITO_PATHS = {
             "description": "Returns PDF of the latest saved version (draft or published). Content-Type: application/pdf.",
             "tags": ["Medical"],
             "parameters": [
-                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
                 {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
-                {"name": "authoring_locale", "in": "query", "schema": {"type": "string"}},
+                {
+                    "name": "authoring_locale",
+                    "in": "query",
+                    "schema": {"type": "string"},
+                },
             ],
-            "responses": {"200": {"description": "PDF file (inline)"}, "404": {"description": "Not found or no version to preview"}},
+            "responses": {
+                "200": {"description": "PDF file (inline)"},
+                "404": {"description": "Not found or no version to preview"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/versions": {
         "get": {
             "summary": "List document versions",
             "tags": ["Medical"],
-            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Items (version_no, version_status, pdf_generation_status, etc.)"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Items (version_no, version_status, pdf_generation_status, etc.)"
+                },
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/audit-trail": {
@@ -390,11 +760,19 @@ COGITO_PATHS = {
             "description": "DOCTOR/ADMIN. Pagination: page (default 1), page_size (default 20, max 100).",
             "tags": ["Medical"],
             "parameters": [
-                {"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
                 PAGE_Q,
                 PAGE_SIZE_Q,
             ],
-            "responses": {"200": {"description": "items, pagination"}, "404": {"description": "Not found"}},
+            "responses": {
+                "200": {"description": "items, pagination"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/retry-processing": {
@@ -402,9 +780,29 @@ COGITO_PATHS = {
             "summary": "Retry document processing",
             "description": "Retry latest failed outbox step (e.g. PDF generation, HiDrive, SMS). ADMIN or RECEPTION.",
             "tags": ["Medical"],
-            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}},
-            "responses": {"200": {"description": "retried, outbox_event_id, event_type, status"}, "404": {"description": "Not found"}, "409": {"description": "Nothing to retry"}},
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {"reason": {"type": "string"}},
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {"description": "retried, outbox_event_id, event_type, status"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Nothing to retry"},
+            },
         },
     },
     f"{PREFIX}/medical-document-versions/{{version_id}}": {
@@ -412,59 +810,219 @@ COGITO_PATHS = {
             "summary": "Get document version",
             "description": "Single version by id (MedicalDocumentVersion.id) with full medical_payload.",
             "tags": ["Medical"],
-            "parameters": [{"name": "version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Version details"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "version_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "Version details"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/draft": {
         "put": {
             "summary": "Save draft",
             "tags": ["Medical"],
-            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "Version"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "Version"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/publish": {
         "post": {
             "summary": "Publish document",
             "tags": ["Medical"],
-            "parameters": [{"name": "medical_document_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
             "responses": {
                 "200": {"description": "Version"},
                 "400": {"description": "Validation or domain error (e.g. no draft)"},
                 "404": {"description": "Not found"},
-                "409": {"description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"},
+                "409": {
+                    "description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"
+                },
             },
         },
     },
     f"{PREFIX}/clinic-sites": {
-        "get": {"summary": "List clinic sites", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
+        "get": {
+            "summary": "List clinic sites",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},
+                {"name": "search", "in": "query", "schema": {"type": "string"}},
+                LIST_LIMIT_Q,
+            ],
+            "responses": {"200": {"description": "Items"}},
         },
-        "post": {"summary": "Create clinic site", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        "post": {
+            "summary": "Create clinic site",
+            "tags": ["Reception – Dictionaries"],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {"201": {"description": "Created"}},
         },
     },
     f"{PREFIX}/clinic-sites/{{clinic_site_id}}": {
-        "get": {"summary": "Get clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get clinic site",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "clinic_site_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update clinic site",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "clinic_site_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "delete": {"summary": "Deactivate clinic site", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "delete": {
+            "summary": "Deactivate clinic site",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "clinic_site_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/consulting-rooms": {
-        "get": {"summary": "List consulting rooms", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
+        "get": {
+            "summary": "List consulting rooms",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "clinic_site_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},
+                {"name": "search", "in": "query", "schema": {"type": "string"}},
+                LIST_LIMIT_Q,
+            ],
+            "responses": {"200": {"description": "Items"}},
         },
-        "post": {"summary": "Create consulting room", "tags": ["Reception – Dictionaries"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        "post": {
+            "summary": "Create consulting room",
+            "tags": ["Reception – Dictionaries"],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {"201": {"description": "Created"}},
         },
     },
     f"{PREFIX}/consulting-rooms/{{consulting_room_id}}": {
-        "get": {"summary": "Get consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get consulting room",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "consulting_room_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update consulting room",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "consulting_room_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "delete": {"summary": "Deactivate consulting room", "tags": ["Reception – Dictionaries"], "parameters": [{"name": "consulting_room_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "delete": {
+            "summary": "Deactivate consulting room",
+            "tags": ["Reception – Dictionaries"],
+            "parameters": [
+                {
+                    "name": "consulting_room_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/imports/batches": {
@@ -479,22 +1037,73 @@ COGITO_PATHS = {
         "get": {
             "summary": "Get import batch",
             "tags": ["Reception – Imports"],
-            "parameters": [{"name": "batch_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "batch_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/imports/batches/{{batch_id}}/errors": {
         "get": {
             "summary": "List import batch errors",
             "tags": ["Reception – Imports"],
-            "parameters": [{"name": "batch_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "batch_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "Items"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/patients": {
-        "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, PAGE_Q, PAGE_SIZE_Q], "responses": {"200": {"description": "Items and pagination"}},
+        "get": {
+            "summary": "List patients",
+            "tags": ["Reception – Patients"],
+            "parameters": [
+                {"name": "search", "in": "query", "schema": {"type": "string"}},
+                {"name": "last_name", "in": "query", "schema": {"type": "string"}},
+                {
+                    "name": "date_of_birth",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date"},
+                },
+                {"name": "phone", "in": "query", "schema": {"type": "string"}},
+                {
+                    "name": "doctolib_patient_id",
+                    "in": "query",
+                    "schema": {"type": "string"},
+                },
+                {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},
+                PAGE_Q,
+                PAGE_SIZE_Q,
+            ],
+            "responses": {"200": {"description": "Items and pagination"}},
         },
-        "post": {"summary": "Create or update patient (manual)", "tags": ["Reception – Patients"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "Patient"}, "201": {"description": "Created"}},
+        "post": {
+            "summary": "Create or update patient (manual)",
+            "tags": ["Reception – Patients"],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "Patient"},
+                "201": {"description": "Created"},
+            },
         },
     },
     f"{PREFIX}/patients/{{patient_id}}/anonymize": {
@@ -502,7 +1111,12 @@ COGITO_PATHS = {
             "summary": "Anonymize patient (ADMIN, RODO Art. 17)",
             "tags": ["Reception – Patients"],
             "parameters": [
-                {"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                {
+                    "name": "patient_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
             ],
             "responses": {
                 "200": {"description": "Patient anonymized"},
@@ -512,35 +1126,205 @@ COGITO_PATHS = {
         },
     },
     f"{PREFIX}/patients/{{patient_id}}": {
-        "get": {"summary": "Get patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get patient",
+            "tags": ["Reception – Patients"],
+            "parameters": [
+                {
+                    "name": "patient_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update patient",
+            "tags": ["Reception – Patients"],
+            "parameters": [
+                {
+                    "name": "patient_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "delete": {"summary": "Deactivate patient", "tags": ["Reception – Patients"], "parameters": [{"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "delete": {
+            "summary": "Deactivate patient",
+            "tags": ["Reception – Patients"],
+            "parameters": [
+                {
+                    "name": "patient_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/daily-queues": {
-        "get": {"summary": "List daily queues", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_date", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "clinic_site_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "consulting_room_id", "in": "query", "schema": {"type": "string", "format": "uuid"}}, {"name": "shift_code", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
+        "get": {
+            "summary": "List daily queues",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "queue_date",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "date"},
+                },
+                {
+                    "name": "clinic_site_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "consulting_room_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {"name": "shift_code", "in": "query", "schema": {"type": "string"}},
+                {"name": "status", "in": "query", "schema": {"type": "string"}},
+                LIST_LIMIT_Q,
+            ],
+            "responses": {"200": {"description": "Items"}},
         },
-        "post": {"summary": "Create daily queue", "tags": ["Reception – Queues"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}},
+        "post": {
+            "summary": "Create daily queue",
+            "tags": ["Reception – Queues"],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {"201": {"description": "Created"}},
         },
     },
     f"{PREFIX}/daily-queues/{{daily_queue_id}}": {
-        "get": {"summary": "Get daily queue", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get daily queue",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "daily_queue_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update daily queue", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update daily queue",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "daily_queue_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/daily-queues/{{daily_queue_id}}/entries": {
-        "get": {"summary": "List queue entries", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "List queue entries",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "daily_queue_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                LIST_LIMIT_Q,
+            ],
+            "responses": {
+                "200": {"description": "Items"},
+                "404": {"description": "Not found"},
+            },
         },
-        "post": {"summary": "Create queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "daily_queue_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created"}, "404": {"description": "Not found"}},
+        "post": {
+            "summary": "Create queue entry",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "daily_queue_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/queue-entries/{{queue_entry_id}}": {
-        "get": {"summary": "Get queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get queue entry",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update queue entry", "tags": ["Reception – Queues"], "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update queue entry",
+            "tags": ["Reception – Queues"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/queue-entries/{{queue_entry_id}}/sessions": {
@@ -548,23 +1332,111 @@ COGITO_PATHS = {
             "summary": "Create tablet session",
             "description": "Creates a session for the intake form on a tablet. No token; tablet uses session cookie. Creator is the authenticated user. Allowed role: TABLET (or RECEPTION, ADMIN). Request body: form_locale (default de-DE), expires_in_minutes (default 120, max 480), optional tablet_device_id, optional android_id (for auto-registering the device).",
             "tags": ["Reception – Queues"],
-            "parameters": [{"name": "queue_entry_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"201": {"description": "Session created. Body: session_id, expires_at (ISO), intake_form_id. No token."}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {
+                    "description": "Session created. Body: session_id, expires_at (ISO), intake_form_id. No token."
+                },
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/tablet-devices": {
-        "get": {"summary": "List tablet devices", "description": "Items have id, android_id, is_active, last_seen_at (last tablet-area login for that android_id via /tablet/login or /auth/login with android_id, or manual POST …/heartbeat). Query: is_active, search (by android_id), limit (default 20, max 100).", "tags": ["Reception – Devices"], "parameters": [{"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, {"name": "search", "in": "query", "schema": {"type": "string", "description": "Filter by android_id (substring)"}}, LIST_LIMIT_Q], "responses": {"200": {"description": "Items"}},
+        "get": {
+            "summary": "List tablet devices",
+            "description": "Items have id, android_id, is_active, last_seen_at (last tablet-area login for that android_id via /tablet/login or /auth/login with android_id, or manual POST …/heartbeat). Query: is_active, search (by android_id), limit (default 20, max 100).",
+            "tags": ["Reception – Devices"],
+            "parameters": [
+                {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},
+                {
+                    "name": "search",
+                    "in": "query",
+                    "schema": {
+                        "type": "string",
+                        "description": "Filter by android_id (substring)",
+                    },
+                },
+                LIST_LIMIT_Q,
+            ],
+            "responses": {"200": {"description": "Items"}},
         },
-        "post": {"summary": "Create tablet device", "description": "Body: android_id (required), is_active (default true). No name or device_code.", "tags": ["Reception – Devices"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"201": {"description": "Created (id, android_id, is_active)"}},
+        "post": {
+            "summary": "Create tablet device",
+            "description": "Body: android_id (required), is_active (default true). No name or device_code.",
+            "tags": ["Reception – Devices"],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {"description": "Created (id, android_id, is_active)"}
+            },
         },
     },
     f"{PREFIX}/tablet-devices/{{tablet_device_id}}": {
-        "get": {"summary": "Get tablet device", "description": "Returns id, android_id, is_active, last_seen_at (last login on device or heartbeat).", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "get": {
+            "summary": "Get tablet device",
+            "description": "Returns id, android_id, is_active, last_seen_at (last login on device or heartbeat).",
+            "tags": ["Reception – Devices"],
+            "parameters": [
+                {
+                    "name": "tablet_device_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "patch": {"summary": "Update tablet device", "description": "Body: optional android_id, optional is_active.", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "patch": {
+            "summary": "Update tablet device",
+            "description": "Body: optional android_id, optional is_active.",
+            "tags": ["Reception – Devices"],
+            "parameters": [
+                {
+                    "name": "tablet_device_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "content": {"application/json": {"schema": {"type": "object"}}}
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
-        "delete": {"summary": "Deactivate tablet device", "tags": ["Reception – Devices"], "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}},
+        "delete": {
+            "summary": "Deactivate tablet device",
+            "tags": ["Reception – Devices"],
+            "parameters": [
+                {
+                    "name": "tablet_device_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/tablet-devices/{{tablet_device_id}}/heartbeat": {
@@ -572,8 +1444,18 @@ COGITO_PATHS = {
             "summary": "Tablet heartbeat",
             "description": "Sets last_seen_at to now (operational refresh; same field as last login time from tablet auth). RECEPTION/ADMIN only.",
             "tags": ["Reception – Devices"],
-            "parameters": [{"name": "tablet_device_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "last_seen_at"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "tablet_device_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "last_seen_at"},
+                "404": {"description": "Not found"},
+            },
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}": {
@@ -581,25 +1463,78 @@ COGITO_PATHS = {
             "summary": "Get intake form context",
             "description": "Context for tablet: patient (read-only), consents, anamnesis questions with options and current answer, body_map, form status. TABLET restricted to today's queues.",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}, {"name": "form_locale", "in": "query", "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "Context (patient, consents, anamnesis_questions, body_map_data, form_status, has_signature)"}, "404": {"description": "Not found"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
+            ],
+            "responses": {
+                "200": {
+                    "description": "Context (patient, consents, anamnesis_questions, body_map_data, form_status, has_signature)"
+                },
+                "404": {"description": "Not found"},
+            },
         },
         "patch": {
             "summary": "Update body map",
             "description": "Update body_map_schema_version and body_map_data (list of points: x, y in [0,1], side front|back, optional label).",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "intake_form_id, body_map_schema_version, body_map_data"}, "404": {"description": "Not found"}, "409": {"description": "Form not IN_PROGRESS"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": "intake_form_id, body_map_schema_version, body_map_data"
+                },
+                "404": {"description": "Not found"},
+                "409": {"description": "Form not IN_PROGRESS"},
+            },
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/anamnesis": {
         "put": {
             "summary": "Update anamnesis payload",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"anamnesis_schema_version": {"type": "integer"}, "answers": {"type": "array"}}}}}},
-            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "409": {"description": "Conflict"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "anamnesis_schema_version": {"type": "integer"},
+                                "answers": {"type": "array"},
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Conflict"},
+            },
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/consents": {
@@ -607,9 +1542,23 @@ COGITO_PATHS = {
             "summary": "Update intake form consents",
             "description": "Replace consent acceptance set. Body: consents[] with consent_definition_id, accepted.",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "intake_form_id, consents"}, "404": {"description": "Not found"}, "409": {"description": "Form not IN_PROGRESS or consent not active"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "intake_form_id, consents"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Form not IN_PROGRESS or consent not active"},
+            },
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/signature": {
@@ -617,18 +1566,60 @@ COGITO_PATHS = {
             "summary": "Upload signature",
             "description": "Base64-encoded image (e.g. data:image/png;base64,...). Max 2MB.",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-            "responses": {"200": {"description": "signature_file_path, signature_sha256"}, "400": {"description": "Invalid signature"}, "404": {"description": "Not found"}, "409": {"description": "Form already submitted"}, "413": {"description": "Payload too large"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {"description": "signature_file_path, signature_sha256"},
+                "400": {"description": "Invalid signature"},
+                "404": {"description": "Not found"},
+                "409": {"description": "Form already submitted"},
+                "413": {"description": "Payload too large"},
+            },
         },
     },
     f"{PREFIX}/intake-forms/{{intake_form_id}}/submit": {
         "post": {
             "summary": "Submit intake form",
             "tags": ["Intake"],
-            "parameters": [{"name": "intake_form_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"submitted_by_user_id": {"type": "string", "format": "uuid"}}}}}},
-            "responses": {"200": {"description": "OK"}, "404": {"description": "Not found"}, "400": {"description": "Validation error"}},
+            "parameters": [
+                {
+                    "name": "intake_form_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "submitted_by_user_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                }
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {"description": "OK"},
+                "404": {"description": "Not found"},
+                "400": {"description": "Validation error"},
+            },
         },
     },
     f"{PREFIX}/patient-results/request-otp": {
@@ -644,7 +1635,11 @@ COGITO_PATHS = {
                             "type": "object",
                             "properties": {
                                 "phone": {"type": "string"},
-                                "date_of_birth": {"type": "string", "format": "date", "description": "YYYY-MM-DD"},
+                                "date_of_birth": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "description": "YYYY-MM-DD",
+                                },
                                 "captcha_token": {"type": "string"},
                             },
                             "required": ["phone", "date_of_birth", "captcha_token"],
@@ -652,7 +1647,10 @@ COGITO_PATHS = {
                     }
                 },
             },
-            "responses": {"200": {"description": "OK (always, to prevent enumeration)"}, "400": {"description": "Invalid input or CAPTCHA failed"}},
+            "responses": {
+                "200": {"description": "OK (always, to prevent enumeration)"},
+                "400": {"description": "Invalid input or CAPTCHA failed"},
+            },
         },
     },
     f"{PREFIX}/patient-results/verify-otp": {
@@ -668,7 +1666,11 @@ COGITO_PATHS = {
                             "type": "object",
                             "properties": {
                                 "phone": {"type": "string"},
-                                "date_of_birth": {"type": "string", "format": "date", "description": "YYYY-MM-DD"},
+                                "date_of_birth": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "description": "YYYY-MM-DD",
+                                },
                                 "otp_code": {"type": "string"},
                             },
                             "required": ["phone", "date_of_birth", "otp_code"],
@@ -676,7 +1678,10 @@ COGITO_PATHS = {
                     }
                 },
             },
-            "responses": {"200": {"description": "OK, session cookie set"}, "400": {"description": "Invalid or expired code"}},
+            "responses": {
+                "200": {"description": "OK, session cookie set"},
+                "400": {"description": "Invalid or expired code"},
+            },
         },
     },
     f"{PREFIX}/patient-results/documents": {
@@ -684,7 +1689,12 @@ COGITO_PATHS = {
             "summary": "List documents",
             "description": "List published documents for the logged-in patient. Requires patient_results session (from verify-otp).",
             "tags": ["Patient results"],
-            "responses": {"200": {"description": "items: [{version_id, document_id, queue_date, published_at}]"}, "401": {"description": "Session required"}},
+            "responses": {
+                "200": {
+                    "description": "items: [{version_id, document_id, queue_date, published_at}]"
+                },
+                "401": {"description": "Session required"},
+            },
         },
     },
     f"{PREFIX}/patient-results/documents/{{version_id}}/download": {
@@ -692,8 +1702,19 @@ COGITO_PATHS = {
             "summary": "Download PDF",
             "description": "Download Befund PDF for a version. Requires patient_results session.",
             "tags": ["Patient results"],
-            "parameters": [{"name": "version_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
-            "responses": {"200": {"description": "PDF file"}, "401": {"description": "Session required"}, "404": {"description": "Not found or unavailable"}},
+            "parameters": [
+                {
+                    "name": "version_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "PDF file"},
+                "401": {"description": "Session required"},
+                "404": {"description": "Not found or unavailable"},
+            },
         },
     },
 }
@@ -701,18 +1722,30 @@ COGITO_PATHS = {
 
 def _paths_with_pydantic_refs() -> dict:
     """Build paths from COGITO_PATHS, injecting $ref request/response schemas from Pydantic where registered."""
-    paths = {}
+    paths: dict[str, Any] = {}
     for path_key, operations in COGITO_PATHS.items():
         paths[path_key] = {}
-        for method, spec in operations.items():
+        for method, spec in operations.items():  # type: ignore[attr-defined]
             op = deepcopy(spec)
             body_schema = get_request_body_schema_for(path_key, method)
-            if body_schema is not None and "requestBody" in op and "content" in op["requestBody"]:
-                op["requestBody"]["content"]["application/json"] = {"schema": body_schema}
+            if (
+                body_schema is not None
+                and "requestBody" in op
+                and "content" in op["requestBody"]
+            ):
+                op["requestBody"]["content"]["application/json"] = {
+                    "schema": body_schema
+                }
             for status in ("200", "201"):
                 response_schema = get_response_schema_for(path_key, method, status)
-                if response_schema is not None and "responses" in op and status in op["responses"]:
-                    op["responses"][status]["content"] = {"application/json": {"schema": response_schema}}
+                if (
+                    response_schema is not None
+                    and "responses" in op
+                    and status in op["responses"]
+                ):
+                    op["responses"][status]["content"] = {
+                        "application/json": {"schema": response_schema}
+                    }
             # Require login for all operations except NO_AUTH_OPERATIONS (Swagger UI shows lock icon).
             if (path_key, method) in NO_AUTH_OPERATIONS:
                 op["security"] = []
@@ -749,7 +1782,12 @@ def build_cogito_openapi_schema() -> dict:
             "description": "OpenAPI schema for Cogitomedica backend. All API v1 endpoints are documented.",
             "version": "1.0.0",
         },
-        "servers": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
+        "servers": [
+            {
+                "url": "/",
+                "description": "Relative to current host (e.g. http://127.0.0.1:8000)",
+            }
+        ],
         "paths": _paths_with_pydantic_refs(),
         "components": {
             "schemas": get_components_schemas(),

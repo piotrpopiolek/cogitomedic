@@ -27,7 +27,9 @@ class Command(BaseCommand):
             run_retention_cleanup.enqueue()
             self.stdout.write(self.style.SUCCESS("Enqueued: run_retention_cleanup"))
             run_intake_retention_cleanup.enqueue()
-            self.stdout.write(self.style.SUCCESS("Enqueued: run_intake_retention_cleanup"))
+            self.stdout.write(
+                self.style.SUCCESS("Enqueued: run_intake_retention_cleanup")
+            )
             return
 
         process_outbox_events.enqueue()

@@ -87,7 +87,11 @@ class DailyQueuesApiTests(TestCase):
             "source": QueueSource.MANUAL,
             "created_by_user_id": str(self.reception_user.id),
         }
-        self.client.post("/api/v1/daily-queues", data=json.dumps(payload), content_type="application/json")
+        self.client.post(
+            "/api/v1/daily-queues",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
         response = self.client.post(
             "/api/v1/daily-queues",
             data=json.dumps(payload),
@@ -375,7 +379,9 @@ class TabletQueueScopeApiTests(TestCase):
         """TABLET with no clinic_sites assigned gets empty list, not all queues."""
         self.client.login(username="tablet-queue-user", password="safe-password")
         clinic = ClinicSite.objects.create(code="C1", name="Clinic 1")
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
+        room = ConsultingRoom.objects.create(
+            clinic_site=clinic, code="R1", name="Room 1"
+        )
         DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=clinic,
@@ -393,8 +399,12 @@ class TabletQueueScopeApiTests(TestCase):
         self.client.login(username="tablet-queue-user", password="safe-password")
         clinic_a = ClinicSite.objects.create(code="A1", name="Clinic A")
         clinic_b = ClinicSite.objects.create(code="B1", name="Clinic B")
-        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
-        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        room_a = ConsultingRoom.objects.create(
+            clinic_site=clinic_a, code="RA", name="Room A"
+        )
+        room_b = ConsultingRoom.objects.create(
+            clinic_site=clinic_b, code="RB", name="Room B"
+        )
         self.tablet_user.clinic_sites.add(clinic_a)
         queue_a = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
@@ -422,8 +432,10 @@ class TabletQueueScopeApiTests(TestCase):
         self.client.login(username="tablet-queue-user", password="safe-password")
         clinic_a = ClinicSite.objects.create(code="A1", name="Clinic A")
         clinic_b = ClinicSite.objects.create(code="B1", name="Clinic B")
-        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
-        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
+        room_b = ConsultingRoom.objects.create(
+            clinic_site=clinic_b, code="RB", name="Room B"
+        )
         self.tablet_user.clinic_sites.add(clinic_a)
         queue_b = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
@@ -438,19 +450,24 @@ class TabletQueueScopeApiTests(TestCase):
 
     def test_tablet_scope_from_device_in_session(self) -> None:
         """When session has tablet_device_id and device has clinic_site, queues are filtered by device site.
-        We also assign user to clinic_a so that scope comes from either device (production) or user (test client)."""
+        We also assign user to clinic_a so that scope comes from either device (production) or user (test client).
+        """
         self.client.login(username="tablet-queue-user", password="safe-password")
         clinic_a = ClinicSite.objects.create(code="AX", name="Clinic A")
         clinic_b = ClinicSite.objects.create(code="BX", name="Clinic B")
         self.tablet_user.clinic_sites.add(clinic_a)
-        room_a = ConsultingRoom.objects.create(clinic_site=clinic_a, code="RA", name="Room A")
-        room_b = ConsultingRoom.objects.create(clinic_site=clinic_b, code="RB", name="Room B")
+        room_a = ConsultingRoom.objects.create(
+            clinic_site=clinic_a, code="RA", name="Room A"
+        )
+        room_b = ConsultingRoom.objects.create(
+            clinic_site=clinic_b, code="RB", name="Room B"
+        )
         device = TabletDevice.objects.create(
             android_id="tablet-scope-device",
             is_active=True,
             clinic_site=clinic_a,
         )
-        queue_a = DailyQueue.objects.create(
+        DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=clinic_a,
             consulting_room=room_a,
@@ -466,7 +483,9 @@ class TabletQueueScopeApiTests(TestCase):
         )
         self.client.session["tablet_device_id"] = str(device.id)
         self.client.session.save()
-        self.client.cookies[settings.SESSION_COOKIE_NAME] = self.client.session.session_key
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = (
+            self.client.session.session_key
+        )
         response = self.client.get("/api/v1/daily-queues")
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]
@@ -477,7 +496,9 @@ class TabletQueueScopeApiTests(TestCase):
         """When session has tablet_device_id but device has no clinic_site, GET daily-queues returns empty."""
         self.client.login(username="tablet-queue-user", password="safe-password")
         clinic = ClinicSite.objects.create(code="CX", name="Clinic C")
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
+        room = ConsultingRoom.objects.create(
+            clinic_site=clinic, code="R1", name="Room 1"
+        )
         DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=clinic,
@@ -485,7 +506,9 @@ class TabletQueueScopeApiTests(TestCase):
             status=QueueStatus.OPEN,
             created_by_user=self.tablet_user,
         )
-        device = TabletDevice.objects.create(android_id="tablet-no-site", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="tablet-no-site", is_active=True
+        )
         self.client.session["tablet_device_id"] = str(device.id)
         self.client.session.save()
         response = self.client.get("/api/v1/daily-queues")
@@ -522,7 +545,9 @@ class DoctorAndTabletAuthorizationApiTests(TestCase):
         self.tablet_user.clinic_sites.add(self.clinic)
         self.doctor.preferred_locale = "en-GB"
         self.tablet_user.preferred_locale = "en-GB"
-        StaffUser.objects.bulk_update([self.doctor, self.tablet_user], ["preferred_locale"])
+        StaffUser.objects.bulk_update(
+            [self.doctor, self.tablet_user], ["preferred_locale"]
+        )
 
     def test_doctor_can_get_clinic_site_detail_when_in_scope(self) -> None:
         self.client.login(username="doctor-auth", password="safe-password")
@@ -657,11 +682,13 @@ class TabletDevicesApiTests(TestCase):
     def test_post_tablet_device_with_clinic_site_id(self) -> None:
         response = self.client.post(
             "/api/v1/tablet-devices",
-            data=json.dumps({
-                "android_id": "device-TAB-SITE",
-                "is_active": True,
-                "clinic_site_id": str(self.clinic_a.id),
-            }),
+            data=json.dumps(
+                {
+                    "android_id": "device-TAB-SITE",
+                    "is_active": True,
+                    "clinic_site_id": str(self.clinic_a.id),
+                }
+            ),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 201)
@@ -692,7 +719,9 @@ class TabletDevicesApiTests(TestCase):
             is_active=True,
             clinic_site=self.clinic_b,
         )
-        response = self.client.get("/api/v1/tablet-devices?is_active=true&search=TAB-ACT")
+        response = self.client.get(
+            "/api/v1/tablet-devices?is_active=true&search=TAB-ACT"
+        )
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]
         self.assertEqual(len(items), 1)
@@ -791,8 +820,12 @@ class TabletDevicesApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_reception_list_sees_only_devices_from_assigned_clinics(self) -> None:
-        TabletDevice.objects.create(android_id="device-TAB-IN", is_active=True, clinic_site=self.clinic_a)
-        TabletDevice.objects.create(android_id="device-TAB-OUT", is_active=True, clinic_site=self.clinic_b)
+        TabletDevice.objects.create(
+            android_id="device-TAB-IN", is_active=True, clinic_site=self.clinic_a
+        )
+        TabletDevice.objects.create(
+            android_id="device-TAB-OUT", is_active=True, clinic_site=self.clinic_b
+        )
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
         android_ids = {item["android_id"] for item in response.json()["items"]}
@@ -800,12 +833,20 @@ class TabletDevicesApiTests(TestCase):
         self.assertNotIn("device-TAB-OUT", android_ids)
 
     def test_reception_gets_404_for_tablet_device_outside_scope(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-OUT-DETAIL", is_active=True, clinic_site=self.clinic_b)
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-OUT-DETAIL",
+            is_active=True,
+            clinic_site=self.clinic_b,
+        )
         response = self.client.get(f"/api/v1/tablet-devices/{device.id}")
         self.assertEqual(response.status_code, 404)
 
-    def test_reception_gets_404_for_tablet_device_retry_actions_outside_scope(self) -> None:
-        device = TabletDevice.objects.create(android_id="device-TAB-OUT-PATCH", is_active=True, clinic_site=self.clinic_b)
+    def test_reception_gets_404_for_tablet_device_retry_actions_outside_scope(
+        self,
+    ) -> None:
+        device = TabletDevice.objects.create(
+            android_id="device-TAB-OUT-PATCH", is_active=True, clinic_site=self.clinic_b
+        )
         patch_response = self.client.patch(
             f"/api/v1/tablet-devices/{device.id}",
             data=json.dumps({"is_active": False}),
@@ -851,7 +892,9 @@ class ClinicSitesAndRoomsApiTests(TestCase):
     def test_clinic_sites_create_list_patch_delete(self) -> None:
         create_response = self.client.post(
             "/api/v1/clinic-sites",
-            data=json.dumps({"code": "BERLIN-1", "name": "Berlin Central", "is_active": True}),
+            data=json.dumps(
+                {"code": "BERLIN-1", "name": "Berlin Central", "is_active": True}
+            ),
             content_type="application/json",
         )
         self.assertEqual(create_response.status_code, 201)
@@ -874,16 +917,22 @@ class ClinicSitesAndRoomsApiTests(TestCase):
         self.assertFalse(delete_response.json()["is_active"])
 
     def test_clinic_site_duplicate_code_returns_409(self) -> None:
-        ClinicSite.objects.create(code="BERLIN-1", name="Berlin Central", is_active=True)
+        ClinicSite.objects.create(
+            code="BERLIN-1", name="Berlin Central", is_active=True
+        )
         response = self.client.post(
             "/api/v1/clinic-sites",
-            data=json.dumps({"code": "BERLIN-1", "name": "Berlin Duplicate", "is_active": True}),
+            data=json.dumps(
+                {"code": "BERLIN-1", "name": "Berlin Duplicate", "is_active": True}
+            ),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 409)
 
     def test_consulting_rooms_create_list_patch_delete(self) -> None:
-        site = ClinicSite.objects.create(code="BERLIN-1", name="Berlin Central", is_active=True)
+        site = ClinicSite.objects.create(
+            code="BERLIN-1", name="Berlin Central", is_active=True
+        )
         create_response = self.client.post(
             "/api/v1/consulting-rooms",
             data=json.dumps(
@@ -899,7 +948,9 @@ class ClinicSitesAndRoomsApiTests(TestCase):
         self.assertEqual(create_response.status_code, 201)
         room_id = create_response.json()["id"]
 
-        list_response = self.client.get(f"/api/v1/consulting-rooms?clinic_site_id={site.id}&search=Room")
+        list_response = self.client.get(
+            f"/api/v1/consulting-rooms?clinic_site_id={site.id}&search=Room"
+        )
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.json()["items"]), 1)
 
@@ -917,8 +968,12 @@ class ClinicSitesAndRoomsApiTests(TestCase):
         self.assertFalse(delete_response.json()["is_active"])
 
     def test_consulting_room_duplicate_code_per_site_returns_409(self) -> None:
-        site = ClinicSite.objects.create(code="BERLIN-1", name="Berlin Central", is_active=True)
-        ConsultingRoom.objects.create(clinic_site=site, code="R01", name="Room 1", is_active=True)
+        site = ClinicSite.objects.create(
+            code="BERLIN-1", name="Berlin Central", is_active=True
+        )
+        ConsultingRoom.objects.create(
+            clinic_site=site, code="R01", name="Room 1", is_active=True
+        )
         response = self.client.post(
             "/api/v1/consulting-rooms",
             data=json.dumps(

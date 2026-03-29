@@ -20,6 +20,7 @@ class MedicalPayloadMinimal(BaseModel):
     Minimal contract for medical_payload stored in DB (§6: must have schema_version).
     Full v1 shape (authoring_locale, lesions, etc.) is in api-plan; this enforces versioning.
     """
+
     model_config = ConfigDict(extra="allow")
 
     schema_version: int = Field(ge=1)
@@ -49,7 +50,9 @@ class PublishMedicalDocumentRequest(BaseModel):
     publish_request_id: UUID
     published_by_user_id: UUID | None = None  # ignored; session user is used
     resend_sms: bool = False  # US-010: when republishing, send SMS again to patient
-    publish_locale: str = Field(min_length=2, max_length=10, pattern=r"^(de|en|pl)(-[A-Z]{2})?$")
+    publish_locale: str = Field(
+        min_length=2, max_length=10, pattern=r"^(de|en|pl)(-[A-Z]{2})?$"
+    )
 
 
 class DoctorTemplateListQuery(BaseModel):
@@ -67,7 +70,9 @@ class DoctorTemplateCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     template_locale: str = Field(min_length=2, max_length=10)
     template_body: str = Field(min_length=1)
-    lesion_group_favorites: list[FavoriteLesionGroupPreset] = Field(default_factory=list)
+    lesion_group_favorites: list[FavoriteLesionGroupPreset] = Field(
+        default_factory=list
+    )
     is_global: bool = False
     clinic_site_id: UUID | None = None
     is_active: bool = True
@@ -86,4 +91,6 @@ class DoctorTemplateUpdateRequest(BaseModel):
 
 class RetryProcessingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    reason: str = Field(default="manual retry from doctor panel", min_length=3, max_length=200)
+    reason: str = Field(
+        default="manual retry from doctor panel", min_length=3, max_length=200
+    )

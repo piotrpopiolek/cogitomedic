@@ -1,4 +1,5 @@
 """OAuth2 token management for HiDrive API."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,7 +38,11 @@ class HiDriveOAuthClient:
         self._token_state: _AccessTokenState | None = None
 
     def get_access_token(self, *, force_refresh: bool = False) -> str:
-        if force_refresh or self._token_state is None or self._is_expired(self._token_state):
+        if (
+            force_refresh
+            or self._token_state is None
+            or self._is_expired(self._token_state)
+        ):
             self._token_state = self._refresh_access_token(
                 refresh_token=(
                     self._token_state.refresh_token
@@ -62,13 +67,17 @@ class HiDriveOAuthClient:
 
         timeout = int(getattr(settings, "HIDRIVE_TIMEOUT_SECONDS", 30))
         response = requests.post(
-            getattr(settings, "HIDRIVE_TOKEN_URL", "https://my.hidrive.com/oauth2/token"),
+            getattr(
+                settings, "HIDRIVE_TOKEN_URL", "https://my.hidrive.com/oauth2/token"
+            ),
             data=payload,
             timeout=timeout,
         )
         if response.status_code != 200:
             _hidrive_token_refresh_total.labels(outcome="error").inc()
-            raise HiDriveAuthError(f"HiDrive token refresh failed with status {response.status_code}")
+            raise HiDriveAuthError(
+                f"HiDrive token refresh failed with status {response.status_code}"
+            )
 
         data = _safe_json(response)
         access_token = str(data.get("access_token") or "").strip()
@@ -78,10 +87,12 @@ class HiDriveOAuthClient:
 
         expires_in_raw = data.get("expires_in")
         try:
-            expires_in = int(expires_in_raw)
+            expires_in = int(expires_in_raw)  # type: ignore[arg-type]
         except (TypeError, ValueError) as exc:
             _hidrive_token_refresh_total.labels(outcome="error").inc()
-            raise HiDriveAuthError("HiDrive token refresh returned invalid expires_in") from exc
+            raise HiDriveAuthError(
+                "HiDrive token refresh returned invalid expires_in"
+            ) from exc
 
         next_refresh_token = str(data.get("refresh_token") or refresh_token).strip()
         if not next_refresh_token:
@@ -89,7 +100,9 @@ class HiDriveOAuthClient:
             raise HiDriveAuthError("HiDrive token refresh returned empty refresh_token")
 
         # Small safety margin before actual expiry.
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(30, expires_in - 30))
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=max(30, expires_in - 30)
+        )
         return _AccessTokenState(
             access_token=access_token,
             expires_at=expires_at,

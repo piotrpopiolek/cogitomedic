@@ -11,7 +11,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         missing: list[str] = []
-        active_keys = TranslationKey.objects.filter(status=TranslationKeyStatus.ACTIVE).order_by("key")
+        active_keys = TranslationKey.objects.filter(
+            status=TranslationKeyStatus.ACTIVE
+        ).order_by("key")
         active_count = active_keys.count()
         if active_count == 0:
             raise CommandError(
@@ -20,7 +22,9 @@ class Command(BaseCommand):
             )
         for key in active_keys:
             present = set(
-                TranslationValue.objects.filter(translation_key=key).values_list("language_code", flat=True)
+                TranslationValue.objects.filter(translation_key=key).values_list(
+                    "language_code", flat=True
+                )
             )
             expected = set(ALLOWED_LANGUAGE_CODES)
             lacking = sorted(expected - present)

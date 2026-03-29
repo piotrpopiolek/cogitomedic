@@ -14,6 +14,7 @@ Optional .env for patient portal flow during seed:
 Usage (from repo root):
   python scripts/capture_manual_screenshots.py --base-url http://127.0.0.1:8000
 """
+
 from __future__ import annotations
 
 import argparse
@@ -71,7 +72,10 @@ def _shot(page, name: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default=os.environ.get("SCREENSHOT_BASE_URL", "http://127.0.0.1:8000"))
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("SCREENSHOT_BASE_URL", "http://127.0.0.1:8000"),
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
@@ -83,7 +87,10 @@ def main() -> int:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("Install: pip install playwright && playwright install chromium", file=sys.stderr)
+        print(
+            "Install: pip install playwright && playwright install chromium",
+            file=sys.stderr,
+        )
         return 1
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -115,7 +122,10 @@ def main() -> int:
         page.goto(f"{base}/admin/reception/dailyqueue/", wait_until="networkidle")
         _shot(page, "reception-03-daily-queue-changelist.png")
 
-        page.goto(f"{base}/admin/reception/dailyqueue/master-detail/", wait_until="networkidle")
+        page.goto(
+            f"{base}/admin/reception/dailyqueue/master-detail/",
+            wait_until="networkidle",
+        )
         _shot(page, "reception-04-master-detail.png")
 
         from django.urls import reverse
@@ -125,7 +135,10 @@ def main() -> int:
         _shot(page, "reception-06-import-xlsx.png")
         _shot(page, "admin-03-import-xlsx.png")
 
-        page.goto(f"{base}{reverse('admin:reception_queueentry_add')}", wait_until="networkidle")
+        page.goto(
+            f"{base}{reverse('admin:reception_queueentry_add')}",
+            wait_until="networkidle",
+        )
         _shot(page, "reception-05-queue-entry-add.png")
 
         page.goto(f"{base}/admin/intake-documents/", wait_until="networkidle")
@@ -133,7 +146,9 @@ def main() -> int:
 
         iv_id = ctx.get("intake_document_version_id")
         if iv_id:
-            page.goto(f"{base}/admin/intake-documents/{iv_id}/", wait_until="networkidle")
+            page.goto(
+                f"{base}/admin/intake-documents/{iv_id}/", wait_until="networkidle"
+            )
             _shot(page, "reception-08-intake-document-detail.png")
 
         page.goto(f"{base}/admin/", wait_until="networkidle")
@@ -151,17 +166,25 @@ def main() -> int:
         page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
         _shot(page, "doctor-02-list-filters.png")
 
-        page.goto(f"{base}/doctor/open/{ctx['queue_entry_err_id']}/?lang=de", wait_until="networkidle")
+        page.goto(
+            f"{base}/doctor/open/{ctx['queue_entry_err_id']}/?lang=de",
+            wait_until="networkidle",
+        )
         _shot(page, "doctor-03-error-no-intake.png")
 
-        page.goto(f"{base}/doctor/{ctx['medical_document_id']}/?lang=de", wait_until="networkidle")
+        page.goto(
+            f"{base}/doctor/{ctx['medical_document_id']}/?lang=de",
+            wait_until="networkidle",
+        )
         page.wait_for_timeout(1500)
         _shot(page, "doctor-04-befund-section.png")
 
         # --- Tablet unassigned ---
         tpage.context.clear_cookies()
         tpage.goto(f"{base}/tablet/login/", wait_until="networkidle")
-        tpage.evaluate("() => { document.querySelector('#tablet-login-android-id').value = 'screenshot-unassigned-dev'; }")
+        tpage.evaluate(
+            "() => { document.querySelector('#tablet-login-android-id').value = 'screenshot-unassigned-dev'; }"
+        )
         tpage.locator('input[name="username"]').fill("screenshot_tablet")
         tpage.locator('input[name="password"]').fill(pwd)
         tpage.locator('button[type="submit"]').click()

@@ -11,6 +11,7 @@ Usage:
   python scripts/record_manual_videos.py --role reception --base-url http://127.0.0.1:8000
   python scripts/record_manual_videos.py --role all --slow-mo 250
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,7 +57,9 @@ def _pause(page, ms: int = 800) -> None:
     page.wait_for_timeout(ms)
 
 
-def _record_reception(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int) -> Path | None:
+def _record_reception(
+    base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int
+) -> Path | None:
     from django.urls import reverse
 
     pwd = ctx["password"]
@@ -80,18 +83,26 @@ def _record_reception(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int
         _pause(page)
         page.goto(f"{base}/admin/reception/dailyqueue/", wait_until="networkidle")
         _pause(page)
-        page.goto(f"{base}/admin/reception/dailyqueue/master-detail/", wait_until="networkidle")
+        page.goto(
+            f"{base}/admin/reception/dailyqueue/master-detail/",
+            wait_until="networkidle",
+        )
         _pause(page)
         imp_url = f"{base}{reverse('admin:reception_dailyqueue_import_xlsx')}"
         page.goto(imp_url, wait_until="networkidle")
         _pause(page)
-        page.goto(f"{base}{reverse('admin:reception_queueentry_add')}", wait_until="networkidle")
+        page.goto(
+            f"{base}{reverse('admin:reception_queueentry_add')}",
+            wait_until="networkidle",
+        )
         _pause(page)
         page.goto(f"{base}/admin/intake-documents/", wait_until="networkidle")
         _pause(page)
         iv_id = ctx.get("intake_document_version_id")
         if iv_id:
-            page.goto(f"{base}/admin/intake-documents/{iv_id}/", wait_until="networkidle")
+            page.goto(
+                f"{base}/admin/intake-documents/{iv_id}/", wait_until="networkidle"
+            )
             _pause(page, 1200)
         context.close()
         browser.close()
@@ -99,7 +110,9 @@ def _record_reception(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int
     return _finalize_webm(folder, "reception")
 
 
-def _record_admin(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int) -> Path | None:
+def _record_admin(
+    base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int
+) -> Path | None:
     from django.urls import reverse
 
     pwd = ctx["password"]
@@ -133,7 +146,9 @@ def _record_admin(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh
     return _finalize_webm(folder, "admin")
 
 
-def _record_doctor(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int) -> Path | None:
+def _record_doctor(
+    base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int
+) -> Path | None:
     pwd = ctx["password"]
     folder = out_dir / "doctor"
     _clear_webm(folder)
@@ -153,9 +168,15 @@ def _record_doctor(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, v
         login_doctor(page, base, pwd)
         page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
         _pause(page, 1200)
-        page.goto(f"{base}/doctor/open/{ctx['queue_entry_err_id']}/?lang=de", wait_until="networkidle")
+        page.goto(
+            f"{base}/doctor/open/{ctx['queue_entry_err_id']}/?lang=de",
+            wait_until="networkidle",
+        )
         _pause(page, 1200)
-        page.goto(f"{base}/doctor/{ctx['medical_document_id']}/?lang=de", wait_until="networkidle")
+        page.goto(
+            f"{base}/doctor/{ctx['medical_document_id']}/?lang=de",
+            wait_until="networkidle",
+        )
         page.wait_for_timeout(2000)
         _pause(page, 1500)
         context.close()
@@ -164,7 +185,9 @@ def _record_doctor(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, v
     return _finalize_webm(folder, "doctor")
 
 
-def _record_tablet(base: str, ctx: dict, out_dir: Path, slow_mo: int, tw: int, th: int) -> Path | None:
+def _record_tablet(
+    base: str, ctx: dict, out_dir: Path, slow_mo: int, tw: int, th: int
+) -> Path | None:
     pwd = ctx["password"]
     folder = out_dir / "tablet"
     _clear_webm(folder)
@@ -205,7 +228,9 @@ def _record_tablet(base: str, ctx: dict, out_dir: Path, slow_mo: int, tw: int, t
     return _finalize_webm(folder, "tablet")
 
 
-def _record_patient(base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int) -> Path | None:
+def _record_patient(
+    base: str, ctx: dict, out_dir: Path, slow_mo: int, vw: int, vh: int
+) -> Path | None:
     folder = out_dir / "patient"
     _clear_webm(folder)
     ck_host = cookie_domain(base)
@@ -264,7 +289,9 @@ ROLE_HANDLERS = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Nagrywa WebM instruktażowe per rola (Playwright).")
+    parser = argparse.ArgumentParser(
+        description="Nagrywa WebM instruktażowe per rola (Playwright)."
+    )
     parser.add_argument(
         "--base-url",
         default=os.environ.get("SCREENSHOT_BASE_URL", "http://127.0.0.1:8000"),
@@ -282,18 +309,40 @@ def main() -> int:
         default=DEFAULT_OUT,
         help=f"Katalog wyjściowy (domyślnie {DEFAULT_OUT})",
     )
-    parser.add_argument("--slow-mo", type=int, default=200, help="Opóźnienie ms między akcjami Playwright")
-    parser.add_argument("--video-width", type=int, default=1280, help="Szerokość nagrania (desktop/pacjent)")
-    parser.add_argument("--video-height", type=int, default=720, help="Wysokość nagrania (desktop/pacjent)")
-    parser.add_argument("--tablet-width", type=int, default=900, help="Szerokość widoku tabletu")
-    parser.add_argument("--tablet-height", type=int, default=1200, help="Wysokość widoku tabletu")
+    parser.add_argument(
+        "--slow-mo",
+        type=int,
+        default=200,
+        help="Opóźnienie ms między akcjami Playwright",
+    )
+    parser.add_argument(
+        "--video-width",
+        type=int,
+        default=1280,
+        help="Szerokość nagrania (desktop/pacjent)",
+    )
+    parser.add_argument(
+        "--video-height",
+        type=int,
+        default=720,
+        help="Wysokość nagrania (desktop/pacjent)",
+    )
+    parser.add_argument(
+        "--tablet-width", type=int, default=900, help="Szerokość widoku tabletu"
+    )
+    parser.add_argument(
+        "--tablet-height", type=int, default=1200, help="Wysokość widoku tabletu"
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
     try:
         import playwright.sync_api  # noqa: F401
     except ImportError:
-        print("Install: pip install playwright && playwright install chromium", file=sys.stderr)
+        print(
+            "Install: pip install playwright && playwright install chromium",
+            file=sys.stderr,
+        )
         return 1
 
     setup_django()
@@ -307,9 +356,13 @@ def main() -> int:
     for role in roles:
         handler = ROLE_HANDLERS[role]
         if role == "tablet":
-            path = handler(base, ctx, out_dir, args.slow_mo, args.tablet_width, args.tablet_height)
+            path = handler(
+                base, ctx, out_dir, args.slow_mo, args.tablet_width, args.tablet_height
+            )
         else:
-            path = handler(base, ctx, out_dir, args.slow_mo, args.video_width, args.video_height)
+            path = handler(
+                base, ctx, out_dir, args.slow_mo, args.video_width, args.video_height
+            )
         if path:
             print(f"OK {role}: {path}")
         else:

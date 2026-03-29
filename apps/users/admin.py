@@ -16,7 +16,14 @@ from apps.users.models import StaffUser
 class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
     form = StaffUserChangeForm
     add_form = StaffUserCreationForm
-    list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_active")
+    list_display = (
+        "username",
+        "email",
+        "first_name",
+        "last_name",
+        "is_staff",
+        "is_active",
+    )
     list_display_links = ("username",)
     list_filter = ("groups", "is_staff", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
@@ -27,8 +34,17 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
         (None, {"fields": ("username", "password")}),
         ("Personal", {"fields": ("first_name", "last_name", "email", "phone_number")}),
         ("Access", {"fields": ("preferred_locale", "is_staff", "is_active")}),
-        ("Kliniki (dla roli Lekarz)", {"fields": ("clinic_sites",), "description": "Z jakich placówek lekarz widzi pacjentów i kolejki."}),
-        ("Dates", {"fields": ("date_joined", "last_login", "created_at", "updated_at")}),
+        (
+            "Kliniki (dla roli Lekarz)",
+            {
+                "fields": ("clinic_sites",),
+                "description": "Z jakich placówek lekarz widzi pacjentów i kolejki.",
+            },
+        ),
+        (
+            "Dates",
+            {"fields": ("date_joined", "last_login", "created_at", "updated_at")},
+        ),
         ("Permissions", {"fields": ("groups", "user_permissions")}),
     )
     add_fieldsets = (
@@ -47,7 +63,9 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
 
     @staticmethod
     def _is_admin_role(request) -> bool:
-        return request.user.is_authenticated and getattr(request.user, "is_admin_role", False)
+        return request.user.is_authenticated and getattr(
+            request.user, "is_admin_role", False
+        )
 
     def has_view_permission(self, request, obj=None):
         if self._is_admin_role(request):

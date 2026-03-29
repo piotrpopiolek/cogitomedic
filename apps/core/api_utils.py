@@ -23,10 +23,12 @@ DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
 MAX_JSON_BODY_BYTES = 1024 * 1024
 
+
 def assign_group_to_test_user(user, group_name: str) -> None:
     """Helper for testing to replace `user = StaffUser.objects.create(..., role=StaffRole.XXX)`."""
     group, _ = Group.objects.get_or_create(name=group_name)
     user.groups.add(group)
+
 
 def json_error(message: str, *, status: int) -> JsonResponse:
     """Build a normalized JSON error payload; keyed ``other.*`` / ``doctor.*`` strings resolve from DB."""
@@ -68,7 +70,9 @@ def read_json_body(request: HttpRequest) -> dict:
     """Decode JSON body for API views. Raises JSONDecodeError or InvalidRequestBodyEncoding on invalid input."""
     if len(request.body) > MAX_JSON_BODY_BYTES:
         raise InvalidRequestBodyEncoding(
-            domain_message("other.api.request_body_too_large", max_bytes=MAX_JSON_BODY_BYTES),
+            domain_message(
+                "other.api.request_body_too_large", max_bytes=MAX_JSON_BODY_BYTES
+            ),
             api_message_key="other.api.request_body_too_large",
             api_message_params={"max_bytes": MAX_JSON_BODY_BYTES},
             http_status=413,
@@ -95,7 +99,9 @@ def parse_bool_query(value: str | None) -> bool | None:
     return None
 
 
-def parse_positive_int(value: str, *, default: int, minimum: int = 1, maximum: int = 100) -> int:
+def parse_positive_int(
+    value: str, *, default: int, minimum: int = 1, maximum: int = 100
+) -> int:
     """Parse positive int; raises ValueError on invalid input. Prefer safe_parse_positive_int in views."""
     if not value:
         return default
@@ -144,7 +150,9 @@ def require_authenticated_user(request: HttpRequest) -> JsonResponse | None:
     return None
 
 
-def require_user_role(request: HttpRequest, *, allowed_roles: set[str]) -> JsonResponse | None:
+def require_user_role(
+    request: HttpRequest, *, allowed_roles: set[str]
+) -> JsonResponse | None:
     """
     Return 401 when not authenticated (same semantics as require_auth).
     Return 403 when authenticated but role is not in allowed_roles.
@@ -204,7 +212,9 @@ def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
     except (ValueError, TypeError):
         return None
     try:
-        device = TabletDevice.objects.only("clinic_site_id").get(id=device_id, is_active=True)
+        device = TabletDevice.objects.only("clinic_site_id").get(
+            id=device_id, is_active=True
+        )
     except TabletDevice.DoesNotExist:
         return None
     if device.clinic_site_id is None:
@@ -212,7 +222,9 @@ def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
     return [device.clinic_site_id]
 
 
-def require_actor_match(request: HttpRequest, actor_id: UUID | None) -> JsonResponse | None:
+def require_actor_match(
+    request: HttpRequest, actor_id: UUID | None
+) -> JsonResponse | None:
     """Return 403 when actor_id is not None and does not match request.user.id. Use for body/query actor fields."""
     if actor_id is not None and actor_id != request.user.id:
         return json_error("other.api.actor_mismatch", status=403)

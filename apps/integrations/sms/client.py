@@ -1,4 +1,5 @@
 """SMS adapter for SMSApi (smsapi.pl)."""
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ def format_phone_for_smsapi(phone: str) -> str:
     if digits.startswith("+"):
         return digits
     return "+" + digits
+
 
 SMS_PATIENT_RESULTS_KEY = "other.sms.patient_results"
 _DEFAULT_SMS_PATIENT_RESULTS = "Neue Dokumentation bei CogitoMed {url}"
@@ -46,7 +48,9 @@ class _SmsApiAdapter:
     def __init__(self) -> None:
         token = getattr(settings, "SMSAPI_ACCESS_TOKEN", None) or ""
         if not token:
-            raise ValueError("SMSAPI_ACCESS_TOKEN must be set when SMSAPI_USE_MOCK is False")
+            raise ValueError(
+                "SMSAPI_ACCESS_TOKEN must be set when SMSAPI_USE_MOCK is False"
+            )
         from smsapi.client import SmsApiPlClient
 
         self._client = SmsApiPlClient(access_token=token)
@@ -66,7 +70,11 @@ class _MockSmsAdapter:
     """Mock adapter – logs only, no HTTP."""
 
     def send_sms(self, to: str, message: str) -> None:
-        logger.info("[MOCK SMS] to=%s*** message=%s", to[: min(4, len(to))], message[:50] + ("..." if len(message) > 50 else ""))
+        logger.info(
+            "[MOCK SMS] to=%s*** message=%s",
+            to[: min(4, len(to))],
+            message[:50] + ("..." if len(message) > 50 else ""),
+        )
 
 
 def _use_mock_sms() -> bool:

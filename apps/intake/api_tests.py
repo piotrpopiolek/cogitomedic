@@ -39,7 +39,7 @@ def _make_intake_document_version(
     clinic_site: ClinicSite,
     consulting_room: ConsultingRoom,
     created_by_user: StaffUser,
-    pdf_generation_status: str = IntakePdfStatus.PENDING,
+    pdf_generation_status: str = IntakePdfStatus.PENDING,  # type: ignore[assignment]
     pdf_local_path: str | None = None,
 ) -> tuple[IntakeDocumentVersion, Patient, QueueEntry]:
     """Create minimal intake form + document version for API tests."""
@@ -139,9 +139,7 @@ class IntakeDocumentsApiTests(TestCase):
             consulting_room=self.room_b,
             created_by_user=self.admin_user,
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
         response = self.client.get("/api/v1/intake-documents")
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -169,9 +167,7 @@ class IntakeDocumentsApiTests(TestCase):
         self.assertIn(str(version_b.id), ids)
 
     def test_doctor_gets_403_for_list(self) -> None:
-        self.client.login(
-            username="doctor-intake-docs", password="safe-password"
-        )
+        self.client.login(username="doctor-intake-docs", password="safe-password")
         response = self.client.get("/api/v1/intake-documents")
         self.assertEqual(response.status_code, 403)
 
@@ -181,12 +177,8 @@ class IntakeDocumentsApiTests(TestCase):
             consulting_room=self.room_b,
             created_by_user=self.admin_user,
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
-        response = self.client.get(
-            f"/api/v1/intake-documents/{version_b.id}"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-documents/{version_b.id}")
         self.assertEqual(response.status_code, 404)
 
     def test_reception_gets_detail_in_scope(self) -> None:
@@ -195,12 +187,8 @@ class IntakeDocumentsApiTests(TestCase):
             consulting_room=self.room_a,
             created_by_user=self.reception_user,
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
-        response = self.client.get(
-            f"/api/v1/intake-documents/{version_a.id}"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-documents/{version_a.id}")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["id"], str(version_a.id))
@@ -212,11 +200,9 @@ class IntakeDocumentsApiTests(TestCase):
             clinic_site=self.clinic_a,
             consulting_room=self.room_a,
             created_by_user=self.reception_user,
-            pdf_generation_status=IntakePdfStatus.PENDING,
+            pdf_generation_status=IntakePdfStatus.PENDING,  # type: ignore[arg-type]
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
         response = self.client.get(
             f"/api/v1/intake-documents/{version_a.id}/preview-pdf"
         )
@@ -228,12 +214,10 @@ class IntakeDocumentsApiTests(TestCase):
             clinic_site=self.clinic_a,
             consulting_room=self.room_a,
             created_by_user=self.reception_user,
-            pdf_generation_status=IntakePdfStatus.COMPLETED,
+            pdf_generation_status=IntakePdfStatus.COMPLETED,  # type: ignore[arg-type]
             pdf_local_path="pdfs/intake/2099/01/nonexistent.pdf",
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
         response = self.client.get(
             f"/api/v1/intake-documents/{version_a.id}/preview-pdf"
         )
@@ -248,12 +232,10 @@ class IntakeDocumentsApiTests(TestCase):
             clinic_site=self.clinic_a,
             consulting_room=self.room_a,
             created_by_user=self.reception_user,
-            pdf_generation_status=IntakePdfStatus.COMPLETED,
+            pdf_generation_status=IntakePdfStatus.COMPLETED,  # type: ignore[arg-type]
             pdf_local_path=rel_path,
         )
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
         response = self.client.get(
             f"/api/v1/intake-documents/{version_a.id}/preview-pdf"
         )
@@ -263,18 +245,12 @@ class IntakeDocumentsApiTests(TestCase):
         self.assertEqual(response.content, b"%PDF-1.0 minimal\n")
 
     def test_intake_document_not_found_returns_404(self) -> None:
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
-        response = self.client.get(
-            f"/api/v1/intake-documents/{uuid4()}"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-documents/{uuid4()}")
         self.assertEqual(response.status_code, 404)
 
     def test_list_empty_returns_200(self) -> None:
-        self.client.login(
-            username="reception-intake-docs", password="safe-password"
-        )
+        self.client.login(username="reception-intake-docs", password="safe-password")
         response = self.client.get("/api/v1/intake-documents")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"], [])
@@ -302,10 +278,14 @@ class IntakeOutboxOperationsApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 202)
-        ev = AuditEvent.objects.filter(
-            event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
-            actor_user_id=self.admin_user.id,
-        ).order_by("-event_time").first()
+        ev = (
+            AuditEvent.objects.filter(
+                event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
+                actor_user_id=self.admin_user.id,
+            )
+            .order_by("-event_time")
+            .first()
+        )
         self.assertIsNotNone(ev)
         self.assertEqual(ev.metadata.get("limit"), 3)
         self.assertIn("client_ip", ev.metadata)
@@ -330,8 +310,12 @@ class IntakeFormsClinicScopeApiTests(TestCase):
         assign_group_to_test_user(self.admin_user, "Admin")
         self.clinic_a = ClinicSite.objects.create(code="IFA", name="Intake Form A")
         self.clinic_b = ClinicSite.objects.create(code="IFB", name="Intake Form B")
-        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="IFA-1", name="A1")
-        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="IFB-1", name="B1")
+        self.room_a = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_a, code="IFA-1", name="A1"
+        )
+        self.room_b = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_b, code="IFB-1", name="B1"
+        )
         self.reception_user.clinic_sites.add(self.clinic_a)
 
         self.form_a = _make_intake_document_version(
@@ -385,8 +369,12 @@ class IntakeOutboxClinicScopeApiTests(TestCase):
         assign_group_to_test_user(self.admin_user, "Admin")
         self.clinic_a = ClinicSite.objects.create(code="IOA", name="Intake Outbox A")
         self.clinic_b = ClinicSite.objects.create(code="IOB", name="Intake Outbox B")
-        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="IOA-1", name="A1")
-        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="IOB-1", name="B1")
+        self.room_a = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_a, code="IOA-1", name="A1"
+        )
+        self.room_b = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_b, code="IOB-1", name="B1"
+        )
         self.reception_user.clinic_sites.add(self.clinic_a)
 
         self.version_a, _, _ = _make_intake_document_version(
@@ -417,15 +405,21 @@ class IntakeOutboxClinicScopeApiTests(TestCase):
         )
 
     def test_reception_outbox_list_contains_only_scoped_intake_events(self) -> None:
-        self.client.login(username="intake-outbox-scope-reception", password="safe-password")
-        response = self.client.get("/api/v1/intake-outbox-events?status=FAILED&limit=20")
+        self.client.login(
+            username="intake-outbox-scope-reception", password="safe-password"
+        )
+        response = self.client.get(
+            "/api/v1/intake-outbox-events?status=FAILED&limit=20"
+        )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["id"], str(self.event_a.id))
 
     def test_reception_cannot_retry_intake_outbox_event_outside_scope(self) -> None:
-        self.client.login(username="intake-outbox-scope-reception", password="safe-password")
+        self.client.login(
+            username="intake-outbox-scope-reception", password="safe-password"
+        )
         response = self.client.post(
             f"/api/v1/intake-outbox-events/{self.event_b.id}/retry",
             data=json.dumps({"reason": "retry test"}),
@@ -434,7 +428,9 @@ class IntakeOutboxClinicScopeApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_admin_can_retry_intake_outbox_event_in_any_clinic(self) -> None:
-        self.client.login(username="intake-outbox-scope-admin", password="safe-password")
+        self.client.login(
+            username="intake-outbox-scope-admin", password="safe-password"
+        )
         response = self.client.post(
             f"/api/v1/intake-outbox-events/{self.event_b.id}/retry",
             data=json.dumps({"reason": "retry test"}),

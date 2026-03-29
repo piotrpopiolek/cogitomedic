@@ -40,6 +40,7 @@ class RetentionCleanupResult:
 class OutboxEventNotRetryableError(DomainError):
     """Raised when manual retry is requested for non-retryable event."""
 
+
 tracer = trace.get_tracer(__name__)
 
 
@@ -50,13 +51,14 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
             "medical_document_version_id": str(event.medical_document_version_id),
             "outbox_event_id": str(event.id),
             "event_type": event.event_type,
-        }
+        },
     ) as span:
         try:
             _execute_event_internal(event, now=now)
         except Exception as e:
             span.record_exception(e)
             raise
+
 
 def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
     version = (
@@ -82,7 +84,13 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.pdf_generation_status = PdfStatus.COMPLETED
         version.pdf_local_path = pdf_local_path
         version.pdf_checksum_sha256 = pdf_checksum_sha256
-        version.save(update_fields=["pdf_generation_status", "pdf_local_path", "pdf_checksum_sha256"])
+        version.save(
+            update_fields=[
+                "pdf_generation_status",
+                "pdf_local_path",
+                "pdf_checksum_sha256",
+            ]
+        )
         next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
             medical_document_version=version,
@@ -123,10 +131,14 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
     if event.event_type == OutboxEventType.SMS_SEND:
         resend_sms = event.payload.get("resend_sms") is True
         if not resend_sms:
-            other_version_sent = MedicalDocumentVersion.objects.filter(
-                medical_document_id=version.medical_document_id,
-                sms_sent=True,
-            ).exclude(id=version.id).exists()
+            other_version_sent = (
+                MedicalDocumentVersion.objects.filter(
+                    medical_document_id=version.medical_document_id,
+                    sms_sent=True,
+                )
+                .exclude(id=version.id)
+                .exists()
+            )
             if other_version_sent:
                 version.sms_sent = False
                 version.save(update_fields=["sms_sent"])
@@ -138,14 +150,16 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 domain_message("other.domain.patient_phone_required_sms"),
                 api_message_key="other.domain.patient_phone_required_sms",
             )
-        base_url = getattr(settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
+        base_url = getattr(
+            settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl"
+        )
         form_locale = None
         intake_form = version.medical_document.intake_form
         if intake_form and intake_form.session_id:
             form_locale = intake_form.session.form_locale
         sms_text = get_sms_patient_results_text(form_locale, base_url)
-        adapter = get_sms_adapter()
-        adapter.send_sms(to=patient.phone, message=sms_text)
+        sms_adapter = get_sms_adapter()
+        sms_adapter.send_sms(to=patient.phone, message=sms_text)
 
         version.sms_sent = True
         version.sms_sent_at = now
@@ -156,7 +170,9 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
 
 
 @transaction.atomic
-def process_outbox_events(*, batch_size: int | None = None, now: datetime | None = None) -> OutboxProcessingResult:
+def process_outbox_events(
+    *, batch_size: int | None = None, now: datetime | None = None
+) -> OutboxProcessingResult:
     """Process pending/failed outbox events available for execution."""
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
@@ -210,9 +226,9 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
             processed += 1
         except Exception as exc:
             if event.event_type == OutboxEventType.GENERATE_PDF:
-                MedicalDocumentVersion.objects.filter(id=event.medical_document_version_id).update(
-                    pdf_generation_status=PdfStatus.FAILED
-                )
+                MedicalDocumentVersion.objects.filter(
+                    id=event.medical_document_version_id
+                ).update(pdf_generation_status=PdfStatus.FAILED)
             event.retry_count += 1
             event.locked_at = None
             event.error_message = str(exc)
@@ -221,7 +237,9 @@ def process_outbox_events(*, batch_size: int | None = None, now: datetime | None
                 dead_lettered += 1
             else:
                 event.status = OutboxStatus.FAILED
-                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (2 ** (event.retry_count - 1))
+                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
+                    2 ** (event.retry_count - 1)
+                )
                 event.available_at = effective_now + timedelta(seconds=backoff)
                 failed += 1
             event.save(
@@ -284,7 +302,15 @@ def retry_outbox_event(
     event.available_at = timezone.now()
     event.locked_at = None
     event.error_message = None
-    event.save(update_fields=["status", "available_at", "locked_at", "error_message", "updated_at"])
+    event.save(
+        update_fields=[
+            "status",
+            "available_at",
+            "locked_at",
+            "error_message",
+            "updated_at",
+        ]
+    )
 
     create_audit_event(
         event_type="OUTBOX_EVENT_RETRY_REQUESTED",
@@ -384,7 +410,9 @@ def _process_single_medical_version_retention(
         return False, False
 
 
-def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) -> RetentionCleanupResult:
+def run_retention_cleanup(
+    *, older_than_days: int = 30, dry_run: bool = True
+) -> RetentionCleanupResult:
     """Delete local PDFs for safe, old published versions; clear medical payload when deleted."""
     if older_than_days <= 0:
         raise DomainError(

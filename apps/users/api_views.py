@@ -19,7 +19,6 @@ from apps.core.api_utils import (
     parse_bool_query,
     read_json_body,
     require_auth,
-    require_authenticated_user,
     require_user_role,
     safe_parse_positive_int,
 )
@@ -34,7 +33,11 @@ from apps.users.api_schemas import (
     UpdateStaffUserRequest,
 )
 from apps.users.models import StaffUser
-from apps.users.services import create_staff_user, deactivate_staff_user, update_staff_user
+from apps.users.services import (
+    create_staff_user,
+    deactivate_staff_user,
+    update_staff_user,
+)
 
 
 def get_primary_role(user) -> str | None:
@@ -49,6 +52,7 @@ def get_primary_role(user) -> str | None:
     elif user.is_tablet:
         return "TABLET"
     return getattr(user, "role", None)
+
 
 def _user_payload(request: HttpRequest) -> dict:
     user = request.user
@@ -92,7 +96,9 @@ def auth_login_view(request: HttpRequest) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     client_ip = get_client_ip(request)
     user = authenticate(request, username=body.username, password=body.password)
@@ -180,7 +186,9 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
-        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+        page = safe_parse_positive_int(
+            request.GET.get("page"), default=1, maximum=10_000
+        )
         page_size = safe_parse_positive_int(
             request.GET.get("page_size"),
             default=DEFAULT_LIST_LIMIT,
@@ -190,7 +198,12 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         start = (page - 1) * page_size
         end = start + page_size
         items = [_serialize_staff_user(user) for user in qs[start:end]]
-        return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
+        return JsonResponse(
+            {
+                "items": items,
+                "pagination": {"page": page, "page_size": page_size, "total": total},
+            }
+        )
 
     if request.method == "POST":
         try:
@@ -200,7 +213,9 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         try:
             user = create_staff_user(
                 username=body.username,
@@ -243,7 +258,10 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
             user = deactivate_staff_user(staff_user_id=staff_user_id)
         except ObjectDoesNotExist:
             return json_error("other.api.staff_user_not_found", status=404)
-        return JsonResponse({"message": "User deactivated", "user": _serialize_staff_user(user)}, status=200)
+        return JsonResponse(
+            {"message": "User deactivated", "user": _serialize_staff_user(user)},
+            status=200,
+        )
 
     try:
         body = UpdateStaffUserRequest.model_validate(read_json_body(request))
@@ -252,7 +270,9 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     try:
         user = update_staff_user(
@@ -277,7 +297,9 @@ def staff_user_detail_view(request: HttpRequest, staff_user_id: UUID) -> JsonRes
 
 
 @require_auth
-def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> JsonResponse:
+def staff_user_clinic_sites_view(
+    request: HttpRequest, staff_user_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
@@ -300,13 +322,17 @@ def staff_user_clinic_sites_view(request: HttpRequest, staff_user_id: UUID) -> J
 
     if request.method == "POST":
         try:
-            body = UpdateStaffUserClinicSitesRequest.model_validate(read_json_body(request))
+            body = UpdateStaffUserClinicSitesRequest.model_validate(
+                read_json_body(request)
+            )
         except JSONDecodeError:
             return json_error("other.api.invalid_json_payload", status=400)
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
 
         user.clinic_sites.set(body.clinic_site_ids)
         items = [

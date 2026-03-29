@@ -9,7 +9,6 @@ przy dodawaniu nowych komunikatów uzupełnij wszystkie trzy warianty.
 
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import UUID
 
 from django.contrib import admin
@@ -65,7 +64,9 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
     """Staff login (DOCTOR/ADMIN). Same session as API. Redirects to /doctor/ or next."""
     if request.user.is_authenticated and _doctor_role_ok(request):
         next_url = (request.GET.get("next") or "").strip()
-        if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
+        if next_url and not url_has_allowed_host_and_scheme(
+            next_url, request.get_host()
+        ):
             next_url = ""
         return redirect(next_url or "doctor-list")
     lang = _get_doctor_lang(request)
@@ -76,8 +77,12 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None and user.is_active and _doctor_role_ok_request(user):
             login(request, user)
-            if request.POST.get("lang") in ("de", "en", "pl") or request.GET.get("lang") in ("de", "en", "pl"):
-                request.session["doctor_lang"] = request.POST.get("lang") or request.GET.get("lang")
+            if request.POST.get("lang") in ("de", "en", "pl") or request.GET.get(
+                "lang"
+            ) in ("de", "en", "pl"):
+                request.session["doctor_lang"] = request.POST.get(
+                    "lang"
+                ) or request.GET.get("lang")
             return _safe_redirect_next(request, "doctor-list")
         return render(
             request,
@@ -171,21 +176,29 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
 
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
-def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> HttpResponse:
+def doctor_open_by_queue_view(
+    request: HttpRequest, queue_entry_id: UUID
+) -> HttpResponse:
     """Create or get medical document for queue entry (with submitted intake) and redirect to detail."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     lang = _get_doctor_lang(request)
     ui = get_doctor_ui(lang)
     try:
-        entry = QueueEntry.objects.select_related("intake_form", "daily_queue").get(id=queue_entry_id)
+        entry = QueueEntry.objects.select_related("intake_form", "daily_queue").get(
+            id=queue_entry_id
+        )
         check_doctor_queue_entry_access(entry, request.user)
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
             "doctor/error.html",
             {
-                "message": "Eintrag nicht gefunden." if lang == "de" else "Entry not found." if lang == "en" else "Nie znaleziono wpisu.",
+                "message": (
+                    "Eintrag nicht gefunden."
+                    if lang == "de"
+                    else "Entry not found." if lang == "en" else "Nie znaleziono wpisu."
+                ),
                 "ui": ui,
                 "lang": lang,
             },
@@ -196,7 +209,15 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
             request,
             "doctor/error.html",
             {
-                "message": "Keine Ankiete für diesen Eintrag." if lang == "de" else "No questionnaire for this entry." if lang == "en" else "Brak ankiety dla tego wpisu.",
+                "message": (
+                    "Keine Ankiete für diesen Eintrag."
+                    if lang == "de"
+                    else (
+                        "No questionnaire for this entry."
+                        if lang == "en"
+                        else "Brak ankiety dla tego wpisu."
+                    )
+                ),
                 "ui": ui,
                 "lang": lang,
             },
@@ -208,7 +229,15 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
             request,
             "doctor/error.html",
             {
-                "message": "Ankiete noch nicht abgeschlossen." if lang == "de" else "Questionnaire not yet completed." if lang == "en" else "Ankieta nie została jeszcze zakończona.",
+                "message": (
+                    "Ankiete noch nicht abgeschlossen."
+                    if lang == "de"
+                    else (
+                        "Questionnaire not yet completed."
+                        if lang == "en"
+                        else "Ankieta nie została jeszcze zakończona."
+                    )
+                ),
                 "ui": ui,
                 "lang": lang,
             },
@@ -225,7 +254,9 @@ def doctor_open_by_queue_view(request: HttpRequest, queue_entry_id: UUID) -> Htt
 
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
-def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID) -> HttpResponse:
+def doctor_document_detail_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> HttpResponse:
     """Document detail with intake summary and Befund form (data for client-side API calls)."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
@@ -234,9 +265,8 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
     try:
         context = get_medical_document_context(
             medical_document_id=medical_document_id,
-            form_locale=request.GET.get("form_locale") or (
-                "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
-            ),
+            form_locale=request.GET.get("form_locale")
+            or ("en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"),
             user=request.user,
         )
     except ObjectDoesNotExist:
@@ -244,7 +274,15 @@ def doctor_document_detail_view(request: HttpRequest, medical_document_id: UUID)
             request,
             "doctor/error.html",
             {
-                "message": "Dokument nicht gefunden." if lang == "de" else "Document not found." if lang == "en" else "Nie znaleziono dokumentu.",
+                "message": (
+                    "Dokument nicht gefunden."
+                    if lang == "de"
+                    else (
+                        "Document not found."
+                        if lang == "en"
+                        else "Nie znaleziono dokumentu."
+                    )
+                ),
                 "ui": ui,
                 "lang": lang,
             },

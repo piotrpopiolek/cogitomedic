@@ -40,8 +40,14 @@ class UpdateDailyQueueRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def at_least_one_field(cls, data: dict) -> dict:
-        if isinstance(data, dict) and "status" not in data and "assigned_doctor_id" not in data:
-            raise ValueError("At least one of status or assigned_doctor_id must be provided.")
+        if (
+            isinstance(data, dict)
+            and "status" not in data
+            and "assigned_doctor_id" not in data
+        ):
+            raise ValueError(
+                "At least one of status or assigned_doctor_id must be provided."
+            )
         return data
 
 
@@ -126,7 +132,9 @@ def _validate_phone_format(v: str | None) -> str | None:
     if v is None:
         return v
     if not PHONE_PATTERN.fullmatch(v):
-        raise ValueError("Phone must match format: digits, +, (), space, hyphen; 7-20 characters.")
+        raise ValueError(
+            "Phone must match format: digits, +, (), space, hyphen; 7-20 characters."
+        )
     return v
 
 
@@ -170,6 +178,7 @@ class UpdatePatientRequest(BaseModel):
     @classmethod
     def phone_format(cls, v: str | None) -> str | None:
         return _validate_phone_format(v)
+
 
 class PatientsListQuery(BaseModel):
     """Query params for GET /api/v1/patients. Validates date_of_birth format (YYYY-MM-DD)."""

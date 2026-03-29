@@ -4,7 +4,6 @@ import contextvars
 from typing import Any
 
 from django.core.cache import cache
-from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import F
 from django.utils.functional import lazy
@@ -67,7 +66,11 @@ def bump_translation_version(category: str, language_code: str) -> None:
 
 
 def get_translation_map(category: str, language_code: str) -> dict[str, str]:
-    from apps.core.models import TranslationCategory, TranslationKeyStatus, TranslationValue
+    from apps.core.models import (
+        TranslationCategory,
+        TranslationKeyStatus,
+        TranslationValue,
+    )
 
     if category not in TranslationCategory.values:
         return {}
@@ -95,7 +98,11 @@ def _get_admin_map_for_request(request: Any) -> dict[str, str]:
     if getattr(request, cache_attr, None) is not None:
         return getattr(request, cache_attr)
     # Prefer authenticated user's preferred_locale so profile "Preferred locale" controls admin UI.
-    if getattr(request, "user", None) and getattr(request.user, "is_authenticated", False) and request.user.is_authenticated:
+    if (
+        getattr(request, "user", None)
+        and getattr(request.user, "is_authenticated", False)
+        and request.user.is_authenticated
+    ):
         locale = getattr(request.user, "preferred_locale", None) or ""
         lang = normalize_language_code(locale)
     elif getattr(request, "LANGUAGE_CODE", None):
@@ -172,7 +179,9 @@ def get_doctor_ui(lang: str) -> dict[str, str]:
     for full_key, value in mapping.items():
         if not full_key.startswith("doctor."):
             continue
-        if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith("doctor.pdf_label."):
+        if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith(
+            "doctor.pdf_label."
+        ):
             continue
         short_key = full_key.split(".", 1)[1]
         ui[short_key] = value
@@ -209,7 +218,7 @@ def get_form_ui_strings(form_locale: str) -> dict[str, str]:
     prefix = "waiting_room.form."
     for full_key, value in mapping.items():
         if full_key.startswith(prefix):
-            ui[full_key[len(prefix):]] = value
+            ui[full_key[len(prefix) :]] = value
     return ui
 
 
@@ -257,7 +266,9 @@ def resolve_other_message(
                 lang = normalize_language_code(loc)
         if lang is None:
             lang = normalize_language_code(
-                getattr(request, "LANGUAGE_CODE", None) or translation.get_language() or "de-DE"
+                getattr(request, "LANGUAGE_CODE", None)
+                or translation.get_language()
+                or "de-DE"
             )
     else:
         lang = normalize_language_code(translation.get_language() or "de-DE")

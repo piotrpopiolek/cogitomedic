@@ -62,7 +62,13 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
         version.pdf_generation_status = IntakePdfStatus.COMPLETED
         version.pdf_local_path = pdf_local_path
         version.pdf_checksum_sha256 = pdf_checksum_sha256
-        version.save(update_fields=["pdf_generation_status", "pdf_local_path", "pdf_checksum_sha256"])
+        version.save(
+            update_fields=[
+                "pdf_generation_status",
+                "pdf_local_path",
+                "pdf_checksum_sha256",
+            ]
+        )
 
         next_payload = {**event.payload, "intake_document_version_id": str(version.id)}
         IntakeOutboxEvent.objects.get_or_create(
@@ -145,7 +151,15 @@ def process_intake_outbox_events(
             event.processed_at = effective_now
             event.locked_at = None
             event.error_message = None
-            event.save(update_fields=["status", "processed_at", "locked_at", "error_message", "updated_at"])
+            event.save(
+                update_fields=[
+                    "status",
+                    "processed_at",
+                    "locked_at",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
             create_audit_event(
                 event_type="INTAKE_OUTBOX_EVENT_PROCESSED",
                 patient_id=patient_id,
@@ -169,9 +183,9 @@ def process_intake_outbox_events(
             processed += 1
         except Exception as exc:
             if event.event_type == IntakeOutboxEventType.GENERATE_INTAKE_PDF:
-                IntakeDocumentVersion.objects.filter(id=event.intake_document_version_id).update(
-                    pdf_generation_status=IntakePdfStatus.FAILED
-                )
+                IntakeDocumentVersion.objects.filter(
+                    id=event.intake_document_version_id
+                ).update(pdf_generation_status=IntakePdfStatus.FAILED)
             event.retry_count += 1
             event.locked_at = None
             event.error_message = str(exc)
@@ -180,7 +194,9 @@ def process_intake_outbox_events(
                 dead_lettered += 1
             else:
                 event.status = IntakeOutboxStatus.FAILED
-                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (2 ** (event.retry_count - 1))
+                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
+                    2 ** (event.retry_count - 1)
+                )
                 event.available_at = effective_now + timedelta(seconds=backoff)
                 failed += 1
             event.save(
@@ -278,7 +294,15 @@ def retry_intake_outbox_event(
     event.available_at = timezone.now()
     event.locked_at = None
     event.error_message = None
-    event.save(update_fields=["status", "available_at", "locked_at", "error_message", "updated_at"])
+    event.save(
+        update_fields=[
+            "status",
+            "available_at",
+            "locked_at",
+            "error_message",
+            "updated_at",
+        ]
+    )
 
     version = event.intake_document_version
     patient_id = version.intake_form.queue_entry.patient_id

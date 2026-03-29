@@ -9,7 +9,11 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.medical.services import (
+    create_or_get_medical_document,
+    publish_document_version,
+    save_draft_document_version,
+)
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
 from apps.core.api_utils import assign_group_to_test_user
@@ -57,7 +61,9 @@ class OutboxApiTests(TestCase):
         self.admin_user.save(update_fields=["preferred_locale"])
         self.client.login(username="api-admin-outbox", password="safe-password")
         self.clinic = ClinicSite.objects.create(code="API-OUT", name="API Outbox")
-        room = ConsultingRoom.objects.create(clinic_site=self.clinic, code="O1", name="O1")
+        room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="O1", name="O1"
+        )
         queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=self.clinic,
@@ -136,7 +142,9 @@ class OutboxApiTests(TestCase):
     def test_outbox_events_list_returns_400_for_non_integer_query_params(self) -> None:
         response = self.client.get("/api/v1/outbox-events?retry_count_gte=abc&limit=10")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "retry_count_gte must be an integer.")
+        self.assertEqual(
+            response.json()["error"], "retry_count_gte must be an integer."
+        )
 
     def test_operations_outbox_process_endpoint(self) -> None:
         response = self.client.post(
@@ -198,10 +206,14 @@ class OutboxApiTests(TestCase):
         )
         self.assertEqual(dry_run_response.status_code, 202)
         self.assertEqual(dry_run_response.json()["befund"]["deleted"], 0)
-        ret_ev = AuditEvent.objects.filter(
-            event_type="OPERATIONS_RETENTION_RUN_TRIGGERED",
-            actor_user_id=self.admin_user.id,
-        ).order_by("-event_time").first()
+        ret_ev = (
+            AuditEvent.objects.filter(
+                event_type="OPERATIONS_RETENTION_RUN_TRIGGERED",
+                actor_user_id=self.admin_user.id,
+            )
+            .order_by("-event_time")
+            .first()
+        )
         self.assertIsNotNone(ret_ev)
         self.assertTrue(ret_ev.metadata.get("dry_run"))
         self.assertEqual(ret_ev.metadata.get("older_than_days"), 30)
@@ -218,9 +230,13 @@ class OutboxApiTests(TestCase):
         self.assertIsNotNone(self.published_version.local_pdf_deleted_at)
         self.assertIsNone(self.published_version.pdf_local_path)
 
-    def test_reception_outbox_list_contains_only_events_from_assigned_clinics(self) -> None:
+    def test_reception_outbox_list_contains_only_events_from_assigned_clinics(
+        self,
+    ) -> None:
         other_clinic = ClinicSite.objects.create(code="API-OUT-2", name="API Outbox 2")
-        other_room = ConsultingRoom.objects.create(clinic_site=other_clinic, code="O2", name="O2")
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="O2", name="O2"
+        )
         other_queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=other_clinic,
@@ -293,13 +309,17 @@ class OutboxApiTests(TestCase):
         response = self.client.get("/api/v1/outbox-events?status=PENDING&limit=20")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        returned_version_ids = {item["medical_document_version_id"] for item in payload["results"]}
+        returned_version_ids = {
+            item["medical_document_version_id"] for item in payload["results"]
+        }
         self.assertIn(str(self.published_version.id), returned_version_ids)
         self.assertNotIn(str(other_published_version.id), returned_version_ids)
 
     def test_reception_cannot_retry_outbox_event_outside_assigned_clinics(self) -> None:
         other_clinic = ClinicSite.objects.create(code="API-OUT-3", name="API Outbox 3")
-        other_room = ConsultingRoom.objects.create(clinic_site=other_clinic, code="O3", name="O3")
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="O3", name="O3"
+        )
         other_queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=other_clinic,

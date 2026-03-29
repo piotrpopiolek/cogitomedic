@@ -10,6 +10,7 @@ Uruchom z korzenia repozytorium:
 
 Wynik: docs/manual/_build/Cogitomedica-Instrukcje.pdf (tymczasowe pliki w _build/).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,7 +64,9 @@ def _find_pandoc() -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Buduje jeden PDF z rozdziałów docs/manual/.")
+    parser = argparse.ArgumentParser(
+        description="Buduje jeden PDF z rozdziałów docs/manual/."
+    )
     parser.add_argument(
         "-o",
         "--output",
