@@ -17,6 +17,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
@@ -25,6 +26,7 @@ from apps.reception.models import (
     ImportSourceSystem,
     ImportStatus,
     ImportType,
+    Patient,
     PatientImportBatch,
     PatientImportError,
     QueueSource,
@@ -53,6 +55,29 @@ class XlsxImportErrorCode:
     INVALID_PHONE = "INVALID_PHONE"
     MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
     DUPLICATE_VISIT = "DUPLICATE_VISIT"
+    DUPLICATE_IN_FILE = "DUPLICATE_IN_FILE"
+    PATIENT_ANONYMIZED_NEW_RECORD = "PATIENT_ANONYMIZED_NEW_RECORD"
+
+
+def _patient_is_import_anonymized(patient: Patient) -> bool:
+    if getattr(patient, "anonymized_at", None) is not None:
+        return True
+    return (patient.first_name or "").strip().upper() == "ANONYMIZED"
+
+
+def find_patient_for_import(*, phone: str) -> Patient | None:
+    """
+    Active (non-anonymized) patient for this normalized phone, or None.
+    Anonymized rows are treated as absent so import can create a new patient
+    (typically after the old row received a numeric sentinel phone).
+    """
+    try:
+        patient = Patient.objects.get(phone=phone)
+    except Patient.DoesNotExist:
+        return None
+    if _patient_is_import_anonymized(patient):
+        return None
+    return patient
 
 
 # --- Header mapping: possible header labels (normalized) -> internal key ---
@@ -391,6 +416,7 @@ def _audit_xlsx_import_finished(
     context_clinic_site_id: uuid.UUID | None,
     status: str,
     inserted_rows: int,
+    matched_rows: int,
     error_rows: int,
     failure_reason: str | None = None,
 ) -> None:
@@ -398,6 +424,7 @@ def _audit_xlsx_import_finished(
         "batch_id": str(batch.id),
         "status": status,
         "inserted_rows": inserted_rows,
+        "matched_rows": matched_rows,
         "error_rows": error_rows,
     }
     if failure_reason:
@@ -424,7 +451,9 @@ def process_patient_xlsx_import_batch(
     batch = PatientImportBatch.objects.get(id=batch_id)
 
     inserted = 0
+    matched = 0
     errors_count = 0
+    seen_phones: set[str] = set()
     header_indices: dict[str, int] = {}
     daily_queue_id: uuid.UUID | None = None
     queue_date: date | None = None
@@ -499,27 +528,68 @@ def process_patient_xlsx_import_batch(
                 )
                 continue
 
-            try:
-                patient = create_or_update_patient_manual(
-                    first_name=norm.first_name,
-                    last_name=norm.last_name,
-                    date_of_birth=norm.date_of_birth,
-                    phone=norm.phone,
-                    email=norm.email,
-                    created_or_updated_by_user_id=created_by_user_id,
-                    doctolib_patient_id=None,
-                    patient_id=None,
-                )
-            except Exception as e:
+            if norm.phone in seen_phones:
                 errors_count += 1
                 PatientImportError.objects.create(
                     batch=batch,
                     row_number=norm.row_number,
-                    error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
-                    error_message=str(e),
+                    error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
+                    error_message=domain_message(
+                        "other.domain.import_duplicate_phone_in_file",
+                        phone=norm.phone,
+                    ),
                     raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
                 )
                 continue
+            seen_phones.add(norm.phone)
+
+            existing_active = find_patient_for_import(phone=norm.phone)
+            reused_existing = False
+            if existing_active is not None:
+                patient = existing_active
+                reused_existing = True
+            else:
+                try:
+                    same_phone = Patient.objects.get(phone=norm.phone)
+                except Patient.DoesNotExist:
+                    same_phone = None
+                if same_phone is not None:
+                    if _patient_is_import_anonymized(same_phone):
+                        errors_count += 1
+                        PatientImportError.objects.create(
+                            batch=batch,
+                            row_number=norm.row_number,
+                            error_code=XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD,
+                            error_message=domain_message(
+                                "other.domain.import_patient_anonymized_same_phone",
+                            ),
+                            raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                        )
+                        continue
+                    patient = same_phone
+                    reused_existing = True
+                else:
+                    try:
+                        patient = create_or_update_patient_manual(
+                            first_name=norm.first_name,
+                            last_name=norm.last_name,
+                            date_of_birth=norm.date_of_birth,
+                            phone=norm.phone,
+                            email=norm.email,
+                            created_or_updated_by_user_id=created_by_user_id,
+                            doctolib_patient_id=None,
+                            patient_id=None,
+                        )
+                    except Exception as e:
+                        errors_count += 1
+                        PatientImportError.objects.create(
+                            batch=batch,
+                            row_number=norm.row_number,
+                            error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                            error_message=str(e),
+                            raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                        )
+                        continue
 
             if daily_queue_id is None:
                 queue = DailyQueue.objects.filter(
@@ -556,7 +626,10 @@ def process_patient_xlsx_import_batch(
                     visit_external_id=None,
                     notes=None,
                 )
-                inserted += 1
+                if reused_existing:
+                    matched += 1
+                else:
+                    inserted += 1
             except Exception as e:
                 errors_count += 1
                 PatientImportError.objects.create(
@@ -590,6 +663,7 @@ def process_patient_xlsx_import_batch(
             context_clinic_site_id=clinic_site_id,
             status=ImportStatus.FAILED.value,
             inserted_rows=0,
+            matched_rows=0,
             error_rows=0,
             failure_reason=str(e),
         )
@@ -610,6 +684,7 @@ def process_patient_xlsx_import_batch(
             context_clinic_site_id=clinic_site_id,
             status=ImportStatus.FAILED.value,
             inserted_rows=0,
+            matched_rows=0,
             error_rows=0,
             failure_reason=str(e),
         )
@@ -630,21 +705,24 @@ def process_patient_xlsx_import_batch(
             context_clinic_site_id=clinic_site_id,
             status=ImportStatus.FAILED.value,
             inserted_rows=0,
+            matched_rows=0,
             error_rows=0,
             failure_reason=str(e),
         )
         return
 
     batch.inserted_rows = inserted
+    batch.matched_rows = matched
     batch.error_rows = errors_count
     batch.status = ImportStatus.COMPLETED if errors_count == 0 else ImportStatus.COMPLETED_WITH_ERRORS
     batch.finished_at = timezone.now()
-    batch.save(update_fields=["inserted_rows", "error_rows", "status", "finished_at"])
+    batch.save(update_fields=["inserted_rows", "matched_rows", "error_rows", "status", "finished_at"])
     _audit_xlsx_import_finished(
         batch,
         context_clinic_site_id=clinic_site_id,
         status=batch.status,
         inserted_rows=inserted,
+        matched_rows=matched,
         error_rows=errors_count,
     )
 
@@ -681,6 +759,7 @@ def enqueue_patient_xlsx_import(
         status=ImportStatus.PROCESSING,
         total_rows=0,
         inserted_rows=0,
+        matched_rows=0,
         error_rows=0,
         created_by_user=created_by_user,
     )

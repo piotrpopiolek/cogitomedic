@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
-from apps.intake.tasks import process_intake_outbox_events
+from apps.intake.tasks import process_intake_outbox_events, run_intake_retention_cleanup
 from apps.outbox.tasks import process_outbox_events, run_retention_cleanup
 from apps.reception.tasks import run_daily_import
 
@@ -26,6 +26,8 @@ class Command(BaseCommand):
         if options["retention_only"]:
             run_retention_cleanup.enqueue()
             self.stdout.write(self.style.SUCCESS("Enqueued: run_retention_cleanup"))
+            run_intake_retention_cleanup.enqueue()
+            self.stdout.write(self.style.SUCCESS("Enqueued: run_intake_retention_cleanup"))
             return
 
         process_outbox_events.enqueue()
@@ -36,6 +38,9 @@ class Command(BaseCommand):
 
         run_retention_cleanup.enqueue()
         self.stdout.write(self.style.SUCCESS("Enqueued: run_retention_cleanup"))
+
+        run_intake_retention_cleanup.enqueue()
+        self.stdout.write(self.style.SUCCESS("Enqueued: run_intake_retention_cleanup"))
 
         if not options["skip_import"]:
             run_daily_import.enqueue()

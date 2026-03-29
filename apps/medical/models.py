@@ -125,6 +125,11 @@ class MedicalDocumentVersion(models.Model):
     sms_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_sms_sent", "Sms sent"))
     sms_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_sms_sent_at", "Sms sent at"))
     local_pdf_deleted_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_local_pdf_deleted_at", "Local pdf deleted at"))
+    anonymization_deleted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_anonymization_deleted_at", "Anonymization deleted at"),
+    )
     publish_requested_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.SET_NULL,
@@ -185,8 +190,10 @@ class MedicalDocumentVersion(models.Model):
                 name="medical_document_publish_locale_format",
             ),
             models.CheckConstraint(
-                condition=Q(pdf_generation_status=PdfStatus.COMPLETED, pdf_local_path__isnull=False)
-                | ~Q(pdf_generation_status=PdfStatus.COMPLETED),
+                condition=~Q(pdf_generation_status=PdfStatus.COMPLETED)
+                | Q(pdf_local_path__isnull=False)
+                | Q(local_pdf_deleted_at__isnull=False)
+                | Q(anonymization_deleted_at__isnull=False),
                 name="medical_document_pdf_completed_requires_path",
             ),
             models.CheckConstraint(

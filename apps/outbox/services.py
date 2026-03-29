@@ -8,9 +8,11 @@ from pathlib import Path
 from opentelemetry import trace
 from django.conf import settings
 from django.db import transaction
+from django.db.utils import OperationalError
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
+from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
@@ -306,9 +308,84 @@ def _try_delete_file(path_value: str | None) -> None:
         path.unlink()
 
 
-@transaction.atomic
+def _process_single_medical_version_retention(
+    version_id: uuid.UUID,
+    *,
+    older_than_days: int,
+    dry_run: bool,
+    threshold: datetime,
+) -> tuple[bool, bool]:
+    """
+    Returns (deleted, skipped_not_safe). Uses one DB transaction per version + nowait lock.
+    """
+    try:
+        with transaction.atomic():
+            try:
+                version = (
+                    MedicalDocumentVersion.objects.select_for_update(nowait=True)
+                    .select_related(
+                        "medical_document__queue_entry__daily_queue",
+                    )
+                    .get(
+                        id=version_id,
+                        version_status=DocVersionStatus.PUBLISHED,
+                        published_at__isnull=False,
+                        published_at__lte=threshold,
+                        local_pdf_deleted_at__isnull=True,
+                    )
+                )
+            except MedicalDocumentVersion.DoesNotExist:
+                return False, False
+
+            if not (version.hidrive_sent and version.sms_sent):
+                create_audit_event(
+                    event_type="RETENTION_FILE_SKIPPED",
+                    patient_id=version.medical_document.queue_entry.patient_id,
+                    medical_document_id=version.medical_document_id,
+                    context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
+                    metadata={
+                        "medical_document_version_id": str(version.id),
+                        "reason": "NOT_SAFE_FOR_DELETION",
+                    },
+                )
+                return False, True
+
+            if dry_run:
+                return False, False
+
+            now = timezone.now()
+            _try_delete_file(version.pdf_local_path)
+            version.local_pdf_deleted_at = now
+            version.pdf_local_path = None
+            version.medical_payload = dict(RETENTION_CLEARED_MEDICAL_PAYLOAD)
+            version.diagnosis_code = None
+            version.procedure_code = None
+            version.save(
+                update_fields=[
+                    "local_pdf_deleted_at",
+                    "pdf_local_path",
+                    "medical_payload",
+                    "diagnosis_code",
+                    "procedure_code",
+                ]
+            )
+            create_audit_event(
+                event_type="RETENTION_FILE_DELETED",
+                patient_id=version.medical_document.queue_entry.patient_id,
+                medical_document_id=version.medical_document_id,
+                context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
+                metadata={
+                    "medical_document_version_id": str(version.id),
+                    "older_than_days": older_than_days,
+                },
+            )
+            return True, False
+    except OperationalError:
+        return False, False
+
+
 def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) -> RetentionCleanupResult:
-    """Delete local PDFs for safe, old published versions."""
+    """Delete local PDFs for safe, old published versions; clear medical payload when deleted."""
     if older_than_days <= 0:
         raise DomainError(
             domain_message("other.domain.retention_days_positive"),
@@ -316,61 +393,33 @@ def run_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) ->
         )
 
     threshold = timezone.now() - timedelta(days=older_than_days)
-    candidates = list(
-        MedicalDocumentVersion.objects.select_for_update()
-        .select_related(
-            "medical_document__queue_entry__daily_queue",
-        )
-        .filter(
+    candidate_ids = list(
+        MedicalDocumentVersion.objects.filter(
             version_status=DocVersionStatus.PUBLISHED,
             published_at__isnull=False,
             published_at__lte=threshold,
             local_pdf_deleted_at__isnull=True,
         )
         .order_by("published_at")
+        .values_list("id", flat=True)
     )
 
     deleted = 0
     skipped_not_safe = 0
-    now = timezone.now()
-
-    for version in candidates:
-        if not (version.hidrive_sent and version.sms_sent):
-            skipped_not_safe += 1
-            create_audit_event(
-                event_type="RETENTION_FILE_SKIPPED",
-                patient_id=version.medical_document.queue_entry.patient_id,
-                medical_document_id=version.medical_document_id,
-                context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
-                metadata={
-                    "medical_document_version_id": str(version.id),
-                    "reason": "NOT_SAFE_FOR_DELETION",
-                },
-            )
-            continue
-
-        if dry_run:
-            continue
-
-        _try_delete_file(version.pdf_local_path)
-        version.local_pdf_deleted_at = now
-        version.pdf_local_path = None
-        version.save(update_fields=["local_pdf_deleted_at", "pdf_local_path"])
-        deleted += 1
-
-        create_audit_event(
-            event_type="RETENTION_FILE_DELETED",
-            patient_id=version.medical_document.queue_entry.patient_id,
-            medical_document_id=version.medical_document_id,
-            context_clinic_site_id=version.medical_document.queue_entry.daily_queue.clinic_site_id,
-            metadata={
-                "medical_document_version_id": str(version.id),
-                "older_than_days": older_than_days,
-            },
+    for vid in candidate_ids:
+        did_delete, did_skip = _process_single_medical_version_retention(
+            vid,
+            older_than_days=older_than_days,
+            dry_run=dry_run,
+            threshold=threshold,
         )
+        if did_delete:
+            deleted += 1
+        if did_skip:
+            skipped_not_safe += 1
 
     return RetentionCleanupResult(
-        candidates=len(candidates),
+        candidates=len(candidate_ids),
         deleted=deleted,
         skipped_not_safe=skipped_not_safe,
     )

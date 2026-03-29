@@ -727,7 +727,12 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(second_publish.status_code, 409)
-        self.assertIn("different publish_locale", second_publish.json().get("error", ""))
+        err = (second_publish.json().get("error") or "").lower()
+        self.assertIn("publish_locale", err)
+        self.assertTrue(
+            "different" in err or "anderem" in err or "inny" in err or "other" in err,
+            f"Expected locale conflict wording, got: {second_publish.json().get('error')!r}",
+        )
 
     def test_medical_document_endpoints_return_404_for_missing_resources(self) -> None:
         missing_doc_id = uuid4()

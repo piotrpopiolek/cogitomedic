@@ -94,6 +94,26 @@
     "en": "older_than_days must be positive.",
     "pl": "older_than_days musi być dodatnie."
   },
+  "other.domain.republish_after_retention_not_allowed": {
+    "de": "Eine erneute Veröffentlichung ist nach Ablauf der Aufbewahrungsfrist nicht möglich.",
+    "en": "Republishing is not allowed after the retention period has passed.",
+    "pl": "Ponowna publikacja nie jest możliwa po upływie okresu retencji."
+  },
+  "other.domain.anonymization_patient_has_active_visits": {
+    "de": "Der Patient kann nicht anonymisiert werden, da er aktive Einträge in der Warteschlange hat.",
+    "en": "Patient cannot be anonymized because they have active queue entries.",
+    "pl": "Pacjent nie może zostać zanonimizowany, ponieważ ma aktywne wpisy w kolejce."
+  },
+  "other.domain.import_duplicate_phone_in_file": {
+    "de": "Doppelte Telefonnummer {phone!r} in dieser Datei.",
+    "en": "Duplicate phone number {phone!r} in this file.",
+    "pl": "Duplikat numeru telefonu {phone!r} w tym pliku."
+  },
+  "other.domain.import_patient_anonymized_same_phone": {
+    "de": "Der Patient mit dieser Telefonnummer ist anonymisiert; ein weiterer Datensatz mit derselben Nummer ist nicht möglich.",
+    "en": "The patient with this phone number is anonymized; another record cannot use the same phone number.",
+    "pl": "Pacjent z tym numerem telefonu jest zanonimizowany; nie można utworzyć kolejnego rekordu z tym samym numerem."
+  },
   "other.domain.outbox_event_not_retryable": {
     "de": "Ereignis ist im aktuellen Status nicht wiederholbar.",
     "en": "Event is not retryable in current status.",

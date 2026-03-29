@@ -197,7 +197,7 @@ class OutboxApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(dry_run_response.status_code, 202)
-        self.assertEqual(dry_run_response.json()["deleted"], 0)
+        self.assertEqual(dry_run_response.json()["befund"]["deleted"], 0)
         ret_ev = AuditEvent.objects.filter(
             event_type="OPERATIONS_RETENTION_RUN_TRIGGERED",
             actor_user_id=self.admin_user.id,
@@ -212,7 +212,7 @@ class OutboxApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(execute_response.status_code, 202)
-        self.assertGreaterEqual(execute_response.json()["deleted"], 1)
+        self.assertGreaterEqual(execute_response.json()["befund"]["deleted"], 1)
 
         self.published_version.refresh_from_db()
         self.assertIsNotNone(self.published_version.local_pdf_deleted_at)

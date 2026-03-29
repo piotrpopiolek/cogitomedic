@@ -271,7 +271,9 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py runserver` | Start the Django development server |
 | `python manage.py migrate` | Apply database migrations |
 | `python manage.py makemigrations [app]` | Create migrations for model changes |
-| `python manage.py test` | Run the test suite (Django `TestCase`) |
+| `make pytest` | **Canonical test suite:** Docker `web` + `requirements-dev` + full `pytest` (same as CI gate after migrations/translations) |
+| `make test-ci` | Migrations, translation seed + completeness check, then same `pytest` as `make pytest` |
+| `python manage.py test` | Legacy Django runner (subset only; prefer `make pytest`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |
 | `python manage.py load_default_translations` | Idempotent seed from all `apps/core/translation_data/*.json` (baseline in migration `0024`; model field labels + login strings in `administration_fields.json`, applied in `0025`) |

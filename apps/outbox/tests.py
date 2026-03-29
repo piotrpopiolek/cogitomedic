@@ -115,7 +115,8 @@ class OutboxProcessingTests(TestCase):
         self.assertTrue(self.version.hidrive_sent)
         self.assertTrue(self.version.sms_sent)
         self.assertIsNotNone(self.version.pdf_local_path)
-        self.assertIn("/hidrive/patients/Patient Outbox/", self.version.hidrive_path or "")
+        patient_id = str(self.medical_document.queue_entry.patient_id)
+        self.assertIn(f"/hidrive/patients/{patient_id}/", self.version.hidrive_path or "")
         self.assertTrue((self.version.hidrive_path or "").endswith("/Befund_v1.pdf"))
 
         self.assertEqual(

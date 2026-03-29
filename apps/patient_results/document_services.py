@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from django.conf import settings
 
 from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
+
+BefundDownloadResolution = Literal["not_found", "retention_expired", "ok"]
 
 
 def list_patient_documents(patient_id: UUID) -> list[dict]:
@@ -20,6 +23,7 @@ def list_patient_documents(patient_id: UUID) -> list[dict]:
             version_status=DocVersionStatus.PUBLISHED,
             pdf_generation_status=PdfStatus.COMPLETED,
             local_pdf_deleted_at__isnull=True,
+            anonymization_deleted_at__isnull=True,
             revoked_at__isnull=True,
         )
         .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__daily_queue")
@@ -42,6 +46,36 @@ def list_patient_documents(patient_id: UUID) -> list[dict]:
     return result
 
 
+def resolve_patient_befund_download(
+    version_id: UUID, patient_id: UUID
+) -> tuple[BefundDownloadResolution, MedicalDocumentVersion | None]:
+    """
+    Resolve portal download eligibility: missing vs retention-expired (410) vs OK.
+    """
+    try:
+        version = (
+            MedicalDocumentVersion.objects.select_related(
+                "medical_document",
+                "medical_document__queue_entry",
+                "medical_document__queue_entry__daily_queue",
+            ).get(
+                id=version_id,
+                medical_document__queue_entry__patient_id=patient_id,
+                version_status=DocVersionStatus.PUBLISHED,
+                pdf_generation_status=PdfStatus.COMPLETED,
+                revoked_at__isnull=True,
+            )
+        )
+    except MedicalDocumentVersion.DoesNotExist:
+        return "not_found", None
+
+    if version.anonymization_deleted_at is not None:
+        return "not_found", None
+    if version.local_pdf_deleted_at is not None:
+        return "retention_expired", version
+    return "ok", version
+
+
 def get_patient_pdf_version(version_id: UUID, patient_id: UUID) -> MedicalDocumentVersion | None:
     """Get version if it belongs to the patient and is available for download."""
     try:
@@ -57,6 +91,7 @@ def get_patient_pdf_version(version_id: UUID, patient_id: UUID) -> MedicalDocume
                 version_status=DocVersionStatus.PUBLISHED,
                 pdf_generation_status=PdfStatus.COMPLETED,
                 local_pdf_deleted_at__isnull=True,
+                anonymization_deleted_at__isnull=True,
                 revoked_at__isnull=True,
             )
         )

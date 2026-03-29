@@ -23,6 +23,7 @@ from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
+from apps.outbox.services import _try_delete_file
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,22 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
+
+        intake_form = version.intake_form
+        sig_path = intake_form.signature_file_path
+        if sig_path:
+            _try_delete_file(sig_path)
+            intake_form.signature_file_path = None
+            intake_form.save(update_fields=["signature_file_path", "updated_at"])
+            create_audit_event(
+                event_type="INTAKE_SIGNATURE_FILE_DELETED",
+                patient_id=intake_form.queue_entry.patient_id,
+                context_clinic_site_id=intake_form.queue_entry.daily_queue.clinic_site_id,
+                metadata={
+                    "intake_document_version_id": str(version.id),
+                    "reason": "hidrive_confirmed",
+                },
+            )
         return
 
     raise RuntimeError(f"Unsupported intake outbox event type: {event.event_type}")
