@@ -102,7 +102,16 @@ class ObservabilityHealthApiTests(TestCase):
             medical_document_id=medical_document.id,
             updated_by_user_id=self.doctor_user.id,
             medical_payload_schema_version=1,
-            medical_payload={"schema_version": 1, "authoring_locale": "de-DE"},
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         self.version = publish_document_version(
             medical_document_id=medical_document.id,
@@ -147,5 +156,10 @@ class ObservabilityHealthApiTests(TestCase):
 
         self.assertEqual(health.status_code, 405)
         self.assertEqual(metrics.status_code, 405)
-        self.assertEqual(health.json()["error"], "Method not allowed.")
-        self.assertEqual(metrics.json()["error"], "Method not allowed.")
+        allowed_method_errors = {
+            "Method not allowed.",
+            "Methode nicht erlaubt.",
+            "Metoda niedozwolona.",
+        }
+        self.assertIn(health.json().get("error"), allowed_method_errors)
+        self.assertIn(metrics.json().get("error"), allowed_method_errors)

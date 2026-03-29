@@ -1,4 +1,7 @@
-.PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci
+.PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci pytest
+
+# Pełna weryfikacja testów (pytest w Dockerze) — uznajemy za źródło prawdy w tym repo.
+DOCKER_PYTEST = pip install --no-cache-dir -q -r requirements-dev.txt && python -m pytest -q --tb=short
 
 up:
 	docker compose up
@@ -32,5 +35,9 @@ shell:
 check-translations:
 	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness"
 
+# CI / bramka: migracje + tłumaczenia + ten sam pytest co `make pytest` (cały zbiór z pytest.ini).
 test-ci:
-	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && python manage.py test apps.core.tests apps.integrations.hidrive.tests apps.medical.api_tests apps.outbox.tests apps.operations.api_tests apps.patient_results.tests apps.patient_results.api_tests"
+	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && $(DOCKER_PYTEST)"
+
+pytest:
+	docker compose run --rm web sh -c "$(DOCKER_PYTEST)"

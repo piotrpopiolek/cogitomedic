@@ -22,6 +22,9 @@ from apps.core.api_utils import (
     safe_parse_positive_int,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.http_utils import get_client_ip
+from apps.operations.services import create_audit_event
+from apps.reception.anonymization import anonymize_patient
 from apps.reception.api_schemas import (
     CreatePatientRequest,
     PatientsListQuery,
@@ -37,7 +40,7 @@ def _serialize_patient(patient: Patient) -> dict:
         "id": str(patient.id),
         "first_name": patient.first_name,
         "last_name": patient.last_name,
-        "date_of_birth": patient.date_of_birth.isoformat(),
+        "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
         "phone": patient.phone,
         "email": patient.email,
         "doctolib_patient_id": patient.doctolib_patient_id,
@@ -245,3 +248,35 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         return json_domain_error(exc, status=400)
 
     return JsonResponse(_serialize_patient(patient))
+
+
+@require_auth
+def patient_anonymize_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    role_error = require_user_role(request, allowed_roles={"ADMIN"})
+    if role_error:
+        return role_error
+
+    create_audit_event(
+        event_type="PATIENT_ANONYMIZE_REQUESTED",
+        actor_user_id=request.user.id,
+        patient_id=patient_id,
+        metadata={"client_ip": get_client_ip(request)},
+    )
+
+    try:
+        patient = anonymize_patient(patient_id, actor_user_id=request.user.id)
+    except ObjectDoesNotExist:
+        return json_error("other.api.patient_not_found", status=404)
+    except DomainError as exc:
+        return json_domain_error(exc, status=422)
+
+    assert patient.anonymized_at is not None
+    return JsonResponse(
+        {
+            "patient_id": str(patient.id),
+            "anonymized_at": patient.anonymized_at.isoformat(),
+        },
+        status=200,
+    )

@@ -26,6 +26,7 @@ from apps.outbox.api_schemas import (
     RetryOutboxEventRequest,
 )
 from apps.outbox.models import OutboxEvent
+from apps.intake.retention_services import run_intake_retention_cleanup
 from apps.outbox.services import process_outbox_events, retry_outbox_event, run_retention_cleanup
 
 @require_auth
@@ -198,7 +199,11 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
         },
     )
     try:
-        result = run_retention_cleanup(
+        befund_result = run_retention_cleanup(
+            older_than_days=body.older_than_days,
+            dry_run=body.dry_run,
+        )
+        intake_result = run_intake_retention_cleanup(
             older_than_days=body.older_than_days,
             dry_run=body.dry_run,
         )
@@ -207,9 +212,16 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
 
     return JsonResponse(
         {
-            "candidates": result.candidates,
-            "deleted": result.deleted,
-            "skipped_not_safe": result.skipped_not_safe,
+            "befund": {
+                "candidates": befund_result.candidates,
+                "deleted": befund_result.deleted,
+                "skipped_not_safe": befund_result.skipped_not_safe,
+            },
+            "intake": {
+                "candidates": intake_result.candidates,
+                "deleted": intake_result.deleted,
+                "skipped_not_safe": intake_result.skipped_not_safe,
+            },
         },
         status=202,
     )

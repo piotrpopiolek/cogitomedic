@@ -15,6 +15,7 @@ from apps.patient_results.document_services import (
     get_patient_pdf_path,
     get_patient_pdf_version,
     list_patient_documents,
+    resolve_patient_befund_download,
 )
 from apps.patient_results.services import (
     get_patient_id_from_session,
@@ -145,8 +146,8 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
     if isinstance(check, JsonResponse):
         return check
     patient_id = UUID(check)
-    version = get_patient_pdf_version(version_id, patient_id)
-    if not version:
+    resolution, version = resolve_patient_befund_download(version_id, patient_id)
+    if resolution == "not_found":
         create_audit_event(
             event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED",
             patient_id=patient_id,
@@ -157,6 +158,18 @@ def patient_results_download_view(request: HttpRequest, version_id: UUID) -> Htt
             },
         )
         return json_error("other.api.document_not_found", status=404)
+    if resolution == "retention_expired":
+        create_audit_event(
+            event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED",
+            patient_id=patient_id,
+            medical_document_id=version.medical_document_id if version else None,
+            metadata={
+                "client_ip": get_client_ip(request),
+                "version_id": str(version_id),
+                "reason": "retention_expired",
+            },
+        )
+        return json_error("other.api.document_retention_expired", status=410)
     path = get_patient_pdf_path(version_id, patient_id, version=version)
     if not path:
         create_audit_event(

@@ -231,7 +231,11 @@ COGITO_PATHS = {
             "summary": "Run retention cleanup",
             "tags": ["Operations"],
             "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"older_than_days": {"type": "integer"}, "dry_run": {"type": "boolean"}}}}}},
-            "responses": {"202": {"description": "Candidates, deleted, skipped"}},
+            "responses": {
+                "202": {
+                    "description": "Per stream: befund + intake each with candidates, deleted, skipped_not_safe",
+                },
+            },
         },
     },
     f"{PREFIX}/audit-events": {
@@ -491,6 +495,20 @@ COGITO_PATHS = {
         "get": {"summary": "List patients", "tags": ["Reception – Patients"], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "last_name", "in": "query", "schema": {"type": "string"}}, {"name": "date_of_birth", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "phone", "in": "query", "schema": {"type": "string"}}, {"name": "doctolib_patient_id", "in": "query", "schema": {"type": "string"}}, {"name": "is_active", "in": "query", "schema": {"type": "boolean"}}, PAGE_Q, PAGE_SIZE_Q], "responses": {"200": {"description": "Items and pagination"}},
         },
         "post": {"summary": "Create or update patient (manual)", "tags": ["Reception – Patients"], "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}}, "responses": {"200": {"description": "Patient"}, "201": {"description": "Created"}},
+        },
+    },
+    f"{PREFIX}/patients/{{patient_id}}/anonymize": {
+        "post": {
+            "summary": "Anonymize patient (ADMIN, RODO Art. 17)",
+            "tags": ["Reception – Patients"],
+            "parameters": [
+                {"name": "patient_id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+            ],
+            "responses": {
+                "200": {"description": "Patient anonymized"},
+                "404": {"description": "Not found"},
+                "422": {"description": "e.g. active queue entries"},
+            },
         },
     },
     f"{PREFIX}/patients/{{patient_id}}": {

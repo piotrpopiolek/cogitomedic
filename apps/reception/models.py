@@ -78,7 +78,11 @@ class Patient(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     first_name = models.CharField(max_length=100, verbose_name=db_gettext_lazy("administration.field_first_name", "First name"))
     last_name = models.CharField(max_length=100, verbose_name=db_gettext_lazy("administration.field_last_name", "Last name"))
-    date_of_birth = models.DateField(verbose_name=db_gettext_lazy("administration.field_date_of_birth", "Date of birth"))
+    date_of_birth = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_date_of_birth", "Date of birth"),
+    )
     phone = models.CharField(max_length=20, verbose_name=db_gettext_lazy("administration.field_phone", "Phone"))
     email = models.EmailField(verbose_name=db_gettext_lazy("administration.field_email", "Email"))
     doctolib_patient_id = models.CharField(max_length=64, blank=True, null=True, unique=True, verbose_name=db_gettext_lazy("administration.field_doctolib_patient_id", "Doctolib patient id"))
@@ -101,6 +105,21 @@ class Patient(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
+    )
+    anonymization_started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_anonymization_started_at", "Anonymization started at"),
+    )
+    anonymized_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_anonymized_at", "Anonymized at"),
+    )
+    consent_summary = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_consent_summary", "Consent summary"),
     )
 
     class Meta:
@@ -129,7 +148,8 @@ class Patient(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.last_name} {self.first_name} ({self.date_of_birth})"
+        dob = self.date_of_birth.isoformat() if self.date_of_birth else "—"
+        return f"{self.last_name} {self.first_name} ({dob})"
 
 
 class ClinicSite(models.Model):
@@ -467,6 +487,7 @@ class PatientImportBatch(models.Model):
     status = models.CharField(max_length=30, choices=ImportStatus.choices, default=ImportStatus.PROCESSING, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
     total_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_total_rows", "Total rows"))
     inserted_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_inserted_rows", "Inserted rows"))
+    matched_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_matched_rows", "Matched rows"))
     error_rows = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_error_rows", "Error rows"))
     created_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -490,6 +511,7 @@ class PatientImportBatch(models.Model):
             models.CheckConstraint(
                 condition=Q(total_rows__gte=0)
                 & Q(inserted_rows__gte=0)
+                & Q(matched_rows__gte=0)
                 & Q(error_rows__gte=0),
                 name="import_batch_non_negative_counts",
             )
