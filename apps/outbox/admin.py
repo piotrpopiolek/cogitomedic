@@ -26,7 +26,15 @@ class OutboxEventAdmin(UnfoldModelAdmin):
     list_filter = ("event_type", "status")
     ordering = ["-created_at"]
     search_fields = ("error_message",)
-    readonly_fields = ("id", "aggregate_type", "aggregate_id", "payload", "payload_schema_version", "created_at", "updated_at")
+    readonly_fields = (
+        "id",
+        "aggregate_type",
+        "aggregate_id",
+        "payload",
+        "payload_schema_version",
+        "created_at",
+        "updated_at",
+    )
     date_hierarchy = "created_at"
 
     def get_queryset(self, request):

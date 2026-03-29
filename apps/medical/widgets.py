@@ -25,7 +25,9 @@ try:
         TEXTAREA_CLASSES,
     )
 except ImportError:
-    CHECKBOX_CLASSES = INPUT_CLASSES = LABEL_CLASSES = SELECT_CLASSES = TEXTAREA_CLASSES = ()
+    CHECKBOX_CLASSES = INPUT_CLASSES = LABEL_CLASSES = SELECT_CLASSES = (
+        TEXTAREA_CLASSES
+    ) = ()
 
 
 def _join_unfold_classes(*parts: object) -> str:
@@ -34,13 +36,15 @@ def _join_unfold_classes(*parts: object) -> str:
         if isinstance(p, (list, tuple)):
             out.extend(x for x in p if x)
         elif p:
-            out.append(p)
+            out.append(str(p))
     return " ".join(out)
 
 
 def _safe_json_b64(value: list) -> str:
     """Encode JSON as base64 for safe embedding in HTML/script."""
-    return base64.b64encode(json.dumps(value, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    return base64.b64encode(
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
 
 
 class LesionGroupFavoritesWidget(Textarea):
@@ -74,9 +78,15 @@ class LesionGroupFavoritesWidget(Textarea):
         context["widget"]["dermatoscopic_choices"] = DERMATOSCOPIC_FEATURE_CHOICES
         context["widget"]["clinical_choices"] = CLINICAL_ASSESSMENT_CHOICES
         context["widget"]["malignancy_choices"] = MALIGNANCY_RISK_CHOICES
-        context["widget"]["dermatoscopic_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in DERMATOSCOPIC_FEATURE_CHOICES])
-        context["widget"]["clinical_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in CLINICAL_ASSESSMENT_CHOICES])
-        context["widget"]["malignancy_b64"] = _safe_json_b64([{"value": v, "label": l} for v, l in MALIGNANCY_RISK_CHOICES])
+        context["widget"]["dermatoscopic_b64"] = _safe_json_b64(
+            [{"value": v, "label": lbl} for v, lbl in DERMATOSCOPIC_FEATURE_CHOICES]
+        )
+        context["widget"]["clinical_b64"] = _safe_json_b64(
+            [{"value": v, "label": lbl} for v, lbl in CLINICAL_ASSESSMENT_CHOICES]
+        )
+        context["widget"]["malignancy_b64"] = _safe_json_b64(
+            [{"value": v, "label": lbl} for v, lbl in MALIGNANCY_RISK_CHOICES]
+        )
         # Match native Unfold admin fields (bundled Tailwind tokens: base-*, font-important, etc.)
         w = context["widget"]
         w["label_class"] = _join_unfold_classes(LABEL_CLASSES)
@@ -87,7 +97,9 @@ class LesionGroupFavoritesWidget(Textarea):
             TEXTAREA_CLASSES,
             ["font-mono", "text-sm", "mb-2"],
         )
-        w["textarea_body_class"] = _join_unfold_classes(["vLargeTextField"], TEXTAREA_CLASSES)
+        w["textarea_body_class"] = _join_unfold_classes(
+            ["vLargeTextField"], TEXTAREA_CLASSES
+        )
         w["checkbox_class"] = _join_unfold_classes(CHECKBOX_CLASSES)
         w["checkbox_row_label_class"] = (
             "inline-flex items-center gap-2 text-sm font-normal "

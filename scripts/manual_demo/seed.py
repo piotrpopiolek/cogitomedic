@@ -2,6 +2,7 @@
 
 Call :func:`scripts.manual_demo.django_setup.setup_django` once before this function.
 """
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -12,9 +13,17 @@ def seed_manual_demo(ctx: dict) -> None:
     from django.utils import timezone
 
     from apps.core.api_utils import assign_group_to_test_user
-    from apps.intake.models import IntakeDocumentVersion, IntakePdfStatus, IntakeStatus, PatientIntakeForm
+    from apps.intake.models import (
+        IntakeDocumentVersion,
+        IntakePdfStatus,
+        IntakeStatus,
+        PatientIntakeForm,
+    )
     from apps.medical.models import MedicalDocument
-    from apps.medical.services import create_or_get_medical_document, save_draft_document_version
+    from apps.medical.services import (
+        create_or_get_medical_document,
+        save_draft_document_version,
+    )
     from apps.reception.models import (
         ClinicSite,
         ConsultingRoom,
@@ -56,7 +65,9 @@ def seed_manual_demo(ctx: dict) -> None:
     admin.is_superuser = True
     admin.save()
 
-    reception = _user("screenshot_reception", "screenshot_reception@example.invalid", "Reception")
+    reception = _user(
+        "screenshot_reception", "screenshot_reception@example.invalid", "Reception"
+    )
     doctor = _user("screenshot_doctor", "screenshot_doctor@example.invalid", "Doctor")
     tablet_u = _user("screenshot_tablet", "screenshot_tablet@example.invalid", "Tablet")
 

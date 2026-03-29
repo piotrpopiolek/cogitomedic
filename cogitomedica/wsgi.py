@@ -11,10 +11,11 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cogitomedica.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cogitomedica.settings")
 
 try:
     from cogitomedica.telemetry import setup_telemetry
+
     setup_telemetry()
 except Exception:
     pass

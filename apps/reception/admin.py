@@ -80,23 +80,32 @@ class PatientAdmin(UnfoldModelAdmin):
             ).distinct()
         return qs
 
+
 def _set_created_by_user(request, obj, change: bool) -> None:
     """Set created_by_user to session user when adding and field is not set."""
     if change or not request.user.is_authenticated:
         return
-    if getattr(obj, "created_by_user_id", None) is None and hasattr(obj, "created_by_user"):
+    if getattr(obj, "created_by_user_id", None) is None and hasattr(
+        obj, "created_by_user"
+    ):
         obj.created_by_user = request.user
 
 
 def _initial_created_by_user(request, form, change: bool) -> None:
     """Pre-fill created_by_user with session user on add so the field is not required to be filled."""
-    if change or not request.user.is_authenticated or "created_by_user" not in form.base_fields:
+    if (
+        change
+        or not request.user.is_authenticated
+        or "created_by_user" not in form.base_fields
+    ):
         return
     if form.base_fields["created_by_user"].initial is None:
         form.base_fields["created_by_user"].initial = request.user.pk
 
 
-def _admin_resolve_dailyqueue_clinic_site_id(request: HttpRequest, obj: DailyQueue | None) -> uuid.UUID | None:
+def _admin_resolve_dailyqueue_clinic_site_id(
+    request: HttpRequest, obj: DailyQueue | None
+) -> uuid.UUID | None:
     """Prefer POSTed clinic_site (user may switch site on change); else persisted obj."""
     if request.method == "POST":
         raw = (request.POST.get("clinic_site") or "").strip()
@@ -118,7 +127,9 @@ def _consulting_rooms_for_clinic_site_queryset(
     qs = ConsultingRoom.objects.filter(clinic_site_id=clinic_site_id)
     active = qs.filter(is_active=True)
     if current_room_id and not active.filter(pk=current_room_id).exists():
-        return qs.filter(Q(is_active=True) | Q(pk=current_room_id)).order_by("code", "name")
+        return qs.filter(Q(is_active=True) | Q(pk=current_room_id)).order_by(
+            "code", "name"
+        )
     return active.order_by("code", "name")
 
 
@@ -160,7 +171,11 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
         # DOCTOR: see rooms from assigned clinics OR rooms from queues assigned to this doctor
         if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(
-                Q(clinic_site_id__in=request.user.clinic_sites.values_list("pk", flat=True))
+                Q(
+                    clinic_site_id__in=request.user.clinic_sites.values_list(
+                        "pk", flat=True
+                    )
+                )
                 | Q(daily_queues__assigned_doctor=request.user)
             ).distinct()
         return qs
@@ -186,7 +201,11 @@ class DailyQueueAdmin(UnfoldModelAdmin):
     list_display_links = ("queue_date",)
     list_filter = ("status", "source", "shift_code", "queue_date")
     ordering = ["-created_at"]
-    search_fields = ("clinic_site__code", "consulting_room__code", "assigned_doctor__username")
+    search_fields = (
+        "clinic_site__code",
+        "consulting_room__code",
+        "assigned_doctor__username",
+    )
     raw_id_fields = ("created_by_user",)
     # consulting_room: nie autocomplete — queryset z formfield_for_foreignkey jest wtedy respektowany (placówka → gabinety).
     autocomplete_fields = ("clinic_site", "assigned_doctor")
@@ -231,7 +250,9 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         ).prefetch_related("entries__patient")
         if queue_date:
             queues_qs = queues_qs.filter(queue_date=queue_date)
-        queues = queues_qs.order_by("-queue_date", "clinic_site__name", "consulting_room__name")
+        queues = queues_qs.order_by(
+            "-queue_date", "clinic_site__name", "consulting_room__name"
+        )
 
         context = {
             **self.admin_site.each_context(request),
@@ -247,10 +268,21 @@ class DailyQueueAdmin(UnfoldModelAdmin):
         )
 
     def import_xlsx_view(self, request: HttpRequest):
-        if not (request.user.is_authenticated and (request.user.is_admin_role or request.user.is_reception or request.user.is_superuser)):
+        if not (
+            request.user.is_authenticated
+            and (
+                request.user.is_admin_role
+                or request.user.is_reception
+                or request.user.is_superuser
+            )
+        ):
             raise PermissionDenied
 
-        next_url = request.GET.get("next") or request.POST.get("next") or reverse("admin:reception_dailyqueue_changelist")
+        next_url = (
+            request.GET.get("next")
+            or request.POST.get("next")
+            or reverse("admin:reception_dailyqueue_changelist")
+        )
         if request.method == "POST":
             form = PatientXlsxImportAdminForm(request.POST, request.FILES)
             if form.is_valid():
@@ -259,7 +291,9 @@ class DailyQueueAdmin(UnfoldModelAdmin):
                         uploaded_file=form.cleaned_data["file"],
                         created_by_user=request.user,
                     )
-                    batch_url = reverse("admin:reception_patientimportbatch_change", args=[batch.id])
+                    batch_url = reverse(
+                        "admin:reception_patientimportbatch_change", args=[batch.id]
+                    )
                     self.message_user(
                         request,
                         format_html(
@@ -268,7 +302,10 @@ class DailyQueueAdmin(UnfoldModelAdmin):
                         ),
                         level=messages.SUCCESS,
                     )
-                    return redirect(form.cleaned_data["next"] or reverse("admin:reception_dailyqueue_changelist"))
+                    return redirect(
+                        form.cleaned_data["next"]
+                        or reverse("admin:reception_dailyqueue_changelist")
+                    )
                 except Exception as e:
                     self.message_user(
                         request,
@@ -291,20 +328,34 @@ class DailyQueueAdmin(UnfoldModelAdmin):
             context,
         )
 
-    @admin.display(description=db_gettext_lazy("administration.admin_col_wpisy", "Wpisy"), ordering="entries_count_annotated")
+    @admin.display(
+        description=db_gettext_lazy("administration.admin_col_wpisy", "Wpisy"),
+        ordering="entries_count_annotated",
+    )
     def entries_count(self, obj):
         return getattr(obj, "entries_count_annotated", 0)
 
-    @admin.display(description=db_gettext_lazy("administration.admin_col_pacjenci", "Pacjenci"), ordering="patients_count_annotated")
+    @admin.display(
+        description=db_gettext_lazy("administration.admin_col_pacjenci", "Pacjenci"),
+        ordering="patients_count_annotated",
+    )
     def patients_count(self, obj):
         return getattr(obj, "patients_count_annotated", 0)
 
-    @admin.display(description=db_gettext_lazy("administration.admin_col_widok_wpisow", "Widok wpisów"))
+    @admin.display(
+        description=db_gettext_lazy(
+            "administration.admin_col_widok_wpisow", "Widok wpisów"
+        )
+    )
     def view_queue_entries(self, obj):
         url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode({'daily_queue__id__exact': str(obj.id)})}"
         return format_html('<a href="{}">Wpisy tej kolejki</a>', url)
 
-    @admin.display(description=db_gettext_lazy("administration.admin_col_pacjenci_dnia", "Pacjenci dnia"))
+    @admin.display(
+        description=db_gettext_lazy(
+            "administration.admin_col_pacjenci_dnia", "Pacjenci dnia"
+        )
+    )
     def view_day_patients(self, obj):
         params = {
             "daily_queue__queue_date__exact": obj.queue_date.isoformat(),
@@ -323,15 +374,21 @@ class DailyQueueAdmin(UnfoldModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "consulting_room":
-            clinic_site_id = _admin_resolve_dailyqueue_clinic_site_id(request, kwargs.get("obj"))
+            clinic_site_id = _admin_resolve_dailyqueue_clinic_site_id(
+                request, kwargs.get("obj")
+            )
             if clinic_site_id is not None:
                 kwargs["queryset"] = _consulting_rooms_for_clinic_site_queryset(
                     clinic_site_id,
-                    current_room_id=getattr(kwargs.get("obj"), "consulting_room_id", None),
+                    current_room_id=getattr(
+                        kwargs.get("obj"), "consulting_room_id", None
+                    ),
                 )
         formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
         if db_field.name == "assigned_doctor":
-            formfield.queryset = StaffUser.objects.filter(groups__name="Doctor").distinct()
+            formfield.queryset = StaffUser.objects.filter(
+                groups__name="Doctor"
+            ).distinct()
         return formfield
 
 
@@ -347,9 +404,19 @@ class QueueEntryAdmin(UnfoldModelAdmin):
         "created_at",
     )
     list_display_links = ("position_no",)
-    list_filter = ("entry_status", "daily_queue__queue_date", "daily_queue__clinic_site", "daily_queue__consulting_room")
+    list_filter = (
+        "entry_status",
+        "daily_queue__queue_date",
+        "daily_queue__clinic_site",
+        "daily_queue__consulting_room",
+    )
     ordering = ["-created_at"]
-    search_fields = ("patient__last_name", "patient__first_name", "visit_external_id", "notes")
+    search_fields = (
+        "patient__last_name",
+        "patient__first_name",
+        "visit_external_id",
+        "notes",
+    )
     raw_id_fields = ("active_session", "created_by_user")
     exclude = ("visit_external_id",)
     date_hierarchy = "created_at"
@@ -366,7 +433,13 @@ class QueueEntryAdmin(UnfoldModelAdmin):
 
 @admin.register(TabletDevice)
 class TabletDeviceAdmin(UnfoldModelAdmin):
-    list_display = ("android_id", "clinic_site", "last_seen_at", "created_at", "is_active")
+    list_display = (
+        "android_id",
+        "clinic_site",
+        "last_seen_at",
+        "created_at",
+        "is_active",
+    )
     list_display_links = ("android_id",)
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
@@ -375,7 +448,15 @@ class TabletDeviceAdmin(UnfoldModelAdmin):
 
 @admin.register(PatientFormSession)
 class PatientFormSessionAdmin(UnfoldModelAdmin):
-    list_display = ("id", "queue_entry", "tablet_device", "form_locale", "expires_at", "consumed_at", "created_at")
+    list_display = (
+        "id",
+        "queue_entry",
+        "tablet_device",
+        "form_locale",
+        "expires_at",
+        "consumed_at",
+        "created_at",
+    )
     list_display_links = ("id",)
     list_filter = ("form_locale",)
     ordering = ["-created_at"]

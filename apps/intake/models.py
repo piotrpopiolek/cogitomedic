@@ -9,15 +9,27 @@ from django.db.models import F, Q
 
 
 class IntakeStatus(models.TextChoices):
-    IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy("administration.choice_intake_status_in_progress", "In progress")
-    SUBMITTED = "SUBMITTED", db_gettext_lazy("administration.choice_intake_status_submitted", "Submitted")
+    IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy(
+        "administration.choice_intake_status_in_progress", "In progress"
+    )
+    SUBMITTED = "SUBMITTED", db_gettext_lazy(
+        "administration.choice_intake_status_submitted", "Submitted"
+    )
 
 
 class IntakePdfStatus(models.TextChoices):
-    PENDING = "PENDING", db_gettext_lazy("administration.choice_intake_pdf_status_pending", "Pending")
-    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_intake_pdf_status_processing", "Processing")
-    COMPLETED = "COMPLETED", db_gettext_lazy("administration.choice_intake_pdf_status_completed", "Completed")
-    FAILED = "FAILED", db_gettext_lazy("administration.choice_intake_pdf_status_failed", "Failed")
+    PENDING = "PENDING", db_gettext_lazy(
+        "administration.choice_intake_pdf_status_pending", "Pending"
+    )
+    PROCESSING = "PROCESSING", db_gettext_lazy(
+        "administration.choice_intake_pdf_status_processing", "Processing"
+    )
+    COMPLETED = "COMPLETED", db_gettext_lazy(
+        "administration.choice_intake_pdf_status_completed", "Completed"
+    )
+    FAILED = "FAILED", db_gettext_lazy(
+        "administration.choice_intake_pdf_status_failed", "Failed"
+    )
 
 
 class IntakeOutboxEventType(models.TextChoices):
@@ -32,28 +44,87 @@ class IntakeOutboxEventType(models.TextChoices):
 
 
 class IntakeOutboxStatus(models.TextChoices):
-    PENDING = "PENDING", db_gettext_lazy("administration.choice_intake_outbox_status_pending", "Pending")
-    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_intake_outbox_status_processing", "Processing")
-    PROCESSED = "PROCESSED", db_gettext_lazy("administration.choice_intake_outbox_status_processed", "Processed")
-    FAILED = "FAILED", db_gettext_lazy("administration.choice_intake_outbox_status_failed", "Failed")
-    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy("administration.choice_intake_outbox_status_dead_letter", "Dead letter")
+    PENDING = "PENDING", db_gettext_lazy(
+        "administration.choice_intake_outbox_status_pending", "Pending"
+    )
+    PROCESSING = "PROCESSING", db_gettext_lazy(
+        "administration.choice_intake_outbox_status_processing", "Processing"
+    )
+    PROCESSED = "PROCESSED", db_gettext_lazy(
+        "administration.choice_intake_outbox_status_processed", "Processed"
+    )
+    FAILED = "FAILED", db_gettext_lazy(
+        "administration.choice_intake_outbox_status_failed", "Failed"
+    )
+    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy(
+        "administration.choice_intake_outbox_status_dead_letter", "Dead letter"
+    )
 
 
 class ConsentDefinition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=60, verbose_name=db_gettext_lazy("administration.field_code", "Code"))
-    version = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_version", "Version"))
-    title_de = models.CharField(max_length=200, verbose_name=db_gettext_lazy("administration.field_title_de", "Title de"))
-    title_en = models.CharField(max_length=200, blank=True, default="", verbose_name=db_gettext_lazy("administration.field_title_en", "Title en"))
-    title_pl = models.CharField(max_length=200, blank=True, default="", verbose_name=db_gettext_lazy("administration.field_title_pl", "Title pl"))
-    content_de = models.TextField(verbose_name=db_gettext_lazy("administration.field_content_de", "Content de"))
-    content_en = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_content_en", "Content en"))
-    content_pl = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_content_pl", "Content pl"))
-    is_required = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_required", "Is required"))
-    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
-    display_order = models.SmallIntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_display_order", "Display order"))
-    effective_from = models.DateField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_effective_from", "Effective from"))
-    effective_to = models.DateField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_effective_to", "Effective to"))
+    code = models.CharField(
+        max_length=60, verbose_name=db_gettext_lazy("administration.field_code", "Code")
+    )
+    version = models.IntegerField(
+        verbose_name=db_gettext_lazy("administration.field_version", "Version")
+    )
+    title_de = models.CharField(
+        max_length=200,
+        verbose_name=db_gettext_lazy("administration.field_title_de", "Title de"),
+    )
+    title_en = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy("administration.field_title_en", "Title en"),
+    )
+    title_pl = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy("administration.field_title_pl", "Title pl"),
+    )
+    content_de = models.TextField(
+        verbose_name=db_gettext_lazy("administration.field_content_de", "Content de")
+    )
+    content_en = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy("administration.field_content_en", "Content en"),
+    )
+    content_pl = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy("administration.field_content_pl", "Content pl"),
+    )
+    is_required = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_required", "Is required"),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"),
+    )
+    display_order = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_display_order", "Display order"
+        ),
+    )
+    effective_from = models.DateField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_effective_from", "Effective from"
+        ),
+    )
+    effective_to = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_effective_to", "Effective to"
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -62,9 +133,12 @@ class ConsentDefinition(models.Model):
     class Meta:
         db_table = "consent_definition"
         constraints = [
-            models.UniqueConstraint(fields=["code", "version"], name="consent_definition_unique"),
+            models.UniqueConstraint(
+                fields=["code", "version"], name="consent_definition_unique"
+            ),
             models.CheckConstraint(
-                condition=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
+                condition=Q(effective_to__isnull=True)
+                | Q(effective_to__gte=F("effective_from")),
                 name="consent_effective_to_after_from",
             ),
         ]
@@ -86,29 +160,72 @@ class AnamnesisQuestionDefinition(models.Model):
             "administration.choice_anamnesis_answer_multi_choice",
             "Multi choice",
         )
-        BOOLEAN = "BOOLEAN", db_gettext_lazy("administration.choice_anamnesis_answer_boolean", "Boolean")
+        BOOLEAN = "BOOLEAN", db_gettext_lazy(
+            "administration.choice_anamnesis_answer_boolean", "Boolean"
+        )
         TEXT_OPTIONAL = "TEXT_OPTIONAL", db_gettext_lazy(
             "administration.choice_anamnesis_answer_text_optional",
             "Text optional",
         )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=80, verbose_name=db_gettext_lazy("administration.field_code", "Code"))
-    version = models.IntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_version", "Version"))
-    question_text_de = models.TextField(verbose_name=db_gettext_lazy("administration.field_question_text_de", "Question text de"))
-    question_text_en = models.TextField(verbose_name=db_gettext_lazy("administration.field_question_text_en", "Question text en"))
-    question_text_pl = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_question_text_pl", "Question text pl"))
+    code = models.CharField(
+        max_length=80, verbose_name=db_gettext_lazy("administration.field_code", "Code")
+    )
+    version = models.IntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy("administration.field_version", "Version"),
+    )
+    question_text_de = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_question_text_de", "Question text de"
+        )
+    )
+    question_text_en = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_question_text_en", "Question text en"
+        )
+    )
+    question_text_pl = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy(
+            "administration.field_question_text_pl", "Question text pl"
+        ),
+    )
     answer_type = models.CharField(
         max_length=30,
         choices=AnswerType.choices,
         default=AnswerType.SINGLE_CHOICE,
         verbose_name=db_gettext_lazy("administration.field_answer_type", "Answer type"),
     )
-    is_required = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_required", "Is required"))
-    display_order = models.SmallIntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_display_order", "Display order"))
-    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
-    effective_from = models.DateField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_effective_from", "Effective from"))
-    effective_to = models.DateField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_effective_to", "Effective to"))
+    is_required = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_required", "Is required"),
+    )
+    display_order = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_display_order", "Display order"
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"),
+    )
+    effective_from = models.DateField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_effective_from", "Effective from"
+        ),
+    )
+    effective_to = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_effective_to", "Effective to"
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -122,7 +239,8 @@ class AnamnesisQuestionDefinition(models.Model):
                 name="anamnesis_question_definition_unique",
             ),
             models.CheckConstraint(
-                condition=Q(effective_to__isnull=True) | Q(effective_to__gte=F("effective_from")),
+                condition=Q(effective_to__isnull=True)
+                | Q(effective_to__gte=F("effective_from")),
                 name="anamnesis_question_effective_to_after_from",
             ),
         ]
@@ -140,14 +258,40 @@ class AnamnesisOptionDefinition(models.Model):
         AnamnesisQuestionDefinition,
         on_delete=models.CASCADE,
         related_name="options",
-        verbose_name=db_gettext_lazy("administration.field_anamnesis_question", "Anamnesis question"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_anamnesis_question", "Anamnesis question"
+        ),
     )
-    code = models.CharField(max_length=80, verbose_name=db_gettext_lazy("administration.field_code", "Code"))
-    option_text_de = models.TextField(verbose_name=db_gettext_lazy("administration.field_option_text_de", "Option text de"))
-    option_text_en = models.TextField(verbose_name=db_gettext_lazy("administration.field_option_text_en", "Option text en"))
-    option_text_pl = models.TextField(blank=True, default="", verbose_name=db_gettext_lazy("administration.field_option_text_pl", "Option text pl"))
-    display_order = models.SmallIntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_display_order", "Display order"))
-    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
+    code = models.CharField(
+        max_length=80, verbose_name=db_gettext_lazy("administration.field_code", "Code")
+    )
+    option_text_de = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_option_text_de", "Option text de"
+        )
+    )
+    option_text_en = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_option_text_en", "Option text en"
+        )
+    )
+    option_text_pl = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy(
+            "administration.field_option_text_pl", "Option text pl"
+        ),
+    )
+    display_order = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_display_order", "Display order"
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -181,7 +325,9 @@ class PatientIntakeForm(models.Model):
         "reception.PatientFormSession",
         on_delete=models.RESTRICT,
         related_name="intake_form",
-        verbose_name=db_gettext_lazy("administration.field_patient_form_session", "Patient form session"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_patient_form_session", "Patient form session"
+        ),
     )
     form_status = models.CharField(
         max_length=20,
@@ -189,13 +335,53 @@ class PatientIntakeForm(models.Model):
         default=IntakeStatus.IN_PROGRESS,
         verbose_name=db_gettext_lazy("administration.field_form_status", "Form status"),
     )
-    body_map_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_body_map_schema_version", "Body map schema version"))
-    body_map_data = models.JSONField(default=list, verbose_name=db_gettext_lazy("administration.field_body_map_data", "Body map data"))
-    anamnesis_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_anamnesis_schema_version", "Anamnesis schema version"))
-    anamnesis_payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_anamnesis_payload", "Anamnesis payload"))
-    signature_file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_signature_file_path", "Signature file path"))
-    signature_sha256 = models.CharField(max_length=64, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_signature_sha256", "Signature sha256"))
-    submitted_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_submitted_at", "Submitted at"))
+    body_map_schema_version = models.SmallIntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy(
+            "administration.field_body_map_schema_version", "Body map schema version"
+        ),
+    )
+    body_map_data = models.JSONField(
+        default=list,
+        verbose_name=db_gettext_lazy(
+            "administration.field_body_map_data", "Body map data"
+        ),
+    )
+    anamnesis_schema_version = models.SmallIntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy(
+            "administration.field_anamnesis_schema_version", "Anamnesis schema version"
+        ),
+    )
+    anamnesis_payload = models.JSONField(
+        default=dict,
+        verbose_name=db_gettext_lazy(
+            "administration.field_anamnesis_payload", "Anamnesis payload"
+        ),
+    )
+    signature_file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_signature_file_path", "Signature file path"
+        ),
+    )
+    signature_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_signature_sha256", "Signature sha256"
+        ),
+    )
+    submitted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_submitted_at", "Submitted at"
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -250,12 +436,33 @@ class PatientIntakeConsent(models.Model):
         ConsentDefinition,
         on_delete=models.RESTRICT,
         related_name="intake_consents",
-        verbose_name=db_gettext_lazy("administration.field_consent_definition", "Consent definition"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_consent_definition", "Consent definition"
+        ),
     )
-    accepted = models.BooleanField(verbose_name=db_gettext_lazy("administration.field_accepted", "Accepted"))
-    accepted_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_accepted_at", "Accepted at"))
-    selected_option_code = models.CharField(max_length=20, blank=True, default="", verbose_name=db_gettext_lazy("administration.field_selected_option_code", "Selected option code"))
-    selected_option_codes = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_selected_option_codes", "Selected option codes"))
+    accepted = models.BooleanField(
+        verbose_name=db_gettext_lazy("administration.field_accepted", "Accepted")
+    )
+    accepted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_accepted_at", "Accepted at"),
+    )
+    selected_option_code = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy(
+            "administration.field_selected_option_code", "Selected option code"
+        ),
+    )
+    selected_option_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_selected_option_codes", "Selected option codes"
+        ),
+    )
 
     class Meta:
         db_table = "patient_intake_consent"
@@ -286,29 +493,77 @@ class IntakeDocumentVersion(models.Model):
         related_name="document_versions",
         verbose_name=db_gettext_lazy("administration.field_intake_form", "Intake form"),
     )
-    version_no = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_version_no", "Version no"))
-    form_locale = models.CharField(max_length=10, verbose_name=db_gettext_lazy("administration.field_form_locale", "Form locale"))
-    snapshot_payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_snapshot_payload", "Snapshot payload"))
+    version_no = models.IntegerField(
+        verbose_name=db_gettext_lazy("administration.field_version_no", "Version no")
+    )
+    form_locale = models.CharField(
+        max_length=10,
+        verbose_name=db_gettext_lazy("administration.field_form_locale", "Form locale"),
+    )
+    snapshot_payload = models.JSONField(
+        default=dict,
+        verbose_name=db_gettext_lazy(
+            "administration.field_snapshot_payload", "Snapshot payload"
+        ),
+    )
     pdf_generation_status = models.CharField(
         max_length=20,
         choices=IntakePdfStatus.choices,
         default=IntakePdfStatus.PENDING,
-        verbose_name=db_gettext_lazy("administration.field_pdf_generation_status", "PDF generation status"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_generation_status", "PDF generation status"
+        ),
     )
-    pdf_local_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_local_path", "Pdf local path"))
-    pdf_checksum_sha256 = models.CharField(max_length=64, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_checksum_sha256", "Pdf checksum sha256"))
-    hidrive_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_path", "Hidrive path"))
-    hidrive_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_hidrive_sent", "Hidrive sent"))
-    hidrive_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_sent_at", "Hidrive sent at"))
+    pdf_local_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_local_path", "Pdf local path"
+        ),
+    )
+    pdf_checksum_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_checksum_sha256", "Pdf checksum sha256"
+        ),
+    )
+    hidrive_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_path", "Hidrive path"
+        ),
+    )
+    hidrive_sent = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_sent", "Hidrive sent"
+        ),
+    )
+    hidrive_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_sent_at", "Hidrive sent at"
+        ),
+    )
     local_pdf_deleted_at = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name=db_gettext_lazy("administration.field_local_pdf_deleted_at", "Local pdf deleted at"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_local_pdf_deleted_at", "Local pdf deleted at"
+        ),
     )
     anonymization_deleted_at = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name=db_gettext_lazy("administration.field_anonymization_deleted_at", "Anonymization deleted at"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_anonymization_deleted_at", "Anonymization deleted at"
+        ),
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -373,25 +628,76 @@ class IntakeOutboxEvent(models.Model):
         IntakeDocumentVersion,
         on_delete=models.CASCADE,
         related_name="outbox_events",
-        verbose_name=db_gettext_lazy("administration.field_intake_document_version", "Intake document version"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_intake_document_version", "Intake document version"
+        ),
     )
-    aggregate_type = models.CharField(max_length=50, default="INTAKE_DOCUMENT_VERSION", verbose_name=db_gettext_lazy("administration.field_aggregate_type", "Aggregate type"))
-    aggregate_id = models.UUIDField(verbose_name=db_gettext_lazy("administration.field_aggregate_id", "Aggregate ID"))
-    event_type = models.CharField(max_length=40, choices=IntakeOutboxEventType.choices, verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"))
-    payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_payload_schema_version", "Payload schema version"))
-    payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_payload", "Payload"))
+    aggregate_type = models.CharField(
+        max_length=50,
+        default="INTAKE_DOCUMENT_VERSION",
+        verbose_name=db_gettext_lazy(
+            "administration.field_aggregate_type", "Aggregate type"
+        ),
+    )
+    aggregate_id = models.UUIDField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_aggregate_id", "Aggregate ID"
+        )
+    )
+    event_type = models.CharField(
+        max_length=40,
+        choices=IntakeOutboxEventType.choices,
+        verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"),
+    )
+    payload_schema_version = models.SmallIntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy(
+            "administration.field_payload_schema_version", "Payload schema version"
+        ),
+    )
+    payload = models.JSONField(
+        default=dict,
+        verbose_name=db_gettext_lazy("administration.field_payload", "Payload"),
+    )
     status = models.CharField(
         max_length=20,
         choices=IntakeOutboxStatus.choices,
         default=IntakeOutboxStatus.PENDING,
         verbose_name=db_gettext_lazy("administration.field_status", "Status"),
     )
-    retry_count = models.SmallIntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_retry_count", "Retry count"))
-    max_retries = models.SmallIntegerField(default=10, verbose_name=db_gettext_lazy("administration.field_max_retries", "Max retries"))
-    available_at = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_available_at", "Available at"))
-    locked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"))
-    processed_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_processed_at", "Processed at"))
-    error_message = models.TextField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_error_message", "Error message"))
+    retry_count = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy("administration.field_retry_count", "Retry count"),
+    )
+    max_retries = models.SmallIntegerField(
+        default=10,
+        verbose_name=db_gettext_lazy("administration.field_max_retries", "Max retries"),
+    )
+    available_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_available_at", "Available at"
+        ),
+    )
+    locked_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"),
+    )
+    processed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_processed_at", "Processed at"
+        ),
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_error_message", "Error message"
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -425,17 +731,29 @@ class IntakeOutboxEvent(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "available_at"]),
-            models.Index(fields=["event_type", "status", "retry_count", "available_at", "payload_schema_version"]),
+            models.Index(
+                fields=[
+                    "event_type",
+                    "status",
+                    "retry_count",
+                    "available_at",
+                    "payload_schema_version",
+                ]
+            ),
             models.Index(fields=["intake_document_version", "-created_at"]),
             models.Index(
                 fields=["status", "available_at"],
                 name="intake_outbox_pend_fail_idx",
-                condition=Q(status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]),
+                condition=Q(
+                    status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]
+                ),
             ),
             models.Index(
                 fields=["available_at", "created_at"],
                 name="intake_outbox_pf_order_idx",
-                condition=Q(status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]),
+                condition=Q(
+                    status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED]
+                ),
             ),
             GinIndex(
                 fields=["payload"],

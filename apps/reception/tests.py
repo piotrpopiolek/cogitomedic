@@ -17,7 +17,10 @@ from django.utils import timezone
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
-from apps.reception.admin import DailyQueueAdmin, _admin_resolve_dailyqueue_clinic_site_id
+from apps.reception.admin import (
+    DailyQueueAdmin,
+    _admin_resolve_dailyqueue_clinic_site_id,
+)
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -52,7 +55,9 @@ from apps.users.models import StaffUser
 
 
 def _purge_seed_clinic_data() -> None:
-    mod = importlib.import_module("apps.reception.migrations.0030_purge_seed_clinics_demo_muc")
+    mod = importlib.import_module(
+        "apps.reception.migrations.0030_purge_seed_clinics_demo_muc"
+    )
     mod.purge_seed_clinic_data(django_apps)
 
 
@@ -212,14 +217,14 @@ class ReceptionServicesTests(TestCase):
         assign_group_to_test_user(doctor_user, "Doctor")
         # Assign clinic to doctor
         doctor_user.clinic_sites.add(self.clinic)
-        
+
         # Create a patient assigned to self.clinic
         patient1 = Patient.objects.create(
             first_name="Test1",
             last_name="Test1",
             date_of_birth=date(1991, 1, 1),
             phone="+48111111111",
-            email="test1@example.com"
+            email="test1@example.com",
         )
         patient1.clinic_sites.add(self.clinic)
 
@@ -230,7 +235,7 @@ class ReceptionServicesTests(TestCase):
             last_name="Test2",
             date_of_birth=date(1991, 1, 1),
             phone="+48111111112",
-            email="test2@example.com"
+            email="test2@example.com",
         )
         patient2.clinic_sites.add(other_clinic)
 
@@ -238,7 +243,7 @@ class ReceptionServicesTests(TestCase):
         client.force_login(doctor_user)
         response = client.get("/api/v1/patients")
         self.assertEqual(response.status_code, 200)
-        
+
         items = response.json()["items"]
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], str(patient1.id))
@@ -269,7 +274,9 @@ class DailyQueueAdminImportTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Import pacjentów z pliku XLSX")
         self.assertContains(response, "Plik XLSX")
-        self.assertContains(response, "Import odczyta z pliku datę kolejki i nazwę placówki")
+        self.assertContains(
+            response, "Import odczyta z pliku datę kolejki i nazwę placówki"
+        )
 
 
 class DailyQueueAdminDoctorFilterTests(TestCase):
@@ -314,7 +321,9 @@ class DailyQueueAdminDoctorFilterTests(TestCase):
     def test_daily_queue_clean_requires_consulting_room_same_clinic_site(self) -> None:
         site_a = ClinicSite.objects.create(code="A", name="Site A")
         site_b = ClinicSite.objects.create(code="B", name="Site B")
-        room_b = ConsultingRoom.objects.create(clinic_site=site_b, code="RB", name="Room B")
+        room_b = ConsultingRoom.objects.create(
+            clinic_site=site_b, code="RB", name="Room B"
+        )
         user = StaffUser.objects.create_user(
             username="dq-clean",
             email="dq-clean@example.com",
@@ -343,17 +352,23 @@ class DailyQueueAdminDoctorFilterTests(TestCase):
         dq = DailyQueue.objects.create(
             queue_date=date(2026, 4, 2),
             clinic_site=site_b,
-            consulting_room=ConsultingRoom.objects.create(clinic_site=site_b, code="RPB", name="R B"),
+            consulting_room=ConsultingRoom.objects.create(
+                clinic_site=site_b, code="RPB", name="R B"
+            ),
             created_by_user=user,
         )
         request = RequestFactory().post(
             "/admin/reception/dailyqueue/change/",
             {"clinic_site": str(site_a.id)},
         )
-        self.assertEqual(_admin_resolve_dailyqueue_clinic_site_id(request, dq), site_a.id)
+        self.assertEqual(
+            _admin_resolve_dailyqueue_clinic_site_id(request, dq), site_a.id
+        )
 
         get_req = RequestFactory().get("/admin/reception/dailyqueue/change/")
-        self.assertEqual(_admin_resolve_dailyqueue_clinic_site_id(get_req, dq), site_b.id)
+        self.assertEqual(
+            _admin_resolve_dailyqueue_clinic_site_id(get_req, dq), site_b.id
+        )
 
 
 class XlsxImportParsingTests(TestCase):
@@ -391,7 +406,9 @@ class TabletWebLoginLastSeenTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(user, "Tablet")
-        device = TabletDevice.objects.create(android_id="web-login-android-seen", is_active=True)
+        device = TabletDevice.objects.create(
+            android_id="web-login-android-seen", is_active=True
+        )
         self.assertIsNone(device.last_seen_at)
         response = client.post(
             "/tablet/login/",
@@ -408,7 +425,9 @@ class TabletWebLoginLastSeenTests(TestCase):
 
 class TabletDeviceAutoRegistrationTests(TestCase):
     def test_auto_registered_tablet_device_has_no_default_clinic_site(self) -> None:
-        device, created = get_or_create_tablet_device_by_android_id(android_id="auto-reg-no-clinic")
+        device, created = get_or_create_tablet_device_by_android_id(
+            android_id="auto-reg-no-clinic"
+        )
         self.assertTrue(created)
         self.assertIsNone(device.clinic_site_id)
 
@@ -425,8 +444,12 @@ class TabletHomeClinicScopeTests(TestCase):
         assign_group_to_test_user(self.tablet_user, "Tablet")
         self.clinic_a = ClinicSite.objects.create(code="TH-A", name="Tablet Home A")
         self.clinic_b = ClinicSite.objects.create(code="TH-B", name="Tablet Home B")
-        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="THA-1", name="A1")
-        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="THB-1", name="B1")
+        self.room_a = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_a, code="THA-1", name="A1"
+        )
+        self.room_b = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_b, code="THB-1", name="B1"
+        )
         DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=self.clinic_a,
@@ -441,7 +464,9 @@ class TabletHomeClinicScopeTests(TestCase):
         )
         self.tablet_user.clinic_sites.add(self.clinic_a)
 
-    def test_tablet_home_without_device_session_is_scoped_to_assigned_clinics(self) -> None:
+    def test_tablet_home_without_device_session_is_scoped_to_assigned_clinics(
+        self,
+    ) -> None:
         self.client.force_login(self.tablet_user)
         response = self.client.get("/tablet/")
         self.assertEqual(response.status_code, 200)
@@ -466,13 +491,23 @@ class ReceptionDashboardScopeTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
-        self.clinic_a = ClinicSite.objects.create(code="RDSA", name="Reception Dashboard A")
-        self.clinic_b = ClinicSite.objects.create(code="RDSB", name="Reception Dashboard B")
-        self.room_a = ConsultingRoom.objects.create(clinic_site=self.clinic_a, code="RA", name="Room A")
-        self.room_b = ConsultingRoom.objects.create(clinic_site=self.clinic_b, code="RB", name="Room B")
+        self.clinic_a = ClinicSite.objects.create(
+            code="RDSA", name="Reception Dashboard A"
+        )
+        self.clinic_b = ClinicSite.objects.create(
+            code="RDSB", name="Reception Dashboard B"
+        )
+        self.room_a = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_a, code="RA", name="Room A"
+        )
+        self.room_b = ConsultingRoom.objects.create(
+            clinic_site=self.clinic_b, code="RB", name="Room B"
+        )
         self.reception_user.clinic_sites.add(self.clinic_a)
 
-    def _create_failed_outbox_event(self, *, clinic: ClinicSite, room: ConsultingRoom, suffix: str) -> OutboxEvent:
+    def _create_failed_outbox_event(
+        self, *, clinic: ClinicSite, room: ConsultingRoom, suffix: str
+    ) -> OutboxEvent:
         patient = Patient.objects.create(
             first_name=f"Dash{suffix}",
             last_name="Patient",
@@ -523,14 +558,25 @@ class ReceptionDashboardScopeTests(TestCase):
             error_message="failed",
         )
 
-    def test_reception_dashboard_outbox_errors_are_scoped_to_assigned_clinics(self) -> None:
-        event_in_scope = self._create_failed_outbox_event(clinic=self.clinic_a, room=self.room_a, suffix="11")
-        event_out_of_scope = self._create_failed_outbox_event(clinic=self.clinic_b, room=self.room_b, suffix="22")
+    def test_reception_dashboard_outbox_errors_are_scoped_to_assigned_clinics(
+        self,
+    ) -> None:
+        event_in_scope = self._create_failed_outbox_event(
+            clinic=self.clinic_a, room=self.room_a, suffix="11"
+        )
+        event_out_of_scope = self._create_failed_outbox_event(
+            clinic=self.clinic_b, room=self.room_b, suffix="22"
+        )
         self.client.force_login(self.reception_user)
         response = self.client.get(reverse("admin_reception_dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, str(event_in_scope.medical_document_version.medical_document_id))
-        self.assertNotContains(response, str(event_out_of_scope.medical_document_version.medical_document_id))
+        self.assertContains(
+            response, str(event_in_scope.medical_document_version.medical_document_id)
+        )
+        self.assertNotContains(
+            response,
+            str(event_out_of_scope.medical_document_version.medical_document_id),
+        )
 
 
 def _write_minimal_patient_xlsx(
@@ -572,13 +618,19 @@ class PatientXlsxImportTests(TestCase):
             password="safe-password",
             is_staff=True,
         )
-        self.clinic = ClinicSite.objects.create(code="XIIMP", name="Xlsx Import Test Clinic München")
-        self.room = ConsultingRoom.objects.create(clinic_site=self.clinic, code="XI1", name="Import room")
+        self.clinic = ClinicSite.objects.create(
+            code="XIIMP", name="Xlsx Import Test Clinic München"
+        )
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="XI1", name="Import room"
+        )
         self.clinic.pdf_import_default_consulting_room = self.room
         self.clinic.save(update_fields=["pdf_import_default_consulting_room"])
         self.import_day = date(2026, 6, 10)
 
-    def _run_import(self, data_rows: list[tuple[str, str, str, str, str]]) -> PatientImportBatch:
+    def _run_import(
+        self, data_rows: list[tuple[str, str, str, str, str]]
+    ) -> PatientImportBatch:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             path = Path(tmp.name)
         try:
@@ -593,7 +645,9 @@ class PatientXlsxImportTests(TestCase):
                 source_file_sha256="a" * 64,
                 created_by_user=self.user,
             )
-            process_patient_xlsx_import_batch(batch_id=batch.id, stored_file_path=str(path))
+            process_patient_xlsx_import_batch(
+                batch_id=batch.id, stored_file_path=str(path)
+            )
             batch.refresh_from_db()
             return batch
         finally:
@@ -621,6 +675,7 @@ class PatientXlsxImportTests(TestCase):
         )
         found = find_patient_for_import(phone="48111222302")
         self.assertIsNotNone(found)
+        assert found is not None
         self.assertEqual(found.id, p.id)
 
     def test_import_new_patient(self) -> None:
@@ -643,7 +698,15 @@ class PatientXlsxImportTests(TestCase):
             email="stary@example.com",
         )
         batch = self._run_import(
-            [("Inny", "Import", "15.05.1995", "+48 777 888 902", "nowyemail@example.com")],
+            [
+                (
+                    "Inny",
+                    "Import",
+                    "15.05.1995",
+                    "+48 777 888 902",
+                    "nowyemail@example.com",
+                )
+            ],
         )
         self.assertEqual(batch.status, ImportStatus.COMPLETED)
         self.assertEqual(Patient.objects.count(), 1)
@@ -670,13 +733,23 @@ class PatientXlsxImportTests(TestCase):
             anonymized_at=timezone.now(),
         )
         batch = self._run_import(
-            [("Powrot", "Pacjent", "10.10.1988", "+48 777 888 903", "powrot@example.com")],
+            [
+                (
+                    "Powrot",
+                    "Pacjent",
+                    "10.10.1988",
+                    "+48 777 888 903",
+                    "powrot@example.com",
+                )
+            ],
         )
         self.assertEqual(batch.status, ImportStatus.COMPLETED)
         self.assertEqual(batch.inserted_rows, 1)
         self.assertEqual(batch.matched_rows, 0)
         self.assertEqual(Patient.objects.count(), 2)
-        self.assertTrue(Patient.objects.filter(phone=normalize_phone("+48 777 888 903")).exists())
+        self.assertTrue(
+            Patient.objects.filter(phone=normalize_phone("+48 777 888 903")).exists()
+        )
 
     def test_import_duplicate_in_file(self) -> None:
         row = ("A", "B", "01.01.1991", "+48 777 888 904", "dup@example.com")
@@ -747,7 +820,9 @@ class PurgeSeedClinicDataTests(TestCase):
         )
         _purge_seed_clinic_data()
         self.assertFalse(ClinicSite.objects.filter(code="DEMO").exists())
-        self.assertFalse(Patient.objects.filter(doctolib_patient_id="DTL-2026-9999").exists())
+        self.assertFalse(
+            Patient.objects.filter(doctolib_patient_id="DTL-2026-9999").exists()
+        )
 
     def test_purge_keeps_non_seed_clinic_and_patients(self) -> None:
         real = ClinicSite.objects.create(code="BER", name="Real")

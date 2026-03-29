@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from django.db.models import Count, Max, Min, F, Sum, Q
+from django.db.models import Count, Min, F, Sum
 from django.utils import timezone
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client import Gauge
 
 from apps.integrations.hidrive.auth import get_hidrive_refresh_metrics
 from apps.outbox.models import OutboxEvent, OutboxStatus
-from apps.reception.models import PatientImportBatch, PatientImportError
+from apps.reception.models import PatientImportBatch
 
 # Typy zdarzeń outbox – używane do emisji serii „zerowych”, żeby metryka zawsze istniała w Prometheusie.
 OUTBOX_EVENT_TYPES = ("GENERATE_PDF", "HIDRIVE_UPLOAD", "SMS_SEND")
@@ -24,14 +24,16 @@ def build_metrics_payload() -> bytes:
         labelnames=["event_type", "status"],
         registry=registry,
     )
-    
+
     # Fast group by query; jeśli brak zdarzeń, emituj przynajmniej jedną serię 0, żeby metryka istniała.
     outbox_counts = list(
         OutboxEvent.objects.values("event_type", "status").annotate(count=Count("id"))
     )
     if outbox_counts:
         for row in outbox_counts:
-            outbox_events_total.labels(event_type=row["event_type"], status=row["status"]).set(row["count"])
+            outbox_events_total.labels(
+                event_type=row["event_type"], status=row["status"]
+            ).set(row["count"])
     else:
         outbox_events_total.labels(event_type="none", status="none").set(0)
 
@@ -42,17 +44,21 @@ def build_metrics_payload() -> bytes:
         labelnames=["event_type"],
         registry=registry,
     )
-    
+
     now = timezone.now()
     # Find oldest created_at for PENDING/FAILED per event_type
     oldest_events = (
-        OutboxEvent.objects.filter(status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED])
+        OutboxEvent.objects.filter(
+            status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED]
+        )
         .values("event_type")
         .annotate(oldest_created=Min("created_at"))
     )
     for row in oldest_events:
         age_seconds = (now - row["oldest_created"]).total_seconds()
-        outbox_pending_age.labels(event_type=row["event_type"]).set(max(0.0, age_seconds))
+        outbox_pending_age.labels(event_type=row["event_type"]).set(
+            max(0.0, age_seconds)
+        )
     if not oldest_events:
         outbox_pending_age.labels(event_type="none").set(0)
 
@@ -69,7 +75,7 @@ def build_metrics_payload() -> bytes:
         labelnames=["event_type"],
         registry=registry,
     )
-    
+
     durations = (
         OutboxEvent.objects.filter(
             status=OutboxStatus.PROCESSED,
@@ -78,8 +84,10 @@ def build_metrics_payload() -> bytes:
         )
         .values("event_type")
         .annotate(
-            total_time=Sum(F("processed_at") - F("medical_document_version__published_at")),
-            count=Count("id")
+            total_time=Sum(
+                F("processed_at") - F("medical_document_version__published_at")
+            ),
+            count=Count("id"),
         )
     )
     for row in durations:
@@ -99,7 +107,9 @@ def build_metrics_payload() -> bytes:
         labelnames=["status"],
         registry=registry,
     )
-    batch_counts = list(PatientImportBatch.objects.values("status").annotate(count=Count("id")))
+    batch_counts = list(
+        PatientImportBatch.objects.values("status").annotate(count=Count("id"))
+    )
     if batch_counts:
         for row in batch_counts:
             import_batches_total.labels(status=row["status"]).set(row["count"])
@@ -114,8 +124,7 @@ def build_metrics_payload() -> bytes:
         registry=registry,
     )
     row_stats = PatientImportBatch.objects.aggregate(
-        total_inserted=Sum("inserted_rows"),
-        total_error=Sum("error_rows")
+        total_inserted=Sum("inserted_rows"), total_error=Sum("error_rows")
     )
     import_rows_total.labels(status="inserted").set(row_stats["total_inserted"] or 0)
     import_rows_total.labels(status="error").set(row_stats["total_error"] or 0)
@@ -128,7 +137,9 @@ def build_metrics_payload() -> bytes:
         registry=registry,
     )
     refresh_stats = get_hidrive_refresh_metrics()
-    hidrive_refresh_total.labels(outcome="attempt").set(refresh_stats.get("attempt", 0.0))
+    hidrive_refresh_total.labels(outcome="attempt").set(
+        refresh_stats.get("attempt", 0.0)
+    )
     hidrive_refresh_total.labels(outcome="error").set(refresh_stats.get("error", 0.0))
 
     return generate_latest(registry)

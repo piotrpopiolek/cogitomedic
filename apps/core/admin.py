@@ -26,7 +26,13 @@ class TranslationKeyAdmin(UnfoldModelAdmin):
 
 @admin.register(TranslationValue)
 class TranslationValueAdmin(UnfoldModelAdmin):
-    list_display = ("translation_key", "language_code", "value_preview", "updated_by", "updated_at")
+    list_display = (
+        "translation_key",
+        "language_code",
+        "value_preview",
+        "updated_by",
+        "updated_at",
+    )
     list_filter = ("language_code", "translation_key__category", "value")
     ordering = ["-created_at"]
     search_fields = ("translation_key__key", "value")

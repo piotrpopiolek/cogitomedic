@@ -99,12 +99,16 @@ def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
         )
     if len(raw) > SIGNATURE_MAX_SIZE:
         raise InvalidSignatureError(
-            domain_message("other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE),
+            domain_message(
+                "other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE
+            ),
             api_message_key="other.domain.signature_payload_too_large",
             api_message_params={"max_bytes": SIGNATURE_MAX_SIZE},
         )
     checksum = hashlib.sha256(raw).hexdigest()
-    if (intake_form.signature_sha256 or "") and intake_form.signature_sha256 != checksum:
+    if (
+        intake_form.signature_sha256 or ""
+    ) and intake_form.signature_sha256 != checksum:
         raise InvalidSignatureError(
             domain_message("other.domain.intake_signature_checksum_mismatch"),
             api_message_key="other.domain.intake_signature_checksum_mismatch",
@@ -132,7 +136,9 @@ def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datetime) -> dict[str, Any]:
+def _build_intake_snapshot_payload(
+    *, intake_form: PatientIntakeForm, now: datetime
+) -> dict[str, Any]:
     session = intake_form.session
     queue_entry = intake_form.queue_entry
     patient = queue_entry.patient
@@ -153,7 +159,9 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
                 "version": definition.version,
                 "is_required": definition.is_required,
                 "accepted": consent.accepted,
-                "accepted_at": consent.accepted_at.isoformat() if consent.accepted_at else None,
+                "accepted_at": (
+                    consent.accepted_at.isoformat() if consent.accepted_at else None
+                ),
                 "title_de": definition.title_de,
                 "title_locale": _localized_text(
                     value_de=definition.title_de,
@@ -179,10 +187,14 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
     ]
     active_options_prefetch = Prefetch(
         "options",
-        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by("display_order", "code")
+        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by(
+            "display_order", "code"
+        ),
     )
     questions = (
-        AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(now.date()), code__in=question_codes)
+        AnamnesisQuestionDefinition.objects.filter(
+            _effective_question_filter(now.date()), code__in=question_codes
+        )
         .prefetch_related(active_options_prefetch)
         .order_by("-version")
     )
@@ -252,7 +264,11 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
             for option_code in selected_option_codes:
                 fallback = _humanize_code(option_code)
                 selected_options.append(
-                    {"option_code": option_code, "label_de": fallback, "label_locale": fallback}
+                    {
+                        "option_code": option_code,
+                        "label_de": fallback,
+                        "label_locale": fallback,
+                    }
                 )
                 all_options.append(
                     {
@@ -262,7 +278,9 @@ def _build_intake_snapshot_payload(*, intake_form: PatientIntakeForm, now: datet
                         "selected": True,
                     }
                 )
-        question_text_de = question.question_text_de if question else _humanize_code(question_code)
+        question_text_de = (
+            question.question_text_de if question else _humanize_code(question_code)
+        )
         question_text_locale = (
             _localized_text(
                 value_de=question.question_text_de,
@@ -329,7 +347,9 @@ def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
         selected_option_codes = answer.get("selected_option_codes")
         free_text = answer.get("free_text")
 
-        has_selected_options = isinstance(selected_option_codes, list) and len(selected_option_codes) > 0
+        has_selected_options = (
+            isinstance(selected_option_codes, list) and len(selected_option_codes) > 0
+        )
         has_free_text = isinstance(free_text, str) and bool(free_text.strip())
         if has_selected_options or has_free_text:
             answered_codes.add(question_code)
@@ -338,11 +358,19 @@ def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
 
 
 def _effective_consent_filter(today: date):
-    return Q(is_active=True) & Q(effective_from__lte=today) & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+    return (
+        Q(is_active=True)
+        & Q(effective_from__lte=today)
+        & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+    )
 
 
 def _effective_question_filter(today: date):
-    return Q(is_active=True) & Q(effective_from__lte=today) & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+    return (
+        Q(is_active=True)
+        & Q(effective_from__lte=today)
+        & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+    )
 
 
 def _assert_intake_form_clinic_scope(
@@ -374,20 +402,20 @@ def get_intake_form_context(
     For tablet_restrict_to_today=True (TABLET role), returns 404 when queue is not today.
     """
     today = timezone.now().date()
-    intake_form = (
-        PatientIntakeForm.objects.select_related(
-            "session",
-            "queue_entry",
-            "queue_entry__patient",
-            "queue_entry__daily_queue",
-        )
-        .get(id=intake_form_id)
-    )
+    intake_form = PatientIntakeForm.objects.select_related(
+        "session",
+        "queue_entry",
+        "queue_entry__patient",
+        "queue_entry__daily_queue",
+    ).get(id=intake_form_id)
     _assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if tablet_restrict_to_today and intake_form.queue_entry.daily_queue.queue_date != today:
+    if (
+        tablet_restrict_to_today
+        and intake_form.queue_entry.daily_queue.queue_date != today
+    ):
         raise ObjectDoesNotExist("Intake form queue is not from today.")
     session = intake_form.session
     queue_entry = intake_form.queue_entry
@@ -397,28 +425,46 @@ def get_intake_form_context(
     consent_defs = (
         ConsentDefinition.objects.filter(_effective_consent_filter(today))
         .order_by("display_order", "code")
-        .values("id", "code", "title_de", "title_en", "title_pl", "content_de", "content_en", "content_pl", "is_required")
+        .values(
+            "id",
+            "code",
+            "title_de",
+            "title_en",
+            "title_pl",
+            "content_de",
+            "content_en",
+            "content_pl",
+            "is_required",
+        )
     )
     consent_by_def_id = {
         c.consent_definition_id: c
-        for c in PatientIntakeConsent.objects.filter(intake_form_id=intake_form.id).select_related(
-            "consent_definition"
-        )
+        for c in PatientIntakeConsent.objects.filter(
+            intake_form_id=intake_form.id
+        ).select_related("consent_definition")
     }
     use_en = form_locale.startswith("en")
     use_pl = form_locale.startswith("pl")
     consents_payload = []
     ui = get_form_ui_strings(form_locale)
-    
+
     for cd in consent_defs:
         cd_id = cd["id"]
         pic = consent_by_def_id.get(cd_id)
         selected_option_codes = []
         if pic:
-            raw_codes = pic.selected_option_codes if isinstance(pic.selected_option_codes, list) else []
-            selected_option_codes = [str(x).strip().upper() for x in raw_codes if str(x).strip()]
+            raw_codes = (
+                pic.selected_option_codes
+                if isinstance(pic.selected_option_codes, list)
+                else []
+            )
+            selected_option_codes = [
+                str(x).strip().upper() for x in raw_codes if str(x).strip()
+            ]
             if not selected_option_codes and (pic.selected_option_code or "").strip():
-                selected_option_codes = [(pic.selected_option_code or "").strip().upper()]
+                selected_option_codes = [
+                    (pic.selected_option_code or "").strip().upper()
+                ]
         if use_en and (cd.get("title_en") or "").strip():
             title = cd["title_en"]
             content = (cd.get("content_en") or "").strip() or (cd["content_de"] or "")
@@ -427,12 +473,12 @@ def get_intake_form_context(
             content = (cd.get("content_pl") or "").strip() or (cd["content_de"] or "")
         else:
             title = cd["title_de"]
-            content = (cd["content_de"] or "")
-            
+            content = cd["content_de"] or ""
+
         options = []
         confirm_label = ""
         is_multi = False
-        
+
         if cd["code"] == CONTACT_METHOD_CONSENT_CODE:
             is_multi = True
             options = [
@@ -441,32 +487,36 @@ def get_intake_form_context(
                 {"code": "PHONE", "label": ui.get("contact_method_phone", "Telefon")},
             ]
         if cd["code"] == "DS_EINWILLIGUNG_ERGEBNISSES":
-            confirm_label = ui.get(
-                "consent_result_portal_agree",
-            )
+            confirm_label = ui.get("consent_result_portal_agree") or ""
         if cd["code"] == "PRAEVENTIONS_ERINNERUNGEN_EINWILLIGUNG":
-            confirm_label = ui.get(
-                "consent_contact_agree",
-            )
+            confirm_label = ui.get("consent_contact_agree") or ""
 
-        consents_payload.append({
-            "consent_definition_id": str(cd_id),
-            "code": cd["code"],
-            "title": title,
-            "content": content,
-            "is_required": cd["is_required"],
-            "accepted": pic.accepted if pic else False,
-            "accepted_at": pic.accepted_at.isoformat() if pic and pic.accepted_at else None,
-            "selected_option_codes": selected_option_codes,
-            "selected_option_code": selected_option_codes[0] if selected_option_codes else "",
-            "is_multi": is_multi,
-            "options": options,
-            "confirm_label": confirm_label,
-        })
+        consents_payload.append(
+            {
+                "consent_definition_id": str(cd_id),
+                "code": cd["code"],
+                "title": title,
+                "content": content,
+                "is_required": cd["is_required"],
+                "accepted": pic.accepted if pic else False,
+                "accepted_at": (
+                    pic.accepted_at.isoformat() if pic and pic.accepted_at else None
+                ),
+                "selected_option_codes": selected_option_codes,
+                "selected_option_code": (
+                    selected_option_codes[0] if selected_option_codes else ""
+                ),
+                "is_multi": is_multi,
+                "options": options,
+                "confirm_label": confirm_label,
+            }
+        )
 
     active_options_prefetch = Prefetch(
         "options",
-        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by("display_order", "code")
+        queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by(
+            "display_order", "code"
+        ),
     )
     # Anamnesis questions effective today with options; attach current answer from payload
     question_defs = (
@@ -475,7 +525,11 @@ def get_intake_form_context(
         .order_by("display_order", "code")
     )
     answers_raw = intake_form.anamnesis_payload.get("answers") or []
-    answer_by_code = {a.get("question_code"): a for a in answers_raw if isinstance(a, dict) and a.get("question_code")}
+    answer_by_code = {
+        a.get("question_code"): a
+        for a in answers_raw
+        if isinstance(a, dict) and a.get("question_code")
+    }
 
     def option_label(opt: AnamnesisOptionDefinition) -> str:
         if form_locale.startswith("de"):
@@ -495,20 +549,24 @@ def get_intake_form_context(
     for q in question_defs:
         if not q.is_active:
             continue
-        options = [{"option_code": o.code, "label": option_label(o)} for o in q.options.all()]
+        options = [
+            {"option_code": o.code, "label": option_label(o)} for o in q.options.all()
+        ]
         current = answer_by_code.get(q.code) or {}
         answer = {
             "selected_option_codes": current.get("selected_option_codes") or [],
             "free_text": current.get("free_text"),
         }
-        anamnesis_questions_payload.append({
-            "question_code": q.code,
-            "question_text": question_text(q),
-            "answer_type": q.answer_type,
-            "is_required": q.is_required,
-            "options": options,
-            "answer": answer,
-        })
+        anamnesis_questions_payload.append(
+            {
+                "question_code": q.code,
+                "question_text": question_text(q),
+                "answer_type": q.answer_type,
+                "is_required": q.is_required,
+                "options": options,
+                "answer": answer,
+            }
+        )
 
     # Patient (read-only for verification)
     patient_payload = {
@@ -570,7 +628,9 @@ def save_intake_body_map(
         raw.append(pt)
     intake_form.body_map_schema_version = body_map_schema_version
     intake_form.body_map_data = raw
-    intake_form.save(update_fields=["body_map_schema_version", "body_map_data", "updated_at"])
+    intake_form.save(
+        update_fields=["body_map_schema_version", "body_map_data", "updated_at"]
+    )
     return intake_form
 
 
@@ -589,7 +649,9 @@ def save_intake_consents(
     """
     today = timezone.now().date()
     effective_defs = list(
-        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values("id", "code")
+        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values(
+            "id", "code"
+        )
     )
     effective_ids = {row["id"] for row in effective_defs}
     consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
@@ -616,7 +678,9 @@ def save_intake_consents(
             cid = str(cdef_id)
             d = str(today)
             raise ConsentNotActiveError(
-                domain_message("other.domain.consent_definition_not_active", consent_id=cid, date=d),
+                domain_message(
+                    "other.domain.consent_definition_not_active", consent_id=cid, date=d
+                ),
                 api_message_key="other.domain.consent_definition_not_active",
                 api_message_params={"consent_id": cid, "date": d},
             )
@@ -638,7 +702,11 @@ def save_intake_consents(
                     domain_message("other.domain.intake_contact_method_required"),
                     api_message_key="other.domain.intake_contact_method_required",
                 )
-            invalid = [x for x in selected_option_codes if x not in CONTACT_METHOD_ALLOWED_OPTIONS]
+            invalid = [
+                x
+                for x in selected_option_codes
+                if x not in CONTACT_METHOD_ALLOWED_OPTIONS
+            ]
             if invalid:
                 raise DomainError(
                     domain_message("other.domain.intake_contact_method_invalid"),
@@ -659,8 +727,17 @@ def save_intake_consents(
         pic.accepted = accepted
         pic.accepted_at = now if accepted else None
         pic.selected_option_codes = selected_option_codes
-        pic.selected_option_code = selected_option_codes[0] if selected_option_codes else ""
-        pic.save(update_fields=["accepted", "accepted_at", "selected_option_code", "selected_option_codes"])
+        pic.selected_option_code = (
+            selected_option_codes[0] if selected_option_codes else ""
+        )
+        pic.save(
+            update_fields=[
+                "accepted",
+                "accepted_at",
+                "selected_option_code",
+                "selected_option_codes",
+            ]
+        )
 
     return intake_form
 
@@ -701,13 +778,13 @@ def save_intake_signature(
     data = signature_base64
     if "," in data:
         data = data.split(",", 1)[1]
-        
+
     if len(data) > SIGNATURE_MAX_SIZE * 1.4:
         raise InvalidSignatureError(
             domain_message("other.domain.signature_payload_too_large_before_decode"),
             api_message_key="other.domain.signature_payload_too_large_before_decode",
         )
-        
+
     try:
         raw = base64.b64decode(data, validate=True)
     except Exception:
@@ -722,7 +799,9 @@ def save_intake_signature(
         )
     if len(raw) > SIGNATURE_MAX_SIZE:
         raise InvalidSignatureError(
-            domain_message("other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE),
+            domain_message(
+                "other.domain.signature_payload_too_large", max_bytes=SIGNATURE_MAX_SIZE
+            ),
             api_message_key="other.domain.signature_payload_too_large",
             api_message_params={"max_bytes": SIGNATURE_MAX_SIZE},
         )
@@ -739,7 +818,9 @@ def save_intake_signature(
     sha256_hash = hashlib.sha256(raw).hexdigest()
     now = timezone.now()
     year_month = now.strftime("%Y/%m")
-    rel_dir = Path(getattr(settings, "SIGNATURES_RELATIVE_DIR", "signatures")) / year_month
+    rel_dir = (
+        Path(getattr(settings, "SIGNATURES_RELATIVE_DIR", "signatures")) / year_month
+    )
     dir_path = Path(settings.MEDIA_ROOT) / rel_dir
     dir_path.mkdir(parents=True, exist_ok=True)
     file_name = f"{intake_form_id}.png"
@@ -750,7 +831,9 @@ def save_intake_signature(
 
     intake_form.signature_file_path = relative_path
     intake_form.signature_sha256 = sha256_hash
-    intake_form.save(update_fields=["signature_file_path", "signature_sha256", "updated_at"])
+    intake_form.save(
+        update_fields=["signature_file_path", "signature_sha256", "updated_at"]
+    )
     return intake_form
 
 
@@ -772,21 +855,20 @@ def submit_patient_intake_form(
     - marks the active session as consumed;
     - updates queue entry state to PATIENT_COMPLETED.
     """
-    intake_form = (
-        PatientIntakeForm.objects.select_related(
-            "session",
-            "queue_entry",
-            "queue_entry__patient",
-            "queue_entry__daily_queue",
-        )
-        .get(id=intake_form_id)
-    )
+    intake_form = PatientIntakeForm.objects.select_related(
+        "session",
+        "queue_entry",
+        "queue_entry__patient",
+        "queue_entry__daily_queue",
+    ).get(id=intake_form_id)
     _assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
     session = intake_form.session
-    queue_entry = QueueEntry.objects.select_for_update().get(id=intake_form.queue_entry_id)
+    queue_entry = QueueEntry.objects.select_for_update().get(
+        id=intake_form.queue_entry_id
+    )
     now = submitted_at or timezone.now()
 
     if intake_form.form_status == IntakeStatus.SUBMITTED:
@@ -843,7 +925,9 @@ def submit_patient_intake_form(
             _effective_question_filter(today), is_required=True
         ).values_list("code", flat=True)
     )
-    answered_question_codes = _extract_answered_question_codes(intake_form.anamnesis_payload)
+    answered_question_codes = _extract_answered_question_codes(
+        intake_form.anamnesis_payload
+    )
     missing_question_codes = required_question_codes - answered_question_codes
     if missing_question_codes:
         raise RequiredAnamnesisMissingError(
@@ -922,7 +1006,9 @@ def submit_patient_intake_form(
             "intake_document_version_id": str(intake_version.id),
             "queue_entry_id": str(queue_entry.id),
             "patient_id": str(queue_entry.patient_id),
-            "submitted_by_user_id": str(submitted_by_user_id) if submitted_by_user_id else None,
+            "submitted_by_user_id": (
+                str(submitted_by_user_id) if submitted_by_user_id else None
+            ),
         },
     )
 
@@ -958,5 +1044,7 @@ def save_intake_anamnesis_payload(
         "schema_version": anamnesis_schema_version,
         "answers": answers_payload,
     }
-    intake_form.save(update_fields=["anamnesis_schema_version", "anamnesis_payload", "updated_at"])
+    intake_form.save(
+        update_fields=["anamnesis_schema_version", "anamnesis_payload", "updated_at"]
+    )
     return intake_form

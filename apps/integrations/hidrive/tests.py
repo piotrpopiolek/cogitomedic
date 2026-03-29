@@ -5,7 +5,10 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from apps.integrations.hidrive.auth import HiDriveOAuthClient, get_hidrive_refresh_metrics
+from apps.integrations.hidrive.auth import (
+    HiDriveOAuthClient,
+    get_hidrive_refresh_metrics,
+)
 from apps.integrations.hidrive.client import get_hidrive_adapter
 
 
@@ -18,7 +21,9 @@ class HiDriveAuthTests(SimpleTestCase):
         HIDRIVE_TIMEOUT_SECONDS=7,
     )
     @patch("apps.integrations.hidrive.auth.requests.post")
-    def test_refresh_access_token_uses_refresh_token_grant(self, post_mock: Mock) -> None:
+    def test_refresh_access_token_uses_refresh_token_grant(
+        self, post_mock: Mock
+    ) -> None:
         response = Mock()
         response.status_code = 200
         response.json.return_value = {
@@ -45,7 +50,9 @@ class HiDriveAuthTests(SimpleTestCase):
         HIDRIVE_TIMEOUT_SECONDS=7,
     )
     @patch("apps.integrations.hidrive.auth.requests.post")
-    def test_cached_access_token_skips_extra_refresh_until_forced(self, post_mock: Mock) -> None:
+    def test_cached_access_token_skips_extra_refresh_until_forced(
+        self, post_mock: Mock
+    ) -> None:
         response = Mock()
         response.status_code = 200
         response.json.return_value = {
@@ -70,7 +77,10 @@ class HiDriveAdapterTests(TestCase):
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_mock_adapter_does_not_require_existing_file(self) -> None:
         adapter = get_hidrive_adapter()
-        adapter.upload(remote_path="/hidrive/patients/p/a.pdf", local_path=Path("/not-existing.pdf"))
+        adapter.upload(
+            remote_path="/hidrive/patients/p/a.pdf",
+            local_path=Path("/not-existing.pdf"),
+        )
 
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.put")
@@ -111,7 +121,9 @@ class HiDriveAdapterTests(TestCase):
         adapter.upload(remote_path="/hidrive/patients/p/a.pdf", local_path=temp_file)
 
         self.assertEqual(put_mock.call_count, 2)
-        created_paths = [call.kwargs["params"]["path"] for call in post_mock.call_args_list]
+        created_paths = [
+            call.kwargs["params"]["path"] for call in post_mock.call_args_list
+        ]
         self.assertNotIn("/users", created_paths)
         self.assertNotIn("/users/cogitomedica", created_paths)
         self.assertIn("/users/cogitomedica/hidrive", created_paths)

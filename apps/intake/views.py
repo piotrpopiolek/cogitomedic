@@ -29,7 +29,10 @@ def _is_reception_or_admin(request: HttpRequest) -> bool:
     return bool(
         user
         and user.is_authenticated
-        and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False))
+        and (
+            getattr(user, "is_admin_role", False)
+            or getattr(user, "is_reception", False)
+        )
     )
 
 
@@ -72,10 +75,12 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
     page = params["page"]
     page_size = params["page_size"]
     get_copy = request.GET.copy()
+
     def pagination_url(p: int) -> str:
         q = get_copy.copy()
         q["page"] = p
         return "?" + q.urlencode()
+
     previous_page_url = pagination_url(page - 1) if page > 1 else None
     next_page_url = pagination_url(page + 1) if page * page_size < total else None
 
@@ -117,13 +122,17 @@ def intake_document_detail_view(request: HttpRequest, version_id: UUID) -> HttpR
         ).get(id=version_id)
     except IntakeDocumentVersion.DoesNotExist:
         context = {**admin.site.each_context(request), "not_found": True}
-        return TemplateResponse(request, "admin/intake/document_detail.html", context, status=404)
+        return TemplateResponse(
+            request, "admin/intake/document_detail.html", context, status=404
+        )
 
     try:
         check_intake_document_access(version, request.user)
     except ObjectDoesNotExist:
         context = {**admin.site.each_context(request), "not_found": True}
-        return TemplateResponse(request, "admin/intake/document_detail.html", context, status=404)
+        return TemplateResponse(
+            request, "admin/intake/document_detail.html", context, status=404
+        )
 
     detail = get_intake_document_detail(version)
     preview_pdf_url = reverse(

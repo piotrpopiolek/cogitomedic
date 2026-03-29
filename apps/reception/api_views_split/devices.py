@@ -5,7 +5,6 @@ from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
@@ -20,7 +19,10 @@ from apps.core.api_utils import (
     require_user_role,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
-from apps.reception.api_schemas import CreateTabletDeviceRequest, UpdateTabletDeviceRequest
+from apps.reception.api_schemas import (
+    CreateTabletDeviceRequest,
+    UpdateTabletDeviceRequest,
+)
 from apps.reception.models import TabletDevice
 from apps.reception.services import (
     create_tablet_device,
@@ -30,22 +32,27 @@ from apps.reception.services import (
 )
 
 
-
 def _serialize_tablet_device(device: TabletDevice) -> dict:
     return {
         "id": str(device.id),
         "android_id": device.android_id,
         "is_active": device.is_active,
-        "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
+        "last_seen_at": (
+            device.last_seen_at.isoformat() if device.last_seen_at else None
+        ),
         "created_at": device.created_at.isoformat(),
         "clinic_site_id": str(device.clinic_site_id) if device.clinic_site_id else None,
     }
 
 
-def _is_device_in_scope(*, device: TabletDevice, scoped_clinic_site_ids: list[UUID] | None) -> bool:
+def _is_device_in_scope(
+    *, device: TabletDevice, scoped_clinic_site_ids: list[UUID] | None
+) -> bool:
     if scoped_clinic_site_ids is None:
         return True
-    return bool(device.clinic_site_id and device.clinic_site_id in scoped_clinic_site_ids)
+    return bool(
+        device.clinic_site_id and device.clinic_site_id in scoped_clinic_site_ids
+    )
 
 
 @require_auth
@@ -67,7 +74,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(android_id__icontains=search)
         limit = parse_list_limit(request.GET.get("limit"))
-        return JsonResponse({"items": [_serialize_tablet_device(device) for device in qs[:limit]]})
+        return JsonResponse(
+            {"items": [_serialize_tablet_device(device) for device in qs[:limit]]}
+        )
 
     if request.method == "POST":
         try:
@@ -77,7 +86,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
         if (
             scoped_clinic_site_ids is not None
@@ -99,7 +110,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
+def tablet_device_detail_view(
+    request: HttpRequest, tablet_device_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
         return role_error
@@ -110,7 +123,9 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     except ObjectDoesNotExist:
         return json_error("other.api.tablet_device_not_found", status=404)
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
-    if not _is_device_in_scope(device=device, scoped_clinic_site_ids=scoped_clinic_site_ids):
+    if not _is_device_in_scope(
+        device=device, scoped_clinic_site_ids=scoped_clinic_site_ids
+    ):
         return json_error("other.api.tablet_device_not_found", status=404)
     if request.method == "GET":
         return JsonResponse(_serialize_tablet_device(device))
@@ -128,7 +143,9 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
     update_kwargs = {
         "tablet_device_id": tablet_device_id,
         "android_id": body.android_id,
@@ -154,7 +171,9 @@ def tablet_device_detail_view(request: HttpRequest, tablet_device_id: UUID) -> J
 
 
 @require_auth
-def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -> JsonResponse:
+def tablet_device_heartbeat_view(
+    request: HttpRequest, tablet_device_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
     if role_error:
         return role_error
@@ -165,7 +184,9 @@ def tablet_device_heartbeat_view(request: HttpRequest, tablet_device_id: UUID) -
     except ObjectDoesNotExist:
         return json_error("other.api.tablet_device_not_found", status=404)
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
-    if not _is_device_in_scope(device=device, scoped_clinic_site_ids=scoped_clinic_site_ids):
+    if not _is_device_in_scope(
+        device=device, scoped_clinic_site_ids=scoped_clinic_site_ids
+    ):
         return json_error("other.api.tablet_device_not_found", status=404)
     device = mark_tablet_heartbeat(tablet_device_id=tablet_device_id)
     return JsonResponse({"last_seen_at": device.last_seen_at.isoformat()})

@@ -15,7 +15,9 @@ except ImportError:
 def _validate_groups_not_empty(groups) -> None:
     if not groups:
         raise ValidationError(
-            db_gettext_lazy("administration.error_at_least_one_group", "Select at least one group.")
+            db_gettext_lazy(
+                "administration.error_at_least_one_group", "Select at least one group."
+            )
         )
 
 
@@ -27,7 +29,9 @@ class StaffUserChangeForm(UserChangeForm):
         super().__init__(*args, **kwargs)
         if "groups" in self.fields:
             self.fields["groups"].required = True
-            self.fields["groups"].label = db_gettext_lazy("administration.field_groups", "Groups")
+            self.fields["groups"].label = db_gettext_lazy(
+                "administration.field_groups", "Groups"
+            )
 
     def clean_groups(self):
         groups = self.cleaned_data.get("groups")
@@ -54,7 +58,9 @@ class StaffUserCreationForm(BaseUserCreationForm):
         super().__init__(*args, **kwargs)
         if "groups" in self.fields:
             self.fields["groups"].required = True
-            self.fields["groups"].label = db_gettext_lazy("administration.field_groups", "Groups")
+            self.fields["groups"].label = db_gettext_lazy(
+                "administration.field_groups", "Groups"
+            )
 
     def clean_groups(self):
         groups = self.cleaned_data.get("groups")

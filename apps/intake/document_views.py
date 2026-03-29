@@ -86,16 +86,13 @@ def intake_document_detail_view(
         return json_error("other.api.method_not_allowed", status=405)
 
     try:
-        version = (
-            IntakeDocumentVersion.objects.select_related(
-                "intake_form",
-                "intake_form__queue_entry",
-                "intake_form__queue_entry__patient",
-                "intake_form__queue_entry__daily_queue",
-                "intake_form__queue_entry__daily_queue__clinic_site",
-            )
-            .get(id=intake_document_version_id)
-        )
+        version = IntakeDocumentVersion.objects.select_related(
+            "intake_form",
+            "intake_form__queue_entry",
+            "intake_form__queue_entry__patient",
+            "intake_form__queue_entry__daily_queue",
+            "intake_form__queue_entry__daily_queue__clinic_site",
+        ).get(id=intake_document_version_id)
     except ObjectDoesNotExist:
         return json_error("other.api.intake_document_not_found", status=404)
     try:
@@ -128,14 +125,11 @@ def intake_document_preview_pdf_view(
         return json_error("other.api.method_not_allowed", status=405)
 
     try:
-        version = (
-            IntakeDocumentVersion.objects.select_related(
-                "intake_form",
-                "intake_form__queue_entry",
-                "intake_form__queue_entry__daily_queue",
-            )
-            .get(id=intake_document_version_id)
-        )
+        version = IntakeDocumentVersion.objects.select_related(
+            "intake_form",
+            "intake_form__queue_entry",
+            "intake_form__queue_entry__daily_queue",
+        ).get(id=intake_document_version_id)
     except ObjectDoesNotExist:
         return json_error("other.api.intake_document_not_found", status=404)
     try:
@@ -143,7 +137,10 @@ def intake_document_preview_pdf_view(
     except ObjectDoesNotExist:
         return json_error("other.api.intake_document_not_found", status=404)
 
-    if version.pdf_generation_status != IntakePdfStatus.COMPLETED or not version.pdf_local_path:
+    if (
+        version.pdf_generation_status != IntakePdfStatus.COMPLETED
+        or not version.pdf_local_path
+    ):
         return json_error("other.api.pdf_not_generated", status=404)
     try:
         pdf_bytes = read_intake_pdf_bytes(version)

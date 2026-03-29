@@ -38,7 +38,6 @@ from apps.reception.services import (
 )
 
 
-
 def _serialize_clinic_site(site: ClinicSite) -> dict:
     return {
         "id": str(site.id),
@@ -88,7 +87,9 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
         limit = parse_list_limit(request.GET.get("limit"))
-        return JsonResponse({"items": [_serialize_clinic_site(site) for site in qs[:limit]]})
+        return JsonResponse(
+            {"items": [_serialize_clinic_site(site) for site in qs[:limit]]}
+        )
 
     if request.method == "POST":
         if not request.user.is_admin_role:
@@ -100,7 +101,9 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         try:
             site = create_clinic_site(
                 code=body.code,
@@ -120,7 +123,9 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"}
+    )
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -151,7 +156,9 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
     fields_set = body.model_fields_set
     try:
         site = update_clinic_site(
@@ -204,7 +211,9 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
         limit = parse_list_limit(request.GET.get("limit"))
-        return JsonResponse({"items": [_serialize_consulting_room(room) for room in qs[:limit]]})
+        return JsonResponse(
+            {"items": [_serialize_consulting_room(room) for room in qs[:limit]]}
+        )
 
     if request.method == "POST":
         if not request.user.is_admin_role:
@@ -216,7 +225,9 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         try:
             room = create_consulting_room(
                 clinic_site_id=body.clinic_site_id,
@@ -234,8 +245,12 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
+def consulting_room_detail_view(
+    request: HttpRequest, consulting_room_id: UUID
+) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"}
+    )
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -265,7 +280,9 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
     try:
         room = update_consulting_room(
             consulting_room_id=consulting_room_id,
@@ -275,7 +292,9 @@ def consulting_room_detail_view(request: HttpRequest, consulting_room_id: UUID) 
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
-        return json_error("other.api.clinic_site_or_consulting_room_not_found", status=404)
+        return json_error(
+            "other.api.clinic_site_or_consulting_room_not_found", status=404
+        )
     except DomainError as exc:
         return json_domain_error(exc, status=400)
     except IntegrityError:

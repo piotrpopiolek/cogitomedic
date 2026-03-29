@@ -12,12 +12,15 @@ from django.utils import timezone
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.core.retention_payloads import ANONYMIZED_INTAKE_SNAPSHOT
-from apps.intake.models import IntakeDocumentVersion, PatientIntakeConsent, PatientIntakeForm
+from apps.intake.models import (
+    IntakeDocumentVersion,
+    PatientIntakeConsent,
+    PatientIntakeForm,
+)
 from apps.medical.models import MedicalDocumentVersion
 from apps.operations.services import create_audit_event
 from apps.outbox.services import _try_delete_file
 from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
-
 
 _TERMINAL_QUEUE_STATUSES = frozenset(
     {
@@ -78,7 +81,9 @@ def _delete_signature_files(patient_id: uuid.UUID) -> None:
     )
     for p in paths:
         _try_delete_file(p)
-    PatientIntakeForm.objects.filter(queue_entry__patient_id=patient_id).update(signature_file_path=None)
+    PatientIntakeForm.objects.filter(queue_entry__patient_id=patient_id).update(
+        signature_file_path=None
+    )
 
 
 @transaction.atomic

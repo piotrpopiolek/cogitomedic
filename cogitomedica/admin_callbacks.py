@@ -1,4 +1,5 @@
 """Callbacks dla Unfold admin (dashboard, etykieta środowiska)."""
+
 from django.conf import settings
 
 

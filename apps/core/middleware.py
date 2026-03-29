@@ -1,7 +1,8 @@
 """Middleware for core app."""
+
 from __future__ import annotations
 
-from apps.core.translation_service import get_current_request, set_current_request
+from apps.core.translation_service import set_current_request
 
 
 class CsrfTrustTunnelOriginMiddleware:

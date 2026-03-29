@@ -27,7 +27,12 @@ from apps.outbox.api_schemas import (
 )
 from apps.outbox.models import OutboxEvent
 from apps.intake.retention_services import run_intake_retention_cleanup
-from apps.outbox.services import process_outbox_events, retry_outbox_event, run_retention_cleanup
+from apps.outbox.services import (
+    process_outbox_events,
+    retry_outbox_event,
+    run_retention_cleanup,
+)
+
 
 @require_auth
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
@@ -39,7 +44,9 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
 
     raw_retry_count_gte = request.GET.get("retry_count_gte")
     try:
-        retry_count_gte = int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
+        retry_count_gte = (
+            int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
+        )
     except ValueError:
         return json_error("other.api.retry_count_gte_integer", status=400)
     limit = parse_list_limit(request.GET.get("limit"))
@@ -54,7 +61,9 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
             }
         )
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     qs = OutboxEvent.objects.select_related(
         "medical_document_version__medical_document__queue_entry__daily_queue"
@@ -78,7 +87,9 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
             "status": event.status,
             "retry_count": event.retry_count,
             "max_retries": event.max_retries,
-            "available_at": event.available_at.isoformat() if event.available_at else None,
+            "available_at": (
+                event.available_at.isoformat() if event.available_at else None
+            ),
             "error_message": event.error_message,
         }
         for event in qs
@@ -101,7 +112,9 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     create_audit_event(
         event_type="OPERATIONS_OUTBOX_BATCH_TRIGGERED",
@@ -123,7 +136,9 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> JsonResponse:
+def outbox_event_retry_view(
+    request: HttpRequest, outbox_event_id: UUID
+) -> JsonResponse:
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
@@ -137,7 +152,9 @@ def outbox_event_retry_view(request: HttpRequest, outbox_event_id: UUID) -> Json
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     try:
         event = OutboxEvent.objects.select_related(
@@ -187,7 +204,9 @@ def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     create_audit_event(
         event_type="OPERATIONS_RETENTION_RUN_TRIGGERED",

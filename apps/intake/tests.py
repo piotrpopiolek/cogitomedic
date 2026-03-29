@@ -148,23 +148,29 @@ class SubmitPatientIntakeFormTests(TestCase):
             ).prefetch_related("options")
         )
         answers = list(self.intake_form.anamnesis_payload.get("answers", []))
-        answered_codes = {a.get("question_code") for a in answers if a.get("question_code")}
+        answered_codes = {
+            a.get("question_code") for a in answers if a.get("question_code")
+        }
         for q in required:
             if q.code in answered_codes:
                 continue
             first_option = next(iter(q.options.order_by("display_order")), None)
             if first_option:
-                answers.append({
-                    "question_code": q.code,
-                    "selected_option_codes": [first_option.code],
-                    "free_text": None,
-                })
+                answers.append(
+                    {
+                        "question_code": q.code,
+                        "selected_option_codes": [first_option.code],
+                        "free_text": None,
+                    }
+                )
             else:
-                answers.append({
-                    "question_code": q.code,
-                    "selected_option_codes": [],
-                    "free_text": "–",
-                })
+                answers.append(
+                    {
+                        "question_code": q.code,
+                        "selected_option_codes": [],
+                        "free_text": "–",
+                    }
+                )
         self.intake_form.anamnesis_payload = {"schema_version": 1, "answers": answers}
         self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
 
@@ -181,7 +187,9 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertEqual(submitted.form_status, IntakeStatus.SUBMITTED)
         self.assertIsNotNone(submitted.submitted_at)
         self.assertIsNotNone(self.session.consumed_at)
-        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED)
+        self.assertEqual(
+            self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED
+        )
         self.assertTrue(
             AuditEvent.objects.filter(
                 event_type="INTAKE_SUBMITTED",
@@ -197,11 +205,15 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
         self.assertEqual(event.status, IntakeOutboxStatus.PENDING)
 
-    def test_submit_patient_intake_form_raises_when_required_consent_missing(self) -> None:
+    def test_submit_patient_intake_form_raises_when_required_consent_missing(
+        self,
+    ) -> None:
         with self.assertRaises(RequiredConsentMissingError):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
-    def test_submit_patient_intake_form_raises_when_required_anamnesis_missing(self) -> None:
+    def test_submit_patient_intake_form_raises_when_required_anamnesis_missing(
+        self,
+    ) -> None:
         self._accept_all_required_consents_effective_today()
         self.intake_form.anamnesis_payload = {"schema_version": 1, "answers": []}
         self.intake_form.save(update_fields=["anamnesis_payload", "updated_at"])
@@ -224,7 +236,9 @@ class SubmitPatientIntakeFormTests(TestCase):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
 
     @override_settings(HIDRIVE_USE_MOCK="1")
-    def test_process_intake_outbox_events_generates_pdf_and_hidrive_upload(self) -> None:
+    def test_process_intake_outbox_events_generates_pdf_and_hidrive_upload(
+        self,
+    ) -> None:
         self._accept_all_required_consents_effective_today()
         self._ensure_all_required_questions_answered_today()
         submitted = submit_patient_intake_form(intake_form_id=self.intake_form.id)
@@ -249,9 +263,14 @@ class SubmitPatientIntakeFormTests(TestCase):
         self._ensure_all_required_questions_answered_today()
         submit_patient_intake_form(intake_form_id=self.intake_form.id)
         submit_patient_intake_form(intake_form_id=self.intake_form.id)
-        self.assertEqual(IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(), 1)
+        self.assertEqual(
+            IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).count(),
+            1,
+        )
 
-    def test_read_signature_data_url_rejects_file_extension_content_mismatch(self) -> None:
+    def test_read_signature_data_url_rejects_file_extension_content_mismatch(
+        self,
+    ) -> None:
         signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
         signature_dir.mkdir(parents=True, exist_ok=True)
         bad_signature_path = signature_dir / f"{self.queue_entry.id}-bad.jpg"
@@ -259,7 +278,9 @@ class SubmitPatientIntakeFormTests(TestCase):
         bad_signature_path.write_bytes(png_bytes)
         self.intake_form.signature_file_path = str(bad_signature_path)
         self.intake_form.signature_sha256 = hashlib.sha256(png_bytes).hexdigest()
-        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256", "updated_at"])
+        self.intake_form.save(
+            update_fields=["signature_file_path", "signature_sha256", "updated_at"]
+        )
 
         with self.assertRaises(InvalidSignatureError):
             _read_signature_data_url(self.intake_form)
@@ -268,10 +289,16 @@ class SubmitPatientIntakeFormTests(TestCase):
         signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
         signature_dir.mkdir(parents=True, exist_ok=True)
         huge_signature_path = signature_dir / f"{self.queue_entry.id}-huge.png"
-        huge_signature_path.write_bytes(b"\x89PNG\r\n\x1a\n" + (b"a" * (SIGNATURE_MAX_SIZE + 1)))
+        huge_signature_path.write_bytes(
+            b"\x89PNG\r\n\x1a\n" + (b"a" * (SIGNATURE_MAX_SIZE + 1))
+        )
         self.intake_form.signature_file_path = str(huge_signature_path)
-        self.intake_form.signature_sha256 = hashlib.sha256(huge_signature_path.read_bytes()).hexdigest()
-        self.intake_form.save(update_fields=["signature_file_path", "signature_sha256", "updated_at"])
+        self.intake_form.signature_sha256 = hashlib.sha256(
+            huge_signature_path.read_bytes()
+        ).hexdigest()
+        self.intake_form.save(
+            update_fields=["signature_file_path", "signature_sha256", "updated_at"]
+        )
 
         with self.assertRaises(InvalidSignatureError):
             _read_signature_data_url(self.intake_form)

@@ -7,15 +7,22 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import DocVersionStatus, MedicalDocument, MedicalDocStatus
-from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.medical.models import DocVersionStatus, MedicalDocStatus
+from apps.medical.services import (
+    create_or_get_medical_document,
+    publish_document_version,
+    save_draft_document_version,
+)
 from apps.operations.models import AuditEvent
 from apps.operations.services import REF_KEY
 from apps.outbox.models import OutboxEvent, OutboxEventType
 from django.core.exceptions import ObjectDoesNotExist
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.medical.services import check_doctor_document_access, check_doctor_queue_entry_access
+from apps.medical.services import (
+    check_doctor_document_access,
+    check_doctor_queue_entry_access,
+)
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -38,7 +45,7 @@ class MedicalServicesTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.doctor_user, "Doctor")
-        
+
         self.reception_user = StaffUser.objects.create_user(
             username="reception1",
             email="reception1@example.com",
@@ -113,11 +120,18 @@ class MedicalServicesTests(TestCase):
             medical_document_id=self.medical_document.id,
         ).first()
         self.assertIsNotNone(audit)
-        self.assertEqual(audit.context_clinic_site_id, self.queue_entry.daily_queue.clinic_site_id)
+        self.assertEqual(
+            audit.context_clinic_site_id, self.queue_entry.daily_queue.clinic_site_id
+        )
         ref = audit.metadata.get(REF_KEY) or {}
-        self.assertEqual(ref.get("patient_id"), str(self.medical_document.queue_entry.patient_id))
+        self.assertEqual(
+            ref.get("patient_id"), str(self.medical_document.queue_entry.patient_id)
+        )
         self.assertEqual(ref.get("medical_document_id"), str(self.medical_document.id))
-        self.assertEqual(ref.get("context_clinic_site_id"), str(self.queue_entry.daily_queue.clinic_site_id))
+        self.assertEqual(
+            ref.get("context_clinic_site_id"),
+            str(self.queue_entry.daily_queue.clinic_site_id),
+        )
 
     def test_save_draft_document_version_updates_existing_draft(self) -> None:
         first = save_draft_document_version(
@@ -209,7 +223,9 @@ class MedicalServicesTests(TestCase):
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(
-            OutboxEvent.objects.filter(medical_document_version=first, event_type=OutboxEventType.GENERATE_PDF).count(),
+            OutboxEvent.objects.filter(
+                medical_document_version=first, event_type=OutboxEventType.GENERATE_PDF
+            ).count(),
             1,
         )
 
@@ -242,7 +258,6 @@ class MedicalServicesTests(TestCase):
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(self.medical_document.versions.count(), 1)
-
 
     def test_check_doctor_document_access_allows_author(self) -> None:
         # doctor_user is the author of self.medical_document
@@ -285,11 +300,11 @@ class MedicalServicesTests(TestCase):
         # Initial state: queue has no assigned_doctor
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
-            
+
         # Assign to queue
         self.queue_entry.daily_queue.assigned_doctor = self.doctor_user
         self.queue_entry.daily_queue.save()
-        
+
         # Now it works
         check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
 
@@ -301,7 +316,9 @@ class LesionGroupFavoritesAdminTests(TestCase):
         from apps.medical.widgets import LesionGroupFavoritesWidget
 
         w = LesionGroupFavoritesWidget()
-        html = w.render("lesion_group_favorites", [], {"id": "id_lesion_group_favorites"})
+        html = w.render(
+            "lesion_group_favorites", [], {"id": "id_lesion_group_favorites"}
+        )
         self.assertIn('name="lesion_group_favorites"', html)
         self.assertIn("id_lesion_group_favorites", html)
         self.assertIn("lesionGroupFavoritesWidget", html)

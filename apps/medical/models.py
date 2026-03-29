@@ -12,20 +12,36 @@ from apps.users.models import StaffUserPreferredLocale
 
 
 class MedicalDocStatus(models.TextChoices):
-    DRAFT = "DRAFT", db_gettext_lazy("administration.choice_medical_doc_status_draft", "Draft")
-    PUBLISHED = "PUBLISHED", db_gettext_lazy("administration.choice_medical_doc_status_published", "Published")
+    DRAFT = "DRAFT", db_gettext_lazy(
+        "administration.choice_medical_doc_status_draft", "Draft"
+    )
+    PUBLISHED = "PUBLISHED", db_gettext_lazy(
+        "administration.choice_medical_doc_status_published", "Published"
+    )
 
 
 class DocVersionStatus(models.TextChoices):
-    DRAFT = "DRAFT", db_gettext_lazy("administration.choice_doc_version_status_draft", "Draft")
-    PUBLISHED = "PUBLISHED", db_gettext_lazy("administration.choice_doc_version_status_published", "Published")
+    DRAFT = "DRAFT", db_gettext_lazy(
+        "administration.choice_doc_version_status_draft", "Draft"
+    )
+    PUBLISHED = "PUBLISHED", db_gettext_lazy(
+        "administration.choice_doc_version_status_published", "Published"
+    )
 
 
 class PdfStatus(models.TextChoices):
-    PENDING = "PENDING", db_gettext_lazy("administration.choice_medical_pdf_status_pending", "Pending")
-    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_medical_pdf_status_processing", "Processing")
-    COMPLETED = "COMPLETED", db_gettext_lazy("administration.choice_medical_pdf_status_completed", "Completed")
-    FAILED = "FAILED", db_gettext_lazy("administration.choice_medical_pdf_status_failed", "Failed")
+    PENDING = "PENDING", db_gettext_lazy(
+        "administration.choice_medical_pdf_status_pending", "Pending"
+    )
+    PROCESSING = "PROCESSING", db_gettext_lazy(
+        "administration.choice_medical_pdf_status_processing", "Processing"
+    )
+    COMPLETED = "COMPLETED", db_gettext_lazy(
+        "administration.choice_medical_pdf_status_completed", "Completed"
+    )
+    FAILED = "FAILED", db_gettext_lazy(
+        "administration.choice_medical_pdf_status_failed", "Failed"
+    )
 
 
 class MedicalDocument(models.Model):
@@ -42,14 +58,32 @@ class MedicalDocument(models.Model):
         related_name="medical_document",
         verbose_name=db_gettext_lazy("administration.field_intake_form", "Intake form"),
     )
-    status = models.CharField(max_length=20, choices=MedicalDocStatus.choices, default=MedicalDocStatus.DRAFT, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
-    current_version_no = models.IntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_current_version_no", "Current version no"))
-    last_published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_last_published_at", "Last published at"))
+    status = models.CharField(
+        max_length=20,
+        choices=MedicalDocStatus.choices,
+        default=MedicalDocStatus.DRAFT,
+        verbose_name=db_gettext_lazy("administration.field_status", "Status"),
+    )
+    current_version_no = models.IntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_current_version_no", "Current version no"
+        ),
+    )
+    last_published_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_published_at", "Last published at"
+        ),
+    )
     created_by_user = models.ForeignKey(
         "users.StaffUser",
         on_delete=models.RESTRICT,
         related_name="created_medical_documents",
-        verbose_name=db_gettext_lazy("administration.field_created_by_user", "Created by"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_created_by_user", "Created by"
+        ),
     )
     updated_by_user = models.ForeignKey(
         "users.StaffUser",
@@ -70,8 +104,12 @@ class MedicalDocument(models.Model):
 
     class Meta:
         db_table = "medical_document"
-        verbose_name = db_gettext_lazy("administration.model_medicaldocument", "Medical document")
-        verbose_name_plural = db_gettext_lazy("administration.model_medicaldocument_plural", "Medical documents")
+        verbose_name = db_gettext_lazy(
+            "administration.model_medicaldocument", "Medical document"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_medicaldocument_plural", "Medical documents"
+        )
         constraints = [
             models.CheckConstraint(
                 condition=Q(current_version_no__gte=0),
@@ -93,42 +131,124 @@ class MedicalDocumentVersion(models.Model):
         MedicalDocument,
         on_delete=models.CASCADE,
         related_name="versions",
-        verbose_name=db_gettext_lazy("administration.field_medical_document", "Medical document"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_document", "Medical document"
+        ),
     )
-    version_no = models.IntegerField(verbose_name=db_gettext_lazy("administration.field_version_no", "Version no"))
+    version_no = models.IntegerField(
+        verbose_name=db_gettext_lazy("administration.field_version_no", "Version no")
+    )
     version_status = models.CharField(
         max_length=20,
         choices=DocVersionStatus.choices,
         default=DocVersionStatus.DRAFT,
-        verbose_name=db_gettext_lazy("administration.field_version_status", "Version status"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_version_status", "Version status"
+        ),
     )
     publish_request_id = models.UUIDField(
         blank=True,
         null=True,
-        verbose_name=db_gettext_lazy("administration.field_publish_request_id", "Publish request ID"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_publish_request_id", "Publish request ID"
+        ),
     )
     pdf_generation_status = models.CharField(
         max_length=20,
         choices=PdfStatus.choices,
         default=PdfStatus.PENDING,
-        verbose_name=db_gettext_lazy("administration.field_pdf_generation_status", "PDF generation status"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_generation_status", "PDF generation status"
+        ),
     )
-    medical_payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_medical_payload_schema_version", "Medical payload schema version"))
-    medical_payload = models.JSONField(default=dict, verbose_name=db_gettext_lazy("administration.field_medical_payload", "Medical payload"))
-    diagnosis_code = models.CharField(max_length=50, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_diagnosis_code", "Diagnosis code"))
-    procedure_code = models.CharField(max_length=50, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_procedure_code", "Procedure code"))
-    pdf_local_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_local_path", "Pdf local path"))
-    pdf_checksum_sha256 = models.CharField(max_length=64, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_pdf_checksum_sha256", "Pdf checksum sha256"))
-    hidrive_path = models.CharField(max_length=500, blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_path", "Hidrive path"))
-    hidrive_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_hidrive_sent", "Hidrive sent"))
-    hidrive_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_hidrive_sent_at", "Hidrive sent at"))
-    sms_sent = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_sms_sent", "Sms sent"))
-    sms_sent_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_sms_sent_at", "Sms sent at"))
-    local_pdf_deleted_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_local_pdf_deleted_at", "Local pdf deleted at"))
+    medical_payload_schema_version = models.SmallIntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_payload_schema_version",
+            "Medical payload schema version",
+        ),
+    )
+    medical_payload = models.JSONField(
+        default=dict,
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_payload", "Medical payload"
+        ),
+    )
+    diagnosis_code = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_diagnosis_code", "Diagnosis code"
+        ),
+    )
+    procedure_code = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_procedure_code", "Procedure code"
+        ),
+    )
+    pdf_local_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_local_path", "Pdf local path"
+        ),
+    )
+    pdf_checksum_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_pdf_checksum_sha256", "Pdf checksum sha256"
+        ),
+    )
+    hidrive_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_path", "Hidrive path"
+        ),
+    )
+    hidrive_sent = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_sent", "Hidrive sent"
+        ),
+    )
+    hidrive_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_sent_at", "Hidrive sent at"
+        ),
+    )
+    sms_sent = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy("administration.field_sms_sent", "Sms sent"),
+    )
+    sms_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_sms_sent_at", "Sms sent at"),
+    )
+    local_pdf_deleted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_local_pdf_deleted_at", "Local pdf deleted at"
+        ),
+    )
     anonymization_deleted_at = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name=db_gettext_lazy("administration.field_anonymization_deleted_at", "Anonymization deleted at"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_anonymization_deleted_at", "Anonymization deleted at"
+        ),
     )
     publish_requested_by_user = models.ForeignKey(
         "users.StaffUser",
@@ -136,14 +256,18 @@ class MedicalDocumentVersion(models.Model):
         blank=True,
         null=True,
         related_name="requested_medical_publications",
-        verbose_name=db_gettext_lazy("administration.field_publish_requested_by_user", "Publish requested by"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_publish_requested_by_user", "Publish requested by"
+        ),
     )
     publish_locale = models.CharField(
         max_length=10,
         blank=True,
         null=True,
         choices=StaffUserPreferredLocale.choices,
-        verbose_name=db_gettext_lazy("administration.field_publish_locale", "Publish locale"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_publish_locale", "Publish locale"
+        ),
     )
     published_by_user = models.ForeignKey(
         "users.StaffUser",
@@ -151,10 +275,22 @@ class MedicalDocumentVersion(models.Model):
         blank=True,
         null=True,
         related_name="published_medical_documents",
-        verbose_name=db_gettext_lazy("administration.field_published_by_user", "Published by"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_published_by_user", "Published by"
+        ),
     )
-    published_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_published_at", "Published at"))
-    revoked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_revoked_at", "Revoked at"))
+    published_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_published_at", "Published at"
+        ),
+    )
+    revoked_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_revoked_at", "Revoked at"),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -171,17 +307,22 @@ class MedicalDocumentVersion(models.Model):
                 fields=["medical_document", "publish_request_id"],
                 name="medical_document_publish_request_unique",
             ),
-            models.CheckConstraint(condition=Q(version_no__gt=0), name="medical_document_version_positive"),
             models.CheckConstraint(
-                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(publish_request_id__isnull=False),
+                condition=Q(version_no__gt=0), name="medical_document_version_positive"
+            ),
+            models.CheckConstraint(
+                condition=Q(version_status=DocVersionStatus.DRAFT)
+                | Q(publish_request_id__isnull=False),
                 name="medical_document_published_requires_request_id",
             ),
             models.CheckConstraint(
-                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(published_at__isnull=False),
+                condition=Q(version_status=DocVersionStatus.DRAFT)
+                | Q(published_at__isnull=False),
                 name="medical_document_published_requires_time",
             ),
             models.CheckConstraint(
-                condition=Q(version_status=DocVersionStatus.DRAFT) | Q(publish_locale__isnull=False),
+                condition=Q(version_status=DocVersionStatus.DRAFT)
+                | Q(publish_locale__isnull=False),
                 name="medical_document_published_requires_publish_locale",
             ),
             models.CheckConstraint(
@@ -202,7 +343,8 @@ class MedicalDocumentVersion(models.Model):
                 name="medical_document_hidrive_sent_requires_time",
             ),
             models.CheckConstraint(
-                condition=Q(sms_sent=False) | (Q(sms_sent=True) & Q(sms_sent_at__isnull=False)),
+                condition=Q(sms_sent=False)
+                | (Q(sms_sent=True) & Q(sms_sent_at__isnull=False)),
                 name="medical_document_sms_sent_requires_time",
             ),
             models.CheckConstraint(
@@ -254,17 +396,38 @@ class DoctorTextTemplate(models.Model):
         related_name="doctor_templates",
         verbose_name=db_gettext_lazy("administration.field_clinic_site", "Clinic site"),
     )
-    name = models.CharField(max_length=120, verbose_name=db_gettext_lazy("administration.field_name", "Name"))
+    name = models.CharField(
+        max_length=120,
+        verbose_name=db_gettext_lazy("administration.field_name", "Name"),
+    )
     template_locale = models.CharField(
         max_length=10,
         default=StaffUserPreferredLocale.DE_DE,
         choices=StaffUserPreferredLocale.choices,
-        verbose_name=db_gettext_lazy("administration.field_template_locale", "Template locale"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_template_locale", "Template locale"
+        ),
     )
-    template_body = models.TextField(verbose_name=db_gettext_lazy("administration.field_template_body", "Template body"))
-    lesion_group_favorites = models.JSONField(default=list, blank=True, verbose_name=db_gettext_lazy("administration.field_lesion_group_favorites", "Lesion group favorites"))
-    is_global = models.BooleanField(default=False, verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"))
-    is_active = models.BooleanField(default=True, verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"))
+    template_body = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_template_body", "Template body"
+        )
+    )
+    lesion_group_favorites = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_lesion_group_favorites", "Lesion group favorites"
+        ),
+    )
+    is_global = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy("administration.field_is_global", "Is global"),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=db_gettext_lazy("administration.field_is_active", "Is active"),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -305,8 +468,12 @@ class DoctorTextTemplate(models.Model):
 
     class Meta:
         db_table = "doctor_text_template"
-        verbose_name = db_gettext_lazy("administration.model_doctortexttemplate", "Doctor template")
-        verbose_name_plural = db_gettext_lazy("administration.model_doctortexttemplate_plural", "Doctor templates")
+        verbose_name = db_gettext_lazy(
+            "administration.model_doctortexttemplate", "Doctor template"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_doctortexttemplate_plural", "Doctor templates"
+        )
         constraints = [
             models.CheckConstraint(
                 condition=Q(template_locale__regex=r"^(de|en|pl)(-[A-Z]{2})?$"),
@@ -314,11 +481,17 @@ class DoctorTextTemplate(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    (Q(is_global=True) & Q(owner_user__isnull=True)) |
-                    (Q(is_global=False) & (
-                        (Q(owner_user__isnull=False) & Q(clinic_site__isnull=True)) |
-                        (Q(owner_user__isnull=True) & Q(clinic_site__isnull=False))
-                    ))
+                    (Q(is_global=True) & Q(owner_user__isnull=True))
+                    | (
+                        Q(is_global=False)
+                        & (
+                            (Q(owner_user__isnull=False) & Q(clinic_site__isnull=True))
+                            | (
+                                Q(owner_user__isnull=True)
+                                & Q(clinic_site__isnull=False)
+                            )
+                        )
+                    )
                 ),
                 name="doctor_template_global_owner_consistency",
             ),

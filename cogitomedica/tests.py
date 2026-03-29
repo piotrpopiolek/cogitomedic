@@ -1,6 +1,7 @@
 """
 Tests for Cogitomedica OpenAPI schema and Pydantic → OpenAPI conversion.
 """
+
 from __future__ import annotations
 
 from django.test import TestCase
@@ -42,7 +43,9 @@ class OpenAPISchemasConversionTests(TestCase):
         self.assertNotIn("#/$defs/", schema_str)
         # Nested ref: may be in root.properties.nested or in defs
         has_component_ref = COMPONENTS_REF_PREFIX + "_DummyNested" in schema_str
-        self.assertTrue(has_component_ref, msg="Expected $ref to _DummyNested in components")
+        self.assertTrue(
+            has_component_ref, msg="Expected $ref to _DummyNested in components"
+        )
 
     def test_build_components_schemas_merges_defs(self) -> None:
         schemas = build_components_schemas([_DummyRequest])
@@ -69,17 +72,27 @@ class OpenAPISchemaIntegrationTests(TestCase):
         schema = build_cogito_openapi_schema()
         login = schema["paths"].get("/api/v1/auth/login", {}).get("post", {})
         rb = login.get("requestBody", {}).get("content", {}).get("application/json", {})
-        self.assertEqual(rb.get("schema"), {"$ref": "#/components/schemas/AuthLoginRequest"})
+        self.assertEqual(
+            rb.get("schema"), {"$ref": "#/components/schemas/AuthLoginRequest"}
+        )
 
     def test_get_request_body_schema_for_returns_ref_for_registered(self) -> None:
         # Path format matches COGITO_PATHS keys (single braces from f-string {{ -> {)
-        ref = get_request_body_schema_for("/api/v1/medical-documents/{medical_document_id}/publish", "post")
-        self.assertEqual(ref, {"$ref": "#/components/schemas/PublishMedicalDocumentRequest"})
+        ref = get_request_body_schema_for(
+            "/api/v1/medical-documents/{medical_document_id}/publish", "post"
+        )
+        self.assertEqual(
+            ref, {"$ref": "#/components/schemas/PublishMedicalDocumentRequest"}
+        )
 
     def test_get_request_body_schema_for_returns_none_for_unregistered(self) -> None:
-        self.assertIsNone(get_request_body_schema_for("/api/v1/observability/health", "get"))
+        self.assertIsNone(
+            get_request_body_schema_for("/api/v1/observability/health", "get")
+        )
 
     def test_metrics_endpoint_is_marked_as_authenticated_in_openapi(self) -> None:
         schema = build_cogito_openapi_schema()
-        metrics = schema["paths"].get("/api/v1/observability/metrics", {}).get("get", {})
+        metrics = (
+            schema["paths"].get("/api/v1/observability/metrics", {}).get("get", {})
+        )
         self.assertEqual(metrics.get("security"), [{"sessionCookie": []}])

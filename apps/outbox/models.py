@@ -9,17 +9,33 @@ from django.db.models import F, Q
 
 
 class OutboxEventType(models.TextChoices):
-    GENERATE_PDF = "GENERATE_PDF", db_gettext_lazy("administration.choice_outbox_event_generate_pdf", "Generate PDF")
-    HIDRIVE_UPLOAD = "HIDRIVE_UPLOAD", db_gettext_lazy("administration.choice_outbox_event_hidrive_upload", "HiDrive upload")
-    SMS_SEND = "SMS_SEND", db_gettext_lazy("administration.choice_outbox_event_sms_send", "SMS send")
+    GENERATE_PDF = "GENERATE_PDF", db_gettext_lazy(
+        "administration.choice_outbox_event_generate_pdf", "Generate PDF"
+    )
+    HIDRIVE_UPLOAD = "HIDRIVE_UPLOAD", db_gettext_lazy(
+        "administration.choice_outbox_event_hidrive_upload", "HiDrive upload"
+    )
+    SMS_SEND = "SMS_SEND", db_gettext_lazy(
+        "administration.choice_outbox_event_sms_send", "SMS send"
+    )
 
 
 class OutboxStatus(models.TextChoices):
-    PENDING = "PENDING", db_gettext_lazy("administration.choice_outbox_status_pending", "Pending")
-    PROCESSING = "PROCESSING", db_gettext_lazy("administration.choice_outbox_status_processing", "Processing")
-    PROCESSED = "PROCESSED", db_gettext_lazy("administration.choice_outbox_status_processed", "Processed")
-    FAILED = "FAILED", db_gettext_lazy("administration.choice_outbox_status_failed", "Failed")
-    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy("administration.choice_outbox_status_dead_letter", "Dead letter")
+    PENDING = "PENDING", db_gettext_lazy(
+        "administration.choice_outbox_status_pending", "Pending"
+    )
+    PROCESSING = "PROCESSING", db_gettext_lazy(
+        "administration.choice_outbox_status_processing", "Processing"
+    )
+    PROCESSED = "PROCESSED", db_gettext_lazy(
+        "administration.choice_outbox_status_processed", "Processed"
+    )
+    FAILED = "FAILED", db_gettext_lazy(
+        "administration.choice_outbox_status_failed", "Failed"
+    )
+    DEAD_LETTER = "DEAD_LETTER", db_gettext_lazy(
+        "administration.choice_outbox_status_dead_letter", "Dead letter"
+    )
 
 
 class OutboxEvent(models.Model):
@@ -28,20 +44,75 @@ class OutboxEvent(models.Model):
         "medical.MedicalDocumentVersion",
         on_delete=models.CASCADE,
         related_name="outbox_events",
-        verbose_name=db_gettext_lazy("administration.field_medical_document_version", "Medical document version"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_document_version", "Medical document version"
+        ),
     )
-    aggregate_type = models.CharField(max_length=50, default="MEDICAL_DOCUMENT_VERSION", verbose_name=db_gettext_lazy("administration.field_aggregate_type", "Aggregate type"))
-    aggregate_id = models.UUIDField(verbose_name=db_gettext_lazy("administration.field_aggregate_id", "Aggregate ID"))
-    event_type = models.CharField(max_length=30, choices=OutboxEventType.choices, verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"))
-    payload_schema_version = models.SmallIntegerField(default=1, verbose_name=db_gettext_lazy("administration.field_payload_schema_version", "Payload schema version"))
-    payload = models.JSONField(verbose_name=db_gettext_lazy("administration.field_payload", "Payload"))
-    status = models.CharField(max_length=20, choices=OutboxStatus.choices, default=OutboxStatus.PENDING, verbose_name=db_gettext_lazy("administration.field_status", "Status"))
-    retry_count = models.SmallIntegerField(default=0, verbose_name=db_gettext_lazy("administration.field_retry_count", "Retry count"))
-    max_retries = models.SmallIntegerField(default=10, verbose_name=db_gettext_lazy("administration.field_max_retries", "Max retries"))
-    available_at = models.DateTimeField(auto_now_add=True, verbose_name=db_gettext_lazy("administration.field_available_at", "Available at"))
-    locked_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"))
-    processed_at = models.DateTimeField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_processed_at", "Processed at"))
-    error_message = models.TextField(blank=True, null=True, verbose_name=db_gettext_lazy("administration.field_error_message", "Error message"))
+    aggregate_type = models.CharField(
+        max_length=50,
+        default="MEDICAL_DOCUMENT_VERSION",
+        verbose_name=db_gettext_lazy(
+            "administration.field_aggregate_type", "Aggregate type"
+        ),
+    )
+    aggregate_id = models.UUIDField(
+        verbose_name=db_gettext_lazy(
+            "administration.field_aggregate_id", "Aggregate ID"
+        )
+    )
+    event_type = models.CharField(
+        max_length=30,
+        choices=OutboxEventType.choices,
+        verbose_name=db_gettext_lazy("administration.field_event_type", "Event type"),
+    )
+    payload_schema_version = models.SmallIntegerField(
+        default=1,
+        verbose_name=db_gettext_lazy(
+            "administration.field_payload_schema_version", "Payload schema version"
+        ),
+    )
+    payload = models.JSONField(
+        verbose_name=db_gettext_lazy("administration.field_payload", "Payload")
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=OutboxStatus.choices,
+        default=OutboxStatus.PENDING,
+        verbose_name=db_gettext_lazy("administration.field_status", "Status"),
+    )
+    retry_count = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy("administration.field_retry_count", "Retry count"),
+    )
+    max_retries = models.SmallIntegerField(
+        default=10,
+        verbose_name=db_gettext_lazy("administration.field_max_retries", "Max retries"),
+    )
+    available_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_available_at", "Available at"
+        ),
+    )
+    locked_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"),
+    )
+    processed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_processed_at", "Processed at"
+        ),
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_error_message", "Error message"
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -75,7 +146,15 @@ class OutboxEvent(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "available_at"]),
-            models.Index(fields=["event_type", "status", "retry_count", "available_at", "payload_schema_version"]),
+            models.Index(
+                fields=[
+                    "event_type",
+                    "status",
+                    "retry_count",
+                    "available_at",
+                    "payload_schema_version",
+                ]
+            ),
             models.Index(fields=["medical_document_version", "-created_at"]),
             models.Index(
                 fields=["status", "available_at"],

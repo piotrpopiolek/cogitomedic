@@ -113,7 +113,7 @@ class TranslationServiceTests(TestCase):
             value='<b>ok</b><script>alert("x")</script>',
         )
         value.full_clean()
-        self.assertEqual(value.value, "<b>ok</b>alert(\"x\")")
+        self.assertEqual(value.value, '<b>ok</b>alert("x")')
 
     def test_value_clean_rejects_percent_s_placeholder_format(self) -> None:
         placeholder_key = TranslationKey.objects.create(
@@ -211,9 +211,15 @@ class TranslationCompletenessCommandTests(TestCase):
             call_command("check_translations_completeness")
 
     def test_command_passes_when_all_languages_present(self) -> None:
-        TranslationValue.objects.create(translation_key=self.key, language_code="de-DE", value="DE")
-        TranslationValue.objects.create(translation_key=self.key, language_code="en-GB", value="EN")
-        TranslationValue.objects.create(translation_key=self.key, language_code="pl-PL", value="PL")
+        TranslationValue.objects.create(
+            translation_key=self.key, language_code="de-DE", value="DE"
+        )
+        TranslationValue.objects.create(
+            translation_key=self.key, language_code="en-GB", value="EN"
+        )
+        TranslationValue.objects.create(
+            translation_key=self.key, language_code="pl-PL", value="PL"
+        )
         out = StringIO()
         call_command("check_translations_completeness", stdout=out)
         self.assertIn("passed", out.getvalue().lower())
@@ -237,8 +243,13 @@ class ReadJsonBodyTests(TestCase):
 class SafeHrefTemplateFilterTests(TestCase):
     def test_safe_href_allows_http_https_and_relative_urls(self) -> None:
         tpl = Template("{% load safe_urls %}{{ url|safe_href }}")
-        self.assertEqual(tpl.render(Context({"url": "https://example.com/a"})), "https://example.com/a")
-        self.assertEqual(tpl.render(Context({"url": "http://example.com/a"})), "http://example.com/a")
+        self.assertEqual(
+            tpl.render(Context({"url": "https://example.com/a"})),
+            "https://example.com/a",
+        )
+        self.assertEqual(
+            tpl.render(Context({"url": "http://example.com/a"})), "http://example.com/a"
+        )
         self.assertEqual(tpl.render(Context({"url": "/admin/"})), "/admin/")
 
     def test_safe_href_blocks_javascript_urls(self) -> None:

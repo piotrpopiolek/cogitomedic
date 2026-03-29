@@ -3,6 +3,7 @@ Load translation keys/values from JSON files under apps/core/translation_data/.
 
 Used by migrations and by ``load_default_translations`` management command.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,6 +28,7 @@ def _storage_language_code(TranslationValue: Any, lang: str) -> str:
         return LOCALE_BY_LANG[lang]
     return lang
 
+
 # Keys that need non-default TranslationKey fields (match historical migrations).
 _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.invalid_shift_code": ["value"],
@@ -42,9 +44,21 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.sms.patient_results": ["url"],
     "administration.error_lesion_favorites_preset_not_object": ["preset_no"],
     "administration.error_lesion_favorites_preset_invalid": ["preset_no", "details"],
-    "administration.error_lesion_favorites_preset_bad_feature": ["preset_no", "code", "allowed"],
-    "administration.error_lesion_favorites_preset_bad_clinical": ["preset_no", "value", "allowed"],
-    "administration.error_lesion_favorites_preset_bad_malignancy": ["preset_no", "value", "allowed"],
+    "administration.error_lesion_favorites_preset_bad_feature": [
+        "preset_no",
+        "code",
+        "allowed",
+    ],
+    "administration.error_lesion_favorites_preset_bad_clinical": [
+        "preset_no",
+        "value",
+        "allowed",
+    ],
+    "administration.error_lesion_favorites_preset_bad_malignancy": [
+        "preset_no",
+        "value",
+        "allowed",
+    ],
 }
 
 _KEY_DESCRIPTIONS: dict[str, str] = {
@@ -100,7 +114,9 @@ def description_for_key(full_key: str) -> str:
         return "Admin validation or form error message"
     if full_key.startswith("administration.field_"):
         return "Model field label"
-    if full_key.startswith("administration.login_") or full_key.startswith("administration.logout_"):
+    if full_key.startswith("administration.login_") or full_key.startswith(
+        "administration.logout_"
+    ):
         return "Login/logout UI labels"
     if full_key == "administration.return_to_site":
         return "Login/logout UI labels"

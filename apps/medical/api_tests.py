@@ -9,7 +9,10 @@ from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
-from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentVersion
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocumentVersion,
+)
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
@@ -34,7 +37,7 @@ class MedicalApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.doctor_user, "Doctor")
-        
+
         self.reception_user = StaffUser.objects.create_user(
             username="api-reception-medical",
             email="api.reception.medical@example.com",
@@ -42,7 +45,7 @@ class MedicalApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
-        
+
         self.admin_user = StaffUser.objects.create_user(
             username="api-admin-medical",
             email="api.admin.medical@example.com",
@@ -224,7 +227,9 @@ class MedicalApiTests(TestCase):
         missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
         self.assertEqual(missing.status_code, 404)
 
-    def test_published_version_keeps_template_snapshot_after_template_change(self) -> None:
+    def test_published_version_keeps_template_snapshot_after_template_change(
+        self,
+    ) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -268,7 +273,6 @@ class MedicalApiTests(TestCase):
                     "medical_payload": {
                         "schema_version": 1,
                         "authoring_locale": "de-DE",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
                         "lesions": [],
                         "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
                         "fitzpatrick_type": "TYPE_III",
@@ -310,14 +314,21 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(patch_template.status_code, 200)
 
-        versions = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        versions = self.client.get(
+            f"/api/v1/medical-documents/{medical_document_id}/versions"
+        )
         self.assertEqual(versions.status_code, 200)
         published_version = versions.json()["items"][0]
-        version_detail = self.client.get(f"/api/v1/medical-document-versions/{published_version['id']}")
+        version_detail = self.client.get(
+            f"/api/v1/medical-document-versions/{published_version['id']}"
+        )
         self.assertEqual(version_detail.status_code, 200)
         payload = version_detail.json()["medical_payload"]
         self.assertIn("Version A header.", payload.get("summary_generated_text", ""))
-        self.assertEqual(payload.get("template_context", {}).get("template_name"), "Snapshot Template")
+        self.assertEqual(
+            payload.get("template_context", {}).get("template_name"),
+            "Snapshot Template",
+        )
 
     def test_medical_document_versions_and_version_detail(self) -> None:
         create_response = self.client.post(
@@ -334,7 +345,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
 
-        versions_list = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        versions_list = self.client.get(
+            f"/api/v1/medical-documents/{medical_document_id}/versions"
+        )
         self.assertEqual(versions_list.status_code, 200)
         self.assertEqual(versions_list.json()["items"], [])
 
@@ -344,12 +357,18 @@ class MedicalApiTests(TestCase):
                 {
                     "updated_by_user_id": str(self.doctor_user.id),
                     "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                    },
                 }
             ),
             content_type="application/json",
         )
-        versions_list2 = self.client.get(f"/api/v1/medical-documents/{medical_document_id}/versions")
+        versions_list2 = self.client.get(
+            f"/api/v1/medical-documents/{medical_document_id}/versions"
+        )
         self.assertEqual(versions_list2.status_code, 200)
         items = versions_list2.json()["items"]
         self.assertEqual(len(items), 1)
@@ -357,7 +376,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(items[0]["version_status"], "DRAFT")
         version_id = items[0]["id"]
 
-        version_detail = self.client.get(f"/api/v1/medical-document-versions/{version_id}")
+        version_detail = self.client.get(
+            f"/api/v1/medical-document-versions/{version_id}"
+        )
         self.assertEqual(version_detail.status_code, 200)
         v = version_detail.json()
         self.assertEqual(v["medical_document_id"], medical_document_id)
@@ -365,10 +386,20 @@ class MedicalApiTests(TestCase):
         self.assertEqual(v["medical_payload_schema_version"], 1)
         self.assertIn("lesions", v["medical_payload"])
 
-        self.assertEqual(self.client.get(f"/api/v1/medical-document-versions/{uuid4()}").status_code, 404)
-        self.assertEqual(self.client.get(f"/api/v1/medical-documents/{uuid4()}/versions").status_code, 404)
+        self.assertEqual(
+            self.client.get(f"/api/v1/medical-document-versions/{uuid4()}").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/api/v1/medical-documents/{uuid4()}/versions"
+            ).status_code,
+            404,
+        )
 
-    def test_medical_document_draft_v1_validation_rejects_duplicate_lesion_numbers(self) -> None:
+    def test_medical_document_draft_v1_validation_rejects_duplicate_lesion_numbers(
+        self,
+    ) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -404,7 +435,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("details", r.json())
 
-    def test_medical_document_draft_v1_validation_rejects_control_needed_without_lesions(self) -> None:
+    def test_medical_document_draft_v1_validation_rejects_control_needed_without_lesions(
+        self,
+    ) -> None:
         create_response = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -468,7 +501,11 @@ class MedicalApiTests(TestCase):
                 }
             ],
             "summary_edited_text": "Zusammenfassung Befund",
-            "template_context": {"template_id": None, "template_name": "Test", "template_locale": "de-DE"},
+            "template_context": {
+                "template_id": None,
+                "template_name": "Test",
+                "template_locale": "de-DE",
+            },
         }
         draft_response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
@@ -482,7 +519,9 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(draft_response.status_code, 200)
         version_id = draft_response.json()["medical_document_version_id"]
-        version_detail = self.client.get(f"/api/v1/medical-document-versions/{version_id}")
+        version_detail = self.client.get(
+            f"/api/v1/medical-document-versions/{version_id}"
+        )
         self.assertEqual(version_detail.status_code, 200)
         saved = version_detail.json()["medical_payload"]
         self.assertEqual(saved["schema_version"], 1)
@@ -573,7 +612,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(publish_response.status_code, 400)
         err = publish_response.json().get("error", "")
         self.assertTrue(
-            "draft" in err.lower() or "entwurf" in err.lower() or "szkic" in err.lower(),
+            "draft" in err.lower()
+            or "entwurf" in err.lower()
+            or "szkic" in err.lower(),
             f"Expected draft-related publish error, got: {err!r}",
         )
 
@@ -598,7 +639,11 @@ class MedicalApiTests(TestCase):
                 {
                     "updated_by_user_id": str(self.doctor_user.id),
                     "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1, "authoring_locale": "de-DE", "lesions": []},
+                    "medical_payload": {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                    },
                 }
             ),
             content_type="application/json",
@@ -618,7 +663,9 @@ class MedicalApiTests(TestCase):
         error_msg = publish_response.json().get("error", "")
         # Komunikat w języku publish_locale (lub fallback EN); w teście bez seed tłumaczeń = angielski fallback
         self.assertTrue(
-            "Before publishing" in error_msg or "Untersuchungsumfang" in error_msg or "Przed publikacją" in error_msg,
+            "Before publishing" in error_msg
+            or "Untersuchungsumfang" in error_msg
+            or "Przed publikacją" in error_msg,
             f"Expected validation message in error, got: {error_msg!r}",
         )
 
@@ -687,7 +734,6 @@ class MedicalApiTests(TestCase):
                     "medical_payload": {
                         "schema_version": 1,
                         "authoring_locale": "de-DE",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
                         "lesions": [],
                         "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
                         "fitzpatrick_type": "TYPE_III",
@@ -811,7 +857,9 @@ class MedicalApiTests(TestCase):
         )
         publish_response = self.client.post(
             f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps({"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}),
+            data=json.dumps(
+                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+            ),
             content_type="application/json",
         )
         self.assertEqual(publish_response.status_code, 200)
@@ -867,7 +915,7 @@ class DoctorTemplatesApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.admin_user, "Admin")
-        
+
         self.doctor_user = StaffUser.objects.create_user(
             username="api-doctor-templates",
             email="api.doctor.templates@example.com",
@@ -875,7 +923,7 @@ class DoctorTemplatesApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.doctor_user, "Doctor")
-        
+
         self.other_doctor_user = StaffUser.objects.create_user(
             username="api-doctor-templates-2",
             email="api.doctor.templates2@example.com",
@@ -914,9 +962,14 @@ class DoctorTemplatesApiTests(TestCase):
         self.assertEqual(len(create_private.json()["lesion_group_favorites"]), 1)
         template_id = create_private.json()["id"]
 
-        template_detail = self.client.get(f"/api/v1/doctor-text-templates/{template_id}")
+        template_detail = self.client.get(
+            f"/api/v1/doctor-text-templates/{template_id}"
+        )
         self.assertEqual(template_detail.status_code, 200)
-        self.assertEqual(template_detail.json()["lesion_group_favorites"][0]["clinical_assessment"], "CONTROL_NEEDED")
+        self.assertEqual(
+            template_detail.json()["lesion_group_favorites"][0]["clinical_assessment"],
+            "CONTROL_NEEDED",
+        )
 
         # Doctor cannot create global template
         create_global_forbidden = self.client.post(

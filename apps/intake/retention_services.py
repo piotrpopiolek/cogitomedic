@@ -75,7 +75,9 @@ def _process_single_intake_version_retention(
             )
             intake_form.anamnesis_payload = {}
             intake_form.body_map_data = []
-            intake_form.save(update_fields=["anamnesis_payload", "body_map_data", "updated_at"])
+            intake_form.save(
+                update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+            )
 
             create_audit_event(
                 event_type="INTAKE_RETENTION_FILE_DELETED",
@@ -91,7 +93,9 @@ def _process_single_intake_version_retention(
         return False, False
 
 
-def run_intake_retention_cleanup(*, older_than_days: int = 30, dry_run: bool = True) -> RetentionCleanupResult:
+def run_intake_retention_cleanup(
+    *, older_than_days: int = 30, dry_run: bool = True
+) -> RetentionCleanupResult:
     if older_than_days <= 0:
         raise DomainError(
             domain_message("other.domain.retention_days_positive"),

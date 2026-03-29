@@ -4,6 +4,7 @@ Patient import from XLSX template.
 Queue date and clinic site are extracted from the file content
 (Doctolib export header: "Standort ...", date string).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -37,6 +38,7 @@ from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
 )
+
 
 # --- Error codes (aligned with batch/PatientImportError) ---
 class XlsxImportFailure(DomainError):
@@ -85,7 +87,14 @@ HEADER_ALIASES = {
     "first_name": ["first_name", "first name", "imie", "imię", "vorname", "prenom"],
     "last_name": ["last_name", "last name", "nazwisko", "nachname", "nom"],
     "full_name": ["pacjent", "patient", "patientin", "name", "patient:in"],
-    "date_of_birth": ["dob", "date_of_birth", "date of birth", "data urodzenia", "geburtsdatum", "birth date"],
+    "date_of_birth": [
+        "dob",
+        "date_of_birth",
+        "date of birth",
+        "data urodzenia",
+        "geburtsdatum",
+        "birth date",
+    ],
     "phone": ["phone", "telefon", "tel", "mobile"],
     "email": ["email", "e-mail", "e-mail-adresse", "mail"],
     "appointment_time": ["godzina", "uhrzeit", "time", "appointment_time", "heure"],
@@ -165,7 +174,9 @@ def _parse_date(value: str | None, *, default_year: int | None = None) -> date |
         )
         month = GERMAN_MONTHS.get(month_raw) or GERMAN_MONTHS.get(month_raw_ascii)
         if month:
-            year = int(m.group(3)) if m.group(3) else (default_year or timezone.now().year)
+            year = (
+                int(m.group(3)) if m.group(3) else (default_year or timezone.now().year)
+            )
             try:
                 return date(year, month, day)
             except ValueError:
@@ -224,7 +235,11 @@ def _title_case_name(value: str) -> str:
         return ""
     chunks = re.split(r"([\-'\s])", value.lower())
     normalized_chunks = [
-        chunk[:1].upper() + chunk[1:] if chunk and not re.fullmatch(r"[\-'\s]", chunk) else chunk
+        (
+            chunk[:1].upper() + chunk[1:]
+            if chunk and not re.fullmatch(r"[\-'\s]", chunk)
+            else chunk
+        )
         for chunk in chunks
     ]
     return "".join(normalized_chunks)
@@ -252,7 +267,9 @@ def _cleanup_clinic_name(value: str) -> str:
     trailing_date_pattern = (
         rf"\s+{weekday_pattern},?\s+\d{{1,2}}\.\s*[a-zA-ZäöüÄÖÜß]+(?:\s+\d{{4}})?$"
     )
-    cleaned = re.sub(trailing_date_pattern, "", cleaned, flags=re.IGNORECASE).strip(" ,;-")
+    cleaned = re.sub(trailing_date_pattern, "", cleaned, flags=re.IGNORECASE).strip(
+        " ,;-"
+    )
     return cleaned
 
 
@@ -276,7 +293,9 @@ def _extract_file_metadata(rows: list[list]) -> tuple[date, str]:
                     queue_date = parsed
 
             if clinic_name is None:
-                m = re.search(r"(?:standort|clinic)\s*:?\s*(.+)$", cell, flags=re.IGNORECASE)
+                m = re.search(
+                    r"(?:standort|clinic)\s*:?\s*(.+)$", cell, flags=re.IGNORECASE
+                )
                 if m:
                     clinic_name = _cleanup_clinic_name(m.group(1).strip())
                 elif cell.lower() == "standort" and idx + 1 < len(row) and row[idx + 1]:
@@ -306,7 +325,9 @@ def _resolve_clinic_site(clinic_name: str) -> ClinicSite:
     all_sites = list(ClinicSite.objects.all())
     matches = [site for site in all_sites if _normalize_site_name(site.name) == target]
     if not matches:
-        matches = [site for site in all_sites if target in _normalize_site_name(site.name)]
+        matches = [
+            site for site in all_sites if target in _normalize_site_name(site.name)
+        ]
     if len(matches) != 1:
         raise XlsxImportFailure(
             XlsxImportErrorCode.UNKNOWN_CLINIC,
@@ -334,6 +355,7 @@ def _normalize_row(
     header_indices: dict[str, int],
 ) -> NormalizedRow | None:
     """Convert a data row to NormalizedRow. Returns None if row is empty."""
+
     def _cell(key: str) -> str:
         idx = header_indices.get(key, -1)
         if idx < 0 or idx >= len(row):
@@ -396,7 +418,11 @@ def _normalize_row(
 def _validate_headers(header_indices: dict[str, int]) -> None:
     """Require at least first_name or full_name, last_name or full_name, date_of_birth, phone, email."""
     required = ["date_of_birth", "phone", "email"]
-    name_ok = "first_name" in header_indices or "last_name" in header_indices or "full_name" in header_indices
+    name_ok = (
+        "first_name" in header_indices
+        or "last_name" in header_indices
+        or "full_name" in header_indices
+    )
     if not name_ok:
         raise XlsxImportFailure(
             XlsxImportErrorCode.TEMPLATE_HEADER_INVALID,
@@ -472,7 +498,9 @@ def process_patient_xlsx_import_batch(
                 "Workbook has no active sheet.",
             )
 
-        materialized_rows = [list(r) if r else [] for r in ws.iter_rows(values_only=True)]
+        materialized_rows = [
+            list(r) if r else [] for r in ws.iter_rows(values_only=True)
+        ]
         queue_date, clinic_name = _extract_file_metadata(materialized_rows)
         clinic_site = _resolve_clinic_site(clinic_name)
         clinic_site_id = clinic_site.id
@@ -487,8 +515,14 @@ def process_patient_xlsx_import_batch(
         for row_no, row_list in enumerate(materialized_rows, start=1):
             if header_row_no is None:
                 candidate = _find_header_indices(row_list)
-                if "phone" in candidate and "email" in candidate and (
-                    "full_name" in candidate or "first_name" in candidate or "last_name" in candidate
+                if (
+                    "phone" in candidate
+                    and "email" in candidate
+                    and (
+                        "full_name" in candidate
+                        or "first_name" in candidate
+                        or "last_name" in candidate
+                    )
                 ):
                     header_indices = candidate
                     _validate_headers(header_indices)
@@ -538,7 +572,10 @@ def process_patient_xlsx_import_batch(
                         "other.domain.import_duplicate_phone_in_file",
                         phone=norm.phone,
                     ),
-                    raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                    raw_row={
+                        "first_name": norm.first_name,
+                        "last_name": norm.last_name,
+                    },
                 )
                 continue
             seen_phones.add(norm.phone)
@@ -563,7 +600,10 @@ def process_patient_xlsx_import_batch(
                             error_message=domain_message(
                                 "other.domain.import_patient_anonymized_same_phone",
                             ),
-                            raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                            raw_row={
+                                "first_name": norm.first_name,
+                                "last_name": norm.last_name,
+                            },
                         )
                         continue
                     patient = same_phone
@@ -587,7 +627,10 @@ def process_patient_xlsx_import_batch(
                             row_number=norm.row_number,
                             error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
                             error_message=str(e),
-                            raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                            raw_row={
+                                "first_name": norm.first_name,
+                                "last_name": norm.last_name,
+                            },
                         )
                         continue
 
@@ -637,7 +680,10 @@ def process_patient_xlsx_import_batch(
                     row_number=norm.row_number,
                     error_code=XlsxImportErrorCode.DUPLICATE_VISIT,
                     error_message=str(e),
-                    raw_row={"first_name": norm.first_name, "last_name": norm.last_name},
+                    raw_row={
+                        "first_name": norm.first_name,
+                        "last_name": norm.last_name,
+                    },
                 )
 
         if header_row_no is None:
@@ -661,7 +707,7 @@ def process_patient_xlsx_import_batch(
         _audit_xlsx_import_finished(
             batch,
             context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,
+            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
             inserted_rows=0,
             matched_rows=0,
             error_rows=0,
@@ -682,7 +728,7 @@ def process_patient_xlsx_import_batch(
         _audit_xlsx_import_finished(
             batch,
             context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,
+            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
             inserted_rows=0,
             matched_rows=0,
             error_rows=0,
@@ -703,7 +749,7 @@ def process_patient_xlsx_import_batch(
         _audit_xlsx_import_finished(
             batch,
             context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,
+            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
             inserted_rows=0,
             matched_rows=0,
             error_rows=0,
@@ -714,9 +760,21 @@ def process_patient_xlsx_import_batch(
     batch.inserted_rows = inserted
     batch.matched_rows = matched
     batch.error_rows = errors_count
-    batch.status = ImportStatus.COMPLETED if errors_count == 0 else ImportStatus.COMPLETED_WITH_ERRORS
+    batch.status = (
+        ImportStatus.COMPLETED
+        if errors_count == 0
+        else ImportStatus.COMPLETED_WITH_ERRORS
+    )
     batch.finished_at = timezone.now()
-    batch.save(update_fields=["inserted_rows", "matched_rows", "error_rows", "status", "finished_at"])
+    batch.save(
+        update_fields=[
+            "inserted_rows",
+            "matched_rows",
+            "error_rows",
+            "status",
+            "finished_at",
+        ]
+    )
     _audit_xlsx_import_finished(
         batch,
         context_clinic_site_id=clinic_site_id,
@@ -765,6 +823,7 @@ def enqueue_patient_xlsx_import(
     )
 
     from apps.reception.tasks import run_patient_xlsx_import
+
     run_patient_xlsx_import.enqueue(
         str(batch.id),
         str(path),

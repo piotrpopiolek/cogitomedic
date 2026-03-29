@@ -1,4 +1,5 @@
 """HiDrive upload adapter (real + mock)."""
+
 from __future__ import annotations
 
 import logging
@@ -57,13 +58,23 @@ class _HiDriveAdapter:
         if response.status_code in (200, 201, 204):
             return
         if response.status_code >= 500:
-            raise RuntimeError(f"HiDrive upload failed with status {response.status_code}")
+            raise RuntimeError(
+                f"HiDrive upload failed with status {response.status_code}"
+            )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive upload unauthorized after token refresh")
-        raise RuntimeError(f"HiDrive upload rejected with status {response.status_code}")
+        raise RuntimeError(
+            f"HiDrive upload rejected with status {response.status_code}"
+        )
 
-    def _upload_once(self, *, access_token: str, remote_path: str, local_path: Path) -> requests.Response:
-        base_url = str(getattr(settings, "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1")).rstrip("/")
+    def _upload_once(
+        self, *, access_token: str, remote_path: str, local_path: Path
+    ) -> requests.Response:
+        base_url = str(
+            getattr(
+                settings, "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1"
+            )
+        ).rstrip("/")
         url = f"{base_url}/file"
         dir_path, file_name = _split_remote_path(
             _resolve_remote_target_path(
@@ -72,7 +83,9 @@ class _HiDriveAdapter:
                 remote_path=remote_path,
             )
         )
-        _ensure_remote_directories(base_url=base_url, access_token=access_token, dir_path=dir_path)
+        _ensure_remote_directories(
+            base_url=base_url, access_token=access_token, dir_path=dir_path
+        )
         params = {
             "dir": dir_path,
             "name": file_name,
@@ -113,7 +126,9 @@ def _split_remote_path(remote_path: str) -> tuple[str, str]:
     return parent, file_name
 
 
-def _resolve_remote_target_path(*, base_url: str, access_token: str, remote_path: str) -> str:
+def _resolve_remote_target_path(
+    *, base_url: str, access_token: str, remote_path: str
+) -> str:
     normalized = _normalize_remote_path(remote_path)
     if normalized.startswith("/users/"):
         return normalized
@@ -137,7 +152,9 @@ def _fetch_user_alias(*, base_url: str, access_token: str) -> str:
     return alias
 
 
-def _ensure_remote_directories(*, base_url: str, access_token: str, dir_path: str) -> None:
+def _ensure_remote_directories(
+    *, base_url: str, access_token: str, dir_path: str
+) -> None:
     timeout = int(getattr(settings, "HIDRIVE_TIMEOUT_SECONDS", 30))
     headers = {"Authorization": f"Bearer {access_token}"}
     path_obj = Path(dir_path)
@@ -161,7 +178,10 @@ def _ensure_remote_directories(*, base_url: str, access_token: str, dir_path: st
         if response.status_code in (200, 201, 409):
             continue
         # Treat already existing/forbidden as non-fatal when parent is not writable.
-        if response.status_code == 403 and "already exists" in (response.text or "").lower():
+        if (
+            response.status_code == 403
+            and "already exists" in (response.text or "").lower()
+        ):
             continue
         raise RuntimeError(
             f"HiDrive directory create failed for {current} with status {response.status_code}"
@@ -177,4 +197,3 @@ def get_hidrive_adapter() -> HiDriveAdapterProtocol:
     if _use_mock_hidrive():
         return _MockHiDriveAdapter()
     return _HiDriveAdapter()
-

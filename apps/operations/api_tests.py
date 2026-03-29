@@ -7,9 +7,11 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
-from apps.outbox.models import OutboxStatus
-from apps.outbox.services import process_outbox_events
+from apps.medical.services import (
+    create_or_get_medical_document,
+    publish_document_version,
+    save_draft_document_version,
+)
 from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.models import (
     ClinicSite,
@@ -34,7 +36,7 @@ class ObservabilityHealthApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.doctor_user, "Doctor")
-        
+
         self.reception_user = StaffUser.objects.create_user(
             username="health-reception",
             email="health.reception@example.com",
@@ -42,7 +44,7 @@ class ObservabilityHealthApiTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
-        
+
         self.admin_user = StaffUser.objects.create_user(
             username="health-admin",
             email="health.admin@example.com",
@@ -151,8 +153,12 @@ class ObservabilityHealthApiTests(TestCase):
         self.assertIn("cogitomedica_import_rows_total", content)
 
     def test_health_and_metrics_return_json_error_for_method_not_allowed(self) -> None:
-        health = self.client.post("/api/v1/observability/health", data="{}", content_type="application/json")
-        metrics = self.client.post("/api/v1/observability/metrics", data="{}", content_type="application/json")
+        health = self.client.post(
+            "/api/v1/observability/health", data="{}", content_type="application/json"
+        )
+        metrics = self.client.post(
+            "/api/v1/observability/metrics", data="{}", content_type="application/json"
+        )
 
         self.assertEqual(health.status_code, 405)
         self.assertEqual(metrics.status_code, 405)

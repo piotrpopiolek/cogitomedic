@@ -77,7 +77,6 @@ from apps.users.api_views import (
     staff_users_view,
 )
 
-
 urlpatterns = [
     path(
         "observability/health",

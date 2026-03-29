@@ -56,6 +56,7 @@ DERMATOSCOPIC_FEATURE_CODE_TO_UI_KEY: dict[str, str] = {
     "REGRESSION_AREAS": "feature_regression",
 }
 
+
 # PDF label short keys — user-facing strings live in DB (doctor.pdf_label.*), seeded from JSON.
 def _pdf_labels(locale: str) -> dict[str, str]:
     """Return PDF labels from DB-only translation storage."""
@@ -161,7 +162,9 @@ def _build_render_context(
     labels = _pdf_labels(authoring_locale)
     lang = _authoring_locale_to_lang(authoring_locale)
     doctor_ui = get_doctor_ui(lang)
-    fitzpatrick_labels = {value: label for value, label in get_fitzpatrick_choices(lang)}
+    fitzpatrick_labels = {
+        value: label for value, label in get_fitzpatrick_choices(lang)
+    }
 
     lesions = []
     for idx, lesion in enumerate(payload.get("lesions") or [], start=1):
@@ -188,12 +191,17 @@ def _build_render_context(
             }
         )
 
-    summary_text = (payload.get("summary_edited_text") or "").strip() or (payload.get("summary_generated_text") or "").strip()
+    summary_text = (payload.get("summary_edited_text") or "").strip() or (
+        payload.get("summary_generated_text") or ""
+    ).strip()
     exam_scope = [
         _translate_code(v, doctor_ui, EXAMINATION_SCOPE_CODE_TO_UI_KEY)
         for v in (payload.get("examination_scope") or [])
     ]
-    recommendations = [_translate_recommendation(v, doctor_ui) for v in (payload.get("recommendations") or [])]
+    recommendations = [
+        _translate_recommendation(v, doctor_ui)
+        for v in (payload.get("recommendations") or [])
+    ]
 
     fp_code = payload.get("fitzpatrick_type")
     fitzpatrick_type_label = fitzpatrick_labels.get(fp_code) if fp_code else None
@@ -245,7 +253,9 @@ def build_befund_pdf_bytes(
     When authoring_locale_override is set (e.g. from request), PDF labels and
     locale match the doctor's current language; otherwise payload's authoring_locale is used.
     """
-    context = _build_render_context(version, authoring_locale_override=authoring_locale_override)
+    context = _build_render_context(
+        version, authoring_locale_override=authoring_locale_override
+    )
     html = render_to_string("pdf/befund_document.html", context)
     return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
 
@@ -260,7 +270,12 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     pdf_bytes = build_befund_pdf_bytes(version)
 
     now = version.created_at
-    relative_dir = Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs")) / "befund" / f"{now.year:04d}" / f"{now.month:02d}"
+    relative_dir = (
+        Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs"))
+        / "befund"
+        / f"{now.year:04d}"
+        / f"{now.month:02d}"
+    )
     relative_path = relative_dir / f"{version.id}.pdf"
     full_path = Path(settings.MEDIA_ROOT) / relative_path
     full_path.parent.mkdir(parents=True, exist_ok=True)

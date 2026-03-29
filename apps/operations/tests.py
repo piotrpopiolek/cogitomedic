@@ -1,4 +1,5 @@
 """Contract tests for audit events: immutable refs and required references per event type."""
+
 from __future__ import annotations
 
 from uuid import uuid4

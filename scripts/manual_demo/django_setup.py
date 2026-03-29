@@ -1,4 +1,5 @@
 """Django bootstrap for standalone scripts under scripts/."""
+
 from __future__ import annotations
 
 import os
