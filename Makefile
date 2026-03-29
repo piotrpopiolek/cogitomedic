@@ -1,7 +1,7 @@
 .PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci pytest
 
-# Pełna weryfikacja testów (pytest w Dockerze) — uznajemy za źródło prawdy w tym repo.
-DOCKER_PYTEST = pip install --no-cache-dir -q -r requirements-dev.txt && python -m pytest -q --tb=short
+# Pełna weryfikacja testów (pytest w Dockerze) z coverage gate z pyproject.toml.
+DOCKER_PYTEST = pip install --no-cache-dir -q -r requirements-dev.txt && python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
 
 up:
 	docker compose up
