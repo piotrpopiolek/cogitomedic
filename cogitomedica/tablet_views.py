@@ -2,6 +2,7 @@
 Minimalny interfejs tabletu (poczekalnia): logowanie, wybór kolejki, lista pacjentów, start formularza.
 Dostęp: rola TABLET, RECEPTION lub ADMIN.
 """
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -15,7 +16,10 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
-from apps.core.api_utils import get_scoped_clinic_site_ids, get_tablet_scope_clinic_site_ids
+from apps.core.api_utils import (
+    get_scoped_clinic_site_ids,
+    get_tablet_scope_clinic_site_ids,
+)
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
@@ -44,7 +48,9 @@ def _staff_context(request: HttpRequest) -> dict:
 
 def _tablet_role_ok(request: HttpRequest) -> bool:
     user = request.user
-    return user.is_authenticated and (user.is_tablet or user.is_reception or user.is_admin_role)
+    return user.is_authenticated and (
+        user.is_tablet or user.is_reception or user.is_admin_role
+    )
 
 
 def _get_tablet_device_from_session(request: HttpRequest) -> TabletDevice | None:
@@ -73,6 +79,7 @@ def _resolve_tablet_area_scope_ids(request: HttpRequest) -> list[UUID] | None:
             return tablet_scope_ids
     return scoped_ids
 
+
 @require_http_methods(["GET", "POST"])
 def tablet_login_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated and _tablet_role_ok(request):
@@ -81,7 +88,9 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
-        if user is not None and (user.is_tablet or user.is_reception or user.is_admin_role):
+        if user is not None and (
+            user.is_tablet or user.is_reception or user.is_admin_role
+        ):
             login(request, user)
             android_id = (request.POST.get("android_id") or "").strip()
             if android_id:
@@ -90,7 +99,9 @@ def tablet_login_view(request: HttpRequest) -> HttpResponse:
             else:
                 request.session.pop("tablet_device_id", None)
             next_url = (request.GET.get("next") or "").strip()
-            if next_url and not url_has_allowed_host_and_scheme(next_url, request.get_host()):
+            if next_url and not url_has_allowed_host_and_scheme(
+                next_url, request.get_host()
+            ):
                 next_url = ""
             return redirect(next_url or "tablet:home")
         ctx = _staff_context(request)
@@ -111,9 +122,11 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
     today = timezone.now().date()
-    qs = DailyQueue.objects.filter(queue_date=today).select_related(
-        "clinic_site", "consulting_room"
-    ).order_by("clinic_site__name", "consulting_room__name")
+    qs = (
+        DailyQueue.objects.filter(queue_date=today)
+        .select_related("clinic_site", "consulting_room")
+        .order_by("clinic_site__name", "consulting_room__name")
+    )
     tablet_unassigned = False
     scope_ids = _resolve_tablet_area_scope_ids(request)
     if scope_ids is not None:
@@ -137,7 +150,9 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required(login_url="tablet:login")
-def tablet_queue_entries_view(request: HttpRequest, daily_queue_id: UUID) -> HttpResponse:
+def tablet_queue_entries_view(
+    request: HttpRequest, daily_queue_id: UUID
+) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
     today = timezone.now().date()
@@ -236,18 +251,22 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
     try:
-        intake_form = (
-            PatientIntakeForm.objects.select_related("session", "queue_entry", "queue_entry__patient")
-            .get(id=intake_form_id)
-        )
+        intake_form = PatientIntakeForm.objects.select_related(
+            "session", "queue_entry", "queue_entry__patient"
+        ).get(id=intake_form_id)
     except ObjectDoesNotExist:
-        ctx = {**_staff_context(request), "message": "Formularz nie istnieje lub brak dostępu."}
+        ctx = {
+            **_staff_context(request),
+            "message": "Formularz nie istnieje lub brak dostępu.",
+        }
         return render(request, "tablet/error.html", ctx, status=404)
     session = intake_form.session
     locale_param = request.GET.get("locale", "").strip().lower()
     if locale_param in ("de", "en", "pl"):
         session.form_locale = (
-            "en-GB" if locale_param == "en" else "pl-PL" if locale_param == "pl" else "de-DE"
+            "en-GB"
+            if locale_param == "en"
+            else "pl-PL" if locale_param == "pl" else "de-DE"
         )
         session.save(update_fields=["form_locale"])
     form_locale = session.form_locale or "de-DE"
@@ -260,18 +279,34 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             allowed_clinic_site_ids=_resolve_tablet_area_scope_ids(request),
         )
     except ObjectDoesNotExist:
-        ctx = {**_staff_context(request), "message": "Formularz nie istnieje lub brak dostępu."}
+        ctx = {
+            **_staff_context(request),
+            "message": "Formularz nie istnieje lub brak dostępu.",
+        }
         return render(request, "tablet/error.html", ctx, status=404)
     if context["form_status"] == "SUBMITTED":
         ui = get_form_ui_strings(form_locale)
-        locale_param = "en" if form_locale.startswith("en") else "pl" if form_locale.startswith("pl") else "de"
+        locale_param = (
+            "en"
+            if form_locale.startswith("en")
+            else "pl" if form_locale.startswith("pl") else "de"
+        )
         return render(
             request,
             "tablet/form_submitted.html",
-            {"intake_form_id": intake_form_id, "ui": ui, "form_locale": form_locale, "locale_param": locale_param},
+            {
+                "intake_form_id": intake_form_id,
+                "ui": ui,
+                "form_locale": form_locale,
+                "locale_param": locale_param,
+            },
         )
     context["intake_form_id"] = str(intake_form_id)
     context["ui"] = get_form_ui_strings(form_locale)
     context["form_locale"] = form_locale
-    context["locale_param"] = "en" if form_locale.startswith("en") else "pl" if form_locale.startswith("pl") else "de"
+    context["locale_param"] = (
+        "en"
+        if form_locale.startswith("en")
+        else "pl" if form_locale.startswith("pl") else "de"
+    )
     return render(request, "tablet/form.html", context)

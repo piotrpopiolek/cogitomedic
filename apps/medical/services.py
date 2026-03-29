@@ -9,13 +9,28 @@ from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
-from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, safe_parse_positive_int
+from apps.core.api_utils import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    safe_parse_positive_int,
+)
 from apps.core.domain_messages import domain_message
-from apps.core.exceptions import DomainError, IdempotencyConflictError, StateTransitionError
-from apps.medical.medical_payload_schemas import validate_medical_payload_complete_for_publish
+from apps.core.exceptions import (
+    DomainError,
+    IdempotencyConflictError,
+)
+from apps.medical.medical_payload_schemas import (
+    validate_medical_payload_complete_for_publish,
+)
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
-from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument, MedicalDocumentVersion, PdfStatus
+from apps.medical.models import (
+    DocVersionStatus,
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentVersion,
+    PdfStatus,
+)
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
@@ -43,7 +58,9 @@ def outbox_event_stage_status(event: OutboxEvent | None, completed: bool) -> str
     return "FAILED"
 
 
-def latest_retryable_outbox_event(version: MedicalDocumentVersion) -> OutboxEvent | None:
+def latest_retryable_outbox_event(
+    version: MedicalDocumentVersion,
+) -> OutboxEvent | None:
     """Return retryable event (FAILED/DEAD_LETTER) for version if no stage is currently running."""
     events_by_type = {e.event_type: e for e in version.outbox_events.all()}
     if any(
@@ -62,9 +79,16 @@ def latest_retryable_outbox_event(version: MedicalDocumentVersion) -> OutboxEven
     return None
 
 
-def latest_version_processing_error_message(version: MedicalDocumentVersion) -> str | None:
+def latest_version_processing_error_message(
+    version: MedicalDocumentVersion,
+) -> str | None:
     events = list(version.outbox_events.all())
-    failed = [e for e in events if e.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER] and (e.error_message or "").strip()]
+    failed = [
+        e
+        for e in events
+        if e.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]
+        and (e.error_message or "").strip()
+    ]
     if not failed:
         return None
     failed.sort(key=lambda e: e.updated_at, reverse=True)
@@ -84,6 +108,7 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     if document.queue_entry.daily_queue.assigned_doctor_id == user.id:
         return
     raise ObjectDoesNotExist("Medical document not found.")
+
 
 def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
     """Raise ObjectDoesNotExist if user does not have access to the queue entry."""
@@ -121,7 +146,9 @@ def create_or_get_medical_document(
             "updated_by_user_id": created_by_user_id,
         },
     )
-    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document.id)
+    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+        id=medical_document.id
+    )
     if created:
         meta = {
             "queue_entry_id": str(queue_entry_id),
@@ -155,7 +182,9 @@ def save_draft_document_version(
     If latest version is DRAFT it is updated in place; otherwise a new draft
     version is created with incremented `version_no`.
     """
-    medical_document = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
 
     latest_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -202,9 +231,9 @@ def save_draft_document_version(
         return latest_version
 
     next_version_no = (
-        MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id).aggregate(
-            max_no=Max("version_no")
-        )["max_no"]
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=medical_document_id
+        ).aggregate(max_no=Max("version_no"))["max_no"]
         or 0
     ) + 1
 
@@ -274,7 +303,9 @@ def publish_document_version(
         )
 
     requested_at = now or timezone.now()
-    medical_document = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
 
     same_request_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -285,7 +316,10 @@ def publish_document_version(
         .first()
     )
     if same_request_version:
-        if same_request_version.publish_locale and same_request_version.publish_locale != publish_locale:
+        if (
+            same_request_version.publish_locale
+            and same_request_version.publish_locale != publish_locale
+        ):
             raise IdempotencyConflictError(
                 domain_message("other.api.publish_request_id_locale_conflict"),
                 api_message_key="other.api.publish_request_id_locale_conflict",
@@ -325,7 +359,9 @@ def publish_document_version(
             api_message_key="other.api.no_draft_before_publish",
         )
 
-    validate_medical_payload_complete_for_publish(draft_version.medical_payload, locale=publish_locale)
+    validate_medical_payload_complete_for_publish(
+        draft_version.medical_payload, locale=publish_locale
+    )
 
     draft_version.version_status = DocVersionStatus.PUBLISHED
     draft_version.publish_request_id = publish_request_id
@@ -403,10 +439,14 @@ def revoke_document_version(
     Revoke the current published version. Deletes local PDF, sets revoked_at.
     Patient will no longer see or download the document in ergebnisse portal.
     """
-    medical_document = MedicalDocument.objects.select_for_update().select_related(
-        "queue_entry",
-        "queue_entry__daily_queue",
-    ).get(id=medical_document_id)
+    medical_document = (
+        MedicalDocument.objects.select_for_update()
+        .select_related(
+            "queue_entry",
+            "queue_entry__daily_queue",
+        )
+        .get(id=medical_document_id)
+    )
 
     current_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -415,7 +455,11 @@ def revoke_document_version(
             version_status=DocVersionStatus.PUBLISHED,
             version_no=medical_document.current_version_no,
         )
-        .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__daily_queue")
+        .select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__daily_queue",
+        )
         .first()
     )
     if not current_version:
@@ -507,8 +551,13 @@ def list_medical_documents(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
-                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                queryset=MedicalDocumentVersion.objects.order_by(
+                    "-version_no"
+                ).prefetch_related(
+                    Prefetch(
+                        "outbox_events",
+                        queryset=OutboxEvent.objects.order_by("-created_at"),
+                    )
                 ),
             )
         )
@@ -516,7 +565,8 @@ def list_medical_documents(
     )
     if not user.is_admin_role and user is not None:
         qs = qs.filter(
-            Q(created_by_user_id=user.id) | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+            Q(created_by_user_id=user.id)
+            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
         )
     if status:
         qs = qs.filter(status=status)
@@ -547,18 +597,19 @@ def list_doctor_work_queue(
     """
     List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
     """
-    qs = (
-        PatientIntakeForm.objects.filter(form_status=IntakeStatus.SUBMITTED)
-        .select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
-    )
+    qs = PatientIntakeForm.objects.filter(
+        form_status=IntakeStatus.SUBMITTED
+    ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     if not user.is_admin_role and user is not None:
         qs = qs.filter(
-            Q(queue_entry__medical_document__created_by_user_id=user.id) | 
-            Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+            Q(queue_entry__medical_document__created_by_user_id=user.id)
+            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
         )
     if status:
         qs = qs.filter(
-            queue_entry_id__in=MedicalDocument.objects.filter(status=status).values_list("queue_entry_id", flat=True)
+            queue_entry_id__in=MedicalDocument.objects.filter(
+                status=status
+            ).values_list("queue_entry_id", flat=True)
         )
     if queue_date is not None:
         qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
@@ -582,8 +633,13 @@ def list_doctor_work_queue(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
-                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                queryset=MedicalDocumentVersion.objects.order_by(
+                    "-version_no"
+                ).prefetch_related(
+                    Prefetch(
+                        "outbox_events",
+                        queryset=OutboxEvent.objects.order_by("-created_at"),
+                    )
                 ),
             )
         )
@@ -600,36 +656,52 @@ def list_doctor_work_queue(
         events_by_type = {}
         if latest:
             events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
-        hidrive_status = outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
-            completed=bool(latest and latest.hidrive_sent),
-        ) if latest else None
-        sms_status = outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.SMS_SEND),
-            completed=bool(latest and latest.sms_sent),
-        ) if latest else None
+        hidrive_status = (
+            outbox_event_stage_status(
+                events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                completed=bool(latest and latest.hidrive_sent),
+            )
+            if latest
+            else None
+        )
+        sms_status = (
+            outbox_event_stage_status(
+                events_by_type.get(OutboxEventType.SMS_SEND),
+                completed=bool(latest and latest.sms_sent),
+            )
+            if latest
+            else None
+        )
         retryable_event = latest_retryable_outbox_event(latest) if latest else None
-        list_items.append({
-            "document_id": str(doc.id) if doc else None,
-            "queue_entry_id": str(entry.id),
-            "intake_form_id": str(intake_form.id),
-            "patient": {
-                "id": str(patient.id),
-                "first_name": patient.first_name,
-                "last_name": patient.last_name,
-                "date_of_birth": patient.date_of_birth.isoformat(),
-            },
-            "queue_date": queue.queue_date.isoformat(),
-            "status": doc.status if doc else "—",
-            "pdf_generation_status": latest.pdf_generation_status if latest else None,
-            "hidrive_sent": latest.hidrive_sent if latest else False,
-            "sms_sent": latest.sms_sent if latest else False,
-            "hidrive_status": hidrive_status,
-            "sms_status": sms_status,
-            "processing_error_message": latest_version_processing_error_message(latest) if latest else None,
-            "can_retry_processing": retryable_event is not None,
-            "retry_event_status": retryable_event.status if retryable_event else None,
-        })
+        list_items.append(
+            {
+                "document_id": str(doc.id) if doc else None,
+                "queue_entry_id": str(entry.id),
+                "intake_form_id": str(intake_form.id),
+                "patient": {
+                    "id": str(patient.id),
+                    "first_name": patient.first_name,
+                    "last_name": patient.last_name,
+                    "date_of_birth": patient.date_of_birth.isoformat(),
+                },
+                "queue_date": queue.queue_date.isoformat(),
+                "status": doc.status if doc else "—",
+                "pdf_generation_status": (
+                    latest.pdf_generation_status if latest else None
+                ),
+                "hidrive_sent": latest.hidrive_sent if latest else False,
+                "sms_sent": latest.sms_sent if latest else False,
+                "hidrive_status": hidrive_status,
+                "sms_status": sms_status,
+                "processing_error_message": (
+                    latest_version_processing_error_message(latest) if latest else None
+                ),
+                "can_retry_processing": retryable_event is not None,
+                "retry_event_status": (
+                    retryable_event.status if retryable_event else None
+                ),
+            }
+        )
     return list_items, total
 
 
@@ -654,8 +726,13 @@ def get_medical_document_context(
         .prefetch_related(
             Prefetch(
                 "versions",
-                queryset=MedicalDocumentVersion.objects.order_by("-version_no").prefetch_related(
-                    Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+                queryset=MedicalDocumentVersion.objects.order_by(
+                    "-version_no"
+                ).prefetch_related(
+                    Prefetch(
+                        "outbox_events",
+                        queryset=OutboxEvent.objects.order_by("-created_at"),
+                    )
                 ),
             )
         )
@@ -679,7 +756,10 @@ def get_medical_document_context(
         "anamnesis_answers": [
             {
                 "question_code": q.get("question_code"),
-                "selected_option_codes": (q.get("answer") or {}).get("selected_option_codes") or [],
+                "selected_option_codes": (q.get("answer") or {}).get(
+                    "selected_option_codes"
+                )
+                or [],
                 "free_text": (q.get("answer") or {}).get("free_text"),
             }
             for q in anamnesis_questions
@@ -710,11 +790,20 @@ def get_medical_document_context(
                     events_by_type.get(OutboxEventType.SMS_SEND),
                     completed=current_version.sms_sent,
                 ),
-                "processing_error_message": latest_version_processing_error_message(current_version),
+                "processing_error_message": latest_version_processing_error_message(
+                    current_version
+                ),
                 "can_retry_processing": retryable_event is not None
-                and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
+                and (
+                    getattr(user, "is_admin_role", False)
+                    or getattr(user, "is_reception", False)
+                ),
                 "publish_locale": current_version.publish_locale,
-                "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
+                "published_at": (
+                    current_version.published_at.isoformat()
+                    if current_version.published_at
+                    else None
+                ),
             }
         else:
             current_version_payload = {
@@ -735,11 +824,20 @@ def get_medical_document_context(
                     events_by_type.get(OutboxEventType.SMS_SEND),
                     completed=current_version.sms_sent,
                 ),
-                "processing_error_message": latest_version_processing_error_message(current_version),
+                "processing_error_message": latest_version_processing_error_message(
+                    current_version
+                ),
                 "can_retry_processing": retryable_event is not None
-                and (getattr(user, "is_admin_role", False) or getattr(user, "is_reception", False)),
+                and (
+                    getattr(user, "is_admin_role", False)
+                    or getattr(user, "is_reception", False)
+                ),
                 "publish_locale": current_version.publish_locale,
-                "published_at": current_version.published_at.isoformat() if current_version.published_at else None,
+                "published_at": (
+                    current_version.published_at.isoformat()
+                    if current_version.published_at
+                    else None
+                ),
             }
 
     return {
@@ -748,7 +846,9 @@ def get_medical_document_context(
         "intake_form_id": str(doc.intake_form_id),
         "status": doc.status,
         "current_version_no": doc.current_version_no,
-        "last_published_at": doc.last_published_at.isoformat() if doc.last_published_at else None,
+        "last_published_at": (
+            doc.last_published_at.isoformat() if doc.last_published_at else None
+        ),
         "intake_summary": intake_summary,
         "current_version": current_version_payload,
     }
@@ -766,15 +866,19 @@ def retry_latest_document_processing(
             domain_message("other.domain.document_processing_retry_role"),
             api_message_key="other.domain.document_processing_retry_role",
         )
-    doc = MedicalDocument.objects.select_for_update().select_related(
-        "queue_entry__daily_queue"
-    ).get(id=medical_document_id)
+    doc = (
+        MedicalDocument.objects.select_for_update()
+        .select_related("queue_entry__daily_queue")
+        .get(id=medical_document_id)
+    )
     latest_version = (
         MedicalDocumentVersion.objects.select_for_update()
         .filter(medical_document_id=medical_document_id)
         .order_by("-version_no")
         .prefetch_related(
-            Prefetch("outbox_events", queryset=OutboxEvent.objects.order_by("-created_at"))
+            Prefetch(
+                "outbox_events", queryset=OutboxEvent.objects.order_by("-created_at")
+            )
         )
         .first()
     )

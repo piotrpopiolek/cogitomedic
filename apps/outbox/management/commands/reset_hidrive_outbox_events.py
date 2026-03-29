@@ -6,7 +6,12 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from apps.intake.models import IntakeDocumentVersion, IntakeOutboxEvent, IntakeOutboxEventType, IntakeOutboxStatus
+from apps.intake.models import (
+    IntakeDocumentVersion,
+    IntakeOutboxEvent,
+    IntakeOutboxEventType,
+    IntakeOutboxStatus,
+)
 from apps.medical.models import MedicalDocumentVersion
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 

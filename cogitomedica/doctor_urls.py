@@ -12,6 +12,14 @@ urlpatterns = [
     path("login/", doctor_login_view, name="doctor-login"),
     path("logout/", doctor_logout_view, name="doctor-logout"),
     path("", doctor_list_view, name="doctor-list"),
-    path("open/<uuid:queue_entry_id>/", doctor_open_by_queue_view, name="doctor-open-by-queue"),
-    path("<uuid:medical_document_id>/", doctor_document_detail_view, name="doctor-document-detail"),
+    path(
+        "open/<uuid:queue_entry_id>/",
+        doctor_open_by_queue_view,
+        name="doctor-open-by-queue",
+    ),
+    path(
+        "<uuid:medical_document_id>/",
+        doctor_document_detail_view,
+        name="doctor-document-detail",
+    ),
 ]

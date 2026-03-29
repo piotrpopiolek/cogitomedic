@@ -15,6 +15,7 @@ from django.urls import reverse_lazy
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+
 def before_send_filter(event: dict, hint: dict) -> dict:
     """Filter sensitive request metadata before sending to Sentry."""
     request = event.get("request", {})
@@ -36,18 +37,21 @@ def before_send_filter(event: dict, hint: dict) -> dict:
 
     return event
 
+
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         send_default_pii=False,
         traces_sample_rate=1.0,
-        before_send=before_send_filter,
+        before_send=before_send_filter,  # type: ignore[arg-type]
     )
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
-    raise ImproperlyConfigured("SECRET_KEY must be set in production (set the SECRET_KEY environment variable).")
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set in production (set the SECRET_KEY environment variable)."
+    )
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
@@ -56,7 +60,9 @@ PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
 
 # Hosty dozwolone w nagłówku Host. W prod MUSI być ustawione ALLOWED_HOSTS (np. twojadomena.com).
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()
+]
 if ENVIRONMENT == "dev" or DEBUG:
     if "web" not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append("web")
@@ -126,21 +132,29 @@ def _is_admin_role(request) -> bool:
 
 def _is_reception_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
-    return bool(user and user.is_authenticated and (user.is_admin_role or user.is_reception))
+    return bool(
+        user and user.is_authenticated and (user.is_admin_role or user.is_reception)
+    )
 
 
 def _is_doctor_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
-    return bool(user and user.is_authenticated and (user.is_admin_role or user.is_doctor))
+    return bool(
+        user and user.is_authenticated and (user.is_admin_role or user.is_doctor)
+    )
 
 
 if HAS_UNFOLD:
     from apps.core.translation_service import db_gettext_lazy
 
     UNFOLD = {
-        "SITE_TITLE": db_gettext_lazy("administration.site_title", "Cogitomedica Staff"),
+        "SITE_TITLE": db_gettext_lazy(
+            "administration.site_title", "Cogitomedica Staff"
+        ),
         "SITE_HEADER": db_gettext_lazy("administration.site_header", "Cogitomedica"),
-        "SITE_SUBHEADER": db_gettext_lazy("administration.site_subheader", "Panel administracyjny"),
+        "SITE_SUBHEADER": db_gettext_lazy(
+            "administration.site_subheader", "Panel administracyjny"
+        ),
         "SIDEBAR": {
             "navigation": [
                 {
@@ -149,19 +163,31 @@ if HAS_UNFOLD:
                     "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_lekarz", "Lekarz"),
+                            "title": db_gettext_lazy(
+                                "administration.side_lekarz", "Lekarz"
+                            ),
                             "icon": "stethoscope",
                             "link": lambda request: reverse_lazy("doctor-list"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_rejestracja", "Rejestracja"),
+                            "title": db_gettext_lazy(
+                                "administration.side_rejestracja", "Rejestracja"
+                            ),
                             "icon": "groups",
-                            "link": lambda request: reverse_lazy("admin_reception_dashboard"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin_reception_dashboard"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_admin", "Admin"),
+                            "title": db_gettext_lazy(
+                                "administration.side_admin", "Admin"
+                            ),
                             "icon": "admin_panel_settings",
                             "link": lambda request: reverse_lazy("admin:index"),
                             "permission": lambda request: _is_admin_role(request),
@@ -169,104 +195,203 @@ if HAS_UNFOLD:
                     ],
                 },
                 {
-                    "title": db_gettext_lazy("administration.side_users_permissions", "Użytkownicy i uprawnienia"),
+                    "title": db_gettext_lazy(
+                        "administration.side_users_permissions",
+                        "Użytkownicy i uprawnienia",
+                    ),
                     "permission": lambda request: _is_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_staff_users", "Staff users"),
+                            "title": db_gettext_lazy(
+                                "administration.side_staff_users", "Staff users"
+                            ),
                             "icon": "person",
-                            "link": lambda request: reverse_lazy("admin:users_staffuser_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:users_staffuser_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_grupy", "Grupy"),
+                            "title": db_gettext_lazy(
+                                "administration.side_grupy", "Grupy"
+                            ),
                             "icon": "group_work",
-                            "link": lambda request: reverse_lazy("admin:auth_group_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:auth_group_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                     ],
                 },
                 {
-                    "title": db_gettext_lazy("administration.side_patients_readonly", "Pacjenci i kliniki (tylko odczyt)"),
-                    "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
+                    "title": db_gettext_lazy(
+                        "administration.side_patients_readonly",
+                        "Pacjenci i kliniki (tylko odczyt)",
+                    ),
+                    "permission": lambda request: _is_doctor_or_admin_role(request)
+                    or _is_reception_or_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_pacjenci", "Pacjenci"),
+                            "title": db_gettext_lazy(
+                                "administration.side_pacjenci", "Pacjenci"
+                            ),
                             "icon": "person",
-                            "link": lambda request: reverse_lazy("admin:reception_patient_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_patient_changelist"
+                            ),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            )
+                            or _is_reception_or_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_placowki", "Placówki"),
+                            "title": db_gettext_lazy(
+                                "administration.side_placowki", "Placówki"
+                            ),
                             "icon": "local_hospital",
-                            "link": lambda request: reverse_lazy("admin:reception_clinicsite_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_clinicsite_changelist"
+                            ),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            )
+                            or _is_reception_or_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_gabinety", "Gabinety"),
+                            "title": db_gettext_lazy(
+                                "administration.side_gabinety", "Gabinety"
+                            ),
                             "icon": "meeting_room",
-                            "link": lambda request: reverse_lazy("admin:reception_consultingroom_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request) or _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_consultingroom_changelist"
+                            ),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            )
+                            or _is_reception_or_admin_role(request),
                         },
                     ],
                 },
                 {
-                    "title": db_gettext_lazy("administration.side_reception_admin", "Rejestracja (Admin)"),
+                    "title": db_gettext_lazy(
+                        "administration.side_reception_admin", "Rejestracja (Admin)"
+                    ),
                     "permission": lambda request: _is_reception_or_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_dashboard_recepcji", "Dashboard operacyjny"),
+                            "title": db_gettext_lazy(
+                                "administration.side_dashboard_recepcji",
+                                "Dashboard operacyjny",
+                            ),
                             "icon": "dashboard",
-                            "link": lambda request: reverse_lazy("admin_reception_dashboard"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin_reception_dashboard"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_kolejki_dzienne", "Kolejki dzienne"),
+                            "title": db_gettext_lazy(
+                                "administration.side_kolejki_dzienne", "Kolejki dzienne"
+                            ),
                             "icon": "today",
-                            "link": lambda request: reverse_lazy("admin:reception_dailyqueue_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_dailyqueue_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_kolejki_master_detail", "Kolejki master/detail"),
+                            "title": db_gettext_lazy(
+                                "administration.side_kolejki_master_detail",
+                                "Kolejki master/detail",
+                            ),
                             "icon": "table_rows",
-                            "link": lambda request: reverse_lazy("admin:reception_dailyqueue_master_detail"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_dailyqueue_master_detail"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_wpisy_kolejki", "Wpisy kolejki"),
+                            "title": db_gettext_lazy(
+                                "administration.side_wpisy_kolejki", "Wpisy kolejki"
+                            ),
                             "icon": "format_list_numbered",
-                            "link": lambda request: reverse_lazy("admin:reception_queueentry_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_queueentry_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_urzadzenia_tablet", "Urządzenia tablet"),
+                            "title": db_gettext_lazy(
+                                "administration.side_urzadzenia_tablet",
+                                "Urządzenia tablet",
+                            ),
                             "icon": "tablet",
-                            "link": lambda request: reverse_lazy("admin:reception_tabletdevice_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_tabletdevice_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_sesje_formularzy", "Sesje formularzy"),
+                            "title": db_gettext_lazy(
+                                "administration.side_sesje_formularzy",
+                                "Sesje formularzy",
+                            ),
                             "icon": "schedule",
-                            "link": lambda request: reverse_lazy("admin:reception_patientformsession_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_patientformsession_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_dokumenty_intake_pdf", "Dokumenty intake (PDF)"),
+                            "title": db_gettext_lazy(
+                                "administration.side_dokumenty_intake_pdf",
+                                "Dokumenty intake (PDF)",
+                            ),
                             "icon": "picture_as_pdf",
-                            "link": lambda request: reverse_lazy("admin_intake_documents"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin_intake_documents"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_batch_importu", "Batch importu pacjentów"),
+                            "title": db_gettext_lazy(
+                                "administration.side_batch_importu",
+                                "Batch importu pacjentów",
+                            ),
                             "icon": "upload_file",
-                            "link": lambda request: reverse_lazy("admin:reception_patientimportbatch_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_patientimportbatch_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_bledy_importu", "Błędy importu pacjentów"),
+                            "title": db_gettext_lazy(
+                                "administration.side_bledy_importu",
+                                "Błędy importu pacjentów",
+                            ),
                             "icon": "error",
-                            "link": lambda request: reverse_lazy("admin:reception_patientimporterror_changelist"),
-                            "permission": lambda request: _is_reception_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:reception_patientimporterror_changelist"
+                            ),
+                            "permission": lambda request: _is_reception_or_admin_role(
+                                request
+                            ),
                         },
                     ],
                 },
@@ -275,33 +400,57 @@ if HAS_UNFOLD:
                     "permission": lambda request: _is_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_definicje_zgod", "Definicje zgód"),
+                            "title": db_gettext_lazy(
+                                "administration.side_definicje_zgod", "Definicje zgód"
+                            ),
                             "icon": "verified_user",
-                            "link": lambda request: reverse_lazy("admin:intake_consentdefinition_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:intake_consentdefinition_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_pytania_anamnezy", "Pytania anamnezy"),
+                            "title": db_gettext_lazy(
+                                "administration.side_pytania_anamnezy",
+                                "Pytania anamnezy",
+                            ),
                             "icon": "quiz",
-                            "link": lambda request: reverse_lazy("admin:intake_anamnesisquestiondefinition_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:intake_anamnesisquestiondefinition_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_opcje_pytan", "Opcje pytań anamnezy"),
+                            "title": db_gettext_lazy(
+                                "administration.side_opcje_pytan",
+                                "Opcje pytań anamnezy",
+                            ),
                             "icon": "list",
-                            "link": lambda request: reverse_lazy("admin:intake_anamnesisoptiondefinition_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:intake_anamnesisoptiondefinition_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_formularze_intake", "Formularze intake"),
+                            "title": db_gettext_lazy(
+                                "administration.side_formularze_intake",
+                                "Formularze intake",
+                            ),
                             "icon": "assignment",
-                            "link": lambda request: reverse_lazy("admin:intake_patientintakeform_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:intake_patientintakeform_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_zgody_formularzy", "Zgody formularzy intake"),
+                            "title": db_gettext_lazy(
+                                "administration.side_zgody_formularzy",
+                                "Zgody formularzy intake",
+                            ),
                             "icon": "how_to_reg",
-                            "link": lambda request: reverse_lazy("admin:intake_patientintakeconsent_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:intake_patientintakeconsent_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                     ],
@@ -311,49 +460,82 @@ if HAS_UNFOLD:
                     "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_dokumenty_medyczne", "Dokumenty medyczne"),
+                            "title": db_gettext_lazy(
+                                "administration.side_dokumenty_medyczne",
+                                "Dokumenty medyczne",
+                            ),
                             "icon": "description",
-                            "link": lambda request: reverse_lazy("admin:medical_medicaldocument_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:medical_medicaldocument_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_wersje_dokumentow", "Wersje dokumentów"),
+                            "title": db_gettext_lazy(
+                                "administration.side_wersje_dokumentow",
+                                "Wersje dokumentów",
+                            ),
                             "icon": "library_books",
-                            "link": lambda request: reverse_lazy("admin:medical_medicaldocumentversion_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:medical_medicaldocumentversion_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_szablony_lekarza", "Szablony lekarza"),
+                            "title": db_gettext_lazy(
+                                "administration.side_szablony_lekarza",
+                                "Szablony lekarza",
+                            ),
                             "icon": "article",
-                            "link": lambda request: reverse_lazy("admin:medical_doctortexttemplate_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:medical_doctortexttemplate_changelist"
+                            ),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            ),
                         },
                     ],
                 },
                 {
-                    "title": db_gettext_lazy("administration.side_outbox_ops", "Outbox i operacje"),
+                    "title": db_gettext_lazy(
+                        "administration.side_outbox_ops", "Outbox i operacje"
+                    ),
                     "permission": lambda request: _is_doctor_or_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_outbox_events", "Outbox events"),
+                            "title": db_gettext_lazy(
+                                "administration.side_outbox_events", "Outbox events"
+                            ),
                             "icon": "outbox",
-                            "link": lambda request: reverse_lazy("admin:outbox_outboxevent_changelist"),
+                            "link": lambda request: reverse_lazy(
+                                "admin:outbox_outboxevent_changelist"
+                            ),
                             "permission": lambda request: _is_admin_role(request),
                         },
                         {
-                            "title": db_gettext_lazy("administration.side_audit_events", "Audit events"),
+                            "title": db_gettext_lazy(
+                                "administration.side_audit_events", "Audit events"
+                            ),
                             "icon": "fact_check",
-                            "link": lambda request: reverse_lazy("admin:operations_auditevent_changelist"),
-                            "permission": lambda request: _is_doctor_or_admin_role(request),
+                            "link": lambda request: reverse_lazy(
+                                "admin:operations_auditevent_changelist"
+                            ),
+                            "permission": lambda request: _is_doctor_or_admin_role(
+                                request
+                            ),
                         },
                     ],
                 },
                 {
-                    "title": db_gettext_lazy("administration.side_api_tools", "API / narzędzia"),
+                    "title": db_gettext_lazy(
+                        "administration.side_api_tools", "API / narzędzia"
+                    ),
                     "permission": lambda request: _is_admin_role(request),
                     "items": [
                         {
-                            "title": db_gettext_lazy("administration.side_swagger", "Swagger"),
+                            "title": db_gettext_lazy(
+                                "administration.side_swagger", "Swagger"
+                            ),
                             "icon": "description",
                             "link": lambda request: reverse_lazy("api-swagger"),
                             "permission": lambda request: _is_admin_role(request),
@@ -449,7 +631,7 @@ DATABASES = {
 }
 
 
-AUTH_PASSWORD_VALIDATORS = [
+AUTH_PASSWORD_VALIDATORS: list[dict[str, str]] = [
     # {
     #     "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     # },
@@ -526,8 +708,12 @@ HIDRIVE_USE_MOCK = os.environ.get("HIDRIVE_USE_MOCK", "0")
 HIDRIVE_CLIENT_ID = os.environ.get("HIDRIVE_CLIENT_ID", "")
 HIDRIVE_CLIENT_SECRET = os.environ.get("HIDRIVE_CLIENT_SECRET", "")
 HIDRIVE_REFRESH_TOKEN = os.environ.get("HIDRIVE_REFRESH_TOKEN", "")
-HIDRIVE_TOKEN_URL = os.environ.get("HIDRIVE_TOKEN_URL", "https://my.hidrive.com/oauth2/token")
-HIDRIVE_API_BASE_URL = os.environ.get("HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1")
+HIDRIVE_TOKEN_URL = os.environ.get(
+    "HIDRIVE_TOKEN_URL", "https://my.hidrive.com/oauth2/token"
+)
+HIDRIVE_API_BASE_URL = os.environ.get(
+    "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1"
+)
 HIDRIVE_TIMEOUT_SECONDS = int(os.environ.get("HIDRIVE_TIMEOUT_SECONDS", "30"))
 if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", "yes"):
     missing_hidrive = [
@@ -546,7 +732,9 @@ if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", 
         )
 
 # Portal wyniki (patient results)
-PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl")
+PATIENT_RESULTS_BASE_URL = os.environ.get(
+    "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl"
+)
 PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
 if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
     raise ImproperlyConfigured(
@@ -556,7 +744,11 @@ if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
 # CAPTCHA (Cloudflare Turnstile)
 TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
 TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
-CAPTCHA_VERIFY_SKIP = os.environ.get("CAPTCHA_VERIFY_SKIP", "0").lower() in ("1", "true", "yes")
+CAPTCHA_VERIFY_SKIP = os.environ.get("CAPTCHA_VERIFY_SKIP", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -568,7 +760,12 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "POSTPROCESSING_HOOKS": ["cogitomedica.openapi_extension.cogito_extend_schema"],
-    "SERVERS": [{"url": "/", "description": "Relative to current host (e.g. http://127.0.0.1:8000)"}],
+    "SERVERS": [
+        {
+            "url": "/",
+            "description": "Relative to current host (e.g. http://127.0.0.1:8000)",
+        }
+    ],
 }
 
 # CORS: dozwolone origins dla requestów z przeglądarki (np. frontend na innym porcie).

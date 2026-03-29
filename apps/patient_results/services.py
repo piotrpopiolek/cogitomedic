@@ -1,10 +1,10 @@
 """Portal wyniki – OTP request/verify services."""
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import random
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -137,14 +137,16 @@ def request_otp(
     pepper = (getattr(settings, "PATIENT_RESULTS_OTP_PEPPER", "") or "").strip()
     environment = (getattr(settings, "ENVIRONMENT", "dev") or "dev").strip().lower()
     if not pepper and environment != "dev":
-        raise ValueError("PATIENT_RESULTS_OTP_PEPPER must be set outside development environments.")
+        raise ValueError(
+            "PATIENT_RESULTS_OTP_PEPPER must be set outside development environments."
+        )
 
     otp_code = f"{random.randint(100000, 999999)}"
     otp_hash = _hash_otp(otp_code)
     expires_at = timezone.now() + timedelta(minutes=OTP_VALID_MINUTES)
 
     with transaction.atomic():
-        session = PatientResultsOtpSession.objects.create(
+        PatientResultsOtpSession.objects.create(
             patient=patient,
             phone=phone_norm,
             otp_code_hash=otp_hash,

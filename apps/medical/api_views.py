@@ -18,7 +18,11 @@ from apps.core.api_utils import (
     safe_parse_positive_int,
 )
 from apps.core.http_utils import get_client_ip
-from apps.core.exceptions import DomainError, IdempotencyConflictError, InvalidRequestBodyEncoding
+from apps.core.exceptions import (
+    DomainError,
+    IdempotencyConflictError,
+    InvalidRequestBodyEncoding,
+)
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
     DoctorTemplateCreateRequest,
@@ -65,7 +69,9 @@ def _serialize_medical_document_list_item(doc) -> dict:
     """Serialize one medical document for list response; doc has prefetched versions (ordered -version_no)."""
     versions = list(doc.versions.all())
     latest = versions[0] if versions else None
-    events_by_type = {e.event_type: e for e in latest.outbox_events.all()} if latest else {}
+    events_by_type = (
+        {e.event_type: e for e in latest.outbox_events.all()} if latest else {}
+    )
     patient = doc.queue_entry.patient
     queue = doc.queue_entry.daily_queue
     return {
@@ -73,7 +79,9 @@ def _serialize_medical_document_list_item(doc) -> dict:
         "queue_entry_id": str(doc.queue_entry_id),
         "status": doc.status,
         "current_version_no": doc.current_version_no,
-        "last_published_at": doc.last_published_at.isoformat() if doc.last_published_at else None,
+        "last_published_at": (
+            doc.last_published_at.isoformat() if doc.last_published_at else None
+        ),
         "queue_date": queue.queue_date.isoformat(),
         "patient": {
             "id": str(patient.id),
@@ -84,20 +92,28 @@ def _serialize_medical_document_list_item(doc) -> dict:
         "pdf_generation_status": latest.pdf_generation_status if latest else None,
         "hidrive_sent": latest.hidrive_sent if latest else False,
         "sms_sent": latest.sms_sent if latest else False,
-        "hidrive_status": outbox_event_stage_status(
-            events_by_type.get("HIDRIVE_UPLOAD"),
-            completed=bool(latest and latest.hidrive_sent),
-        )
-        if latest
-        else None,
-        "sms_status": outbox_event_stage_status(
-            events_by_type.get("SMS_SEND"),
-            completed=bool(latest and latest.sms_sent),
-        )
-        if latest
-        else None,
-        "processing_error_message": latest_version_processing_error_message(latest) if latest else None,
-        "can_retry_processing": latest_retryable_outbox_event(latest) is not None if latest else False,
+        "hidrive_status": (
+            outbox_event_stage_status(
+                events_by_type.get("HIDRIVE_UPLOAD"),
+                completed=bool(latest and latest.hidrive_sent),
+            )
+            if latest
+            else None
+        ),
+        "sms_status": (
+            outbox_event_stage_status(
+                events_by_type.get("SMS_SEND"),
+                completed=bool(latest and latest.sms_sent),
+            )
+            if latest
+            else None
+        ),
+        "processing_error_message": (
+            latest_version_processing_error_message(latest) if latest else None
+        ),
+        "can_retry_processing": (
+            latest_retryable_outbox_event(latest) is not None if latest else False
+        ),
     }
 
 
@@ -142,10 +158,14 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
 
         try:
-            entry = QueueEntry.objects.select_related("daily_queue").get(id=body.queue_entry_id)
+            entry = QueueEntry.objects.select_related("daily_queue").get(
+                id=body.queue_entry_id
+            )
             check_doctor_queue_entry_access(entry, request.user)
             document = create_or_get_medical_document(
                 queue_entry_id=body.queue_entry_id,
@@ -168,7 +188,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_detail_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     """GET full document context: intake summary + current version (for doctor panel)."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -184,7 +206,9 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
         )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
-    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+    doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+        id=medical_document_id
+    )
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VIEWED",
         actor_user_id=request.user.id,
@@ -200,7 +224,9 @@ def medical_document_detail_view(request: HttpRequest, medical_document_id: UUID
 
 
 @require_auth
-def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id: UUID) -> HttpResponse:
+def medical_document_preview_pdf_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> HttpResponse:
     """GET: return PDF preview from the latest saved version (draft or published). Opens inline in browser."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -208,23 +234,33 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
     version = (
         MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
-        .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__patient")
+        .select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__patient",
+        )
         .order_by("-version_no")
         .first()
     )
     if not version:
         return json_error("other.api.no_version_to_preview", status=404)
 
-    form_locale = (request.GET.get("form_locale") or request.GET.get("authoring_locale") or "").strip()[:10]
+    form_locale = (
+        request.GET.get("form_locale") or request.GET.get("authoring_locale") or ""
+    ).strip()[:10]
     authoring_locale_override = form_locale if form_locale else None
-    pdf_bytes = build_befund_pdf_bytes(version, authoring_locale_override=authoring_locale_override)
+    pdf_bytes = build_befund_pdf_bytes(
+        version, authoring_locale_override=authoring_locale_override
+    )
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
         actor_user_id=request.user.id,
@@ -246,7 +282,9 @@ def medical_document_preview_pdf_view(request: HttpRequest, medical_document_id:
 
 
 @require_auth
-def medical_document_versions_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_versions_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     """GET: list versions of a medical document."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -254,7 +292,9 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
@@ -279,7 +319,9 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
             "version_no": v["version_no"],
             "version_status": v["version_status"],
             "pdf_generation_status": v["pdf_generation_status"],
-            "published_at": v["published_at"].isoformat() if v["published_at"] else None,
+            "published_at": (
+                v["published_at"].isoformat() if v["published_at"] else None
+            ),
             "revoked_at": v["revoked_at"].isoformat() if v["revoked_at"] else None,
             "hidrive_sent": v["hidrive_sent"],
             "sms_sent": v["sms_sent"],
@@ -302,7 +344,9 @@ def medical_document_versions_view(request: HttpRequest, medical_document_id: UU
 
 
 @require_auth
-def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_draft_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -315,13 +359,17 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("other.api.medical_payload_schema_mismatch", status=400)
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
@@ -331,8 +379,14 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
         try:
             payload_dict = validate_medical_payload_v1(payload_dict)
         except ValidationError as exc:
-            details = [{"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")} for e in exc.errors()]
-            return JsonResponse({"error": "Invalid medical_payload (v1).", "details": details}, status=400)
+            details = [
+                {"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")}
+                for e in exc.errors()
+            ]
+            return JsonResponse(
+                {"error": "Invalid medical_payload (v1).", "details": details},
+                status=400,
+            )
 
     try:
         version = save_draft_document_version(
@@ -359,7 +413,9 @@ def medical_document_draft_view(request: HttpRequest, medical_document_id: UUID)
 
 
 @require_auth
-def medical_document_publish_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_publish_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -372,10 +428,14 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
@@ -400,7 +460,9 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
             "medical_document_version_id": str(version.id),
             "version_no": version.version_no,
             "version_status": version.version_status,
-            "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+            "publish_request_id": (
+                str(version.publish_request_id) if version.publish_request_id else None
+            ),
             "publish_locale": version.publish_locale,
         },
         status=200,
@@ -408,7 +470,9 @@ def medical_document_publish_view(request: HttpRequest, medical_document_id: UUI
 
 
 @require_auth
-def medical_document_version_detail_view(request: HttpRequest, version_id: UUID) -> JsonResponse:
+def medical_document_version_detail_view(
+    request: HttpRequest, version_id: UUID
+) -> JsonResponse:
     """GET: single medical document version by id (MedicalDocumentVersion.id)."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -448,12 +512,22 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
             "procedure_code": version.procedure_code,
             "pdf_generation_status": version.pdf_generation_status,
             "hidrive_sent": version.hidrive_sent,
-            "hidrive_sent_at": version.hidrive_sent_at.isoformat() if version.hidrive_sent_at else None,
+            "hidrive_sent_at": (
+                version.hidrive_sent_at.isoformat() if version.hidrive_sent_at else None
+            ),
             "sms_sent": version.sms_sent,
-            "sms_sent_at": version.sms_sent_at.isoformat() if version.sms_sent_at else None,
-            "published_at": version.published_at.isoformat() if version.published_at else None,
-            "revoked_at": version.revoked_at.isoformat() if version.revoked_at else None,
-            "publish_request_id": str(version.publish_request_id) if version.publish_request_id else None,
+            "sms_sent_at": (
+                version.sms_sent_at.isoformat() if version.sms_sent_at else None
+            ),
+            "published_at": (
+                version.published_at.isoformat() if version.published_at else None
+            ),
+            "revoked_at": (
+                version.revoked_at.isoformat() if version.revoked_at else None
+            ),
+            "publish_request_id": (
+                str(version.publish_request_id) if version.publish_request_id else None
+            ),
             "publish_locale": version.publish_locale,
             "created_at": version.created_at.isoformat(),
         },
@@ -462,7 +536,9 @@ def medical_document_version_detail_view(request: HttpRequest, version_id: UUID)
 
 
 @require_auth
-def medical_document_retry_processing_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_retry_processing_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
@@ -475,10 +551,14 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
         retried = retry_latest_document_processing(
             medical_document_id=medical_document_id,
@@ -502,7 +582,9 @@ def medical_document_retry_processing_view(request: HttpRequest, medical_documen
 
 
 @require_auth
-def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_revoke_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     """POST: Revoke the current published version. Patient loses access in ergebnisse portal."""
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
@@ -510,7 +592,9 @@ def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
         version = revoke_document_version(
             medical_document_id=medical_document_id,
@@ -524,7 +608,9 @@ def medical_document_revoke_view(request: HttpRequest, medical_document_id: UUID
         {
             "medical_document_version_id": str(version.id),
             "version_no": version.version_no,
-            "revoked_at": version.revoked_at.isoformat() if version.revoked_at else None,
+            "revoked_at": (
+                version.revoked_at.isoformat() if version.revoked_at else None
+            ),
         },
         status=200,
     )
@@ -540,11 +626,16 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
             query = DoctorTemplateListQuery.model_validate(
                 {
                     "template_locale": request.GET.get("template_locale"),
-                    "include_inactive": request.GET.get("include_inactive", "false").lower() == "true",
+                    "include_inactive": request.GET.get(
+                        "include_inactive", "false"
+                    ).lower()
+                    == "true",
                 }
             )
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
 
         try:
             templates = list_templates(
@@ -569,9 +660,17 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                         "template_body": template.template_body,
                         "lesion_group_favorites": template.lesion_group_favorites or [],
                         "is_global": template.is_global,
-                        "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
+                        "clinic_site_id": (
+                            str(template.clinic_site_id)
+                            if template.clinic_site_id
+                            else None
+                        ),
                         "is_active": template.is_active,
-                        "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
+                        "owner_user_id": (
+                            str(template.owner_user_id)
+                            if template.owner_user_id
+                            else None
+                        ),
                     }
                     for template in templates
                 ]
@@ -587,7 +686,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
 
         try:
             template = create_template(
@@ -595,7 +696,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 name=body.name,
                 template_locale=body.template_locale,
                 template_body=body.template_body,
-                lesion_group_favorites=[p.model_dump(mode="json") for p in body.lesion_group_favorites],
+                lesion_group_favorites=[
+                    p.model_dump(mode="json") for p in body.lesion_group_favorites
+                ],
                 is_global=body.is_global,
                 clinic_site_id=body.clinic_site_id,
                 is_active=body.is_active,
@@ -615,7 +718,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 "template_body": template.template_body,
                 "lesion_group_favorites": template.lesion_group_favorites or [],
                 "is_global": template.is_global,
-                "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
+                "clinic_site_id": (
+                    str(template.clinic_site_id) if template.clinic_site_id else None
+                ),
                 "is_active": template.is_active,
             },
             status=201,
@@ -625,13 +730,17 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
-def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) -> JsonResponse:
+def doctor_text_template_detail_view(
+    request: HttpRequest, template_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
     if request.method == "GET":
         try:
-            template = get_template(template_id=template_id, actor_user_id=request.user.id)
+            template = get_template(
+                template_id=template_id, actor_user_id=request.user.id
+            )
         except TemplateNotFoundError:
             return json_error("other.api.template_not_found", status=404)
         return JsonResponse(
@@ -642,9 +751,13 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
                 "template_body": template.template_body,
                 "lesion_group_favorites": template.lesion_group_favorites or [],
                 "is_global": template.is_global,
-                "clinic_site_id": str(template.clinic_site_id) if template.clinic_site_id else None,
+                "clinic_site_id": (
+                    str(template.clinic_site_id) if template.clinic_site_id else None
+                ),
                 "is_active": template.is_active,
-                "owner_user_id": str(template.owner_user_id) if template.owner_user_id else None,
+                "owner_user_id": (
+                    str(template.owner_user_id) if template.owner_user_id else None
+                ),
             },
             status=200,
         )
@@ -658,7 +771,9 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     try:
         template = update_template(
@@ -667,9 +782,11 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
             name=body.name,
             template_locale=body.template_locale,
             template_body=body.template_body,
-            lesion_group_favorites=[p.model_dump(mode="json") for p in body.lesion_group_favorites]
-            if body.lesion_group_favorites is not None
-            else None,
+            lesion_group_favorites=(
+                [p.model_dump(mode="json") for p in body.lesion_group_favorites]
+                if body.lesion_group_favorites is not None
+                else None
+            ),
             is_active=body.is_active,
         )
     except ObjectDoesNotExist:
@@ -696,14 +813,18 @@ def doctor_text_template_detail_view(request: HttpRequest, template_id: UUID) ->
 
 
 @require_auth
-def medical_document_audit_trail_view(request: HttpRequest, medical_document_id: UUID) -> JsonResponse:
+def medical_document_audit_trail_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(id=medical_document_id)
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
@@ -714,7 +835,9 @@ def medical_document_audit_trail_view(request: HttpRequest, medical_document_id:
         default=DEFAULT_LIST_LIMIT,
         maximum=MAX_LIST_LIMIT,
     )
-    qs = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by("-event_time")
+    qs = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by(
+        "-event_time"
+    )
     total = qs.count()
     start = (page - 1) * page_size
     events = list(qs[start : start + page_size])

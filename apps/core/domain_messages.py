@@ -1,4 +1,5 @@
 """English log messages for domain exceptions; keys map to ``translation_data`` (``other.*``)."""
+
 from __future__ import annotations
 
 from typing import Any

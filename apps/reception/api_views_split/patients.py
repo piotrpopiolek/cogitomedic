@@ -34,13 +34,14 @@ from apps.reception.models import Patient
 from apps.reception.services import create_or_update_patient_manual
 
 
-
 def _serialize_patient(patient: Patient) -> dict:
     return {
         "id": str(patient.id),
         "first_name": patient.first_name,
         "last_name": patient.last_name,
-        "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+        "date_of_birth": (
+            patient.date_of_birth.isoformat() if patient.date_of_birth else None
+        ),
         "phone": patient.phone,
         "email": patient.email,
         "doctolib_patient_id": patient.doctolib_patient_id,
@@ -56,7 +57,9 @@ def _serialize_patient(patient: Patient) -> dict:
 
 @require_auth
 def patients_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -111,7 +114,9 @@ def patients_view(request: HttpRequest) -> JsonResponse:
             return json_error("other.api.invalid_is_active", status=400)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
-        page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
+        page = safe_parse_positive_int(
+            request.GET.get("page"), default=1, maximum=10_000
+        )
         page_size = safe_parse_positive_int(
             request.GET.get("page_size"),
             default=DEFAULT_LIST_LIMIT,
@@ -121,7 +126,12 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         start = (page - 1) * page_size
         end = start + page_size
         items = [_serialize_patient(patient) for patient in qs[start:end]]
-        return JsonResponse({"items": items, "pagination": {"page": page, "page_size": page_size, "total": total}})
+        return JsonResponse(
+            {
+                "items": items,
+                "pagination": {"page": page, "page_size": page_size, "total": total},
+            }
+        )
 
     if request.method == "POST":
         try:
@@ -131,7 +141,9 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Validation error.", "details": exc.errors()}, status=400
+            )
         try:
             patient = create_or_update_patient_manual(
                 first_name=body.first_name,
@@ -163,12 +175,14 @@ def patients_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "DOCTOR"}
+    )
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH"):
         return json_error("other.api.method_not_allowed", status=405)
-    
+
     if request.method == "PATCH" and request.user.is_doctor:
         return json_error("other.api.method_not_allowed_for_role", status=403)
 
@@ -196,7 +210,9 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse({"error": "Validation error.", "details": exc.errors()}, status=400)
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
 
     fields_set = body.model_fields_set
     if not fields_set:
@@ -214,13 +230,25 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         if identity_or_contact_fields.intersection(fields_set):
             patient = create_or_update_patient_manual(
                 patient_id=patient.id,
-                first_name=body.first_name if "first_name" in fields_set else patient.first_name,
-                last_name=body.last_name if "last_name" in fields_set else patient.last_name,
-                date_of_birth=body.date_of_birth if "date_of_birth" in fields_set else patient.date_of_birth,
+                first_name=(
+                    body.first_name
+                    if "first_name" in fields_set
+                    else patient.first_name
+                ),
+                last_name=(
+                    body.last_name if "last_name" in fields_set else patient.last_name
+                ),
+                date_of_birth=(
+                    body.date_of_birth
+                    if "date_of_birth" in fields_set
+                    else patient.date_of_birth
+                ),
                 phone=body.phone if "phone" in fields_set else patient.phone,
                 email=body.email if "email" in fields_set else patient.email,
                 doctolib_patient_id=(
-                    body.doctolib_patient_id if "doctolib_patient_id" in fields_set else patient.doctolib_patient_id
+                    body.doctolib_patient_id
+                    if "doctolib_patient_id" in fields_set
+                    else patient.doctolib_patient_id
                 ),
                 created_or_updated_by_user_id=request.user.id,
             )

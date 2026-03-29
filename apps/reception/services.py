@@ -57,12 +57,14 @@ def create_clinic_site(
     name: str,
     is_active: bool = True,
     pdf_import_default_consulting_room_id: uuid.UUID | None = None,
-    pdf_import_shift_code: str = QueueShift.FULL_DAY,
+    pdf_import_shift_code: str = QueueShift.FULL_DAY,  # type: ignore[assignment]
 ) -> ClinicSite:
     """Create a clinic site."""
     if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
         raise DomainError(
-            domain_message("other.domain.invalid_shift_code", value=pdf_import_shift_code),
+            domain_message(
+                "other.domain.invalid_shift_code", value=pdf_import_shift_code
+            ),
             api_message_key="other.domain.invalid_shift_code",
             api_message_params={"value": pdf_import_shift_code},
         )
@@ -87,7 +89,9 @@ def update_clinic_site(
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
-    pdf_import_default_consulting_room_id: uuid.UUID | None | object = CLINIC_SITE_FIELD_NOT_PROVIDED,
+    pdf_import_default_consulting_room_id: (
+        uuid.UUID | None | object
+    ) = CLINIC_SITE_FIELD_NOT_PROVIDED,
     pdf_import_shift_code: str | object = CLINIC_SITE_FIELD_NOT_PROVIDED,
 ) -> ClinicSite:
     """Update mutable clinic site fields."""
@@ -117,7 +121,9 @@ def update_clinic_site(
     if pdf_import_shift_code is not CLINIC_SITE_FIELD_NOT_PROVIDED:
         if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
             raise DomainError(
-                domain_message("other.domain.invalid_shift_code", value=pdf_import_shift_code),
+                domain_message(
+                    "other.domain.invalid_shift_code", value=pdf_import_shift_code
+                ),
                 api_message_key="other.domain.invalid_shift_code",
                 api_message_params={"value": pdf_import_shift_code},
             )
@@ -218,7 +224,10 @@ def create_tablet_device(
         clinic_site_id=clinic_site_id,
     )
 
-def get_or_create_tablet_device_by_android_id(*, android_id: str) -> tuple[TabletDevice, bool]:
+
+def get_or_create_tablet_device_by_android_id(
+    *, android_id: str
+) -> tuple[TabletDevice, bool]:
     """Get or create a tablet device by android_id (auto-registration). Returns (device, created).
 
     New devices have ``clinic_site`` unset; assign a site in admin when isolating queues per site.
@@ -307,7 +316,11 @@ def create_or_update_patient_manual(
     # The actor id is part of the service signature for audit extension in next steps.
     _ = created_or_updated_by_user_id
 
-    patient = Patient.objects.select_for_update().filter(id=patient_id).first() if patient_id else Patient()
+    patient = (
+        Patient.objects.select_for_update().filter(id=patient_id).first()
+        if patient_id
+        else Patient()
+    )
     patient.first_name = first_name
     patient.last_name = last_name
     patient.date_of_birth = date_of_birth
@@ -328,7 +341,7 @@ def create_daily_queue(
     assigned_doctor_id: uuid.UUID | None = None,
     shift_code: str,
     created_by_user_id: uuid.UUID,
-    source: str = QueueSource.MANUAL,
+    source: str = QueueSource.MANUAL,  # type: ignore[assignment]
 ) -> DailyQueue:
     """Create a daily queue for date/site/room/shift. Raises StateTransitionError if slot exists."""
     ClinicSite.objects.get(id=clinic_site_id)
@@ -434,9 +447,13 @@ def update_queue_entry(
     notes: str | None = None,
 ) -> QueueEntry:
     """Update queue entry status and/or notes. DELETE semantic = set CANCELLED."""
-    if entry_status is not None and entry_status not in [c[0] for c in QueueEntryStatus.choices]:
+    if entry_status is not None and entry_status not in [
+        c[0] for c in QueueEntryStatus.choices
+    ]:
         raise DomainError(
-            domain_message("other.domain.invalid_queue_entry_status", value=entry_status),
+            domain_message(
+                "other.domain.invalid_queue_entry_status", value=entry_status
+            ),
             api_message_key="other.domain.invalid_queue_entry_status",
             api_message_params={"value": entry_status},
         )

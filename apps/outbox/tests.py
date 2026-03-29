@@ -7,7 +7,11 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.services import create_or_get_medical_document, publish_document_version, save_draft_document_version
+from apps.medical.services import (
+    create_or_get_medical_document,
+    publish_document_version,
+    save_draft_document_version,
+)
 from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
@@ -34,7 +38,7 @@ class OutboxProcessingTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.doctor_user, "Doctor")
-        
+
         self.reception_user = StaffUser.objects.create_user(
             username="reception-outbox",
             email="reception.outbox@example.com",
@@ -116,11 +120,15 @@ class OutboxProcessingTests(TestCase):
         self.assertTrue(self.version.sms_sent)
         self.assertIsNotNone(self.version.pdf_local_path)
         patient_id = str(self.medical_document.queue_entry.patient_id)
-        self.assertIn(f"/hidrive/patients/{patient_id}/", self.version.hidrive_path or "")
+        self.assertIn(
+            f"/hidrive/patients/{patient_id}/", self.version.hidrive_path or ""
+        )
         self.assertTrue((self.version.hidrive_path or "").endswith("/Befund_v1.pdf"))
 
         self.assertEqual(
-            OutboxEvent.objects.filter(medical_document_version=self.version, status=OutboxStatus.PROCESSED).count(),
+            OutboxEvent.objects.filter(
+                medical_document_version=self.version, status=OutboxStatus.PROCESSED
+            ).count(),
             3,
         )
         self.assertEqual(

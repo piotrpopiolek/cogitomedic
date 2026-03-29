@@ -1,4 +1,5 @@
 """Playwright helpers shared by screenshot and video scripts."""
+
 from __future__ import annotations
 
 from urllib.parse import urlparse

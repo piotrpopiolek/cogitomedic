@@ -1,4 +1,5 @@
 """Tests for patient_results services."""
+
 from __future__ import annotations
 
 import hashlib
@@ -11,7 +12,14 @@ from django.utils import timezone
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.patient_results.services import request_otp, verify_otp
 from apps.reception.phone_utils import normalize_phone
-from apps.reception.models import ClinicSite, ConsultingRoom, DailyQueue, Patient, QueueEntry, QueueStatus
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    QueueEntry,
+    QueueStatus,
+)
 from apps.users.models import StaffUser
 
 
@@ -42,7 +50,9 @@ class RequestOtpTests(TestCase):
             is_staff=True,
         )
         clinic = ClinicSite.objects.create(code="HAM", name="Hamburg")
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
+        room = ConsultingRoom.objects.create(
+            clinic_site=clinic, code="R1", name="Room 1"
+        )
         self.queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
             clinic_site=clinic,
@@ -97,9 +107,13 @@ class RequestOtpTests(TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
 
-    @override_settings(CAPTCHA_VERIFY_SKIP=True, ENVIRONMENT="staging", PATIENT_RESULTS_OTP_PEPPER="")
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, ENVIRONMENT="staging", PATIENT_RESULTS_OTP_PEPPER=""
+    )
     @patch("apps.patient_results.services.get_sms_adapter")
-    def test_request_otp_requires_pepper_outside_dev_environment(self, mock_get_adapter) -> None:
+    def test_request_otp_requires_pepper_outside_dev_environment(
+        self, mock_get_adapter
+    ) -> None:
         with self.assertRaises(ValueError):
             request_otp(
                 phone="01762222222",
@@ -124,7 +138,10 @@ class VerifyOtpTests(TestCase):
         pepper = "test-pepper"
         payload = f"{pepper}{otp}"
         h = hashlib.sha256(payload.encode()).hexdigest()
-        with patch.dict("django.conf.settings.__dict__", {"PATIENT_RESULTS_OTP_PEPPER": "test-pepper"}):
+        with patch.dict(
+            "django.conf.settings.__dict__",
+            {"PATIENT_RESULTS_OTP_PEPPER": "test-pepper"},
+        ):
             return PatientResultsOtpSession.objects.create(
                 patient=self.patient,
                 phone="01761111111",

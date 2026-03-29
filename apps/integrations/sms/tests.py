@@ -1,4 +1,5 @@
 """Tests for SMS adapter and patient results text."""
+
 from __future__ import annotations
 
 from django.test import TestCase

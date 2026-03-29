@@ -1,4 +1,5 @@
 """Phone normalization for patient lookups and storage."""
+
 from __future__ import annotations
 
 import re

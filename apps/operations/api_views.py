@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
@@ -9,9 +8,7 @@ from django.db import connection
 from django.db.models import Q
 from django.db.utils import Error as DatabaseError
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from pydantic import BaseModel, ConfigDict
 
 from apps.operations.services import REF_KEY
 from apps.core.api_utils import (
@@ -24,7 +21,6 @@ from apps.core.api_utils import (
 )
 from apps.operations.metrics import build_metrics_payload
 from apps.operations.models import AuditEvent
-from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 
 def _ref(event: AuditEvent, key: str) -> str | None:
@@ -39,11 +35,29 @@ def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
         "id": str(event.id),
         "event_time": event.event_time.isoformat(),
         "event_type": event.event_type,
-        "actor_user_id": str(event.actor_user_id) if event.actor_user_id else _ref(event, "actor_user_id"),
-        "patient_id": str(event.patient_id) if event.patient_id else _ref(event, "patient_id"),
-        "medical_document_id": str(event.medical_document_id) if event.medical_document_id else _ref(event, "medical_document_id"),
-        "outbox_event_id": str(event.outbox_event_id) if event.outbox_event_id else _ref(event, "outbox_event_id"),
-        "context_clinic_site_id": str(event.context_clinic_site_id) if event.context_clinic_site_id else _ref(event, "context_clinic_site_id"),
+        "actor_user_id": (
+            str(event.actor_user_id)
+            if event.actor_user_id
+            else _ref(event, "actor_user_id")
+        ),
+        "patient_id": (
+            str(event.patient_id) if event.patient_id else _ref(event, "patient_id")
+        ),
+        "medical_document_id": (
+            str(event.medical_document_id)
+            if event.medical_document_id
+            else _ref(event, "medical_document_id")
+        ),
+        "outbox_event_id": (
+            str(event.outbox_event_id)
+            if event.outbox_event_id
+            else _ref(event, "outbox_event_id")
+        ),
+        "context_clinic_site_id": (
+            str(event.context_clinic_site_id)
+            if event.context_clinic_site_id
+            else _ref(event, "context_clinic_site_id")
+        ),
         "metadata": event.metadata,
     }
 
@@ -62,9 +76,9 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
         # DOCTOR: only events where metadata.assigned_doctor_id == current_user.id
         # OR actor_user_id == current_user.id
         qs = qs.filter(
-            Q(metadata__assigned_doctor_id=str(request.user.id)) |
-            Q(metadata__actor_user_id=str(request.user.id)) |
-            Q(actor_user_id=request.user.id)
+            Q(metadata__assigned_doctor_id=str(request.user.id))
+            | Q(metadata__actor_user_id=str(request.user.id))
+            | Q(actor_user_id=request.user.id)
         )
 
     event_type = request.GET.get("event_type")
@@ -140,7 +154,10 @@ def _observability_authorized(request: HttpRequest) -> bool:
     token = getattr(settings, "PROMETHEUS_METRICS_TOKEN", None)
     if token and request.headers.get("Authorization") == f"Bearer {token}":
         return True
-    if request.user.is_authenticated and require_user_role(request, allowed_roles={"ADMIN"}) is None:
+    if (
+        request.user.is_authenticated
+        and require_user_role(request, allowed_roles={"ADMIN"}) is None
+    ):
         return True
     return False
 
@@ -179,4 +196,6 @@ def observability_metrics_view(request: HttpRequest) -> HttpResponse:
         return json_error("other.api.unauthorized", status=401)
 
     payload = build_metrics_payload()
-    return HttpResponse(payload, content_type="text/plain; version=0.0.4; charset=utf-8")
+    return HttpResponse(
+        payload, content_type="text/plain; version=0.0.4; charset=utf-8"
+    )

@@ -1,6 +1,7 @@
 """
 Context processors for the project.
 """
+
 from __future__ import annotations
 
 from apps.core.translation_service import get_admin_translation

@@ -1,11 +1,10 @@
 """Portal wyniki – OTP session for patient results access."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
 
 from django.db import models
-from django.utils import timezone
 
 from apps.core.translation_service import db_gettext_lazy
 
@@ -22,12 +21,19 @@ class PatientResultsOtpSession(models.Model):
         related_name="patient_results_otp_sessions",
         verbose_name=db_gettext_lazy("administration.field_patient", "Patient"),
     )
-    phone = models.CharField(max_length=20, verbose_name=db_gettext_lazy("administration.field_phone", "Phone"))
+    phone = models.CharField(
+        max_length=20,
+        verbose_name=db_gettext_lazy("administration.field_phone", "Phone"),
+    )
     otp_code_hash = models.CharField(
         max_length=64,
-        verbose_name=db_gettext_lazy("administration.field_otp_code_hash", "OTP code hash"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_otp_code_hash", "OTP code hash"
+        ),
     )
-    expires_at = models.DateTimeField(verbose_name=db_gettext_lazy("administration.field_expires_at", "Expires at"))
+    expires_at = models.DateTimeField(
+        verbose_name=db_gettext_lazy("administration.field_expires_at", "Expires at")
+    )
     verified_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -35,7 +41,9 @@ class PatientResultsOtpSession(models.Model):
     )
     verify_attempt_count = models.PositiveSmallIntegerField(
         default=0,
-        verbose_name=db_gettext_lazy("administration.field_verify_attempt_count", "Verify attempt count"),
+        verbose_name=db_gettext_lazy(
+            "administration.field_verify_attempt_count", "Verify attempt count"
+        ),
     )
     created_at = models.DateTimeField(
         auto_now_add=True,

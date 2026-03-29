@@ -110,7 +110,9 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.username_or_email_exists": "Username or email already exists.",
 }
 
-OTHER_DOMAIN_KEY_DEFAULT_EN: dict[str, str] = _en_map_from_translation_json("other_domain.json")
+OTHER_DOMAIN_KEY_DEFAULT_EN: dict[str, str] = _en_map_from_translation_json(
+    "other_domain.json"
+)
 
 OTHER_I18N_KEY_DEFAULT_EN: dict[str, str] = {
     **API_ERROR_KEY_DEFAULT_EN,

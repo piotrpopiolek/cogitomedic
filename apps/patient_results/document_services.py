@@ -1,4 +1,5 @@
 """Services for patient results document list and PDF download."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,7 +27,11 @@ def list_patient_documents(patient_id: UUID) -> list[dict]:
             anonymization_deleted_at__isnull=True,
             revoked_at__isnull=True,
         )
-        .select_related("medical_document", "medical_document__queue_entry", "medical_document__queue_entry__daily_queue")
+        .select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__daily_queue",
+        )
         .order_by("-published_at")
     )
     result: list[dict] = []
@@ -53,18 +58,16 @@ def resolve_patient_befund_download(
     Resolve portal download eligibility: missing vs retention-expired (410) vs OK.
     """
     try:
-        version = (
-            MedicalDocumentVersion.objects.select_related(
-                "medical_document",
-                "medical_document__queue_entry",
-                "medical_document__queue_entry__daily_queue",
-            ).get(
-                id=version_id,
-                medical_document__queue_entry__patient_id=patient_id,
-                version_status=DocVersionStatus.PUBLISHED,
-                pdf_generation_status=PdfStatus.COMPLETED,
-                revoked_at__isnull=True,
-            )
+        version = MedicalDocumentVersion.objects.select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__daily_queue",
+        ).get(
+            id=version_id,
+            medical_document__queue_entry__patient_id=patient_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            revoked_at__isnull=True,
         )
     except MedicalDocumentVersion.DoesNotExist:
         return "not_found", None
@@ -76,24 +79,23 @@ def resolve_patient_befund_download(
     return "ok", version
 
 
-def get_patient_pdf_version(version_id: UUID, patient_id: UUID) -> MedicalDocumentVersion | None:
+def get_patient_pdf_version(
+    version_id: UUID, patient_id: UUID
+) -> MedicalDocumentVersion | None:
     """Get version if it belongs to the patient and is available for download."""
     try:
-        return (
-            MedicalDocumentVersion.objects.select_related(
-                "medical_document",
-                "medical_document__queue_entry",
-                "medical_document__queue_entry__daily_queue",
-            )
-            .get(
-                id=version_id,
-                medical_document__queue_entry__patient_id=patient_id,
-                version_status=DocVersionStatus.PUBLISHED,
-                pdf_generation_status=PdfStatus.COMPLETED,
-                local_pdf_deleted_at__isnull=True,
-                anonymization_deleted_at__isnull=True,
-                revoked_at__isnull=True,
-            )
+        return MedicalDocumentVersion.objects.select_related(
+            "medical_document",
+            "medical_document__queue_entry",
+            "medical_document__queue_entry__daily_queue",
+        ).get(
+            id=version_id,
+            medical_document__queue_entry__patient_id=patient_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            local_pdf_deleted_at__isnull=True,
+            anonymization_deleted_at__isnull=True,
+            revoked_at__isnull=True,
         )
     except MedicalDocumentVersion.DoesNotExist:
         return None
@@ -121,5 +123,3 @@ def get_patient_pdf_path(
     if not path.resolve().is_relative_to(media_resolved):
         return None
     return path
-
-

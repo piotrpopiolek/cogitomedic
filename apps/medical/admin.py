@@ -22,7 +22,11 @@ from apps.medical.constants import (
     MALIGNANCY_RISK_CHOICES,
 )
 from apps.core.translation_service import format_administration_message
-from apps.medical.models import DoctorTextTemplate, MedicalDocument, MedicalDocumentVersion
+from apps.medical.models import (
+    DoctorTextTemplate,
+    MedicalDocument,
+    MedicalDocumentVersion,
+)
 from apps.medical.widgets import LesionGroupFavoritesWidget
 from apps.users.models import StaffUserPreferredLocale
 
@@ -79,7 +83,9 @@ class DoctorTextTemplateForm(forms.ModelForm):
                 FavoriteLesionGroupPreset.model_validate(item)
             except PydanticValidationError as e:
                 errs = e.errors()
-                msg = "; ".join(f"{x.get('loc', [])}: {x.get('msg', '')}" for x in errs[:3])
+                msg = "; ".join(
+                    f"{x.get('loc', [])}: {x.get('msg', '')}" for x in errs[:3]
+                )
                 raise ValidationError(
                     format_administration_message(
                         "administration.error_lesion_favorites_preset_invalid",
@@ -143,7 +149,15 @@ def _set_medical_document_users(request, obj, change: bool) -> None:
 
 @admin.register(MedicalDocument)
 class MedicalDocumentAdmin(UnfoldModelAdmin):
-    list_display = ("queue_entry", "intake_form", "status", "current_version_no", "last_published_at", "created_by_user", "created_at")
+    list_display = (
+        "queue_entry",
+        "intake_form",
+        "status",
+        "current_version_no",
+        "last_published_at",
+        "created_by_user",
+        "created_at",
+    )
     list_display_links = ("queue_entry",)
     list_filter = ("status",)
     ordering = ["-created_at"]
@@ -162,7 +176,11 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
-        if not change and request.user.is_authenticated and "created_by_user" in form.base_fields:
+        if (
+            not change
+            and request.user.is_authenticated
+            and "created_by_user" in form.base_fields
+        ):
             if form.base_fields["created_by_user"].initial is None:
                 form.base_fields["created_by_user"].initial = request.user.pk
         return form
@@ -219,7 +237,15 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
 @admin.register(DoctorTextTemplate)
 class DoctorTextTemplateAdmin(UnfoldModelAdmin):
     form = DoctorTextTemplateForm
-    list_display = ("name", "template_locale", "owner_user", "clinic_site", "updated_at", "created_at", "is_active")
+    list_display = (
+        "name",
+        "template_locale",
+        "owner_user",
+        "clinic_site",
+        "updated_at",
+        "created_at",
+        "is_active",
+    )
     list_display_links = ("name",)
     list_filter = ("template_locale", "is_active")
     ordering = ["-created_at"]
@@ -253,9 +279,9 @@ class DoctorTextTemplateAdmin(UnfoldModelAdmin):
         # DOCTOR: see own templates + clinic templates + global templates
         if request.user.is_doctor and not request.user.is_superuser:
             qs = qs.filter(
-                Q(owner_user=request.user) |
-                Q(clinic_site_id__in=request.user.clinic_sites.all()) |
-                Q(is_global=True)
+                Q(owner_user=request.user)
+                | Q(clinic_site_id__in=request.user.clinic_sites.all())
+                | Q(is_global=True)
             ).distinct()
         return qs
 

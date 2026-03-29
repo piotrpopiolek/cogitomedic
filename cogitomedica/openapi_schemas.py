@@ -6,12 +6,12 @@ uses components/schemas and #/components/schemas/Name refs. This module
 flattens $defs into components.schemas and rewrites $refs for use in the
 Cogitomedica OpenAPI schema.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from pydantic import BaseModel, ConfigDict
 
 # --- Response models (documentation only; §2 consistent output contracts) ---
 
@@ -123,7 +123,7 @@ def build_components_schemas(
     for model in model_classes:
         if not isinstance(model, type) or not issubclass(model, BaseModel):
             continue
-        raw = model.model_json_schema()
+        raw = model.model_json_schema()  # type: ignore[attr-defined]
         root, defs = pydantic_to_openapi_schema(raw)
         # Root may be $ref to model.__name__; ensure it's in defs
         root_name = model.__name__
@@ -281,7 +281,11 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
     )
-    from apps.outbox.api_schemas import ProcessOutboxRequest, RetentionRunRequest, RetryOutboxEventRequest
+    from apps.outbox.api_schemas import (
+        ProcessOutboxRequest,
+        RetentionRunRequest,
+        RetryOutboxEventRequest,
+    )
     from apps.reception.api_schemas import (
         CreateClinicSiteRequest,
         CreateConsultingRoomRequest,
@@ -297,7 +301,11 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         UpdateQueueEntryRequest,
         UpdateTabletDeviceRequest,
     )
-    from apps.users.api_schemas import AuthLoginRequest, CreateStaffUserRequest, UpdateStaffUserRequest
+    from apps.users.api_schemas import (
+        AuthLoginRequest,
+        CreateStaffUserRequest,
+        UpdateStaffUserRequest,
+    )
 
     P = "/api/v1"
     return {
@@ -305,34 +313,73 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/staff-users", "post"): CreateStaffUserRequest,
         (f"{P}/staff-users/{{staff_user_id}}", "patch"): UpdateStaffUserRequest,
         (f"{P}/doctor-text-templates", "post"): DoctorTemplateCreateRequest,
-        (f"{P}/doctor-text-templates/{{template_id}}", "patch"): DoctorTemplateUpdateRequest,
-        (f"{P}/outbox-events/{{outbox_event_id}}/retry", "post"): RetryOutboxEventRequest,
-        (f"{P}/intake-outbox-events/{{intake_outbox_event_id}}/retry", "post"): RetryIntakeOutboxEventRequest,
+        (
+            f"{P}/doctor-text-templates/{{template_id}}",
+            "patch",
+        ): DoctorTemplateUpdateRequest,
+        (
+            f"{P}/outbox-events/{{outbox_event_id}}/retry",
+            "post",
+        ): RetryOutboxEventRequest,
+        (
+            f"{P}/intake-outbox-events/{{intake_outbox_event_id}}/retry",
+            "post",
+        ): RetryIntakeOutboxEventRequest,
         (f"{P}/operations/outbox/process", "post"): ProcessOutboxRequest,
         (f"{P}/operations/intake-outbox/process", "post"): ProcessIntakeOutboxRequest,
         (f"{P}/operations/retention/run", "post"): RetentionRunRequest,
         (f"{P}/medical-documents", "post"): CreateMedicalDocumentRequest,
-        (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): SaveDraftMedicalDocumentRequest,
-        (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): PublishMedicalDocumentRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/draft",
+            "put",
+        ): SaveDraftMedicalDocumentRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/publish",
+            "post",
+        ): PublishMedicalDocumentRequest,
         (f"{P}/clinic-sites", "post"): CreateClinicSiteRequest,
         (f"{P}/clinic-sites/{{clinic_site_id}}", "patch"): UpdateClinicSiteRequest,
         (f"{P}/consulting-rooms", "post"): CreateConsultingRoomRequest,
-        (f"{P}/consulting-rooms/{{consulting_room_id}}", "patch"): UpdateConsultingRoomRequest,
+        (
+            f"{P}/consulting-rooms/{{consulting_room_id}}",
+            "patch",
+        ): UpdateConsultingRoomRequest,
         (f"{P}/patients", "post"): CreatePatientRequest,
         (f"{P}/patients/{{patient_id}}", "patch"): UpdatePatientRequest,
         (f"{P}/daily-queues", "post"): CreateDailyQueueRequest,
         (f"{P}/daily-queues/{{daily_queue_id}}", "patch"): UpdateDailyQueueRequest,
-        (f"{P}/daily-queues/{{daily_queue_id}}/entries", "post"): CreateQueueEntryRequest,
+        (
+            f"{P}/daily-queues/{{daily_queue_id}}/entries",
+            "post",
+        ): CreateQueueEntryRequest,
         (f"{P}/queue-entries/{{queue_entry_id}}", "patch"): UpdateQueueEntryRequest,
-        (f"{P}/queue-entries/{{queue_entry_id}}/sessions", "post"): CreateQueueEntrySessionRequest,
+        (
+            f"{P}/queue-entries/{{queue_entry_id}}/sessions",
+            "post",
+        ): CreateQueueEntrySessionRequest,
         (f"{P}/tablet-devices", "post"): CreateTabletDeviceRequest,
-        (f"{P}/tablet-devices/{{tablet_device_id}}", "patch"): UpdateTabletDeviceRequest,
-        (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): UpdateAnamnesisPayloadRequest,
+        (
+            f"{P}/tablet-devices/{{tablet_device_id}}",
+            "patch",
+        ): UpdateTabletDeviceRequest,
+        (
+            f"{P}/intake-forms/{{intake_form_id}}/anamnesis",
+            "put",
+        ): UpdateAnamnesisPayloadRequest,
         (f"{P}/intake-forms/{{intake_form_id}}/consents", "put"): UpdateConsentsRequest,
         (f"{P}/intake-forms/{{intake_form_id}}", "patch"): UpdateBodyMapRequest,
-        (f"{P}/intake-forms/{{intake_form_id}}/signature", "post"): SignatureUploadRequest,
-        (f"{P}/intake-forms/{{intake_form_id}}/submit", "post"): SubmitIntakeFormRequest,
-        (f"{P}/medical-documents/{{medical_document_id}}/retry-processing", "post"): RetryProcessingRequest,
+        (
+            f"{P}/intake-forms/{{intake_form_id}}/signature",
+            "post",
+        ): SignatureUploadRequest,
+        (
+            f"{P}/intake-forms/{{intake_form_id}}/submit",
+            "post",
+        ): SubmitIntakeFormRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/retry-processing",
+            "post",
+        ): RetryProcessingRequest,
     }
 
 
@@ -349,14 +396,24 @@ def _response_schema_map() -> dict[tuple[str, str], dict[str, type]]:
     """(path, method) -> { status: response_model_class } for documented responses (§2)."""
     P = "/api/v1"
     return {
-        (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): {"200": AnamnesisUpdateResponse},
-        (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): {"200": MedicalDocumentVersionResponse},
-        (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {"200": PublishDocumentVersionResponse},
-        (f"{P}/queue-entries/{{queue_entry_id}}/sessions", "post"): {"201": CreateQueueEntrySessionResponse},
+        (f"{P}/intake-forms/{{intake_form_id}}/anamnesis", "put"): {
+            "200": AnamnesisUpdateResponse
+        },
+        (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): {
+            "200": MedicalDocumentVersionResponse
+        },
+        (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {
+            "200": PublishDocumentVersionResponse
+        },
+        (f"{P}/queue-entries/{{queue_entry_id}}/sessions", "post"): {
+            "201": CreateQueueEntrySessionResponse
+        },
     }
 
 
-def get_response_schema_for(path: str, method: str, status: str) -> dict[str, Any] | None:
+def get_response_schema_for(
+    path: str, method: str, status: str
+) -> dict[str, Any] | None:
     """Return OpenAPI schema $ref for response body if registered; otherwise None."""
     by_status = _response_schema_map().get((path, method.lower()))
     if not by_status:
