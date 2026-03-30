@@ -1,8 +1,9 @@
 from django.apps import AppConfig
-from django.utils.translation import gettext_lazy as _
+
+from apps.core.translation_service import db_gettext_lazy
 
 
 class OperationsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.operations"
-    verbose_name = _("Operations")
+    verbose_name = db_gettext_lazy("administration.app_operations", "Operations")

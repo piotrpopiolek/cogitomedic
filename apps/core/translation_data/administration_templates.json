@@ -1,0 +1,332 @@
+{
+  "administration.breadcrumb_start": {
+    "de": "Start",
+    "en": "Start",
+    "pl": "Start"
+  },
+  "administration.breadcrumb_registration": {
+    "de": "Anmeldung",
+    "en": "Registration",
+    "pl": "Rejestracja"
+  },
+  "administration.breadcrumb_intake_documents": {
+    "de": "Intake-Dokumente (PDF)",
+    "en": "Intake documents (PDF)",
+    "pl": "Dokumenty intake (PDF)"
+  },
+  "administration.btn_filter": {
+    "de": "Filtern",
+    "en": "Filter",
+    "pl": "Filtruj"
+  },
+  "administration.btn_clear": {
+    "de": "Zurücksetzen",
+    "en": "Clear",
+    "pl": "Wyczyść"
+  },
+  "administration.btn_cancel": {
+    "de": "Abbrechen",
+    "en": "Cancel",
+    "pl": "Anuluj"
+  },
+  "administration.btn_select_file": {
+    "de": "Datei auswählen",
+    "en": "Select file",
+    "pl": "Wybierz plik"
+  },
+  "administration.btn_run_import": {
+    "de": "Import starten",
+    "en": "Run import",
+    "pl": "Uruchom import"
+  },
+  "administration.btn_import_from_file": {
+    "de": "Aus Datei importieren",
+    "en": "Import from file",
+    "pl": "Import z pliku"
+  },
+  "administration.btn_pdf_preview": {
+    "de": "PDF-Vorschau",
+    "en": "PDF preview",
+    "pl": "Podgląd PDF"
+  },
+  "administration.link_details": {
+    "de": "Details",
+    "en": "Details",
+    "pl": "Szczegóły"
+  },
+  "administration.link_back_to_list": {
+    "de": "← Zurück zur Liste",
+    "en": "← Back to list",
+    "pl": "← Powrót do listy"
+  },
+  "administration.link_previous": {
+    "de": "← Zurück",
+    "en": "← Previous",
+    "pl": "← Poprzednia"
+  },
+  "administration.link_next": {
+    "de": "Weiter →",
+    "en": "Next →",
+    "pl": "Następna →"
+  },
+  "administration.link_edit_queue": {
+    "de": "Warteschlange bearbeiten",
+    "en": "Edit queue",
+    "pl": "Edytuj kolejkę"
+  },
+  "administration.link_all_queue_entries": {
+    "de": "Alle Einträge dieser Warteschlange",
+    "en": "All entries of this queue",
+    "pl": "Wszystkie wpisy tej kolejki"
+  },
+  "administration.link_entry": {
+    "de": "Eintrag",
+    "en": "Entry",
+    "pl": "Wpis"
+  },
+  "administration.col_patient": {
+    "de": "Patient",
+    "en": "Patient",
+    "pl": "Pacjent"
+  },
+  "administration.col_queue_date": {
+    "de": "Datum",
+    "en": "Queue date",
+    "pl": "Data kolejki"
+  },
+  "administration.col_clinic_site": {
+    "de": "Standort",
+    "en": "Clinic site",
+    "pl": "Placówka"
+  },
+  "administration.col_pdf_status": {
+    "de": "PDF-Status",
+    "en": "PDF status",
+    "pl": "Status PDF"
+  },
+  "administration.col_created_at": {
+    "de": "Erstellt",
+    "en": "Created",
+    "pl": "Utworzono"
+  },
+  "administration.col_actions": {
+    "de": "Aktionen",
+    "en": "Actions",
+    "pl": "Akcje"
+  },
+  "administration.col_position": {
+    "de": "Position",
+    "en": "Position",
+    "pl": "Pozycja"
+  },
+  "administration.col_status": {
+    "de": "Status",
+    "en": "Status",
+    "pl": "Status"
+  },
+  "administration.col_time": {
+    "de": "Uhrzeit",
+    "en": "Time",
+    "pl": "Godzina"
+  },
+  "administration.filter_queue_date": {
+    "de": "Datum der Warteschlange",
+    "en": "Queue date",
+    "pl": "Data kolejki"
+  },
+  "administration.filter_pdf_status": {
+    "de": "PDF-Status",
+    "en": "PDF status",
+    "pl": "Status PDF"
+  },
+  "administration.filter_clinic_site": {
+    "de": "Standort",
+    "en": "Clinic site",
+    "pl": "Placówka"
+  },
+  "administration.filter_patient": {
+    "de": "Patient (Name, Vorname)",
+    "en": "Patient (surname, given names)",
+    "pl": "Pacjent (nazwisko/imiona)"
+  },
+  "administration.filter_all": {
+    "de": "Alle",
+    "en": "All",
+    "pl": "Wszystkie"
+  },
+  "administration.filter_search_placeholder": {
+    "de": "Suchen…",
+    "en": "Search…",
+    "pl": "Szukaj…"
+  },
+  "administration.pdf_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "administration.pdf_status_in_progress": {
+    "de": "In Bearbeitung",
+    "en": "In progress",
+    "pl": "W trakcie"
+  },
+  "administration.pdf_status_completed": {
+    "de": "Generiert",
+    "en": "Generated",
+    "pl": "Wygenerowany"
+  },
+  "administration.pdf_status_failed": {
+    "de": "Fehler",
+    "en": "Error",
+    "pl": "Błąd"
+  },
+  "administration.field_date_of_birth": {
+    "de": "Geburtsdatum",
+    "en": "Date of birth",
+    "pl": "Data urodzenia"
+  },
+  "administration.field_queue_date": {
+    "de": "Datum der Warteschlange",
+    "en": "Queue date",
+    "pl": "Data kolejki"
+  },
+  "administration.field_clinic_site": {
+    "de": "Standort",
+    "en": "Clinic site",
+    "pl": "Placówka"
+  },
+  "administration.field_version": {
+    "de": "Version",
+    "en": "Version",
+    "pl": "Wersja"
+  },
+  "administration.field_form_locale": {
+    "de": "Formularsprache",
+    "en": "Form language",
+    "pl": "Język formularza"
+  },
+  "administration.field_pdf_status": {
+    "de": "PDF-Status",
+    "en": "PDF status",
+    "pl": "Status PDF"
+  },
+  "administration.field_processing_error": {
+    "de": "Verarbeitungsfehler",
+    "en": "Processing error",
+    "pl": "Błąd przetwarzania"
+  },
+  "administration.section_patient_queue": {
+    "de": "Patient und Warteschlange",
+    "en": "Patient and queue",
+    "pl": "Pacjent i kolejka"
+  },
+  "administration.section_document": {
+    "de": "Dokument",
+    "en": "Document",
+    "pl": "Dokument"
+  },
+  "administration.section_date_filter": {
+    "de": "Datum",
+    "en": "Date",
+    "pl": "Data"
+  },
+  "administration.intake_doc_not_found": {
+    "de": "Dokument nicht gefunden",
+    "en": "Document not found",
+    "pl": "Nie znaleziono dokumentu"
+  },
+  "administration.intake_doc_not_found_desc": {
+    "de": "Das Dokument existiert nicht oder Sie haben keinen Zugriff darauf.",
+    "en": "The document does not exist or you do not have access to it.",
+    "pl": "Dokument nie istnieje lub nie masz do niego dostępu."
+  },
+  "administration.intake_docs_empty": {
+    "de": "Keine Intake-Dokumente entsprechen den Kriterien.",
+    "en": "No intake documents match the criteria.",
+    "pl": "Brak dokumentów intake spełniających kryteria."
+  },
+  "administration.queue_entries_empty": {
+    "de": "Keine Einträge in dieser Warteschlange.",
+    "en": "No entries in this queue.",
+    "pl": "Brak wpisów w tej kolejce."
+  },
+  "administration.queues_empty": {
+    "de": "Keine Warteschlangen für den ausgewählten Filter.",
+    "en": "No queues for the selected filter.",
+    "pl": "Brak kolejek dla wybranego filtra."
+  },
+  "administration.dashboard_failed_outbox_title": {
+    "de": "Ausstehende Ereignisse (Fehler)",
+    "en": "Pending events (Errors)",
+    "pl": "Zaległe zdarzenia (Błędy)"
+  },
+  "administration.dashboard_document_id": {
+    "de": "Dokument-ID",
+    "en": "Document ID",
+    "pl": "Dokument ID"
+  },
+  "administration.dashboard_no_errors": {
+    "de": "Keine ausstehenden Verarbeitungsfehler. Alles funktioniert korrekt.",
+    "en": "No pending processing errors. Everything is working correctly.",
+    "pl": "Brak zaległych błędów przetwarzania. Wszystko działa poprawnie."
+  },
+  "administration.dashboard_recent_imports_title": {
+    "de": "Letzte Importe",
+    "en": "Recent imports",
+    "pl": "Ostatnie importy"
+  },
+  "administration.dashboard_added": {
+    "de": "Hinzugefügt",
+    "en": "Added",
+    "pl": "Dodano"
+  },
+  "administration.dashboard_errors": {
+    "de": "Fehler",
+    "en": "Errors",
+    "pl": "Błędy"
+  },
+  "administration.dashboard_import_details": {
+    "de": "Import-Details",
+    "en": "Import details",
+    "pl": "Szczegóły importu"
+  },
+  "administration.dashboard_no_imports": {
+    "de": "Keine Importhistorie.",
+    "en": "No import history.",
+    "pl": "Brak historii importów."
+  },
+  "administration.import_xlsx_desc": {
+    "de": "Laden Sie eine Excel-Datei (.xlsx) mit der Patientenliste hoch. Der Import wird im Hintergrund ausgeführt und erstellt ein neues Batch.",
+    "en": "Upload an Excel file (.xlsx) with the patient list. The import will run in the background and create a new batch.",
+    "pl": "Wgraj plik Excel (.xlsx) z listą pacjentów. Import uruchomi się w tle i utworzy nowy batch."
+  },
+  "administration.import_xlsx_hint": {
+    "de": "Der Import liest aus der Datei das Datum der Warteschlange und den Standortnamen (Standort). XLSX-Vorlage: erste Zeile Kopfzeilen mit Patientendaten (z. B. Uhrzeit, Patient:in, Telefon, Geburtsdatum, E-Mail-Adresse, Anschrift, Postleitzahl).",
+    "en": "The import reads the queue date and clinic site name (Standort) from the file. XLSX template: first row headers with patient data (e.g. Uhrzeit, Patient:in, Telefon, Date of birth, E-Mail-Adresse, Anschrift, Postleitzahl).",
+    "pl": "Import odczyta z pliku datę kolejki i nazwę placówki (Standort). Szablon XLSX: pierwszy wiersz nagłówków z danymi pacjentów (np. Uhrzeit, Patient:in, Telefon, Data urodzenia, E-Mail-Adresse, Anschrift, Postleitzahl)."
+  },
+  "administration.import_xlsx_no_file": {
+    "de": "Keine Datei ausgewählt.",
+    "en": "No file selected.",
+    "pl": "Nie wybrano pliku."
+  },
+  "administration.dailyqueue_master_title": {
+    "de": "Tageslisten – Master/Detail",
+    "en": "Daily queues – master/detail",
+    "pl": "Kolejki dzienne – master/detail"
+  },
+  "administration.results_available": {
+    "de": "Ihre Untersuchungsergebnisse sind jetzt verfügbar",
+    "en": "Your examination results are now available",
+    "pl": "Wyniki Twoich badań są teraz dostępne"
+  },
+  "administration.results_fetch": {
+    "de": "Ergebnisse abrufen",
+    "en": "Retrieve results",
+    "pl": "Pobierz wyniki"
+  },
+  "administration.results_not_available": {
+    "de": "Ihre Ergebnisse sind noch nicht verfügbar. Wir benachrichtigen Sie per SMS, sobald sie vorliegen.",
+    "en": "Your results are not yet available. We will notify you by SMS as soon as they are ready.",
+    "pl": "Twoje wyniki nie są jeszcze dostępne. Poinformujemy Cię SMS-em, gdy będą gotowe."
+  }
+}

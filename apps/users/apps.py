@@ -1,8 +1,9 @@
 from django.apps import AppConfig
-from django.utils.translation import gettext_lazy as _
+
+from apps.core.translation_service import db_gettext_lazy
 
 
 class UsersConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.users"
-    verbose_name = _("Users")
+    verbose_name = db_gettext_lazy("administration.app_users", "Users")

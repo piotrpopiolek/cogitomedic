@@ -1,11 +1,11 @@
 {% extends "admin/change_list.html" %}
-{% load unfold %}
+{% load unfold cogitomedica_i18n %}
 
 {% block object-tools-items %}
     <li>
         {% component "unfold/components/button.html" with href=import_xlsx_url variant="primary" %}
             <span class="material-symbols-outlined">upload_file</span>
-            Import z pliku
+            {% admin_trans "administration.btn_import_from_file" "Import z pliku" %}
         {% endcomponent %}
     </li>
     {{ block.super }}

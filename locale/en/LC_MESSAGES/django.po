@@ -1,35 +1,9 @@
-# English — explicit msgstr equals msgid for catalog completeness.
+# English translations (gettext) — Unfold UI strings only.
+# App labels are now managed via DB translations (administration.app_*).
 #
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
-
-msgid "Core"
-msgstr "Core"
-
-msgid "Users"
-msgstr "Users"
-
-msgid "Reception"
-msgstr "Reception"
-
-msgid "Intake"
-msgstr "Intake"
-
-msgid "Medical"
-msgstr "Medical"
-
-msgid "Outbox"
-msgstr "Outbox"
-
-msgid "Integrations"
-msgstr "Integrations"
-
-msgid "Operations"
-msgstr "Operations"
-
-msgid "Patient results (portal wyniki)"
-msgstr "Patient results (portal wyniki)"
 
 msgid "Search"
 msgstr "Search"
