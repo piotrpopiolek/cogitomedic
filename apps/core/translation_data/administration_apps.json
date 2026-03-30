@@ -1,0 +1,47 @@
+{
+  "administration.app_core": {
+    "de": "Kern",
+    "en": "Core",
+    "pl": "Konfiguracja"
+  },
+  "administration.app_users": {
+    "de": "Benutzer",
+    "en": "Users",
+    "pl": "Użytkownicy"
+  },
+  "administration.app_reception": {
+    "de": "Anmeldung",
+    "en": "Reception",
+    "pl": "Rejestracja"
+  },
+  "administration.app_intake": {
+    "de": "Intake",
+    "en": "Intake",
+    "pl": "Intake"
+  },
+  "administration.app_medical": {
+    "de": "Medizin",
+    "en": "Medical",
+    "pl": "Medycyna"
+  },
+  "administration.app_outbox": {
+    "de": "Outbox",
+    "en": "Outbox",
+    "pl": "Skrzynka wyjściowa"
+  },
+  "administration.app_integrations": {
+    "de": "Integrationen",
+    "en": "Integrations",
+    "pl": "Integracje"
+  },
+  "administration.app_operations": {
+    "de": "Vorgänge",
+    "en": "Operations",
+    "pl": "Operacje"
+  },
+  "administration.app_patient_results": {
+    "de": "Patientenergebnisse",
+    "en": "Patient results",
+    "pl": "Wyniki pacjentów"
+  }
+}

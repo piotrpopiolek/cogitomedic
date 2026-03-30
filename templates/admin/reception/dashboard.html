@@ -1,11 +1,11 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n %}
+{% load i18n cogitomedica_i18n %}
 
 {% block breadcrumbs %}
     <div class="px-4 py-3 sm:px-8">
         <nav aria-label="Breadcrumb">
             <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
-                <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">Start</a></li>
+                <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
                 <li><span class="mx-2">/</span></li>
                 <li class="text-gray-900" aria-current="page">{{ title }}</li>
             </ol>
@@ -18,11 +18,11 @@
     <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- ZALAGŁE DOKUMENTY (FAILED OUTBOX) -->
+        <!-- Failed outbox -->
         <div class="bg-white rounded-md shadow p-6 border border-gray-200">
             <h2 class="text-lg font-semibold mb-4 text-red-600 flex items-center">
                 <span class="material-symbols-outlined mr-2">error</span>
-                Zaległe zdarzenia (Błędy)
+                {% admin_trans "administration.dashboard_failed_outbox_title" "Zaległe zdarzenia (Błędy)" %}
             </h2>
             {% if failed_outbox %}
                 <ul class="divide-y divide-gray-200">
@@ -31,7 +31,7 @@
                         <div class="flex justify-between">
                             <div>
                                 <p class="text-sm font-medium text-gray-900">{{ event.get_event_type_display }}</p>
-                                <p class="text-sm text-gray-500">Dokument ID: {{ event.medical_document_version.medical_document_id|default:"Brak" }}</p>
+                                <p class="text-sm text-gray-500">{% admin_trans "administration.dashboard_document_id" "Dokument ID" %}: {{ event.medical_document_version.medical_document_id|default:"–" }}</p>
                             </div>
                             <div class="text-right">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if event.status == 'DEAD_LETTER' %}bg-gray-100 text-gray-800{% else %}bg-red-100 text-red-800{% endif %}">
@@ -41,21 +41,21 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <a href="{% url 'admin:outbox_outboxevent_change' event.id %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">Zobacz szczegóły &rarr;</a>
+                            <a href="{% url 'admin:outbox_outboxevent_change' event.id %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">{% admin_trans "administration.link_details" "Szczegóły" %} &rarr;</a>
                         </div>
                     </li>
                 {% endfor %}
                 </ul>
             {% else %}
-                <p class="text-sm text-gray-500 italic">Brak zaległych błędów przetwarzania. Wszystko działa poprawnie.</p>
+                <p class="text-sm text-gray-500 italic">{% admin_trans "administration.dashboard_no_errors" "Brak zaległych błędów przetwarzania." %}</p>
             {% endif %}
         </div>
 
-        <!-- OSTATNIE IMPORTY -->
+        <!-- Recent imports -->
         <div class="bg-white rounded-md shadow p-6 border border-gray-200">
             <h2 class="text-lg font-semibold mb-4 flex items-center">
                 <span class="material-symbols-outlined mr-2">upload_file</span>
-                Ostatnie importy
+                {% admin_trans "administration.dashboard_recent_imports_title" "Ostatnie importy" %}
             </h2>
             {% if recent_imports %}
                 <ul class="divide-y divide-gray-200">
@@ -64,10 +64,10 @@
                         <div class="flex justify-between">
                             <div>
                                 <p class="text-sm font-medium text-gray-900">{{ imp.source_file_name }}</p>
-                                <p class="text-sm text-gray-500">Dodano: {{ imp.inserted_rows }}, Błędy: {{ imp.error_rows }}</p>
+                                <p class="text-sm text-gray-500">{% admin_trans "administration.dashboard_added" "Dodano" %}: {{ imp.inserted_rows }}, {% admin_trans "administration.dashboard_errors" "Błędy" %}: {{ imp.error_rows }}</p>
                             </div>
                             <div class="text-right">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                     {% if imp.status == 'COMPLETED' %}bg-green-100 text-green-800
                                     {% elif imp.status == 'PROCESSING' %}bg-blue-100 text-blue-800
                                     {% elif imp.status == 'FAILED' %}bg-red-100 text-red-800
@@ -78,13 +78,13 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <a href="{% url 'admin:reception_patientimportbatch_change' imp.id %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">Szczegóły importu &rarr;</a>
+                            <a href="{% url 'admin:reception_patientimportbatch_change' imp.id %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">{% admin_trans "administration.dashboard_import_details" "Szczegóły importu" %} &rarr;</a>
                         </div>
                     </li>
                 {% endfor %}
                 </ul>
             {% else %}
-                <p class="text-sm text-gray-500 italic">Brak historii importów.</p>
+                <p class="text-sm text-gray-500 italic">{% admin_trans "administration.dashboard_no_imports" "Brak historii importów." %}</p>
             {% endif %}
         </div>
     </div>

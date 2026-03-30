@@ -1,12 +1,12 @@
 {% extends "admin/base_site.html" %}
-{% load unfold %}
+{% load unfold cogitomedica_i18n %}
 
 {% block content %}
 <div class="px-4 py-6 sm:px-8">
     <div class="max-w-3xl">
         <h1 class="text-2xl font-semibold mb-2">{{ title }}</h1>
         <p class="text-sm text-gray-500 mb-6">
-            Wgraj plik Excel (.xlsx) z listą pacjentów. Import uruchomi się w tle i utworzy nowy batch.
+            {% admin_trans "administration.import_xlsx_desc" "Wgraj plik Excel (.xlsx) z listą pacjentów. Import uruchomi się w tle i utworzy nowy batch." %}
         </p>
 
         <form method="post" enctype="multipart/form-data" class="bg-white rounded-default border border-base-200 p-6 dark:bg-base-900 dark:border-base-800">
@@ -24,9 +24,9 @@
                         type="button"
                         class="inline-flex items-center rounded-default border border-base-300 px-4 py-2 text-sm font-medium hover:bg-base-100 dark:border-base-700 dark:hover:bg-base-800"
                     >
-                        Wybierz plik
+                        {% admin_trans "administration.btn_select_file" "Wybierz plik" %}
                     </button>
-                    <span id="selected-file-name" class="text-sm text-gray-500">Nie wybrano pliku.</span>
+                    <span id="selected-file-name" class="text-sm text-gray-500">{% admin_trans "administration.import_xlsx_no_file" "Nie wybrano pliku." %}</span>
                 </div>
                 {% if form.file.errors %}
                     <div class="mt-2 text-sm text-red-600">
@@ -36,15 +36,15 @@
             </div>
 
             <div class="text-sm text-gray-500 mb-6">
-                Import odczyta z pliku datę kolejki i nazwę placówki (Standort). Szablon XLSX: pierwszy wiersz nagłówków z danymi pacjentów (np. Uhrzeit, Patient:in, Telefon, Data urodzenia, E-Mail-Adresse, Anschrift, Postleitzahl).
+                {% admin_trans "administration.import_xlsx_hint" "Import odczyta z pliku datę kolejki i nazwę placówki (Standort)." %}
             </div>
 
             <div class="flex gap-3">
                 {% component "unfold/components/button.html" with submit=1 variant="primary" %}
-                    Uruchom import
+                    {% admin_trans "administration.btn_run_import" "Uruchom import" %}
                 {% endcomponent %}
                 {% component "unfold/components/button.html" with href=next_url variant="default" %}
-                    Anuluj
+                    {% admin_trans "administration.btn_cancel" "Anuluj" %}
                 {% endcomponent %}
             </div>
         </form>
@@ -67,7 +67,7 @@
         fileInput.addEventListener("change", function () {
             fileName.textContent = fileInput.files && fileInput.files.length
                 ? fileInput.files[0].name
-                : "Nie wybrano pliku.";
+                : fileName.dataset.empty || "–";
         });
     })();
 </script>
