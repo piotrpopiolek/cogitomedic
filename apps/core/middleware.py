@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.utils import translation
 
-from apps.core.translation_service import set_current_request
+from apps.core.translation_service import normalize_language_code, set_current_request
 
 _PREFERRED_LOCALE_TO_DJANGO_LANG: dict[str, str] = {
     "de-DE": "de",
@@ -49,6 +49,8 @@ class StaffLocaleMiddleware:
             translation.activate(lang)
             request.LANGUAGE_CODE = lang
         response = self.get_response(request)
+        if lang:
+            response["X-Staff-Lang"] = lang
         translation.deactivate()
         return response
 
@@ -58,7 +60,8 @@ class StaffLocaleMiddleware:
         if not (user and getattr(user, "is_authenticated", False)):
             return None
         preferred = getattr(user, "preferred_locale", None) or "de-DE"
-        return _PREFERRED_LOCALE_TO_DJANGO_LANG.get(preferred, "de")
+        normalized = normalize_language_code(preferred)
+        return _PREFERRED_LOCALE_TO_DJANGO_LANG.get(normalized, "de")
 
 
 class TranslationRequestMiddleware:

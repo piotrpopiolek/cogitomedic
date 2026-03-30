@@ -1,35 +1,9 @@
-# Polish translations (gettext) — app labels in admin breadcrumbs and optional Django/Unfold UI.
+# Polish translations (gettext) — Unfold UI strings only.
+# App labels are now managed via DB translations (administration.app_*).
 #
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
-
-msgid "Core"
-msgstr "Rdzeń"
-
-msgid "Users"
-msgstr "Użytkownicy"
-
-msgid "Reception"
-msgstr "Rejestracja"
-
-msgid "Intake"
-msgstr "Intake"
-
-msgid "Medical"
-msgstr "Medycyna"
-
-msgid "Outbox"
-msgstr "Skrzynka wyjściowa"
-
-msgid "Integrations"
-msgstr "Integracje"
-
-msgid "Operations"
-msgstr "Operacje"
-
-msgid "Patient results (portal wyniki)"
-msgstr "Wyniki pacjentów (portal)"
 
 msgid "Search"
 msgstr "Szukaj"

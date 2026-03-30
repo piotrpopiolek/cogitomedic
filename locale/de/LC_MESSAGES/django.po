@@ -1,35 +1,9 @@
-# German translations (gettext) — app labels and common admin UI strings.
+# German translations (gettext) — Unfold UI strings only.
+# App labels are now managed via DB translations (administration.app_*).
 #
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
-
-msgid "Core"
-msgstr "Kern"
-
-msgid "Users"
-msgstr "Benutzer"
-
-msgid "Reception"
-msgstr "Anmeldung"
-
-msgid "Intake"
-msgstr "Intake"
-
-msgid "Medical"
-msgstr "Medizin"
-
-msgid "Outbox"
-msgstr "Outbox"
-
-msgid "Integrations"
-msgstr "Integrationen"
-
-msgid "Operations"
-msgstr "Vorgänge"
-
-msgid "Patient results (portal wyniki)"
-msgstr "Patientenergebnisse (Portal)"
 
 msgid "Search"
 msgstr "Suchen"

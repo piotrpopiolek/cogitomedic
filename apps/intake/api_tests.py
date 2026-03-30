@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.conf import settings
@@ -437,3 +438,346 @@ class IntakeOutboxClinicScopeApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
+
+
+# ---------------------------------------------------------------------------
+# Helper shared by IntakeFormDetailViewTests and IntakeFormConsentsViewTests
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_intake_form(
+    *,
+    created_by_user: StaffUser,
+    clinic_site: ClinicSite,
+    consulting_room: ConsultingRoom,
+    form_status: str = "IN_PROGRESS",
+) -> PatientIntakeForm:
+    """Return a PatientIntakeForm linked to the minimal required objects."""
+    suffix = uuid4().hex[:6]
+    patient = Patient.objects.create(
+        first_name="Detail",
+        last_name="Patient",
+        date_of_birth=date(1985, 3, 10),
+        phone=f"4811100{str(abs(hash(suffix)))[:7]}",
+        email=f"detail-{suffix}@example.com",
+        doctolib_patient_id=f"DETAIL-{suffix}",
+    )
+    queue = DailyQueue.objects.create(
+        queue_date=timezone.now().date(),
+        clinic_site=clinic_site,
+        consulting_room=consulting_room,
+        status=QueueStatus.OPEN,
+        created_by_user=created_by_user,
+    )
+    entry = QueueEntry.objects.create(
+        daily_queue=queue,
+        patient=patient,
+        position_no=1,
+        entry_status=QueueEntryStatus.IN_PROGRESS,
+        created_by_user=created_by_user,
+    )
+    session = PatientFormSession.objects.create(
+        queue_entry=entry,
+        form_locale="de-DE",
+        expires_at=timezone.now() + timedelta(minutes=60),
+        created_by_user_id=created_by_user.id,
+    )
+    return PatientIntakeForm.objects.create(
+        queue_entry=entry,
+        session=session,
+        form_status=form_status,
+        signature_file_path=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# intake_form_detail_view  (GET + PATCH /api/v1/intake-forms/<id>)
+# ---------------------------------------------------------------------------
+
+
+class IntakeFormDetailViewTests(TestCase):
+    """Cover intake_form_detail_view: role check, GET (locale, 404, happy-path),
+    PATCH (invalid JSON, validation error, 404, state error, happy-path, 405)."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="reception-form-detail",
+            email="reception-form-detail@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.doctor_user = StaffUser.objects.create_user(
+            username="doctor-form-detail",
+            email="doctor-form-detail@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        self.clinic = ClinicSite.objects.create(code="FDV", name="Form Detail Clinic")
+        self.reception_user.clinic_sites.add(self.clinic)
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="FD1", name="FD1"
+        )
+
+    # ------------------------------------------------------------------
+    # Role enforcement
+    # ------------------------------------------------------------------
+
+    def test_doctor_gets_403_on_get(self) -> None:
+        self.client.login(username="doctor-form-detail", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-forms/{uuid4()}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_gets_401_on_get(self) -> None:
+        response = self.client.get(f"/api/v1/intake-forms/{uuid4()}")
+        self.assertEqual(response.status_code, 401)
+
+    # ------------------------------------------------------------------
+    # GET — locale validation
+    # ------------------------------------------------------------------
+
+    def test_get_invalid_locale_returns_400(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.get(
+            f"/api/v1/intake-forms/{uuid4()}?form_locale=INVALID123"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    # ------------------------------------------------------------------
+    # GET — 404 for non-existent form
+    # ------------------------------------------------------------------
+
+    def test_get_nonexistent_form_returns_404(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-forms/{uuid4()}")
+        self.assertEqual(response.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # GET — happy path (service mocked)
+    # ------------------------------------------------------------------
+
+    @patch("apps.intake.api_views.get_intake_form_context")
+    def test_get_valid_form_returns_200(self, mock_ctx) -> None:
+        mock_ctx.return_value = {"consents": [], "questions": [], "form_status": "IN_PROGRESS"}
+        intake_form = _make_minimal_intake_form(
+            created_by_user=self.reception_user,
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+        )
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.get(f"/api/v1/intake-forms/{intake_form.id}")
+        self.assertEqual(response.status_code, 200)
+        mock_ctx.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # PATCH — input validation
+    # ------------------------------------------------------------------
+
+    def test_patch_invalid_json_returns_400(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{uuid4()}",
+            data="NOT_JSON{{{",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_patch_invalid_body_schema_returns_400(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{uuid4()}",
+            data=json.dumps({"wrong_field": "bad"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    # ------------------------------------------------------------------
+    # PATCH — service errors
+    # ------------------------------------------------------------------
+
+    def test_patch_nonexistent_form_returns_404(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{uuid4()}",
+            data=json.dumps({"body_map_schema_version": 1, "body_map_data": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @patch("apps.intake.api_views.save_intake_body_map")
+    def test_patch_state_error_returns_409(self, mock_save) -> None:
+        from apps.core.exceptions import StateTransitionError
+        from apps.core.domain_messages import domain_message
+
+        mock_save.side_effect = StateTransitionError(
+            domain_message("other.domain.invalid_shift_code", value="x"),
+            api_message_key="other.domain.invalid_shift_code",
+        )
+        intake_form = _make_minimal_intake_form(
+            created_by_user=self.reception_user,
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+        )
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{intake_form.id}",
+            data=json.dumps({"body_map_schema_version": 1, "body_map_data": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
+
+    @patch("apps.intake.api_views.save_intake_body_map")
+    def test_patch_happy_path_returns_200(self, mock_save) -> None:
+        intake_form = _make_minimal_intake_form(
+            created_by_user=self.reception_user,
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+        )
+        mock_intake = MagicMock()
+        mock_intake.id = intake_form.id
+        mock_intake.body_map_schema_version = 1
+        mock_intake.body_map_data = []
+        mock_save.return_value = mock_intake
+
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.patch(
+            f"/api/v1/intake-forms/{intake_form.id}",
+            data=json.dumps({"body_map_schema_version": 1, "body_map_data": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("intake_form_id", data)
+        self.assertIn("body_map_data", data)
+
+    # ------------------------------------------------------------------
+    # Method not allowed
+    # ------------------------------------------------------------------
+
+    def test_put_returns_405(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{uuid4()}",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_delete_returns_405(self) -> None:
+        self.client.login(username="reception-form-detail", password="safe-password")
+        response = self.client.delete(f"/api/v1/intake-forms/{uuid4()}")
+        self.assertEqual(response.status_code, 405)
+
+
+# ---------------------------------------------------------------------------
+# intake_form_consents_view  (PUT /api/v1/intake-forms/<id>/consents)
+# ---------------------------------------------------------------------------
+
+
+class IntakeFormConsentsViewTests(TestCase):
+    """Cover intake_form_consents_view: role check, JSON error, 404, happy path."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.reception_user = StaffUser.objects.create_user(
+            username="reception-consents",
+            email="reception-consents@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception_user, "Reception")
+        self.doctor_user = StaffUser.objects.create_user(
+            username="doctor-consents",
+            email="doctor-consents@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor_user, "Doctor")
+        self.clinic = ClinicSite.objects.create(code="CSV", name="Consents Clinic")
+        self.reception_user.clinic_sites.add(self.clinic)
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="CS1", name="CS1"
+        )
+
+    def test_doctor_gets_403(self) -> None:
+        self.client.login(username="doctor-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{uuid4()}/consents",
+            data=json.dumps({"consents": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_invalid_json_returns_400(self) -> None:
+        self.client.login(username="reception-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{uuid4()}/consents",
+            data="BAD_JSON{",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_body_schema_returns_400(self) -> None:
+        self.client.login(username="reception-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{uuid4()}/consents",
+            data=json.dumps({"wrong_key": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_nonexistent_form_returns_404(self) -> None:
+        self.client.login(username="reception-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{uuid4()}/consents",
+            data=json.dumps({"consents": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @patch("apps.intake.api_views.save_intake_consents")
+    def test_happy_path_returns_200_with_consents_list(self, mock_save) -> None:
+        intake_form = _make_minimal_intake_form(
+            created_by_user=self.reception_user,
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+        )
+        mock_save.return_value = intake_form
+
+        self.client.login(username="reception-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{intake_form.id}/consents",
+            data=json.dumps({"consents": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("intake_form_id", data)
+        self.assertIn("consents", data)
+        self.assertEqual(data["consents"], [])
+        mock_save.assert_called_once()
+
+    @patch("apps.intake.api_views.save_intake_consents")
+    def test_state_error_returns_409(self, mock_save) -> None:
+        from apps.core.exceptions import StateTransitionError
+        from apps.core.domain_messages import domain_message
+
+        mock_save.side_effect = StateTransitionError(
+            domain_message("other.domain.invalid_shift_code", value="x"),
+            api_message_key="other.domain.invalid_shift_code",
+        )
+        intake_form = _make_minimal_intake_form(
+            created_by_user=self.reception_user,
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+        )
+        self.client.login(username="reception-consents", password="safe-password")
+        response = self.client.put(
+            f"/api/v1/intake-forms/{intake_form.id}/consents",
+            data=json.dumps({"consents": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)

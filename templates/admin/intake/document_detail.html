@@ -1,17 +1,17 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n unfold %}
+{% load i18n unfold cogitomedica_i18n %}
 
 {% block breadcrumbs %}
     <div class="px-4 py-3 sm:px-8">
         <nav aria-label="Breadcrumb">
             <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
-                <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">Start</a></li>
+                <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
                 <li><span class="mx-2">/</span></li>
-                <li><a href="{% url 'admin_reception_dashboard' %}" class="hover:text-gray-900">Rejestracja</a></li>
+                <li><a href="{% url 'admin_reception_dashboard' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_registration" "Rejestracja" %}</a></li>
                 <li><span class="mx-2">/</span></li>
-                <li><a href="{% url 'admin_intake_documents' %}" class="hover:text-gray-900">Dokumenty intake (PDF)</a></li>
+                <li><a href="{% url 'admin_intake_documents' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_intake_documents" "Dokumenty intake (PDF)" %}</a></li>
                 <li><span class="mx-2">/</span></li>
-                <li class="text-gray-900" aria-current="page">{{ title|default:"Szczegóły" }}</li>
+                <li class="text-gray-900" aria-current="page">{{ title|default:"–" }}</li>
             </ol>
         </nav>
     </div>
@@ -20,28 +20,28 @@
 {% block content %}
 <div class="px-4 sm:px-8 pb-8">
     {% if not_found %}
-    <h1 class="text-2xl font-bold mb-6 text-red-600">Nie znaleziono dokumentu</h1>
-    <p class="text-gray-600 mb-4">Dokument nie istnieje lub nie masz do niego dostępu.</p>
-    <a href="{% url 'admin_intake_documents' %}" class="inline-flex items-center text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">← Powrót do listy</a>
+    <h1 class="text-2xl font-bold mb-6 text-red-600">{% admin_trans "administration.intake_doc_not_found" "Nie znaleziono dokumentu" %}</h1>
+    <p class="text-gray-600 mb-4">{% admin_trans "administration.intake_doc_not_found_desc" "Dokument nie istnieje lub nie masz do niego dostępu." %}</p>
+    <a href="{% url 'admin_intake_documents' %}" class="inline-flex items-center text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">{% admin_trans "administration.link_back_to_list" "← Powrót do listy" %}</a>
     {% else %}
     <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
 
     <div class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-4">Pacjent i kolejka</h2>
+        <h2 class="text-lg font-semibold mb-4">{% admin_trans "administration.section_patient_queue" "Pacjent i kolejka" %}</h2>
         <dl class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><dt class="text-gray-500">Pacjent</dt><dd class="font-medium">{{ doc.patient.last_name }} {{ doc.patient.first_name }}</dd></div>
-            <div><dt class="text-gray-500">Data urodzenia</dt><dd>{{ doc.patient.date_of_birth }}</dd></div>
-            <div><dt class="text-gray-500">Data kolejki</dt><dd>{{ doc.queue_date }}</dd></div>
-            <div><dt class="text-gray-500">Placówka</dt><dd>{{ doc.clinic_site_name }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.col_patient" "Pacjent" %}</dt><dd class="font-medium">{{ doc.patient.last_name }} {{ doc.patient.first_name }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_date_of_birth" "Data urodzenia" %}</dt><dd>{{ doc.patient.date_of_birth }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_queue_date" "Data kolejki" %}</dt><dd>{{ doc.queue_date }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_clinic_site" "Placówka" %}</dt><dd>{{ doc.clinic_site_name }}</dd></div>
         </dl>
     </div>
 
     <div class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-4">Dokument</h2>
+        <h2 class="text-lg font-semibold mb-4">{% admin_trans "administration.section_document" "Dokument" %}</h2>
         <dl class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><dt class="text-gray-500">Wersja</dt><dd>{{ doc.version_no }}</dd></div>
-            <div><dt class="text-gray-500">Język formularza</dt><dd>{{ doc.form_locale }}</dd></div>
-            <div><dt class="text-gray-500">Status PDF</dt>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_version" "Wersja" %}</dt><dd>{{ doc.version_no }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_form_locale" "Język formularza" %}</dt><dd>{{ doc.form_locale }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.field_pdf_status" "Status PDF" %}</dt>
                 <dd>
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                         {% if doc.pdf_generation_status == 'COMPLETED' %}bg-green-100 text-green-800
@@ -52,9 +52,9 @@
                     </span>
                 </dd>
             </div>
-            <div><dt class="text-gray-500">Utworzono</dt><dd>{{ doc.created_at }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.col_created_at" "Utworzono" %}</dt><dd>{{ doc.created_at }}</dd></div>
             {% if doc.processing_error_message %}
-            <div class="md:col-span-2"><dt class="text-gray-500">Błąd przetwarzania</dt><dd class="text-red-600">{{ doc.processing_error_message }}</dd></div>
+            <div class="md:col-span-2"><dt class="text-gray-500">{% admin_trans "administration.field_processing_error" "Błąd przetwarzania" %}</dt><dd class="text-red-600">{{ doc.processing_error_message }}</dd></div>
             {% endif %}
         </dl>
     </div>
@@ -64,11 +64,11 @@
         {% if doc.pdf_available %}
         {% component "unfold/components/button.html" with href=preview_pdf_url variant="primary" extra_attrs='target="_blank" rel="noopener noreferrer"' %}
             <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
-            Podgląd PDF
+            {% admin_trans "administration.btn_pdf_preview" "Podgląd PDF" %}
         {% endcomponent %}
         {% endif %}
         {% component "unfold/components/button.html" with href=admin_intake_documents_list_url variant="default" %}
-            ← Powrót do listy
+            {% admin_trans "administration.link_back_to_list" "← Powrót do listy" %}
         {% endcomponent %}
     </div>
     {% endif %}
