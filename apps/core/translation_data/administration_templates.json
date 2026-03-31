@@ -328,5 +328,25 @@
     "de": "Ihre Ergebnisse sind noch nicht verfügbar. Wir benachrichtigen Sie per SMS, sobald sie vorliegen.",
     "en": "Your results are not yet available. We will notify you by SMS as soon as they are ready.",
     "pl": "Twoje wyniki nie są jeszcze dostępne. Poinformujemy Cię SMS-em, gdy będą gotowe."
+  },
+  "administration.empty_no_results_found": {
+    "de": "Keine Ergebnisse gefunden",
+    "en": "No results found",
+    "pl": "Nie znaleziono wyników"
+  },
+  "administration.empty_no_results_description": {
+    "de": "Diese Seite hat keine Ergebnisse geliefert. Erstellen Sie einen neuen Eintrag oder setzen Sie Ihre Filter zurück.",
+    "en": "This page yielded into no results. Create a new item or reset your filters.",
+    "pl": "Ta strona nie zwróciła wyników. Dodaj nowy element lub zresetuj filtry."
+  },
+  "administration.btn_reset_filters": {
+    "de": "Filter zurücksetzen",
+    "en": "Reset filters",
+    "pl": "Resetuj filtry"
+  },
+  "administration.btn_add": {
+    "de": "Hinzufügen",
+    "en": "Add",
+    "pl": "Dodaj"
   }
 }
