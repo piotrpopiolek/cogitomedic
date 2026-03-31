@@ -1,18 +1,6 @@
-# English translations (gettext) — Unfold UI strings only.
-# App labels are now managed via DB translations (administration.app_*).
+# English translations (gettext).
+# Project-specific UI strings are now managed via DB translations.
 #
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
-
-msgid "Search"
-msgstr "Search"
-
-msgid "Filters"
-msgstr "Filters"
-
-msgid "Filter"
-msgstr "Filter"
-
-msgid "Type to search"
-msgstr "Type to search"
