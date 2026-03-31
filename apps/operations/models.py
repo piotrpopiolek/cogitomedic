@@ -104,4 +104,4 @@ class AuditEvent(models.Model):
 
     def __str__(self) -> str:
         actor = str(self.actor_user) if self.actor_user_id else "—"
-        return f"{self.event_type} – {self.event_time.strftime('%Y-%m-%d %H:%M')} ({actor})"
+        return f"{self.event_type} – {self.event_time.strftime('%d.%m.%Y')} ({actor})"
