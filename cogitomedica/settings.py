@@ -651,6 +651,7 @@ AUTH_PASSWORD_VALIDATORS: list[dict[str, str]] = [
 LANGUAGE_CODE = "de-de"
 LANGUAGES = [("de", "German"), ("en", "English"), ("pl", "Polish")]
 LOCALE_PATHS = [BASE_DIR / "locale"]
+FORMAT_MODULE_PATH = ["cogitomedica.formats"]
 TIME_ZONE = os.environ.get("DJANGO_TIME_ZONE", "Europe/Warsaw")
 USE_I18N = True
 USE_TZ = True

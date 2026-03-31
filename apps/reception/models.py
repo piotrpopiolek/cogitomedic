@@ -670,7 +670,7 @@ class PatientFormSession(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Sesja formularza: {self.queue_entry} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+        return f"Sesja formularza: {self.queue_entry} ({self.created_at.strftime('%d.%m.%Y')})"
 
     @classmethod
     def create_session(
@@ -781,7 +781,7 @@ class PatientImportBatch(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Import: {self.source_file_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')}, {self.get_status_display()})"
+        return f"Import: {self.source_file_name} ({self.created_at.strftime('%d.%m.%Y')}, {self.get_status_display()})"
 
 
 class PatientImportError(models.Model):
