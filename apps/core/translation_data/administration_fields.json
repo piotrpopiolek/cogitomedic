@@ -839,6 +839,21 @@
     "en": "Verify attempt count",
     "pl": "Liczba prób weryfikacji"
   },
+  "administration.field_anonymization_started_at": {
+    "de": "Anonymisierung begonnen am",
+    "en": "Anonymization started at",
+    "pl": "Anonimizacja rozpoczęta o"
+  },
+  "administration.field_anonymized_at": {
+    "de": "Anonymisiert am",
+    "en": "Anonymized at",
+    "pl": "Zanonimizowano o"
+  },
+  "administration.field_consent_summary": {
+    "de": "Einwilligungsübersicht",
+    "en": "Consent summary",
+    "pl": "Podsumowanie zgód"
+  },
   "administration.field_verified_at": {
     "de": "Verifiziert am",
     "en": "Verified at",
