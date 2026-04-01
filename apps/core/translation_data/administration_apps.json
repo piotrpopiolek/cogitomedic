@@ -43,5 +43,10 @@
     "de": "Patientenergebnisse",
     "en": "Patient results",
     "pl": "Wyniki pacjentów"
+  },
+  "administration.app_auth": {
+    "de": "Zugriffsverwaltung",
+    "en": "Authentication and Authorization",
+    "pl": "Uwierzytelnianie i autoryzacja"
   }
 }

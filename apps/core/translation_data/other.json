@@ -133,5 +133,80 @@
     "de": "Ich bin mit der elektronischen Bereitstellung meines Ergebnisses im Portal einverstanden.",
     "en": "I agree to the electronic provision of my result in the portal.",
     "pl": "Wyrażam zgodę na elektroniczne udostępnienie mojego wyniku w portalu."
+  },
+  "other.auth.correct_error_below": {
+    "de": "Bitte korrigieren Sie den folgenden Fehler.",
+    "en": "Please correct the error below.",
+    "pl": "Popraw poniższy błąd."
+  },
+  "other.auth.correct_errors_below": {
+    "de": "Bitte korrigieren Sie die folgenden Fehler.",
+    "en": "Please correct the errors below.",
+    "pl": "Popraw poniższe błędy."
+  },
+  "other.auth.already_authenticated_other_account": {
+    "de": "Sie sind als {username} angemeldet, haben aber keinen Zugriff auf diese Seite. Möchten Sie sich mit einem anderen Konto anmelden?",
+    "en": "You are authenticated as {username}, but are not authorized to access this page. Would you like to login to a different account?",
+    "pl": "Jesteś zalogowany jako {username}, ale nie masz dostępu do tej strony. Czy chcesz zalogować się na inne konto?"
+  },
+  "other.auth.phone_number_label": {
+    "de": "Handynummer",
+    "en": "Phone number",
+    "pl": "Numer telefonu"
+  },
+  "other.auth.access_code_label": {
+    "de": "Zugangscode",
+    "en": "Access code",
+    "pl": "Kod dostępu"
+  },
+  "other.auth.sign_in": {
+    "de": "Anmelden",
+    "en": "Sign in",
+    "pl": "Zaloguj"
+  },
+  "other.auth.login_help_text": {
+    "de": "Zur Anmeldung nutzen Sie bitte den Abholcode ***** und Ihre Handynummer ohne führende 0 und ohne Ländervorwahl (z. B. 123 456 78 90).",
+    "en": "Use your pickup code ***** and your phone number without leading 0 and without country code (e.g. 123 456 78 90).",
+    "pl": "Do logowania użyj kodu odbioru ***** oraz numeru telefonu bez wiodącego 0 i bez prefiksu kraju (np. 123 456 78 90)."
+  },
+  "other.auth.logout_thanks": {
+    "de": "Vielen Dank für die Nutzung der Website.",
+    "en": "Thanks for spending some quality time with the website today.",
+    "pl": "Dziękujemy za skorzystanie z serwisu."
+  },
+  "other.auth.log_in_again": {
+    "de": "Erneut anmelden",
+    "en": "Log in again",
+    "pl": "Zaloguj się ponownie"
+  },
+  "other.auth.logout": {
+    "de": "Abmelden",
+    "en": "Log out",
+    "pl": "Wyloguj"
+  },
+  "other.portal.page_title": {
+    "de": "CogitoMedica Untersuchungsergebnisse",
+    "en": "CogitoMedica Results",
+    "pl": "CogitoMedica Wyniki"
+  },
+  "other.results.available_now": {
+    "de": "Ihre Untersuchungsergebnisse sind jetzt verfügbar",
+    "en": "Your examination results are now available",
+    "pl": "Wyniki Twoich badań są teraz dostępne"
+  },
+  "other.results.fetch": {
+    "de": "Ergebnisse abrufen",
+    "en": "Retrieve results",
+    "pl": "Pobierz wyniki"
+  },
+  "other.results.not_available_yet": {
+    "de": "Ihre Ergebnisse sind noch nicht verfügbar. Wir benachrichtigen Sie per SMS, sobald sie vorliegen.",
+    "en": "Your results are not yet available. We will notify you by SMS as soon as they are ready.",
+    "pl": "Twoje wyniki nie są jeszcze dostępne. Poinformujemy Cię SMS-em, gdy będą gotowe."
+  },
+  "other.ergebnisse.choose_language": {
+    "de": "Sprache wählen",
+    "en": "Choose language",
+    "pl": "Wybierz język"
   }
 }

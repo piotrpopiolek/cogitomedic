@@ -1,15 +1,14 @@
-{% extends "index.html" %} {% load i18n static %} {% block content %}
+{% extends "index.html" %} {% load static cogitomedica_i18n %} {% block content %}
 <div class="content">
   <h3>{{ user.first_name }} {{ user.last_name }}</h3>
   {% if file %}
-  <h5>Ihre Untersuchungsergebnisse sind jetzt verfügbar</h5>
+  <h5>{% db_trans "other.results.available_now" "Your examination results are now available" %}</h5>
   <a href="{% url 'download_file' file %}" target="_blank"
-    >Ergebnisse abrufen</a
+    >{% db_trans "other.results.fetch" "Retrieve results" %}</a
   >
   {% else %}
   <h5>
-    Ihre Ergebnisse sind noch nicht verfügbar. Wir benachrichtigen Sie per SMS,
-    sobald sie vorliegen.
+    {% db_trans "other.results.not_available_yet" "Your results are not yet available. We will notify you by SMS as soon as they are ready." %}
   </h5>
   {% endif %}
 </div>

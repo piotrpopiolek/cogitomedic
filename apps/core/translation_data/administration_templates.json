@@ -348,5 +348,85 @@
     "de": "Hinzufügen",
     "en": "Add",
     "pl": "Dodaj"
+  },
+  "administration.btn_save_and_view": {
+    "de": "Speichern und anzeigen",
+    "en": "Save and view",
+    "pl": "Zapisz i podgląd"
+  },
+  "administration.btn_save_as_new": {
+    "de": "Als neu speichern",
+    "en": "Save as new",
+    "pl": "Zapisz jako nowe"
+  },
+  "administration.btn_close": {
+    "de": "Zamknij",
+    "en": "Close",
+    "pl": "Zamknij"
+  },
+  "administration.site_admin_title": {
+    "de": "Django-Verwaltung",
+    "en": "Django site admin",
+    "pl": "Panel administracyjny Django"
+  },
+  "administration.login_welcome_back": {
+    "de": "Witamy ponownie w",
+    "en": "Welcome back to",
+    "pl": "Witaj ponownie w"
+  },
+  "administration.login_authenticated_but_unauthorized": {
+    "de": "Sie sind als {username} angemeldet, haben aber keinen Zugriff auf diese Seite. Möchten Sie sich mit einem anderen Konto anmelden?",
+    "en": "You are authenticated as {username}, but are not authorized to access this page. Would you like to login to a different account?",
+    "pl": "Jesteś zalogowany jako {username}, ale nie masz uprawnień do tej strony. Czy chcesz zalogować się na inne konto?"
+  },
+  "administration.login_btn": {
+    "de": "Anmelden",
+    "en": "Log in",
+    "pl": "Zaloguj"
+  },
+  "administration.login_forgot_password": {
+    "de": "Passwort oder Benutzername vergessen?",
+    "en": "Forgotten your password or username?",
+    "pl": "Nie pamiętasz hasła lub nazwy użytkownika?"
+  },
+  "administration.btn_apply_filters": {
+    "de": "Filter anwenden",
+    "en": "Apply filters",
+    "pl": "Zastosuj filtry"
+  },
+  "administration.btn_hide_counts": {
+    "de": "Zähler ausblenden",
+    "en": "Hide counts",
+    "pl": "Ukryj liczniki"
+  },
+  "administration.btn_show_counts": {
+    "de": "Zähler anzeigen",
+    "en": "Show counts",
+    "pl": "Pokaż liczniki"
+  },
+  "administration.btn_clear_all_filters": {
+    "de": "Alle Filter zurücksetzen",
+    "en": "Clear all filters",
+    "pl": "Wyczyść wszystkie filtry"
+  },
+  "administration.btn_view": {
+    "de": "Podgląd",
+    "en": "View",
+    "pl": "Podgląd"
+  },
+  "administration.btn_change": {
+    "de": "Edytuj",
+    "en": "Change",
+    "pl": "Edytuj"
+  },
+  "administration.models_in_application": {
+    "de": "Modelle der {name}-Anwendung",
+    "en": "Models in the {name} application",
+    "pl": "Modele aplikacji {name}"
+  },
+  "administration.no_permission_view_or_edit": {
+    "de": "Sie haben keine Berechtigung, etwas anzuzeigen oder zu bearbeiten.",
+    "en": "You don’t have permission to view or edit anything.",
+    "pl": "Nie masz uprawnień do wyświetlania lub edycji."
   }
 }

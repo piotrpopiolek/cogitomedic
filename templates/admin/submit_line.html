@@ -1,4 +1,4 @@
-{% load i18n admin_urls unfold %}
+{% load admin_urls unfold cogitomedica_i18n %}
 
 <div {% if not is_popup %}id="submit-row"{% endif %} class="relative lg:sticky lg:bottom-0 z-40">
     <div class="backdrop-blur-xs bg-white/80 rounded-b-default pb-4 px-4 dark:bg-base-900/80 lg:border-t lg:border-base-200 relative lg:scrollable-top lg:py-0 dark:border-base-800">
@@ -27,7 +27,7 @@
                         {% if can_change %}
                             {{ admin_btn_save_and_continue_editing|default:"Save and continue editing" }}
                         {% else %}
-                            {% trans "Save and view" %}
+                            {% admin_trans "administration.btn_save_and_view" "Save and view" %}
                         {% endif %}
                     {% endcomponent %}
                 {% endif %}
@@ -40,7 +40,7 @@
 
                 {% if show_save_as_new %}
                     {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name="_saveasnew" variant="default" class="w-full lg:w-auto" %}
-                        {% trans "Save as new" %}
+                        {% admin_trans "administration.btn_save_as_new" "Save as new" %}
                     {% endcomponent %}
                 {% endif %}
 
@@ -50,7 +50,7 @@
                         {% add_preserved_filters changelist_url as link %}
 
                         {% component "unfold/components/button.html" with href=link variant="default" class="w-full lg:w-auto"%}
-                            {% trans "Close" %}
+                            {% admin_trans "administration.btn_close" "Close" %}
                         {% endcomponent %}
                     {% endif %}
 

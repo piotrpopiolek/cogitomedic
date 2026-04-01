@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{% load static %}
+{% load static cogitomedica_i18n %}
 <html lang="de">
   <head>
     <meta charset="utf-8" />
@@ -9,7 +9,8 @@
     />
     <meta name="description" content="" />
     <meta name="author" content="" />
-    <title>CogitoMedica Untersuchungsergebnisse</title>
+    {% db_trans "other.portal.page_title" "CogitoMedica Results" as portal_page_title %}
+    <title>{{ portal_page_title }}</title>
     <!-- Favicon-->
     <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
     <!-- Core theme CSS (includes Bootstrap); brand: teal #075255, surface #f5f7f8 (jak post-17.css na cogitomedica.de) -->
@@ -24,7 +25,7 @@
           ><img src="{% static 'lab/logo.png' %}" alt="CogitoMedica."
         /></a>
         {% if user.is_authenticated %}
-        <a class="btn btn-primary" href="/accounts/logout">Abmelden</a>
+        <a class="btn btn-primary" href="/accounts/logout">{% db_trans "other.auth.logout" "Log out" %}</a>
         {% endif %}
       </div>
     </nav>

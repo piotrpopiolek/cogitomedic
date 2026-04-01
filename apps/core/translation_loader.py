@@ -42,6 +42,8 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.signature_payload_too_large": ["max_bytes"],
     "other.api.request_body_too_large": ["max_bytes"],
     "other.sms.patient_results": ["url"],
+    "other.auth.already_authenticated_other_account": ["username"],
+    "administration.login_authenticated_but_unauthorized": ["username"],
     "administration.error_lesion_favorites_preset_not_object": ["preset_no"],
     "administration.error_lesion_favorites_preset_invalid": ["preset_no", "details"],
     "administration.error_lesion_favorites_preset_bad_feature": [

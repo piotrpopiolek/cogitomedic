@@ -233,5 +233,15 @@
     "de": "Bitte akzeptieren Sie alle erforderlichen Einwilligungen (mit * markiert).",
     "en": "Please accept all required consents (marked with *).",
     "pl": "Proszę zaakceptować wszystkie wymagane zgody (oznaczone *)."
+  },
+  "waiting_room.form.form_submitted_page_title": {
+    "de": "Formular abgesendet",
+    "en": "Form submitted",
+    "pl": "Formularz wysłany"
+  },
+  "waiting_room.form.choose_language": {
+    "de": "Sprache wählen",
+    "en": "Choose language",
+    "pl": "Wybierz język"
   }
 }

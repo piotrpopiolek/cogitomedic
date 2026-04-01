@@ -1,4 +1,4 @@
-{% load static %}
+{% load static cogitomedica_i18n %}
 <!DOCTYPE html>
 <html lang="{{ staff_locale|default:'pl' }}">
 <head>
@@ -16,12 +16,14 @@
 <body class="cm-portal">
   <h1>{{ staff_ui.login_title|default:"Poczekalnia – logowanie" }}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% db_trans "waiting_room.staff.username" "Username" as staff_username_label %}
+  {% db_trans "waiting_room.staff.password" "Password" as staff_password_label %}
   <form method="post" action="" id="tablet-login-form">
     {% csrf_token %}
     <input type="hidden" name="android_id" id="tablet-login-android-id" value="" />
-    <label for="username">Login</label>
+    <label for="username">{{ staff_ui.username|default:staff_username_label }}</label>
     <input id="username" name="username" type="text" required autocomplete="username" />
-    <label for="password">Hasło</label>
+    <label for="password">{{ staff_ui.password|default:staff_password_label }}</label>
     <input id="password" name="password" type="password" required autocomplete="current-password" />
     <button type="submit">{{ staff_ui.login_btn|default:"Zaloguj" }}</button>
   </form>
