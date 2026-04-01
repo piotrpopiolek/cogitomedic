@@ -1,4 +1,4 @@
-{% load static %}
+{% load static cogitomedica_i18n %}
 <!DOCTYPE html>
 <html lang="{{ ergebnisse_locale|default:'de' }}">
 <head>
@@ -22,7 +22,7 @@
 </head>
 <body class="cm-portal">
   {% if ergebnisse_ui %}
-  <nav class="ergebnisse-lang-nav" aria-label="Wybierz język" style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:1.5rem;line-height:1">
+  <nav class="ergebnisse-lang-nav" aria-label="{% db_trans 'other.ergebnisse.choose_language' 'Choose language' %}" style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:1.5rem;line-height:1">
     {% if ergebnisse_locale == 'en' %}
       <a href="{{ request.path }}?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</a>
       <span title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</span>

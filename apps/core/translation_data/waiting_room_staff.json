@@ -143,5 +143,15 @@
     "de": "Tablet ist keiner Standort zugeordnet. Bitte wenden Sie sich an den Administrator.",
     "en": "Tablet is not assigned to a clinic site. Please contact the administrator.",
     "pl": "Tablet nie jest przypisany do placówki. Skontaktuj się z administratorem."
+  },
+  "waiting_room.staff.username": {
+    "de": "Login",
+    "en": "Username",
+    "pl": "Login"
+  },
+  "waiting_room.staff.password": {
+    "de": "Passwort",
+    "en": "Password",
+    "pl": "Hasło"
   }
 }

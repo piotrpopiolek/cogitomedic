@@ -1,4 +1,4 @@
-{% load static %}
+{% load static cogitomedica_i18n %}
 <!DOCTYPE html>
 <html lang="{{ locale_param|default:'de' }}">
 <head>
@@ -15,7 +15,7 @@
     <button type="button" id="tablet-form-retry-btn" class="retry-btn">{{ ui.msg_try_again }}</button>
   </div>
   <div class="form-nav-lang-wrap">
-    <nav class="form-nav-lang" aria-label="Wybierz język">
+    <nav class="form-nav-lang" aria-label="{% db_trans 'waiting_room.form.choose_language' 'Choose language' %}">
       {% if locale_param == 'en' %}
         <a href="?locale=de" title="{{ ui.lang_de }}"><span class="form-lang-flag" aria-hidden="true">🇩🇪</span></a>
         <span class="form-lang-flag form-lang-current" title="{{ ui.lang_en }}">🇬🇧</span>

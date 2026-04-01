@@ -1,10 +1,11 @@
-{% load static %}
+{% load static cogitomedica_i18n %}
 <!DOCTYPE html>
 <html lang="{{ locale_param|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% if locale_param == 'en' %}Form submitted{% else %}Formular abgesendet{% endif %}</title>
+  {% db_trans "waiting_room.form.form_submitted_page_title" "Form submitted" as form_submitted_page_title %}
+  <title>{{ ui.form_submitted_title|default:form_submitted_page_title }}</title>
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
     body { max-width: 480px; margin: 2rem auto; padding: 1rem; }
@@ -13,7 +14,9 @@
   </style>
 </head>
 <body class="cm-portal">
-  <p class="ok">{% if ui.form_submitted_title %}{{ ui.form_submitted_title }}{% else %}Formular wurde abgesendet.{% endif %}</p>
-  <a class="btn" href="{% url 'tablet:home' %}">{% if ui.back_to_queues %}{{ ui.back_to_queues }}{% else %}Zurück zur Warteliste{% endif %}</a>
+  {% db_trans "waiting_room.form.form_submitted_title" "Form submitted." as form_submitted_title %}
+  {% db_trans "waiting_room.form.back_to_queues" "Back to queue list" as back_to_queues %}
+  <p class="ok">{{ ui.form_submitted_title|default:form_submitted_title }}</p>
+  <a class="btn" href="{% url 'tablet:home' %}">{{ ui.back_to_queues|default:back_to_queues }}</a>
 </body>
 </html>

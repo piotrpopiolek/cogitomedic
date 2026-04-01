@@ -523,5 +523,70 @@
     "de": "Benutzername",
     "en": "Username",
     "pl": "Nazwa użytkownika"
+  },
+  "doctor.group_numbers_hint": {
+    "de": "Nummern der Veränderungen aus dem Gerät im Feld „Nummern in der Gruppe“ eintragen (z. B. 2, 3, 13). Eine Gruppe = eine gemeinsame Beschreibung.",
+    "en": "Enter lesion numbers from the device in the \"Numbers in group\" field (e.g. 2, 3, 13). One group equals one shared description.",
+    "pl": "Numery zmian z urządzenia wpisuj w polu „Numery w grupie” (np. 2, 3, 13). Jedna grupa = jeden wspólny opis."
+  },
+  "doctor.group_numbers_label": {
+    "de": "Nummern in der Gruppe (vom Gerät, z. B. 2, 3, 13)",
+    "en": "Numbers in group (from device, e.g. 2, 3, 13)",
+    "pl": "Numery w grupie (z urządzenia, np. 2, 3, 13)"
+  },
+  "doctor.widget_lgf_json_label": {
+    "de": "Favoriten für Läsionsgruppen (JSON)",
+    "en": "Lesion group favorites (JSON)",
+    "pl": "Ulubione grup zmian (JSON)"
+  },
+  "doctor.widget_lgf_help_text": {
+    "de": "Bei aktiviertem JavaScript verwenden Sie den visuellen Editor unten; dieser wird mit dem JSON oben synchronisiert. Ohne JavaScript bearbeiten Sie das JSON direkt.",
+    "en": "With JavaScript enabled, use the visual editor below; it syncs to the JSON above. Without JavaScript, edit the JSON directly.",
+    "pl": "Przy włączonym JavaScript użyj edytora wizualnego poniżej; synchronizuje się on z JSON-em powyżej. Bez JavaScript edytuj JSON bezpośrednio."
+  },
+  "doctor.widget_remove": {
+    "de": "Entfernen",
+    "en": "Remove",
+    "pl": "Usuń"
+  },
+  "doctor.widget_name": {
+    "de": "Name",
+    "en": "Name",
+    "pl": "Nazwa"
+  },
+  "doctor.widget_clinical_assessment": {
+    "de": "Klinische Einschätzung",
+    "en": "Clinical assessment",
+    "pl": "Ocena kliniczna"
+  },
+  "doctor.widget_select_placeholder": {
+    "de": "— Auswählen —",
+    "en": "— Select —",
+    "pl": "— Wybierz —"
+  },
+  "doctor.widget_malignancy_risk": {
+    "de": "Malignitätsrisiko",
+    "en": "Malignancy risk",
+    "pl": "Ryzyko złośliwości"
+  },
+  "doctor.widget_dermatoscopic_features": {
+    "de": "Dermatoskopische Merkmale",
+    "en": "Dermatoscopic features",
+    "pl": "Cechy dermatoskopowe"
+  },
+  "doctor.widget_text_section_8": {
+    "de": "Text (Abschnitt 8)",
+    "en": "Text (section 8)",
+    "pl": "Tekst (sekcja 8)"
+  },
+  "doctor.widget_text_section_8_placeholder": {
+    "de": "Text für Abschnitt 8 (generiert / bearbeitet)",
+    "en": "Text for section 8 (generated / edited)",
+    "pl": "Tekst dla sekcji 8 (wygenerowany / edytowany)"
+  },
+  "doctor.widget_add_preset": {
+    "de": "Preset hinzufügen",
+    "en": "Add preset",
+    "pl": "Dodaj preset"
   }
 }
