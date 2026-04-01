@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load cogitomedica_i18n %}
 <div id="lesion-group-favorites-{{ widget.attrs.id }}" class="lesion-group-favorites-widget group" x-data="lesionGroupFavoritesWidget(
   atob('{{ widget.value_b64 }}'),
   atob('{{ widget.dermatoscopic_b64 }}'),
@@ -8,9 +8,9 @@
   <textarea name="{{ widget.name }}" x-ref="textarea" id="{{ widget.attrs.id }}"
     class="{{ widget.textarea_json_class }}"
     rows="4"
-    aria-label="{% translate 'Lesion group favorites (JSON)' %}"
+    aria-label="{% db_trans 'doctor.widget_lgf_json_label' 'Lesion group favorites (JSON)' %}"
   >{{ widget.value_json }}</textarea>
-  <p class="{{ widget.help_line_class }} mb-3">{% translate "With JavaScript enabled, use the visual editor below; it syncs to the JSON above. Without JavaScript, edit the JSON directly." %}</p>
+  <p class="{{ widget.help_line_class }} mb-3">{% db_trans "doctor.widget_lgf_help_text" "With JavaScript enabled, use the visual editor below; it syncs to the JSON above. Without JavaScript, edit the JSON directly." %}</p>
   <div class="space-y-4 max-w-4xl">
     <template x-for="(preset, index) in presets" :key="index">
       <div class="{{ widget.preset_card_class }}">
@@ -18,37 +18,37 @@
           <span class="{{ widget.preset_heading_class }}" x-text="'Preset ' + (index + 1)"></span>
           <button type="button" @click="removePreset(index)"
             class="{{ widget.remove_button_class }}">
-            {% translate "Remove" %}
+            {% db_trans "doctor.widget_remove" "Remove" %}
           </button>
         </div>
         <div>
-          <label class="{{ widget.label_class }}">{% translate "Name" %}</label>
+          <label class="{{ widget.label_class }}">{% db_trans "doctor.widget_name" "Name" %}</label>
           <input type="text" x-model="preset.name" maxlength="120"
             class="{{ widget.input_class }}"
             placeholder="e.g. Zmiana kontrolna">
         </div>
         <div>
-          <label class="{{ widget.label_class }}">{% translate "Clinical assessment" %}</label>
+          <label class="{{ widget.label_class }}">{% db_trans "doctor.widget_clinical_assessment" "Clinical assessment" %}</label>
           <select x-model="preset.clinical_assessment"
             class="{{ widget.select_class }}">
-            <option value="">{% translate "— Select —" %}</option>
+            <option value="">{% db_trans "doctor.widget_select_placeholder" "— Select —" %}</option>
             {% for value, label in widget.clinical_choices %}
             <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         <div>
-          <label class="{{ widget.label_class }}">{% translate "Malignancy risk" %}</label>
+          <label class="{{ widget.label_class }}">{% db_trans "doctor.widget_malignancy_risk" "Malignancy risk" %}</label>
           <select x-model="preset.malignancy_risk"
             class="{{ widget.select_class }}">
-            <option value="">{% translate "— Select —" %}</option>
+            <option value="">{% db_trans "doctor.widget_select_placeholder" "— Select —" %}</option>
             {% for value, label in widget.malignancy_choices %}
             <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         <div>
-          <label class="{{ widget.label_class }}">{% translate "Dermatoscopic features" %}</label>
+          <label class="{{ widget.label_class }}">{% db_trans "doctor.widget_dermatoscopic_features" "Dermatoscopic features" %}</label>
           <div class="flex flex-wrap gap-x-4 gap-y-2">
             <template x-for="opt in dermatoscopicChoices" :key="opt.value">
               <label class="{{ widget.checkbox_row_label_class }}">
@@ -61,16 +61,16 @@
           </div>
         </div>
         <div>
-          <label class="{{ widget.label_class }}">{% translate "Text (section 8)" %}</label>
+          <label class="{{ widget.label_class }}">{% db_trans "doctor.widget_text_section_8" "Text (section 8)" %}</label>
           <textarea x-model="preset.text" maxlength="5000" rows="3"
             class="{{ widget.textarea_body_class }}"
-            placeholder="{% translate 'Text for section 8 (generiert / bearbeitet)' %}"></textarea>
+            placeholder="{% db_trans 'doctor.widget_text_section_8_placeholder' 'Text for section 8 (generated / edited)' %}"></textarea>
         </div>
       </div>
     </template>
     <button type="button" @click="addPreset()"
       class="{{ widget.add_preset_button_class }}">
-      {% translate "Add preset" %}
+      {% db_trans "doctor.widget_add_preset" "Add preset" %}
     </button>
   </div>
 </div>
