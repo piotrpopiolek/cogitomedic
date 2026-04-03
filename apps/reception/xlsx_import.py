@@ -374,12 +374,19 @@ def _normalize_row(
     if not first_name and not last_name:
         return None
 
-    dob_raw = _cell("date_of_birth")
-    dob = _parse_date(dob_raw) if dob_raw else None
+    dob_idx = header_indices.get("date_of_birth", -1)
+    raw_dob = row[dob_idx] if 0 <= dob_idx < len(row) else None
+    if isinstance(raw_dob, datetime):
+        dob = raw_dob.date()
+    elif isinstance(raw_dob, date):
+        dob = raw_dob
+    else:
+        dob_raw = str(raw_dob).strip() if raw_dob is not None else ""
+        dob = _parse_date(dob_raw) if dob_raw else None
     if not dob:
         raise XlsxImportFailure(
             XlsxImportErrorCode.INVALID_DATE_OF_BIRTH,
-            f"Row {row_index}: invalid or missing date of birth: {dob_raw!r}",
+            f"Row {row_index}: invalid or missing date of birth: {raw_dob!r}",
         )
 
     phone_raw = _cell("phone")
