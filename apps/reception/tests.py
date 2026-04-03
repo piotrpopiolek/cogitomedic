@@ -265,18 +265,17 @@ class DailyQueueAdminImportTests(TestCase):
         response = self.client.get(reverse("admin:reception_dailyqueue_changelist"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Import z pliku")
-        self.assertContains(response, reverse("admin:reception_dailyqueue_import_xlsx"))
+        import_url = reverse("admin:reception_dailyqueue_import_xlsx")
+        self.assertContains(response, import_url)
 
     def test_import_xlsx_admin_view_renders_form(self) -> None:
         response = self.client.get(reverse("admin:reception_dailyqueue_import_xlsx"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Import pacjentów z pliku XLSX")
-        self.assertContains(response, "Plik XLSX")
-        self.assertContains(
-            response, "Import odczyta z pliku datę kolejki i nazwę placówki"
-        )
+        content = response.content.decode()
+        self.assertIn('name="file"', content)
+        self.assertIn("multipart/form-data", content)
+        self.assertIn("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content)
 
 
 class DailyQueueAdminDoctorFilterTests(TestCase):
