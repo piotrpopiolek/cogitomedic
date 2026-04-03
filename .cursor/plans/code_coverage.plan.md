@@ -1,145 +1,438 @@
-# Plan podniesienia code coverage powyżej 82%
+# Plan podniesienia jakości testów i pokrycia kodu
 
-Plan oparty na `coverage.txt` (łącznie **8066** instrukcji, **2303** niepokryte, **~71%** pokrycia; w `pyproject.toml` jest już `fail_under = 82`). Aby przejść z ~71% do **>82%**, trzeba pokryć rzędu **~850 dodatkowych instrukcji** (przy niezmienionym zakresie pomiaru).
+## Zasada nadrzędna
 
----
-
-## 1. Analiza luk (Gap Analysis)
-
-### Stan ogólny
-
-- **Cel CI:** `tool.coverage.report.fail_under = 82` w `pyproject.toml`.
-- **Źródło:** `apps` + `cogitomedica` (bez migracji, `tests.py`, `api_tests.py`, `test_*.py`).
-
-### Moduły o największej liczbie niepokrytych linii (największy wpływ na %)
-
-| Obszar | Przykładowe pliki | Uwagi |
-|--------|-------------------|--------|
-| Usługi intake/medical | `apps/intake/services.py` (~133 miss), `apps/medical/services.py` (~93) | Logika workflow, walidacje, integracje domenowe |
-| Widoki API | `apps/intake/api_views.py`, `apps/medical/api_views.py`, `apps/reception/api_views_split/*.py`, `apps/operations/api_views.py` | Duże bloki gałęzi (HTTP, uprawnienia, błędy) |
-| Import XLSX | `apps/reception/xlsx_import.py` (~114 miss) | Parsowanie, edge cases plików |
-| Widoki HTML (tablet/lekarz) | `cogitomedica/tablet_views.py`, `cogitomedica/doctor_views.py` | Niski %, dużo instrukcji |
-| Wyniki pacjenta | `apps/patient_results/views.py`, `apps/patient_results/document_services.py` | Portal / PDF / lista dokumentów |
-| Anonimizacja | `apps/reception/anonymization.py` (~33% pokrycia) | RODO, transakcje, pliki |
-
-### Pliki z **0%** (łatwe „paczki” instrukcji przy mockach)
-
-- `apps/operations/management/commands/enqueue_tasks.py`, `run_periodic_tasks.py`
-- `apps/outbox/management/commands/reset_hidrive_outbox_events.py`
-- `apps/outbox/tasks.py`, `apps/reception/tasks.py`
-- `cogitomedica/telemetry.py`, `cogitomedica/admin_callbacks.py`, `cogitomedica/wsgi.py`, `cogitomedica/asgi.py`
-- `cogitomedica/formats/pl/formats.py`
-
-**Wysokie ryzyko biznesowe (testować wcześniej):** `intake/services.py`, `medical/services.py`, `reception/anonymization.py`, `patient_results/document_services.py` (integralność danych, retencja, pobieranie PDF), API reception (kolejki, słowniki, pacjenci).
+**Jakość testów > procent pokrycia.** Celem nie jest osiągnięcie liczby 82%, lecz zbudowanie suite'u testów, który faktycznie łapie regresje, chroni krytyczną logikę biznesową i nie spowalnia developmentu. Procent pokrycia jest efektem ubocznym, nie celem.
 
 ---
 
-## 2. Strategia i priorytetyzacja
+## 0. Stan wyjściowy
 
-### Etap 1 — Krytyczna logika biznesowa (najwyższy ROI)
-
-- Rozszerzyć testy dla **`apps/intake/services.py`** i **`apps/medical/services.py`** (funkcje czyste tam, gdzie da się wywołać bez pełnego UI).
-- **`apps/reception/anonymization.py`** — scenariusze z danymi w DB + mock usuwania plików (`_try_delete_file` / ścieżki).
-- **`apps/patient_results/document_services.py`** — `list_*`, `resolve_*`, `get_patient_pdf_path` (ścieżki: brak wersji, retention, path traversal, plik nie istnieje).
-
-### Etap 2 — Quick wins na pokrycie
-
-- **Management commands / tasks** z **0%**: wywołać `call_command` / zaimportować moduł z **`unittest.mock.patch`** na `.enqueue()` lub task backend — szybko dodaje setki instrukcji przy małej liczbie testów.
-- **`apps/reception/xlsx_import.py`** — kilka deterministycznych plików XLSX (poprawny, zły nagłówek, puste wiersze) → duży przyrost %.
-
-### Etap 3 — API i integracje
-
-- **`api_tests.py`** (wzór jak w `cogitomedica/api_tests.py`): endpointy z `Client` + `force_login` + `assign_group_to_test_user` dla `intake`, `medical`, `reception` (szczególnie `queues`, `dictionaries`, `patients`).
-- Uzupełnić **`apps/operations/api_views.py`** oraz **`apps/outbox/api_views.py`** tam, gdzie brakuje gałęzi błędów.
-
-### Etap 4 — Widoki HTML i reszta
-
-- `cogitomedica/tablet_views.py`, `doctor_views.py`, `apps/intake/views.py`, `apps/patient_results/views.py` — testy żądań (Django `Client`) z minimalnym setup kolejki/pacjenta.
-- Admin (`apps/medical/admin.py`, `apps/reception/admin.py`) — tylko jeśli nadal brakuje %; niższy priorytet vs domena, chyba że CI wymusza.
-
-**Quick wins (najszybszy wzrost %):** commands/tasks 0%, `document_services.py`, wybrane ścieżki w `xlsx_import.py`, potem duże `services.py` / `api_views`.
+- **8066** instrukcji, **2303** niepokryte, **~71%** pokrycia instrukcji.
+- `fail_under = 82` w `pyproject.toml` — obecnie nieosiągalne, gate jest de facto wyłączony.
+- **304** testy, **~6k linii** kodu testowego, **zero** plików `conftest.py`, **zero** fabryk.
+- Testy oparte wyłącznie na `django.test.TestCase` z ręcznym `setUp` i `objects.create(...)`.
+- Brak branch coverage — mierzone jest tylko pokrycie instrukcji.
+- Brak diff-coverage — nowy kod może wchodzić do `main` bez testów.
 
 ---
 
-## 3. Propozycje przypadków testowych (skrót)
+## Faza 0 — Infrastruktura testowa (warunek konieczny)
 
-Dla każdego modułu: **2–5** propozycji; typ: **Unit** (bez HTTP / mocki) vs **Integration** (DB + ewentualnie HTTP).
+Bez tej fazy każdy napisany test mnoży dług techniczny zamiast go spłacać.
 
-| Moduł | Propozycje TC | Typ |
-|--------|----------------|-----|
-| `intake/services.py` | (1) Submit form — brak wymaganej zgody → wyjątek. (2) Brak anamnezy wymaganej. (3) Podpis — rozmiar/format (`InvalidSignatureError`). (4) Ścieżka happy path już częściowo w `tests.py` — dodać gałęzie z `Missing` w raporcie coverage. | Unit / Integration (TestCase) |
-| `medical/services.py` | (1) Tworzenie/aktualizacja dokumentu — stany niedozwolone. (2) Publikacja — warunki PDF/status. (3) Funkcje czyste z `medical_payload_schemas` jeśli wywoływane stąd. | Integration |
-| `intake/api_views.py` | (1) GET/POST bez uprawnień → 403/302. (2) Walidacja payloadu (400). (3) Sukces z fixture użytkownika Reception. | Integration (API) |
-| `medical/api_views.py` | Analogicznie: brak uprawnień, 404 dla nieistniejącego zasobu, poprawna odpowiedź dla roli medycznej. | Integration (API) |
-| `reception/api_views_split/queues.py` | (1) Lista kolejki dla dnia. (2) Zmiana statusu wpisu — niedozwolony przejście. (3) Filtry query params. | Integration (API) |
-| `reception/xlsx_import.py` | (1) Poprawny arkusz → oczekiwana liczba wierszy. (2) Brak wymaganej kolumny. (3) Nieprawidłowy typ komórki. (4) Pusty plik / pierwszy wiersz nagłówka. | Unit (funkcje parsujące) + Integration |
-| `reception/anonymization.py` | (1) Pacjent bez formularza — pusty consent summary. (2) Z formularzem i zgodami — struktura JSON. (3) Usuwanie podpisów — mock `_try_delete_file`. (4) Kolejka nie terminalna → `DomainError` (jeśli dotyczy). | Integration |
-| `patient_results/document_services.py` | (1) `list_patient_documents` — tylko `current_version_no`. (2) `resolve_patient_befund_download` — not_found / retention_expired / ok. (3) `get_patient_pdf_path` — względna ścieżka pod `MEDIA_ROOT`, brak pliku, path traversal poza MEDIA. | Unit + Integration |
-| `patient_results/views.py` | (1) Lista dokumentów zalogowanego pacjenta. (2) Pobranie PDF — 404/410 zgodnie z serwisem. | Integration |
-| `operations/management/commands/*` | (1) `enqueue_tasks` — `retention_only` vs pełna ścieżka vs `--skip-import` (mock `.enqueue()`). (2) `run_periodic_tasks` — wywołanie `handle`. | Unit (command) |
-| `outbox/tasks.py`, `reception/tasks.py` | Import modułu + wywołanie funkcji task z mockiem backendu (jeśli wymagane przez framework). | Integration |
-| `cogitomedica/telemetry.py` | (1) Inicjalizacja przy wybranych ustawieniach (mock exporter). (2) No-op gdy wyłączone. | Unit |
-| `tablet_views.py` / `doctor_views.py` | (1) GET strony po zalogowaniu roli. (2) Redirect dla anonima. | Integration |
-| `apps/core/api_utils.py` | Gałęzie błędów walidacji / paginacji wskazane w `Missing` (linie z raportu). | Unit |
+### 0.1. Wykluczenie boilerplate z pomiaru
+
+Pliki, które nie zawierają logiki biznesowej, zawyżają deficyt i motywują do pisania bezwartościowych testów.
+
+Dodać do `[tool.coverage.run].omit`:
+
+```toml
+"cogitomedica/wsgi.py",
+"cogitomedica/asgi.py",
+"cogitomedica/formats/pl/formats.py",
+"cogitomedica/admin_callbacks.py",
+```
+
+**Efekt:** ~33 instrukcje znikają z raportu, pokrycie rośnie do ~72% bez jednego nowego testu. Ważniejsze: eliminuje pokusę pisania bezwartościowych testów importu.
+
+### 0.2. Włączenie branch coverage
+
+Dodać do `pyproject.toml`:
+
+```toml
+[tool.coverage.run]
+branch = true
+```
+
+**Dlaczego:** Pokrycie instrukcji nie wykrywa nieosiągniętych gałęzi `if/else`, `try/except`, `and/or`. Branch coverage to minimum, które nadaje metryce jakąkolwiek wartość diagnostyczną. Po włączeniu globalne % spadnie o kilka punktów — to jest informacja, nie problem.
+
+### 0.3. Inkrementalne podnoszenie `fail_under`
+
+Zmienić `fail_under` na **aktualną wartość + 1pp** i podnosić z każdym sprintem:
+
+| Sprint | `fail_under` (branch) | Uwagi |
+|--------|-----------------------|-------|
+| Bieżący | Ustawić na aktualny % po włączeniu branch coverage | Bazeline — CI musi przechodzić od dziś |
+| +1 | +2pp | Po fazie 1 |
+| +2 | +2pp | Po fazie 2 |
+| +3 | +2pp | Po fazie 3 |
+| Docelowo | 80% branch | Rewizja po 4 sprintach |
+
+**Dlaczego:** Skok 71% → 82% to abstrakcyjny cel bez planu dojścia. Inkrementalne podnoszenie daje mechanizm egzekucji — CI czerwone = blokada merge'a.
+
+### 0.4. Diff-coverage jako gate na nowy kod
+
+Dodać do CI:
+
+```yaml
+- name: Diff coverage
+  run: |
+    pip install diff-cover
+    diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
+```
+
+**Dlaczego:** Globalna metryka nie zapobiega dodawaniu nowego, nieobjętego kodu. Diff-cover wymusza, że każdy nowy PR ma ≥90% pokrycia gałęzi. To jedyne narzędzie, które chroni przed regresją pokrycia w czasie.
+
+### 0.5. Wspólny `conftest.py` z fixture'ami
+
+Stworzyć `conftest.py` w katalogu głównym z fixture'ami, które dziś są powielane w `setUp` wielu klas:
+
+```python
+import pytest
+from django.test import Client
+from apps.core.api_utils import assign_group_to_test_user
+from apps.users.models import StaffUser
+
+
+@pytest.fixture
+def staff_user(db):
+    return StaffUser.objects.create_user(
+        username="testuser", password="testpass"
+    )
+
+
+@pytest.fixture
+def reception_user(staff_user):
+    assign_group_to_test_user(staff_user, "Reception")
+    return staff_user
+
+
+@pytest.fixture
+def doctor_user(staff_user):
+    assign_group_to_test_user(staff_user, "Doctor")
+    return staff_user
+
+
+@pytest.fixture
+def admin_user(staff_user):
+    assign_group_to_test_user(staff_user, "Admin")
+    return staff_user
+
+
+@pytest.fixture
+def tablet_user(staff_user):
+    assign_group_to_test_user(staff_user, "Tablet")
+    return staff_user
+
+
+@pytest.fixture
+def auth_client(staff_user):
+    client = Client()
+    client.force_login(staff_user)
+    return client
+
+
+@pytest.fixture
+def tmp_media(tmp_path, settings):
+    settings.MEDIA_ROOT = str(tmp_path / "media")
+    return tmp_path / "media"
+```
+
+**Dlaczego:** Dziś **304 testy** powielają boilerplate tworzenia użytkowników. Bez tego fundamentu każdy nowy test to kopia-wklej istniejącego `setUp`, a refaktoryzacja modelu `StaffUser` wymaga zmian w dziesiątkach plików.
+
+### 0.6. Instalacja `model_bakery` do generacji danych
+
+Dodać do `requirements-dev.txt`:
+
+```
+model_bakery
+```
+
+**Dlaczego:** Ręczne `Patient.objects.create(first_name=..., last_name=..., ...)` w każdym teście:
+- wymaga znajomości wymaganych pól modelu,
+- łamie się przy dodaniu nowego wymaganego pola,
+- zmusza do wypełniania pól nieistotnych dla testu.
+
+`baker.make(Patient)` automatycznie generuje minimalne poprawne instancje. Istniejące testy nie wymagają migracji — `model_bakery` jest addytywny.
+
+### 0.7. Instalacja `freezegun` do izolacji czasu
+
+Dodać do `requirements-dev.txt`:
+
+```
+freezegun
+```
+
+**Dlaczego:** `timezone.now()` jest używane w co najmniej 6 kluczowych modułach (`anonymization.py`, `services.py`, `xlsx_import.py`). Testy zależne od aktualnego czasu są źródłem flaky failures (przełom dnia/miesiąca/roku). Nie jest "opcjonalny" — jest wymagany.
 
 ---
 
-## 4. Wymagania technologiczne
+## Faza 1 — Logika krytyczna biznesowo (najwyższe ryzyko)
 
-### Stack (z repozytorium)
+Priorytetyzacja wg **ryzyka biznesowego**, nie liczby niepokrytych linii.
 
-- **Python 3.13**, **Django**, **pytest** (`pytest.ini`: `DJANGO_SETTINGS_MODULE=cogitomedica.settings`).
-- Testy w **`tests.py`**, **`api_tests.py`**, oraz **`test_*.py`** (już używane).
-- **Coverage:** `[tool.coverage.run]` / `[tool.coverage.report]` w `pyproject.toml`.
+### 1.1. `apps/reception/anonymization.py` (~33%, 49 miss)
 
-### Rekomendacje narzędzi
+**Ryzyko:** RODO compliance. Błąd = kara finansowa, nie bug.
 
-| Potrzeba | Propozycja |
-|----------|------------|
-| Mockowanie I/O, tasków, zewnętrznych klientów | **`unittest.mock`** (`patch`, `MagicMock`) — spójne z istniejącymi `TestCase` |
-| API HTTP | **`django.test.Client`** (jak w `cogitomedica/api_tests.py`) |
-| Dane testowe | Istniejące modele ORM + ewentualnie **`model_bakery`** / **`factory_boy`** (tylko jeśli zespół chce skrócić boilerplate — dziś w kodzie jest ręczne `create`) |
-| Pliki (PDF, XLSX) | **`tempfile.TemporaryDirectory`**, **`override_settings(MEDIA_ROOT=...)`** |
-| Izolacja czasu | **`django.utils.timezone`** + **`freezegun`** (opcjonalnie, jeśli pojawią się flaky testy dat) |
+**Specyfika testowania:** Moduł ma celowo nieatomatowy design — faza 2 (usuwanie plików) działa poza `transaction.atomic`. Testy muszą pokryć scenariusze częściowej awarii.
 
-### Struktura
+| Przypadek testowy | Typ | Weryfikacja |
+|-------------------|-----|-------------|
+| Pacjent z aktywnymi (nieterminalnymi) wpisami w kolejce → blokada | Integration | `DomainError` raised, żadne dane nie zmienione |
+| Pełny happy path: pacjent z formularzami, zgodami, podpisami, dokumentami | Integration | Dane zanonimizowane, sentinele poprawne, audit event created |
+| `_extract_consent_summary` — pacjent bez formularza | Integration | Pusta lista/dict |
+| `_extract_consent_summary` — z formularzem i zgodami | Integration | Struktura JSON zgodna z oczekiwaniami |
+| Awaria `_try_delete_file` w fazie 2 (mock rzuca wyjątek po N wywołaniach) | Integration | Faza 1 committed, faza 3 NIE wykonana, stan bazy spójny |
+| Idempotentność — ponowne uruchomienie na częściowo zanonimizowanym pacjencie | Integration | Brak wyjątku, stan końcowy poprawny |
 
-- Trzymać **testy jednostkowe** przy czystych funkcjach (np. fragmenty `xlsx_import`, walidatory) w osobnych klasach w `tests.py` lub `test_<module>.py`.
-- **Testy API** konsekwentnie w `api_tests.py` per aplikacja (spójnie z projektem).
-- Rozważyć wspólny **`conftest.py`** z fixture użytkownika + `assign_group_to_test_user` — redukcja duplikacji (opcjonalnie, nie blokuje celu %).
+**Mockowanie:** `patch('apps.reception.anonymization._try_delete_file')`, `freeze_time`.
+
+### 1.2. `apps/patient_results/document_services.py` (~41%, 27 miss)
+
+**Ryzyko:** Pacjent pobiera cudzy PDF lub PDF po retention — naruszenie prywatności.
+
+| Przypadek testowy | Typ | Weryfikacja |
+|-------------------|-----|-------------|
+| `list_patient_documents` — filtrowanie do `current_version_no` | Integration | Stare wersje niewidoczne |
+| `resolve_patient_befund_download` — dokument nie istnieje | Integration | `not_found` result |
+| `resolve_patient_befund_download` — retention expired | Integration | `expired` result |
+| `resolve_patient_befund_download` — revoked version | Integration | Odrzucone |
+| `resolve_patient_befund_download` — happy path | Integration | Poprawny path + metadata |
+| `get_patient_pdf_path` — path traversal (ścieżka poza `MEDIA_ROOT`) | Unit | `ValueError` / odmowa |
+| `get_patient_pdf_path` — plik nie istnieje na dysku | Unit | Odpowiedni błąd / None |
+
+**Mockowanie:** `tmp_media` fixture, `baker.make(MedicalDocumentVersion, ...)`.
+
+### 1.3. `apps/intake/services.py` (~64%, 133 miss)
+
+**Ryzyko:** Integralność danych pacjenta, podpisy, zgody.
+
+**Podejście:** Wydzielić testy pure functions (niski koszt) od testów integracyjnych (wyższy koszt, wyższe ROI).
+
+**Pure functions (unit tests, bez DB):**
+
+| Funkcja | Przypadki |
+|---------|-----------|
+| `_humanize_code` | Kilka wariantów string input |
+| `_localized_text` | Brakujący klucz, istniejący klucz |
+| `_extract_answered_question_codes` | Pusty payload, wypełniony payload |
+
+**Funkcje z DB (integration tests):**
+
+| Przypadek testowy | Weryfikacja |
+|-------------------|-------------|
+| `submit_patient_intake_form` — brak wymaganej zgody | `RequiredConsentMissingError` raised |
+| `submit_patient_intake_form` — brak wymaganej anamnezy | Odpowiedni wyjątek |
+| `save_intake_signature` — za duży plik | `InvalidSignatureError` |
+| `save_intake_signature` — nieprawidłowy format data URL | `InvalidSignatureError` |
+| `submit_patient_intake_form` — happy path (idempotentność przy ponownym wywołaniu) | Brak duplikatu, status queue entry zmieniony |
+| `get_intake_form_context` — formularz z wieloma zgodami i pytaniami anamnezy | Poprawna struktura kontekstu |
+
+**Mockowanie:** `tmp_media` (podpisy na dysku), `freeze_time`, `patch('apps.intake.services.create_audit_event')`.
+
+### 1.4. `apps/medical/services.py` (~63%, 93 miss)
+
+**Ryzyko:** Stan dokumentu medycznego, publikacja PDF, integralność outboxa.
+
+**Uwaga architekturalna:** Moduł importuje `get_intake_form_context` z intake i prywatną `_try_delete_file` z outbox. Testy tego modułu są de facto testami integracyjnymi obejmującymi 3 aplikacje. Akceptujemy to jako koszt — refaktoryzacja coupling jest osobnym zadaniem.
+
+| Przypadek testowy | Typ | Weryfikacja |
+|-------------------|-----|-------------|
+| `save_draft_document_version` — tworzenie nowego draftu | Integration | Wersja utworzona, status DRAFT |
+| `save_draft_document_version` — aktualizacja istniejącego draftu | Integration | Brak nowej wersji, dane zaktualizowane |
+| `publish_document_version` — brakujące wymagane pola | Integration | Wyjątek z walidacji payload |
+| `publish_document_version` — happy path | Integration | Status PUBLISHED, outbox event created |
+| `publish_document_version` — idempotentność (ponowna publikacja) | Integration | Brak duplikatu, ten sam wynik |
+| `revoke_document_version` — usunięcie pliku PDF (mock `_try_delete_file`) | Integration | Status REVOKED, plik "usunięty" |
+| `list_doctor_work_queue` — różne stany dokumentów | Integration | Poprawna denormalizacja w odpowiedzi |
+
+**Mockowanie:** `patch('apps.medical.services._try_delete_file')`, `freeze_time`, pełny setup intake fixtures.
 
 ---
 
-## 5. Tabela priorytetowa
+## Faza 2 — Parsowanie i walidacja (wysoki ROI, niski koszt utrzymania)
 
-| Nazwa pliku/modułu | Obecny stan (szacunkowo) | Proponowane testy | Priorytet |
-|--------------------|--------------------------|-------------------|-----------|
-| `apps/intake/services.py` | ~64% (~133 miss) | Walidacje zgód/anamnezy/podpisu; dodatkowe gałęzie submitu; obsługa błędów domenowych | **Wysoki** |
-| `apps/medical/services.py` | ~63% (~93 miss) | Publikacja PDF/stany dokumentu; ścieżki błędów z raportu `Missing` | **Wysoki** |
-| `apps/reception/anonymization.py` | ~33% (~49 miss) | Consent summary (z/bez formularza); usuwanie plików (mock); pełny przepływ anonimizacji | **Wysoki** |
-| `apps/patient_results/document_services.py` | ~41% (~27 miss) | Lista wersji; `resolve_*` (not_found/retention/ok); `get_patient_pdf_path` + path traversal | **Wysoki** |
-| `apps/reception/xlsx_import.py` | ~70% (~114 miss) | Poprawny import; błędne nagłówki; typy danych; puste wiersze; gałęzie z `Missing` | **Wysoki** |
-| `apps/intake/api_views.py` | ~59% (~97 miss) | Uprawnienia; 400/404; happy path dla roli Reception | **Wysoki** |
-| `apps/medical/api_views.py` | ~59% (~130 miss) | Jak wyżej dla roli medycznej; zasoby nieistniejące | **Wysoki** |
-| `apps/reception/api_views_split/queues.py` | ~60% (~100 miss) | Lista/zmiana statusu/filtry; błędne przejścia stanów | **Wysoki** |
-| `apps/reception/api_views_split/dictionaries.py` | ~63% (~69 miss) | CRUD/słowniki — sukces i błędy walidacji | **Średni** |
-| `apps/reception/api_views_split/patients.py` | ~63% (~60 miss) | Wyszukiwanie/aktualizacja pacjenta; ograniczenia dostępu | **Średni** |
-| `apps/operations/api_views.py` | ~42% (~59 miss) | Endpointy operacji + autoryzacja | **Średni** |
-| `apps/outbox/api_views.py` | ~68% (~35 miss) | Listowanie/zdarzenia — gałęzie błędów | **Średni** |
-| `apps/intake/views.py` | ~28% (~47 miss) | Widoki HTML intake — login, podstawowe GET/POST | **Średni** |
-| `apps/patient_results/views.py` | ~17% (~73 miss) | Portal wyników — lista i download | **Średni** |
-| `cogitomedica/tablet_views.py` | ~38% (~121 miss) | Tablet UI — autoryzacja i kluczowe ekrany | **Średni** |
-| `cogitomedica/doctor_views.py` | ~33% (~80 miss) | Panel lekarza — te same wzorce | **Średni** |
-| `apps/operations/management/commands/*.py` | 0% (~71 łącznie) | `call_command` + mock `.enqueue()` / zależności tasków | **Wysoki** (quick win) |
-| `apps/outbox/tasks.py`, `apps/reception/tasks.py` | 0% | Wywołanie z mockiem backendu zadań | **Wysoki** (quick win) |
-| `apps/outbox/management/commands/reset_hidrive_outbox_events.py` | 0% (~59) | Dry-run / potwierdzenie (z mockiem HiDrive jeśli potrzeba) | **Średni** |
-| `cogitomedica/telemetry.py` | 0% (~29) | Włącz/wyłącz; mock konfiguracji OTEL | **Średni** (quick win) |
-| `cogitomedica/wsgi.py`, `asgi.py`, `admin_callbacks.py`, `formats/pl/formats.py` | 0% / niski % | Minimalne testy importu/entrypoint (lub wykluczenie z coverage — decyzja zespołu) | **Niski** |
-| `apps/medical/admin.py`, `apps/reception/admin.py` | ~59–66% | Kluczowe akcje admina używane w produkcji | **Niski** |
-| `apps/core/api_utils.py` | ~75% (~36 miss) | Gałęzie obsługi błędów i paginacji | **Średni** |
+### 2.1. `apps/reception/xlsx_import.py` — warstwa pure functions (~70%, 114 miss)
+
+**Podejście:** Ten moduł ma najlepszy stosunek kodu testowalnego do kosztu — duża warstwa czystych funkcji parsujących.
+
+**Unit tests (bez DB, bez plików XLSX):**
+
+| Funkcja | Przypadki |
+|---------|-----------|
+| `_normalize_header_cell` | Whitespace, case, diakrytyki |
+| `_find_header_indices` | Kompletne nagłówki, brakujące kolumny |
+| `_parse_time` | Poprawny format, nieprawidłowy, pusty |
+| `_parse_date` | Formaty DE/PL, brak roku (domyślny), nieparsowalna wartość |
+| `_split_full_name` | "Kowalski, Jan", "Jan Kowalski", jednowyrazowe, puste |
+| `_title_case_name` | Wieloczłonowe nazwiska, dywisy |
+| `_normalize_site_name` / `_cleanup_clinic_name` | Warianty nazw klinik |
+| `_validate_headers` | Brakujące wymagane kolumny, dodatkowe kolumny |
+| `_extract_file_metadata` | Poprawne wiersze, puste wiersze, brak nagłówków |
+| `_normalize_row` | Poprawny wiersz, brakujące pola, złe typy |
+
+**Dlaczego osobno:** Te funkcje to czysta logika string → struktura. Testy są szybkie (~0ms każdy), deterministyczne i odporne na zmiany w ORM.
+
+**Integration tests (z DB, z plikami `.xlsx`):**
+
+| Przypadek testowy | Weryfikacja |
+|-------------------|-------------|
+| `process_patient_xlsx_import_batch` — poprawny arkusz z 5 wierszami | 5 pacjentów + wpisy w kolejce |
+| `process_patient_xlsx_import_batch` — błędne typy danych w wierszach | Błędy zapisane do `PatientImportError`, reszta przetworzona |
+| `process_patient_xlsx_import_batch` — pusty arkusz | Informacyjny wynik, brak wyjątku |
+| `enqueue_patient_xlsx_import` — mock `enqueue()` | Batch created, task enqueued |
+
+**Pliki fixture XLSX:** Tworzyć programowo w teście za pomocą `openpyxl.Workbook()` — NIE commitować plików binarnych do repozytorium.
+
+### 2.2. `apps/core/api_utils.py` (~75%, 36 miss)
+
+| Przypadek testowy | Typ | Weryfikacja |
+|-------------------|-----|-------------|
+| Walidacja body z brakującymi polami | Unit | Odpowiedni komunikat błędu |
+| Paginacja — parametry poza zakresem | Unit | Domyślne wartości |
+| Paginacja — poprawne parametry | Unit | Poprawne offset/limit |
+| Obsługa `DomainError` w middleware/handler | Unit | Poprawny HTTP status + JSON |
 
 ---
 
-## Podsumowanie
+## Faza 3 — API endpoints (ochrona kontraktu)
 
-Najpierw **komendy/zadania 0%** oraz **`patient_results/document_services`** i **`reception/anonymization`** / **`xlsx_import`** dają szybki skok procentowy; równolegle **intake/medical `services` + `api_views`** domykają ryzyko i większość brakujących ~850 instrukcji. Po osiągnięciu ~80% dodać **widoki tablet/doctor/patient_results** oraz resztę API reception, żeby stabilnie utrzymać **>82%** przy `fail_under`.
+### Podejście
+
+Testy API weryfikują **kontrakt HTTP** (status codes, kształt odpowiedzi, autoryzację), nie logikę biznesową — ta jest pokryta w fazie 1. Używać `auth_client` fixture z `conftest.py`.
+
+### 3.1. `apps/intake/api_views.py` (~59%, 97 miss)
+
+| Przypadek testowy | Weryfikacja |
+|-------------------|-------------|
+| Każdy endpoint bez autentykacji | 403 lub 302 |
+| Każdy endpoint z niewłaściwą rolą | 403 |
+| POST z nieprawidłowym payloadem | 400 + struktura błędu |
+| GET/POST happy path z rolą Reception | 200/201 + kształt odpowiedzi |
+
+### 3.2. `apps/medical/api_views.py` (~59%, 130 miss)
+
+Analogiczny wzorzec jak intake. Dodać:
+
+| Przypadek testowy | Weryfikacja |
+|-------------------|-------------|
+| GET nieistniejącego zasobu | 404 |
+| Operacja na dokumencie w niedozwolonym stanie | 400/409 + komunikat |
+
+### 3.3. `apps/reception/api_views_split/` (queues ~60%, dictionaries ~63%, patients ~63%)
+
+| Moduł | Kluczowe przypadki |
+|-------|-------------------|
+| `queues.py` | Lista kolejki; zmiana statusu — niedozwolone przejście; filtry query params |
+| `dictionaries.py` | CRUD sukces; walidacja błędnych danych |
+| `patients.py` | Wyszukiwanie; aktualizacja; ograniczenia dostępu |
+
+### 3.4. `apps/operations/api_views.py` (~42%, 59 miss), `apps/outbox/api_views.py` (~68%, 35 miss)
+
+Gałęzie błędów wskazane w kolumnie `Missing` raportu coverage — uzupełnić testy 400/404/403.
+
+---
+
+## Faza 4 — Widoki HTML i reszta (niski priorytet)
+
+Realizować **tylko jeśli** po fazach 1-3 nadal brakuje do celu. Testy widoków HTML mają najgorszy stosunek wartości do kosztu utrzymania.
+
+| Moduł | Podejście |
+|-------|-----------|
+| `tablet_views.py` (~38%, 121 miss) | Smoke tests: GET kluczowych URL po zalogowaniu → 200; anonim → redirect |
+| `doctor_views.py` (~33%, 80 miss) | Jak wyżej |
+| `intake/views.py` (~28%, 47 miss) | Jak wyżej |
+| `patient_results/views.py` (~17%, 73 miss) | Lista + download — 200/404/410 |
+| Admin (`medical/admin.py`, `reception/admin.py`) | Tylko jeśli konieczne; niski priorytet |
+
+### Pliki celowo wyłączone z pokrycia (nie testować)
+
+| Plik | Powód |
+|------|-------|
+| `cogitomedica/wsgi.py` | Entry point Django, zero logiki |
+| `cogitomedica/asgi.py` | Entry point Django, zero logiki |
+| `cogitomedica/formats/pl/formats.py` | Stałe lokalizacyjne |
+| `cogitomedica/admin_callbacks.py` | Callbacki admina, niekrytyczne |
+
+---
+
+## Wymagania technologiczne
+
+### Stack
+
+- **Python 3.13**, **Django**, **pytest** + **pytest-django** + **pytest-cov**.
+- Testy w `tests.py`, `api_tests.py`, `test_*.py` (istniejąca konwencja).
+- `conftest.py` w katalogu głównym (nowy).
+
+### Wymagane narzędzia (dodać do `requirements-dev.txt`)
+
+| Narzędzie | Cel | Status |
+|-----------|-----|--------|
+| `model_bakery` | Generacja danych testowych bez boilerplate | **Nowy** |
+| `freezegun` | Deterministyczne testy zależne od czasu | **Nowy** |
+| `diff-cover` | Gate na pokrycie nowego kodu w CI | **Nowy** |
+
+### Narzędzia już obecne (nie zmieniać)
+
+| Narzędzie | Cel |
+|-----------|-----|
+| `unittest.mock` | Mockowanie I/O, tasków, zewnętrznych klientów |
+| `django.test.Client` | Testy HTTP |
+| `pytest-cov` | Raportowanie pokrycia |
+
+### Struktura testów
+
+- **Unit tests** czystych funkcji → `test_<moduł>.py` per aplikacja (np. `test_xlsx_parsing.py`).
+- **Integration tests** z DB → istniejące `tests.py` per aplikacja.
+- **API tests** → istniejące `api_tests.py` per aplikacja.
+- **Fixture XLSX** → generowane programowo w teście (`openpyxl.Workbook()`), **nie** pliki binarne w repo.
+
+---
+
+## Ochrona przed regresją i flaky testami
+
+### SLA na czas testów
+
+Dodać do CI krok z timeoutem:
+
+```yaml
+- name: Tests
+  run: python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
+  timeout-minutes: 8
+```
+
+Jeśli suite przekroczy 8 minut, to jest problem do rozwiązania, nie normalna sytuacja.
+
+### `setUpTestData` zamiast `setUp`
+
+W nowych testach `TestCase` używać `setUpTestData` (class-level, raz per klasa) zamiast `setUp` (per test) dla danych, które nie są modyfikowane w testach. Różnica w szybkości: **10-50x** dla klas z wieloma testami.
+
+### Zamrażanie czasu
+
+Każdy test, który testuje logikę zależną od `timezone.now()`, **musi** używać `@freeze_time(...)`. Nie jest to rekomendacja — to wymaganie.
+
+### Nie mockować tego, czego nie musisz
+
+Preferować testy z prawdziwą bazą danych nad mockami ORM. Mock `Model.objects.filter(...)` łamie się przy każdej zmianie query i nie testuje prawdziwego zachowania. Mockować tylko:
+- I/O zewnętrzne (pliki, HTTP, kolejki zadań),
+- `timezone.now()`,
+- `create_audit_event` (jeśli nie jest przedmiotem testu).
+
+---
+
+## Znane ryzyka i ograniczenia planu
+
+| Ryzyko | Mitigacja |
+|--------|-----------|
+| Branch coverage obniży % po włączeniu — frustracja zespołu | Komunikacja: nowa baseline to informacja, nie regres |
+| `model_bakery` generuje dane niezgodne z walidatorami modelu | Definiować `baker.prepare(..., field=value)` dla pól z custom walidacją |
+| Nowy kod produkcyjny obniża % szybciej niż testy go podnoszą | Diff-cover gate (90% na nowy kod) chroni przed tym |
+| Testy `anonymization.py` wymagają złożonego setup grafu modeli | Zainwestować w dedykowany fixture w `apps/reception/conftest.py` — zwróci się wielokrotnie |
+| Cross-app coupling (`medical` → `intake` → `reception`) | Akceptujemy koszt testów integracyjnych; refaktoryzacja coupling to osobny projekt |
+| Flaky testy dat/czasu | `freezegun` obowiązkowy, nie opcjonalny |
+
+---
+
+## Mierzalne kamienie milowe
+
+| Kamień milowy | Kryterium zakończenia | Szacunkowy efekt |
+|---------------|----------------------|------------------|
+| Faza 0 zakończona | `conftest.py` istnieje, branch coverage włączone, `diff-cover` w CI, `fail_under` ustawione na baseline | % może spaść — to jest OK |
+| Faza 1 zakończona | Testy anonymization, document_services, intake/services, medical/services wg tabel powyżej | +6-8pp pokrycia gałęzi |
+| Faza 2 zakończona | Unit testy xlsx_import pure functions, api_utils | +3-4pp |
+| Faza 3 zakończona | API contract tests dla intake, medical, reception endpoints | +4-6pp |
+| Faza 4 (opcjonalna) | Smoke tests widoków HTML | +2-3pp |
+
+**Cel docelowy:** ≥80% branch coverage (odpowiednik ~85-88% statement coverage) osiągnięty stabilnie, z mechanizmem diff-cover chroniącym przed regresją.
