@@ -1,3 +1,10 @@
+---
+name: ""
+overview: ""
+todos: []
+isProject: false
+---
+
 # Plan podniesienia jakości testów i pokrycia kodu
 
 ## Zasada nadrzędna
