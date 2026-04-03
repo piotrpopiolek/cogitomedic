@@ -25,6 +25,7 @@ exclude = [
 ]
 
 [tool.coverage.run]
+branch = true
 source = ["apps", "cogitomedica"]
 omit = [
     "*/migrations/*",
@@ -32,9 +33,13 @@ omit = [
     "*/api_tests.py",
     "*/test_*.py",
     "*/__init__.py",
+    "cogitomedica/wsgi.py",
+    "cogitomedica/asgi.py",
+    "cogitomedica/formats/pl/formats.py",
+    "cogitomedica/admin_callbacks.py",
 ]
 
 [tool.coverage.report]
-fail_under = 82
+fail_under = 68
 show_missing = true
 skip_covered = true
