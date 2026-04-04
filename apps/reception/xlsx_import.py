@@ -376,6 +376,7 @@ def _normalize_row(
 
     dob_idx = header_indices.get("date_of_birth", -1)
     raw_dob = row[dob_idx] if 0 <= dob_idx < len(row) else None
+    dob: date | None
     if isinstance(raw_dob, datetime):
         dob = raw_dob.date()
     elif isinstance(raw_dob, date):
