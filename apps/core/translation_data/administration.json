@@ -134,6 +134,36 @@
     "en": "Audit events",
     "pl": "Zdarzenia audytu"
   },
+  "administration.model_patientformsession": {
+    "de": "Patientenformular-Sitzung",
+    "en": "Patient form session",
+    "pl": "Sesja formularza pacjenta"
+  },
+  "administration.model_patientformsession_plural": {
+    "de": "Patientenformular-Sitzungen",
+    "en": "Patient form sessions",
+    "pl": "Sesje formularzy pacjenta"
+  },
+  "administration.model_patientimportbatch": {
+    "de": "Patienten-Import",
+    "en": "Patient import batch",
+    "pl": "Partia importu pacjentów"
+  },
+  "administration.model_patientimportbatch_plural": {
+    "de": "Patienten-Importe",
+    "en": "Patient import batches",
+    "pl": "Partie importu pacjentów"
+  },
+  "administration.model_patientimporterror": {
+    "de": "Patienten-Importfehler",
+    "en": "Patient import error",
+    "pl": "Błąd importu pacjenta"
+  },
+  "administration.model_patientimporterror_plural": {
+    "de": "Patienten-Importfehler",
+    "en": "Patient import errors",
+    "pl": "Błędy importu pacjenta"
+  },
   "administration.side_admin": {
     "de": "Verwaltung",
     "en": "Admin",
@@ -150,12 +180,12 @@
     "pl": "Zdarzenia audytu"
   },
   "administration.side_batch_importu": {
-    "de": "Patientenimport-Batch",
+    "de": "Patienten-Importe",
     "en": "Patient import batch",
     "pl": "Batch importu pacjentów"
   },
   "administration.side_bledy_importu": {
-    "de": "Importfehler",
+    "de": "Patienten-Importfehler",
     "en": "Import errors",
     "pl": "Błędy importu pacjentów"
   },
@@ -265,7 +295,7 @@
     "pl": "Rejestracja"
   },
   "administration.side_sesje_formularzy": {
-    "de": "Formularsitzungen",
+    "de": "Patientenformular-Sitzungen",
     "en": "Form sessions",
     "pl": "Sesje formularzy"
   },

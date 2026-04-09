@@ -314,6 +314,11 @@
     "en": "Daily queues – master/detail",
     "pl": "Kolejki dzienne – master/detail"
   },
+  "administration.recent_actions_title": {
+    "de": "Neueste Aktionen",
+    "en": "Recent actions",
+    "pl": "Ostatnie działania"
+  },
   "administration.results_available": {
     "de": "Ihre Untersuchungsergebnisse sind jetzt verfügbar",
     "en": "Your examination results are now available",
