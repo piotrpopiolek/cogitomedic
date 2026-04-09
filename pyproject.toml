@@ -38,6 +38,6 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 72
+fail_under = 76
 show_missing = true
 skip_covered = true
