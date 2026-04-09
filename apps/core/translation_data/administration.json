@@ -124,6 +124,16 @@
     "en": "Staff users",
     "pl": "Użytkownicy staff"
   },
+  "administration.model_auditevent": {
+    "de": "Audit-Protokoll",
+    "en": "Audit event",
+    "pl": "Zdarzenie audytu"
+  },
+  "administration.model_auditevent_plural": {
+    "de": "Audit-Protokolle",
+    "en": "Audit events",
+    "pl": "Zdarzenia audytu"
+  },
   "administration.side_admin": {
     "de": "Verwaltung",
     "en": "Admin",
@@ -135,7 +145,7 @@
     "pl": "API / narzędzia"
   },
   "administration.side_audit_events": {
-    "de": "Audit-Ereignisse",
+    "de": "Audit-Protokolle",
     "en": "Audit events",
     "pl": "Zdarzenia audytu"
   },

@@ -71,6 +71,10 @@ class AuditEvent(models.Model):
 
     class Meta:
         db_table = "audit_event"
+        verbose_name = db_gettext_lazy("administration.model_auditevent", "Audit event")
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_auditevent_plural", "Audit events"
+        )
         constraints = [
             models.CheckConstraint(
                 condition=Q(metadata__isnull=False),
