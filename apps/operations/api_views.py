@@ -87,7 +87,10 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
     patient_id = request.GET.get("patient_id")
     if patient_id:
-        qs = qs.filter(patient_id=patient_id)
+        try:
+            qs = qs.filter(patient_id=uuid.UUID(patient_id))
+        except (ValueError, TypeError):
+            pass
 
     medical_document_id = request.GET.get("medical_document_id")
     if medical_document_id:
