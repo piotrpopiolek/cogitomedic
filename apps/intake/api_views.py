@@ -342,11 +342,11 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
 @require_auth
 def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
     """GET list of intake outbox events (ADMIN, RECEPTION)."""
-    if request.method != "GET":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
+    if request.method != "GET":
+        return json_error("other.api.method_not_allowed", status=405)
 
     raw_retry_count_gte = request.GET.get("retry_count_gte")
     try:
@@ -408,11 +408,11 @@ def intake_outbox_event_retry_view(
     request: HttpRequest, intake_outbox_event_id: UUID
 ) -> JsonResponse:
     """POST retry a single intake outbox event (ADMIN, RECEPTION)."""
-    if request.method != "POST":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = RetryIntakeOutboxEventRequest.model_validate(read_json_body(request))
@@ -461,11 +461,11 @@ def intake_outbox_event_retry_view(
 @require_auth
 def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
     """POST process a batch of intake outbox events (ADMIN)."""
-    if request.method != "POST":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = ProcessIntakeOutboxRequest.model_validate(read_json_body(request))
