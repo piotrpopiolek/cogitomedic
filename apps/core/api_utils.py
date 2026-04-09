@@ -193,7 +193,7 @@ def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
     if getattr(user, "is_tablet", False) and user.is_tablet:
         ids = list(user.clinic_sites.values_list("id", flat=True))
         return ids
-    return None
+    return []
 
 
 def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
