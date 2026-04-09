@@ -588,6 +588,12 @@ class TabletDevice(models.Model):
 
     class Meta:
         db_table = "tablet_device"
+        verbose_name = db_gettext_lazy(
+            "administration.model_tabletdevice", "Tablet device"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_tabletdevice_plural", "Tablet devices"
+        )
 
     def __str__(self) -> str:
         return (

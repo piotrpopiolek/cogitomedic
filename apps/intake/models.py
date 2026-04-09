@@ -132,6 +132,12 @@ class ConsentDefinition(models.Model):
 
     class Meta:
         db_table = "consent_definition"
+        verbose_name = db_gettext_lazy(
+            "administration.model_consentdefinition", "Consent definition"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_consentdefinition_plural", "Consent definitions"
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["code", "version"], name="consent_definition_unique"
@@ -233,6 +239,14 @@ class AnamnesisQuestionDefinition(models.Model):
 
     class Meta:
         db_table = "anamnesis_question_definition"
+        verbose_name = db_gettext_lazy(
+            "administration.model_anamnesisquestiondefinition",
+            "Anamnesis question definition",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_anamnesisquestiondefinition_plural",
+            "Anamnesis question definitions",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["code", "version"],
@@ -299,6 +313,14 @@ class AnamnesisOptionDefinition(models.Model):
 
     class Meta:
         db_table = "anamnesis_option_definition"
+        verbose_name = db_gettext_lazy(
+            "administration.model_anamnesisoptiondefinition",
+            "Anamnesis option definition",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_anamnesisoptiondefinition_plural",
+            "Anamnesis option definitions",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["question", "code"],
@@ -572,6 +594,14 @@ class IntakeDocumentVersion(models.Model):
 
     class Meta:
         db_table = "intake_document_version"
+        verbose_name = db_gettext_lazy(
+            "administration.model_intakedocumentversion",
+            "Intake document version",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_intakedocumentversion_plural",
+            "Intake document versions",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["intake_form", "version_no"],
