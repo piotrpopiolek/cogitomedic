@@ -561,7 +561,11 @@ class IntakeFormDetailViewTests(TestCase):
 
     @patch("apps.intake.api_views.get_intake_form_context")
     def test_get_valid_form_returns_200(self, mock_ctx) -> None:
-        mock_ctx.return_value = {"consents": [], "questions": [], "form_status": "IN_PROGRESS"}
+        mock_ctx.return_value = {
+            "consents": [],
+            "questions": [],
+            "form_status": "IN_PROGRESS",
+        }
         intake_form = _make_minimal_intake_form(
             created_by_user=self.reception_user,
             clinic_site=self.clinic,
