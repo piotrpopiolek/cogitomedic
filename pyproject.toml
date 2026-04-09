@@ -29,9 +29,7 @@ branch = true
 source = ["apps", "cogitomedica"]
 omit = [
     "*/migrations/*",
-    "*/tests.py",
-    "*/api_tests.py",
-    "*/test_*.py",
+    "*/tests/*",
     "*/__init__.py",
     "cogitomedica/wsgi.py",
     "cogitomedica/asgi.py",
