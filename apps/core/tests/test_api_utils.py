@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import Mock, PropertyMock
-from uuid import UUID, uuid4
+from unittest.mock import Mock
+from uuid import uuid4
 
-from django.http import HttpRequest, QueryDict
+from django.http import HttpRequest
 from django.test import SimpleTestCase, TestCase, RequestFactory
 
 from apps.core.api_utils import (

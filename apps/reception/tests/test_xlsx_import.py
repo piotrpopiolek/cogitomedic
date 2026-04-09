@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import date, time
-from unittest.mock import patch
 
-from django.test import SimpleTestCase, TestCase
-from django.utils import timezone
+from django.test import SimpleTestCase
 
 from freezegun import freeze_time
 
