@@ -69,6 +69,11 @@
     "en": "No published version to revoke.",
     "pl": "Brak opublikowanej wersji do cofnięcia."
   },
+  "other.domain.revoke_requires_full_delivery": {
+    "de": "Widerruf erst möglich, wenn die Version vollständig zugestellt wurde (HiDrive und SMS).",
+    "en": "Cannot revoke until the version has been fully delivered (HiDrive and SMS).",
+    "pl": "Cofnięcie możliwe dopiero po pełnej dostawie wersji (HiDrive i SMS)."
+  },
   "other.domain.document_processing_retry_role": {
     "de": "Nur ADMIN oder RECEPTION können die Verarbeitung erneut anstoßen.",
     "en": "Only ADMIN or RECEPTION can retry processing.",
