@@ -79,7 +79,9 @@ class AnonymizationIntegrationTests(TestCase):
             email=f"jan.{n}@example.com",
         )
 
-    def _terminal_entry(self, patient: Patient, *, status: str = "PUBLISHED") -> QueueEntry:
+    def _terminal_entry(
+        self, patient: Patient, *, status: str = "PUBLISHED"
+    ) -> QueueEntry:
         return QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=patient,

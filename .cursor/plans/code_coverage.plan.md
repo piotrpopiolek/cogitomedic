@@ -19,6 +19,7 @@ isProject: false
 - `fail_under = 82` w `pyproject.toml` — obecnie nieosiągalne, gate jest de facto wyłączony.
 - **304** testy, **~6k linii** kodu testowego, **zero** plików `conftest.py`, **zero** fabryk.
 - Testy oparte wyłącznie na `django.test.TestCase` z ręcznym `setUp` i `objects.create(...)`.
+- Niespójna struktura testów — flat files (`tests.py`, `api_tests.py`) obok kodu produkcyjnego; wyjątek: `apps/users/tests/` (katalog).
 - Brak branch coverage — mierzone jest tylko pokrycie instrukcji.
 - Brak diff-coverage — nowy kod może wchodzić do `main` bez testów.
 
@@ -81,7 +82,94 @@ Dodać do CI:
 
 **Dlaczego:** Globalna metryka nie zapobiega dodawaniu nowego, nieobjętego kodu. Diff-cover wymusza, że każdy nowy PR ma ≥90% pokrycia gałęzi. To jedyne narzędzie, które chroni przed regresją pokrycia w czasie.
 
-### 0.5. Wspólny `conftest.py` z fixture'ami
+### 0.5. Migracja testów do katalogów `tests/`
+
+Obecna struktura jest niespójna — większość aplikacji trzyma testy jako flat files (`tests.py`, `api_tests.py`, `test_*.py`) obok kodu produkcyjnego, a `apps/users/` już używa katalogu `tests/`. Po dodaniu nowych testów z tego planu liczba plików testowych per aplikacja wzrośnie do 4-6, co czyni flat files nieczytelnym.
+
+**Docelowa struktura per aplikacja:**
+
+```
+apps/<app>/
+├── models.py
+├── services.py
+├── ...
+└── tests/
+    ├── __init__.py
+    ├── conftest.py          # per-app fixtures (opcjonalnie)
+    ├── test_services.py     # dawne tests.py
+    ├── test_api.py          # dawne api_tests.py
+    └── test_<specific>.py   # dawne test_<specific>.py
+```
+
+**Mapa migracji istniejących plików:**
+
+| Aplikacja | Plik źródłowy | Plik docelowy |
+|-----------|--------------|---------------|
+| `apps/core` | `tests.py` | `tests/test_core.py` |
+| `apps/core` | `test_commands.py` | `tests/test_commands.py` |
+| `apps/intake` | `tests.py` | `tests/test_services.py` |
+| `apps/intake` | `api_tests.py` | `tests/test_api.py` |
+| `apps/intake` | `test_retention.py` | `tests/test_retention.py` |
+| `apps/intake` | `test_tasks.py` | `tests/test_tasks.py` |
+| `apps/medical` | `tests.py` | `tests/test_services.py` |
+| `apps/medical` | `api_tests.py` | `tests/test_api.py` |
+| `apps/medical` | `test_befund_text.py` | `tests/test_befund_text.py` |
+| `apps/reception` | `tests.py` | `tests/test_services.py` |
+| `apps/reception` | `api_tests.py` | `tests/test_api.py` |
+| `apps/reception` | `test_anonymization.py` | `tests/test_anonymization.py` |
+| `apps/operations` | `tests.py` | `tests/test_operations.py` |
+| `apps/operations` | `api_tests.py` | `tests/test_api.py` |
+| `apps/outbox` | `tests.py` | `tests/test_outbox.py` |
+| `apps/outbox` | `api_tests.py` | `tests/test_api.py` |
+| `apps/patient_results` | `tests.py` | `tests/test_services.py` |
+| `apps/patient_results` | `api_tests.py` | `tests/test_api.py` |
+| `apps/users` | `api_tests.py` | `tests/test_api.py` |
+| `apps/users` | `tests/test_admin_changelist.py` | `tests/test_admin_changelist.py` (bez zmian) |
+| `apps/users` | `tests/test_admin_staffuser_groups_required.py` | `tests/test_admin_staffuser_groups_required.py` (bez zmian) |
+| `apps/integrations/hidrive` | `tests.py` | `tests/test_hidrive.py` |
+| `apps/integrations/sms` | `tests.py` | `tests/test_sms.py` |
+| `cogitomedica` | `tests.py` | `tests/test_core.py` |
+| `cogitomedica` | `api_tests.py` | `tests/test_api.py` |
+
+**Zmiany konfiguracji po migracji:**
+
+`pytest.ini` — uprościć `python_files` (wszystkie pliki mają teraz wzorzec `test_*.py`):
+
+```ini
+[pytest]
+DJANGO_SETTINGS_MODULE = cogitomedica.settings
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts = -v --tb=short
+```
+
+`pyproject.toml` — uprościć omit coverage (zamiast trzech wzorców, jeden katalog):
+
+```toml
+[tool.coverage.run]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__init__.py",
+    "cogitomedica/wsgi.py",
+    "cogitomedica/asgi.py",
+    "cogitomedica/formats/pl/formats.py",
+    "cogitomedica/admin_callbacks.py",
+]
+```
+
+**Kolejność wykonania:**
+
+1. Stworzyć katalogi `tests/` z `__init__.py` we wszystkich aplikacjach.
+2. Przenieść pliki (`git mv`).
+3. Zaktualizować `pytest.ini` i `pyproject.toml`.
+4. Uruchomić `pytest` — upewnić się, że wszystkie 304 testy przechodzą.
+5. Jeden commit atomowy: "Migrate flat test files to tests/ packages".
+
+**Dlaczego:** Spójna konwencja eliminuje decyzję "gdzie dodać nowy test". Katalog `tests/` per aplikacja jest standardem w dużych projektach Django (DRF, Sentry, django-oscar). Każdy nowy test z faz 1-4 trafia do właściwego katalogu bez dyskusji.
+
+### 0.6. Wspólny `conftest.py` z fixture'ami
 
 Stworzyć `conftest.py` w katalogu głównym z fixture'ami, które dziś są powielane w `setUp` wielu klas:
 
@@ -138,7 +226,7 @@ def tmp_media(tmp_path, settings):
 
 **Dlaczego:** Dziś **304 testy** powielają boilerplate tworzenia użytkowników. Bez tego fundamentu każdy nowy test to kopia-wklej istniejącego `setUp`, a refaktoryzacja modelu `StaffUser` wymaga zmian w dziesiątkach plików.
 
-### 0.6. Instalacja `model_bakery` do generacji danych
+### 0.7. Instalacja `model_bakery` do generacji danych
 
 Dodać do `requirements-dev.txt`:
 
@@ -153,7 +241,7 @@ model_bakery
 
 `baker.make(Patient)` automatycznie generuje minimalne poprawne instancje. Istniejące testy nie wymagają migracji — `model_bakery` jest addytywny.
 
-### 0.7. Instalacja `freezegun` do izolacji czasu
+### 0.8. Instalacja `freezegun` do izolacji czasu
 
 Dodać do `requirements-dev.txt`:
 
@@ -360,8 +448,8 @@ Realizować **tylko jeśli** po fazach 1-3 nadal brakuje do celu. Testy widoków
 ### Stack
 
 - **Python 3.13**, **Django**, **pytest** + **pytest-django** + **pytest-cov**.
-- Testy w `tests.py`, `api_tests.py`, `test_*.py` (istniejąca konwencja).
-- `conftest.py` w katalogu głównym (nowy).
+- Testy w katalogach `<app>/tests/test_*.py` (konwencja po migracji z fazy 0.5).
+- `conftest.py` w katalogu głównym + opcjonalnie per-app `<app>/tests/conftest.py`.
 
 ### Wymagane narzędzia (dodać do `requirements-dev.txt`)
 
@@ -379,12 +467,28 @@ Realizować **tylko jeśli** po fazach 1-3 nadal brakuje do celu. Testy widoków
 | `django.test.Client` | Testy HTTP |
 | `pytest-cov` | Raportowanie pokrycia |
 
-### Struktura testów
+### Struktura testów (konwencja po migracji)
 
-- **Unit tests** czystych funkcji → `test_<moduł>.py` per aplikacja (np. `test_xlsx_parsing.py`).
-- **Integration tests** z DB → istniejące `tests.py` per aplikacja.
-- **API tests** → istniejące `api_tests.py` per aplikacja.
-- **Fixture XLSX** → generowane programowo w teście (`openpyxl.Workbook()`), **nie** pliki binarne w repo.
+Wszystkie testy żyją w katalogu `tests/` per aplikacja. Pliki nazywane `test_*.py`:
+
+```
+apps/<app>/tests/
+├── __init__.py
+├── conftest.py           # per-app fixtures (opcjonalnie, gdy setup jest złożony)
+├── test_services.py      # testy logiki biznesowej (dawne tests.py)
+├── test_api.py           # testy kontraktu HTTP (dawne api_tests.py)
+└── test_<specific>.py    # testy wydzielonych zagadnień (np. test_anonymization.py)
+```
+
+**Konwencja nazewnictwa nowych plików testowych:**
+
+| Typ testu | Nazwa pliku | Przykład |
+|-----------|-------------|---------|
+| Unit testy czystych funkcji | `test_<moduł>_unit.py` lub `test_<moduł>.py` | `tests/test_xlsx_parsing.py` |
+| Testy integracyjne (DB) | `test_services.py` lub `test_<moduł>.py` | `tests/test_services.py` |
+| Testy API | `test_api.py` lub `test_api_<obszar>.py` | `tests/test_api.py` |
+
+**Fixture XLSX:** Generowane programowo w teście (`openpyxl.Workbook()`), **nie** pliki binarne w repo.
 
 ---
 
@@ -426,7 +530,7 @@ Preferować testy z prawdziwą bazą danych nad mockami ORM. Mock `Model.objects
 | Branch coverage obniży % po włączeniu — frustracja zespołu | Komunikacja: nowa baseline to informacja, nie regres |
 | `model_bakery` generuje dane niezgodne z walidatorami modelu | Definiować `baker.prepare(..., field=value)` dla pól z custom walidacją |
 | Nowy kod produkcyjny obniża % szybciej niż testy go podnoszą | Diff-cover gate (90% na nowy kod) chroni przed tym |
-| Testy `anonymization.py` wymagają złożonego setup grafu modeli | Zainwestować w dedykowany fixture w `apps/reception/conftest.py` — zwróci się wielokrotnie |
+| Testy `anonymization.py` wymagają złożonego setup grafu modeli | Zainwestować w dedykowany fixture w `apps/reception/tests/conftest.py` — zwróci się wielokrotnie |
 | Cross-app coupling (`medical` → `intake` → `reception`) | Akceptujemy koszt testów integracyjnych; refaktoryzacja coupling to osobny projekt |
 | Flaky testy dat/czasu | `freezegun` obowiązkowy, nie opcjonalny |
 
@@ -436,7 +540,7 @@ Preferować testy z prawdziwą bazą danych nad mockami ORM. Mock `Model.objects
 
 | Kamień milowy | Kryterium zakończenia | Szacunkowy efekt |
 |---------------|----------------------|------------------|
-| Faza 0 zakończona | `conftest.py` istnieje, branch coverage włączone, `diff-cover` w CI, `fail_under` ustawione na baseline | % może spaść — to jest OK |
+| Faza 0 zakończona | Testy zmigrowane do `tests/`, `conftest.py` istnieje, branch coverage włączone, `diff-cover` w CI, `fail_under` ustawione na baseline, 304 testy nadal przechodzą | % może spaść — to jest OK |
 | Faza 1 zakończona | Testy anonymization, document_services, intake/services, medical/services wg tabel powyżej | +6-8pp pokrycia gałęzi |
 | Faza 2 zakończona | Unit testy xlsx_import pure functions, api_utils | +3-4pp |
 | Faza 3 zakończona | API contract tests dla intake, medical, reception endpoints | +4-6pp |
