@@ -51,7 +51,9 @@ class JoinFeaturesTests(SimpleTestCase):
         self.assertIn("sowie", result)
 
     def test_three_features_de_joined_with_comma_and_sowie(self) -> None:
-        result = _join_features(["ASYMMETRY", "MULTICOLOR", "IRREGULAR_DOTS"], locale_de=True)
+        result = _join_features(
+            ["ASYMMETRY", "MULTICOLOR", "IRREGULAR_DOTS"], locale_de=True
+        )
         self.assertIn(",", result)
         self.assertIn("sowie", result)
 
@@ -249,7 +251,9 @@ class GenerateBefundTextTemplatBodyTests(SimpleTestCase):
             authoring_locale="de-DE",
             template_body="Individuelle Vorlage.",
         )
-        self.assertTrue(result["summary_generated_text"].startswith("Individuelle Vorlage."))
+        self.assertTrue(
+            result["summary_generated_text"].startswith("Individuelle Vorlage.")
+        )
 
     def test_empty_template_body_not_prepended(self) -> None:
         result_no_tpl = generate_befund_text(
@@ -261,7 +265,10 @@ class GenerateBefundTextTemplatBodyTests(SimpleTestCase):
             {"lesions": [], "final_assessment": "NO_HIGH_GRADE_SUSPICION"},
             authoring_locale="de-DE",
         )
-        self.assertEqual(result_no_tpl["summary_generated_text"], result_tpl["summary_generated_text"])
+        self.assertEqual(
+            result_no_tpl["summary_generated_text"],
+            result_tpl["summary_generated_text"],
+        )
 
     def test_template_body_separated_by_blank_line(self) -> None:
         result = generate_befund_text(

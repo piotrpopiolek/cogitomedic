@@ -275,7 +275,9 @@ class DailyQueueAdminImportTests(TestCase):
         content = response.content.decode()
         self.assertIn('name="file"', content)
         self.assertIn("multipart/form-data", content)
-        self.assertIn("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content)
+        self.assertIn(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content
+        )
 
 
 class DailyQueueAdminDoctorFilterTests(TestCase):
