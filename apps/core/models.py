@@ -211,6 +211,12 @@ class TranslationValue(TimeStampedUUIDModel):
 
     class Meta:
         db_table = "translation_value"
+        verbose_name = db_gettext_lazy(
+            "administration.model_translationvalue", "Translation value"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_translationvalue_plural", "Translation values"
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["translation_key", "language_code"],

@@ -64,13 +64,73 @@
     "en": "Consulting rooms",
     "pl": "Gabinety"
   },
+  "administration.model_anamnesisoptiondefinition": {
+    "de": "Anamneseoption",
+    "en": "Anamnesis option definition",
+    "pl": "Definicja opcji anamnezy"
+  },
+  "administration.model_anamnesisoptiondefinition_plural": {
+    "de": "Anamneseoptionen",
+    "en": "Anamnesis option definitions",
+    "pl": "Definicje opcji anamnezy"
+  },
+  "administration.model_anamnesisquestiondefinition": {
+    "de": "Anamnesefrage",
+    "en": "Anamnesis question definition",
+    "pl": "Definicja pytania anamnezy"
+  },
+  "administration.model_anamnesisquestiondefinition_plural": {
+    "de": "Anamnesefragen",
+    "en": "Anamnesis question definitions",
+    "pl": "Definicje pytań anamnezy"
+  },
+  "administration.model_consentdefinition": {
+    "de": "Einwilligungsvorlage",
+    "en": "Consent definition",
+    "pl": "Definicja zgody"
+  },
+  "administration.model_consentdefinition_plural": {
+    "de": "Einwilligungsvorlagen",
+    "en": "Consent definitions",
+    "pl": "Definicje zgód"
+  },
+  "administration.model_intakedocumentversion": {
+    "de": "Version des Aufnahmeformulars",
+    "en": "Intake document version",
+    "pl": "Wersja dokumentu intake"
+  },
+  "administration.model_intakedocumentversion_plural": {
+    "de": "Versionen der Aufnahmeformulare",
+    "en": "Intake document versions",
+    "pl": "Wersje dokumentów intake"
+  },
+  "administration.model_tabletdevice": {
+    "de": "Tablet-Gerät",
+    "en": "Tablet device",
+    "pl": "Urządzenie tablet"
+  },
+  "administration.model_tabletdevice_plural": {
+    "de": "Tablet-Geräte",
+    "en": "Tablet devices",
+    "pl": "Urządzenia tablet"
+  },
+  "administration.model_translationvalue": {
+    "de": "Übersetzung",
+    "en": "Translation value",
+    "pl": "Wartość tłumaczenia"
+  },
+  "administration.model_translationvalue_plural": {
+    "de": "Übersetzungen",
+    "en": "Translation values",
+    "pl": "Wartości tłumaczeń"
+  },
   "administration.model_dailyqueue": {
-    "de": "Tageswarteschlange",
+    "de": "Tägliche Warteliste",
     "en": "Daily queue",
     "pl": "Kolejka dzienna"
   },
   "administration.model_dailyqueue_plural": {
-    "de": "Tageswarteschlangen",
+    "de": "Tägliche Wartelisten",
     "en": "Daily queues",
     "pl": "Kolejki dzienne"
   },
@@ -190,7 +250,7 @@
     "pl": "Błędy importu pacjentów"
   },
   "administration.side_definicje_zgod": {
-    "de": "Einwilligungsdefinitionen",
+    "de": "Einwilligungsvorlagen",
     "en": "Consent definitions",
     "pl": "Definicje zgód"
   },
@@ -220,12 +280,12 @@
     "pl": "Historia kontaktu"
   },
   "administration.side_intake": {
-    "de": "Intake",
+    "de": "Patientenaufnahme",
     "en": "Intake",
     "pl": "Intake"
   },
   "administration.side_kolejki_dzienne": {
-    "de": "Tageswarteschlangen",
+    "de": "Tägliche Wartelisten",
     "en": "Daily queues",
     "pl": "Kolejki dzienne"
   },
@@ -245,7 +305,7 @@
     "pl": "Medycyna"
   },
   "administration.side_opcje_pytan": {
-    "de": "Antwortoptionen Anamnese",
+    "de": "Anamneseoptionen",
     "en": "Anamnesis options",
     "pl": "Opcje pytań anamnezy"
   },
@@ -280,7 +340,7 @@
     "pl": "Placówki"
   },
   "administration.side_pytania_anamnezy": {
-    "de": "Anamnese-Fragen",
+    "de": "Anamnesefragen",
     "en": "Anamnesis questions",
     "pl": "Pytania anamnezy"
   },
