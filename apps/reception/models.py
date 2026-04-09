@@ -643,6 +643,14 @@ class PatientFormSession(models.Model):
 
     class Meta:
         db_table = "patient_form_session"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientformsession",
+            "Patient form session",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientformsession_plural",
+            "Patient form sessions",
+        )
         indexes = [
             models.Index(fields=["queue_entry", "consumed_at"]),
             models.Index(fields=["queue_entry", "-created_at"]),
@@ -766,6 +774,14 @@ class PatientImportBatch(models.Model):
 
     class Meta:
         db_table = "patient_import_batch"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientimportbatch",
+            "Patient import batch",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientimportbatch_plural",
+            "Patient import batches",
+        )
         indexes = [
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["source_system", "-created_at"]),
@@ -818,6 +834,14 @@ class PatientImportError(models.Model):
 
     class Meta:
         db_table = "patient_import_error"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientimporterror",
+            "Patient import error",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientimporterror_plural",
+            "Patient import errors",
+        )
         constraints = [
             models.CheckConstraint(
                 condition=Q(row_number__gt=0), name="import_error_row_positive"
