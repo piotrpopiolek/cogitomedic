@@ -296,6 +296,25 @@ class RevokeDocumentVersionTests(ServicesCoverageBase):
         self.assertIsNotNone(result.local_pdf_deleted_at)
 
     @freeze_time("2026-03-10T12:00:00Z")
+    def test_not_fully_sent_raises(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=False,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            revoke_document_version(
+                medical_document_id=doc.id,
+                revoked_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "revoke_requires_full_delivery",
+            ctx.exception.api_message_key,
+        )
+
+    @freeze_time("2026-03-10T12:00:00Z")
     @patch("apps.medical.services._try_delete_file")
     def test_revoke_creates_audit_event(self, mock_del):
         from apps.operations.models import AuditEvent

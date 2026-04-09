@@ -471,16 +471,25 @@ def revoke_document_version(
     if current_version.revoked_at:
         return current_version
 
+    if not (current_version.hidrive_sent and current_version.sms_sent):
+        raise DomainError(
+            domain_message(
+                "other.domain.revoke_requires_full_delivery"
+            ),
+            api_message_key="other.domain.revoke_requires_full_delivery",
+        )
+
     now = timezone.now()
     _try_delete_file(current_version.pdf_local_path)
 
-    update_fields = ["revoked_at", "pdf_local_path"]
     current_version.revoked_at = now
     current_version.pdf_local_path = None
-
-    if current_version.hidrive_sent and current_version.sms_sent:
-        current_version.local_pdf_deleted_at = now
-        update_fields.append("local_pdf_deleted_at")
+    current_version.local_pdf_deleted_at = now
+    update_fields = [
+        "revoked_at",
+        "pdf_local_path",
+        "local_pdf_deleted_at",
+    ]
 
     current_version.save(update_fields=update_fields)
 
