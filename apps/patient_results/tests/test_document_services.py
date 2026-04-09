@@ -180,9 +180,7 @@ class ResolvePatientBefundDownloadTests(DocumentServicesBaseTestCase):
             sms_sent=True,
             sms_sent_at=timezone.now(),
         )
-        resolution, version = resolve_patient_befund_download(
-            v.id, self.patient.id
-        )
+        resolution, version = resolve_patient_befund_download(v.id, self.patient.id)
         self.assertEqual(resolution, "retention_expired")
         self.assertIsNotNone(version)
 

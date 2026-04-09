@@ -473,9 +473,7 @@ def revoke_document_version(
 
     if not (current_version.hidrive_sent and current_version.sms_sent):
         raise DomainError(
-            domain_message(
-                "other.domain.revoke_requires_full_delivery"
-            ),
+            domain_message("other.domain.revoke_requires_full_delivery"),
             api_message_key="other.domain.revoke_requires_full_delivery",
         )
 
