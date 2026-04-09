@@ -1,7 +1,7 @@
 asgiref==3.11.1
 certifi==2026.1.4
 charset-normalizer==3.4.4
-Django==6.0.2
+Django==6.0.3
 django-cors-headers==4.6.0
 django-ratelimit==4.1.0
 djangorestframework==3.16.1
@@ -25,7 +25,7 @@ pycryptodome==3.23.0
 pydantic==2.12.5
 PyYAML==6.0.3
 python-dotenv==1.2.1
-requests==2.32.5
+requests==2.33.0
 sentry-sdk==2.53.0
 smsapi-client==2.9.6
 sqlparse==0.5.5
