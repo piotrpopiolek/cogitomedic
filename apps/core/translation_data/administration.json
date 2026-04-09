@@ -313,5 +313,10 @@
     "de": "Cogitomedica Mitarbeiter",
     "en": "Cogitomedica Staff",
     "pl": "Cogitomedica Personel"
+  },
+  "administration.admin_index_title": {
+    "de": "Websiteverwaltung",
+    "en": "Site administration",
+    "pl": "Administracja stroną"
   }
 }
