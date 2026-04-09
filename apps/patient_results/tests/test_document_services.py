@@ -6,10 +6,8 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
-
-from freezegun import freeze_time
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
@@ -21,7 +19,6 @@ from apps.medical.models import (
 )
 from apps.patient_results.document_services import (
     get_patient_pdf_path,
-    get_patient_pdf_version,
     list_patient_documents,
     resolve_patient_befund_download,
 )
