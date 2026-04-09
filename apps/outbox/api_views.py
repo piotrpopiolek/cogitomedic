@@ -36,11 +36,11 @@ from apps.outbox.services import (
 
 @require_auth
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
-    if request.method != "GET":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
+    if request.method != "GET":
+        return json_error("other.api.method_not_allowed", status=405)
 
     raw_retry_count_gte = request.GET.get("retry_count_gte")
     try:
@@ -99,11 +99,11 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
-    if request.method != "POST":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = ProcessOutboxRequest.model_validate(read_json_body(request))
@@ -139,11 +139,11 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 def outbox_event_retry_view(
     request: HttpRequest, outbox_event_id: UUID
 ) -> JsonResponse:
-    if request.method != "POST":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
     if role_error:
         return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = RetryOutboxEventRequest.model_validate(read_json_body(request))
@@ -191,11 +191,11 @@ def outbox_event_retry_view(
 
 @require_auth
 def operations_retention_run_view(request: HttpRequest) -> JsonResponse:
-    if request.method != "POST":
-        return json_error("other.api.method_not_allowed", status=405)
     role_error = require_user_role(request, allowed_roles={"ADMIN"})
     if role_error:
         return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
 
     try:
         body = RetentionRunRequest.model_validate(read_json_body(request))
