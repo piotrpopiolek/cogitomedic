@@ -548,7 +548,7 @@ def medical_document_retry_processing_view(
     try:
         body = RetryProcessingRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
-        body = RetryProcessingRequest()
+        return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
