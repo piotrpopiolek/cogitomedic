@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: "26.1.0"
+    hooks:
+      - id: black
+        exclude: /migrations/
+        types: [python]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.15.1"
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: /migrations/
+        types: [python]
