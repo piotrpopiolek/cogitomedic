@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -150,6 +151,32 @@ class Tests(TestCase):
         self.assertIn("pagination", body)
         self.assertIsInstance(body["items"], list)
         self.assertIsInstance(body["pagination"]["total"], int)
+
+    def test_audit_trail_ref_fallback_after_set_null(self):
+        """After actor_user FK is NULLed, actor_user_id is still
+        returned from metadata._ref (compliance requirement)."""
+        actor_id = str(self.doctor.id)
+        evt = AuditEvent.objects.create(
+            event_type="TEST_REF_FALLBACK",
+            actor_user=self.doctor,
+            medical_document=self.medical_doc,
+            metadata={
+                "_ref": {
+                    "actor_user_id": actor_id,
+                    "medical_document_id": str(self.medical_doc.id),
+                }
+            },
+        )
+        # Simulate SET_NULL (as if the StaffUser row was deleted)
+        AuditEvent.objects.filter(id=evt.id).update(actor_user=None)
+
+        self._login_doctor()
+        r = self.client.get(self._doc_url("/audit-trail"))
+        self.assertEqual(r.status_code, 200)
+        items = r.json()["items"]
+        matched = [i for i in items if i["id"] == str(evt.id)]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["actor_user_id"], actor_id)
 
     # =============================================================
     # 3. medical_documents_view  (POST /medical-documents)

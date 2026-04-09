@@ -61,6 +61,7 @@ from apps.medical.template_services import (
     list_templates,
     update_template,
 )
+from apps.operations.api_views import _serialize_audit_event
 from apps.operations.models import AuditEvent
 from apps.operations.services import create_audit_event
 
@@ -841,16 +842,7 @@ def medical_document_audit_trail_view(
     total = qs.count()
     start = (page - 1) * page_size
     events = list(qs[start : start + page_size])
-    items = [
-        {
-            "id": str(event.id),
-            "event_time": event.event_time.isoformat(),
-            "event_type": event.event_type,
-            "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
-            "metadata": event.metadata,
-        }
-        for event in events
-    ]
+    items = [_serialize_audit_event(event) for event in events]
     return JsonResponse(
         {
             "items": items,
