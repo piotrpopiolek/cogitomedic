@@ -692,7 +692,7 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}": {
         "get": {
             "summary": "Get medical document context",
-            "description": "Full document context for doctor panel: intake summary and current version (draft or published).",
+            "description": "Full document context for doctor panel: intake summary and current version (draft or published). Includes edit-lock fields when applicable: locked_by_user_id, locked_by_username, locked_at (effective lock only, max 24h).",
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -842,6 +842,29 @@ COGITO_PATHS = {
             },
             "responses": {
                 "200": {"description": "Version"},
+                "404": {"description": "Not found"},
+                "423": {
+                    "description": "Edit lock held by another user (draft only); error body includes locked_by_username"
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/unlock": {
+        "post": {
+            "summary": "Release edit lock",
+            "description": "Clears edit lock for this document when the caller holds the lock (or is admin). Intended for page unload from the doctor panel.",
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {"description": "released: true"},
+                "403": {"description": "Caller cannot release this lock"},
                 "404": {"description": "Not found"},
             },
         },

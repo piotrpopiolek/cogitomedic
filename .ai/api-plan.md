@@ -640,7 +640,7 @@
   - Description: List doctor work queue.
   - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (default `1`), `page_size` (default **20**, max **100**).
   - Request JSON: none.
-  - Response JSON: paginated document list with latest version status flags (`pdf_generation_status`, `hidrive_sent`, `sms_sent`).
+  - Response JSON: paginated document list with latest version status flags (`pdf_generation_status`, `hidrive_sent`, `sms_sent`) oraz pola blokady edycji: `locked_by_username`, `locked_at` (gdy aktywna blokada, max 24h).
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
@@ -654,6 +654,9 @@
       "queue_entry_id": "uuid",
       "status": "DRAFT",
       "current_version_no": 2,
+      "locked_by_user_id": "uuid-or-null",
+      "locked_by_username": "string-or-null",
+      "locked_at": "iso8601-or-null",
       "intake_summary": {
         "consents": [{"code": "PRIVACY", "accepted": true}],
         "body_map_data": [],
@@ -678,6 +681,13 @@
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
+- **POST** `/medical-documents/{id}/unlock`
+  - Description: Zwolnienie blokady edycji (właściciel blokady lub admin); wywoływane m.in. przy opuszczeniu strony Befund (`pagehide` + `fetch` z `keepalive`).
+  - Request JSON: opcjonalnie pusty `{}`.
+  - Response JSON: `{ "released": true }` lub `{ "released": false, "error": "..." }` przy `403`.
+  - Success: `200 OK`.
+  - Errors: `403 FORBIDDEN`, `404 NOT_FOUND`.
+
 - **POST** `/medical-documents`
   - Description: Create document for queue entry if not existing.
   - Request JSON:
@@ -690,8 +700,8 @@
   - Success: `201 CREATED` or `200 OK` (idempotent).
   - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
 
-- **PATCH** `/medical-documents/{id}/draft`
-  - Description: Save draft medical section (US-008/009).
+- **PUT** `/medical-documents/{id}/draft`
+  - Description: Save draft medical section (US-008/009). Przy aktywnej blokadzie należącej do innego użytkownika: `423 Locked` z `error` i `locked_by_username`.
   - Request JSON:
     ```json
     {
@@ -727,7 +737,7 @@
     ```
   - Response JSON: latest draft version.
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`, `423 LOCKED` (inny lekarz edytuje szkic).
 
 - **POST** `/medical-documents/{id}/publish`
   - Description: Publish document version and enqueue outbox chain idempotently (US-009/010).

@@ -10,7 +10,7 @@ Dokument opisuje endpointy używane przez personel oraz **RBAC** (kto ma dostęp
 |-----------|------------|
 | **RECEPTION** | Kolejki dzienne, wpisy kolejki, pacjenci (CRUD), urządzenia tabletu, sesje formularza (POST sessions → intake_form_id); dokumenty intake (PDF): lista, szczegóły, podgląd PDF – scope po placówce. |
 | **TABLET**    | Lista kolejek, lista wpisów kolejki, kontekst formularza (GET intake-forms), zgody/anamneza/body map/podpis/submit (PUT/PATCH/POST na intake-forms). **Zakres kolejek:** gdy w sesji jest `tablet_device_id` i urządzenie ma przypisaną placówkę (`TabletDevice.clinic_site_id`), API i widok HTML zwracają tylko kolejki tej placówki; bez przypisania – pusta lista. |
-| **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), publish (POST), wersje (GET). |
+| **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), unlock (POST), publish (POST), wersje (GET). Blokada edycji szkicu (max 24h): inny lekarz dostaje `423` na PUT draft; GET kontekstu zawiera `locked_by_*`. |
 | **ADMIN**     | Wszystko powyżej + użytkownicy staff, operacje outbox (lista, retry, process), retention, metryki (observability/metrics). |
 
 ---
@@ -38,7 +38,7 @@ Dostęp: **wyłącznie rola ADMIN**. Dla RECEPTION/DOCTOR zwracane jest **403 Fo
 - **Auth:** POST login, POST logout, GET me – sesja + CSRF.
 - **Recepcja:** daily-queues, queue-entries, patients, clinic-sites, consulting-rooms, tablet-devices (CRUD; pole `clinic_site_id` – przypisanie tabletu do placówki), POST queue-entries/…/sessions; GET intake-documents (lista), GET intake-documents/{id} (szczegóły), GET intake-documents/{id}/preview-pdf (RECEPTION/ADMIN, scope po clinic_site). Dla TABLET: GET daily-queues i GET daily-queues/{id}/entries używają scope z urządzenia w sesji (`tablet_device_id` + `TabletDevice.clinic_site_id`), gdy dostępne.
 - **Intake:** GET/PATCH intake-forms/{id}, PUT consents, PUT anamnesis, POST signature, POST submit.
-- **Medical:** GET/POST medical-documents, GET medical-documents/{id}, PUT draft, POST publish, GET versions.
+- **Medical:** GET/POST medical-documents, GET medical-documents/{id}, PUT draft, POST unlock, POST publish, GET versions.
 
 Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 

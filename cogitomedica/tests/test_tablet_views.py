@@ -50,7 +50,7 @@ class TabletViewsSmokeTests(TestCase):
             clinic_site=self.clinic, code="T1", name="T1"
         )
         self.queue = DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
+            queue_date=timezone.localdate(),
             clinic_site=self.clinic,
             consulting_room=room,
             status=QueueStatus.OPEN,

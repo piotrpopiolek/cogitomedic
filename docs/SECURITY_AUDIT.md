@@ -26,6 +26,10 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 - Bez zmian w zachowaniu: nadal wymagany Bearer token lub sesja ADMIN (już wcześniej chronione).
 
+## Integralność danych – blokada edycji Befund
+
+- Dla dokumentów w stanie **DRAFT** stosowana jest **aplikacyjna blokada** na rekordzie `medical_document` (`locked_by_user`, `locked_at`), aby ograniczyć równoległe nadpisywanie szkicu przez dwóch lekarzy. Blokada wygasa po **24 godzinach** (bez osobnego schedulera) i jest zwalniana przy **publikacji** oraz **best-effort** przy zamknięciu karty (żądanie `POST /api/v1/medical-documents/{id}/unlock`). **Admin** może przejąć lub zwolnić blokadę zgodnie z logiką serwisu.
+
 ## Weryfikacja zabezpieczeń
 
 ### Panel lekarza (`cogitomedica/doctor_views.py`)

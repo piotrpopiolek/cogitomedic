@@ -37,6 +37,8 @@ Tabela pokazuje m.in.:
 - **SMS** — status wysyłki powiadomienia logistycznego,
 - Kolumna akcji: **Otwórz** (`Öffnen` / odpowiednik w wybranym języku).
 
+**Blokada edycji (szkic):** Gdy inny lekarz ma otwarty ten sam dokument w stanie **DRAFT**, wiersz może być **podświetlony (amber)**; przy nazwisku pojawia się informacja z ikoną kłódki (**kto edytuje**). Przycisk **Otwórz** jest wtedy **nieaktywny** (nie wejdziesz w edycję, dopóki blokada jest ważna — maks. 24 godziny lub do zwolnienia przez edytującego / publikacji). Wiersze **opublikowanych** dokumentów mogą być **zielonkawo** podświetlone dla szybkiej orientacji.
+
 ### Filtry (formularz nad tabelą)
 
 - **Status** — szkic / opublikowany / wszystkie (zależnie od opcji).
@@ -55,6 +57,8 @@ Tabela pokazuje m.in.:
 ---
 
 ## 3. Szczegóły dokumentu i formularz Befund — `/doctor/<medical_document_id>/`
+
+Przy wejściu na stronę szkicu system **próbuje nadać blokadę edycji**. Jeśli dokument jest już edytowany przez innego użytkownika, zobaczysz **komunikat błędu** zamiast formularza (HTTP 423). Po **opuszczeniu strony** przeglądarka wysyła żądanie **zwolnienia blokady** (best-effort). **Publikacja** również zwalnia blokadę.
 
 ### 3.1 Co zawiera ekran
 

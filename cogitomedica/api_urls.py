@@ -26,6 +26,7 @@ from apps.medical.api_views import (
     medical_document_publish_view,
     medical_document_retry_processing_view,
     medical_document_revoke_view,
+    medical_document_unlock_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
     medical_document_audit_trail_view,
@@ -197,6 +198,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/draft",
         medical_document_draft_view,
         name="medical-document-draft",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/unlock",
+        medical_document_unlock_view,
+        name="medical-document-unlock",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/publish",

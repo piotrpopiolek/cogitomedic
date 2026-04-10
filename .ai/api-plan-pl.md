@@ -637,7 +637,7 @@
   - Opis: Lista robocza lekarza.
   - Parametry zapytania: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).
   - Request JSON: brak.
-  - Response JSON: stronicowana lista dokumentów z flagami statusu ostatniej wersji (`pdf_generation_status`, `hidrive_sent`, `sms_sent`).
+  - Response JSON: stronicowana lista dokumentów z flagami statusu ostatniej wersji (`pdf_generation_status`, `hidrive_sent`, `sms_sent`) oraz polami blokady: `locked_by_username`, `locked_at` (gdy aktywna, max 24h).
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `403 FORBIDDEN`.
 
@@ -651,6 +651,9 @@
       "queue_entry_id": "uuid",
       "status": "DRAFT",
       "current_version_no": 2,
+      "locked_by_user_id": "uuid-or-null",
+      "locked_by_username": "string-or-null",
+      "locked_at": "iso8601-or-null",
       "intake_summary": {
         "consents": [{"code": "PRIVACY", "accepted": true}],
         "body_map_data": [],
@@ -675,6 +678,13 @@
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
+- **POST** `/medical-documents/{id}/unlock`
+  - Opis: Zwolnienie blokady edycji (właściciel lub admin); wywoływane przy zamknięciu karty Befund.
+  - Request JSON: opcjonalnie `{}`.
+  - Response JSON: `{ "released": true }` lub błąd przy `403`.
+  - Kody sukcesu: `200 OK`.
+  - Kody błędów: `403 FORBIDDEN`, `404 NOT_FOUND`.
+
 - **POST** `/medical-documents`
   - Opis: Tworzy dokument dla wpisu kolejki, jeśli nie istnieje.
   - Request JSON:
@@ -687,8 +697,8 @@
   - Kody sukcesu: `201 CREATED` lub `200 OK` (idempotentnie).
   - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
 
-- **PATCH** `/medical-documents/{id}/draft`
-  - Opis: Zapisuje szkic części medycznej (US-008/009).
+- **PUT** `/medical-documents/{id}/draft`
+  - Opis: Zapisuje szkic części medycznej (US-008/009). Gdy aktywna blokada innego użytkownika: `423 Locked` z `locked_by_username`.
   - Request JSON:
     ```json
     {
@@ -724,7 +734,7 @@
     ```
   - Response JSON: najnowsza wersja szkicu.
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`, `423 LOCKED`.
   - Uwagi:
     - `generated_text` i `edited_text` przyjmują wyłącznie plain text (bez znaczników HTML/JS).
     - Logika zapisu po stronie backendu nigdy automatycznie nie nadpisuje `edited_text`.
