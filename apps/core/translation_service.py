@@ -223,14 +223,24 @@ def get_form_ui_strings(form_locale: str) -> dict[str, str]:
 
 
 def get_staff_ui_strings(locale: str) -> dict[str, str]:
-    """Return tablet staff/waiting room UI from DB-only translation storage."""
+    """Return tablet staff/waiting room UI from DB-only translation storage.
+
+    Missing keys for the active locale are filled from en-GB so templates need no
+    hardcoded ``|default:`` fallbacks.
+    """
     lang = normalize_language_code(locale)
     mapping = get_translation_map(category="waiting_room", language_code=lang)
+    en_mapping = get_translation_map(category="waiting_room", language_code="en-GB")
     ui: dict[str, str] = {}
     prefix = "waiting_room.staff."
     for full_key, value in mapping.items():
         if full_key.startswith(prefix):
             ui[full_key[len(prefix) :]] = value
+    for full_key, value in en_mapping.items():
+        if full_key.startswith(prefix):
+            short = full_key[len(prefix) :]
+            if short not in ui:
+                ui[short] = value
     return ui
 
 
