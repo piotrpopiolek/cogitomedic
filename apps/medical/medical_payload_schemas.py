@@ -43,6 +43,7 @@ MalignancyRiskCode = Literal["NO_SUSPICION", "LOW_SUSPICION", "CANNOT_EXCLUDE"]
 RecommendationCode = Literal[
     "FOLLOWUP_3_MONTHS",
     "FOLLOWUP_6_MONTHS",
+    "FOLLOWUP_12_MONTHS",
     "PROMPT_VISIT_ON_CHANGE",
     "NO_SHORT_TERM_FOLLOWUP_REQUIRED",
 ]
