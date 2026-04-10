@@ -197,3 +197,23 @@ class DoctorDetailHappyPathTests(TestCase):
         url = f"/doctor/{self.doc.id}/"
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+
+    def test_detail_returns_423_when_locked_by_another_doctor(self):
+        other = StaffUser.objects.create_user(
+            username="hp-doc-2",
+            email="hp-doc-2@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        dq = self.doc.queue_entry.daily_queue
+        dq.assigned_doctor = other
+        dq.save(update_fields=["assigned_doctor", "updated_at"])
+        self.doc.locked_by_user = self.doctor
+        self.doc.locked_at = timezone.now()
+        self.doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+
+        self.client.force_login(other)
+        url = f"/doctor/{self.doc.id}/"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 423)

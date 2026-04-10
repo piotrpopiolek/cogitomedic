@@ -25,6 +25,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.intake.models import IntakeStatus
 from apps.medical.services import (
+    acquire_document_lock,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
     get_medical_document_context,
@@ -32,7 +33,12 @@ from apps.medical.services import (
     parse_medical_documents_list_params,
 )
 from apps.reception.models import QueueEntry
-from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
+from apps.core.translation_service import (
+    get_doctor_ui,
+    get_fitzpatrick_choices,
+    get_translation_map,
+    normalize_language_code,
+)
 
 
 def _render_doctor(
@@ -287,6 +293,26 @@ def doctor_document_detail_view(
                 "lang": lang,
             },
             status=404,
+        )
+    granted, lock_holder = acquire_document_lock(
+        medical_document_id=medical_document_id, user=request.user
+    )
+    if not granted:
+        loc = normalize_language_code(lang)
+        mapping = get_translation_map("doctor", loc)
+        tmpl = mapping.get(
+            "doctor.document_locked_error",
+            (
+                "Dieses Dokument wird gerade von {username} bearbeitet. "
+                "Bitte versuchen Sie es später erneut."
+            ),
+        )
+        message = tmpl.format(username=lock_holder or "…")
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {"message": message, "ui": ui, "lang": lang},
+            status=423,
         )
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"

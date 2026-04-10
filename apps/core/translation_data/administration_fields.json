@@ -679,6 +679,16 @@
     "en": "Updated by",
     "pl": "Zaktualizował"
   },
+  "administration.field_locked_by_user": {
+    "de": "Gesperrt von",
+    "en": "Locked by",
+    "pl": "Zablokowany przez"
+  },
+  "administration.field_locked_at": {
+    "de": "Gesperrt um",
+    "en": "Locked at",
+    "pl": "Zablokowano o"
+  },
   "administration.field_anamnesis_question": {
     "de": "Anamnese-Frage",
     "en": "Anamnesis question",
