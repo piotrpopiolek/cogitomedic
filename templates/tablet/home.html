@@ -1,5 +1,5 @@
 {% extends "tablet/base.html" %}
-{% block title %}{{ staff_ui.home_title|default:"Poczekalnia" }} – {{ today }}{% endblock %}
+{% block title %}{{ staff_ui.home_title }} – {{ today }}{% endblock %}
 {% block content %}
   <h1>{{ staff_ui.home_title }}</h1>
   <p>{{ staff_ui.date }} <strong>{{ today }}</strong></p>
@@ -15,7 +15,7 @@
     </ul>
   {% else %}
     {% if tablet_unassigned %}
-      <p>{{ staff_ui.tablet_unassigned|default:"Tablet nie jest przypisany do placówki. Skontaktuj się z administratorem." }}</p>
+      <p>{{ staff_ui.tablet_unassigned }}</p>
     {% else %}
       <p>{{ staff_ui.no_queues_today }}</p>
     {% endif %}

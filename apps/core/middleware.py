@@ -57,11 +57,16 @@ class StaffLocaleMiddleware:
     @staticmethod
     def _resolve_lang(request) -> str | None:
         user = getattr(request, "user", None)
-        if not (user and getattr(user, "is_authenticated", False)):
-            return None
-        preferred = getattr(user, "preferred_locale", None) or "de-DE"
-        normalized = normalize_language_code(preferred)
-        return _PREFERRED_LOCALE_TO_DJANGO_LANG.get(normalized, "de")
+        if user and getattr(user, "is_authenticated", False):
+            preferred = getattr(user, "preferred_locale", None) or "de-DE"
+            normalized = normalize_language_code(preferred)
+            return _PREFERRED_LOCALE_TO_DJANGO_LANG.get(normalized, "de")
+        # Anonymous: honour ?language= param (persisted in session), default DE
+        lang_param = (getattr(request, "GET", {}).get("language") or "").strip().lower()
+        if lang_param in ("de", "en", "pl"):
+            request.session["anon_language"] = lang_param
+            return lang_param
+        return request.session.get("anon_language", "de")
 
 
 class TranslationRequestMiddleware:

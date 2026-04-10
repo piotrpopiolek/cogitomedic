@@ -153,5 +153,35 @@
     "de": "Passwort",
     "en": "Password",
     "pl": "Hasło"
+  },
+  "waiting_room.staff.err_queue_not_found": {
+    "de": "Warteschlange nicht gefunden.",
+    "en": "Queue not found.",
+    "pl": "Nie znaleziono kolejki."
+  },
+  "waiting_room.staff.err_queue_access_denied": {
+    "de": "Kein Zugriff auf diese Warteschlange.",
+    "en": "No access to this queue.",
+    "pl": "Brak dostępu do tej kolejki."
+  },
+  "waiting_room.staff.err_entry_not_found": {
+    "de": "Warteschlangeneintrag nicht gefunden.",
+    "en": "Queue entry not found.",
+    "pl": "Nie znaleziono wpisu kolejki."
+  },
+  "waiting_room.staff.err_entry_access_denied": {
+    "de": "Kein Zugriff auf diesen Eintrag.",
+    "en": "No access to this queue entry.",
+    "pl": "Brak dostępu do tego wpisu."
+  },
+  "waiting_room.staff.err_session_create_failed": {
+    "de": "Sitzung konnte nicht erstellt werden.",
+    "en": "Session could not be created.",
+    "pl": "Nie udało się utworzyć sesji."
+  },
+  "waiting_room.staff.err_intake_form_not_found": {
+    "de": "Formular nicht gefunden oder kein Zugriff.",
+    "en": "Form not found or access denied.",
+    "pl": "Nie znaleziono formularza lub brak dostępu."
   }
 }

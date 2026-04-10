@@ -37,10 +37,10 @@ TABLET_ALLOWED_ROLES = {"TABLET", "RECEPTION", "ADMIN"}
 def _staff_context(request: HttpRequest) -> dict:
     """Return staff_locale and staff_ui for waiting room templates. Persists ?locale= in session."""
     locale = (request.GET.get("locale") or "").strip().lower() or request.session.get(
-        "tablet_staff_locale", "pl"
+        "tablet_staff_locale", "de"
     )
     if locale not in ("de", "en", "pl"):
-        locale = "pl"
+        locale = "de"
     if request.GET.get("locale"):
         request.session["tablet_staff_locale"] = locale
     return {"staff_locale": locale, "staff_ui": get_staff_ui_strings(locale)}
@@ -161,16 +161,19 @@ def tablet_queue_entries_view(
             id=daily_queue_id
         )
     except ObjectDoesNotExist:
-        ctx = {**_staff_context(request), "message": "Kolejka nie istnieje."}
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_queue_not_found"]
         return render(request, "tablet/error.html", ctx, status=404)
     device = _get_tablet_device_from_session(request)
     scope_ids = _resolve_tablet_area_scope_ids(request)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
-        ctx = {**_staff_context(request), "message": "Brak dostępu do tej kolejki."}
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_queue_access_denied"]
         return render(request, "tablet/error.html", ctx, status=403)
     if device is not None and device.clinic_site_id is not None:
         if queue.clinic_site_id != device.clinic_site_id:
-            ctx = {**_staff_context(request), "message": "Brak dostępu do tej kolejki."}
+            ctx = {**_staff_context(request)}
+            ctx["message"] = ctx["staff_ui"]["err_queue_access_denied"]
             return render(request, "tablet/error.html", ctx, status=403)
     if queue.queue_date != today:
         ctx = {**_staff_context(request)}
@@ -196,7 +199,8 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
             id=queue_entry_id
         )
     except ObjectDoesNotExist:
-        ctx = {**_staff_context(request), "message": "Wpis kolejki nie istnieje."}
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_entry_not_found"]
         return render(request, "tablet/error.html", ctx, status=404)
     if entry.daily_queue.queue_date != today:
         ctx = {**_staff_context(request)}
@@ -205,11 +209,13 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
     device = _get_tablet_device_from_session(request)
     scope_ids = _resolve_tablet_area_scope_ids(request)
     if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
-        ctx = {**_staff_context(request), "message": "Brak dostępu do tego wpisu."}
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_entry_access_denied"]
         return render(request, "tablet/error.html", ctx, status=403)
     if device is not None and device.clinic_site_id is not None:
         if entry.daily_queue.clinic_site_id != device.clinic_site_id:
-            ctx = {**_staff_context(request), "message": "Brak dostępu do tego wpisu."}
+            ctx = {**_staff_context(request)}
+            ctx["message"] = ctx["staff_ui"]["err_entry_access_denied"]
             return render(request, "tablet/error.html", ctx, status=403)
     if request.method == "POST":
         tablet_device_id = None
@@ -239,7 +245,8 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
             }
             return render(request, "tablet/entry_started.html", ctx)
         except ObjectDoesNotExist:
-            ctx = {**_staff_context(request), "message": "Nie można utworzyć sesji."}
+            ctx = {**_staff_context(request)}
+            ctx["message"] = ctx["staff_ui"]["err_session_create_failed"]
             return render(request, "tablet/error.html", ctx, status=404)
     ctx = {**_staff_context(request), "entry": entry}
     return render(request, "tablet/entry_start.html", ctx)
@@ -255,10 +262,8 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             "session", "queue_entry", "queue_entry__patient"
         ).get(id=intake_form_id)
     except ObjectDoesNotExist:
-        ctx = {
-            **_staff_context(request),
-            "message": "Formularz nie istnieje lub brak dostępu.",
-        }
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_intake_form_not_found"]
         return render(request, "tablet/error.html", ctx, status=404)
     session = intake_form.session
     locale_param = request.GET.get("locale", "").strip().lower()
@@ -279,10 +284,8 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
             allowed_clinic_site_ids=_resolve_tablet_area_scope_ids(request),
         )
     except ObjectDoesNotExist:
-        ctx = {
-            **_staff_context(request),
-            "message": "Formularz nie istnieje lub brak dostępu.",
-        }
+        ctx = {**_staff_context(request)}
+        ctx["message"] = ctx["staff_ui"]["err_intake_form_not_found"]
         return render(request, "tablet/error.html", ctx, status=404)
     if context["form_status"] == "SUBMITTED":
         ui = get_form_ui_strings(form_locale)

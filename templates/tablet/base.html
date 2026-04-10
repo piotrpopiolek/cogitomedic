@@ -1,10 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="{{ staff_locale|default:'pl' }}">
+<html lang="{{ staff_locale|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}{{ staff_ui.page_title|default:"Tablet – Poczekalnia" }}{% endblock %}</title>
+  <title>{% block title %}{{ staff_ui.page_title }}{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
     body { max-width: 480px; margin: 0 auto; padding: 1rem; }
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body class="cm-portal cm-portal-tablet">
-  <p class="user">{{ staff_ui.logged_in_as|default:"Zalogowany:" }} {{ request.user.username }} ({{ request.user.role }}) · <a href="{% url 'tablet:logout' %}">{{ staff_ui.logout|default:"Wyloguj" }}</a>
+  <p class="user">{{ staff_ui.logged_in_as }} {{ request.user.username }} ({{ request.user.role }}) · <a href="{% url 'tablet:logout' %}">{{ staff_ui.logout }}</a>
     <span class="staff-lang">{% if staff_locale == 'en' %}<a href="?locale=de">{{ staff_ui.lang_de }}</a> | <strong>{{ staff_ui.lang_en }}</strong> | <a href="?locale=pl">{{ staff_ui.lang_pl }}</a>{% elif staff_locale == 'de' %}<strong>{{ staff_ui.lang_de }}</strong> | <a href="?locale=en">{{ staff_ui.lang_en }}</a> | <a href="?locale=pl">{{ staff_ui.lang_pl }}</a>{% else %}<a href="?locale=de">{{ staff_ui.lang_de }}</a> | <a href="?locale=en">{{ staff_ui.lang_en }}</a> | <strong>{{ staff_ui.lang_pl }}</strong>{% endif %}</span>
   </p>
   {% block content %}{% endblock %}
