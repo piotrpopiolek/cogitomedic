@@ -124,6 +124,12 @@ class OutboxEvent(models.Model):
 
     class Meta:
         db_table = "outbox_event"
+        verbose_name = db_gettext_lazy(
+            "administration.model_outboxevent", "Outbox event"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_outboxevent_plural", "Outbox events"
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["medical_document_version", "event_type"],

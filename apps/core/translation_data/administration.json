@@ -204,6 +204,36 @@
     "en": "Medical documents",
     "pl": "Dokumenty medyczne"
   },
+  "administration.model_medicaldocumentversion": {
+    "de": "Version eines medizinischen Dokuments",
+    "en": "Medical document version",
+    "pl": "Wersja dokumentu medycznego"
+  },
+  "administration.model_medicaldocumentversion_plural": {
+    "de": "Versionen medizinischer Dokumente",
+    "en": "Medical document versions",
+    "pl": "Wersje dokumentów medycznych"
+  },
+  "administration.model_outboxevent": {
+    "de": "Ausgangsereignis",
+    "en": "Outbox event",
+    "pl": "Zdarzenie skrzynki wyjściowej"
+  },
+  "administration.model_outboxevent_plural": {
+    "de": "Ausgangsereignisse",
+    "en": "Outbox events",
+    "pl": "Zdarzenia skrzynki wyjściowej"
+  },
+  "administration.model_patientresultsotpsession": {
+    "de": "OTP-Sitzung für Patientenergebnisse",
+    "en": "Patient results OTP session",
+    "pl": "Sesja OTP wyników pacjenta"
+  },
+  "administration.model_patientresultsotpsession_plural": {
+    "de": "OTP-Sitzungen für Patientenergebnisse",
+    "en": "Patient results OTP sessions",
+    "pl": "Sesje OTP wyników pacjenta"
+  },
   "administration.model_patient": {
     "de": "Patient",
     "en": "Patient",
@@ -360,7 +390,7 @@
     "pl": "Opcje pytań anamnezy"
   },
   "administration.side_outbox_events": {
-    "de": "Outbox-Ereignisse",
+    "de": "Ausgangsereignisse",
     "en": "Outbox events",
     "pl": "Zdarzenia outbox"
   },
@@ -435,7 +465,7 @@
     "pl": "Użytkownicy i uprawnienia"
   },
   "administration.side_wersje_dokumentow": {
-    "de": "Dokumentversionen",
+    "de": "Versionen medizinischer Dokumente",
     "en": "Document versions",
     "pl": "Wersje dokumentów"
   },

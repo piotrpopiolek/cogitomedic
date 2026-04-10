@@ -52,6 +52,14 @@ class PatientResultsOtpSession(models.Model):
 
     class Meta:
         db_table = "patient_results_otp_session"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientresultsotpsession",
+            "Patient results OTP session",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientresultsotpsession_plural",
+            "Patient results OTP sessions",
+        )
         indexes = [
             models.Index(fields=["patient", "expires_at"]),
             models.Index(fields=["phone", "expires_at"]),

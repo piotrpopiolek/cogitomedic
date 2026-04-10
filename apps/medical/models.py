@@ -298,6 +298,14 @@ class MedicalDocumentVersion(models.Model):
 
     class Meta:
         db_table = "medical_document_version"
+        verbose_name = db_gettext_lazy(
+            "administration.model_medicaldocumentversion",
+            "Medical document version",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_medicaldocumentversion_plural",
+            "Medical document versions",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["medical_document", "version_no"],
