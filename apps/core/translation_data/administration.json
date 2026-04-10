@@ -104,6 +104,36 @@
     "en": "Intake document versions",
     "pl": "Wersje dokumentów intake"
   },
+  "administration.model_intakeoutboxevent": {
+    "de": "Ausgangsereignis",
+    "en": "Intake outbox event",
+    "pl": "Zdarzenie outbox intake"
+  },
+  "administration.model_intakeoutboxevent_plural": {
+    "de": "Ausgangsereignisse",
+    "en": "Intake outbox events",
+    "pl": "Zdarzenia outbox intake"
+  },
+  "administration.model_patientintakeconsent": {
+    "de": "Einwilligung zur Patientenaufnahme",
+    "en": "Patient intake consent",
+    "pl": "Zgoda formularza intake"
+  },
+  "administration.model_patientintakeconsent_plural": {
+    "de": "Einwilligungen zur Patientenaufnahme",
+    "en": "Patient intake consents",
+    "pl": "Zgody formularza intake"
+  },
+  "administration.model_patientintakeform": {
+    "de": "Formular zur Patientenaufnahme",
+    "en": "Patient intake form",
+    "pl": "Formularz intake pacjenta"
+  },
+  "administration.model_patientintakeform_plural": {
+    "de": "Formulare zur Patientenaufnahme",
+    "en": "Patient intake forms",
+    "pl": "Formularze intake pacjentów"
+  },
   "administration.model_tabletdevice": {
     "de": "Tablet-Gerät",
     "en": "Tablet device",
@@ -114,13 +144,33 @@
     "en": "Tablet devices",
     "pl": "Urządzenia tablet"
   },
+  "administration.model_translationcacheversion": {
+    "de": "Version des Übersetzungscaches",
+    "en": "Translation cache version",
+    "pl": "Wersja cache tłumaczeń"
+  },
+  "administration.model_translationcacheversion_plural": {
+    "de": "Versionen des Übersetzungscaches",
+    "en": "Translation cache versions",
+    "pl": "Wersje cache tłumaczeń"
+  },
+  "administration.model_translationkey": {
+    "de": "Übersetzungsschlüssel",
+    "en": "Translation key",
+    "pl": "Klucz tłumaczenia"
+  },
+  "administration.model_translationkey_plural": {
+    "de": "Übersetzungsschlüssel",
+    "en": "Translation keys",
+    "pl": "Klucze tłumaczeń"
+  },
   "administration.model_translationvalue": {
-    "de": "Übersetzung",
+    "de": "Übersetzungswert",
     "en": "Translation value",
     "pl": "Wartość tłumaczenia"
   },
   "administration.model_translationvalue_plural": {
-    "de": "Übersetzungen",
+    "de": "Übersetzungswerte",
     "en": "Translation values",
     "pl": "Wartości tłumaczeń"
   },
@@ -260,7 +310,7 @@
     "pl": "Dokumenty medyczne"
   },
   "administration.side_formularze_intake": {
-    "de": "Intake-Formulare",
+    "de": "Formulare zur Patientenaufnahme",
     "en": "Intake forms",
     "pl": "Formularze intake"
   },
@@ -395,7 +445,7 @@
     "pl": "Wpisy kolejki"
   },
   "administration.side_zgody_formularzy": {
-    "de": "Einwilligungen Intake",
+    "de": "Einwilligungen zur Patientenaufnahme",
     "en": "Intake consents",
     "pl": "Zgody formularzy intake"
   },

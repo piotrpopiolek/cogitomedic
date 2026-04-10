@@ -415,6 +415,12 @@ class PatientIntakeForm(models.Model):
 
     class Meta:
         db_table = "patient_intake_form"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientintakeform", "Patient intake form"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientintakeform_plural", "Patient intake forms"
+        )
         indexes = [
             models.Index(fields=["form_status", "submitted_at"]),
             GinIndex(
@@ -488,6 +494,13 @@ class PatientIntakeConsent(models.Model):
 
     class Meta:
         db_table = "patient_intake_consent"
+        verbose_name = db_gettext_lazy(
+            "administration.model_patientintakeconsent", "Patient intake consent"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_patientintakeconsent_plural",
+            "Patient intake consents",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["intake_form", "consent_definition"],
@@ -739,6 +752,12 @@ class IntakeOutboxEvent(models.Model):
 
     class Meta:
         db_table = "intake_outbox_event"
+        verbose_name = db_gettext_lazy(
+            "administration.model_intakeoutboxevent", "Intake outbox event"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_intakeoutboxevent_plural", "Intake outbox events"
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["intake_document_version", "event_type"],
