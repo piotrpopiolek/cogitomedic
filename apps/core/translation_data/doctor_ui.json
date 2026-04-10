@@ -394,6 +394,11 @@
     "en": "Dermatological follow-up in 6 months recommended",
     "pl": "Kontrola dermatologiczna za 6 miesięcy"
   },
+  "doctor.rec_followup_12": {
+    "de": "Dermatologische Verlaufskontrolle in 12 Monaten empfohlen",
+    "en": "Dermatological follow-up in 12 months recommended",
+    "pl": "Kontrola dermatologiczna za 12 miesięcy"
+  },
   "doctor.rec_no_short": {
     "de": "Aktuell keine kurzfristige Kontrolle erforderlich",
     "en": "No short-term follow-up required at present",
