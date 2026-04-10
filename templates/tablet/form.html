@@ -57,7 +57,7 @@
       {% for c in consents %}
       <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
         <h3>{{ c.title }}{% if c.is_required %} <span style="color:var(--cm-danger)">*</span>{% endif %}</h3>
-        <div class="consent-content">{{ c.content }}</div>
+        <div class="consent-content">{{ c.content|markdown_consent }}</div>
         {% if c.is_multi %}
           {% for opt in c.options %}
           <label class="consent-check">

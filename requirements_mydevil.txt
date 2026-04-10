@@ -35,3 +35,4 @@ urllib3==2.6.3
 weasyprint==68.1
 django-unfold
 bleach
+markdown
