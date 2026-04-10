@@ -593,5 +593,35 @@
     "de": "Preset hinzufügen",
     "en": "Add preset",
     "pl": "Dodaj preset"
+  },
+  "doctor.document_locked_by": {
+    "de": "Wird bearbeitet von {username}",
+    "en": "Being edited by {username}",
+    "pl": "Edytowany przez {username}"
+  },
+  "doctor.document_locked_error": {
+    "de": "Dieses Dokument wird gerade von {username} bearbeitet. Bitte versuchen Sie es später erneut.",
+    "en": "This document is being edited by {username}. Please try again later.",
+    "pl": "Ten dokument jest obecnie edytowany przez {username}. Spróbuj ponownie później."
+  },
+  "doctor.document_unlock_forbidden": {
+    "de": "Sie können diese Sperre nicht aufheben.",
+    "en": "You cannot release this document lock.",
+    "pl": "Nie możesz zwolnić tej blokady dokumentu."
+  },
+  "doctor.list_open_locked_tooltip": {
+    "de": "Wird von einem anderen Benutzer bearbeitet.",
+    "en": "Being edited by another user.",
+    "pl": "Edytowany przez innego użytkownika."
+  },
+  "doctor.list_locked_by_prefix": {
+    "de": "Bearbeitet von",
+    "en": "Edited by",
+    "pl": "Edytuje"
+  },
+  "doctor.unlock": {
+    "de": "Freigeben",
+    "en": "Unlock",
+    "pl": "Odblokuj"
   }
 }

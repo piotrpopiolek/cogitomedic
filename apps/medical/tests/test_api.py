@@ -11,6 +11,7 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import (
     MedicalDocStatus,
+    MedicalDocument,
     MedicalDocumentVersion,
 )
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -903,6 +904,77 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_draft_423_when_locked_by_other_doctor_unlock_releases(self) -> None:
+        other = StaffUser.objects.create_user(
+            username="api-doc-lock-2",
+            email="api.doc.lock2@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        mid = create_response.json()["medical_document_id"]
+
+        dq = self.queue_entry.daily_queue
+        dq.assigned_doctor = other
+        dq.save(update_fields=["assigned_doctor", "updated_at"])
+
+        MedicalDocument.objects.filter(id=mid).update(
+            locked_by_user_id=self.doctor_user.id,
+            locked_at=timezone.now(),
+        )
+
+        draft_body = {
+            "medical_payload_schema_version": 1,
+            "medical_payload": {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        }
+
+        self.client.force_login(other)
+        blocked = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.assertEqual(blocked.status_code, 423)
+        self.assertIn("locked_by_username", blocked.json())
+
+        self.client.force_login(self.doctor_user)
+        unlocked = self.client.post(
+            f"/api/v1/medical-documents/{mid}/unlock",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(unlocked.status_code, 200)
+        self.assertTrue(unlocked.json().get("released"))
+
+        self.client.force_login(other)
+        ok = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.assertEqual(ok.status_code, 200)
 
 
 class DoctorTemplatesApiTests(TestCase):

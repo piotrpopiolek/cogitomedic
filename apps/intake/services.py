@@ -193,7 +193,7 @@ def _build_intake_snapshot_payload(
     )
     questions = (
         AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(now.date()), code__in=question_codes
+            _effective_question_filter(timezone.localdate(now)), code__in=question_codes
         )
         .prefetch_related(active_options_prefetch)
         .order_by("-version")
@@ -401,7 +401,7 @@ def get_intake_form_context(
     Raises ObjectDoesNotExist if form not found.
     For tablet_restrict_to_today=True (TABLET role), returns 404 when queue is not today.
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     intake_form = PatientIntakeForm.objects.select_related(
         "session",
         "queue_entry",
@@ -647,7 +647,7 @@ def save_intake_consents(
     Each item: consent_definition_id (UUID), accepted (bool).
     Raises ConsentNotActiveError if any consent definition is not active for today.
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     effective_defs = list(
         ConsentDefinition.objects.filter(_effective_consent_filter(today)).values(
             "id", "code"
@@ -900,7 +900,7 @@ def submit_patient_intake_form(
             api_message_key="other.domain.intake_session_expired",
         )
 
-    today = now.date()
+    today = timezone.localdate(now)
     required_consent_ids = set(
         ConsentDefinition.objects.filter(
             _effective_consent_filter(today), is_required=True

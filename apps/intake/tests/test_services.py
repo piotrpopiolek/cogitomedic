@@ -59,7 +59,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         clinic = ClinicSite.objects.create(code="WAW", name="Warsaw")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")
         daily_queue = DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
+            queue_date=timezone.localdate(),
             clinic_site=clinic,
             consulting_room=room,
             status=QueueStatus.OPEN,
@@ -130,7 +130,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
 
     def _accept_all_required_consents_effective_today(self) -> None:
-        today = timezone.now().date()
+        today = timezone.localdate()
         for cdef in ConsentDefinition.objects.filter(
             _effective_consent_filter(today), is_required=True
         ):
@@ -141,7 +141,7 @@ class SubmitPatientIntakeFormTests(TestCase):
             )
 
     def _ensure_all_required_questions_answered_today(self) -> None:
-        today = timezone.now().date()
+        today = timezone.localdate()
         required = list(
             AnamnesisQuestionDefinition.objects.filter(
                 _effective_question_filter(today), is_required=True
