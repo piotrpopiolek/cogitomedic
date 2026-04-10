@@ -17,6 +17,7 @@ from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
 RECOMMENDATION_CODE_TO_UI_KEY: dict[str, str] = {
     "FOLLOWUP_3_MONTHS": "rec_followup_3",
     "FOLLOWUP_6_MONTHS": "rec_followup_6",
+    "FOLLOWUP_12_MONTHS": "rec_followup_12",
     "PROMPT_VISIT_ON_CHANGE": "rec_prompt_visit",
     "NO_SHORT_TERM_FOLLOWUP_REQUIRED": "rec_no_short",
 }
