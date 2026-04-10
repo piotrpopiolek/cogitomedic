@@ -123,6 +123,12 @@ class TranslationKey(TimeStampedUUIDModel):
 
     class Meta:
         db_table = "translation_key"
+        verbose_name = db_gettext_lazy(
+            "administration.model_translationkey", "Translation key"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_translationkey_plural", "Translation keys"
+        )
         indexes = [
             models.Index(fields=["category", "status"]),
         ]
@@ -259,6 +265,14 @@ class TranslationCacheVersion(TimeStampedUUIDModel):
 
     class Meta:
         db_table = "translation_cache_version"
+        verbose_name = db_gettext_lazy(
+            "administration.model_translationcacheversion",
+            "Translation cache version",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_translationcacheversion_plural",
+            "Translation cache versions",
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=["category", "language_code"],
