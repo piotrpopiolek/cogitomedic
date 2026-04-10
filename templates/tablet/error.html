@@ -1,10 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="{{ staff_locale|default:'pl' }}">
+<html lang="{{ staff_locale|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ staff_ui.error_title|default:"Błąd" }}</title>
+  <title>{{ staff_ui.error_title }}</title>
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
     body { max-width: 480px; margin: 2rem auto; padding: 1rem; }
@@ -13,6 +13,6 @@
 </head>
 <body class="cm-portal">
   <p>{{ message }}</p>
-  <p><a href="{% url 'tablet:home' %}">{{ staff_ui.error_home_link|default:"Strona główna tabletu" }}</a></p>
+  <p><a href="{% url 'tablet:home' %}">{{ staff_ui.error_home_link }}</a></p>
 </body>
 </html>

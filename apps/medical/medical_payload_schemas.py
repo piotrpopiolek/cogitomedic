@@ -146,7 +146,7 @@ def validate_medical_payload_complete_for_publish(
 
     if not payload or payload.get("schema_version") != 1:
         return
-    lang = normalize_language_code(locale or "en")
+    lang = normalize_language_code(locale or "de")
     ui = get_translation_map(category="doctor", language_code=lang)
 
     def _msg(full_key: str) -> str:

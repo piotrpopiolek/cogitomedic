@@ -23,19 +23,13 @@ from apps.patient_results.services import (
 
 
 def _get_locale(request) -> str:
-    """Get locale from ?locale= or Accept-Language, default de."""
+    """Get locale from ?locale= query param, default de.
+
+    Language is chosen explicitly by the user via the DE/EN/PL switcher
+    (which sets ?locale=). We intentionally ignore Accept-Language so the
+    page always starts in German for the majority of users.
+    """
     locale = request.GET.get("locale") or ""
-    if (
-        not locale
-        and hasattr(request, "META")
-        and request.META.get("HTTP_ACCEPT_LANGUAGE")
-    ):
-        # Parse first preferred language (e.g. "de-DE,de;q=0.9,en;q=0.8")
-        accept = (
-            request.META["HTTP_ACCEPT_LANGUAGE"].split(",")[0].strip().split("-")[0]
-        )
-        if accept in ("de", "en", "pl"):
-            locale = accept
     return normalize_language_code(locale or "de")
 
 

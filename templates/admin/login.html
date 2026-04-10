@@ -16,6 +16,12 @@
     {% admin_trans "administration.login_welcome_back" "Welcome back to" as login_welcome_text %}
     {% include "unfold/helpers/unauthenticated_title.html" with title=site_title|default:site_admin_title_text subtitle=admin_login_welcome|default:login_welcome_text %}
 
+    <p class="text-right text-sm text-base-500 dark:text-base-400 mb-6">
+      <a href="?language=de" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">DE</a> |
+      <a href="?language=en" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">EN</a> |
+      <a href="?language=pl" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">PL</a>
+    </p>
+
     {% include "unfold/helpers/messages.html" %}
 
     {% if form.errors or form.non_field_errors %}

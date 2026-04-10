@@ -1,10 +1,10 @@
-{% load static cogitomedica_i18n %}
+{% load static %}
 <!DOCTYPE html>
-<html lang="{{ staff_locale|default:'pl' }}">
+<html lang="{{ staff_locale|default:'de' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ staff_ui.login_title|default:"Tablet – logowanie" }}</title>
+  <title>{{ staff_ui.login_title }}</title>
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
     body { max-width: 360px; margin: 2rem auto; padding: 0 1rem; }
@@ -14,18 +14,16 @@
   </style>
 </head>
 <body class="cm-portal">
-  <h1>{{ staff_ui.login_title|default:"Poczekalnia – logowanie" }}</h1>
+  <h1>{{ staff_ui.login_title }}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  {% db_trans "waiting_room.staff.username" "Username" as staff_username_label %}
-  {% db_trans "waiting_room.staff.password" "Password" as staff_password_label %}
   <form method="post" action="" id="tablet-login-form">
     {% csrf_token %}
     <input type="hidden" name="android_id" id="tablet-login-android-id" value="" />
-    <label for="username">{{ staff_ui.username|default:staff_username_label }}</label>
+    <label for="username">{{ staff_ui.username }}</label>
     <input id="username" name="username" type="text" required autocomplete="username" />
-    <label for="password">{{ staff_ui.password|default:staff_password_label }}</label>
+    <label for="password">{{ staff_ui.password }}</label>
     <input id="password" name="password" type="password" required autocomplete="current-password" />
-    <button type="submit">{{ staff_ui.login_btn|default:"Zaloguj" }}</button>
+    <button type="submit">{{ staff_ui.login_btn }}</button>
   </form>
   <script>
     (function() {

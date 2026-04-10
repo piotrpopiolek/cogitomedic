@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="utf-8" />
   <style>
@@ -31,7 +31,7 @@
   <table class="pdf-header" role="presentation">
     <tr>
       <td class="pdf-header-title">
-        <h1>{{ labels.befund|default:"Befund" }}</h1>
+        <h1>{{ labels.befund }}</h1>
       </td>
       <td class="pdf-header-logo">
         <img src="static/lab/logo.png" alt="CogitoMedica" />
@@ -39,72 +39,72 @@
     </tr>
   </table>
   <div class="meta">
-    {{ labels.document_id|default:"Document ID" }}: {{ document_id }}<br />
-    {{ labels.version|default:"Version" }}: {{ version_no }}<br />
-    {{ labels.generated_at|default:"Generated at" }}: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
-    {{ labels.locale|default:"Locale" }}: {{ authoring_locale }}
+    {{ labels.document_id }}: {{ document_id }}<br />
+    {{ labels.version }}: {{ version_no }}<br />
+    {{ labels.generated_at }}: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
+    {{ labels.locale }}: {{ authoring_locale }}
   </div>
 
-  <h2>{{ labels.patient|default:"Patient" }}</h2>
+  <h2>{{ labels.patient }}</h2>
   <div class="grid">
     <div class="row">
-      <div class="cell head">{{ labels.name|default:"Name" }}</div>
+      <div class="cell head">{{ labels.name }}</div>
       <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.date_of_birth|default:"Date of birth" }}</div>
+      <div class="cell head">{{ labels.date_of_birth }}</div>
       <div class="cell">{{ patient.date_of_birth }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.phone|default:"Phone" }}</div>
+      <div class="cell head">{{ labels.phone }}</div>
       <div class="cell">{{ patient.phone }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.email|default:"Email" }}</div>
+      <div class="cell head">{{ labels.email }}</div>
       <div class="cell">{{ patient.email }}</div>
     </div>
   </div>
 
-  <h2>{{ labels.global_assessment|default:"Global Assessment" }}</h2>
+  <h2>{{ labels.global_assessment }}</h2>
   <div class="grid">
     <div class="row">
-      <div class="cell head">{{ labels.fitzpatrick_type|default:"Fitzpatrick type" }}</div>
+      <div class="cell head">{{ labels.fitzpatrick_type }}</div>
       <div class="cell">{{ befund.fitzpatrick_type }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.overall_image_assessment|default:"Overall image assessment" }}</div>
+      <div class="cell head">{{ labels.overall_image_assessment }}</div>
       <div class="cell">{{ befund.overall_image_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.final_assessment|default:"Final assessment" }}</div>
+      <div class="cell head">{{ labels.final_assessment }}</div>
       <div class="cell">{{ befund.final_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.diagnosis_code|default:"Diagnosis code" }}</div>
+      <div class="cell head">{{ labels.diagnosis_code }}</div>
       <div class="cell">{{ befund.diagnosis_code }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.procedure_code|default:"Procedure code" }}</div>
+      <div class="cell head">{{ labels.procedure_code }}</div>
       <div class="cell">{{ befund.procedure_code }}</div>
     </div>
   </div>
 
-  <h2>{{ labels.examination_scope|default:"Examination Scope" }}</h2>
+  <h2>{{ labels.examination_scope }}</h2>
   {% if befund.examination_scope %}
     {% for item in befund.examination_scope %}<span class="badge">{{ item }}</span>{% endfor %}
   {% else %}
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>{{ labels.lesions|default:"Lesions" }}</h2>
+  <h2>{{ labels.lesions }}</h2>
   {% if befund.lesions %}
     {% for lesion in befund.lesions %}
       <div class="lesion">
-        <div class="lesion-title">{{ labels.group|default:"Group" }} {{ lesion.index }} ({{ labels.numbers|default:"Numbers" }}: {{ lesion.numbers }})</div>
-        <div><strong>{{ labels.clinical_assessment|default:"Clinical assessment" }}:</strong> {{ lesion.clinical_assessment }}</div>
-        <div><strong>{{ labels.malignancy_risk|default:"Malignancy risk" }}:</strong> {{ lesion.malignancy_risk }}</div>
+        <div class="lesion-title">{{ labels.group }} {{ lesion.index }} ({{ labels.numbers }}: {{ lesion.numbers }})</div>
+        <div><strong>{{ labels.clinical_assessment }}:</strong> {{ lesion.clinical_assessment }}</div>
+        <div><strong>{{ labels.malignancy_risk }}:</strong> {{ lesion.malignancy_risk }}</div>
         <div>
-          <strong>{{ labels.dermatoscopic_features|default:"Dermatoscopic features" }}:</strong>
+          <strong>{{ labels.dermatoscopic_features }}:</strong>
           {% if lesion.features %}
             {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
           {% else %}
@@ -112,16 +112,16 @@
           {% endif %}
         </div>
         <div style="margin-top: 8px;">
-          <strong>{{ labels.final_text|default:"Final text" }}:</strong>
+          <strong>{{ labels.final_text }}:</strong>
           <div class="section-text">{{ lesion.final_text }}</div>
         </div>
       </div>
     {% endfor %}
   {% else %}
-    <div class="muted">{{ labels.no_lesions|default:"No lesions listed." }}</div>
+    <div class="muted">{{ labels.no_lesions }}</div>
   {% endif %}
 
-  <h2>{{ labels.recommendations|default:"Recommendations" }}</h2>
+  <h2>{{ labels.recommendations }}</h2>
   {% if befund.recommendations %}
     <ul>
       {% for item in befund.recommendations %}
@@ -132,7 +132,7 @@
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>{{ labels.summary|default:"Summary" }}</h2>
+  <h2>{{ labels.summary }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
 </body>
 </html>
