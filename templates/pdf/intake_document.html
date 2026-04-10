@@ -1,3 +1,4 @@
+{% load cogitomedica_i18n %}
 <!doctype html>
 <html lang="de">
 <head>
@@ -29,6 +30,10 @@
     .pdf-header-title h1 { margin: 0 0 4px 0; color: #075255; }
     .pdf-header-logo { text-align: right; width: 30%; }
     .pdf-header-logo img { height: 72px; width: auto; max-width: 220px; object-fit: contain; }
+    .consent-text h2, .consent-text h3, .consent-text h4 { color: #075255; font-size: 13px; font-weight: 700; margin: 8px 0 2px; }
+    .consent-text h2 { font-size: 14px; }
+    .consent-text p { margin: 2px 0; }
+    .consent-text .text-center { text-align: center; }
   </style>
 </head>
 <body>
@@ -81,9 +86,9 @@
         {% if form_locale and form_locale|slice:":2" != "de" %}
         <div class="item-subtitle">{{ consent.title_locale|default:consent.title_de|default:"" }}</div>
         {% endif %}
-        <div style="margin-top:6px;"><strong>DE text:</strong> {{ consent.content_de|default:"-" }}</div>
+        <div class="consent-text" style="margin-top:6px;"><strong>DE text:</strong><br/>{{ consent.content_de|default:"-"|markdown_consent }}</div>
         {% if form_locale and form_locale|slice:":2" != "de" %}
-        <div style="margin-top:4px;"><strong>{{ form_locale }} text:</strong> {{ consent.content_locale|default:consent.content_de|default:"-" }}</div>
+        <div class="consent-text" style="margin-top:4px;"><strong>{{ form_locale }} text:</strong><br/>{{ consent.content_locale|default:consent.content_de|default:"-"|markdown_consent }}</div>
         {% endif %}
         <div class="muted" style="margin-top:6px;">accepted_at: {{ consent.accepted_at|default:"-" }}</div>
       </div>

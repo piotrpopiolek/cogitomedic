@@ -13,6 +13,13 @@ from apps.intake.models import (
     PatientIntakeForm,
 )
 
+_MARKDOWN_HELP = (
+    "Markdown-Formatierung wird unterstützt. "
+    "Überschriften: Zeile mit ## beginnen (z.B. ## Verantwortliche Stelle). "
+    "Fett: **Text**, Kursiv: *Text*. "
+    "Zentriert: -> Text <- (z.B. -> Unterschrift <-)."
+)
+
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
 except ImportError:
@@ -56,6 +63,11 @@ class ConsentDefinitionAdmin(UnfoldModelAdmin):
         ("English", {"fields": ("title_en", "content_en")}),
         ("Polski", {"fields": ("title_pl", "content_pl")}),
     )
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name in ("content_de", "content_en", "content_pl"):
+            kwargs["help_text"] = _MARKDOWN_HELP
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
     def has_add_permission(self, request):
         if request.user.is_authenticated and request.user.is_staff:
