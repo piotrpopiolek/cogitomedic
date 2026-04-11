@@ -97,7 +97,7 @@ class _MockHiDriveAdapter:
             for e in entries:
                 ep = str(e.get("path") or "")
                 if ep == src:
-                    name = Path(dst).name
+                    name = PurePosixPath(dst).name
                     new_entries.append(
                         {
                             **e,
@@ -572,10 +572,11 @@ def _normalize_remote_path(remote_path: str) -> str:
 
 def _split_remote_path(remote_path: str) -> tuple[str, str]:
     normalized = _normalize_remote_path(remote_path)
-    file_name = Path(normalized).name
+    p = PurePosixPath(normalized)
+    file_name = p.name
     if not file_name:
         raise ValueError("HiDrive remote path must include file name")
-    parent = str(Path(normalized).parent).replace("\\", "/")
+    parent = str(p.parent)
     if parent == ".":
         parent = "/"
     return parent, file_name

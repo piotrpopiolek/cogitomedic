@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from io import BytesIO
 from uuid import uuid4
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from pypdf import PdfWriter
 
+from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.models import ExternalPdfAttachment, ExternalPdfStatus
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
@@ -27,6 +31,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_valid_pdf_bytes() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
 
 
 class OutboxProcessingTests(TestCase):
@@ -155,5 +167,72 @@ class OutboxProcessingTests(TestCase):
             AuditEvent.objects.filter(
                 event_type="OUTBOX_EVENT_DEAD_LETTERED",
                 outbox_event_id=event.id,
+            ).exists()
+        )
+
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    def test_outbox_moves_matched_external_pdf_to_processed_after_upload(self) -> None:
+        """§12 pipeline: GENERATE_PDF merges external bytes; HIDRIVE_UPLOAD moves MATCHED rows."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf_bytes = _minimal_valid_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/patient_outbox.pdf",
+            pdf_bytes,
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/patient_outbox.pdf",
+            original_filename="patient_outbox.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        first = process_outbox_events()
+        second = process_outbox_events()
+        third = process_outbox_events()
+        self.assertEqual(
+            (first.processed, second.processed, third.processed), (1, 1, 1)
+        )
+
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.hidrive_sent)
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="patient_outbox.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertEqual(att.hidrive_remote_path, "/processed/patient_outbox.pdf")
+
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    def test_outbox_corrupt_external_marks_merge_failed_and_skips_processed_move(
+        self,
+    ) -> None:
+        """§12: invalid HiDrive bytes → MERGE_FAILED; upload still completes; no move to /processed/."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/patient_outbox.pdf",
+            b"%PDF-1.4\nnot-enough-for-reader",
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/patient_outbox.pdf",
+            original_filename="patient_outbox.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        process_outbox_events()
+        process_outbox_events()
+        process_outbox_events()
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="patient_outbox.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertEqual(att.hidrive_remote_path, "/incoming/patient_outbox.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_CORRUPT",
+                medical_document_id=self.medical_document.id,
             ).exists()
         )
