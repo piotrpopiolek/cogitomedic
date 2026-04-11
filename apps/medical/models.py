@@ -101,6 +101,21 @@ class MedicalDocument(models.Model):
         auto_now=True,
         verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
     )
+    locked_by_user = models.ForeignKey(
+        "users.StaffUser",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="locked_medical_documents",
+        verbose_name=db_gettext_lazy(
+            "administration.field_locked_by_user", "Locked by"
+        ),
+    )
+    locked_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"),
+    )
 
     class Meta:
         db_table = "medical_document"

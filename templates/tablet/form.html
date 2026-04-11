@@ -53,11 +53,11 @@
   <div class="form-step active" id="step-1" role="group" aria-labelledby="step-indicator" aria-hidden="false">
     <section id="consents-section">
       <h2>{{ ui.consents_title }}</h2>
-      <div id="consents-msg" class="error" style="display:none;"></div>
       {% for c in consents %}
       <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
         <h3>{{ c.title }}{% if c.is_required %} <span style="color:var(--cm-danger)">*</span>{% endif %}</h3>
         <div class="consent-content">{{ c.content|markdown_consent }}</div>
+        <div class="consent-block-msg error" style="display:none;" role="alert" aria-live="polite"></div>
         {% if c.is_multi %}
           {% for opt in c.options %}
           <label class="consent-check">
@@ -130,6 +130,7 @@
     <span id="signature-saved" class="success" style="display:none;">{{ ui.signature_saved }}</span>
     </section>
     <section>
+      <p id="auto-submit-hint" class="text-muted-portal" style="display: none; font-size: 0.9rem; max-width: 36rem;" role="status" aria-live="polite"></p>
       <div id="submit-msg" class="error" style="display:none;"></div>
       <div class="step-actions">
         <button type="button" id="btn-step3-back" class="btn secondary">{{ ui.step_back }}</button>

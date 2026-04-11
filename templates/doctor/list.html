@@ -42,8 +42,18 @@
     </thead>
     <tbody class="divide-y divide-base-200 dark:divide-base-700 bg-white dark:bg-base-900">
       {% for item in items %}
-      <tr class="hover:bg-base-50 dark:hover:bg-base-800/50">
-        <td class="px-4 py-3 text-base-900 dark:text-base-100">{{ item.patient.last_name }}, {{ item.patient.first_name }}</td>
+      <tr class="hover:bg-base-50 dark:hover:bg-base-800/50 {% if item.row_is_published %}bg-emerald-50 dark:bg-emerald-950/20{% elif item.is_locked_by_other %}bg-amber-50 dark:bg-amber-950/20{% endif %}">
+        <td class="px-4 py-3 text-base-900 dark:text-base-100">
+          <span class="inline-flex flex-wrap items-center gap-2">
+            <span>{{ item.patient.last_name }}, {{ item.patient.first_name }}</span>
+            {% if item.is_locked_by_other and item.locked_by_username %}
+            <span class="inline-flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200" title="{% if ui %}{{ ui.list_open_locked_tooltip }}{% else %}Gesperrt{% endif %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              <span>{% if ui %}{{ ui.list_locked_by_prefix }}{% else %}Bearbeitet von{% endif %}: {{ item.locked_by_username }}</span>
+            </span>
+            {% endif %}
+          </span>
+        </td>
         <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.queue_date }}</td>
         <td class="px-4 py-3">
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
@@ -72,7 +82,15 @@
           {% else %}–{% endif %}
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
-          {% if item.document_id %}<a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% else %}<a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>{% endif %}
+          {% if item.document_id %}
+            {% if item.is_locked_by_other %}
+            <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500" title="{% if ui %}{{ ui.list_open_locked_tooltip }}{% else %}Gesperrt{% endif %}">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</span>
+            {% else %}
+            <a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>
+            {% endif %}
+          {% else %}
+          <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>
+          {% endif %}
         </td>
       </tr>
       {% if item.processing_error_message %}

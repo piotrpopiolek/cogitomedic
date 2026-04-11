@@ -4,6 +4,7 @@ from json import JSONDecodeError
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from pydantic import ValidationError
 
@@ -34,13 +35,19 @@ from apps.medical.api_schemas import (
 )
 from apps.medical.pdf_builder import build_befund_pdf_bytes
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
-from apps.medical.models import MedicalDocument, MedicalDocumentVersion
+from apps.core.translation_service import resolve_other_message
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentVersion,
+)
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
     assigned_doctor_audit_metadata,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
+    get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
     latest_version_processing_error_message,
@@ -48,6 +55,8 @@ from apps.medical.services import (
     outbox_event_stage_status,
     parse_medical_documents_list_params,
     publish_document_version,
+    refresh_document_lock,
+    release_document_lock,
     revoke_document_version,
     retry_latest_document_processing,
     save_draft_document_version,
@@ -66,6 +75,33 @@ from apps.operations.models import AuditEvent
 from apps.operations.services import create_audit_event
 
 
+class _MedicalDocumentEditLocked(Exception):
+    """Raised inside ``transaction.atomic`` to roll back and return HTTP 423."""
+
+    __slots__ = ("locked_by_username",)
+
+    def __init__(self, locked_by_username: str | None) -> None:
+        super().__init__()
+        self.locked_by_username = locked_by_username
+
+
+def _json_document_locked(
+    request: HttpRequest, locked_by_username: str | None
+) -> JsonResponse:
+    holder = locked_by_username or "—"
+    default = "This document is being edited by {username}. Please try again later."
+    msg = resolve_other_message(
+        request,
+        "doctor.document_locked_error",
+        default,
+        username=holder,
+    )
+    return JsonResponse(
+        {"error": msg, "locked_by_username": locked_by_username},
+        status=423,
+    )
+
+
 def _serialize_medical_document_list_item(doc) -> dict:
     """Serialize one medical document for list response; doc has prefetched versions (ordered -version_no)."""
     versions = list(doc.versions.all())
@@ -75,6 +111,7 @@ def _serialize_medical_document_list_item(doc) -> dict:
     )
     patient = doc.queue_entry.patient
     queue = doc.queue_entry.daily_queue
+    lock_eff, lock_name, lock_at = get_document_lock_state(doc)
     return {
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
@@ -90,6 +127,8 @@ def _serialize_medical_document_list_item(doc) -> dict:
             "last_name": patient.last_name,
             "date_of_birth": patient.date_of_birth.isoformat(),
         },
+        "locked_by_username": lock_name if lock_eff else None,
+        "locked_at": lock_at.isoformat() if lock_eff and lock_at else None,
         "pdf_generation_status": latest.pdf_generation_status if latest else None,
         "hidrive_sent": latest.hidrive_sent if latest else False,
         "sms_sent": latest.sms_sent if latest else False,
@@ -367,14 +406,6 @@ def medical_document_draft_view(
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("other.api.medical_payload_schema_mismatch", status=400)
 
-    try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
-            id=medical_document_id
-        )
-        check_doctor_document_access(doc, request.user)
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
-
     payload_dict = body.medical_payload.model_dump()
     if body.medical_payload_schema_version == 1:
         try:
@@ -390,14 +421,47 @@ def medical_document_draft_view(
             )
 
     try:
-        version = save_draft_document_version(
-            medical_document_id=medical_document_id,
-            updated_by_user_id=request.user.id,
-            medical_payload_schema_version=body.medical_payload_schema_version,
-            medical_payload=payload_dict,
-            diagnosis_code=body.diagnosis_code,
-            procedure_code=body.procedure_code,
-        )
+        with transaction.atomic():
+            # Do not select_related("locked_by_user") here: PostgreSQL rejects
+            # FOR UPDATE on the nullable side of an outer join.
+            doc = (
+                MedicalDocument.objects.select_for_update()
+                .select_related(
+                    "queue_entry__daily_queue",
+                )
+                .get(id=medical_document_id)
+            )
+            check_doctor_document_access(doc, request.user)
+            if doc.status == MedicalDocStatus.DRAFT:
+                eff, holder_name, _ = get_document_lock_state(doc)
+                if (
+                    eff
+                    and doc.locked_by_user_id != request.user.id
+                    and not request.user.is_admin_role
+                ):
+                    raise _MedicalDocumentEditLocked(holder_name)
+
+            version = save_draft_document_version(
+                medical_document_id=medical_document_id,
+                updated_by_user_id=request.user.id,
+                medical_payload_schema_version=body.medical_payload_schema_version,
+                medical_payload=payload_dict,
+                diagnosis_code=body.diagnosis_code,
+                procedure_code=body.procedure_code,
+            )
+            doc.refresh_from_db()
+
+            if doc.status == MedicalDocStatus.DRAFT:
+                if not refresh_document_lock(
+                    medical_document_id=medical_document_id, user=request.user
+                ):
+                    doc_after = MedicalDocument.objects.select_related(
+                        "locked_by_user"
+                    ).get(id=medical_document_id)
+                    _, holder2, _ = get_document_lock_state(doc_after)
+                    raise _MedicalDocumentEditLocked(holder2)
+    except _MedicalDocumentEditLocked as exc:
+        return _json_document_locked(request, exc.locked_by_username)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
@@ -411,6 +475,44 @@ def medical_document_draft_view(
         },
         status=200,
     )
+
+
+@require_auth
+def medical_document_unlock_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    """POST: release edit lock (session holder or admin). Used on page unload from doctor panel."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    try:
+        released = release_document_lock(
+            medical_document_id=medical_document_id, user=request.user
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    if not released:
+        return JsonResponse(
+            {
+                "released": False,
+                "error": resolve_other_message(
+                    request,
+                    "doctor.document_unlock_forbidden",
+                    "You cannot release this document lock.",
+                ),
+            },
+            status=403,
+        )
+    return JsonResponse({"released": True}, status=200)
 
 
 @require_auth
@@ -434,21 +536,32 @@ def medical_document_publish_view(
         )
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
-            id=medical_document_id
-        )
-        check_doctor_document_access(doc, request.user)
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
+        with transaction.atomic():
+            doc = (
+                MedicalDocument.objects.select_for_update()
+                .select_related("queue_entry__daily_queue")
+                .get(id=medical_document_id)
+            )
+            check_doctor_document_access(doc, request.user)
 
-    try:
-        version = publish_document_version(
-            medical_document_id=medical_document_id,
-            publish_request_id=body.publish_request_id,
-            published_by_user_id=request.user.id,
-            publish_locale=body.publish_locale,
-            resend_sms=body.resend_sms,
-        )
+            if doc.status == MedicalDocStatus.DRAFT:
+                eff, holder_name, _ = get_document_lock_state(doc)
+                if (
+                    eff
+                    and doc.locked_by_user_id != request.user.id
+                    and not request.user.is_admin_role
+                ):
+                    raise _MedicalDocumentEditLocked(holder_name)
+
+            version = publish_document_version(
+                medical_document_id=medical_document_id,
+                publish_request_id=body.publish_request_id,
+                published_by_user_id=request.user.id,
+                publish_locale=body.publish_locale,
+                resend_sms=body.resend_sms,
+            )
+    except _MedicalDocumentEditLocked as exc:
+        return _json_document_locked(request, exc.locked_by_username)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except IdempotencyConflictError as exc:

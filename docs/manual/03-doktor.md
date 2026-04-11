@@ -7,7 +7,7 @@ Dostęp: grupy **Doctor** lub **Admin** (oba typy kont używają tego samego int
 ## Wymagania wstępne
 
 - Konto z grupą **Doctor** (lub **Admin**).
-- Lekarz ma przypisane **placówki (`clinic_sites`)** — widzi pacjentów i kolejki zgodnie z regułami dostępu w systemie (w tym przypisanie do zmiany w kolejce). Bez przypisań listy mogą być puste (bez błędu technicznego).
+- Lekarz ma przypisane **placówki (`clinic_sites`)** tam, gdzie moduły rejestracji/tabletu tego wymagają. **Kolejka dokumentów Befund** w panelu `/doctor/` nie opiera się na przypisaniu lekarza do zmiany: szkice (**DRAFT**) i wpisy z ukończoną ankietą bez jeszcze utworzonego dokumentu są **wspólne dla wszystkich lekarzy**; dokument **opublikowany** (**PUBLISHED**) widzi zwykle **twórca dokumentu** (lekarz, który pierwszy utworzył rekord z wpisu kolejki), a dodatkowo lekarz **przypisany do zmiany** w kolejce — jeśli pole przypisania jest używane w danej placówce.
 - Przeglądarka z obsługą JavaScript (panel szczegółów dokumentu komunikuje się z API `/api/v1/`).
 
 ---
@@ -27,6 +27,8 @@ Dostęp: grupy **Doctor** lub **Admin** (oba typy kont używają tego samego int
 
 ## 2. Lista dokumentów (Work queue) — `/doctor/`
 
+Na liście pojawiają się wpisy z **ukończoną ankietą** (`SUBMITTED`) oraz powiązany dokument medyczny (lub możliwość jego utworzenia). **Szkice (DRAFT)** oraz wpisy **oczekujące na pierwsze utworzenie dokumentu** są widoczne dla **każdego** lekarza z grupą Doctor — można przejąć opisanie od kolegi po blokadzie edycji (patrz niżej). **Dokument opublikowany** w tej samej tabeli zobaczysz, jeśli **Ty go utworzyłeś** (jesteś twórcą rekordu) lub jesteś **lekarzem przypisanym do danej zmiany** w kolejce (gdy to pole jest wypełnione).
+
 Tabela pokazuje m.in.:
 
 - **Pacjent** (nazwisko, imię),
@@ -36,6 +38,8 @@ Tabela pokazuje m.in.:
 - **HiDrive** — status zapisu do archiwum,
 - **SMS** — status wysyłki powiadomienia logistycznego,
 - Kolumna akcji: **Otwórz** (`Öffnen` / odpowiednik w wybranym języku).
+
+**Blokada edycji (szkic):** Gdy inny lekarz ma otwarty ten sam dokument w stanie **DRAFT**, wiersz może być **podświetlony (amber)**; przy nazwisku pojawia się informacja z ikoną kłódki (**kto edytuje**). Przycisk **Otwórz** jest wtedy **nieaktywny** (nie wejdziesz w edycję, dopóki blokada jest ważna — maks. 24 godziny lub do zwolnienia przez edytującego / publikacji). Wiersze **opublikowanych** dokumentów mogą być **zielonkawo** podświetlone dla szybkiej orientacji.
 
 ### Filtry (formularz nad tabelą)
 
@@ -47,14 +51,18 @@ Tabela pokazuje m.in.:
 
 ### Otwieranie dokumentu
 
-- Jeśli dokument już istnieje: link prowadzi do **`/doctor/<medical_document_id>/`**.
-- Jeśli jeszcze nie: link używa **`/doctor/open/<queue_entry_id>/`** — serwer tworzy lub pobiera dokument medyczny dla wpisu kolejki z **ukończonym** formularzem intake (`SUBMITTED`). Gdy ankieta nie jest zakończona, zobaczysz **komunikat błędu** (np. ankieta nieukończona).
+- Jeśli dokument już istnieje: link prowadzi do **`/doctor/<medical_document_id>/`** (dostęp do szkicu mają wszyscy lekarze; do opublikowanego — wg zasad powyżej).
+- Jeśli jeszcze nie: link używa **`/doctor/open/<queue_entry_id>/`** — serwer tworzy lub pobiera dokument medyczny dla wpisu kolejki z **ukończonym** formularzem intake (`SUBMITTED`). Każdy lekarz może wykonać ten krok dla wspólnej kolejki. Gdy ankieta nie jest zakończona, zobaczysz **komunikat błędu** (np. ankieta nieukończona).
+
+**Audyt:** odczyty i zapis przez API `/api/v1/` są rejestrowane w dzienniku zdarzeń (np. podgląd dokumentu); przy współdzieleniu szkiców kolejne wejścia różnych lekarzy dają **osobne wpisy** z identyfikatorem użytkownika.
 
 ![Komunikat błędu — brak ukończonej ankiety](/docs/manual/assets/screenshots/doctor-03-error-no-intake.png)
 
 ---
 
 ## 3. Szczegóły dokumentu i formularz Befund — `/doctor/<medical_document_id>/`
+
+Przy wejściu na stronę szkicu system **próbuje nadać blokadę edycji**. Jeśli dokument jest już edytowany przez innego użytkownika, zobaczysz **komunikat błędu** zamiast formularza (HTTP 423). Po **opuszczeniu strony** przeglądarka wysyła żądanie **zwolnienia blokady** (best-effort). **Publikacja** również zwalnia blokadę.
 
 ### 3.1 Co zawiera ekran
 

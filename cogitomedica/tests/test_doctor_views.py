@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import date, timedelta
 from uuid import uuid4
 
@@ -111,7 +113,7 @@ class DoctorViewsSmokeTests(TestCase):
         self._login_doctor()
         url = f"/doctor/{uuid4()}/"
         resp = self.client.get(url)
-        self.assertIn(resp.status_code, (404, 200))
+        self.assertEqual(resp.status_code, 404)
 
     # ==========================================================
     # Open by queue – nonexistent UUID
@@ -121,7 +123,7 @@ class DoctorViewsSmokeTests(TestCase):
         self._login_doctor()
         url = f"/doctor/open/{uuid4()}/"
         resp = self.client.get(url)
-        self.assertIn(resp.status_code, (404, 200))
+        self.assertEqual(resp.status_code, 404)
 
 
 class DoctorDetailHappyPathTests(TestCase):
@@ -183,6 +185,10 @@ class DoctorDetailHappyPathTests(TestCase):
             form_status=IntakeStatus.SUBMITTED,
             submitted_at=timezone.now(),
             signature_sha256="a" * 64,
+            body_map_data=[
+                {"x": 0.22, "y": 0.35, "side": "front"},
+                {"x": 0.72, "y": 0.4, "side": "back"},
+            ],
         )
         self.doc = MedicalDocument.objects.create(
             queue_entry=qe,
@@ -196,4 +202,58 @@ class DoctorDetailHappyPathTests(TestCase):
         self.client.force_login(self.doctor)
         url = f"/doctor/{self.doc.id}/"
         resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_detail_panel_includes_body_map_image_url_and_stored_points(self):
+        self.client.force_login(self.doctor)
+        url = f"/doctor/{self.doc.id}/"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(m)
+        panel = json.loads(m.group(1))
+        self.assertIn("bodyMapImageUrl", panel)
+        self.assertIn("tablet/body.jpg", panel["bodyMapImageUrl"])
+        pts = panel["context"]["intake_summary"]["body_map_data"]
+        self.assertEqual(len(pts), 2)
+        self.assertEqual(pts[0]["side"], "front")
+
+    def test_detail_returns_423_when_locked_by_another_doctor(self):
+        other = StaffUser.objects.create_user(
+            username="hp-doc-2",
+            email="hp-doc-2@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        dq = self.doc.queue_entry.daily_queue
+        dq.assigned_doctor = other
+        dq.save(update_fields=["assigned_doctor", "updated_at"])
+        self.doc.locked_by_user = self.doctor
+        self.doc.locked_at = timezone.now()
+        self.doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+
+        self.client.force_login(other)
+        url = f"/doctor/{self.doc.id}/"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 423)
+
+    def test_second_doctor_can_open_draft_without_queue_assignment(self):
+        dq = self.doc.queue_entry.daily_queue
+        dq.assigned_doctor = None
+        dq.save(update_fields=["assigned_doctor", "updated_at"])
+        other = StaffUser.objects.create_user(
+            username="hp-doc-shared",
+            email="hp-doc-shared@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        self.client.force_login(other)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
         self.assertEqual(resp.status_code, 200)

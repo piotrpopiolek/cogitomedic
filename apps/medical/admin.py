@@ -161,7 +161,13 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
     list_display_links = ("queue_entry",)
     list_filter = ("status",)
     ordering = ["-created_at"]
-    readonly_fields = ("id", "created_at", "updated_at")
+    readonly_fields = (
+        "id",
+        "created_at",
+        "updated_at",
+        "locked_by_user",
+        "locked_at",
+    )
     date_hierarchy = "created_at"
 
     def get_queryset(self, request):
@@ -172,6 +178,7 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
             "intake_form",
             "created_by_user",
             "updated_by_user",
+            "locked_by_user",
         )
 
     def get_form(self, request, obj=None, change=None, **kwargs):
