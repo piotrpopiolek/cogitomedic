@@ -636,6 +636,8 @@
 
 **Doctor flow (Wideodermatoskop):** Lesion numbers and images come from the Wideodermatoskop device. (1) The doctor enters lesion numbers from the device (e.g. 2, 3, 12, 13, 22, 25, 56). (2) For each **group** of numbers the doctor provides the list in `lesion_numbers` (e.g. `[2, 13, 56]`), fills in **one shared description** (dermatoscopic features, clinical assessment, malignancy risk) and uses generated text, optionally editing it (`generated_text` / `edited_text`). (3) Example: group 1 `lesion_numbers: [2, 13, 56]` → one description; group 2 `lesion_numbers: [3, 12, 22, 25]` → second description. (4) Rest of Befund unchanged: examination scope, Fitzpatrick, global assessment, recommendations, final assessment, draft save / publish. Body schema is not used in the Befund form. The final text (`edited_text` or `generated_text`) per group goes to PDF.
 
+**Access (role DOCTOR, not admin):** Any doctor may list and open **DRAFT** documents (shared describing queue), queue entries with submitted intake but **no** medical document yet, and **POST** create-or-get for those entries. **PUBLISHED** documents remain visible and actionable only for the document **creator** (`created_by_user`) or the **assigned doctor** on the daily queue (if set). Admins are not restricted. Successful reads still emit audit events (e.g. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
+
 - **GET** `/medical-documents`
   - Description: List doctor work queue.
   - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (default `1`), `page_size` (default **20**, max **100**).

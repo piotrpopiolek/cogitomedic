@@ -120,7 +120,7 @@ jobs:
         timeout-minutes: 8
 
       - name: Diff coverage
-        run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
+        run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=79
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

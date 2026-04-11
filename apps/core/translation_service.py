@@ -172,9 +172,14 @@ def db_gettext_lazy(key: str, default: str = "") -> Any:
 
 
 def get_doctor_ui(lang: str) -> dict[str, str]:
-    """Return doctor UI strings from DB-only translation storage."""
+    """Return doctor UI strings from DB-only translation storage.
+
+    Missing keys for the active locale are filled from en-GB so templates need no
+    hardcoded ``{% else %}`` fallbacks.
+    """
     normalized = normalize_language_code(lang)
     mapping = get_translation_map(category="doctor", language_code=normalized)
+    en_mapping = get_translation_map(category="doctor", language_code="en-GB")
     ui: dict[str, str] = {}
     for full_key, value in mapping.items():
         if not full_key.startswith("doctor."):
@@ -185,6 +190,16 @@ def get_doctor_ui(lang: str) -> dict[str, str]:
             continue
         short_key = full_key.split(".", 1)[1]
         ui[short_key] = value
+    for full_key, value in en_mapping.items():
+        if not full_key.startswith("doctor."):
+            continue
+        if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith(
+            "doctor.pdf_label."
+        ):
+            continue
+        short_key = full_key.split(".", 1)[1]
+        if short_key not in ui:
+            ui[short_key] = value
     return ui
 
 

@@ -633,6 +633,8 @@
 
 **Flow lekarza (Wideodermatoskop):** Numery zmian i zdjęcia pochodzą z Wideodermatoskopu. (1) Lekarz wpisuje numery zmian z urządzenia (np. 2, 3, 12, 13, 22, 25, 56). (2) Dla każdej **grupy** numerów lekarz podaje listę numerów w `lesion_numbers` (np. `[2, 13, 56]`), wypełnia **jeden wspólny opis** (cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości) oraz korzysta z tekstu generowanego i ewentualnie go edytuje (`generated_text` / `edited_text`). (3) Przykład: grupa 1 `lesion_numbers: [2, 13, 56]` → jeden opis; grupa 2 `lesion_numbers: [3, 12, 22, 25]` → drugi opis. (4) Reszta Befundu bez zmian: zakres badania, Fitzpatrick, ocena globalna, rekomendacje, ocena końcowa, zapis szkicu / publikacja. Schemat ciała nie jest używany w formularzu Befund. Do PDF trafia tekst końcowy (`edited_text` lub `generated_text`) per grupa.
 
+**Dostęp (rola DOCTOR, nie admin):** Każdy lekarz może listować i otwierać dokumenty w stanie **DRAFT**, wpisy kolejki z ukończonym intake bez jeszcze utworzonego dokumentu medycznego oraz wywołać **POST** utworzenia/pobrania dokumentu dla takich wpisów. Dokumenty **PUBLISHED** pozostają widoczne i obsługiwalne dla **twórcy** rekordu (`created_by_user`) oraz opcjonalnie **lekarza przypisanego do zmiany** w kolejce dnia (`assigned_doctor`), jeśli pole jest ustawione. Administratorzy nie mają ograniczeń. Udane odczyty nadal generują zdarzenia audytu (np. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
+
 - **GET** `/medical-documents`
   - Opis: Lista robocza lekarza.
   - Parametry zapytania: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (domyślnie `1`), `page_size` (domyślnie **20**, maks. **100**).

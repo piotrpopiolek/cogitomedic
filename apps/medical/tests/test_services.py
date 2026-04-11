@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import DocVersionStatus, MedicalDocStatus
+from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
@@ -273,7 +273,13 @@ class MedicalServicesTests(TestCase):
         )
         assign_group_to_test_user(other_doctor, "Doctor")
 
-        # Should raise initially
+        # DRAFT: any doctor may access (shared queue)
+        check_doctor_document_access(self.medical_document, other_doctor)
+
+        MedicalDocument.objects.filter(pk=self.medical_document.id).update(
+            status=MedicalDocStatus.PUBLISHED
+        )
+        self.medical_document.refresh_from_db()
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_document_access(self.medical_document, other_doctor)
 
@@ -281,7 +287,7 @@ class MedicalServicesTests(TestCase):
         self.medical_document.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.medical_document.queue_entry.daily_queue.save()
 
-        # Should not raise now
+        # Should not raise now (assigned on published document)
         check_doctor_document_access(self.medical_document, other_doctor)
 
     def test_check_doctor_document_access_allows_admin(self) -> None:
@@ -297,16 +303,27 @@ class MedicalServicesTests(TestCase):
         check_doctor_document_access(self.medical_document, admin_user)
 
     def test_check_doctor_queue_entry_access(self) -> None:
-        # Initial state: queue has no assigned_doctor
-        with self.assertRaises(ObjectDoesNotExist):
-            check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
-
-        # Assign to queue
-        self.queue_entry.daily_queue.assigned_doctor = self.doctor_user
-        self.queue_entry.daily_queue.save()
-
-        # Now it works
+        # Creator can open without assigned_doctor while document is DRAFT
         check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
+
+        other_doctor = StaffUser.objects.create_user(
+            username="qe_other",
+            email="qe_other@example.com",
+            password="pwd",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other_doctor, "Doctor")
+        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+
+        MedicalDocument.objects.filter(pk=self.medical_document.id).update(
+            status=MedicalDocStatus.PUBLISHED
+        )
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+
+        self.queue_entry.daily_queue.assigned_doctor = other_doctor
+        self.queue_entry.daily_queue.save()
+        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
 
 
 class LesionGroupFavoritesAdminTests(TestCase):
