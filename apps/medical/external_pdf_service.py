@@ -48,6 +48,8 @@ class MatchedIncomingFile:
 class GateResult:
     passed: bool
     matched_files: tuple[MatchedIncomingFile, ...]
+    #: When ``passed`` is False, gate failure reason. When ``passed`` is True with
+    #: ``skip_attachment_sync`` (HiDrive listing failed), a soft warning for the UI.
     error_message: str | None
     #: When True, HiDrive listing failed — caller must not sync DB attachments from
     #: ``matched_files`` (would clear stale MATCHED rows while cloud is unreachable).
@@ -124,7 +126,7 @@ def check_external_pdf_gate(
     except Exception:
         logger.exception("HiDrive list_dir failed for gate")
         # Do not block the doctor UI on HiDrive outages; optional /incoming PDFs.
-        return GateResult(True, (), None, skip_attachment_sync=True)
+        return GateResult(True, (), error_hidrive, skip_attachment_sync=True)
 
     logger.info(
         "external_pdf_gate: incoming directory readable path=%s raw_entry_count=%s",

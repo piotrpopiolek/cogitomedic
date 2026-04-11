@@ -341,5 +341,8 @@ def doctor_document_detail_view(
             "fitzpatrick_choices": fitzpatrick_choices,
             "ui": ui,
             "lang": lang,
+            "external_pdf_hidrive_warning": (
+                gate.error_message if gate.passed and gate.error_message else None
+            ),
         },
     )
