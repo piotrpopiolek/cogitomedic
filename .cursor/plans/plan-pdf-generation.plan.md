@@ -119,7 +119,7 @@ Handler `SMS_SEND` wysyła SMS **wyłącznie o charakterze logistycznym**. Treś
 Obecnie `HIDRIVE_UPLOAD` tylko ustawia `hidrive_path` i `hidrive_sent=True` (mock). Docelowo w tym handlerze trzeba będzie:
 
 - Odczytać plik z `MEDIA_ROOT / version.pdf_local_path`.
-- Wysłać do HiDrive (lub mocka) pod ścieżką np. `/hidrive/medical/{document_id}/{version_id}.pdf`.
+- Wysłać do HiDrive (lub mocka) pod ścieżką z [apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py), np. `/patients/{patient_uuid}/Befund_v{version_no}.pdf`.
 - Po sukcesie ustawić `hidrive_sent`, `hidrive_sent_at`.
 
 W **planie PDF** wystarczy zagwarantować, że po GENERATE_PDF plik istnieje pod `pdf_local_path` i że retencja rozwiąże pełną ścieżkę przez `MEDIA_ROOT`. Szczegóły uploadu – osobny plan integracji HiDrive.

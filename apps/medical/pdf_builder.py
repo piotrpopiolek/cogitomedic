@@ -10,8 +10,18 @@ from django.utils import timezone
 from weasyprint import HTML
 
 from apps.core.translation_service import get_translation_map
-from apps.medical.models import MedicalDocumentVersion
+from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    MedicalDocumentVersion,
+)
 from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
+from apps.medical.external_pdf_service import (
+    ExternalPdfCorruptError,
+    download_external_pdf,
+)
+from apps.medical.pdf_merge import safe_merge_pdfs
+from apps.operations.services import create_audit_event
 
 # Map payload enum codes to doctor_ui keys so PDF shows translated text (DE/EN/PL)
 RECOMMENDATION_CODE_TO_UI_KEY: dict[str, str] = {
@@ -268,7 +278,53 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     Returns:
         (pdf_local_path_relative_to_media_root, sha256_checksum_hex)
     """
-    pdf_bytes = build_befund_pdf_bytes(version)
+    befund_bytes = build_befund_pdf_bytes(version)
+    doc = version.medical_document
+    patient = doc.queue_entry.patient
+
+    attachments = list(
+        ExternalPdfAttachment.objects.filter(
+            medical_document=doc,
+            status=ExternalPdfStatus.MATCHED,
+        ).order_by("original_filename", "hidrive_remote_path")
+    )
+    external_bytes_list: list[bytes] = []
+    attachments_used: list[ExternalPdfAttachment] = []
+    for att in attachments:
+        try:
+            ext_bytes = download_external_pdf(att)
+        except ExternalPdfCorruptError:
+            att.status = ExternalPdfStatus.MERGE_FAILED
+            att.save(update_fields=["status"])
+            create_audit_event(
+                event_type="EXTERNAL_PDF_CORRUPT",
+                patient_id=patient.id,
+                medical_document_id=doc.id,
+                metadata={
+                    "hidrive_remote_path": att.hidrive_remote_path,
+                    "external_pdf_attachment_id": str(att.id),
+                },
+            )
+            continue
+        external_bytes_list.append(ext_bytes)
+        attachments_used.append(att)
+
+    if external_bytes_list:
+        pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)
+        if not merge_ok:
+            for att in attachments_used:
+                att.status = ExternalPdfStatus.MERGE_FAILED
+            ExternalPdfAttachment.objects.bulk_update(attachments_used, ["status"])
+            create_audit_event(
+                event_type="EXTERNAL_PDF_MERGE_FAILED",
+                patient_id=patient.id,
+                medical_document_id=doc.id,
+                metadata={
+                    "error_message": "PDF merge failed; Befund-only PDF stored.",
+                },
+            )
+    else:
+        pdf_bytes = befund_bytes
 
     now = version.created_at
     relative_dir = (
@@ -285,3 +341,42 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
     relative_str = str(relative_path).replace("\\", "/")
     return relative_str, checksum
+
+
+def build_merged_preview_pdf_bytes(
+    version: MedicalDocumentVersion,
+    authoring_locale_override: str | None = None,
+) -> tuple[bytes, str | None]:
+    """
+    Build Befund + external HiDrive PDFs for doctor preview (no DB status changes).
+
+    Returns ``(pdf_bytes, warning_key_or_none)`` where warning is a short machine key
+    for the client (e.g. merge failed, corrupt attachment).
+    """
+    befund_bytes = build_befund_pdf_bytes(
+        version, authoring_locale_override=authoring_locale_override
+    )
+    doc = version.medical_document
+    attachments = list(
+        ExternalPdfAttachment.objects.filter(
+            medical_document=doc,
+            status=ExternalPdfStatus.MATCHED,
+        ).order_by("original_filename", "hidrive_remote_path")
+    )
+    external_bytes_list: list[bytes] = []
+    corrupt = False
+    for att in attachments:
+        try:
+            external_bytes_list.append(download_external_pdf(att))
+        except ExternalPdfCorruptError:
+            corrupt = True
+            continue
+    warning: str | None = None
+    if corrupt:
+        warning = "external_pdf_corrupt"
+    if external_bytes_list:
+        pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)
+        if not merge_ok:
+            warning = warning + "|merge_failed" if warning else "merge_failed"
+        return pdf_bytes, warning
+    return befund_bytes, warning

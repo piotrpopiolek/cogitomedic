@@ -76,6 +76,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - **Idempotentność publikacji:** Serwer przed utworzeniem nowej wersji publikowanej i wpisów outbox sprawdza, czy dla danego dokumentu nie ma już publikacji w toku (wersja w trakcie generowania PDF / uploadu); w takim przypadku zwraca sukces bez duplikowania zadań. Dopuszczalne jest uzupełnienie o klucz idempotentności z klienta (`publish_request_id`).
 - Mechanizm Transactional Outbox do obsługi procesów asynchronicznych.
 - Mockowanie systemu plików HiDrive (Faza 1-2) z zachowaniem docelowej struktury katalogów.
+- **Struktura logiczna HiDrive:** PDF Befund/intake zapisywane pod `/patients/{uuid_pacjenta}/` (np. `Befund_v1.pdf`); PDF z laboratorium w `/incoming/`; po publikacji dopasowane załączniki przenoszone do `/processed/` — implementacja: `apps/outbox/hidrive_paths.py`, `apps/medical/external_pdf_service.py`, instrukcja: `docs/manual/hidrive_incoming_reception.md`.
 - Integracja z API HiDrive (Faza 3).
 - Integracja z SMSApi do powiadamiania pacjentów (SMS wyłącznie logistyczny: „Nowa dokumentacja w Cogito” – bez informacji o badaniu/wyniku; 100% zgodność RODO/BÄK).
 - Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
@@ -279,7 +280,7 @@ Kryteria akceptacji:
 
 - Cron uruchamia przetwarzanie tabeli Outbox.
 - Krok 1: Generowanie pliku PDF (operacja CPU-bound) realizowane przez zadanie Django Tasks, a nie w żądaniu HTTP.
-- Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) w ustalonej strukturze folderów.
+- Krok 2: Zapis pliku PDF do HiDrive (lub Mocka w F. 1-2) pod ścieżką z `hidrive_paths` (np. `/patients/{uuid}/Befund_v{N}.pdf`).
 - Krok 3: Po sukcesie Kroku 2, wysyłka SMS o charakterze wyłącznie logistycznym – treść: „Nowa dokumentacja w Cogito” (bez linku, bez informacji o badaniu/wyniku; zgodność RODO/BÄK). Pacjent pobiera wynik przez portal wyniki (logowanie phone+DOB, OTP, PDF).
 - W przypadku błędu, zadanie otrzymuje status błędu i jest ponawiane w kolejnym cyklu (zgodnie z polityką retry).
 - Dokument ma status Opublikowany, ale flagi hidrive_sent/sms_sent odzwierciedlają stan faktyczny.

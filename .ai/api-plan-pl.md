@@ -887,6 +887,8 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 
 ### 2.12 Outbox i operacje (Admin/Ops)
 
+**HiDrive — logiczne ścieżki plików (nie są to endpointy REST API):** upload Befund/intake pod `/patients/{patient_uuid}/Befund_v{N}.pdf` lub `/patients/{patient_uuid}/Intake_v{N}.pdf` — `apps/outbox/hidrive_paths.py`. PDF z laboratorium: katalog `HIDRIVE_INCOMING_PATH` (domyślnie `/incoming/`); po publikacji dopasowane pliki — `HIDRIVE_PROCESSED_PATH` (domyślnie `/processed/`). Instrukcja recepcji: `docs/manual/hidrive_incoming_reception.md`.
+
 - **GET** `/outbox-events`
   - Opis: Operacyjny widok kolejki outbox.
   - Parametry zapytania: `status`, `event_type`, `retry_count_gte`, `limit` (domyślnie **20**, maks. **100**; `parse_list_limit`).

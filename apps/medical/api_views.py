@@ -33,10 +33,19 @@ from apps.medical.api_schemas import (
     RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
 )
-from apps.medical.pdf_builder import build_befund_pdf_bytes
+from apps.medical.external_pdf_service import (
+    ExternalPdfCorruptError,
+    download_external_pdf,
+    reject_external_pdf,
+)
+from apps.medical.pdf_builder import (
+    build_merged_preview_pdf_bytes,
+)
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.core.translation_service import resolve_other_message
 from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentVersion,
@@ -298,7 +307,7 @@ def medical_document_preview_pdf_view(
         request.GET.get("form_locale") or request.GET.get("authoring_locale") or ""
     ).strip()[:10]
     authoring_locale_override = form_locale if form_locale else None
-    pdf_bytes = build_befund_pdf_bytes(
+    pdf_bytes, preview_warn = build_merged_preview_pdf_bytes(
         version, authoring_locale_override=authoring_locale_override
     )
     create_audit_event(
@@ -318,6 +327,8 @@ def medical_document_preview_pdf_view(
     response["Cache-Control"] = "no-store, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
+    if preview_warn:
+        response["X-Befund-Preview-Warning"] = preview_warn
     return response
 
 
@@ -963,3 +974,119 @@ def medical_document_audit_trail_view(
         },
         status=200,
     )
+
+
+@require_auth
+def medical_document_external_pdfs_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    """GET: list external HiDrive PDF attachments for this document."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+
+    items = [
+        {
+            "id": str(a.id),
+            "filename": a.original_filename,
+            "status": a.status,
+            "hidrive_remote_path": a.hidrive_remote_path,
+        }
+        for a in ExternalPdfAttachment.objects.filter(
+            medical_document_id=medical_document_id
+        ).order_by("original_filename", "created_at")
+    ]
+    return JsonResponse({"items": items}, status=200)
+
+
+@require_auth
+def medical_document_external_pdf_content_view(
+    request: HttpRequest, medical_document_id: UUID, attachment_id: UUID
+) -> HttpResponse:
+    """GET: stream external PDF from HiDrive (on-demand, no disk cache)."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(doc, request.user)
+        att = ExternalPdfAttachment.objects.get(
+            id=attachment_id, medical_document_id=medical_document_id
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+
+    if att.status == ExternalPdfStatus.REJECTED:
+        return json_error("other.api.external_pdf_rejected", status=410)
+    try:
+        data = download_external_pdf(att)
+    except ExternalPdfCorruptError:
+        return JsonResponse(
+            {
+                "error": resolve_other_message(
+                    request,
+                    "doctor.external_pdf_upload_in_progress",
+                    "",
+                )
+            },
+            status=422,
+        )
+    safe_name = (att.original_filename or "external.pdf").replace('"', "")
+    response = HttpResponse(data, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{safe_name}"'
+    response["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
+@require_auth
+def medical_document_external_pdf_reject_view(
+    request: HttpRequest, medical_document_id: UUID, attachment_id: UUID
+) -> JsonResponse:
+    """POST: reject external PDF (rename on HiDrive + REJECTED)."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(doc, request.user)
+        att = ExternalPdfAttachment.objects.get(
+            id=attachment_id, medical_document_id=medical_document_id
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+
+    if att.status == ExternalPdfStatus.REJECTED:
+        return JsonResponse({"ok": True, "status": att.status}, status=200)
+    try:
+        reject_external_pdf(att)
+    except Exception:
+        return json_error("other.api.external_pdf_reject_failed", status=502)
+    create_audit_event(
+        event_type="EXTERNAL_PDF_REJECTED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "external_pdf_attachment_id": str(att.id),
+            "hidrive_remote_path": att.hidrive_remote_path,
+        },
+    )
+    return JsonResponse({"ok": True, "status": att.status}, status=200)

@@ -15,7 +15,7 @@ todos:
     content: "Zaimplementować run_intake_retention_cleanup: usuń lokalny PDF, wyczyść snapshot_payload, anamnesis_payload, body_map_data (audit: INTAKE_RETENTION_FILE_DELETED / SKIPPED)"
     status: pending
   - id: hidrive-path-uuid
-    content: "apps/outbox/hidrive_paths.py: usunąć _patient_folder_name() (używa last_name+first_name), folder = str(patient.id) — ścieżka /hidrive/patients/<uuid>/Befund_v1.pdf"
+    content: "apps/outbox/hidrive_paths.py: folder = patient.id (UUID), ścieżka /patients/<uuid>/Befund_v{N}.pdf (bez /hidrive/)"
     status: pending
   - id: befund-retention-clear-payload
     content: Rozszerzyć run_retention_cleanup o wyczyszczenie medical_payload, diagnosis_code, procedure_code przy retencji + blokada republish gdy local_pdf_deleted_at IS NOT NULL
@@ -615,44 +615,22 @@ Klucz tłumaczenia blokady anonimizacji do `[apps/core/translation_data/other_do
 | PDF intake na HiDrive                        | Poza zakresem aplikacji                              | Zostaje                                   |
 
 
-### Zmiana ścieżek HiDrive — UUID zamiast imienia i nazwiska
+### Ścieżki HiDrive — UUID, `/patients/` bez `/hidrive/`
 
-**Plik:** `[apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py)`
+**Plik:** [apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py)
 
-Obecna implementacja (`_patient_folder_name`) buduje folder z `last_name + first_name`:
+Docelowy układ logiczny (współrzędny z `/incoming/` i `/processed/`):
 
-```
-/hidrive/patients/Kowalski Jan/Befund_v1.pdf
-```
-
-**Zmiana:** usunąć `_patient_folder_name()`, zastąpić przez `str(patient.id)`:
-
-```python
-def build_befund_hidrive_path(version: "MedicalDocumentVersion") -> str:
-    patient = version.medical_document.queue_entry.patient
-    file_name = HIDRIVE_BEFUND_FILENAME_TEMPLATE.format(version_no=version.version_no)
-    return f"/hidrive/patients/{patient.id}/{file_name}"
-
-def build_intake_hidrive_path(version: "IntakeDocumentVersion") -> str:
-    patient = version.intake_form.queue_entry.patient
-    file_name = HIDRIVE_INTAKE_FILENAME_TEMPLATE.format(version_no=version.version_no)
-    return f"/hidrive/patients/{patient.id}/{file_name}"
-```
-
-Nowa ścieżka:
-
-```
-/hidrive/patients/3f7a2c1d-.../Befund_v1.pdf
-```
+- PDF Befund / intake: `/patients/{patient_uuid}/Befund_v{N}.pdf`, `/patients/{patient_uuid}/Intake_v{N}.pdf`
+- W kodzie: `HIDRIVE_PATIENTS_DIR_PREFIX = "/patients"`, `build_befund_hidrive_path` / `build_intake_hidrive_path`
 
 **Korzyści:**
 
-- Listing folderów HiDrive nie ujawnia nazwisk pacjentów
-- Ścieżka stabilna po anonimizacji (UUID się nie zmienia)
-- Prosta, deterministyczna, bez sanitizacji
-- `_sanitize_folder_part()` i `_patient_folder_name()` do usunięcia w całości
+- Listing folderów HiDrive nie ujawnia nazwisk pacjentów w nazwie katalogu (tylko UUID)
+- Ścieżka stabilna względem anonimizacji tożsamości w DB (UUID pacjenta)
+- Prosta, deterministyczna
 
-**Uwaga:** `hidrive_path` jest zapisywany w DB przy pierwszym upload — zmiana dotyczy nowych dokumentów. Istniejące wpisy zachowują stare ścieżki (migracja danych na HiDrive poza zakresem).
+**Uwaga:** `hidrive_path` jest zapisywany w DB przy pierwszym uploadzie; zmiana konwencji dotyczy nowych dokumentów. Starsze wpisy w DB lub pliki na dysku kliniki mogą wymagać migracji ręcznej lub skryptu (poza zakresem tego planu).
 
 ### Napięcie RODO Art. 17 vs BÄK §10 MBO-Ä
 

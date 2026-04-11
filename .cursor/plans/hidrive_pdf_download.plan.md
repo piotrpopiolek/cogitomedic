@@ -6,16 +6,16 @@ todos:
     content: "Rozszerzenie klienta HiDrive o metody: `download`, `list_dir`, `move_file` + mock + testy"
     status: pending
   - id: normalize-matching
-    content: "Modul normalizacji nazw (unicodedata NFKD, diakrytyki, case) + helper build_patient_filename_candidates + testy"
+    content: Modul normalizacji nazw (unicodedata NFKD, diakrytyki, case) + helper build_patient_filename_candidates + testy
     status: pending
   - id: external-pdf-model
-    content: "Model `ExternalPdfAttachment` (status MATCHED/ACCEPTED/REJECTED, bez local_cache_path) + migracja"
+    content: Model `ExternalPdfAttachment` (status MATCHED/ACCEPTED/REJECTED, bez local_cache_path) + migracja
     status: pending
   - id: external-pdf-service
     content: "Serwis: match_incoming_files (list_dir + normalizacja), check_external_pdf_gate, reject_external_pdf, download_on_demand"
     status: pending
   - id: befund-gate
-    content: "Bramka w doctor_document_detail_view -- blokuje otwarcie Befund jesli brak dopasowania; bez semafora"
+    content: Bramka w doctor_document_detail_view -- blokuje otwarcie Befund jesli brak dopasowania; bez semafora
     status: pending
   - id: api-endpoints
     content: "Endpointy API: lista zewn. PDF, podglad inline (on-demand download), reject pliku"
@@ -24,7 +24,7 @@ todos:
     content: "Panel w detail.html: podglad PDF (iframe), przycisk Odrzuc plik, komunikaty o statusie dopasowania"
     status: pending
   - id: pdf-merge
-    content: "Modul pdf_merge.py z pypdf + fallback (Befund-only przy bledzie merge) + dodanie pypdf do requirements"
+    content: Modul pdf_merge.py z pypdf + fallback (Befund-only przy bledzie merge) + dodanie pypdf do requirements
     status: pending
   - id: pipeline-modify
     content: "Modyfikacja GENERATE_PDF: download on-demand -> merge -> zapis -> przeniesienie do /processed/"
@@ -45,7 +45,7 @@ isProject: false
 
 ## Stan aktualny
 
-- HiDrive jest zintegrowany **tylko jako upload** -- system generuje PDF Befundu (WeasyPrint), uploaduje go do `/hidrive/patients/{patient_id}/Befund_v{N}.pdf`, a nastepnie wysyla SMS z linkiem do portalu pacjenta.
+- HiDrive jest zintegrowany **tylko jako upload** — system generuje PDF Befundu (WeasyPrint), uploaduje go do `/patients/{patient_id}/Befund_v{N}.pdf` ([apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py)), a następnie wysyła SMS z linkiem do portalu pacjenta.
 - Klient HiDrive ([apps/integrations/hidrive/client.py](apps/integrations/hidrive/client.py)) obsluguje wylacznie `PUT /file` (upload), `GET /user/me` i `POST /dir`.
 - **Brak** metod `download`, `list_dir`, `move_file` w kliencie HiDrive.
 - **Brak** scalania PDF (brak pypdf w [requirements.txt](requirements.txt)).
@@ -58,19 +58,27 @@ Recepcja kliniki wrzuca pliki PDF bezposrednio do folderu `/incoming/` na HiDriv
 
 ### Struktura folderow na HiDrive
 
+Katalogi logiczne na **tym samym poziomie** (bez podfolderu `hidrive` w ścieżce aplikacji):
+
 ```
-/incoming/          <- pliki do przetworzenia
+/incoming/          <- pliki do przetworzenia (PDF z laboratorium)
   Kowalski_Jan.pdf
   Kowalski_Jan_1985_03_12.pdf
   Mueller_Anna_1990_07_22.pdf
   rejected_Kowalski_Jan.pdf  <- odrzucony przez lekarza, ignorowany
 
+/patients/          <- PDF wygenerowane przez aplikację (Befund / intake)
+  {patient_uuid}/
+    Befund_v1.pdf
+    Intake_v1.pdf
+
 /processed/         <- przetworzone pliki (po scaleniu z Befund)
   Kowalski_Jan_1985_03_12.pdf
 ```
 
-- `/incoming/` -- pliki czekajace na przetworzenie. System czyta z tego folderu.
-- `/processed/` -- pliki przeniesione po udanym scaleniu i publikacji. System pisze do tego folderu. **Portal pacjenta NIE ma dostepu do /processed/** -- zabezpieczenie przed wyciekiem danych.
+- `/incoming/` — pliki czekające na przetworzenie. System czyta z tego folderu.
+- `/patients/{uuid}/` — zapis `Befund_v{N}.pdf` / `Intake_v{N}.pdf` po stronie outboxu.
+- `/processed/` — pliki przeniesione po udanym scaleniu i publikacji. System pisze do tego folderu. **Portal pacjenta NIE ma dostepu do /processed/** -- zabezpieczenie przed wyciekiem danych.
 - Pliki z przedrostkiem `rejected_` sa **ignorowane** przez algorytm dopasowania.
 
 ### Konwencja nazw plikow

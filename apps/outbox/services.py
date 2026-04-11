@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from opentelemetry import trace
 from django.conf import settings
@@ -17,7 +17,14 @@ from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
 from apps.medical.pdf_builder import generate_befund_pdf
-from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
+from apps.medical.external_pdf_service import logical_path_to_processed
+from apps.medical.models import (
+    DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    MedicalDocumentVersion,
+    PdfStatus,
+)
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -115,6 +122,27 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
+
+        for att in ExternalPdfAttachment.objects.filter(
+            medical_document_id=version.medical_document_id,
+            status=ExternalPdfStatus.MATCHED,
+        ):
+            dest_path = logical_path_to_processed(att.hidrive_remote_path)
+            adapter.move_file(
+                source_path=att.hidrive_remote_path,
+                dest_path=dest_path,
+            )
+            # Another attachment for the same document may already occupy dest_path
+            # (e.g. prior version published the same lab PDF). Delete the duplicate
+            # so the unique constraint (medical_document, hidrive_remote_path) is satisfied.
+            ExternalPdfAttachment.objects.filter(
+                medical_document_id=version.medical_document_id,
+                hidrive_remote_path=dest_path,
+            ).exclude(id=att.id).delete()
+            att.hidrive_remote_path = dest_path
+            att.status = ExternalPdfStatus.ACCEPTED
+            att.save(update_fields=["hidrive_remote_path", "status"])
+
         next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
             medical_document_version=version,

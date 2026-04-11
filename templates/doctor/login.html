@@ -1,15 +1,15 @@
 {% extends "unfold/layouts/unauthenticated.html" %}
 {% load i18n static unfold %}
 
-{% block title %}{% if ui %}{{ ui.login_title }}{% else %}Arztbereich – Anmelden{% endif %} | {{ site_title }}{% endblock %}
+{% block title %}{{ ui.login_title }} | {{ site_title }}{% endblock %}
 
 {% block content %}
-  {% include "unfold/helpers/unauthenticated_title.html" with title=site_title|default:"CogitoMedica" subtitle=ui.login_title|default:"Anmelden" %}
+  {% include "unfold/helpers/unauthenticated_title.html" with title=site_title|default:"CogitoMedica" subtitle=ui.login_title %}
 
   <p class="text-right text-sm text-base-500 dark:text-base-400 mb-6">
-    {% if ui %}<a href="?lang=de" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ ui.lang_de }}</a> |
+    <a href="?lang=de" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ ui.lang_de }}</a> |
     <a href="?lang=en" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ ui.lang_en }}</a> |
-    <a href="?lang=pl" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ ui.lang_pl }}</a>{% endif %}
+    <a href="?lang=pl" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ ui.lang_pl }}</a>
   </p>
 
   {% if error %}
@@ -24,22 +24,22 @@
     {% if lang %}<input type="hidden" name="lang" value="{{ lang }}" />{% endif %}
 
     <div>
-      <label for="username" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.username }}{% else %}Benutzername{% endif %}</label>
+      <label for="username" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.username }}</label>
       <input type="text" id="username" name="username" required autofocus
         class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
     </div>
     <div>
-      <label for="password" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.password }}{% else %}Passwort{% endif %}</label>
+      <label for="password" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.password }}</label>
       <input type="password" id="password" name="password" required
         class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
     </div>
 
     <div class="pt-2">
       {% component "unfold/components/button.html" with submit=1 variant="primary" class="w-full" %}
-        {% if ui %}{{ ui.login_submit }}{% else %}Anmelden{% endif %}
+        {{ ui.login_submit }}
       {% endcomponent %}
     </div>
   </form>
 
-  <p class="mt-6 text-sm text-base-500 dark:text-base-400">{% if ui %}{{ ui.login_footer }}{% else %}Nur für Berechtigte (Arzt/Admin).{% endif %}</p>
+  <p class="mt-6 text-sm text-base-500 dark:text-base-400">{{ ui.login_footer }}</p>
 {% endblock %}

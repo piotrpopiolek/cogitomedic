@@ -1,6 +1,6 @@
 {% extends "admin/base_site.html" %}
 
-{% block title %}{% if ui %}{{ ui.area_name }}{% else %}Arztbereich{% endif %} – CogitoMedica{% endblock %}
+{% block title %}{{ ui.area_name }} – CogitoMedica{% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
@@ -15,7 +15,7 @@
         href="{% url 'doctor-list' %}"
         class="inline-flex items-center rounded-default border border-primary-600/30 bg-primary-600/5 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/40 dark:text-primary-400 dark:hover:bg-primary-500/10"
       >
-        {% if ui %}{{ ui.area_name }}{% else %}Arztbereich{% endif %}
+        {{ ui.area_name }}
       </a>
       <span class="text-sm text-base-500 dark:text-base-400">{{ user.username }}{% if user.role %} ({{ user.role }}){% endif %}</span>
     </div>
@@ -23,25 +23,22 @@
       <a
         href="{% url 'doctor-list' %}?lang=de"
         class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800"
-        >{% if ui %}{{ ui.lang_de }}{% else %}DE{% endif %}</a
-      >
+      >{{ ui.lang_de }}</a>
       <a
         href="{% url 'doctor-list' %}?lang=en"
         class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800"
-        >{% if ui %}{{ ui.lang_en }}{% else %}EN{% endif %}</a
-      >
+      >{{ ui.lang_en }}</a>
       <a
         href="{% url 'doctor-list' %}?lang=pl"
         class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800"
-        >{% if ui %}{{ ui.lang_pl }}{% else %}PL{% endif %}</a
-      >
+      >{{ ui.lang_pl }}</a>
       <form method="post" action="{% url 'doctor-logout' %}" class="inline">
         {% csrf_token %}
         <button
           type="submit"
           class="inline-flex cursor-pointer items-center rounded-default border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800/80 dark:text-red-400 dark:hover:bg-red-500/10"
         >
-          {% if ui %}{{ ui.logout }}{% else %}Abmelden{% endif %}
+          {{ ui.logout }}
         </button>
       </form>
     </div>
