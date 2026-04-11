@@ -18,6 +18,7 @@ from apps.intake.models import (
     PatientIntakeForm,
 )
 from apps.medical.models import MedicalDocumentVersion
+from apps.medical.name_normalize import compute_incoming_pdf_name_keys
 from apps.operations.services import create_audit_event
 from apps.outbox.services import _try_delete_file
 from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
@@ -143,6 +144,7 @@ def _phase3_finalize(patient_id: uuid.UUID, *, actor_user_id: uuid.UUID) -> Pati
         return patient
 
     phone_sentinel = str(patient_id.int)[:20]
+    anon_fl, anon_lf = compute_incoming_pdf_name_keys("ANONYMIZED", "ANONYMIZED")
     Patient.objects.filter(id=patient_id).update(
         first_name="ANONYMIZED",
         last_name="ANONYMIZED",
@@ -154,6 +156,8 @@ def _phase3_finalize(patient_id: uuid.UUID, *, actor_user_id: uuid.UUID) -> Pati
         postal_code=None,
         doctolib_patient_id=None,
         anonymized_at=_now(),
+        incoming_pdf_name_key_fl=anon_fl[:300],
+        incoming_pdf_name_key_lf=anon_lf[:300],
     )
     create_audit_event(
         event_type="PATIENT_ANONYMIZED",

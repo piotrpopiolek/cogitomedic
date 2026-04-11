@@ -315,7 +315,8 @@ def doctor_document_detail_view(
             status=423,
         )
     doc = MedicalDocument.objects.get(pk=medical_document_id)
-    create_attachment_records(doc, gate.matched_files)
+    if not gate.skip_attachment_sync:
+        create_attachment_records(doc, gate.matched_files)
 
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
