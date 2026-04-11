@@ -256,6 +256,9 @@ def doctor_document_detail_view(
             or ("en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"),
             user=request.user,
         )
+        granted, lock_holder = acquire_document_lock(
+            medical_document_id=medical_document_id, user=request.user
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
@@ -267,9 +270,6 @@ def doctor_document_detail_view(
             },
             status=404,
         )
-    granted, lock_holder = acquire_document_lock(
-        medical_document_id=medical_document_id, user=request.user
-    )
     if not granted:
         loc = normalize_language_code(lang)
         mapping = get_translation_map("doctor", loc)
