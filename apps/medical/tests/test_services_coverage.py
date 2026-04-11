@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
@@ -706,6 +707,19 @@ class DocumentLockTests(ServicesCoverageBase):
         eff, name, at = get_document_lock_state(plain)
         self.assertTrue(eff)
         self.assertIsNotNone(name)
+
+    def test_lock_state_resolves_holder_when_instance_has_no_user_relation(
+        self,
+    ) -> None:
+        """``get_document_lock_state`` falls back to ``StaffUser`` lookup when no FK object."""
+        ns = SimpleNamespace(
+            locked_by_user_id=self.doctor.id,
+            locked_at=timezone.now(),
+        )
+        eff, name, at = get_document_lock_state(ns)
+        self.assertTrue(eff)
+        self.assertIsNotNone(name)
+        self.assertIsNotNone(at)
 
     # -- acquire_document_lock --
     def test_acquire_free_lock(self):
