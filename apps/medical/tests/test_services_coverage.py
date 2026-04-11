@@ -716,7 +716,7 @@ class DocumentLockTests(ServicesCoverageBase):
             locked_by_user_id=self.doctor.id,
             locked_at=timezone.now(),
         )
-        eff, name, at = get_document_lock_state(ns)
+        eff, name, at = get_document_lock_state(ns)  # type: ignore[arg-type]
         self.assertTrue(eff)
         self.assertIsNotNone(name)
         self.assertIsNotNone(at)
