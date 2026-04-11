@@ -229,11 +229,11 @@ class Patient(models.Model):
             models.Index(fields=["phone"]),
             models.Index(
                 fields=["incoming_pdf_name_key_fl"],
-                name="patient_incoming_pdf_key_fl_idx",
+                name="patient_incpdf_key_fl_idx",
             ),
             models.Index(
                 fields=["incoming_pdf_name_key_lf"],
-                name="patient_incoming_pdf_key_lf_idx",
+                name="patient_incpdf_key_lf_idx",
             ),
         ]
         constraints = [
