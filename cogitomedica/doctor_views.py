@@ -3,8 +3,8 @@ Doctor panel: list of medical documents and document detail with Befund form.
 Requires authenticated user with role DOCTOR or ADMIN.
 Staff login (HTML) shares Django session with API auth.
 
-Komunikaty błędów w szablonach są w trzech wersjach językowych (DE/EN/PL) zgodnie z lang;
-przy dodawaniu nowych komunikatów uzupełnij wszystkie trzy warianty.
+UI strings and error messages use the ``doctor`` translation category (see
+``doctor_ui.json`` / ``TranslationValue``).
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -95,7 +96,7 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
             "doctor/login.html",
             {
                 **admin.site.each_context(request),
-                "error": "Ungültige Anmeldung oder keine Berechtigung.",
+                "error": ui["login_error_invalid"],
                 "next": (request.POST.get("next") or "").strip(),
                 "ui": ui,
                 "lang": lang,
@@ -200,11 +201,7 @@ def doctor_open_by_queue_view(
             request,
             "doctor/error.html",
             {
-                "message": (
-                    "Eintrag nicht gefunden."
-                    if lang == "de"
-                    else "Entry not found." if lang == "en" else "Nie znaleziono wpisu."
-                ),
+                "message": ui["error_queue_entry_not_found"],
                 "ui": ui,
                 "lang": lang,
             },
@@ -215,15 +212,7 @@ def doctor_open_by_queue_view(
             request,
             "doctor/error.html",
             {
-                "message": (
-                    "Keine Ankiete für diesen Eintrag."
-                    if lang == "de"
-                    else (
-                        "No questionnaire for this entry."
-                        if lang == "en"
-                        else "Brak ankiety dla tego wpisu."
-                    )
-                ),
+                "message": ui["error_no_intake_for_entry"],
                 "ui": ui,
                 "lang": lang,
             },
@@ -235,15 +224,7 @@ def doctor_open_by_queue_view(
             request,
             "doctor/error.html",
             {
-                "message": (
-                    "Ankiete noch nicht abgeschlossen."
-                    if lang == "de"
-                    else (
-                        "Questionnaire not yet completed."
-                        if lang == "en"
-                        else "Ankieta nie została jeszcze zakończona."
-                    )
-                ),
+                "message": ui["error_intake_not_submitted"],
                 "ui": ui,
                 "lang": lang,
             },
@@ -280,15 +261,7 @@ def doctor_document_detail_view(
             request,
             "doctor/error.html",
             {
-                "message": (
-                    "Dokument nicht gefunden."
-                    if lang == "de"
-                    else (
-                        "Document not found."
-                        if lang == "en"
-                        else "Nie znaleziono dokumentu."
-                    )
-                ),
+                "message": ui["error_document_not_found"],
                 "ui": ui,
                 "lang": lang,
             },
@@ -318,12 +291,14 @@ def doctor_document_detail_view(
     authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
     if "authoring_locale" not in context:
         context["authoring_locale"] = authoring_locale
+    body_map_rel = static("tablet/body.jpg")
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
         "context": context,
         "ui": get_doctor_ui(lang),
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
+        "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
     }
     return _render_doctor(
         request,

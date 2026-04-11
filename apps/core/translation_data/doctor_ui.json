@@ -24,6 +24,11 @@
     "en": "Body map (marked by patient)",
     "pl": "Schemat ciała (zaznaczony przez pacjenta)"
   },
+  "doctor.body_map_toggle_hint": {
+    "de": "Zum Ein- und Ausklappen klicken",
+    "en": "Click to expand or collapse",
+    "pl": "Kliknij, aby rozwinąć lub zwinąć"
+  },
   "doctor.btn_apply_favorite": {
     "de": "Anwenden",
     "en": "Apply",
@@ -83,6 +88,36 @@
     "de": "Zgody",
     "en": "Consents",
     "pl": "Zgody"
+  },
+  "doctor.detail_head_title": {
+    "de": "Befund – Dokument",
+    "en": "Report – Document",
+    "pl": "Befund – dokument"
+  },
+  "doctor.detail_patient_heading": {
+    "de": "Befund – Patient:",
+    "en": "Report – Patient:",
+    "pl": "Befund – pacjent:"
+  },
+  "doctor.error_document_not_found": {
+    "de": "Dokument nicht gefunden.",
+    "en": "Document not found.",
+    "pl": "Nie znaleziono dokumentu."
+  },
+  "doctor.error_intake_not_submitted": {
+    "de": "Ankiete noch nicht abgeschlossen.",
+    "en": "Questionnaire not yet completed.",
+    "pl": "Ankieta nie została jeszcze zakończona."
+  },
+  "doctor.error_no_intake_for_entry": {
+    "de": "Keine Ankiete für diesen Eintrag.",
+    "en": "No questionnaire for this entry.",
+    "pl": "Brak ankiety dla tego wpisu."
+  },
+  "doctor.error_queue_entry_not_found": {
+    "de": "Eintrag nicht gefunden.",
+    "en": "Entry not found.",
+    "pl": "Nie znaleziono wpisu."
   },
   "doctor.examination_intimate": {
     "de": "Intimbereich nicht untersucht",
@@ -253,6 +288,11 @@
     "de": "Arztbereich – Anmelden",
     "en": "Doctor area – Sign in",
     "pl": "Panel lekarza – Logowanie"
+  },
+  "doctor.login_error_invalid": {
+    "de": "Ungültige Anmeldung oder keine Berechtigung.",
+    "en": "Invalid sign-in or no permission.",
+    "pl": "Nieprawidłowe logowanie lub brak uprawnień."
   },
   "doctor.logout": {
     "de": "Abmelden",
