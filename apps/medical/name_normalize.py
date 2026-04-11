@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -64,3 +65,31 @@ def stem_matches_dated_variant(filename_stem: str, patient: Patient) -> bool:
     if not dated:
         return False
     return match_filename_to_candidates(filename_stem, dated)
+
+
+def compute_incoming_pdf_name_keys(first_name: str, last_name: str) -> tuple[str, str]:
+    """Normalized ``first_last`` / ``last_first`` stems used for HiDrive /incoming lookup."""
+    nf = normalize_name(first_name)
+    nl = normalize_name(last_name)
+    return f"{nf}_{nl}", f"{nl}_{nf}"
+
+
+_INCOMING_STEM_DOB_TAIL = re.compile(r"_\d{4}_\d{2}_\d{2}$")
+
+
+@lru_cache(maxsize=512)
+def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
+    """Return DB lookup keys for an incoming filename stem (normalized, no ``.pdf``).
+
+    Used with denormalized :class:`~apps.reception.models.Patient` fields so ambiguity
+    checks need not scan the whole patient table. Includes a stripped ``_digits`` suffix
+    for multi-file undated names (``Name_2``) but not when the tail looks like a DOB
+    segment (``…_YYYY_MM_DD``).
+    """
+    bases: set[str] = {norm}
+    if _INCOMING_STEM_DOB_TAIL.search(norm):
+        return frozenset(bases)
+    m = re.fullmatch(r"(.+)_(\d+)$", norm)
+    if m:
+        bases.add(m.group(1))
+    return frozenset(bases)
