@@ -14,8 +14,10 @@ if TYPE_CHECKING:
 def normalize_name(name: str) -> str:
     """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
     raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
+    raw = " ".join(raw.split())
     nfkd = unicodedata.normalize("NFKD", raw)
     ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
+    ascii_only = ascii_only.replace("ł", "l").replace("Ł", "L")
     return ascii_only.strip().replace("-", "_").replace(" ", "_").lower()
 
 

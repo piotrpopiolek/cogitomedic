@@ -247,6 +247,56 @@ class ExternalPdfGateTests(TestCase):
         self.assertFalse(gate.passed)
         self.assertEqual(gate.error_message, "AMBIG")
 
+    def test_gate_dated_filename_matches_only_correct_homonym(self) -> None:
+        """§12: two same name+different DOB; dated stem resolves to one patient."""
+        Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500101001",
+            email="hom_a@example.com",
+        )
+        Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1992, 2, 2),
+            phone="48500101002",
+            email="hom_b@example.com",
+        )
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Med_Test_1990_01_01.pdf",
+                    "path": "/incoming/Med_Test_1990_01_01.pdf",
+                    "size": 10,
+                    "mtime": None,
+                }
+            ],
+        )
+        patient_a = Patient.objects.get(email="hom_a@example.com")
+        gate_a = check_external_pdf_gate(
+            patient_a,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertTrue(gate_a.passed)
+        self.assertEqual(len(gate_a.matched_files), 1)
+        self.assertEqual(gate_a.matched_files[0].name, "Med_Test_1990_01_01.pdf")
+
+        patient_b = Patient.objects.get(email="hom_b@example.com")
+        gate_b = check_external_pdf_gate(
+            patient_b,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertFalse(gate_b.passed)
+        self.assertEqual(gate_b.error_message, "NO_FILE")
+
     def test_gate_no_match_when_incoming_has_unrelated_pdf(self) -> None:
         patient = Patient.objects.create(
             first_name="Anna",

@@ -458,6 +458,104 @@ class HiDriveRealAdapterMoveFileTests(SimpleTestCase):
         )
 
 
+class HiDriveRealAdapterDownloadParamsEncodingTests(SimpleTestCase):
+    """§12: logical paths with spaces are passed as ``params`` (requests encodes the URL)."""
+
+    @override_settings(HIDRIVE_USE_MOCK="0")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client._resolve_remote_target_path")
+    def test_download_get_file_passes_space_in_resolved_path_as_param(
+        self, resolve_mock: Mock, oauth_client_mock: Mock, get_mock: Mock
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        ok_file = Mock()
+        ok_file.status_code = 200
+        ok_file.content = b"%PDF-1.4\n"
+
+        resolve_mock.return_value = "/users/cogitomedica/incoming/Kowalski Jan.pdf"
+        get_mock.return_value = ok_file
+
+        adapter = get_hidrive_adapter()
+        adapter.download(remote_path="/incoming/Kowalski Jan.pdf")
+
+        file_calls = [
+            c
+            for c in get_mock.call_args_list
+            if c.args and str(c.args[0]).endswith("/file")
+        ]
+        self.assertGreaterEqual(len(file_calls), 1)
+        self.assertEqual(
+            file_calls[0].kwargs["params"]["path"],
+            "/users/cogitomedica/incoming/Kowalski Jan.pdf",
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="0")
+    @patch("apps.integrations.hidrive.client.requests.post")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client._resolve_remote_target_path")
+    def test_move_file_post_passes_space_in_src_dst_params(
+        self,
+        resolve_mock: Mock,
+        oauth_client_mock: Mock,
+        get_mock: Mock,
+        post_mock: Mock,
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        user_me = Mock()
+        user_me.status_code = 200
+        user_me.json.return_value = {"alias": "cogitomedica"}
+
+        dir_created = Mock()
+        dir_created.status_code = 201
+        move_ok = Mock()
+        move_ok.status_code = 200
+
+        def resolve_side_effect(**kwargs: object) -> str:
+            rp = str(kwargs.get("remote_path") or "")
+            if "rejected" in rp:
+                return "/users/cogitomedica/incoming/rejected_Kowalski Jan.pdf"
+            if rp.startswith("/processed"):
+                return "/users/cogitomedica/processed/Kowalski Jan.pdf"
+            return "/users/cogitomedica/incoming/Kowalski Jan.pdf"
+
+        resolve_mock.side_effect = resolve_side_effect
+
+        get_mock.return_value = user_me
+
+        def post_side_effect(url, **_kwargs):
+            if "/file/move" in str(url):
+                return move_ok
+            return dir_created
+
+        post_mock.side_effect = post_side_effect
+
+        adapter = get_hidrive_adapter()
+        adapter.move_file(
+            source_path="/incoming/Kowalski Jan.pdf",
+            dest_path="/incoming/rejected_Kowalski Jan.pdf",
+        )
+
+        move_calls = [
+            c
+            for c in post_mock.call_args_list
+            if c.args and "/file/move" in str(c.args[0])
+        ]
+        self.assertEqual(len(move_calls), 1)
+        params = move_calls[0].kwargs.get("params") or {}
+        self.assertEqual(params["src"], "/users/cogitomedica/incoming/Kowalski Jan.pdf")
+        self.assertEqual(
+            params["dst"], "/users/cogitomedica/incoming/rejected_Kowalski Jan.pdf"
+        )
+
+
 class HiDriveRealAdapterListDirTests(SimpleTestCase):
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
