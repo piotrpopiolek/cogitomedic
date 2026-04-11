@@ -199,6 +199,18 @@ class DoctorDetailHappyPathTests(TestCase):
             current_version_no=0,
             created_by_user=self.doctor,
         )
+        # Default HiDrive /incoming listing is empty in tests → real gate returns 422.
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
 
     def test_detail_happy_path_returns_200(self):
         self.client.force_login(self.doctor)
