@@ -468,24 +468,58 @@ for att in ExternalPdfAttachment.objects.filter(
 
 Pliki z `MERGE_FAILED` NIE sa przenoszone -- zostaja w `/incoming/` do recznej interwencji.
 
-### 11. Preview PDF z zewnetrznymi
+### 11. Preview PDF z zewnetrznymi (obowiazkowy przed publikacja)
 
 Plik: [apps/medical/api_views.py](apps/medical/api_views.py) -- endpoint `preview-pdf`
 
 Zmodyfikowac preview aby pobieralo zewnetrzne PDFy on-demand i scalo z Befundem na zywo. Lekarz widzi finalny wynik przed publikacja. Jesli merge sie nie uda -- preview pokazuje sam Befund + komunikat o bledzie.
 
+**Obowiazkowy podglad**: Przycisk "Opublikuj" jest zablokowany do momentu, az lekarz uzyje "Preview PDF" przynajmniej raz (po ostatnim zapisie draftu). Chroni to przed sytuacja, w ktorej fallback `safe_merge_pdfs` wyslalby pacjentowi sam Befund bez zalacznikow -- lekarz MUSI zobaczyc scalony dokument na wlasne oczy. Implementacja: flaga JS `previewSeenSinceLastSave`, reset przy kazdym save/draft, set przy uzyciu preview. Przycisk publish disabled gdy `!previewSeenSinceLastSave`.
+
 ### 12. Testy
 
-- Testy `normalize_name()`: diakrytyki (Muller->Muller, Sliwka->Sliwka), mylniki, spacje, case.
-- Testy `build_patient_filename_candidates()`: 4 warianty, z/bez daty.
-- Testy `match_filename_to_candidates()`: exact match, sufiks `_2`, brak dopasowania, prefix `rejected_` ignorowany, plik z dodatkowym tekstem NIE pasuje (RODO).
-- Testy kolizji: 2 pacjentow o tym samym imieniu/nazwisku, dopasowanie z data vs bez.
-- Testy `merge_pdfs()` / `safe_merge_pdfs()`: happy path, uszkodzony PDF -> fallback.
-- Testy bramki: brak pliku -> 422, kolizja -> 422, dopasowanie -> 200 + semafor.
-- Testy reject: rename na HiDrive, status REJECTED.
-- Testy walidacji pobranego PDF (niekompletny upload -> ExternalPdfCorruptError).
-- Test pipeline e2e: publish -> download -> merge -> upload merged -> move to /processed/ -> SMS.
-- Test fallback pipeline: publish -> download -> merge FAIL -> upload Befund-only -> audit event.
+**Normalizacja i dopasowanie:**
+- `normalize_name()`: diakrytyki niemieckie (Muller->Muller, Konig->Konig, Strasse->Strasse, Grossmann->Grossmann), polskie (Sliwka->Sliwka, Zolnierz->Zolnierz, Swiatek->Swiatek), umlauts (a->a, o->o, u->u, ss->ss), mylniki (`Kowalska-Nowak`->`kowalska_nowak`), spacje (`Kowalski Jan`->`kowalski_jan`), case, puste stringi, wielokrotne spacje/podkreslenia.
+- `build_patient_filename_candidates()`: 4 warianty, z/bez daty, poprawna zamiana `-` na `_` w dacie.
+- `match_filename_to_candidates()`:
+  - Exact match: `kowalski_jan` == `kowalski_jan` -> True
+  - Sufiks `_2`: `kowalski_jan_1985_03_12_2` matches `kowalski_jan_1985_03_12` -> True
+  - Dodatkowy tekst NIE pasuje (RODO): `kowalski_jan_wyniki_brata` != `kowalski_jan` -> False
+  - Prefix `rejected_` ignorowany przez algorytm
+  - Spacje w nazwie pliku: `Kowalski Jan.pdf` -> normalizacja -> `kowalski_jan` -> match
+  - Pacjent z cyfra w nazwisku (edge case): jezeli nazwisko zawiera cyfre, testy pokrywaja ten przypadek
+  - Zachlannosc regex: `kowalski_jan_2` vs pacjent "Jan Kowalski" (match) vs pacjent "Jan Kowalski 2" (tez match -- ale to kolizja, wiec system ja wykrywa)
+
+**Kolizje:**
+- 2 pacjentow o tym samym imieniu/nazwisku, plik bez daty -> brak dopasowania + komunikat
+- 2 pacjentow o tym samym imieniu/nazwisku, plik z data -> dopasowanie do wlasciwego
+- Pacjent z podwojnym nazwiskiem vs prosty (Kowalska_Nowak vs Kowalska)
+
+**Scalanie PDF:**
+- Happy path: Befund + 1 zewnetrzny PDF -> poprawny scalony PDF.
+- Wiele zewnetrznych PDF: Befund + 3 pliki -> poprawna kolejnosc stron.
+- Uszkodzony PDF -> `safe_merge_pdfs` fallback do Befund-only + `merge_succeeded=False`.
+- PDF z osadzonymi czcionkami (Type1, TrueType, CIDFont) -> brak krzaczkow po scaleniu.
+- PDF z roznymi rozmiarami stron (A4, Letter, A3) -> poprawne scalenie.
+- PDF zabezpieczony haslem -> wyjatek -> fallback.
+- Pusty PDF (0 stron) -> wyjatek -> fallback.
+- PDF z formularzami / annotacjami -> scalenie bez utraty czytelnosci.
+
+**Bramka i flow:**
+- Brak pliku w /incoming/ -> 422, brak semafora.
+- Kolizja -> 422, brak semafora.
+- Dopasowanie OK -> 200 + semafor + rekordy ExternalPdfAttachment.
+- Reject: rename na HiDrive, status REJECTED, plik nie pasuje ponownie.
+- Walidacja pobranego PDF (niekompletny upload -> ExternalPdfCorruptError).
+
+**URL encoding (spacje w nazwach plikow):**
+- Download pliku z HiDrive ze spacja w nazwie (`Kowalski Jan.pdf`) -> poprawne URL encoding w `requests.get(params=...)`.
+- Move pliku ze spacja -> poprawne URL encoding.
+
+**Pipeline e2e:**
+- Publish -> download on-demand -> merge -> upload merged -> move to /processed/ -> SMS.
+- Publish -> download -> merge FAIL -> upload Befund-only -> audit event `EXTERNAL_PDF_MERGE_FAILED` -> plik NIE przeniesiony do /processed/.
+- Publish -> download -> ExternalPdfCorruptError -> fallback -> audit event.
 
 ### 13. Dokumentacja
 
