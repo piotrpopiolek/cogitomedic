@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -104,6 +106,17 @@ class TabletViewsSmokeTests(TestCase):
         )
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/tablet/", resp.url)
+
+    def test_login_post_ignores_unsafe_next_query_param(self):
+        """``next`` is read from the query string; external URLs must not win redirects."""
+        resp = self.client.post(
+            "/tablet/login/?next=https://evil.example/phish",
+            {"username": "tablet-smoke", "password": "x"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(
+            resp.url.endswith("/tablet/") or resp.url.rstrip("/").endswith("/tablet")
+        )
 
     def test_login_post_doctor_stays_on_login(self):
         resp = self.client.post(
@@ -379,3 +392,26 @@ class TabletViewsScopeAndEdgeTests(TestCase):
         self.client.get(f"/tablet/form/{self.intake.id}/?locale=en")
         self.intake.session.refresh_from_db()
         self.assertEqual(self.intake.session.form_locale, "en-GB")
+
+    def test_entry_start_post_session_failure_returns_404(self) -> None:
+        self._login_tablet()
+        with patch(
+            "cogitomedica.tablet_views.issue_tablet_session_latest_wins",
+            side_effect=ObjectDoesNotExist(),
+        ):
+            resp = self.client.post(
+                f"/tablet/entry/{self.entry.id}/",
+                {"tablet_device_id": "", "android_id": ""},
+            )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTemplateUsed(resp, "tablet/error.html")
+
+    def test_form_get_context_missing_returns_404(self) -> None:
+        self._login_tablet()
+        with patch(
+            "cogitomedica.tablet_views.get_intake_form_context",
+            side_effect=ObjectDoesNotExist(),
+        ):
+            resp = self.client.get(f"/tablet/form/{self.intake.id}/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertTemplateUsed(resp, "tablet/error.html")
