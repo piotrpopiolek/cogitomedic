@@ -7,14 +7,17 @@ if False:  # pragma: no cover
 HIDRIVE_BEFUND_FILENAME_TEMPLATE = "Befund_v{version_no}.pdf"
 HIDRIVE_INTAKE_FILENAME_TEMPLATE = "Intake_v{version_no}.pdf"
 
+# Logical HiDrive layout: ``/patients/{uuid}/`` is a sibling of ``/incoming`` and ``/processed``.
+HIDRIVE_PATIENTS_DIR_PREFIX = "/patients"
+
 
 def build_befund_hidrive_path(version: "MedicalDocumentVersion") -> str:
     patient = version.medical_document.queue_entry.patient
     file_name = HIDRIVE_BEFUND_FILENAME_TEMPLATE.format(version_no=version.version_no)
-    return f"/hidrive/patients/{patient.id}/{file_name}"
+    return f"{HIDRIVE_PATIENTS_DIR_PREFIX}/{patient.id}/{file_name}"
 
 
 def build_intake_hidrive_path(version: "IntakeDocumentVersion") -> str:
     patient = version.intake_form.queue_entry.patient
     file_name = HIDRIVE_INTAKE_FILENAME_TEMPLATE.format(version_no=version.version_no)
-    return f"/hidrive/patients/{patient.id}/{file_name}"
+    return f"{HIDRIVE_PATIENTS_DIR_PREFIX}/{patient.id}/{file_name}"

@@ -70,7 +70,7 @@
   <a href="{% url 'doctor-list' %}" class="inline-flex items-center justify-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800 shrink-0">{{ ui.back_to_list }}</a>
 </div>
 
-<div id="alert-placeholder"></div>
+<div id="alert-placeholder" class="sticky top-0 z-30 mb-4 empty:hidden"></div>
 
 <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
   <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.intake_header }}</div>
@@ -111,6 +111,24 @@
           <option value="">{{ ui.template_select_placeholder }}</option>
         </select>
         <p class="text-sm text-base-500 dark:text-base-400 mb-0 mt-1">{{ ui.template_select_hint }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="external-pdfs-panel" class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs hidden" aria-live="polite">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.external_pdf_section_title }}</div>
+    <div class="p-4 text-sm text-base-900 dark:text-base-100 space-y-3">
+      <p id="external-pdfs-empty" class="text-base-500 dark:text-base-400 mb-0 hidden"></p>
+      <ul id="external-pdfs-list" class="list-none space-y-2 p-0 m-0"></ul>
+      {# Wysokość inline: bundel Tailwinda z admina często nie zawiera klas arbitrary (min-h-[…]), więc iframe zostawał „pasek”. #}
+      <div class="border border-base-200 dark:border-base-700 rounded-default overflow-hidden bg-base-50 dark:bg-base-950" style="min-height: 70vh;">
+        <iframe
+          id="external-pdf-iframe"
+          title="{{ ui.external_pdf_iframe_title }}"
+          class="w-full border-0"
+          style="display: block; width: 100%; min-height: 680px; height: 80vh; max-height: 1200px;"
+          src="about:blank"
+        ></iframe>
       </div>
     </div>
   </section>
@@ -218,7 +236,8 @@
   <div class="flex flex-wrap items-center gap-3">
     <button type="button" class="inline-flex items-center justify-center rounded-default border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-800 hover:bg-base-200 dark:bg-base-800 dark:border-base-600 dark:text-base-100 dark:hover:bg-base-700" id="btn-save-draft">{{ ui.btn_save_draft }}</button>
     <a class="inline-flex items-center justify-center rounded-default border border-primary-600/40 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/50 dark:text-primary-400" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{{ ui.btn_preview_pdf }}</a>
-    <button type="button" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600" id="btn-publish">{{ ui.btn_publish }}</button>
+    <button type="button" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 disabled:opacity-50 disabled:pointer-events-none" id="btn-publish" disabled aria-describedby="publish-preview-hint">{{ ui.btn_publish }}</button>
+    <p id="publish-preview-hint" class="w-full text-xs text-base-500 dark:text-base-400 mb-0">{{ ui.publish_requires_preview_hint }}</p>
     <label class="inline-flex items-center gap-2 text-sm text-base-700 dark:text-base-300"><input type="checkbox" id="resend_sms" class="rounded border-base-300 text-primary-600 dark:border-base-600 dark:bg-base-900" /> {{ ui.resend_sms }}</label>
   </div>
 </form>

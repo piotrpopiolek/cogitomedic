@@ -65,6 +65,8 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.invalid_request_encoding": "Request body is not valid UTF-8.",
     "other.api.invalid_role_query": "Invalid role query parameter.",
     "other.api.medical_document_not_found": "Medical document not found.",
+    "other.api.external_pdf_rejected": "This external PDF was already rejected.",
+    "other.api.external_pdf_reject_failed": "Could not reject the file on HiDrive.",
     "other.api.medical_document_version_not_found": "Medical document version not found.",
     "other.api.medical_payload_schema_mismatch": (
         "medical_payload.schema_version must match medical_payload_schema_version."

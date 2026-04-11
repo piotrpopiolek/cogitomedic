@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import patch
 from uuid import uuid4
 
-from django.test import Client, TestCase
+from pypdf import PdfWriter
+
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentVersion,
@@ -353,6 +358,158 @@ class Tests(TestCase):
         r = self.client.get(self._doc_url("/preview-pdf") + "?form_locale=en-GB")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
+
+    # =============================================================
+    # 3b2. External HiDrive PDF attachments API
+    # =============================================================
+
+    @staticmethod
+    def _minimal_pdf_bytes() -> bytes:
+        w = PdfWriter()
+        w.add_blank_page(width=200, height=200)
+        buf = BytesIO()
+        w.write(buf)
+        return buf.getvalue()
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdfs_get_empty_list(self) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        self._login_doctor()
+        r = self.client.get(self._doc_url("/external-pdfs"))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("items"), [])
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdfs_get_with_attachment(self) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf = self._minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Test_Med.pdf",
+                    "path": "/incoming/Test_Med.pdf",
+                    "size": len(pdf),
+                    "mtime": None,
+                }
+            ],
+        )
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Test_Med.pdf", pdf)
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url("/external-pdfs"))
+        self.assertEqual(r.status_code, 200)
+        items = r.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["filename"], "Test_Med.pdf")
+        self.assertEqual(items[0]["status"], "MATCHED")
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdf_content_get_returns_pdf(self) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf = self._minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Test_Med.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", r.content[:8])
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdf_content_rejected_returns_410(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/rejected_Test_Med.pdf",
+            original_filename="rejected_Test_Med.pdf",
+            status=ExternalPdfStatus.REJECTED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 410)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdf_content_corrupt_returns_422(self) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+        from apps.medical.external_pdf_service import ExternalPdfCorruptError
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        with patch(
+            "apps.medical.api_views.download_external_pdf",
+            side_effect=ExternalPdfCorruptError("x"),
+        ):
+            r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("error", r.json())
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_external_pdf_reject_post_updates_status(self) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf = self._minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Test_Med.pdf",
+                    "path": "/incoming/Test_Med.pdf",
+                    "size": len(pdf),
+                    "mtime": None,
+                }
+            ],
+        )
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Test_Med.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.post(
+            self._doc_url(f"/external-pdfs/{att.id}/reject"),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("ok"))
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.REJECTED)
+        self.assertIn("rejected_", att.hidrive_remote_path)
+
+    def test_external_pdfs_wrong_method_returns_405(self) -> None:
+        self._login_doctor()
+        r = self.client.post(self._doc_url("/external-pdfs"))
+        self.assertEqual(r.status_code, 405)
+
+    def test_external_pdfs_reception_returns_403(self) -> None:
+        self._login_reception()
+        r = self.client.get(self._doc_url("/external-pdfs"))
+        self.assertEqual(r.status_code, 403)
 
     # =============================================================
     # 3c. medical_document_draft_view — encoding / validation / lock race
