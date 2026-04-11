@@ -3,18 +3,28 @@
 Covers: signature, anamnesis, submit, outbox-events access,
 outbox-process access. Focuses on status codes and auth/role
 enforcement — business logic is covered in service tests.
+
+Also targets selected ``api_views`` branches for submit (body parsing,
+domain/state errors) and GET form context (clinic scope, patient payload).
 """
 
 from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.domain_messages import domain_message
+from apps.core.exceptions import (
+    DomainError,
+    InvalidRequestBodyEncoding,
+    StateTransitionError,
+)
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.reception.models import (
     ClinicSite,
@@ -31,10 +41,18 @@ from apps.users.models import StaffUser
 _PW = "safe-password"
 
 
-def _create_intake_form(*, created_by: StaffUser) -> PatientIntakeForm:
-    """Minimal fixture: clinic → queue → patient → entry → form."""
+def _create_intake_form(
+    *, created_by: StaffUser, clinic_site: ClinicSite | None = None
+) -> PatientIntakeForm:
+    """Minimal fixture: clinic → queue → patient → entry → form.
+
+    When ``clinic_site`` is provided, the queue is created for that site
+    (reuse an existing clinic for scope tests).
+    """
     sfx = uuid4().hex[:6]
-    clinic = ClinicSite.objects.create(code=f"C{sfx[:3].upper()}", name=f"Clinic {sfx}")
+    clinic = clinic_site or ClinicSite.objects.create(
+        code=f"C{sfx[:3].upper()}", name=f"Clinic {sfx}"
+    )
     room = ConsultingRoom.objects.create(
         clinic_site=clinic, code=f"R{sfx[:2]}", name=f"R{sfx[:2]}"
     )
@@ -231,6 +249,21 @@ class IntakeFormAnamnesisViewTests(TestCase):
 
 
 class IntakeFormSubmitViewTests(TestCase):
+    """Submit is rate-limited to 5/min per IP; many POSTs in one class hit 429 without this patch."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls._ratelimit_patcher = patch(
+            "django_ratelimit.decorators.is_ratelimited", return_value=False
+        )
+        cls._ratelimit_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._ratelimit_patcher.stop()
+        super().tearDownClass()
+
     def setUp(self) -> None:
         self.client = Client()
         self.rec_user = StaffUser.objects.create_user(
@@ -273,6 +306,137 @@ class IntakeFormSubmitViewTests(TestCase):
             self._url(uuid4()),
             data=json.dumps({}),
             content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_invalid_json_returns_400(self) -> None:
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data="NOT_JSON{{{",
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_validation_error_on_unknown_field_returns_400(self) -> None:
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({"unexpected": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("details", resp.json())
+
+    @patch("apps.intake.api_views.read_json_body")
+    def test_invalid_body_encoding_returns_domain_error(
+        self, mock_read: MagicMock
+    ) -> None:
+        mock_read.side_effect = InvalidRequestBodyEncoding(
+            "bad utf-8",
+            api_message_key="other.api.request_body_too_large",
+            api_message_params={"max_bytes": 42},
+            http_status=413,
+        )
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 413)
+        self.assertIn("error", resp.json())
+
+    @patch("apps.intake.api_views.submit_patient_intake_form")
+    def test_submit_state_transition_returns_400(self, mock_submit: MagicMock) -> None:
+        mock_submit.side_effect = StateTransitionError(
+            domain_message("other.domain.intake_submit_in_progress_only"),
+            api_message_key="other.domain.intake_submit_in_progress_only",
+        )
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.json())
+
+    @patch("apps.intake.api_views.submit_patient_intake_form")
+    def test_submit_domain_error_returns_400(self, mock_submit: MagicMock) -> None:
+        mock_submit.side_effect = DomainError(
+            domain_message("other.domain.intake_session_expired"),
+            api_message_key="other.domain.intake_session_expired",
+        )
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.json())
+
+
+# ---------------------------------------------------------------
+# 3b. intake_form_detail_view — GET context scope & patient (read-only)
+# ---------------------------------------------------------------
+
+
+class IntakeFormGetContextScopeTests(TestCase):
+    """GET ``/intake-forms/<id>`` without mocking service: clinic scope + patient block."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin = StaffUser.objects.create_user(
+            username="ctx-admin",
+            email="ctx-admin@ex.com",
+            password=_PW,
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin, "Admin")
+        self.rec_user = StaffUser.objects.create_user(
+            username="ctx-rec",
+            email="ctx-rec@ex.com",
+            password=_PW,
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.rec_user, "Reception")
+        self.clinic_own = ClinicSite.objects.create(code="CTX", name="Ctx Clinic")
+        self.clinic_other = ClinicSite.objects.create(code="CTO", name="Other Ctx")
+        self.rec_user.clinic_sites.add(self.clinic_own)
+
+    def test_admin_get_includes_patient_identity_and_form_status(self) -> None:
+        intake = _create_intake_form(created_by=self.admin)
+        patient = intake.queue_entry.patient
+        self.client.login(username="ctx-admin", password=_PW)
+        resp = self.client.get(
+            f"/api/v1/intake-forms/{intake.id}?form_locale=de-DE",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["form_status"], IntakeStatus.IN_PROGRESS)
+        self.assertEqual(data["intake_form_id"], str(intake.id))
+        self.assertIn("patient", data)
+        self.assertEqual(data["patient"]["first_name"], patient.first_name)
+        self.assertEqual(data["patient"]["last_name"], patient.last_name)
+        self.assertEqual(data["patient"]["phone"], patient.phone)
+
+    def test_reception_get_outside_assigned_clinic_returns_404(self) -> None:
+        intake = _create_intake_form(
+            created_by=self.admin, clinic_site=self.clinic_other
+        )
+        self.client.login(username="ctx-rec", password=_PW)
+        resp = self.client.get(
+            f"/api/v1/intake-forms/{intake.id}?form_locale=de-DE",
         )
         self.assertEqual(resp.status_code, 404)
 

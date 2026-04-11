@@ -22,12 +22,17 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.services import (
+    acquire_document_lock,
     create_or_get_medical_document,
+    get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
     latest_version_processing_error_message,
     list_doctor_work_queue,
+    list_medical_documents,
     outbox_event_stage_status,
+    refresh_document_lock,
+    release_document_lock,
     revoke_document_version,
     save_draft_document_version,
 )
@@ -629,3 +634,289 @@ class LatestVersionProcessingErrorTests(ServicesCoverageBase):
             payload_schema_version=1,
         )
         self.assertIsNone(latest_version_processing_error_message(ver))
+
+
+# ------------------------------------------------------------------
+# 7. Document locking services
+# ------------------------------------------------------------------
+class DocumentLockTests(ServicesCoverageBase):
+    def _make_draft_doc(self):
+        return MedicalDocument.objects.create(
+            queue_entry=self.queue_entry,
+            intake_form=self.intake,
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=0,
+            created_by_user=self.doctor,
+        )
+
+    def _other_doctor(self, suffix="lock"):
+        user = StaffUser.objects.create_user(
+            username=f"cov-{suffix}",
+            email=f"cov-{suffix}@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(user, "Doctor")
+        return user
+
+    def _admin_user(self):
+        user = StaffUser.objects.create_user(
+            username="cov-admin-lock",
+            email="cov-admin-lock@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(user, "Admin")
+        return user
+
+    # -- get_document_lock_state --
+    def test_lock_state_no_lock(self):
+        doc = self._make_draft_doc()
+        eff, name, at = get_document_lock_state(doc)
+        self.assertFalse(eff)
+        self.assertIsNone(name)
+        self.assertIsNone(at)
+
+    def test_lock_state_active_lock(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        eff, name, at = get_document_lock_state(doc)
+        self.assertTrue(eff)
+        self.assertIsNotNone(name)
+        self.assertIsNotNone(at)
+
+    def test_lock_state_expired_lock(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now() - timedelta(hours=25)
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        eff, name, at = get_document_lock_state(doc)
+        self.assertFalse(eff)
+        self.assertIsNone(name)
+        self.assertIsNone(at)
+
+    def test_lock_state_without_user_relation_loaded(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user_id = self.doctor.id
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        plain = MedicalDocument.objects.get(id=doc.id)
+        eff, name, at = get_document_lock_state(plain)
+        self.assertTrue(eff)
+        self.assertIsNotNone(name)
+
+    # -- acquire_document_lock --
+    def test_acquire_free_lock(self):
+        doc = self._make_draft_doc()
+        granted, holder = acquire_document_lock(
+            medical_document_id=doc.id, user=self.doctor
+        )
+        self.assertTrue(granted)
+        self.assertIsNone(holder)
+        doc.refresh_from_db()
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+
+    def test_acquire_own_lock_refreshes(self):
+        doc = self._make_draft_doc()
+        old_time = timezone.now() - timedelta(minutes=30)
+        doc.locked_by_user = self.doctor
+        doc.locked_at = old_time
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        granted, holder = acquire_document_lock(
+            medical_document_id=doc.id, user=self.doctor
+        )
+        self.assertTrue(granted)
+        doc.refresh_from_db()
+        self.assertGreater(doc.locked_at, old_time)
+
+    def test_acquire_other_lock_denied(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        other = self._other_doctor("acq-deny")
+        granted, holder = acquire_document_lock(medical_document_id=doc.id, user=other)
+        self.assertFalse(granted)
+        self.assertIsNotNone(holder)
+
+    def test_acquire_admin_takes_over(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        admin = self._admin_user()
+        granted, holder = acquire_document_lock(medical_document_id=doc.id, user=admin)
+        self.assertTrue(granted)
+        doc.refresh_from_db()
+        self.assertEqual(doc.locked_by_user_id, admin.id)
+
+    def test_acquire_expired_lock_grants(self):
+        doc = self._make_draft_doc()
+        other = self._other_doctor("acq-exp")
+        doc.locked_by_user = other
+        doc.locked_at = timezone.now() - timedelta(hours=25)
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        granted, holder = acquire_document_lock(
+            medical_document_id=doc.id, user=self.doctor
+        )
+        self.assertTrue(granted)
+        doc.refresh_from_db()
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+
+    def test_acquire_on_published_doc_returns_true(self):
+        doc = self._make_medical_doc()
+        granted, holder = acquire_document_lock(
+            medical_document_id=doc.id, user=self.doctor
+        )
+        self.assertTrue(granted)
+
+    # -- release_document_lock --
+    def test_release_own_lock(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        result = release_document_lock(medical_document_id=doc.id, user=self.doctor)
+        self.assertTrue(result)
+        doc.refresh_from_db()
+        self.assertIsNone(doc.locked_by_user_id)
+
+    def test_release_no_lock(self):
+        doc = self._make_draft_doc()
+        result = release_document_lock(medical_document_id=doc.id, user=self.doctor)
+        self.assertTrue(result)
+
+    def test_release_other_lock_denied(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        other = self._other_doctor("rel-deny")
+        result = release_document_lock(medical_document_id=doc.id, user=other)
+        self.assertFalse(result)
+
+    def test_release_admin_releases_other_lock(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        admin = self._admin_user()
+        result = release_document_lock(medical_document_id=doc.id, user=admin)
+        self.assertTrue(result)
+        doc.refresh_from_db()
+        self.assertIsNone(doc.locked_by_user_id)
+
+    # -- refresh_document_lock --
+    def test_refresh_own_lock(self):
+        doc = self._make_draft_doc()
+        old_time = timezone.now() - timedelta(minutes=10)
+        doc.locked_by_user = self.doctor
+        doc.locked_at = old_time
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
+        self.assertTrue(result)
+        doc.refresh_from_db()
+        self.assertGreater(doc.locked_at, old_time)
+
+    def test_refresh_free_lock_acquires(self):
+        doc = self._make_draft_doc()
+        result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
+        self.assertTrue(result)
+        doc.refresh_from_db()
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+
+    def test_refresh_other_lock_denied(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        other = self._other_doctor("ref-deny")
+        result = refresh_document_lock(medical_document_id=doc.id, user=other)
+        self.assertFalse(result)
+
+    def test_refresh_admin_takes_over(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        admin = self._admin_user()
+        result = refresh_document_lock(medical_document_id=doc.id, user=admin)
+        self.assertTrue(result)
+        doc.refresh_from_db()
+        self.assertEqual(doc.locked_by_user_id, admin.id)
+
+    def test_refresh_on_published_doc_returns_true(self):
+        doc = self._make_medical_doc()
+        result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
+        self.assertTrue(result)
+
+    # -- list_medical_documents lock fields --
+    def test_list_medical_documents_includes_lock_fields(self):
+        doc = self._make_draft_doc()
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        items, total = list_medical_documents(user=self.doctor)
+        self.assertEqual(total, 1)
+        item_data = items[0]
+        self.assertIsNotNone(item_data.locked_by_user_id)
+
+    # -- list_doctor_work_queue lock fields --
+    def test_work_queue_includes_lock_fields_in_output(self):
+        doc = self._make_draft_doc()
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.current_version_no = 1
+        doc.save(update_fields=["locked_by_user", "locked_at", "current_version_no"])
+        items, total = list_doctor_work_queue(user=self.doctor)
+        self.assertGreaterEqual(total, 1)
+        item = items[0]
+        self.assertIn("locked_by_username", item)
+        self.assertIn("locked_at", item)
+        self.assertIn("is_locked_by_other", item)
+        self.assertIn("row_is_published", item)
+        self.assertFalse(item["is_locked_by_other"])
+
+    def test_work_queue_locked_by_other(self):
+        other = self._other_doctor("wq-lock")
+        doc = self._make_draft_doc()
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        doc.locked_by_user = other
+        doc.locked_at = timezone.now()
+        doc.current_version_no = 1
+        doc.save(update_fields=["locked_by_user", "locked_at", "current_version_no"])
+        items, total = list_doctor_work_queue(user=self.doctor)
+        self.assertGreaterEqual(total, 1)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["is_locked_by_other"])
+
+    # -- list_medical_documents draft visibility for non-assigned doctor --
+    def test_list_medical_documents_draft_visible_to_non_assigned(self):
+        self._make_draft_doc()
+        other = self._other_doctor("list-vis")
+        items, total = list_medical_documents(user=other)
+        self.assertEqual(total, 1)
+
+    def test_list_medical_documents_published_hidden_from_non_assigned(self):
+        self._make_medical_doc()
+        other = self._other_doctor("list-hid")
+        self.daily_queue.assigned_doctor = self.doctor
+        self.daily_queue.save(update_fields=["assigned_doctor"])
+        items, total = list_medical_documents(user=other)
+        self.assertEqual(total, 0)

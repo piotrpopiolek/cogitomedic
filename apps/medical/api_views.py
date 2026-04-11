@@ -536,21 +536,32 @@ def medical_document_publish_view(
         )
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
-            id=medical_document_id
-        )
-        check_doctor_document_access(doc, request.user)
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
+        with transaction.atomic():
+            doc = (
+                MedicalDocument.objects.select_for_update()
+                .select_related("queue_entry__daily_queue")
+                .get(id=medical_document_id)
+            )
+            check_doctor_document_access(doc, request.user)
 
-    try:
-        version = publish_document_version(
-            medical_document_id=medical_document_id,
-            publish_request_id=body.publish_request_id,
-            published_by_user_id=request.user.id,
-            publish_locale=body.publish_locale,
-            resend_sms=body.resend_sms,
-        )
+            if doc.status == MedicalDocStatus.DRAFT:
+                eff, holder_name, _ = get_document_lock_state(doc)
+                if (
+                    eff
+                    and doc.locked_by_user_id != request.user.id
+                    and not request.user.is_admin_role
+                ):
+                    raise _MedicalDocumentEditLocked(holder_name)
+
+            version = publish_document_version(
+                medical_document_id=medical_document_id,
+                publish_request_id=body.publish_request_id,
+                published_by_user_id=request.user.id,
+                publish_locale=body.publish_locale,
+                resend_sms=body.resend_sms,
+            )
+    except _MedicalDocumentEditLocked as exc:
+        return _json_document_locked(request, exc.locked_by_username)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except IdempotencyConflictError as exc:
