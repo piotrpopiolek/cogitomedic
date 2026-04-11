@@ -97,10 +97,10 @@
     </section>
     <section id="anamnesis-section">
     <h2>{{ ui.anamnesis_title }}</h2>
-    <div id="anamnesis-msg" class="error" style="display:none;"></div>
     {% for q in anamnesis_questions %}
     <div class="field" data-question-code="{{ q.question_code }}" data-required="{{ q.is_required|yesno:'true,false' }}">
       <strong>{{ q.question_text }}{% if q.is_required %} *{% endif %}</strong>
+      <div class="anamnesis-field-msg" style="display:none;" role="alert" aria-live="polite"></div>
       {% if q.answer_type == "BOOLEAN" or q.answer_type == "SINGLE_CHOICE" %}
         {% for opt in q.options %}
         <label><input type="radio" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
@@ -129,10 +129,10 @@
     <button type="button" id="save-signature">{{ ui.save_signature }}</button>
     <span id="signature-saved" class="success" style="display:none;">{{ ui.signature_saved }}</span>
     </section>
-    <section>
-      <p id="auto-submit-hint" class="text-muted-portal" style="display: none; font-size: 0.9rem; max-width: 36rem;" role="status" aria-live="polite"></p>
+    <section class="tablet-step3-footer">
+      <p id="auto-submit-hint" class="text-muted-portal tablet-step3-hint" style="display: none;" role="status" aria-live="polite"></p>
       <div id="submit-msg" class="error" style="display:none;"></div>
-      <div class="step-actions">
+      <div class="step-actions tablet-step3-actions">
         <button type="button" id="btn-step3-back" class="btn secondary">{{ ui.step_back }}</button>
         <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>{{ ui.submit_form }}</button>
       </div>
