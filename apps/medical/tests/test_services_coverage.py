@@ -414,10 +414,22 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         )
         self.assertEqual(total, 0)
 
-    def test_non_assigned_doctor_sees_nothing(self):
+    def test_non_assigned_doctor_sees_pending_intake_without_document(self):
         other = StaffUser.objects.create_user(
             username="other-doc",
             email="other-doc@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        items, total = list_doctor_work_queue(user=other)
+        self.assertEqual(total, 1)
+
+    def test_non_assigned_doctor_sees_nothing_when_only_others_published(self):
+        self._make_medical_doc()
+        other = StaffUser.objects.create_user(
+            username="other-doc-2",
+            email="other-doc-2@example.com",
             password="x",
             is_staff=True,
         )

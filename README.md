@@ -31,7 +31,7 @@
 
 - **Reception:** Manage the daily patient list (waiting room), add patients manually or via daily file import, start tablet form sessions without one-time token links; browse generated intake PDFs (list, filters, detail, inline preview) in the panel at `/admin/intake-documents/`
 - **Patient (tablet):** Touch-optimized form with read-only personal data, consent checkboxes, interactive body map, and electronic signature
-- **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend
+- **Doctor/Staff:** View completed forms, fill medical section, save as draft or publish, edit published documents and resend. **Doctor panel:** all doctors share the **DRAFT** work queue (and queue entries awaiting first document creation); **PUBLISHED** documents are scoped to the **creator** of the medical record and optionally the **assigned doctor** on the daily queue when that field is used.
 - **Backend:** Asynchronous pipeline (`GENERATE_PDF` -> `HIDRIVE_UPLOAD` -> `SMS_SEND`) processed through Django 6 Tasks (`django.tasks`) + Transactional Outbox, HiDrive API archiving (OAuth2 refresh token; mock switchable), SMS (logistic-only: „Nowa dokumentacja w Cogito“) via SMSApi, 30-day retention policy for local PDFs
 - **Patient results portal:** 4-step process implemented in `apps/patient_results`: SMS logistic → portal login by phone+DOB → OTP (15 min) → PDF download via HTTPS (RODO/BÄK compliant; doctor can revoke publication)
 

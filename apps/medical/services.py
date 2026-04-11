@@ -216,6 +216,7 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     """
     Raise ObjectDoesNotExist if user (doctor) does not have access.
     Access is granted if user is the author OR is assigned to the document's queue.
+    Any doctor may access a document in DRAFT (shared work queue for describing).
     ADMIN has access to all.
     """
     if user.is_admin_role:
@@ -224,14 +225,30 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
         return
     if document.queue_entry.daily_queue.assigned_doctor_id == user.id:
         return
+    if document.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
+        return
     raise ObjectDoesNotExist("Medical document not found.")
 
 
 def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
-    """Raise ObjectDoesNotExist if user does not have access to the queue entry."""
+    """
+    Raise ObjectDoesNotExist if user does not have access to the queue entry.
+
+    Allowed: admin; doctor assigned to the daily queue; creator of an existing
+    medical document for this entry; any doctor when there is no document yet
+    or the document is still DRAFT (shared queue).
+    """
     if user.is_admin_role:
         return
     if queue_entry.daily_queue.assigned_doctor_id == user.id:
+        return
+    md = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
+    if md is not None:
+        if md.created_by_user_id == user.id:
+            return
+        if md.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
+            return
+    elif getattr(user, "is_doctor", False):
         return
     raise ObjectDoesNotExist("Queue entry not found.")
 
@@ -668,7 +685,8 @@ def list_medical_documents(
 ) -> tuple[list[MedicalDocument], int]:
     """
     List medical documents for doctor work queue.
-    If user is DOCTOR, returns only documents where user is author OR assigned to queue.
+    If user is DOCTOR (not admin), returns documents where user is author OR assigned
+    to queue, plus every document still in DRAFT (shared describing queue).
     """
     qs = (
         MedicalDocument.objects.select_related(
@@ -696,6 +714,7 @@ def list_medical_documents(
         qs = qs.filter(
             Q(created_by_user_id=user.id)
             | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+            | Q(status=MedicalDocStatus.DRAFT)
         )
     if status:
         qs = qs.filter(status=status)
@@ -730,10 +749,13 @@ def list_doctor_work_queue(
         form_status=IntakeStatus.SUBMITTED
     ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     if not user.is_admin_role and user is not None:
-        qs = qs.filter(
-            Q(queue_entry__medical_document__created_by_user_id=user.id)
-            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+        shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
+            queue_entry__medical_document__status=MedicalDocStatus.DRAFT
         )
+        personal = Q(queue_entry__medical_document__created_by_user_id=user.id) | Q(
+            queue_entry__daily_queue__assigned_doctor_id=user.id
+        )
+        qs = qs.filter(shared_draft_or_pending | personal)
     if status:
         qs = qs.filter(
             queue_entry_id__in=MedicalDocument.objects.filter(
