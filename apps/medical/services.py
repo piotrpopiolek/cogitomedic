@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -36,6 +36,123 @@ from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry
 from apps.users.models import StaffUser
+
+DOCUMENT_LOCK_TIMEOUT_HOURS = 24
+
+
+def _staff_user_display_name(user: StaffUser | None) -> str:
+    if user is None:
+        return ""
+    name = f"{user.first_name} {user.last_name}".strip()
+    return name or (user.username or "")
+
+
+def get_document_lock_state(
+    doc: MedicalDocument, *, now: datetime | None = None
+) -> tuple[bool, str | None, datetime | None]:
+    """
+    Returns (is_effective_lock, locked_by_display_name, locked_at).
+    Expired locks are treated as ineffective (False, None, None).
+    """
+    at = now or timezone.now()
+    if not doc.locked_by_user_id or not doc.locked_at:
+        return False, None, None
+    if doc.locked_at < at - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS):
+        return False, None, None
+    holder = getattr(doc, "locked_by_user", None)
+    if holder is None and doc.locked_by_user_id:
+        holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
+    return True, _staff_user_display_name(holder), doc.locked_at
+
+
+@transaction.atomic
+def acquire_document_lock(
+    *, medical_document_id: uuid.UUID, user: Any
+) -> tuple[bool, str | None]:
+    """
+    Acquire or refresh edit lock for a DRAFT document. Published documents are not locked.
+
+    Returns (granted, current_holder_display_name_if_denied).
+    Admin may take over an active lock held by another user.
+    """
+    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    if doc.status != MedicalDocStatus.DRAFT:
+        return True, None
+
+    now = timezone.now()
+    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
+    locked = (
+        doc.locked_by_user_id is not None
+        and doc.locked_at is not None
+        and doc.locked_at >= cutoff
+    )
+
+    if locked:
+        if doc.locked_by_user_id == user.id:
+            doc.locked_at = now
+            doc.save(update_fields=["locked_at", "updated_at"])
+            return True, None
+        if getattr(user, "is_admin_role", False):
+            doc.locked_by_user_id = user.id
+            doc.locked_at = now
+            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+            return True, None
+        holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
+        return False, _staff_user_display_name(holder)
+
+    doc.locked_by_user_id = user.id
+    doc.locked_at = now
+    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    return True, None
+
+
+@transaction.atomic
+def release_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
+    """
+    Clear edit lock if the user holds it, or if the user is admin.
+    Returns True if the lock row was cleared or there was nothing to release.
+    """
+    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    if not doc.locked_by_user_id:
+        return True
+    if doc.locked_by_user_id != user.id and not getattr(user, "is_admin_role", False):
+        return False
+    doc.locked_by_user_id = None
+    doc.locked_at = None
+    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    return True
+
+
+@transaction.atomic
+def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
+    """
+    Refresh ``locked_at`` for the current holder (or acquire if lock is free/expired).
+    Returns False if another user holds an effective lock (and caller is not admin).
+    """
+    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    if doc.status != MedicalDocStatus.DRAFT:
+        return True
+
+    now = timezone.now()
+    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
+    locked = (
+        doc.locked_by_user_id is not None
+        and doc.locked_at is not None
+        and doc.locked_at >= cutoff
+    )
+
+    if locked and doc.locked_by_user_id != user.id:
+        if getattr(user, "is_admin_role", False):
+            doc.locked_by_user_id = user.id
+            doc.locked_at = now
+            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+            return True
+        return False
+
+    doc.locked_by_user_id = user.id
+    doc.locked_at = now
+    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    return True
 
 
 def assigned_doctor_audit_metadata(medical_document: MedicalDocument) -> dict[str, str]:
@@ -99,6 +216,7 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     """
     Raise ObjectDoesNotExist if user (doctor) does not have access.
     Access is granted if user is the author OR is assigned to the document's queue.
+    Any doctor may access a document in DRAFT (shared work queue for describing).
     ADMIN has access to all.
     """
     if user.is_admin_role:
@@ -107,14 +225,30 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
         return
     if document.queue_entry.daily_queue.assigned_doctor_id == user.id:
         return
+    if document.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
+        return
     raise ObjectDoesNotExist("Medical document not found.")
 
 
 def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
-    """Raise ObjectDoesNotExist if user does not have access to the queue entry."""
+    """
+    Raise ObjectDoesNotExist if user does not have access to the queue entry.
+
+    Allowed: admin; doctor assigned to the daily queue; creator of an existing
+    medical document for this entry; any doctor when there is no document yet
+    or the document is still DRAFT (shared queue).
+    """
     if user.is_admin_role:
         return
     if queue_entry.daily_queue.assigned_doctor_id == user.id:
+        return
+    md = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
+    if md is not None:
+        if md.created_by_user_id == user.id:
+            return
+        if md.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
+            return
+    elif getattr(user, "is_doctor", False):
         return
     raise ObjectDoesNotExist("Queue entry not found.")
 
@@ -386,6 +520,8 @@ def publish_document_version(
     medical_document.current_version_no = draft_version.version_no
     medical_document.last_published_at = requested_at
     medical_document.updated_by_user_id = published_by_user_id
+    medical_document.locked_by_user_id = None
+    medical_document.locked_at = None
     medical_document.save(
         update_fields=[
             "status",
@@ -393,6 +529,8 @@ def publish_document_version(
             "last_published_at",
             "updated_by_user",
             "updated_at",
+            "locked_by_user",
+            "locked_at",
         ]
     )
 
@@ -547,13 +685,15 @@ def list_medical_documents(
 ) -> tuple[list[MedicalDocument], int]:
     """
     List medical documents for doctor work queue.
-    If user is DOCTOR, returns only documents where user is author OR assigned to queue.
+    If user is DOCTOR (not admin), returns documents where user is author OR assigned
+    to queue, plus every document still in DRAFT (shared describing queue).
     """
     qs = (
         MedicalDocument.objects.select_related(
             "queue_entry",
             "queue_entry__patient",
             "queue_entry__daily_queue",
+            "locked_by_user",
         )
         .prefetch_related(
             Prefetch(
@@ -574,6 +714,7 @@ def list_medical_documents(
         qs = qs.filter(
             Q(created_by_user_id=user.id)
             | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+            | Q(status=MedicalDocStatus.DRAFT)
         )
     if status:
         qs = qs.filter(status=status)
@@ -608,10 +749,13 @@ def list_doctor_work_queue(
         form_status=IntakeStatus.SUBMITTED
     ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     if not user.is_admin_role and user is not None:
-        qs = qs.filter(
-            Q(queue_entry__medical_document__created_by_user_id=user.id)
-            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+        shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
+            queue_entry__medical_document__status=MedicalDocStatus.DRAFT
         )
+        personal = Q(queue_entry__medical_document__created_by_user_id=user.id) | Q(
+            queue_entry__daily_queue__assigned_doctor_id=user.id
+        )
+        qs = qs.filter(shared_draft_or_pending | personal)
     if status:
         qs = qs.filter(
             queue_entry_id__in=MedicalDocument.objects.filter(
@@ -636,7 +780,7 @@ def list_doctor_work_queue(
     queue_entry_ids = [f.queue_entry_id for f in intake_forms]
     docs = (
         MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids)
-        .select_related("queue_entry")
+        .select_related("queue_entry", "locked_by_user")
         .prefetch_related(
             Prefetch(
                 "versions",
@@ -680,6 +824,16 @@ def list_doctor_work_queue(
             else None
         )
         retryable_event = latest_retryable_outbox_event(latest) if latest else None
+        locked_eff, locked_name, locked_at = (
+            get_document_lock_state(doc) if doc else (False, None, None)
+        )
+        is_published = bool(doc and doc.status == MedicalDocStatus.PUBLISHED)
+        is_locked_by_other = bool(
+            doc
+            and locked_eff
+            and doc.locked_by_user_id != user.id
+            and not getattr(user, "is_admin_role", False)
+        )
         list_items.append(
             {
                 "document_id": str(doc.id) if doc else None,
@@ -693,6 +847,10 @@ def list_doctor_work_queue(
                 },
                 "queue_date": queue.queue_date.isoformat(),
                 "status": doc.status if doc else "—",
+                "locked_by_username": locked_name,
+                "locked_at": locked_at.isoformat() if locked_at else None,
+                "is_locked_by_other": is_locked_by_other,
+                "row_is_published": is_published,
                 "pdf_generation_status": (
                     latest.pdf_generation_status if latest else None
                 ),
@@ -729,6 +887,7 @@ def get_medical_document_context(
             "queue_entry__patient",
             "queue_entry__daily_queue",
             "intake_form",
+            "locked_by_user",
         )
         .prefetch_related(
             Prefetch(
@@ -847,6 +1006,7 @@ def get_medical_document_context(
                 ),
             }
 
+    lock_eff, lock_name, lock_at = get_document_lock_state(doc)
     return {
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
@@ -856,6 +1016,11 @@ def get_medical_document_context(
         "last_published_at": (
             doc.last_published_at.isoformat() if doc.last_published_at else None
         ),
+        "locked_by_user_id": (
+            str(doc.locked_by_user_id) if doc.locked_by_user_id else None
+        ),
+        "locked_by_username": lock_name if lock_eff else None,
+        "locked_at": lock_at.isoformat() if lock_at and lock_eff else None,
         "intake_summary": intake_summary,
         "current_version": current_version_payload,
     }

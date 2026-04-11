@@ -452,13 +452,13 @@ class TabletHomeClinicScopeTests(TestCase):
             clinic_site=self.clinic_b, code="THB-1", name="B1"
         )
         DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
+            queue_date=timezone.localdate(),
             clinic_site=self.clinic_a,
             consulting_room=self.room_a,
             created_by_user=self.tablet_user,
         )
         DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
+            queue_date=timezone.localdate(),
             clinic_site=self.clinic_b,
             consulting_room=self.room_b,
             created_by_user=self.tablet_user,

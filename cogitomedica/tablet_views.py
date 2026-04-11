@@ -121,7 +121,7 @@ def tablet_logout_view(request: HttpRequest) -> HttpResponse:
 def tablet_home_view(request: HttpRequest) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
-    today = timezone.now().date()
+    today = timezone.localdate()
     qs = (
         DailyQueue.objects.filter(queue_date=today)
         .select_related("clinic_site", "consulting_room")
@@ -155,7 +155,7 @@ def tablet_queue_entries_view(
 ) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
-    today = timezone.now().date()
+    today = timezone.localdate()
     try:
         queue = DailyQueue.objects.select_related("clinic_site", "consulting_room").get(
             id=daily_queue_id
@@ -193,7 +193,7 @@ def tablet_queue_entries_view(
 def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpResponse:
     if not _tablet_role_ok(request):
         return redirect("tablet:login")
-    today = timezone.now().date()
+    today = timezone.localdate()
     try:
         entry = QueueEntry.objects.select_related("daily_queue", "patient").get(
             id=queue_entry_id

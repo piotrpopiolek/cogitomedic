@@ -172,7 +172,11 @@ def db_gettext_lazy(key: str, default: str = "") -> Any:
 
 
 def get_doctor_ui(lang: str) -> dict[str, str]:
-    """Return doctor UI strings from DB-only translation storage."""
+    """Return doctor UI strings from DB-only translation storage.
+
+    The active locale wins when a value exists. Missing keys are filled from **de-DE**
+    (canonical doctor copy) so templates need no hardcoded ``{% else %}`` fallbacks.
+    """
     normalized = normalize_language_code(lang)
     mapping = get_translation_map(category="doctor", language_code=normalized)
     ui: dict[str, str] = {}
@@ -185,6 +189,18 @@ def get_doctor_ui(lang: str) -> dict[str, str]:
             continue
         short_key = full_key.split(".", 1)[1]
         ui[short_key] = value
+    if normalized != "de-DE":
+        de_mapping = get_translation_map(category="doctor", language_code="de-DE")
+        for full_key, value in de_mapping.items():
+            if not full_key.startswith("doctor."):
+                continue
+            if full_key.startswith("doctor.fitzpatrick.") or full_key.startswith(
+                "doctor.pdf_label."
+            ):
+                continue
+            short_key = full_key.split(".", 1)[1]
+            if short_key not in ui:
+                ui[short_key] = value
     return ui
 
 
@@ -192,6 +208,11 @@ def get_fitzpatrick_choices(lang: str) -> list[tuple[str, str]]:
     """Return (value, label) pairs for Fitzpatrick from DB-only translation storage."""
     normalized = normalize_language_code(lang)
     mapping = get_translation_map(category="doctor", language_code=normalized)
+    de_mapping = (
+        {}
+        if normalized == "de-DE"
+        else get_translation_map(category="doctor", language_code="de-DE")
+    )
     codes = [
         "TYPE_I",
         "TYPE_II",
@@ -205,7 +226,11 @@ def get_fitzpatrick_choices(lang: str) -> list[tuple[str, str]]:
     choices: list[tuple[str, str]] = []
     for code in codes:
         key = f"doctor.fitzpatrick.{code}"
-        label = mapping.get(key) or code.replace("_", " ").title()
+        label = mapping.get(key)
+        if not label and de_mapping:
+            label = de_mapping.get(key)
+        if not label:
+            label = code.replace("_", " ").title()
         choices.append((code, label))
     return choices
 
@@ -244,6 +269,42 @@ def get_staff_ui_strings(locale: str) -> dict[str, str]:
     return ui
 
 
+def _resolve_message_language(request: Any | None) -> str:
+    """Pick locale from staff profile, then Django request language (non-doctor paths)."""
+    from django.utils import translation
+
+    lang: str | None = None
+    if request is not None:
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False) and user.is_authenticated:
+            loc = getattr(user, "preferred_locale", None) or ""
+            if loc:
+                lang = normalize_language_code(loc)
+        if lang is None:
+            lang = normalize_language_code(
+                getattr(request, "LANGUAGE_CODE", None)
+                or translation.get_language()
+                or "de-DE"
+            )
+    else:
+        lang = normalize_language_code(translation.get_language() or "de-DE")
+    return lang
+
+
+def resolve_doctor_message_locale(request: Any | None) -> str:
+    """Locale for ``doctor.*`` API/HTML messages: panel ``doctor_lang`` session first."""
+    if request is not None:
+        sess = getattr(request, "session", None)
+        if sess is not None:
+            # Match ``doctor_views._get_doctor_lang`` default when the key is unset.
+            short = sess.get("doctor_lang") or "de"
+            if short in ("de", "en", "pl"):
+                return (
+                    "en-GB" if short == "en" else "pl-PL" if short == "pl" else "de-DE"
+                )
+    return _resolve_message_language(request)
+
+
 def translation_category_for_message_key(key: str) -> str:
     """Map full translation key prefix to ``TranslationCategory`` value."""
     if key.startswith("administration."):
@@ -264,27 +325,28 @@ def resolve_other_message(
     """
     Resolve a message from DB using the key's category (``other``, ``doctor``, …) and
     active request language; apply ``str.format`` when *params* are provided.
-    """
-    from django.utils import translation
 
-    lang: str | None = None
-    if request is not None:
-        user = getattr(request, "user", None)
-        if user and getattr(user, "is_authenticated", False) and user.is_authenticated:
-            loc = getattr(user, "preferred_locale", None) or ""
-            if loc:
-                lang = normalize_language_code(loc)
-        if lang is None:
-            lang = normalize_language_code(
-                getattr(request, "LANGUAGE_CODE", None)
-                or translation.get_language()
-                or "de-DE"
-            )
-    else:
-        lang = normalize_language_code(translation.get_language() or "de-DE")
+    ``doctor.*`` keys use the same panel locale as HTML (session ``doctor_lang``), then
+    fall back to **de-DE** in the doctor category when the active locale has no value
+    (except ``doctor.fitzpatrick.*`` / ``doctor.pdf_label.*``).
+    """
     category = translation_category_for_message_key(key)
+    if category == "doctor":
+        lang = resolve_doctor_message_locale(request)
+    else:
+        lang = _resolve_message_language(request)
     data = get_translation_map(category, lang)
-    template = data.get(key, default)
+    template = data.get(key)
+    if (
+        template is None
+        and category == "doctor"
+        and lang != "de-DE"
+        and not key.startswith("doctor.fitzpatrick.")
+        and not key.startswith("doctor.pdf_label.")
+    ):
+        template = get_translation_map("doctor", "de-DE").get(key)
+    if template is None:
+        template = default
     if not params:
         return template
     try:

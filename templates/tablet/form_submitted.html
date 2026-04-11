@@ -8,9 +8,27 @@
   <title>{{ ui.form_submitted_title|default:form_submitted_page_title }}</title>
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
   <style>
-    body { max-width: 480px; margin: 2rem auto; padding: 1rem; }
-    .ok { color: #0a0; font-weight: bold; }
-    a.btn { display: inline-block; padding: 1rem; margin-top: 1rem; text-align: center; }
+    body.cm-portal {
+      max-width: min(94vw, 480px);
+      margin: 2rem auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .ok {
+      color: #0a0;
+      font-weight: bold;
+      margin: 0 0 0.5rem;
+      max-width: 100%;
+    }
+    a.btn {
+      display: inline-block;
+      padding: 1rem 1.25rem;
+      margin-top: 0.75rem;
+      text-align: center;
+    }
   </style>
 </head>
 <body class="cm-portal">
