@@ -717,6 +717,8 @@ HIDRIVE_API_BASE_URL = os.environ.get(
     "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1"
 )
 HIDRIVE_TIMEOUT_SECONDS = int(os.environ.get("HIDRIVE_TIMEOUT_SECONDS", "30"))
+HIDRIVE_INCOMING_PATH = os.environ.get("HIDRIVE_INCOMING_PATH", "/incoming")
+HIDRIVE_PROCESSED_PATH = os.environ.get("HIDRIVE_PROCESSED_PATH", "/processed")
 if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", "yes"):
     missing_hidrive = [
         key

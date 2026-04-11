@@ -39,7 +39,7 @@ Tabela pokazuje m.in.:
 - **SMS** — status wysyłki powiadomienia logistycznego,
 - Kolumna akcji: **Otwórz** (`Öffnen` / odpowiednik w wybranym języku).
 
-**Blokada edycji (szkic):** Gdy inny lekarz ma otwarty ten sam dokument w stanie **DRAFT**, wiersz może być **podświetlony (amber)**; przy nazwisku pojawia się informacja z ikoną kłódki (**kto edytuje**). Przycisk **Otwórz** jest wtedy **nieaktywny** (nie wejdziesz w edycję, dopóki blokada jest ważna — maks. 24 godziny lub do zwolnienia przez edytującego / publikacji). Wiersze **opublikowanych** dokumentów mogą być **zielonkawo** podświetlone dla szybkiej orientacji.
+**Blokada edycji (szkic / semafor):** Gdy na dokumencie w stanie **DRAFT** obowiązuje **aktywna blokada edycji** (ktoś ma otwarty szczegół w trybie edycji), wiersz jest **podświetlony na żółto (amber)**; przy nazwisku — jeśli to **inny** lekarz — pojawia się ikona kłódki i podpis (**kto edytuje**). Przycisk **Otwórz** jest **nieaktywny**, gdy edytuje **inny** użytkownik (nie wejdziesz w edycję, dopóki blokada jest ważna — maks. 24 godziny lub do zwolnienia / publikacji). **Zielone** podświetlenie wiersza oznacza dokument **opublikowany** z **ukończonym łańcuchem**: PDF wygenerowany, zapis do HiDrive oraz **SMS logistyczny wysłany**.
 
 ### Filtry (formularz nad tabelą)
 
