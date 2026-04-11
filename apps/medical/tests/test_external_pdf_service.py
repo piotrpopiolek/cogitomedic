@@ -64,7 +64,7 @@ class ExternalPdfGateTests(TestCase):
             )
         self.assertTrue(gate.passed)
         self.assertEqual(gate.matched_files, ())
-        self.assertIsNone(gate.error_message)
+        self.assertEqual(gate.error_message, "HIDRIVE")
         self.assertTrue(gate.skip_attachment_sync)
 
     def test_gate_fails_when_incoming_empty(self) -> None:
