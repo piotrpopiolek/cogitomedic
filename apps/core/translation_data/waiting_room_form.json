@@ -224,6 +224,11 @@
     "en": "Submit form",
     "pl": "Wyślij formularz"
   },
+  "waiting_room.form.msg_auto_submit_after_signature": {
+    "de": "Wenn Sie nichts tun, wird das Formular in einer Minute automatisch abgesendet.",
+    "en": "If you take no action, the form will be submitted automatically in one minute.",
+    "pl": "Jeśli nic nie zrobisz, formularz zostanie automatycznie wysłany za minutę."
+  },
   "waiting_room.form.validation_anamnesis_required": {
     "de": "Bitte beantworten Sie alle Pflichtfragen (mit * markiert).",
     "en": "Please answer all required questions (marked with *).",
