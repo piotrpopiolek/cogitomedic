@@ -30,6 +30,7 @@ from apps.intake.services import (
     _read_signature_data_url,
     _effective_consent_filter,
     _effective_question_filter,
+    get_intake_form_context,
     submit_patient_intake_form,
 )
 from apps.core.api_utils import assign_group_to_test_user
@@ -59,7 +60,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         clinic = ClinicSite.objects.create(code="WAW", name="Warsaw")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="A1", name="A1")
         daily_queue = DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
+            queue_date=timezone.localdate(),
             clinic_site=clinic,
             consulting_room=room,
             status=QueueStatus.OPEN,
@@ -130,7 +131,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
 
     def _accept_all_required_consents_effective_today(self) -> None:
-        today = timezone.now().date()
+        today = timezone.localdate()
         for cdef in ConsentDefinition.objects.filter(
             _effective_consent_filter(today), is_required=True
         ):
@@ -141,7 +142,7 @@ class SubmitPatientIntakeFormTests(TestCase):
             )
 
     def _ensure_all_required_questions_answered_today(self) -> None:
-        today = timezone.now().date()
+        today = timezone.localdate()
         required = list(
             AnamnesisQuestionDefinition.objects.filter(
                 _effective_question_filter(today), is_required=True
@@ -204,6 +205,16 @@ class SubmitPatientIntakeFormTests(TestCase):
             event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
         )
         self.assertEqual(event.status, IntakeOutboxStatus.PENDING)
+
+    def test_get_intake_form_context_uses_service_localdate_path(self) -> None:
+        ctx = get_intake_form_context(
+            intake_form_id=self.intake_form.id,
+            form_locale="de-DE",
+            tablet_restrict_to_today=False,
+            allowed_clinic_site_ids=None,
+        )
+        self.assertEqual(ctx["form_status"], IntakeStatus.IN_PROGRESS)
+        self.assertIn("patient", ctx)
 
     def test_submit_patient_intake_form_raises_when_required_consent_missing(
         self,

@@ -229,6 +229,8 @@
 - `last_published_at` `timestamptz` NULL
 - `created_by_user_id` `uuid` NOT NULL FK -> `staff_user(id)` ON DELETE RESTRICT
 - `updated_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL
+- `locked_by_user_id` `uuid` NULL FK -> `staff_user(id)` ON DELETE SET NULL (pessimistyczna blokada edycji szkicu; wygasa logicznie po 24h bez cron)
+- `locked_at` `timestamptz` NULL
 - `created_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - Ograniczenia:

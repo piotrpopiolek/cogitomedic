@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import DocVersionStatus, MedicalDocStatus
+from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
@@ -19,6 +19,7 @@ from apps.outbox.models import OutboxEvent, OutboxEventType
 from django.core.exceptions import ObjectDoesNotExist
 
 from apps.core.api_utils import assign_group_to_test_user
+import apps.medical.services as medical_services
 from apps.medical.services import (
     check_doctor_document_access,
     check_doctor_queue_entry_access,
@@ -273,7 +274,13 @@ class MedicalServicesTests(TestCase):
         )
         assign_group_to_test_user(other_doctor, "Doctor")
 
-        # Should raise initially
+        # DRAFT: any doctor may access (shared queue)
+        check_doctor_document_access(self.medical_document, other_doctor)
+
+        MedicalDocument.objects.filter(pk=self.medical_document.id).update(
+            status=MedicalDocStatus.PUBLISHED
+        )
+        self.medical_document.refresh_from_db()
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_document_access(self.medical_document, other_doctor)
 
@@ -281,7 +288,7 @@ class MedicalServicesTests(TestCase):
         self.medical_document.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.medical_document.queue_entry.daily_queue.save()
 
-        # Should not raise now
+        # Should not raise now (assigned on published document)
         check_doctor_document_access(self.medical_document, other_doctor)
 
     def test_check_doctor_document_access_allows_admin(self) -> None:
@@ -297,16 +304,68 @@ class MedicalServicesTests(TestCase):
         check_doctor_document_access(self.medical_document, admin_user)
 
     def test_check_doctor_queue_entry_access(self) -> None:
-        # Initial state: queue has no assigned_doctor
-        with self.assertRaises(ObjectDoesNotExist):
-            check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
-
-        # Assign to queue
-        self.queue_entry.daily_queue.assigned_doctor = self.doctor_user
-        self.queue_entry.daily_queue.save()
-
-        # Now it works
+        # Creator can open without assigned_doctor while document is DRAFT
         check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
+
+        other_doctor = StaffUser.objects.create_user(
+            username="qe_other",
+            email="qe_other@example.com",
+            password="pwd",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other_doctor, "Doctor")
+        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+
+        MedicalDocument.objects.filter(pk=self.medical_document.id).update(
+            status=MedicalDocStatus.PUBLISHED
+        )
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+
+        self.queue_entry.daily_queue.assigned_doctor = other_doctor
+        self.queue_entry.daily_queue.save()
+        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+
+    def test_check_doctor_queue_entry_access_doctor_without_medical_document(
+        self,
+    ) -> None:
+        other_doctor = StaffUser.objects.create_user(
+            username="qe_no_doc",
+            email="qe_no_doc@example.com",
+            password="pwd",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other_doctor, "Doctor")
+        patient2 = Patient.objects.create(
+            first_name="No",
+            last_name="DocYet",
+            date_of_birth=date(1982, 2, 2),
+            phone="+49999999999",
+            email="nodoc@example.com",
+            doctolib_patient_id="DOC-NO-M",
+        )
+        entry2 = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient2,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=2,
+            created_by_user=self.reception_user,
+        )
+        check_doctor_queue_entry_access(entry2, other_doctor)
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(entry2, self.reception_user)
+
+    def test_staff_user_display_name_empty_and_username_fallback(self) -> None:
+        self.assertEqual(medical_services._staff_user_display_name(None), "")
+        bare = StaffUser.objects.create_user(
+            username="uonly",
+            email="uonly@example.com",
+            password="pwd",
+            first_name="",
+            last_name="",
+            is_staff=True,
+        )
+        self.assertEqual(medical_services._staff_user_display_name(bare), "uonly")
 
 
 class LesionGroupFavoritesAdminTests(TestCase):

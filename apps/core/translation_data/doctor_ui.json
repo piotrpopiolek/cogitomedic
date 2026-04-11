@@ -24,6 +24,11 @@
     "en": "Body map (marked by patient)",
     "pl": "Schemat ciała (zaznaczony przez pacjenta)"
   },
+  "doctor.body_map_toggle_hint": {
+    "de": "Zum Ein- und Ausklappen klicken",
+    "en": "Click to expand or collapse",
+    "pl": "Kliknij, aby rozwinąć lub zwinąć"
+  },
   "doctor.btn_apply_favorite": {
     "de": "Anwenden",
     "en": "Apply",
@@ -83,6 +88,36 @@
     "de": "Zgody",
     "en": "Consents",
     "pl": "Zgody"
+  },
+  "doctor.detail_head_title": {
+    "de": "Befund – Dokument",
+    "en": "Report – Document",
+    "pl": "Befund – dokument"
+  },
+  "doctor.detail_patient_heading": {
+    "de": "Befund – Patient:",
+    "en": "Report – Patient:",
+    "pl": "Befund – pacjent:"
+  },
+  "doctor.error_document_not_found": {
+    "de": "Dokument nicht gefunden.",
+    "en": "Document not found.",
+    "pl": "Nie znaleziono dokumentu."
+  },
+  "doctor.error_intake_not_submitted": {
+    "de": "Ankiete noch nicht abgeschlossen.",
+    "en": "Questionnaire not yet completed.",
+    "pl": "Ankieta nie została jeszcze zakończona."
+  },
+  "doctor.error_no_intake_for_entry": {
+    "de": "Keine Ankiete für diesen Eintrag.",
+    "en": "No questionnaire for this entry.",
+    "pl": "Brak ankiety dla tego wpisu."
+  },
+  "doctor.error_queue_entry_not_found": {
+    "de": "Eintrag nicht gefunden.",
+    "en": "Entry not found.",
+    "pl": "Nie znaleziono wpisu."
   },
   "doctor.examination_intimate": {
     "de": "Intimbereich nicht untersucht",
@@ -253,6 +288,11 @@
     "de": "Arztbereich – Anmelden",
     "en": "Doctor area – Sign in",
     "pl": "Panel lekarza – Logowanie"
+  },
+  "doctor.login_error_invalid": {
+    "de": "Ungültige Anmeldung oder keine Berechtigung.",
+    "en": "Invalid sign-in or no permission.",
+    "pl": "Nieprawidłowe logowanie lub brak uprawnień."
   },
   "doctor.logout": {
     "de": "Abmelden",
@@ -593,5 +633,35 @@
     "de": "Preset hinzufügen",
     "en": "Add preset",
     "pl": "Dodaj preset"
+  },
+  "doctor.document_locked_by": {
+    "de": "Wird bearbeitet von {username}",
+    "en": "Being edited by {username}",
+    "pl": "Edytowany przez {username}"
+  },
+  "doctor.document_locked_error": {
+    "de": "Dieses Dokument wird gerade von {username} bearbeitet. Bitte versuchen Sie es später erneut.",
+    "en": "This document is being edited by {username}. Please try again later.",
+    "pl": "Ten dokument jest obecnie edytowany przez {username}. Spróbuj ponownie później."
+  },
+  "doctor.document_unlock_forbidden": {
+    "de": "Sie können diese Sperre nicht aufheben.",
+    "en": "You cannot release this document lock.",
+    "pl": "Nie możesz zwolnić tej blokady dokumentu."
+  },
+  "doctor.list_open_locked_tooltip": {
+    "de": "Wird von einem anderen Benutzer bearbeitet.",
+    "en": "Being edited by another user.",
+    "pl": "Edytowany przez innego użytkownika."
+  },
+  "doctor.list_locked_by_prefix": {
+    "de": "Bearbeitet von",
+    "en": "Edited by",
+    "pl": "Edytuje"
+  },
+  "doctor.unlock": {
+    "de": "Freigeben",
+    "en": "Unlock",
+    "pl": "Odblokuj"
   }
 }

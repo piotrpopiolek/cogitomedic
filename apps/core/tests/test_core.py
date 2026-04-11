@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 from io import StringIO
+from typing import Any
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.template import Context, Template
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
 from apps.core.api_utils import MAX_JSON_BODY_BYTES, read_json_body
@@ -19,7 +23,11 @@ from apps.core.models import (
     TranslationKeyStatus,
     TranslationValue,
 )
-from apps.core.translation_service import get_translation_map
+from apps.core.translation_service import (
+    get_doctor_ui,
+    get_translation_map,
+    resolve_other_message,
+)
 
 
 class TranslationServiceTests(TestCase):
@@ -88,6 +96,65 @@ class TranslationServiceTests(TestCase):
 
         second = get_translation_map("doctor", "de-DE")
         self.assertEqual(second.get("doctor.test_key"), "New value")
+
+    def _request_with_session(self, **session_values: Any) -> Any:
+        rf = RequestFactory()
+        request = rf.get("/")
+
+        middleware = SessionMiddleware(lambda req: HttpResponse())
+        middleware.process_request(request)
+        request.session.save()
+        for key, val in session_values.items():
+            request.session[key] = val
+        request.session.save()
+        return request
+
+    def test_resolve_other_message_doctor_key_respects_doctor_lang_session(
+        self,
+    ) -> None:
+        TranslationValue.objects.create(
+            translation_key=self.key,
+            language_code="de-DE",
+            value="Aus DE",
+        )
+        TranslationValue.objects.create(
+            translation_key=self.key,
+            language_code="pl-PL",
+            value="Z PL",
+        )
+        request = self._request_with_session(doctor_lang="pl")
+        msg = resolve_other_message(request, "doctor.test_key", "DEFAULT")
+        self.assertEqual(msg, "Z PL")
+
+    def test_resolve_other_message_doctor_key_falls_back_to_de_de(self) -> None:
+        TranslationValue.objects.create(
+            translation_key=self.key,
+            language_code="de-DE",
+            value="Aus DE",
+        )
+        request = self._request_with_session(doctor_lang="pl")
+        msg = resolve_other_message(request, "doctor.test_key", "DEFAULT")
+        self.assertEqual(msg, "Aus DE")
+
+    def test_get_doctor_ui_merges_de_de_when_missing_in_active_locale(self) -> None:
+        def fake_map(category: str, language_code: str) -> dict[str, str]:
+            if language_code == "pl-PL":
+                return {"doctor.only_pl": "W PL"}
+            if language_code == "de-DE":
+                return {
+                    "other.not_doctor": "skip-me",
+                    "doctor.fitzpatrick.TYPE_I": "skip-fitz",
+                    "doctor.only_pl": "DE überschreibt PL nicht",
+                    "doctor.only_de": "Aus DE",
+                }
+            return {}
+
+        with patch(
+            "apps.core.translation_service.get_translation_map", side_effect=fake_map
+        ):
+            ui = get_doctor_ui("pl-PL")
+        self.assertEqual(ui.get("only_pl"), "W PL")
+        self.assertEqual(ui.get("only_de"), "Aus DE")
 
     def test_value_clean_rejects_html_when_not_allowed(self) -> None:
         value = TranslationValue(
