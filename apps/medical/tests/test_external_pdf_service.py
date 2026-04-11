@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from datetime import date
+from unittest.mock import MagicMock, patch
 
+from django.db.models import Q
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.integrations.hidrive import client as hidrive_client
 from apps.medical.external_pdf_service import (
+    _ambiguous_undated_stem,
     check_external_pdf_gate,
     logical_path_to_processed,
+)
+from apps.medical.name_normalize import (
+    incoming_stem_norm_lookup_bases,
+    normalize_name,
+    _stem_without_pdf,
 )
 from apps.reception.models import Patient
 
@@ -30,6 +38,34 @@ class LogicalPathToProcessedTests(SimpleTestCase):
 class ExternalPdfGateTests(TestCase):
     def setUp(self) -> None:
         hidrive_client._MockHiDriveAdapter.reset_test_state()
+        incoming_stem_norm_lookup_bases.cache_clear()
+
+    def test_gate_passes_when_list_dir_raises(self) -> None:
+        """HiDrive outage must not hard-block doctor workflow (no attachment sync)."""
+        patient = Patient.objects.create(
+            first_name="Down",
+            last_name="HiDrive",
+            date_of_birth=date(1988, 8, 8),
+            phone="+48500100299",
+            email="down@example.com",
+        )
+        adapter = MagicMock()
+        adapter.list_dir.side_effect = RuntimeError("connection reset")
+        with patch(
+            "apps.medical.external_pdf_service.get_hidrive_adapter",
+            return_value=adapter,
+        ):
+            gate = check_external_pdf_gate(
+                patient,
+                error_no_file="NO_FILE",
+                error_no_pdfs_in_folder="NO_PDFS",
+                error_ambiguous="AMBIG",
+                error_hidrive="HIDRIVE",
+            )
+        self.assertTrue(gate.passed)
+        self.assertEqual(gate.matched_files, ())
+        self.assertIsNone(gate.error_message)
+        self.assertTrue(gate.skip_attachment_sync)
 
     def test_gate_fails_when_incoming_empty(self) -> None:
         patient = Patient.objects.create(
@@ -140,6 +176,39 @@ class ExternalPdfGateTests(TestCase):
         )
         self.assertFalse(gate.passed)
         self.assertEqual(gate.error_message, "NO_FILE")
+
+    def test_ambiguous_stem_prefilter_narrows_to_colliding_patients(self) -> None:
+        """Regression: DB prefilter must ignore unrelated patients (indexed keys)."""
+        for i in range(35):
+            Patient.objects.create(
+                first_name=f"Zed{i}",
+                last_name=f"Unique{i}",
+                date_of_birth=date(2000, 1, 1),
+                phone=f"485001003{i:02d}",
+                email=f"zed{i}@example.com",
+            )
+        Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500100399",
+            email="ambig_a@example.com",
+        )
+        Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1992, 2, 2),
+            phone="48500100398",
+            email="ambig_b@example.com",
+        )
+        norm = normalize_name(_stem_without_pdf("Med_Test"))
+        bases = incoming_stem_norm_lookup_bases(norm)
+        narrowed = Patient.objects.filter(
+            Q(incoming_pdf_name_key_fl__in=bases)
+            | Q(incoming_pdf_name_key_lf__in=bases)
+        ).count()
+        self.assertEqual(narrowed, 2)
+        self.assertTrue(_ambiguous_undated_stem("Med_Test"))
 
     def test_gate_ambiguous_without_dob_in_filename(self) -> None:
         Patient.objects.create(

@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from io import BytesIO
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from django.conf import settings
+from django.db.models import Q
 
 from pypdf import PdfReader
 
@@ -19,8 +20,11 @@ from apps.medical.models import (
     MedicalDocument,
 )
 from apps.medical.name_normalize import (
+    _stem_without_pdf,
     build_patient_filename_candidates,
+    incoming_stem_norm_lookup_bases,
     match_filename_to_candidates,
+    normalize_name,
     stem_matches_dated_variant,
 )
 from apps.reception.models import Patient
@@ -45,6 +49,9 @@ class GateResult:
     passed: bool
     matched_files: tuple[MatchedIncomingFile, ...]
     error_message: str | None
+    #: When True, HiDrive listing failed — caller must not sync DB attachments from
+    #: ``matched_files`` (would clear stale MATCHED rows while cloud is unreachable).
+    skip_attachment_sync: bool = False
 
 
 def hidrive_incoming_dir() -> str:
@@ -72,7 +79,7 @@ def _pdf_basename_from_listing_entry(entry: dict[str, Any]) -> str | None:
     for candidate in (path, name):
         if not candidate:
             continue
-        base = Path(candidate).name
+        base = PurePosixPath(candidate.replace("\\", "/")).name
         if base.lower().endswith(".pdf"):
             return base
     return None
@@ -80,10 +87,12 @@ def _pdf_basename_from_listing_entry(entry: dict[str, Any]) -> str | None:
 
 def _ambiguous_undated_stem(stem: str) -> bool:
     """More than one patient matches this stem without using a DOB-specific filename."""
+    norm = normalize_name(_stem_without_pdf(stem))
+    bases = incoming_stem_norm_lookup_bases(norm)
+    qs = Patient.objects.filter(
+        Q(incoming_pdf_name_key_fl__in=bases) | Q(incoming_pdf_name_key_lf__in=bases)
+    ).only("id", "first_name", "last_name", "date_of_birth")
     count = 0
-    qs = Patient.objects.only(
-        "id", "first_name", "last_name", "date_of_birth"
-    ).iterator(chunk_size=500)
     for p in qs:
         candidates = build_patient_filename_candidates(p)
         if not match_filename_to_candidates(stem, candidates):
@@ -114,7 +123,8 @@ def check_external_pdf_gate(
         entries = adapter.list_dir(remote_path=inc)
     except Exception:
         logger.exception("HiDrive list_dir failed for gate")
-        return GateResult(False, (), error_hidrive)
+        # Do not block the doctor UI on HiDrive outages; optional /incoming PDFs.
+        return GateResult(True, (), None, skip_attachment_sync=True)
 
     logger.info(
         "external_pdf_gate: incoming directory readable path=%s raw_entry_count=%s",
@@ -141,7 +151,7 @@ def check_external_pdf_gate(
     for _entry, pdf_name in pdf_rows:
         if pdf_name.lower().startswith("rejected_"):
             continue
-        stem = Path(pdf_name).stem
+        stem = PurePosixPath(pdf_name).stem
         patient_candidates = build_patient_filename_candidates(patient)
         if not match_filename_to_candidates(stem, patient_candidates):
             continue
@@ -201,8 +211,9 @@ def reject_external_pdf(attachment: ExternalPdfAttachment) -> None:
     if attachment.status == ExternalPdfStatus.REJECTED:
         return
     src = attachment.hidrive_remote_path
-    parent = str(Path(src).parent).replace("\\", "/") or "/"
-    base_name = Path(src).name
+    src_pp = PurePosixPath((src or "").strip().replace("\\", "/"))
+    parent = str(src_pp.parent) or "/"
+    base_name = src_pp.name
     if base_name.lower().startswith("rejected_"):
         attachment.status = ExternalPdfStatus.REJECTED
         attachment.save(update_fields=["status"])
@@ -239,4 +250,4 @@ def logical_path_to_processed(incoming_path: str) -> str:
     if norm.startswith(inc + "/"):
         suffix = norm[len(inc) :].lstrip("/")
         return f"{proc}/{suffix}".replace("//", "/")
-    return f"{proc}/{Path(norm).name}".replace("//", "/")
+    return f"{proc}/{PurePosixPath(norm).name}".replace("//", "/")
