@@ -37,8 +37,7 @@ from apps.reception.models import QueueEntry
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
-    get_translation_map,
-    normalize_language_code,
+    resolve_other_message,
 )
 
 
@@ -271,16 +270,15 @@ def doctor_document_detail_view(
             status=404,
         )
     if not granted:
-        loc = normalize_language_code(lang)
-        mapping = get_translation_map("doctor", loc)
-        tmpl = mapping.get(
+        message = resolve_other_message(
+            request,
             "doctor.document_locked_error",
             (
                 "Dieses Dokument wird gerade von {username} bearbeitet. "
                 "Bitte versuchen Sie es später erneut."
             ),
+            username=lock_holder or "…",
         )
-        message = tmpl.format(username=lock_holder or "…")
         return _render_doctor(
             request,
             "doctor/error.html",
