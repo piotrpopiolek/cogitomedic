@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -1156,6 +1158,51 @@ class MedicalApiTests(TestCase):
         mid = create_resp.json()["medical_document_id"]
         resp = self.client.get(f"/api/v1/medical-documents/{mid}/unlock")
         self.assertEqual(resp.status_code, 405)
+
+    def test_unlock_returns_403_for_reception_role(self) -> None:
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        self.client.force_login(self.reception_user)
+        resp = self.client.post(
+            f"/api/v1/medical-documents/{mid}/unlock",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("error", resp.json())
+
+    def test_unlock_returns_404_when_release_raises_not_found(self) -> None:
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        with patch(
+            "apps.medical.api_views.release_document_lock",
+            side_effect=ObjectDoesNotExist(),
+        ):
+            resp = self.client.post(
+                f"/api/v1/medical-documents/{mid}/unlock",
+                data=json.dumps({}),
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("error", resp.json())
 
     def test_admin_can_override_lock_on_draft_save(self) -> None:
         create_resp = self.client.post(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
@@ -19,7 +20,7 @@ from apps.core.models import (
     TranslationKeyStatus,
     TranslationValue,
 )
-from apps.core.translation_service import get_translation_map
+from apps.core.translation_service import get_doctor_ui, get_translation_map
 
 
 class TranslationServiceTests(TestCase):
@@ -88,6 +89,26 @@ class TranslationServiceTests(TestCase):
 
         second = get_translation_map("doctor", "de-DE")
         self.assertEqual(second.get("doctor.test_key"), "New value")
+
+    def test_get_doctor_ui_merges_en_gb_when_missing_in_active_locale(self) -> None:
+        def fake_map(category: str, language_code: str) -> dict[str, str]:
+            if language_code == "pl-PL":
+                return {"doctor.only_pl": "W PL"}
+            if language_code == "en-GB":
+                return {
+                    "other.not_doctor": "skip-me",
+                    "doctor.fitzpatrick.TYPE_I": "skip-fitz",
+                    "doctor.only_pl": "EN would override",
+                    "doctor.only_en": "From EN",
+                }
+            return {}
+
+        with patch(
+            "apps.core.translation_service.get_translation_map", side_effect=fake_map
+        ):
+            ui = get_doctor_ui("pl-PL")
+        self.assertEqual(ui.get("only_pl"), "W PL")
+        self.assertEqual(ui.get("only_en"), "From EN")
 
     def test_value_clean_rejects_html_when_not_allowed(self) -> None:
         value = TranslationValue(
