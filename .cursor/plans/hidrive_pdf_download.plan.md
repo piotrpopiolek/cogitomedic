@@ -277,7 +277,7 @@ Plik: [apps/medical/models.py](apps/medical/models.py) (+ migracja)
 
 ```python
 class ExternalPdfStatus(models.TextChoices):
-    MATCHED = "MATCHED"       # dopasowany, czeka na akceptacje lekarza
+    MATCHED = "MATCHED"       # dopasowany
     ACCEPTED = "ACCEPTED"     # lekarz zaakceptowal (implicit przy publish)
     REJECTED = "REJECTED"     # lekarz odrzucil -- plik dostaje prefix rejected_
     MERGE_FAILED = "MERGE_FAILED"  # scalanie nie powiodlo sie
