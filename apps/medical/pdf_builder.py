@@ -338,7 +338,11 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
 
     if external_bytes_list:
         pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)
-        if not merge_ok:
+        if merge_ok:
+            for att in attachments_used:
+                att.status = ExternalPdfStatus.ACCEPTED
+            ExternalPdfAttachment.objects.bulk_update(attachments_used, ["status"])
+        else:
             for att in attachments_used:
                 att.status = ExternalPdfStatus.MERGE_FAILED
             ExternalPdfAttachment.objects.bulk_update(attachments_used, ["status"])
