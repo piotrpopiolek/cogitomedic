@@ -1105,6 +1105,11 @@ def medical_document_external_pdf_reject_view(
     try:
         reject_external_pdf(att)
     except Exception:
+        logger.exception(
+            "reject_external_pdf failed: attachment=%s path=%s",
+            att.id,
+            att.hidrive_remote_path,
+        )
         return json_error("other.api.external_pdf_reject_failed", status=502)
     create_audit_event(
         event_type="EXTERNAL_PDF_REJECTED",
