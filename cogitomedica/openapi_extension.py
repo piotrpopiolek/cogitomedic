@@ -738,8 +738,8 @@ COGITO_PATHS = {
                     "headers": {
                         "X-Befund-Preview-Warning": {
                             "description": (
-                                "Optional hint when merge failed or a HiDrive attachment was "
-                                "invalid (e.g. upload in progress); body is still a PDF."
+                                "Optional hint when merge failed, a HiDrive attachment was "
+                                "invalid, or download failed (pipe-separated tokens); body is still a PDF."
                             ),
                             "schema": {"type": "string"},
                         }

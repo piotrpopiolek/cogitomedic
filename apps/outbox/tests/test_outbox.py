@@ -236,3 +236,37 @@ class OutboxProcessingTests(TestCase):
                 medical_document_id=self.medical_document.id,
             ).exists()
         )
+
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    def test_outbox_missing_external_file_marks_merge_failed_and_still_completes_chain(
+        self,
+    ) -> None:
+        """HiDrive download errors must not fail GENERATE_PDF; Befund-only PDF + upload proceed."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/not_seeded.pdf",
+            original_filename="not_seeded.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        process_outbox_events()
+        process_outbox_events()
+        process_outbox_events()
+
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.hidrive_sent)
+        self.assertIsNotNone(self.version.pdf_local_path)
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="not_seeded.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertEqual(att.hidrive_remote_path, "/incoming/not_seeded.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                medical_document_id=self.medical_document.id,
+            ).exists()
+        )

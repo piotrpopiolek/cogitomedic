@@ -10,6 +10,7 @@ from django.test import SimpleTestCase
 from apps.medical.name_normalize import (
     build_patient_filename_candidates,
     compute_incoming_pdf_name_keys,
+    dated_match_candidates,
     incoming_stem_norm_lookup_bases,
     match_filename_to_candidates,
     normalize_name,
@@ -59,6 +60,20 @@ class NameNormalizeTests(SimpleTestCase):
         p.date_of_birth = datetime.date(1985, 3, 12)
         self.assertTrue(stem_matches_dated_variant("Kowalski_Jan_1985_03_12.pdf", p))
         self.assertFalse(stem_matches_dated_variant("Kowalski_Jan.pdf", p))
+
+    def test_dated_match_candidates_empty_when_no_dob(self) -> None:
+        p = Mock()
+        p.first_name = "Jan"
+        p.last_name = "Kowalski"
+        p.date_of_birth = None
+        self.assertEqual(dated_match_candidates(p), [])
+
+    def test_stem_matches_dated_variant_false_when_patient_has_no_dob(self) -> None:
+        p = Mock()
+        p.first_name = "Jan"
+        p.last_name = "Kowalski"
+        p.date_of_birth = None
+        self.assertFalse(stem_matches_dated_variant("Kowalski_Jan_1985_03_12.pdf", p))
 
     def test_compute_incoming_pdf_name_keys(self) -> None:
         self.assertEqual(

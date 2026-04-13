@@ -719,6 +719,8 @@ HIDRIVE_API_BASE_URL = os.environ.get(
 HIDRIVE_TIMEOUT_SECONDS = int(os.environ.get("HIDRIVE_TIMEOUT_SECONDS", "30"))
 HIDRIVE_INCOMING_PATH = os.environ.get("HIDRIVE_INCOMING_PATH", "/incoming")
 HIDRIVE_PROCESSED_PATH = os.environ.get("HIDRIVE_PROCESSED_PATH", "/processed")
+# Logical root for Befund/intake PDFs (same resolution as incoming/processed: /users/<alias><prefix>/…).
+HIDRIVE_PATIENTS_DIR_PREFIX = os.environ.get("HIDRIVE_PATIENTS_DIR_PREFIX", "/patients")
 if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", "yes"):
     missing_hidrive = [
         key

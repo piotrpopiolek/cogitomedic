@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.external_pdf_service import ExternalPdfCorruptError
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -359,6 +360,43 @@ class Tests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
 
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch(
+        "apps.medical.pdf_builder.download_external_pdf",
+        side_effect=RuntimeError("simulated HiDrive failure"),
+    )
+    def test_preview_pdf_returns_befund_when_external_download_raises(self, _mock_dl):
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.medical_doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            pdf_generation_status=PdfStatus.PENDING,
+            medical_payload_schema_version=1,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/x.pdf",
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url("/preview-pdf"))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", r.content[:8])
+        warn = (r.get("X-Befund-Preview-Warning") or "").lower()
+        self.assertIn("external_pdf_download_failed", warn)
+
     # =============================================================
     # 3b2. External HiDrive PDF attachments API
     # =============================================================
@@ -447,7 +485,6 @@ class Tests(TestCase):
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_external_pdf_content_corrupt_returns_422(self) -> None:
         from apps.integrations.hidrive import client as hidrive_client
-        from apps.medical.external_pdf_service import ExternalPdfCorruptError
 
         hidrive_client._MockHiDriveAdapter.reset_test_state()
         att = ExternalPdfAttachment.objects.create(
@@ -500,6 +537,139 @@ class Tests(TestCase):
         att.refresh_from_db()
         self.assertEqual(att.status, ExternalPdfStatus.REJECTED)
         self.assertIn("rejected_", att.hidrive_remote_path)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch(
+        "apps.medical.pdf_builder.download_external_pdf",
+        side_effect=ExternalPdfCorruptError("x"),
+    )
+    def test_preview_pdf_sets_warning_header_on_corrupt_external(
+        self,
+        _mock_dl: object,
+    ) -> None:
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.medical_doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            pdf_generation_status=PdfStatus.PENDING,
+            medical_payload_schema_version=1,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/x.pdf",
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url("/preview-pdf"))
+        self.assertEqual(r.status_code, 200)
+        warn = (r.get("X-Befund-Preview-Warning") or "").lower()
+        self.assertIn("external_pdf_corrupt", warn)
+
+    def test_external_pdfs_not_found_returns_404(self) -> None:
+        self._login_doctor()
+        r = self.client.get(f"{BASE}medical-documents/{uuid4()}/external-pdfs")
+        self.assertEqual(r.status_code, 404)
+
+    def test_external_pdf_content_wrong_method_returns_405(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/x.pdf",
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.post(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 405)
+
+    def test_external_pdf_content_doc_not_found_returns_404(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/x.pdf",
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(
+            f"{BASE}medical-documents/{uuid4()}/external-pdfs/{att.id}/content"
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_external_pdf_content_attachment_not_found_returns_404(self) -> None:
+        self._login_doctor()
+        r = self.client.get(
+            self._doc_url(f"/external-pdfs/{uuid4()}/content"),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_external_pdf_reject_doc_not_found_returns_404(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/x.pdf",
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.post(
+            f"{BASE}medical-documents/{uuid4()}/external-pdfs/{att.id}/reject",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_external_pdf_reject_already_rejected_returns_200(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/rejected_x.pdf",
+            original_filename="rejected_x.pdf",
+            status=ExternalPdfStatus.REJECTED,
+        )
+        self._login_doctor()
+        r = self.client.post(
+            self._doc_url(f"/external-pdfs/{att.id}/reject"),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("status"), ExternalPdfStatus.REJECTED)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch(
+        "apps.medical.api_views.reject_external_pdf",
+        side_effect=RuntimeError("HiDrive move failed"),
+    )
+    def test_external_pdf_reject_hidrive_error_returns_502(
+        self,
+        _mock_reject: object,
+    ) -> None:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf = self._minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Test_Med.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.post(
+            self._doc_url(f"/external-pdfs/{att.id}/reject"),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 502)
 
     def test_external_pdfs_wrong_method_returns_405(self) -> None:
         self._login_doctor()
