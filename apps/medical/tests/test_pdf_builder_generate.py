@@ -200,6 +200,26 @@ class GenerateBefundPdfExternalTests(TestCase):
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_befund_marks_attachment_accepted_when_merge_succeeds(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        ext = _minimal_pdf_bytes()
+        dl_mock.return_value = ext
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Med_Test.pdf", ext)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            generate_befund_pdf(self.version)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
     def test_build_merged_preview_warns_on_corrupt_external(
         self,
         dl_mock: MagicMock,

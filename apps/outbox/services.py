@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from opentelemetry import trace
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.db.utils import OperationalError
 from django.utils import timezone
 
@@ -17,7 +18,10 @@ from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
 from apps.medical.pdf_builder import generate_befund_pdf
-from apps.medical.external_pdf_service import logical_path_to_processed
+from apps.medical.external_pdf_service import (
+    hidrive_incoming_dir,
+    logical_path_to_processed,
+)
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -123,10 +127,14 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
 
+        inc = hidrive_incoming_dir().rstrip("/")
+        incoming_q = Q(hidrive_remote_path__startswith=f"{inc}/") | Q(
+            hidrive_remote_path=inc
+        )
         for att in ExternalPdfAttachment.objects.filter(
             medical_document_id=version.medical_document_id,
-            status=ExternalPdfStatus.MATCHED,
-        ):
+            status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
+        ).filter(incoming_q):
             dest_path = logical_path_to_processed(att.hidrive_remote_path)
             adapter.move_file(
                 source_path=att.hidrive_remote_path,
