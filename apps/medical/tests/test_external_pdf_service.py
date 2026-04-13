@@ -80,7 +80,12 @@ class LogicalPathToProcessedTests(SimpleTestCase):
         )
 
 
-@override_settings(HIDRIVE_USE_MOCK="1")
+@override_settings(
+    HIDRIVE_USE_MOCK="1",
+    HIDRIVE_INCOMING_PATH="/incoming",
+    HIDRIVE_PROCESSED_PATH="/processed",
+    HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+)
 class ExternalPdfGateTests(TestCase):
     def setUp(self) -> None:
         hidrive_client._MockHiDriveAdapter.reset_test_state()
@@ -381,7 +386,12 @@ def _minimal_pdf_bytes() -> bytes:
     return buf.getvalue()
 
 
-@override_settings(HIDRIVE_USE_MOCK="1")
+@override_settings(
+    HIDRIVE_USE_MOCK="1",
+    HIDRIVE_INCOMING_PATH="/incoming",
+    HIDRIVE_PROCESSED_PATH="/processed",
+    HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+)
 class ExternalPdfServiceDbTests(TestCase):
     """create_attachment_records, download, reject, and model __str__."""
 
