@@ -14,6 +14,24 @@ from apps.integrations.hidrive.auth import HiDriveAuthError, get_hidrive_oauth_c
 logger = logging.getLogger(__name__)
 
 
+class HiDriveApiError(RuntimeError):
+    """HiDrive HTTP failure, invalid JSON body, or other API contract error (non-OAuth)."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _response_json(response: requests.Response) -> Any:
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise HiDriveApiError(
+            "HiDrive response body is not valid JSON",
+            status_code=response.status_code,
+        ) from exc
+
+
 class HiDriveAdapterProtocol(Protocol):
     """Protocol for HiDrive uploads and file operations."""
 
@@ -153,8 +171,9 @@ class _HiDriveAdapter:
             )
             return
         if response.status_code >= 500:
-            raise RuntimeError(
-                f"HiDrive upload failed with status {response.status_code}"
+            raise HiDriveApiError(
+                f"HiDrive upload failed with status {response.status_code}",
+                status_code=response.status_code,
             )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive upload unauthorized after token refresh")
@@ -166,18 +185,15 @@ class _HiDriveAdapter:
             dbg_resolved,
             err_snip,
         )
-        raise RuntimeError(
-            f"HiDrive upload rejected with status {response.status_code}"
+        raise HiDriveApiError(
+            f"HiDrive upload rejected with status {response.status_code}",
+            status_code=response.status_code,
         )
 
     def _upload_once(
         self, *, access_token: str, remote_path: str, local_path: Path
     ) -> requests.Response:
-        base_url = str(
-            getattr(
-                settings, "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1"
-            )
-        ).rstrip("/")
+        base_url = _hidrive_base_url()
         url = f"{base_url}/file"
         dir_path, file_name = _split_remote_path(
             _resolve_remote_target_path(
@@ -222,13 +238,15 @@ class _HiDriveAdapter:
         if response.status_code == 200:
             return bytes(response.content or b"")
         if response.status_code >= 500:
-            raise RuntimeError(
-                f"HiDrive download failed with status {response.status_code}"
+            raise HiDriveApiError(
+                f"HiDrive download failed with status {response.status_code}",
+                status_code=response.status_code,
             )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive download unauthorized after token refresh")
-        raise RuntimeError(
-            f"HiDrive download rejected with status {response.status_code}"
+        raise HiDriveApiError(
+            f"HiDrive download rejected with status {response.status_code}",
+            status_code=response.status_code,
         )
 
     def _download_once(
@@ -267,7 +285,7 @@ class _HiDriveAdapter:
                 access_token=access_token,
                 remote_path=remote_path,
             )
-            payload = response.json()
+            payload = _response_json(response)
             return _parse_dir_list_response(
                 resolved_dir_path=resolved_for_parse,
                 payload=payload,
@@ -280,13 +298,15 @@ class _HiDriveAdapter:
             )
             return []
         if response.status_code >= 500:
-            raise RuntimeError(
-                f"HiDrive list_dir failed with status {response.status_code}"
+            raise HiDriveApiError(
+                f"HiDrive list_dir failed with status {response.status_code}",
+                status_code=response.status_code,
             )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive list_dir unauthorized after token refresh")
-        raise RuntimeError(
-            f"HiDrive list_dir rejected with status {response.status_code}"
+        raise HiDriveApiError(
+            f"HiDrive list_dir rejected with status {response.status_code}",
+            status_code=response.status_code,
         )
 
     def _list_dir_once(
@@ -348,13 +368,15 @@ class _HiDriveAdapter:
                 )
                 return
         if response.status_code >= 500:
-            raise RuntimeError(
-                f"HiDrive move_file failed with status {response.status_code}"
+            raise HiDriveApiError(
+                f"HiDrive move_file failed with status {response.status_code}",
+                status_code=response.status_code,
             )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive move_file unauthorized after token refresh")
-        raise RuntimeError(
-            f"HiDrive move_file rejected with status {response.status_code}"
+        raise HiDriveApiError(
+            f"HiDrive move_file rejected with status {response.status_code}",
+            status_code=response.status_code,
         )
 
     def _move_file_once(
@@ -450,7 +472,7 @@ class _HiDriveAdapter:
         )
         rows = _parse_dir_list_response(
             resolved_dir_path=resolved_dir,
-            payload=resp.json(),
+            payload=_response_json(resp),
         )
         want = file_name.lower()
         dst_norm = dst_resolved.rstrip("/")
@@ -624,11 +646,17 @@ def _fetch_user_alias(*, base_url: str, access_token: str) -> str:
         timeout=timeout,
     )
     if response.status_code != 200:
-        raise RuntimeError(f"HiDrive user/me failed with status {response.status_code}")
-    data = response.json()
+        raise HiDriveApiError(
+            f"HiDrive user/me failed with status {response.status_code}",
+            status_code=response.status_code,
+        )
+    data = _response_json(response)
     alias = str(data.get("alias") or "").strip()
     if not alias:
-        raise RuntimeError("HiDrive user/me returned empty alias")
+        raise HiDriveApiError(
+            "HiDrive user/me returned empty alias",
+            status_code=response.status_code,
+        )
     return alias
 
 
@@ -666,8 +694,9 @@ def _ensure_remote_directories(
             and "already exists" in (response.text or "").lower()
         ):
             continue
-        raise RuntimeError(
-            f"HiDrive directory create failed for {current} with status {response.status_code}"
+        raise HiDriveApiError(
+            f"HiDrive directory create failed for {current} with status {response.status_code}",
+            status_code=response.status_code,
         )
 
 
