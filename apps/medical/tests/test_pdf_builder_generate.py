@@ -214,3 +214,20 @@ class GenerateBefundPdfExternalTests(TestCase):
         _pdf, warn = build_merged_preview_pdf_bytes(self.version)
         self.assertIsNotNone(_pdf)
         self.assertIn("external_pdf_corrupt", (warn or "").lower())
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_build_merged_preview_warns_on_download_failure(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        dl_mock.side_effect = RuntimeError("simulated HiDrive failure")
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        _pdf, warn = build_merged_preview_pdf_bytes(self.version)
+        self.assertIsNotNone(_pdf)
+        self.assertIn("external_pdf_download_failed", (warn or "").lower())
