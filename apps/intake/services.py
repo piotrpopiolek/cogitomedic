@@ -38,6 +38,48 @@ CONTACT_METHOD_CONSENT_CODE = "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG"
 CONTACT_METHOD_ALLOWED_OPTIONS = {"EMAIL", "SMS", "PHONE"}
 
 
+def _patient_intake_consent_selected_codes(consent: PatientIntakeConsent) -> list[str]:
+    raw = (
+        consent.selected_option_codes
+        if isinstance(consent.selected_option_codes, list)
+        else []
+    )
+    out = [str(x).strip().upper() for x in raw if str(x).strip()]
+    if not out and (consent.selected_option_code or "").strip():
+        out = [(consent.selected_option_code or "").strip().upper()]
+    return out
+
+
+def _contact_method_pdf_options(
+    *, locale: str, selected_codes: Iterable[str]
+) -> list[dict[str, Any]]:
+    """Rows for intake PDF (same shape as anamnesis ``all_options`` items)."""
+    selected = {c for c in selected_codes if c in CONTACT_METHOD_ALLOWED_OPTIONS}
+    loc = (locale or "de-DE").lower()
+    use_en = loc.startswith("en")
+    use_pl = loc.startswith("pl")
+    ui = get_form_ui_strings(locale)
+    phone_de = "Telefon"
+    phone_loc = ui.get("contact_method_phone", phone_de) if ui else phone_de
+    email_de = "E-Mail"
+    email_loc = "E-mail" if use_pl else ("Email" if use_en else email_de)
+    rows: list[dict[str, Any]] = []
+    for code, label_de, label_loc in (
+        ("EMAIL", email_de, email_loc),
+        ("SMS", "SMS", "SMS"),
+        ("PHONE", phone_de, phone_loc),
+    ):
+        rows.append(
+            {
+                "option_code": code,
+                "label_de": label_de,
+                "label_locale": label_loc,
+                "selected": code in selected,
+            }
+        )
+    return rows
+
+
 class RequiredConsentMissingError(DomainError):
     """Raised when required active consent is not accepted."""
 
@@ -152,32 +194,37 @@ def _build_intake_snapshot_payload(
     )
     for consent in consent_rows:
         definition = consent.consent_definition
-        consents.append(
-            {
-                "consent_definition_id": str(definition.id),
-                "code": definition.code,
-                "version": definition.version,
-                "is_required": definition.is_required,
-                "accepted": consent.accepted,
-                "accepted_at": (
-                    consent.accepted_at.isoformat() if consent.accepted_at else None
-                ),
-                "title_de": definition.title_de,
-                "title_locale": _localized_text(
-                    value_de=definition.title_de,
-                    value_en=definition.title_en,
-                    value_pl=definition.title_pl,
-                    locale=locale,
-                ),
-                "content_de": definition.content_de,
-                "content_locale": _localized_text(
-                    value_de=definition.content_de,
-                    value_en=definition.content_en,
-                    value_pl=definition.content_pl,
-                    locale=locale,
-                ),
-            }
-        )
+        selected_codes = _patient_intake_consent_selected_codes(consent)
+        row: dict[str, Any] = {
+            "consent_definition_id": str(definition.id),
+            "code": definition.code,
+            "version": definition.version,
+            "is_required": definition.is_required,
+            "accepted": consent.accepted,
+            "accepted_at": (
+                consent.accepted_at.isoformat() if consent.accepted_at else None
+            ),
+            "title_de": definition.title_de,
+            "title_locale": _localized_text(
+                value_de=definition.title_de,
+                value_en=definition.title_en,
+                value_pl=definition.title_pl,
+                locale=locale,
+            ),
+            "content_de": definition.content_de,
+            "content_locale": _localized_text(
+                value_de=definition.content_de,
+                value_en=definition.content_en,
+                value_pl=definition.content_pl,
+                locale=locale,
+            ),
+            "selected_option_codes": selected_codes,
+        }
+        if definition.code == CONTACT_METHOD_CONSENT_CODE:
+            row["contact_method_all_options"] = _contact_method_pdf_options(
+                locale=locale, selected_codes=selected_codes
+            )
+        consents.append(row)
 
     answers_raw = intake_form.anamnesis_payload.get("answers") or []
     question_codes = [

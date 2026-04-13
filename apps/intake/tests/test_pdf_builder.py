@@ -12,6 +12,7 @@ from django.test import SimpleTestCase
 from pypdf import PdfReader
 
 from apps.intake.pdf_builder import _normalize_snapshot, build_intake_pdf_bytes
+from apps.intake.services import CONTACT_METHOD_CONSENT_CODE
 
 
 def _render_intake_pdf_html(snapshot: dict) -> str:
@@ -82,7 +83,11 @@ class IntakePdfMetadataTests(SimpleTestCase):
 
 
 class IntakePdfBilingualLayoutTests(SimpleTestCase):
-    """Layout rules from templates/pdf/intake_document.html (DE-only vs bilingual)."""
+    """Layout rules from templates/pdf/intake_document.html (DE-only vs bilingual).
+
+    Bilingual consent order: title DE + checkbox, body DE, title locale + checkbox,
+    body locale.
+    """
 
     _when = datetime(2026, 4, 13, 13, 56, 53, tzinfo=UTC)
 
@@ -154,7 +159,9 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
         self.assertIn("Frage DE", html)
         self.assertNotIn("Frage PL", html)
 
-    def test_polish_locale_consent_body_de_then_locale_then_titles(self) -> None:
+    def test_polish_locale_consent_title_de_body_de_title_locale_body_locale_order(
+        self,
+    ) -> None:
         snap = self._base_snapshot(form_locale="pl-PL")
         snap["consents"] = [
             {
@@ -179,9 +186,9 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
         self.assertGreater(c_pl, -1, msg="Locale body missing")
         self.assertGreater(t_de, -1, msg="German title missing")
         self.assertGreater(t_pl, -1, msg="Locale title missing")
-        self.assertLess(c_de, c_pl)
-        self.assertLess(c_pl, t_de)
-        self.assertLess(t_de, t_pl)
+        self.assertLess(t_de, c_de)
+        self.assertLess(c_de, t_pl)
+        self.assertLess(t_pl, c_pl)
 
     def test_polish_locale_anamnesis_question_and_options_stacked_per_language(
         self,
@@ -212,10 +219,10 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
         }
         html = _render_intake_pdf_html(snap)
         self.assertIn("Anamnese / Anamnesis", html)
+        self.assertNotIn("padding-left:22px", html)
         q_de = html.find("Q_DE_SUNBURN")
         q_pl = html.find("Q_PL_SUNBURN")
         self.assertLess(q_de, q_pl)
-        self.assertGreaterEqual(html.count("padding-left:22px"), 2)
         nein = html.find("Nein")
         nie = html.find("Nie")
         self.assertGreater(nein, -1)
@@ -251,3 +258,104 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
         html = _render_intake_pdf_html(snap)
         self.assertIn("<h2>Unterschrift / Unterschrift</h2>", html)
         self.assertIn("<strong>fr-FR</strong>", html)
+
+    def test_german_locale_prevention_contact_method_shows_checkboxes(self) -> None:
+        snap = self._base_snapshot(form_locale="de-DE")
+        snap["consents"] = [
+            {
+                "code": CONTACT_METHOD_CONSENT_CODE,
+                "version": 1,
+                "is_required": False,
+                "accepted": True,
+                "accepted_at": self._when.isoformat(),
+                "title_de": "Kontaktweg",
+                "title_locale": "Kontaktweg",
+                "content_de": "Bitte wählen:",
+                "content_locale": "Bitte wählen:",
+                "selected_option_codes": ["EMAIL", "PHONE"],
+                "contact_method_all_options": [
+                    {
+                        "option_code": "EMAIL",
+                        "label_de": "E-Mail",
+                        "label_locale": "E-Mail",
+                        "selected": True,
+                    },
+                    {
+                        "option_code": "SMS",
+                        "label_de": "SMS",
+                        "label_locale": "SMS",
+                        "selected": False,
+                    },
+                    {
+                        "option_code": "PHONE",
+                        "label_de": "Telefon",
+                        "label_locale": "Telefon",
+                        "selected": True,
+                    },
+                ],
+            }
+        ]
+        html = _render_intake_pdf_html(snap)
+        self.assertRegex(
+            html,
+            r'<span class="cb">☑</span>\s*<span>E-Mail</span>',
+        )
+        self.assertRegex(
+            html,
+            r'<span class="cb">☐</span>\s*<span>SMS</span>',
+        )
+        self.assertRegex(
+            html,
+            r'<span class="cb">☑</span>\s*<span>Telefon</span>',
+        )
+
+    def test_polish_locale_contact_method_stacks_de_and_locale_rows(self) -> None:
+        snap = self._base_snapshot(form_locale="pl-PL")
+        snap["consents"] = [
+            {
+                "code": CONTACT_METHOD_CONSENT_CODE,
+                "version": 1,
+                "is_required": False,
+                "accepted": True,
+                "accepted_at": self._when.isoformat(),
+                "title_de": "Kontakt",
+                "title_locale": "Kontakt PL",
+                "content_de": "Wybór:",
+                "content_locale": "Wybór PL:",
+                "selected_option_codes": ["SMS"],
+                "contact_method_all_options": [
+                    {
+                        "option_code": "EMAIL",
+                        "label_de": "E-Mail",
+                        "label_locale": "E-mail",
+                        "selected": False,
+                    },
+                    {
+                        "option_code": "SMS",
+                        "label_de": "SMS",
+                        "label_locale": "SMS",
+                        "selected": True,
+                    },
+                    {
+                        "option_code": "PHONE",
+                        "label_de": "Telefon",
+                        "label_locale": "Telefon",
+                        "selected": False,
+                    },
+                ],
+            }
+        ]
+        html = _render_intake_pdf_html(snap)
+        self.assertNotIn("padding-left:22px", html)
+        self.assertRegex(
+            html,
+            r'<span class="cb">☐</span>\s*<span>E-Mail</span>',
+        )
+        self.assertRegex(
+            html,
+            r'<span class="cb">☐</span>\s*<span>E-mail</span>',
+        )
+        self.assertRegex(
+            html,
+            r'<span class="cb">☑</span>\s*<span>SMS</span>',
+        )
