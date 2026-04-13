@@ -2,24 +2,52 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 from django.db.models import Q
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
+from pypdf import PdfWriter
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.integrations.hidrive import client as hidrive_client
+from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.external_pdf_service import (
+    ExternalPdfCorruptError,
+    MatchedIncomingFile,
     _ambiguous_undated_stem,
     check_external_pdf_gate,
+    create_attachment_records,
+    download_external_pdf,
+    hidrive_incoming_dir,
+    hidrive_processed_dir,
     logical_path_to_processed,
+    reject_external_pdf,
+)
+from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    MedicalDocStatus,
+    MedicalDocument,
 )
 from apps.medical.name_normalize import (
     incoming_stem_norm_lookup_bases,
     normalize_name,
     _stem_without_pdf,
 )
-from apps.reception.models import Patient
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    PatientFormSession,
+    QueueEntry,
+    QueueEntryStatus,
+    QueueStatus,
+)
+from apps.users.models import StaffUser
 
 
 class LogicalPathToProcessedTests(SimpleTestCase):
@@ -30,6 +58,24 @@ class LogicalPathToProcessedTests(SimpleTestCase):
     def test_root_incoming_prefix_maps_to_processed(self) -> None:
         self.assertEqual(
             logical_path_to_processed("/incoming/X.pdf"),
+            "/processed/X.pdf",
+        )
+
+    @override_settings(
+        HIDRIVE_INCOMING_PATH="incoming",
+        HIDRIVE_PROCESSED_PATH="processed",
+    )
+    def test_dirs_normalize_missing_leading_slash_from_settings(self) -> None:
+        self.assertEqual(hidrive_incoming_dir(), "/incoming")
+        self.assertEqual(hidrive_processed_dir(), "/processed")
+
+    @override_settings(
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+    )
+    def test_logical_path_outside_incoming_uses_basename_under_processed(self) -> None:
+        self.assertEqual(
+            logical_path_to_processed("/other/X.pdf"),
             "/processed/X.pdf",
         )
 
@@ -325,3 +371,172 @@ class ExternalPdfGateTests(TestCase):
         )
         self.assertFalse(gate.passed)
         self.assertEqual(gate.error_message, "NO_FILE")
+
+
+def _minimal_pdf_bytes() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+@override_settings(HIDRIVE_USE_MOCK="1")
+class ExternalPdfServiceDbTests(TestCase):
+    """create_attachment_records, download, reject, and model __str__."""
+
+    def setUp(self) -> None:
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        self.doctor = StaffUser.objects.create_user(
+            username="ext-pdf-doc",
+            email="ext@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor, "Doctor")
+        rec = StaffUser.objects.create_user(
+            username="ext-pdf-rec",
+            email="rec@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(rec, "Reception")
+        clinic = ClinicSite.objects.create(code="EXT", name="Ext Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="E1", name="E1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=rec,
+        )
+        patient = Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500100901",
+            email="extpatient@example.com",
+        )
+        qe = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=rec,
+        )
+        sess = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=rec,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=sess,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        self.medical_doc = MedicalDocument.objects.create(
+            queue_entry=qe,
+            intake_form=intake,
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=0,
+            created_by_user=self.doctor,
+        )
+
+    def test_external_pdf_attachment_str_includes_status(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.assertIn("Med_Test.pdf", str(att))
+        self.assertIn("MATCHED", str(att))
+
+    def test_create_attachment_records_prunes_stale_paths(self) -> None:
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/old.pdf",
+            original_filename="old.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        matched = (MatchedIncomingFile(name="new.pdf", path="/incoming/new.pdf"),)
+        out = create_attachment_records(self.medical_doc, matched)
+        self.assertEqual(len(out), 1)
+        self.assertFalse(
+            ExternalPdfAttachment.objects.filter(
+                hidrive_remote_path="/incoming/old.pdf"
+            ).exists()
+        )
+
+    def test_download_external_pdf_happy_path(self) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Med_Test.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        data = download_external_pdf(att)
+        self.assertEqual(data, pdf)
+
+    def test_download_external_pdf_corrupt_raises(self) -> None:
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/Med_Test.pdf", b"xxx")
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(ExternalPdfCorruptError):
+            download_external_pdf(att)
+
+    @patch("apps.medical.external_pdf_service.PdfReader")
+    def test_download_external_pdf_raises_when_no_pages(
+        self, reader_cls: MagicMock
+    ) -> None:
+        inst = MagicMock()
+        inst.pages = []
+        reader_cls.return_value = inst
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/Med_Test.pdf", b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Med_Test.pdf",
+            original_filename="Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(ExternalPdfCorruptError):
+            download_external_pdf(att)
+
+    def test_reject_external_pdf_noop_when_already_rejected(self) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/rejected_x.pdf",
+            original_filename="rejected_x.pdf",
+            status=ExternalPdfStatus.REJECTED,
+        )
+        reject_external_pdf(att)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.REJECTED)
+
+    def test_reject_external_pdf_noop_when_filename_already_rejected_prefix(
+        self,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/rejected_Med_Test.pdf", pdf
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/rejected_Med_Test.pdf",
+            original_filename="rejected_Med_Test.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        reject_external_pdf(att)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.REJECTED)

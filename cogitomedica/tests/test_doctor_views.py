@@ -287,3 +287,33 @@ class DoctorDetailHappyPathTests(TestCase):
         self.client.force_login(other)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
         self.assertEqual(resp.status_code, 200)
+
+    @patch(
+        "cogitomedica.doctor_views.check_external_pdf_gate",
+        return_value=GateResult(
+            False,
+            (),
+            "GATE_BLOCKED",
+            skip_attachment_sync=False,
+        ),
+    )
+    def test_detail_returns_422_when_external_pdf_gate_blocks(
+        self,
+        _mock_gate: MagicMock,
+    ) -> None:
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn("GATE_BLOCKED", resp.content.decode())
+
+    @patch(
+        "cogitomedica.doctor_views.get_medical_document_context",
+        return_value={"intake_summary": {"patient": {}}},
+    )
+    def test_detail_returns_404_when_intake_patient_id_missing(
+        self,
+        _mock_ctx: MagicMock,
+    ) -> None:
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 404)
