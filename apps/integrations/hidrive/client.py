@@ -64,7 +64,7 @@ class _MockHiDriveAdapter:
 
     def upload(self, *, remote_path: str, local_path: Path) -> None:
         logger.info(
-            "[MOCK HIDRIVE] upload path=%s local=%s",
+            "[MOCK HIDRIVE] upload path=%s local=%s — not sent to cloud; set HIDRIVE_USE_MOCK=0 + OAuth to use real HiDrive",
             remote_path,
             str(local_path),
         )
@@ -134,7 +134,23 @@ class _HiDriveAdapter:
                 local_path=local_path,
             )
 
+        dbg_base = _hidrive_base_url()
+        dbg_resolved = ""
+        try:
+            dbg_resolved = _resolve_remote_target_path(
+                base_url=dbg_base,
+                access_token=access_token,
+                remote_path=remote_path,
+            )
+        except Exception as res_exc:
+            dbg_resolved = f"<resolve_failed:{type(res_exc).__name__}>"
         if response.status_code in (200, 201, 204):
+            logger.info(
+                "HiDrive upload OK status=%s logical=%s api_path=%s",
+                response.status_code,
+                remote_path,
+                dbg_resolved,
+            )
             return
         if response.status_code >= 500:
             raise RuntimeError(
@@ -142,6 +158,14 @@ class _HiDriveAdapter:
             )
         if response.status_code == 401:
             raise HiDriveAuthError("HiDrive upload unauthorized after token refresh")
+        err_snip = (response.text or "")[:160].replace("\n", " ")
+        logger.warning(
+            "HiDrive upload rejected status=%s logical=%s api_path=%s snippet=%s",
+            response.status_code,
+            remote_path,
+            dbg_resolved,
+            err_snip,
+        )
         raise RuntimeError(
             f"HiDrive upload rejected with status {response.status_code}"
         )
@@ -571,8 +595,23 @@ def _resolve_remote_target_path(
     *, base_url: str, access_token: str, remote_path: str
 ) -> str:
     normalized = _normalize_remote_path(remote_path)
-    if normalized.startswith("/users/"):
+    # Root-level absolute paths: /users/… (personal) and /public/… (Common/shared space).
+    if normalized.startswith("/users/") or normalized.startswith("/public/"):
         return normalized
+    root_prefix = (
+        str(getattr(settings, "HIDRIVE_USERS_ROOT_PREFIX", "") or "")
+        .strip()
+        .rstrip("/")
+    )
+    if root_prefix:
+        if not (
+            root_prefix == "/public" or root_prefix.startswith(("/users/", "/public/"))
+        ):
+            raise ValueError(
+                "HIDRIVE_USERS_ROOT_PREFIX must be an absolute HiDrive path "
+                "starting with /users/ or /public/"
+            )
+        return f"{root_prefix}{normalized}"
     alias = _fetch_user_alias(base_url=base_url, access_token=access_token)
     return f"/users/{alias}{normalized}"
 
@@ -601,11 +640,13 @@ def _ensure_remote_directories(
     # Remote HiDrive paths are always POSIX; ``Path`` on Windows mangles leading ``/``.
     path_obj = PurePosixPath(dir_path)
     parts = [p for p in path_obj.parts if p not in ("", "/")]
-    # HiDrive root namespaces like /users and /users/<alias> are system-managed.
-    # Creating them returns 403, so only create paths below user alias.
+    # HiDrive root namespaces are system-managed (creating them returns 403).
+    # /users/<alias>/… → skip first 2 parts; /public/… → skip first 1 part.
     start_index = 0
     if len(parts) >= 2 and parts[0] == "users":
         start_index = 2
+    elif parts and parts[0] == "public":
+        start_index = 1
     current = ""
     for idx, part in enumerate(parts):
         current = f"{current}/{part}"

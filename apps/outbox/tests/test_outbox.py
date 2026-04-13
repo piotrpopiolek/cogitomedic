@@ -17,6 +17,7 @@ from apps.medical.services import (
     save_draft_document_version,
 )
 from apps.operations.models import AuditEvent
+from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
 from apps.core.api_utils import assign_group_to_test_user
@@ -141,6 +142,13 @@ class OutboxProcessingTests(TestCase):
             ).count(),
             3,
         )
+
+    @override_settings(HIDRIVE_PATIENTS_DIR_PREFIX="/public/patients")
+    def test_build_befund_hidrive_path_uses_patients_dir_prefix(self) -> None:
+        patient_id = str(self.medical_document.queue_entry.patient_id)
+        path = build_befund_hidrive_path(self.version)
+        self.assertIn(f"/public/patients/{patient_id}/", path)
+        self.assertTrue(path.endswith("/Befund_v1.pdf"))
         self.assertEqual(
             AuditEvent.objects.filter(
                 event_type="OUTBOX_EVENT_PROCESSED",
