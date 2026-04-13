@@ -34,6 +34,16 @@
     "en": "Email",
     "pl": "E-mail"
   },
+  "doctor.pdf_label.ergebnisse": {
+    "de": "Ergebnisse",
+    "en": "Results",
+    "pl": "Wyniki"
+  },
+  "doctor.pdf_label.examination_date": {
+    "de": "Untersuchungsdatum",
+    "en": "Examination date",
+    "pl": "Data badania"
+  },
   "doctor.pdf_label.examination_scope": {
     "de": "Untersuchungsumfang",
     "en": "Examination Scope",
@@ -124,6 +134,11 @@
     "en": "Recommendations",
     "pl": "Rekomendacje"
   },
+  "doctor.pdf_label.reporting_physician": {
+    "de": "Beurteilender Arzt",
+    "en": "Reporting physician",
+    "pl": "Lekarz sporządzający opis"
+  },
   "doctor.pdf_label.summary": {
     "de": "Zusammenfassung",
     "en": "Summary",
@@ -135,3 +150,4 @@
     "pl": "Wersja"
   }
 }
+

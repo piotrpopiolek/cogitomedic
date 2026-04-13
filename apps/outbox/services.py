@@ -78,8 +78,11 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             "medical_document",
             "medical_document__queue_entry",
             "medical_document__queue_entry__patient",
+            "medical_document__created_by_user",
+            "medical_document__updated_by_user",
             "medical_document__intake_form",
             "medical_document__intake_form__session",
+            "published_by_user",
         )
         .get(id=event.medical_document_version_id)
     )

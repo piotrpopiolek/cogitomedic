@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from freezegun import freeze_time
 from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -26,6 +27,7 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.pdf_builder import (
+    _build_render_context,
     build_merged_preview_pdf_bytes,
     generate_befund_pdf,
 )
@@ -251,3 +253,59 @@ class GenerateBefundPdfExternalTests(TestCase):
         _pdf, warn = build_merged_preview_pdf_bytes(self.version)
         self.assertIsNotNone(_pdf)
         self.assertIn("external_pdf_download_failed", (warn or "").lower())
+
+    def test_publication_date_display_uses_last_published_when_version_published_at_null(
+        self,
+    ) -> None:
+        lp = timezone.make_aware(datetime(2026, 4, 10, 14, 0, 0))
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            last_published_at=lp
+        )
+        MedicalDocumentVersion.objects.filter(pk=self.version.pk).update(
+            published_at=None
+        )
+        self.version.refresh_from_db()
+        self.medical_doc.refresh_from_db()
+        ctx = _build_render_context(self.version)
+        expected = timezone.localtime(lp).strftime("%d.%m.%Y")
+        self.assertEqual(ctx["publication_date_display"], expected)
+
+    @freeze_time("2026-04-13T10:00:00Z")
+    def test_publication_date_display_for_draft_uses_render_day_not_dash(self) -> None:
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            last_published_at=None
+        )
+        MedicalDocumentVersion.objects.filter(pk=self.version.pk).update(
+            published_at=None,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        self.version.refresh_from_db()
+        self.medical_doc.refresh_from_db()
+        ctx = _build_render_context(self.version)
+        self.assertNotEqual(ctx["publication_date_display"], "–")
+        expected = timezone.localtime(timezone.now()).strftime("%d.%m.%Y")
+        self.assertEqual(ctx["publication_date_display"], expected)
+
+    def test_reporting_physician_display_uses_published_by_when_set(self) -> None:
+        self.doctor.first_name = "Anna"
+        self.doctor.last_name = "Schmidt"
+        self.doctor.save(update_fields=["first_name", "last_name"])
+        self.version.published_by_user = self.doctor
+        self.version.save(update_fields=["published_by_user"])
+        ctx = _build_render_context(self.version)
+        self.assertEqual(ctx["reporting_physician_display"], "Schmidt, Anna")
+
+    def test_reporting_physician_display_falls_back_to_document_creator(self) -> None:
+        self.doctor.first_name = "Ben"
+        self.doctor.last_name = "Weber"
+        self.doctor.save(update_fields=["first_name", "last_name"])
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            updated_by_user_id=None
+        )
+        MedicalDocumentVersion.objects.filter(pk=self.version.pk).update(
+            published_by_user_id=None
+        )
+        self.medical_doc.refresh_from_db()
+        self.version.refresh_from_db()
+        ctx = _build_render_context(self.version)
+        self.assertEqual(ctx["reporting_physician_display"], "Weber, Ben")

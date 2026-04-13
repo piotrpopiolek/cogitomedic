@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from json import JSONDecodeError
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -82,6 +84,8 @@ from apps.medical.template_services import (
 from apps.operations.api_views import _serialize_audit_event
 from apps.operations.models import AuditEvent
 from apps.operations.services import create_audit_event
+
+logger = logging.getLogger(__name__)
 
 
 class _MedicalDocumentEditLocked(Exception):
@@ -296,6 +300,9 @@ def medical_document_preview_pdf_view(
             "medical_document",
             "medical_document__queue_entry",
             "medical_document__queue_entry__patient",
+            "medical_document__created_by_user",
+            "medical_document__updated_by_user",
+            "published_by_user",
         )
         .order_by("-version_no")
         .first()
@@ -1009,10 +1016,15 @@ def medical_document_external_pdfs_view(
 
 
 @require_auth
+@xframe_options_sameorigin
 def medical_document_external_pdf_content_view(
     request: HttpRequest, medical_document_id: UUID, attachment_id: UUID
 ) -> HttpResponse:
-    """GET: stream external PDF from HiDrive (on-demand, no disk cache)."""
+    """GET: stream external PDF from HiDrive (on-demand, no disk cache).
+
+    Same-origin framing is allowed so the doctor panel can show this URL in an
+    ``iframe`` (blob: URLs break multi-page PDF in some browsers).
+    """
     role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
     if role_error:
         return role_error
@@ -1043,6 +1055,22 @@ def medical_document_external_pdf_content_view(
                 )
             },
             status=422,
+        )
+    except Exception:
+        logger.exception(
+            "download_external_pdf failed: attachment=%s path=%s",
+            att.id,
+            att.hidrive_remote_path,
+        )
+        return JsonResponse(
+            {
+                "error": resolve_other_message(
+                    request,
+                    "doctor.external_pdf_gate_hidrive_error",
+                    "",
+                )
+            },
+            status=502,
         )
     safe_name = (att.original_filename or "external.pdf").replace('"', "")
     response = HttpResponse(data, content_type="application/pdf")

@@ -469,6 +469,11 @@ class Tests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", r.content[:8])
+        self.assertEqual(
+            (r.get("X-Frame-Options") or "").upper(),
+            "SAMEORIGIN",
+            msg="Doctor panel embeds this URL in an iframe (avoid blob: for large PDFs).",
+        )
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_external_pdf_content_rejected_returns_410(self) -> None:
