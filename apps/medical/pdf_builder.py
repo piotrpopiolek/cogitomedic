@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,25 @@ from apps.medical.pdf_merge import safe_merge_pdfs
 from apps.operations.services import create_audit_event
 
 logger = logging.getLogger(__name__)
+
+
+class AllExternalPdfDownloadsFailed(RuntimeError):
+    """Every ``MATCHED`` lab PDF download failed (infra). Outbox records audits after savepoint rollback."""
+
+    __slots__ = ("patient_id", "medical_document_id", "failed_download_metadata")
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        patient_id: uuid.UUID,
+        medical_document_id: uuid.UUID,
+        failed_download_metadata: list[dict[str, Any]],
+    ) -> None:
+        super().__init__(message)
+        self.patient_id = patient_id
+        self.medical_document_id = medical_document_id
+        self.failed_download_metadata = failed_download_metadata
 
 
 def _w3c_profile_datetime(dt: datetime | None) -> str | None:
@@ -432,6 +452,13 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     """
     Generate and store Befund PDF for medical document version.
 
+    When there are ``MATCHED`` external (lab) PDF attachments and every download
+    fails with an infrastructure error (not :class:`ExternalPdfCorruptError`),
+    raises :class:`AllExternalPdfDownloadsFailed` — Befund must not be archived
+    without lab bytes; outbox should retry once HiDrive serves the file.
+    Attachments stay ``MATCHED``. ``EXTERNAL_PDF_DOWNLOAD_FAILED`` audits are
+    written by the outbox handler after rolling back the per-event savepoint.
+
     Returns:
         (pdf_local_path_relative_to_media_root, sha256_checksum_hex)
     """
@@ -477,21 +504,21 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
         attachments_used.append(att)
 
     if attachments and not external_bytes_list and infra_errors:
-        for att, download_error in infra_errors:
-            create_audit_event(
-                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-                patient_id=patient.id,
-                medical_document_id=doc.id,
-                metadata={
-                    "hidrive_remote_path": att.hidrive_remote_path,
-                    "external_pdf_attachment_id": str(att.id),
-                    "error_type": type(download_error).__name__,
-                },
-            )
-        raise RuntimeError(
+        meta_list = [
+            {
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "error_type": type(download_error).__name__,
+            }
+            for att, download_error in infra_errors
+        ]
+        raise AllExternalPdfDownloadsFailed(
             f"All {len(infra_errors)} external PDF download(s) failed "
             f"(HiDrive unavailable?); refusing to publish Befund without "
-            f"lab results. Outbox will retry."
+            f"lab results. Outbox will retry.",
+            patient_id=patient.id,
+            medical_document_id=doc.id,
+            failed_download_metadata=meta_list,
         )
 
     for att, download_error in infra_errors:

@@ -10,7 +10,11 @@ from pypdf import PdfWriter
 
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import ExternalPdfAttachment, ExternalPdfStatus
+from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    PdfStatus,
+)
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
@@ -256,11 +260,12 @@ class OutboxProcessingTests(TestCase):
         HIDRIVE_INCOMING_PATH="/incoming",
         HIDRIVE_PROCESSED_PATH="/processed",
         HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+        OUTBOX_BASE_BACKOFF_SECONDS=0,
     )
-    def test_outbox_missing_external_file_marks_merge_failed_and_still_completes_chain(
+    def test_outbox_missing_external_lab_pdf_fails_then_completes_when_file_arrives(
         self,
     ) -> None:
-        """HiDrive download errors must not fail GENERATE_PDF; Befund-only PDF + upload proceed."""
+        """GENERATE_PDF must not store Befund-only when lab PDF is required but missing; retry after upload."""
         hidrive_client._MockHiDriveAdapter.reset_test_state()
         ExternalPdfAttachment.objects.create(
             medical_document=self.medical_document,
@@ -269,19 +274,20 @@ class OutboxProcessingTests(TestCase):
             status=ExternalPdfStatus.MATCHED,
         )
 
-        process_outbox_events()
-        process_outbox_events()
-        process_outbox_events()
+        r1 = process_outbox_events()
+        self.assertEqual(r1.failed, 1)
+        self.assertEqual(r1.processed, 0)
 
         self.version.refresh_from_db()
-        self.assertTrue(self.version.hidrive_sent)
-        self.assertIsNotNone(self.version.pdf_local_path)
+        self.assertEqual(self.version.pdf_generation_status, PdfStatus.FAILED)
+        self.assertFalse(self.version.hidrive_sent)
+        self.assertIsNone(self.version.pdf_local_path)
 
         att = ExternalPdfAttachment.objects.get(
             medical_document=self.medical_document,
             original_filename="not_seeded.pdf",
         )
-        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
         self.assertEqual(att.hidrive_remote_path, "/incoming/not_seeded.pdf")
         self.assertTrue(
             AuditEvent.objects.filter(
@@ -289,3 +295,19 @@ class OutboxProcessingTests(TestCase):
                 medical_document_id=self.medical_document.id,
             ).exists()
         )
+
+        pdf_bytes = _minimal_valid_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/not_seeded.pdf",
+            pdf_bytes,
+        )
+
+        for _ in range(6):
+            process_outbox_events()
+
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.hidrive_sent)
+        self.assertIsNotNone(self.version.pdf_local_path)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertEqual(att.hidrive_remote_path, "/processed/not_seeded.pdf")
