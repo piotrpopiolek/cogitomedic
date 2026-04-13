@@ -12,6 +12,7 @@ from apps.integrations.hidrive.auth import (
 )
 from apps.integrations.hidrive import client as hidrive_client
 from apps.integrations.hidrive.client import (
+    HiDriveApiError,
     _parse_dir_list_response,
     _resolve_remote_target_path,
     get_hidrive_adapter,
@@ -267,7 +268,7 @@ class HiDriveRealAdapterDownloadListMoveErrorTests(SimpleTestCase):
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.get")
     @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
-    def test_real_adapter_download_502_raises_runtime_error(
+    def test_real_adapter_download_502_raises_api_error(
         self, oauth_client_mock: Mock, get_mock: Mock
     ) -> None:
         oauth = Mock()
@@ -280,8 +281,9 @@ class HiDriveRealAdapterDownloadListMoveErrorTests(SimpleTestCase):
         err.status_code = 503
         get_mock.side_effect = [user_me, err]
         adapter = get_hidrive_adapter()
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(HiDriveApiError) as ctx:
             adapter.download(remote_path="/incoming/x.pdf")
+        self.assertEqual(ctx.exception.status_code, 503)
 
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.get")
@@ -350,7 +352,7 @@ class HiDriveRealAdapterDownloadListMoveErrorTests(SimpleTestCase):
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.get")
     @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
-    def test_real_adapter_list_dir_503_raises(
+    def test_real_adapter_list_dir_503_raises_api_error(
         self, oauth_client_mock: Mock, get_mock: Mock
     ) -> None:
         oauth = Mock()
@@ -365,9 +367,32 @@ class HiDriveRealAdapterDownloadListMoveErrorTests(SimpleTestCase):
         post_mock = Mock(return_value=Mock(status_code=201))
         with patch("apps.integrations.hidrive.client.requests.post", post_mock):
             adapter = get_hidrive_adapter()
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(HiDriveApiError) as ctx:
                 adapter.list_dir(remote_path="/incoming")
+            self.assertEqual(ctx.exception.status_code, 503)
         post_mock.assert_not_called()
+
+    @override_settings(HIDRIVE_USE_MOCK="0")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    def test_real_adapter_list_dir_200_invalid_json_raises_api_error(
+        self, oauth_client_mock: Mock, get_mock: Mock
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "t1"
+        oauth_client_mock.return_value = oauth
+        user_me = Mock()
+        user_me.status_code = 200
+        user_me.json.return_value = {"alias": "cogitomedica"}
+        bad_json = Mock()
+        bad_json.status_code = 200
+        bad_json.json.side_effect = ValueError("not json")
+        # list_dir resolves path before /dir and again after HTTP 200 before parsing.
+        get_mock.side_effect = [user_me, bad_json, user_me]
+        adapter = get_hidrive_adapter()
+        with self.assertRaises(HiDriveApiError) as ctx:
+            adapter.list_dir(remote_path="/incoming")
+        self.assertEqual(ctx.exception.status_code, 200)
 
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.post")
@@ -393,11 +418,12 @@ class HiDriveRealAdapterDownloadListMoveErrorTests(SimpleTestCase):
 
         post_mock.side_effect = post_side_effect
         adapter = get_hidrive_adapter()
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(HiDriveApiError) as ctx:
             adapter.move_file(
                 source_path="/incoming/a.pdf",
                 dest_path="/processed/a.pdf",
             )
+        self.assertEqual(ctx.exception.status_code, 502)
 
 
 class HiDriveRealAdapterMoveFileTests(SimpleTestCase):
