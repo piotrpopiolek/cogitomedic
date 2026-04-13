@@ -27,6 +27,7 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.pdf_builder import (
+    AllExternalPdfDownloadsFailed,
     _build_render_context,
     build_merged_preview_pdf_bytes,
     generate_befund_pdf,
@@ -159,7 +160,7 @@ class GenerateBefundPdfExternalTests(TestCase):
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     @patch("apps.medical.pdf_builder.download_external_pdf")
-    def test_generate_befund_marks_attachment_merge_failed_on_generic_download_error(
+    def test_generate_befund_refuses_without_lab_when_all_downloads_fail(
         self,
         dl_mock: MagicMock,
     ) -> None:
@@ -173,9 +174,10 @@ class GenerateBefundPdfExternalTests(TestCase):
             status=ExternalPdfStatus.MATCHED,
         )
         with self.settings(MEDIA_ROOT=str(self.media_root)):
-            generate_befund_pdf(self.version)
+            with self.assertRaises(AllExternalPdfDownloadsFailed):
+                generate_befund_pdf(self.version)
         att.refresh_from_db()
-        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     @patch("apps.medical.pdf_builder.safe_merge_pdfs")
