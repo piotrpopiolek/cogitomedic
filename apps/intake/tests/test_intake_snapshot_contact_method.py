@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
+from pathlib import Path
 
+from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
 
@@ -66,11 +69,18 @@ class IntakeSnapshotPreventionContactTests(TestCase):
             expires_at=timezone.now() + timedelta(minutes=30),
             created_by_user=user,
         )
+        signature_dir = Path(settings.MEDIA_ROOT) / "signatures" / "tests"
+        signature_dir.mkdir(parents=True, exist_ok=True)
+        signature_path = signature_dir / f"{self.queue_entry.id}.png"
+        signature_bytes = b"\x89PNG\r\n\x1a\n" + b"valid-test-signature"
+        signature_path.write_bytes(signature_bytes)
         self.intake_form = PatientIntakeForm.objects.create(
             queue_entry=self.queue_entry,
             session=self.session,
             form_status=IntakeStatus.IN_PROGRESS,
             anamnesis_payload={"answers": []},
+            signature_file_path=str(signature_path),
+            signature_sha256=hashlib.sha256(signature_bytes).hexdigest(),
         )
 
     def test_build_snapshot_includes_contact_method_selection(self) -> None:
