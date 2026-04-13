@@ -150,11 +150,11 @@ def check_external_pdf_gate(
 
     matched: list[MatchedIncomingFile] = []
     skipped_ambiguous = False
+    patient_candidates = build_patient_filename_candidates(patient)
     for _entry, pdf_name in pdf_rows:
         if pdf_name.lower().startswith("rejected_"):
             continue
         stem = PurePosixPath(pdf_name).stem
-        patient_candidates = build_patient_filename_candidates(patient)
         if not match_filename_to_candidates(stem, patient_candidates):
             continue
         if not stem_matches_dated_variant(stem, patient):
