@@ -13,6 +13,7 @@ from apps.integrations.hidrive.auth import (
 from apps.integrations.hidrive import client as hidrive_client
 from apps.integrations.hidrive.client import (
     _parse_dir_list_response,
+    _resolve_remote_target_path,
     get_hidrive_adapter,
 )
 
@@ -914,6 +915,79 @@ class HiDriveMockAdapterFileOpsTests(SimpleTestCase):
         )
         files2 = adapter.list_dir(remote_path="/incoming")
         self.assertEqual(files2[0]["name"], "rejected_Kowalski_Jan.pdf")
+
+
+class HiDriveResolvePathTests(SimpleTestCase):
+    @override_settings(HIDRIVE_USERS_ROOT_PREFIX="/users/teamspace")
+    def test_resolve_appends_logical_path_to_users_root_prefix(self) -> None:
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/patients/u/f.pdf",
+        )
+        self.assertEqual(out, "/users/teamspace/patients/u/f.pdf")
+
+    @override_settings(HIDRIVE_USERS_ROOT_PREFIX="/users/teamspace/")
+    def test_resolve_trims_trailing_slash_on_prefix(self) -> None:
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/incoming/x.pdf",
+        )
+        self.assertEqual(out, "/users/teamspace/incoming/x.pdf")
+
+    def test_resolve_absolute_users_path_unchanged(self) -> None:
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/users/other/incoming/x.pdf",
+        )
+        self.assertEqual(out, "/users/other/incoming/x.pdf")
+
+    def test_resolve_absolute_public_path_unchanged(self) -> None:
+        """Paths starting with /public/ target the Common (shared) space — no /users/<alias> prepend."""
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/public/incoming/x.pdf",
+        )
+        self.assertEqual(out, "/public/incoming/x.pdf")
+
+    def test_resolve_public_patients_path_unchanged(self) -> None:
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/public/patients/some-uuid/Befund_v1.pdf",
+        )
+        self.assertEqual(out, "/public/patients/some-uuid/Befund_v1.pdf")
+
+    @override_settings(HIDRIVE_USERS_ROOT_PREFIX="/public/shared")
+    def test_resolve_public_root_prefix(self) -> None:
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/incoming/x.pdf",
+        )
+        self.assertEqual(out, "/public/shared/incoming/x.pdf")
+
+    @override_settings(HIDRIVE_USERS_ROOT_PREFIX="/public")
+    def test_resolve_public_bare_prefix_maps_to_common(self) -> None:
+        """HIDRIVE_USERS_ROOT_PREFIX=/public maps relative paths into the Common space."""
+        out = _resolve_remote_target_path(
+            base_url="https://api.hidrive.strato.com/2.1",
+            access_token="ignored",
+            remote_path="/incoming/x.pdf",
+        )
+        self.assertEqual(out, "/public/incoming/x.pdf")
+
+    @override_settings(HIDRIVE_USERS_ROOT_PREFIX="bad")
+    def test_resolve_invalid_prefix_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            _resolve_remote_target_path(
+                base_url="https://api.hidrive.strato.com/2.1",
+                access_token="ignored",
+                remote_path="/incoming/x.pdf",
+            )
 
 
 class HiDriveMetricsTests(SimpleTestCase):
