@@ -477,7 +477,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
         attachments_used.append(att)
 
     if attachments and not external_bytes_list and infra_errors:
-        for att, exc in infra_errors:
+        for att, download_error in infra_errors:
             create_audit_event(
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 patient_id=patient.id,
@@ -485,7 +485,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                 metadata={
                     "hidrive_remote_path": att.hidrive_remote_path,
                     "external_pdf_attachment_id": str(att.id),
-                    "error_type": type(exc).__name__,
+                    "error_type": type(download_error).__name__,
                 },
             )
         raise RuntimeError(
@@ -494,7 +494,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
             f"lab results. Outbox will retry."
         )
 
-    for att, exc in infra_errors:
+    for att, download_error in infra_errors:
         att.status = ExternalPdfStatus.MERGE_FAILED
         att.save(update_fields=["status"])
         create_audit_event(
@@ -504,7 +504,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
             metadata={
                 "hidrive_remote_path": att.hidrive_remote_path,
                 "external_pdf_attachment_id": str(att.id),
-                "error_type": type(exc).__name__,
+                "error_type": type(download_error).__name__,
             },
         )
 
