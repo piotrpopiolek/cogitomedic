@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from apps.medical.external_pdf_service import (
     download_external_pdf,
 )
 from apps.medical.models import (
+    DocVersionStatus,
     ExternalPdfAttachment,
     ExternalPdfStatus,
     MedicalDocumentVersion,
@@ -28,6 +30,84 @@ from apps.medical.pdf_merge import safe_merge_pdfs
 from apps.operations.services import create_audit_event
 
 logger = logging.getLogger(__name__)
+
+
+def _w3c_profile_datetime(dt: datetime | None) -> str | None:
+    """Format for WeasyPrint ``<meta name=dcterms.*>`` (W3C datetime profile)."""
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt.replace(microsecond=0).isoformat()
+
+
+def _format_header_day_dmy(dt: datetime | None) -> str:
+    """Calendar day as d.m.Y (same pattern as intake PDF header under title)."""
+    if dt is None:
+        return "–"
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt).strftime("%d.%m.%Y")
+
+
+def _format_queue_date_dmy(d: date | None) -> str:
+    if d is None:
+        return "–"
+    return d.strftime("%d.%m.%Y")
+
+
+def _effective_publication_datetime_for_header(
+    version: MedicalDocumentVersion,
+    *,
+    generated_at: datetime,
+) -> datetime:
+    """
+    Calendar day under the Ergebnisse title (d.m.Y in local time).
+
+    Prefer ``version.published_at``. If it is missing (e.g. draft preview, or rare
+    inconsistent rows), fall back to ``medical_document.last_published_at``, then
+    ``version.updated_at`` for a published version, then ``generated_at`` so the
+    line is not a dash when a meaningful date exists or for preview parity with
+    intake (render-time day).
+    """
+    if version.published_at:
+        return version.published_at
+    doc = version.medical_document
+    if doc is not None and doc.last_published_at:
+        return doc.last_published_at
+    if version.version_status == DocVersionStatus.PUBLISHED and version.updated_at:
+        return version.updated_at
+    return generated_at
+
+
+def _pdf_befund_document_subject(
+    *,
+    document_id: str,
+    version_no: int,
+    authoring_locale: str,
+    generated_at: datetime,
+    published_at: datetime | None,
+    examination_date: date | None,
+) -> str:
+    """Single-line summary for PDF /Subject (former grey meta box, now file metadata)."""
+    gen = timezone.localtime(generated_at).strftime("%Y-%m-%d %H:%M:%S")
+    parts = [
+        f"Medical document ID: {document_id}",
+        f"Version: {version_no}",
+        f"Generated at: {gen}",
+        f"Locale: {authoring_locale}",
+    ]
+    if published_at is not None:
+        pub = timezone.localtime(published_at).strftime("%Y-%m-%d %H:%M:%S")
+        parts.append(f"Published at: {pub}")
+    else:
+        parts.append("Published at: -")
+    if examination_date is not None:
+        parts.append(f"Examination date: {examination_date.isoformat()}")
+    else:
+        parts.append("Examination date: -")
+    return "; ".join(parts)
+
 
 # Map payload enum codes to doctor_ui keys so PDF shows translated text (DE/EN/PL)
 RECOMMENDATION_CODE_TO_UI_KEY: dict[str, str] = {
@@ -81,6 +161,8 @@ def _pdf_labels(locale: str) -> dict[str, str]:
     mapping = get_translation_map(category="doctor", language_code=lang)
     keys = [
         "befund",
+        "ergebnisse",
+        "examination_date",
         "document_id",
         "version",
         "generated_at",
@@ -105,6 +187,7 @@ def _pdf_labels(locale: str) -> dict[str, str]:
         "dermatoscopic_features",
         "final_text",
         "recommendations",
+        "reporting_physician",
         "summary",
         "no_lesions",
     ]
@@ -161,12 +244,51 @@ def _lesion_final_text(lesion: dict[str, Any]) -> str:
     return "-"
 
 
+def _staff_user_display_name(user: Any) -> str | None:
+    """Last name, first name (clinical letter style); username if names missing."""
+    if user is None:
+        return None
+    last = (getattr(user, "last_name", None) or "").strip()
+    first = (getattr(user, "first_name", None) or "").strip()
+    if last and first:
+        return f"{last}, {first}"
+    if last:
+        return last
+    if first:
+        return first
+    un = (getattr(user, "username", None) or "").strip()
+    return un or None
+
+
+def _reporting_physician_display(version: MedicalDocumentVersion) -> str | None:
+    """
+    Doctor who authored the report text: publisher for published versions, else
+    last document editor, else document creator.
+    """
+    u = getattr(version, "published_by_user", None)
+    if u is not None:
+        return _staff_user_display_name(u)
+    doc = version.medical_document
+    if doc is None:
+        return None
+    u = getattr(doc, "updated_by_user", None)
+    if u is not None:
+        return _staff_user_display_name(u)
+    u = getattr(doc, "created_by_user", None)
+    return _staff_user_display_name(u) if u is not None else None
+
+
 def _build_render_context(
     version: MedicalDocumentVersion,
     authoring_locale_override: str | None = None,
 ) -> dict[str, Any]:
     payload = version.medical_payload or {}
-    patient = version.medical_document.queue_entry.patient
+    medical_document = version.medical_document
+    queue_entry = medical_document.queue_entry
+    patient = queue_entry.patient
+    examination_day: date | None = getattr(
+        getattr(queue_entry, "daily_queue", None), "queue_date", None
+    )
 
     authoring_locale = (
         (authoring_locale_override or "").strip()
@@ -225,11 +347,38 @@ def _build_render_context(
     if not fitzpatrick_type_label:
         fitzpatrick_type_label = _pretty_code(fp_code)
 
+    generated_at = timezone.now()
+    strict_published_at = version.published_at
+    publication_dt = _effective_publication_datetime_for_header(
+        version, generated_at=generated_at
+    )
+    publication_date_display = _format_header_day_dmy(publication_dt)
+    examination_date_display = _format_queue_date_dmy(examination_day)
+    pdf_document_subject = _pdf_befund_document_subject(
+        document_id=str(version.medical_document_id),
+        version_no=version.version_no,
+        authoring_locale=authoring_locale,
+        generated_at=generated_at,
+        published_at=strict_published_at,
+        examination_date=examination_day,
+    )
+    created_for_meta = strict_published_at or version.created_at
+    reporting_physician_display = _reporting_physician_display(version)
     return {
         "document_id": str(version.medical_document_id),
         "version_no": version.version_no,
-        "generated_at": timezone.now(),
+        "generated_at": generated_at,
         "authoring_locale": authoring_locale,
+        "publication_date_display": publication_date_display,
+        "examination_date_display": examination_date_display,
+        "reporting_physician_display": reporting_physician_display,
+        "pdf_document_subject": pdf_document_subject,
+        "pdf_dcterms_created": _w3c_profile_datetime(created_for_meta),
+        "pdf_dcterms_modified": _w3c_profile_datetime(
+            strict_published_at or generated_at
+        ),
+        "pdf_meta_published_at": _w3c_profile_datetime(strict_published_at),
+        "pdf_meta_generated_at": _w3c_profile_datetime(generated_at),
         "labels": labels,
         "patient": {
             "first_name": patient.first_name,
@@ -274,7 +423,9 @@ def build_befund_pdf_bytes(
         version, authoring_locale_override=authoring_locale_override
     )
     html = render_to_string("pdf/befund_document.html", context)
-    return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
+    return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf(
+        custom_metadata=True,
+    )
 
 
 def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
@@ -296,6 +447,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     )
     external_bytes_list: list[bytes] = []
     attachments_used: list[ExternalPdfAttachment] = []
+    infra_errors: list[tuple[ExternalPdfAttachment, Exception]] = []
     for att in attachments:
         try:
             ext_bytes = download_external_pdf(att)
@@ -314,14 +466,18 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
             continue
         except Exception as exc:
             logger.warning(
-                "download_external_pdf failed (Befund-only PDF will be stored): "
-                "attachment_id=%s path=%s",
+                "download_external_pdf failed: attachment_id=%s path=%s",
                 att.id,
                 att.hidrive_remote_path,
                 exc_info=True,
             )
-            att.status = ExternalPdfStatus.MERGE_FAILED
-            att.save(update_fields=["status"])
+            infra_errors.append((att, exc))
+            continue
+        external_bytes_list.append(ext_bytes)
+        attachments_used.append(att)
+
+    if attachments and not external_bytes_list and infra_errors:
+        for att, exc in infra_errors:
             create_audit_event(
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 patient_id=patient.id,
@@ -332,9 +488,25 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                     "error_type": type(exc).__name__,
                 },
             )
-            continue
-        external_bytes_list.append(ext_bytes)
-        attachments_used.append(att)
+        raise RuntimeError(
+            f"All {len(infra_errors)} external PDF download(s) failed "
+            f"(HiDrive unavailable?); refusing to publish Befund without "
+            f"lab results. Outbox will retry."
+        )
+
+    for att, exc in infra_errors:
+        att.status = ExternalPdfStatus.MERGE_FAILED
+        att.save(update_fields=["status"])
+        create_audit_event(
+            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+            patient_id=patient.id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "error_type": type(exc).__name__,
+            },
+        )
 
     if external_bytes_list:
         pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)

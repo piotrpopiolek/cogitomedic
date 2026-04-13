@@ -2,13 +2,27 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
+  <title>{{ labels.ergebnisse }}</title>
+  <meta name="description" content="{{ pdf_document_subject }}" />
+  {% if pdf_dcterms_created %}
+  <meta name="dcterms.created" content="{{ pdf_dcterms_created }}" />
+  {% endif %}
+  {% if pdf_dcterms_modified %}
+  <meta name="dcterms.modified" content="{{ pdf_dcterms_modified }}" />
+  {% endif %}
+  <meta name="cogitomedicaldocumentid" content="{{ document_id }}" />
+  <meta name="cogitomedicaldocumentversion" content="{{ version_no }}" />
+  {% if pdf_meta_published_at %}
+  <meta name="cogitomedicaldocumentpublishedat" content="{{ pdf_meta_published_at }}" />
+  {% endif %}
+  <meta name="cogitomedicaldocumentlocale" content="{{ authoring_locale }}" />
+  <meta name="cogitomedicaldocumentgeneratedat" content="{{ pdf_meta_generated_at }}" />
   <style>
     @page { size: A4; margin: 16mm; }
     body { font-family: Arial, sans-serif; color: #1a1a1a; font-size: 12px; line-height: 1.35; }
     h1, h2, h3 { margin: 0 0 8px 0; }
     h1 { font-size: 20px; color: #075255; }
     h2 { font-size: 15px; margin-top: 14px; color: #0a4a4d; border-bottom: 2px solid #b8d4d4; padding-bottom: 4px; }
-    .meta { color: #4a5568; font-size: 11px; margin-bottom: 8px; padding: 8px 10px; background: #f8fafb; border-left: 3px solid #075255; border-radius: 0 4px 4px 0; }
     .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
     .row { display: table-row; }
     .cell { display: table-cell; border: 1px solid #cfe3e3; padding: 6px 8px; vertical-align: top; }
@@ -22,34 +36,36 @@
     li { margin: 2px 0; }
     .pdf-header { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #e0f0f0; padding-bottom: 8px; }
     .pdf-header td { vertical-align: top; }
-    .pdf-header-title h1 { margin: 0 0 4px 0; color: #075255; }
+    .pdf-header-title h1 { margin: 0 0 2px 0; color: #075255; }
+    .pdf-header-date { margin: 0; font-size: 11px; color: #5a6a6a; }
     .pdf-header-logo { text-align: right; width: 30%; }
     .pdf-header-logo img { height: 72px; width: auto; max-width: 220px; object-fit: contain; }
+    .physician-attribution { margin-top: 18px; padding-top: 10px; border-top: 1px solid #e0f0f0; font-size: 11px; color: #3d4d4d; }
+    .physician-attribution strong { color: #0a4a4d; }
   </style>
 </head>
 <body>
   <table class="pdf-header" role="presentation">
     <tr>
       <td class="pdf-header-title">
-        <h1>{{ labels.befund }}</h1>
+        <h1>{{ labels.ergebnisse }}</h1>
+        <p class="pdf-header-date">{{ publication_date_display }}</p>
       </td>
       <td class="pdf-header-logo">
         <img src="static/lab/logo.png" alt="CogitoMedica" />
       </td>
     </tr>
   </table>
-  <div class="meta">
-    {{ labels.document_id }}: {{ document_id }}<br />
-    {{ labels.version }}: {{ version_no }}<br />
-    {{ labels.generated_at }}: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
-    {{ labels.locale }}: {{ authoring_locale }}
-  </div>
 
   <h2>{{ labels.patient }}</h2>
   <div class="grid">
     <div class="row">
       <div class="cell head">{{ labels.name }}</div>
       <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
+    </div>
+    <div class="row">
+      <div class="cell head">{{ labels.examination_date }}</div>
+      <div class="cell">{{ examination_date_display }}</div>
     </div>
     <div class="row">
       <div class="cell head">{{ labels.date_of_birth }}</div>
@@ -134,5 +150,14 @@
 
   <h2>{{ labels.summary }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
+
+  <div class="physician-attribution">
+    <strong>{{ labels.reporting_physician }}:</strong>
+    {% if reporting_physician_display %}
+      {{ reporting_physician_display }}
+    {% else %}
+      <span class="muted">–</span>
+    {% endif %}
+  </div>
 </body>
 </html>
