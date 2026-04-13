@@ -95,21 +95,42 @@
     {% for consent in consents %}
       <div class="item">
         {% if form_locale and form_locale|slice:":2" != "de" %}
-        <div class="consent-text">{{ consent.content_de|default:"-"|markdown_consent }}</div>
-        <div class="consent-text" style="margin-top:8px;">{{ consent.content_locale|default:consent.content_de|default:"-"|markdown_consent }}</div>
-        <div class="item-title" style="margin-top:10px;">
+        <div class="item-title">
           {% if consent.is_required %}* {% endif %}{{ consent.title_de|default:"" }}
           <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
         </div>
-        <div class="item-subtitle" style="margin-top:4px;">
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_de|default:"-"|markdown_consent }}</div>
+        <div class="item-subtitle" style="margin-top:10px;">
           {{ consent.title_locale|default:consent.title_de|default:"" }}
           <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
         </div>
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_locale|default:consent.content_de|default:"-"|markdown_consent }}</div>
         {% else %}
-        <div class="consent-text">{{ consent.content_de|default:"-"|markdown_consent }}</div>
-        <div class="item-title" style="margin-top:10px;">
+        <div class="item-title">
           {% if consent.is_required %}* {% endif %}{{ consent.title_de|default:"" }}
           <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
+        </div>
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_de|default:"-"|markdown_consent }}</div>
+        {% endif %}
+        {% if consent.contact_method_all_options %}
+        <div style="margin-top:8px;">
+          {% for option in consent.contact_method_all_options %}
+            {% if form_locale and form_locale|slice:":2" != "de" %}
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_de|default:option.option_code }}</span>
+            </div>
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_locale|default:option.label_de }}</span>
+            </div>
+            {% else %}
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_de|default:option.option_code }}</span>
+            </div>
+            {% endif %}
+          {% endfor %}
         </div>
         {% endif %}
       </div>
@@ -136,7 +157,7 @@
                 <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
                 <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
               </div>
-              <div class="option-row" style="padding-left:22px;">
+              <div class="option-row">
                 <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
                 <span>{{ option.label_locale|default:option.label_de|default:"-" }}</span>
               </div>
@@ -156,7 +177,7 @@
                 <span class="cb">☑</span>
                 <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
               </div>
-              <div class="option-row" style="padding-left:22px;">
+              <div class="option-row">
                 <span class="cb">☑</span>
                 <span>{{ option.label_locale|default:option.label_de|default:"-" }}</span>
               </div>
