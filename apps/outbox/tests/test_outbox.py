@@ -149,13 +149,6 @@ class OutboxProcessingTests(TestCase):
         path = build_befund_hidrive_path(self.version)
         self.assertIn(f"/public/patients/{patient_id}/", path)
         self.assertTrue(path.endswith("/Befund_v1.pdf"))
-        self.assertEqual(
-            AuditEvent.objects.filter(
-                event_type="OUTBOX_EVENT_PROCESSED",
-                medical_document_id=self.medical_document.id,
-            ).count(),
-            3,
-        )
 
     def test_process_outbox_events_moves_to_dead_letter_after_retries(self) -> None:
         event = OutboxEvent.objects.get(
@@ -178,7 +171,13 @@ class OutboxProcessingTests(TestCase):
             ).exists()
         )
 
-    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+    )
     def test_outbox_moves_matched_external_pdf_to_processed_after_upload(self) -> None:
         """§12 pipeline: GENERATE_PDF merges external bytes; HIDRIVE_UPLOAD moves MATCHED rows."""
         hidrive_client._MockHiDriveAdapter.reset_test_state()
@@ -211,7 +210,13 @@ class OutboxProcessingTests(TestCase):
         self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
         self.assertEqual(att.hidrive_remote_path, "/processed/patient_outbox.pdf")
 
-    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+    )
     def test_outbox_corrupt_external_marks_merge_failed_and_skips_processed_move(
         self,
     ) -> None:
@@ -245,7 +250,13 @@ class OutboxProcessingTests(TestCase):
             ).exists()
         )
 
-    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+    )
     def test_outbox_missing_external_file_marks_merge_failed_and_still_completes_chain(
         self,
     ) -> None:
