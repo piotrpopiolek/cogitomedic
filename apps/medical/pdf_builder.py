@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,19 +10,24 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from weasyprint import HTML
 
-from apps.core.translation_service import get_translation_map
+from apps.core.translation_service import (
+    get_doctor_ui,
+    get_fitzpatrick_choices,
+    get_translation_map,
+)
+from apps.medical.external_pdf_service import (
+    ExternalPdfCorruptError,
+    download_external_pdf,
+)
 from apps.medical.models import (
     ExternalPdfAttachment,
     ExternalPdfStatus,
     MedicalDocumentVersion,
 )
-from apps.core.translation_service import get_doctor_ui, get_fitzpatrick_choices
-from apps.medical.external_pdf_service import (
-    ExternalPdfCorruptError,
-    download_external_pdf,
-)
 from apps.medical.pdf_merge import safe_merge_pdfs
 from apps.operations.services import create_audit_event
+
+logger = logging.getLogger(__name__)
 
 # Map payload enum codes to doctor_ui keys so PDF shows translated text (DE/EN/PL)
 RECOMMENDATION_CODE_TO_UI_KEY: dict[str, str] = {
@@ -306,6 +312,27 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                 },
             )
             continue
+        except Exception as exc:
+            logger.warning(
+                "download_external_pdf failed (Befund-only PDF will be stored): "
+                "attachment_id=%s path=%s",
+                att.id,
+                att.hidrive_remote_path,
+                exc_info=True,
+            )
+            att.status = ExternalPdfStatus.MERGE_FAILED
+            att.save(update_fields=["status"])
+            create_audit_event(
+                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                patient_id=patient.id,
+                medical_document_id=doc.id,
+                metadata={
+                    "hidrive_remote_path": att.hidrive_remote_path,
+                    "external_pdf_attachment_id": str(att.id),
+                    "error_type": type(exc).__name__,
+                },
+            )
+            continue
         external_bytes_list.append(ext_bytes)
         attachments_used.append(att)
 
@@ -350,8 +377,8 @@ def build_merged_preview_pdf_bytes(
     """
     Build Befund + external HiDrive PDFs for doctor preview (no DB status changes).
 
-    Returns ``(pdf_bytes, warning_key_or_none)`` where warning is a short machine key
-    for the client (e.g. merge failed, corrupt attachment).
+    Returns ``(pdf_bytes, warning_key_or_none)`` where warning is a pipe-separated
+    hint for the client (e.g. ``external_pdf_download_failed``, merge failed, corrupt attachment).
     """
     befund_bytes = build_befund_pdf_bytes(
         version, authoring_locale_override=authoring_locale_override
@@ -365,15 +392,32 @@ def build_merged_preview_pdf_bytes(
     )
     external_bytes_list: list[bytes] = []
     corrupt = False
+    download_failed = False
     for att in attachments:
         try:
             external_bytes_list.append(download_external_pdf(att))
         except ExternalPdfCorruptError:
             corrupt = True
             continue
+        except Exception:
+            download_failed = True
+            logger.warning(
+                "download_external_pdf failed during preview (Befund-only): "
+                "attachment_id=%s path=%s",
+                att.id,
+                att.hidrive_remote_path,
+                exc_info=True,
+            )
+            continue
     warning: str | None = None
     if corrupt:
         warning = "external_pdf_corrupt"
+    if download_failed:
+        warning = (
+            f"{warning}|external_pdf_download_failed"
+            if warning
+            else "external_pdf_download_failed"
+        )
     if external_bytes_list:
         pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)
         if not merge_ok:
