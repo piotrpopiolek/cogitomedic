@@ -130,6 +130,10 @@ Translations are managed in Django Admin and loaded from the database as the sin
 | `HIDRIVE_CLIENT_ID` | HiDrive OAuth client id (required in production when `HIDRIVE_USE_MOCK=0`). |
 | `HIDRIVE_CLIENT_SECRET` | HiDrive OAuth client secret (required in production when `HIDRIVE_USE_MOCK=0`). |
 | `HIDRIVE_REFRESH_TOKEN` | HiDrive refresh token obtained via OAuth code flow (required in production when `HIDRIVE_USE_MOCK=0`). |
+| `HIDRIVE_INCOMING_PATH` | (Optional) Logical path to the lab PDF inbox; default `/incoming`. Under HiDrive *Common*, often e.g. `/public/incoming`. |
+| `HIDRIVE_PROCESSED_PATH` | (Optional) Logical path for archived lab PDFs after publish; default `/processed`. |
+| `HIDRIVE_PATIENTS_DIR_PREFIX` | (Optional) Logical directory root for Befund/intake PDFs; default `/patients` (files under `…/{patient_uuid}/`). |
+| `HIDRIVE_USERS_ROOT_PREFIX` | (Optional) Absolute HiDrive path beginning with `/users/…` (no trailing slash). When set, logical `HIDRIVE_*` paths are appended here instead of `/users/<OAuth user/me alias>/` — for team/Common API roots. |
 
    Example (replace with your values):
 

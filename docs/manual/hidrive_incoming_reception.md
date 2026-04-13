@@ -2,9 +2,9 @@
 
 ## Gdzie wrzucać pliki
 
-- Katalog na HiDrive: **`/incoming/`** — bez podfolderów, bezpośrednio pliki PDF (na tym samym poziomie co **`/patients/`** i **`/processed/`**; nie używamy już podfolderu `hidrive`).
-- PDF Befundu / intake trafiają do **`/patients/{id_pacjenta}/`** (np. `Befund_v1.pdf` obok folderu pacjenta).
-- Po poprawnej publikacji Befundu system przenosi użyte pliki z dopasowania do **`/processed/`** (archiwum kliniki; portal pacjenta nie ma tam dostępu).
+- Katalog na HiDrive: **`/incoming/`** (domyślnie) — bez podfolderów, bezpośrednio pliki PDF, obok **`/patients/`** i **`/processed/`** w tej samej „gałęzi” logicznej. Domyślnie aplikacja mapuje ścieżki logiczne na **`/users/<alias z OAuth>/…`** (alias z `GET /user/me`). Jeśli **przestrzeń wspólna (Common)** w API HiDrive ma **inny korzeń** niż Twój alias (np. `/users/nazwa_zespolu/…`), ustaw **`HIDRIVE_USERS_ROOT_PREFIX`** na ten absolutny prefix (bez końcowego `/`), a ścieżki logiczne trzymaj krótko, np. `HIDRIVE_INCOMING_PATH=/incoming`, `HIDRIVE_PROCESSED_PATH=/processed`, `HIDRIVE_PATIENTS_DIR_PREFIX=/patients`. W przeciwnym razie, gdy pliki mają być pod Twoim kontem w podfolderze `public`, użyj np. `HIDRIVE_INCOMING_PATH=/public/incoming` itd. **bez** `HIDRIVE_USERS_ROOT_PREFIX`.
+- PDF Befundu / intake trafiają do **`{HIDRIVE_PATIENTS_DIR_PREFIX}/{id_pacjenta}/`** (np. domyślnie `/patients/{uuid}/Befund_v1.pdf`).
+- Po poprawnej publikacji Befundu system przenosi użyte pliki z dopasowania do katalogu **`HIDRIVE_PROCESSED_PATH`** (archiwum kliniki; portal pacjenta nie ma tam dostępu).
 
 ## Nazwy plików (separator `_`, bez polskich znaków w nazwie pliku)
 

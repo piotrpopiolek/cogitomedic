@@ -721,6 +721,10 @@ HIDRIVE_INCOMING_PATH = os.environ.get("HIDRIVE_INCOMING_PATH", "/incoming")
 HIDRIVE_PROCESSED_PATH = os.environ.get("HIDRIVE_PROCESSED_PATH", "/processed")
 # Logical root for Befund/intake PDFs (same resolution as incoming/processed: /users/<alias><prefix>/…).
 HIDRIVE_PATIENTS_DIR_PREFIX = os.environ.get("HIDRIVE_PATIENTS_DIR_PREFIX", "/patients")
+# Optional API root: absolute path starting with /users/… (no trailing slash). When set, logical paths
+# (incoming, processed, patients) are appended here instead of /users/<OAuth user/me alias>/…
+# — use when HiDrive „Common” / team space is exposed under a different /users/… prefix than the token alias.
+HIDRIVE_USERS_ROOT_PREFIX = os.environ.get("HIDRIVE_USERS_ROOT_PREFIX", "").strip()
 if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", "yes"):
     missing_hidrive = [
         key
@@ -805,5 +809,17 @@ LOGGING = {
             "class": "logging.StreamHandler",
         },
     },
-    "loggers": {},
+    "loggers": {
+        # HiDrive adapter uses INFO for mock/real upload paths — visible in Docker without raising root to INFO.
+        "apps.integrations.hidrive.client": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "apps.intake.outbox_services": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
 }
