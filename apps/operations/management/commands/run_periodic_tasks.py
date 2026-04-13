@@ -17,8 +17,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--interval-seconds",
             type=int,
-            default=300,
-            help="How often to enqueue tasks (default: 300 seconds).",
+            default=60 * 5,
+            help="How often to enqueue tasks (default: 5 minutes).",
         )
         parser.add_argument(
             "--skip-import",

@@ -227,28 +227,13 @@ class _HiDriveAdapter:
     def list_dir(self, *, remote_path: str) -> list[dict[str, Any]]:
         oauth_client = get_hidrive_oauth_client()
         access_token = oauth_client.get_access_token()
-        base_url = _hidrive_base_url()
-        resolved_dir = _resolve_remote_target_path(
-            base_url=base_url,
-            access_token=access_token,
-            remote_path=remote_path,
-        )
-        _ensure_remote_directories(
-            base_url=base_url, access_token=access_token, dir_path=resolved_dir
-        )
+        # Intentionally no ``POST /dir`` before listing: read-only (no mkdir side effects
+        # on e.g. /incoming when the folder is missing or not configured yet).
         response = self._list_dir_once(
             access_token=access_token, remote_path=remote_path
         )
         if response.status_code == 401:
             access_token = oauth_client.get_access_token(force_refresh=True)
-            resolved_dir = _resolve_remote_target_path(
-                base_url=base_url,
-                access_token=access_token,
-                remote_path=remote_path,
-            )
-            _ensure_remote_directories(
-                base_url=base_url, access_token=access_token, dir_path=resolved_dir
-            )
             response = self._list_dir_once(
                 access_token=access_token, remote_path=remote_path
             )
