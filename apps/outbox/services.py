@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from opentelemetry import trace
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.db.utils import OperationalError
 from django.utils import timezone
 
@@ -16,8 +17,18 @@ from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
-from apps.medical.pdf_builder import generate_befund_pdf
-from apps.medical.models import DocVersionStatus, MedicalDocumentVersion, PdfStatus
+from apps.medical.pdf_builder import AllExternalPdfDownloadsFailed, generate_befund_pdf
+from apps.medical.external_pdf_service import (
+    hidrive_incoming_dir,
+    logical_path_to_processed,
+)
+from apps.medical.models import (
+    DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    MedicalDocumentVersion,
+    PdfStatus,
+)
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -62,13 +73,16 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
 
 def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
     version = (
-        MedicalDocumentVersion.objects.select_for_update()
+        MedicalDocumentVersion.objects.select_for_update(of=("self",))
         .select_related(
             "medical_document",
             "medical_document__queue_entry",
             "medical_document__queue_entry__patient",
+            "medical_document__created_by_user",
+            "medical_document__updated_by_user",
             "medical_document__intake_form",
             "medical_document__intake_form__session",
+            "published_by_user",
         )
         .get(id=event.medical_document_version_id)
     )
@@ -115,6 +129,31 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.hidrive_sent = True
         version.hidrive_sent_at = now
         version.save(update_fields=["hidrive_path", "hidrive_sent", "hidrive_sent_at"])
+
+        inc = hidrive_incoming_dir().rstrip("/")
+        incoming_q = Q(hidrive_remote_path__startswith=f"{inc}/") | Q(
+            hidrive_remote_path=inc
+        )
+        for att in ExternalPdfAttachment.objects.filter(
+            medical_document_id=version.medical_document_id,
+            status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
+        ).filter(incoming_q):
+            dest_path = logical_path_to_processed(att.hidrive_remote_path)
+            adapter.move_file(
+                source_path=att.hidrive_remote_path,
+                dest_path=dest_path,
+            )
+            # Another attachment for the same document may already occupy dest_path
+            # (e.g. prior version published the same lab PDF). Delete the duplicate
+            # so the unique constraint (medical_document, hidrive_remote_path) is satisfied.
+            ExternalPdfAttachment.objects.filter(
+                medical_document_id=version.medical_document_id,
+                hidrive_remote_path=dest_path,
+            ).exclude(id=att.id).delete()
+            att.hidrive_remote_path = dest_path
+            att.status = ExternalPdfStatus.ACCEPTED
+            att.save(update_fields=["hidrive_remote_path", "status"])
+
         next_payload = {**event.payload, "medical_document_version_id": str(version.id)}
         OutboxEvent.objects.get_or_create(
             medical_document_version=version,
@@ -191,12 +230,20 @@ def process_outbox_events(
     dead_lettered = 0
 
     for event in events:
-        event.status = OutboxStatus.PROCESSING
-        event.locked_at = effective_now
-        event.error_message = None
-        event.save(update_fields=["status", "locked_at", "error_message", "updated_at"])
-
+        event_id = event.id
+        sid = transaction.savepoint()
         try:
+            event.status = OutboxStatus.PROCESSING
+            event.locked_at = effective_now
+            event.error_message = None
+            event.save(
+                update_fields=[
+                    "status",
+                    "locked_at",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
             _execute_event(event, now=effective_now)
             event.status = OutboxStatus.PROCESSED
             event.processed_at = effective_now
@@ -223,26 +270,37 @@ def process_outbox_events(
                     "retry_count": event.retry_count,
                 },
             )
+            transaction.savepoint_commit(sid)
             processed += 1
         except Exception as exc:
-            if event.event_type == OutboxEventType.GENERATE_PDF:
+            transaction.savepoint_rollback(sid)
+            if isinstance(exc, AllExternalPdfDownloadsFailed):
+                for meta in exc.failed_download_metadata:
+                    create_audit_event(
+                        event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                        patient_id=exc.patient_id,
+                        medical_document_id=exc.medical_document_id,
+                        metadata=meta,
+                    )
+            ev = OutboxEvent.objects.get(pk=event_id)
+            if ev.event_type == OutboxEventType.GENERATE_PDF:
                 MedicalDocumentVersion.objects.filter(
-                    id=event.medical_document_version_id
+                    id=ev.medical_document_version_id
                 ).update(pdf_generation_status=PdfStatus.FAILED)
-            event.retry_count += 1
-            event.locked_at = None
-            event.error_message = str(exc)
-            if event.retry_count >= event.max_retries:
-                event.status = OutboxStatus.DEAD_LETTER
+            ev.retry_count += 1
+            ev.locked_at = None
+            ev.error_message = str(exc)
+            if ev.retry_count >= ev.max_retries:
+                ev.status = OutboxStatus.DEAD_LETTER
                 dead_lettered += 1
             else:
-                event.status = OutboxStatus.FAILED
+                ev.status = OutboxStatus.FAILED
                 backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
-                    2 ** (event.retry_count - 1)
+                    2 ** (ev.retry_count - 1)
                 )
-                event.available_at = effective_now + timedelta(seconds=backoff)
+                ev.available_at = effective_now + timedelta(seconds=backoff)
                 failed += 1
-            event.save(
+            ev.save(
                 update_fields=[
                     "status",
                     "retry_count",
@@ -252,21 +310,21 @@ def process_outbox_events(
                     "updated_at",
                 ]
             )
-            doc = event.medical_document_version.medical_document
+            doc = ev.medical_document_version.medical_document
             create_audit_event(
                 event_type=(
                     "OUTBOX_EVENT_DEAD_LETTERED"
-                    if event.status == OutboxStatus.DEAD_LETTER
+                    if ev.status == OutboxStatus.DEAD_LETTER
                     else "OUTBOX_EVENT_FAILED"
                 ),
                 patient_id=doc.queue_entry.patient_id,
                 medical_document_id=doc.id,
-                outbox_event_id=event.id,
+                outbox_event_id=ev.id,
                 context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
                 metadata={
-                    "event_type": event.event_type,
-                    "retry_count": event.retry_count,
-                    "error_message": event.error_message or "",
+                    "event_type": ev.event_type,
+                    "retry_count": ev.retry_count,
+                    "error_message": ev.error_message or "",
                 },
             )
 

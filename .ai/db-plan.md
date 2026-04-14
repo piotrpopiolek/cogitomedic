@@ -251,7 +251,7 @@
 - `procedure_code` `varchar(50)` NULL
 - `pdf_local_path` `varchar(500)` NULL
 - `pdf_checksum_sha256` `char(64)` NULL
-- `hidrive_path` `varchar(500)` NULL
+- `hidrive_path` `varchar(500)` NULL — zdalna ścieżka logiczna z aplikacji, np. `/patients/{patient_uuid}/Befund_v1.pdf` (budowana w `apps/outbox/hidrive_paths.py`)
 - `hidrive_sent` `boolean` NOT NULL DEFAULT `false`
 - `hidrive_sent_at` `timestamptz` NULL
 - `sms_sent` `boolean` NOT NULL DEFAULT `false`

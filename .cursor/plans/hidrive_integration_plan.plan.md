@@ -10,7 +10,7 @@ isProject: false
 ## Kontekst
 
 - **Obecny stan:** W obu pipeline’ach outbox upload do HiDrive jest **mockiem** – ustawiane są tylko `hidrive_path`, `hidrive_sent`, `hidrive_sent_at` bez wysyłania pliku ([apps/outbox/services.py](apps/outbox/services.py) HIDRIVE_UPLOAD, [apps/intake/outbox_services.py](apps/intake/outbox_services.py) HIDRIVE_UPLOAD_INTAKE_PDF).
-- **Ścieżki zdalne:** Już zdefiniowane w [apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py) – Befund: `/hidrive/patients/{folder}/{stamp}_befund_{version.id}.pdf`, intake: analogicznie `_intake`_.
+- **Ścieżki zdalne:** Zdefiniowane w [apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py) — Befund: `/patients/{patient_uuid}/Befund_v{version_no}.pdf`, intake: `/patients/{patient_uuid}/Intake_v{version_no}.pdf` (wspólny prefiks `HIDRIVE_PATIENTS_DIR_PREFIX`; bez `/hidrive/` w ścieżce logicznej).
 - **Plik lokalny:** Befund – `version.pdf_local_path` (względny do `MEDIA_ROOT`); retencja i odczyt już używają `Path(settings.MEDIA_ROOT) / path` ([apps/outbox/services.py](apps/outbox/services.py) `_try_delete_file`).
 - **Dokumentacja:** PRD Faza 3 – „Integracja z API HiDrive”; runbook [docs/runbooks/INTEGRATION_ERROR.md](docs/runbooks/INTEGRATION_ERROR.md) opisuje już 401/503 dla HiDrive; [.cursor/plans/plan-pdf-generation.plan.md](.cursor/plans/plan-pdf-generation.plan.md) wskazuje, że szczegóły uploadu to „osobny plan integracji HiDrive”.
 
@@ -96,7 +96,7 @@ flowchart LR
 - **[.env.example](.env.example):** Dodać komentarze dla `HIDRIVE_USE_MOCK`, `HIDRIVE_CLIENT_ID`, `HIDRIVE_CLIENT_SECRET`, `HIDRIVE_REFRESH_TOKEN`.
 - **README:** Krótka wzmianka w sekcji konfiguracji (HiDrive Faza 3: opcjonalnie wyłączenie mocka i ustawienie credentials; link do HiDrive Developer).
 - **Runbook [INTEGRATION_ERROR](docs/runbooks/INTEGRATION_ERROR.md):** Uzupełnić punkt 401: „Jeśli po odświeżeniu tokena nadal 401 – refresh token mógł wygasnąć; uzyskać nowy (OAuth2 code flow) i zaktualizować HIDRIVE_REFRESH_TOKEN”.
-- **[.ai/api-plan.md](.ai/api-plan.md) / [.ai/api-plan-pl.md](.ai/api-plan-pl.md):** Nie wymagają zmian (opis GET/statusów hidrive_sent już jest); ewentualnie jedna linijka w sekcji „Integration” / konfiguracji: „HiDrive upload realizowany przez apps.integrations.hidrive; konfiguracja przez HIDRIVE_*”.
+- **[.ai/api-plan.md](.ai/api-plan.md) / [.ai/api-plan-pl.md](.ai/api-plan-pl.md):** Krótki opis logicznych ścieżek HiDrive przy sekcji outbox (ścieżki plików vs. REST); flagi `hidrive_sent` / `hidrive_path` bez zmian.
 
 ---
 
@@ -116,6 +116,6 @@ flowchart LR
 
 - **Rejestracja aplikacji HiDrive:** Do 72h; potrzebna przed testami z prawdziwym API. Do tego czasu i w CI obowiązuje `HIDRIVE_USE_MOCK=1`.
 - **Refresh token:** Wymaga jednorazowego OAuth2 code flow (przeglądarka). Dokumentacja HiDrive: Server/Desktop – code → exchange → refresh_token; przechowywanie tylko refresh_token w env.
-- **Ścieżki HiDrive:** Obecna konwencja `/hidrive/patients/{folder}/...` pozostaje; jeśli API wymaga innego formatu (np. bez leading slash), adapter może normalizować prefix.
+- **Ścieżki HiDrive:** Konwencja z kodu — `/patients/{uuid}/…` dla PDF z aplikacji; PDF z labu listowane z `HIDRIVE_INCOMING_PATH` (domyślnie `/incoming/`); po publikacji przeniesienie do `HIDRIVE_PROCESSED_PATH` (domyślnie `/processed/`). Adapter normalizuje ścieżki względem konta API (`/users/{alias}/…`).
 - **Intake i retencja:** Intake PDF ma własny pipeline i własne pole `pdf_local_path`; retencja dla intake (jeśli będzie) – osobna decyzja; ten plan nie zmienia retencji, tylko realizuje upload do HiDrive dla obu typów plików.
 

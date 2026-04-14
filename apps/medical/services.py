@@ -834,6 +834,19 @@ def list_doctor_work_queue(
             and doc.locked_by_user_id != user.id
             and not getattr(user, "is_admin_role", False)
         )
+        # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT
+        row_has_edit_semaphore = bool(
+            doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
+        )
+        # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS)
+        row_is_fully_delivered = bool(
+            doc
+            and doc.status == MedicalDocStatus.PUBLISHED
+            and latest
+            and latest.pdf_generation_status == PdfStatus.COMPLETED
+            and latest.hidrive_sent
+            and latest.sms_sent
+        )
         list_items.append(
             {
                 "document_id": str(doc.id) if doc else None,
@@ -851,6 +864,8 @@ def list_doctor_work_queue(
                 "locked_at": locked_at.isoformat() if locked_at else None,
                 "is_locked_by_other": is_locked_by_other,
                 "row_is_published": is_published,
+                "row_has_edit_semaphore": row_has_edit_semaphore,
+                "row_is_fully_delivered": row_is_fully_delivered,
                 "pdf_generation_status": (
                     latest.pdf_generation_status if latest else None
                 ),

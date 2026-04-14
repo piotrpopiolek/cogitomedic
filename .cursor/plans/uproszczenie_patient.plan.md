@@ -68,8 +68,7 @@ isProject: false
 
 ## Skutki uboczne i zależności
 
-- Zachować kompatybilność ścieżek archiwizacji w [C:\Users\piotr\Programming\cogitomedica\apps\outbox\hidrive_paths.py](C:\Users\piotr\Programming\cogitomedica\apps\outbox\hidrive_paths.py):
-  - obecna logika folderu po `doctolib_patient_id` lub `patient.id` może zostać bez zmian, bo `doctolib_patient_id` zostaje.
+- Ścieżki archiwizacji HiDrive w [apps/outbox/hidrive_paths.py](apps/outbox/hidrive_paths.py): folder pacjenta = **`patient.id` (UUID)** pod `/patients/{uuid}/` — bez nazwiska w ścieżce; nie używa się już prefiksu `/hidrive/`.
 - Zrewidować miejsca, gdzie testy lub fixture setup zakładają tymczasowość pacjenta albo zwracane pola API, zwłaszcza w:
   - [C:\Users\piotr\Programming\cogitomedica\apps\reception\tests.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\tests.py),
   - [C:\Users\piotr\Programming\cogitomedica\apps\reception\api_tests.py](C:\Users\piotr\Programming\cogitomedica\apps\reception\api_tests.py),

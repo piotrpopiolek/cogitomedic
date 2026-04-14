@@ -266,7 +266,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertTrue(version.hidrive_sent)
         self.assertIsNotNone(version.pdf_local_path)
         patient_id = str(self.queue_entry.patient_id)
-        self.assertIn(f"/hidrive/patients/{patient_id}/", version.hidrive_path or "")
+        self.assertIn(f"/patients/{patient_id}/", version.hidrive_path or "")
         self.assertTrue((version.hidrive_path or "").endswith("/Intake_v1.pdf"))
 
     def test_submit_is_idempotent_for_already_submitted_form(self) -> None:

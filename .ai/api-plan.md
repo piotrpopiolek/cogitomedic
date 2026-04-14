@@ -884,6 +884,8 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 ### 2.12 Outbox and operations (Admin/Ops)
 
+**HiDrive logical paths** (cloud filesystem paths, not REST routes): Befund/intake PDFs upload to `/patients/{patient_uuid}/Befund_v{N}.pdf` or `/patients/{patient_uuid}/Intake_v{N}.pdf` — see `apps/outbox/hidrive_paths.py`. Laboratory PDFs are listed from `HIDRIVE_INCOMING_PATH` (default `/incoming/`); after publish, matched files are moved under `HIDRIVE_PROCESSED_PATH` (default `/processed/`). Reception runbook: `docs/manual/hidrive_incoming_reception.md`.
+
 - **GET** `/outbox-events`
   - Description: Operational queue view.
   - Query params: `status`, `event_type`, `retry_count_gte`, `limit` (default **20**, max **100**; `parse_list_limit`).

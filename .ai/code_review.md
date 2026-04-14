@@ -281,7 +281,7 @@ Szablony HTML / statyczne — **nie** w iteracji 1; zaplanować po dokończeniu 
 | 11 | `apps/operations/models.py` | `AuditEvent` + GIN na `metadata`; constrainty — OK pod kątem zapytań i JSON. |
 | 12 | `apps/outbox/models.py` | Unikalność zdarzenia per typ i wersja; constrainty `aggregate_id` — spójne z PRD outbox. |
 | 13 | `apps/outbox/tasks.py` | `process_outbox_events`, `run_retention_cleanup` jako taski — OK; **retention** ma stałe `older_than_days=30` w tasku — warto wiedzieć przy zmianie polityki. |
-| 14 | `apps/outbox/hidrive_paths.py` | Sanitacja fragmentów folderu (usuwanie `/`, `\`); nazewnictwo pacjenta — rozsądne. |
+| 14 | `apps/outbox/hidrive_paths.py` | Szablony `Befund_v{N}.pdf` / `Intake_v{N}.pdf`; ścieżka logiczna `/patients/{patient.id}/…` (UUID) — bez PII w segmencie folderu. |
 | 15 | `apps/patient_results/models.py` | OTP session z constrainte `expires_at > created_at` — OK. |
 | 16 | `apps/patient_results/views.py` | HTML portalu: sesja na telefon/DOB, potem OTP; **redirect** z `reverse('ergebnisse:…')` vs sama nazwa URL — w gałęzi `locale == "de"` używane `redirect("ergebnisse:otp")` itd. (Django rozwiązuje nazwę) — do weryfikacji testem E2E. |
 | 17 | `apps/patient_results/document_services.py` | `get_patient_pdf_path`: **`path.resolve().is_relative_to(media_resolved)`** — ochrona przed path traversal poza `MEDIA_ROOT` — dobra. |
@@ -634,7 +634,7 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
 | 10 | `apps/intake/outbox_services.py` (fragment) | Analogiczny pipeline dla intake PDF / HiDrive; `select_related` do kolejki/placówki — spójne z outboxem medycznym. |
 | 11 | `cogitomedica/admin_callbacks.py` | Unfold: etykieta środowiska (`prod`/`staging`/dev); `dashboard_callback` no-op — rozszerzalne. |
 | 12 | `cogitomedica/telemetry.py` | OTLP HTTP, instrumentacje Django/requests/psycopg; `psycopg` w try/except — nie blokuje startu. |
-| 13 | `apps/outbox/hidrive_paths.py` | `_sanitize_folder_part` usuwa separatory ścieżek; szablony nazw plików Befund/Intake — redukcja złych znaków w ścieżce chmurowej. |
+| 13 | `apps/outbox/hidrive_paths.py` | Jedno źródło ścieżek zdalnych dla outboxu Befund/intake; katalog pacjenta = UUID, nazwy plików wersjonowane (`Befund_v{version_no}` itd.). |
 | 14 | `apps/integrations/hidrive/auth.py` (fragment) | Token w pamięci procesu; metryki Prometheus `hidrive_token_refresh_*`; refresh grant — solidny wzorzec. |
 | 15 | `apps/integrations/sms/client.py` (fragment) | `get_sms_patient_results_text` z tłumaczeń DB; `format_phone_for_smsapi`; protokół `SmsAdapter` — czyste granice. |
 | 16 | `apps/users/forms.py` | `StaffUserCreationForm` z Unfold — minimalne pola (`username`); hasło przez bazowy formularz. |

@@ -146,3 +146,34 @@ body.cm-portal {
 .consent-content h2 { font-size: 1.1rem; }
 .consent-content p { margin: 0.3em 0; }
 .consent-content .text-center { text-align: center; }
+
+/*
+ * Doctor work queue (Unfold shell): row tint must target <td>, because the admin
+ * Tailwind bundle often omits arbitrary row utilities (e.g. bg-amber-50 on <tr>), and
+ * table/td layering can hide <tr> backgrounds.
+ */
+tr.doctor-queue-row--delivered > td {
+  background-color: #ecfdf5 !important; /* emerald-50 */
+}
+.dark tr.doctor-queue-row--delivered > td {
+  background-color: rgba(6, 78, 59, 0.28) !important;
+}
+tr.doctor-queue-row--delivered:hover > td {
+  background-color: #d1fae5 !important; /* emerald-100 */
+}
+.dark tr.doctor-queue-row--delivered:hover > td {
+  background-color: rgba(6, 78, 59, 0.38) !important;
+}
+
+tr.doctor-queue-row--semaphore > td {
+  background-color: #fffbeb !important; /* amber-50 */
+}
+.dark tr.doctor-queue-row--semaphore > td {
+  background-color: rgba(120, 53, 15, 0.22) !important;
+}
+tr.doctor-queue-row--semaphore:hover > td {
+  background-color: #fef3c7 !important; /* amber-100 */
+}
+.dark tr.doctor-queue-row--semaphore:hover > td {
+  background-color: rgba(120, 53, 15, 0.32) !important;
+}

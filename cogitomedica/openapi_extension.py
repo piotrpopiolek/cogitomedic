@@ -712,7 +712,11 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/preview-pdf": {
         "get": {
             "summary": "Preview PDF",
-            "description": "Returns PDF of the latest saved version (draft or published). Content-Type: application/pdf.",
+            "description": (
+                "Returns PDF for the latest saved version (draft or published). When external "
+                "HiDrive PDFs are matched to the document, the response merges them with the "
+                "Befund PDF in that order. Content-Type: application/pdf."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -729,8 +733,126 @@ COGITO_PATHS = {
                 },
             ],
             "responses": {
-                "200": {"description": "PDF file (inline)"},
+                "200": {
+                    "description": "PDF file (inline). May be Befund-only if merge failed or an attachment was unreadable.",
+                    "headers": {
+                        "X-Befund-Preview-Warning": {
+                            "description": (
+                                "Optional hint when merge failed, a HiDrive attachment was "
+                                "invalid, or download failed (pipe-separated tokens); body is still a PDF."
+                            ),
+                            "schema": {"type": "string"},
+                        }
+                    },
+                },
                 "404": {"description": "Not found or no version to preview"},
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-pdfs": {
+        "get": {
+            "summary": "List external HiDrive PDF attachments",
+            "description": (
+                "DOCTOR/ADMIN. Returns rows linked to the medical document (matched/rejected/etc.) "
+                "from HiDrive /incoming flow."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+            ],
+            "responses": {
+                "200": {
+                    "description": "JSON: items[{id, filename, status, hidrive_remote_path}]",
+                },
+                "404": {"description": "Medical document not found"},
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-pdfs/{{attachment_id}}/content": {
+        "get": {
+            "summary": "Download external PDF (inline)",
+            "description": (
+                "DOCTOR/ADMIN. Streams the file from HiDrive on demand (no local cache). "
+                "Content-Type: application/pdf."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "attachment_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+            ],
+            "responses": {
+                "200": {"description": "PDF file (inline)"},
+                "404": {"description": "Document or attachment not found"},
+                "410": {"description": "Attachment was rejected"},
+                "422": {
+                    "description": "Invalid or incomplete PDF (e.g. upload still in progress)",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {"error": {"type": "string"}},
+                            }
+                        }
+                    },
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-pdfs/{{attachment_id}}/reject": {
+        "post": {
+            "summary": "Reject external PDF on HiDrive",
+            "description": (
+                "DOCTOR/ADMIN. Renames the file on HiDrive with prefix rejected_ and sets "
+                "attachment status to REJECTED."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "attachment_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+            ],
+            "responses": {
+                "200": {
+                    "description": "JSON: {ok: true, status}",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ok": {"type": "boolean"},
+                                    "status": {"type": "string"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "404": {"description": "Document or attachment not found"},
+                "405": {"description": "Method not allowed"},
+                "502": {"description": "HiDrive rename failed"},
             },
         },
     },

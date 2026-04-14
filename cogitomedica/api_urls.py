@@ -22,6 +22,9 @@ from apps.medical.api_views import (
     doctor_text_templates_view,
     medical_document_detail_view,
     medical_document_draft_view,
+    medical_document_external_pdf_content_view,
+    medical_document_external_pdf_reject_view,
+    medical_document_external_pdfs_view,
     medical_document_preview_pdf_view,
     medical_document_publish_view,
     medical_document_retry_processing_view,
@@ -183,6 +186,21 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/preview-pdf",
         medical_document_preview_pdf_view,
         name="medical-document-preview-pdf",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-pdfs/<uuid:attachment_id>/content",
+        medical_document_external_pdf_content_view,
+        name="medical-document-external-pdf-content",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-pdfs/<uuid:attachment_id>/reject",
+        medical_document_external_pdf_reject_view,
+        name="medical-document-external-pdf-reject",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-pdfs",
+        medical_document_external_pdfs_view,
+        name="medical-document-external-pdfs",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/versions",

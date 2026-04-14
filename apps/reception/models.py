@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
+from apps.medical.name_normalize import compute_incoming_pdf_name_keys
 from apps.reception.phone_utils import normalize_phone
 from django.db.models import F, Q
 from django.utils import timezone
@@ -204,6 +205,18 @@ class Patient(models.Model):
             "administration.field_consent_summary", "Consent summary"
         ),
     )
+    incoming_pdf_name_key_fl = models.CharField(
+        max_length=300,
+        default="",
+        editable=False,
+        verbose_name="Incoming PDF name key (first_last)",
+    )
+    incoming_pdf_name_key_lf = models.CharField(
+        max_length=300,
+        default="",
+        editable=False,
+        verbose_name="Incoming PDF name key (last_first)",
+    )
 
     class Meta:
         db_table = "patient"
@@ -214,6 +227,14 @@ class Patient(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name", "date_of_birth"]),
             models.Index(fields=["phone"]),
+            models.Index(
+                fields=["incoming_pdf_name_key_fl"],
+                name="patient_incpdf_key_fl_idx",
+            ),
+            models.Index(
+                fields=["incoming_pdf_name_key_lf"],
+                name="patient_incpdf_key_lf_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -230,6 +251,16 @@ class Patient(models.Model):
         norm = normalize_phone(self.phone)
         if norm:
             self.phone = norm
+        fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
+        self.incoming_pdf_name_key_fl = fl[:300]
+        self.incoming_pdf_name_key_lf = lf[:300]
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = list(update_fields)
+            for key in ("incoming_pdf_name_key_fl", "incoming_pdf_name_key_lf"):
+                if key not in update_fields:
+                    update_fields.append(key)
+            kwargs["update_fields"] = update_fields
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
