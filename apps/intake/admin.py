@@ -44,7 +44,7 @@ class ConsentDefinitionAdmin(UnfoldModelAdmin):
     list_display_links = ("code",)
     list_filter = ("is_required", "is_active")
     search_fields = ("code", "title_de", "title_en", "title_pl")
-    ordering = ["-created_at"]
+    ordering = ["display_order", "code", "version"]
     fieldsets = (
         (
             None,

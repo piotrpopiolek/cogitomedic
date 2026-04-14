@@ -1,6 +1,6 @@
 {% extends "doctor/base.html" %}
-{% block title %}{% if lang == 'pl' %}Błąd{% elif lang == 'en' %}Error{% else %}Fehler{% endif %}{% endblock %}
+{% block title %}{{ ui.msg_error }}{% endblock %}
 {% block content_inner %}
 <div class="mb-4 rounded-default border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">{{ message }}</div>
-<a href="{% url 'doctor-list' %}" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{% if ui %}{{ ui.back_to_list }}{% else %}Zurück zur Liste{% endif %}</a>
+<a href="{% url 'doctor-list' %}" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{{ ui.back_to_list }}</a>
 {% endblock %}

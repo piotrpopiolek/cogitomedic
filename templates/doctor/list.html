@@ -1,28 +1,32 @@
 {% extends "doctor/base.html" %}
-{% block title %}{% if ui %}{{ ui.list_title }}{% else %}Dokumente – Work Queue{% endif %}{% endblock %}
+{% load static %}
+{% block doctor_extrahead %}
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
+{% endblock %}
+{% block title %}{{ ui.list_title }}{% endblock %}
 {% block content_inner %}
-<h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-6">{% if ui %}{{ ui.list_title }}{% else %}Medizinische Dokumente (Work Queue){% endif %}</h1>
+<h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-6">{{ ui.list_title }}</h1>
 
 <form method="get" class="mb-6 p-4 bg-white dark:bg-base-900 rounded-default border border-base-200 dark:border-base-700 shadow-xs">
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
     <div>
-      <label for="id_status" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.filter_status }}{% else %}Status{% endif %}</label>
+      <label for="id_status" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_status }}</label>
       <select name="status" id="id_status" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100">
-        <option value="">{% if ui %}{{ ui.filter_all }}{% else %}– alle –{% endif %}</option>
-        <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>{% if ui %}{{ ui.filter_draft }}{% else %}Entwurf{% endif %}</option>
-        <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>{% if ui %}{{ ui.filter_published }}{% else %}Veröffentlicht{% endif %}</option>
+        <option value="">{{ ui.filter_all }}</option>
+        <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>{{ ui.filter_draft }}</option>
+        <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>{{ ui.filter_published }}</option>
       </select>
     </div>
     <div>
-      <label for="id_queue_date" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.filter_date }}{% else %}Datum{% endif %}</label>
+      <label for="id_queue_date" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_date }}</label>
       <input type="date" name="queue_date" id="id_queue_date" value="{{ filters.queue_date }}" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
     </div>
     <div>
-      <label for="id_patient_search" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{% if ui %}{{ ui.filter_patient }}{% else %}Patient (Name){% endif %}</label>
-      <input type="text" name="patient_search" id="id_patient_search" placeholder="{% if ui %}{{ ui.filter_search_placeholder }}{% else %}Suche…{% endif %}" value="{{ filters.patient_search }}" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
+      <label for="id_patient_search" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_patient }}</label>
+      <input type="text" name="patient_search" id="id_patient_search" placeholder="{{ ui.filter_search_placeholder }}" value="{{ filters.patient_search }}" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
     </div>
     <div>
-      <button type="submit" class="inline-flex w-full sm:w-auto justify-center items-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{% if ui %}{{ ui.filter_submit }}{% else %}Filtern{% endif %}</button>
+      <button type="submit" class="inline-flex w-full sm:w-auto justify-center items-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{{ ui.filter_submit }}</button>
     </div>
   </div>
 </form>
@@ -31,25 +35,25 @@
   <table class="w-full min-w-full divide-y divide-base-200 dark:divide-base-700 text-sm">
     <thead class="bg-base-50 dark:bg-base-900/80">
       <tr>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_patient }}{% else %}Patient{% endif %}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_date }}{% else %}Datum{% endif %}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_status }}{% else %}Status{% endif %}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_pdf }}{% else %}PDF{% endif %}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_hidrive }}{% else %}HiDrive{% endif %}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{% if ui %}{{ ui.table_sms }}{% else %}SMS{% endif %}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_patient }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_date }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_status }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_pdf }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_hidrive }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_sms }}</th>
         <th class="px-4 py-3 text-right font-medium text-base-700 dark:text-base-300"></th>
       </tr>
     </thead>
     <tbody class="divide-y divide-base-200 dark:divide-base-700 bg-white dark:bg-base-900">
       {% for item in items %}
-      <tr class="hover:bg-base-50 dark:hover:bg-base-800/50 {% if item.row_is_published %}bg-emerald-50 dark:bg-emerald-950/20{% elif item.is_locked_by_other %}bg-amber-50 dark:bg-amber-950/20{% endif %}">
+      <tr class="doctor-queue-row {% if item.row_is_fully_delivered %}doctor-queue-row--delivered{% elif item.row_has_edit_semaphore %}doctor-queue-row--semaphore{% else %}hover:bg-base-50 dark:hover:bg-base-800/50{% endif %}">
         <td class="px-4 py-3 text-base-900 dark:text-base-100">
           <span class="inline-flex flex-wrap items-center gap-2">
             <span>{{ item.patient.last_name }}, {{ item.patient.first_name }}</span>
             {% if item.is_locked_by_other and item.locked_by_username %}
-            <span class="inline-flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200" title="{% if ui %}{{ ui.list_open_locked_tooltip }}{% else %}Gesperrt{% endif %}">
+            <span class="inline-flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200" title="{{ ui.list_open_locked_tooltip }}">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              <span>{% if ui %}{{ ui.list_locked_by_prefix }}{% else %}Bearbeitet von{% endif %}: {{ item.locked_by_username }}</span>
+              <span>{{ ui.list_locked_by_prefix }}: {{ item.locked_by_username }}</span>
             </span>
             {% endif %}
           </span>
@@ -84,12 +88,12 @@
         <td class="px-4 py-3 text-right whitespace-nowrap">
           {% if item.document_id %}
             {% if item.is_locked_by_other %}
-            <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500" title="{% if ui %}{{ ui.list_open_locked_tooltip }}{% else %}Gesperrt{% endif %}">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</span>
+            <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500" title="{{ ui.list_open_locked_tooltip }}">{{ ui.open }}</span>
             {% else %}
-            <a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>
+            <a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
             {% endif %}
           {% else %}
-          <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{% if ui %}{{ ui.open }}{% else %}Öffnen{% endif %}</a>
+          <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
           {% endif %}
         </td>
       </tr>
@@ -99,7 +103,7 @@
       </tr>
       {% endif %}
       {% empty %}
-      <tr><td colspan="7" class="px-4 py-6 text-center text-base-500 dark:text-base-400">{% if ui %}{{ ui.no_documents }}{% else %}Keine Dokumente.{% endif %}</td></tr>
+      <tr><td colspan="7" class="px-4 py-6 text-center text-base-500 dark:text-base-400">{{ ui.no_documents }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -107,7 +111,7 @@
 
 {% if pagination.total > 0 %}
 <nav class="mt-4">
-  <p class="text-sm text-base-500 dark:text-base-400">{% if ui %}{{ ui.pagination_page }}{% else %}Seite{% endif %} {{ pagination.page }}, {{ pagination.total }} {% if ui %}{{ ui.pagination_total }}{% else %}Einträge gesamt.{% endif %}</p>
+  <p class="text-sm text-base-500 dark:text-base-400">{{ ui.pagination_page }} {{ pagination.page }}, {{ pagination.total }} {{ ui.pagination_total }}</p>
 </nav>
 {% endif %}
 {% endblock %}

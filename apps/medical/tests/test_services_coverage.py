@@ -898,7 +898,11 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertIn("locked_at", item)
         self.assertIn("is_locked_by_other", item)
         self.assertIn("row_is_published", item)
+        self.assertIn("row_has_edit_semaphore", item)
+        self.assertIn("row_is_fully_delivered", item)
         self.assertFalse(item["is_locked_by_other"])
+        self.assertTrue(item["row_has_edit_semaphore"])
+        self.assertFalse(item["row_is_fully_delivered"])
 
     def test_work_queue_locked_by_other(self):
         other = self._other_doctor("wq-lock")
@@ -919,6 +923,35 @@ class DocumentLockTests(ServicesCoverageBase):
         found = [i for i in items if i["document_id"] == str(doc.id)]
         self.assertEqual(len(found), 1)
         self.assertTrue(found[0]["is_locked_by_other"])
+        self.assertTrue(found[0]["row_has_edit_semaphore"])
+
+    def test_work_queue_row_fully_delivered_when_pipeline_complete(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["row_is_fully_delivered"])
+        self.assertFalse(found[0]["row_has_edit_semaphore"])
+
+    def test_work_queue_row_not_fully_delivered_when_sms_pending(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=False,
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertFalse(found[0]["row_is_fully_delivered"])
 
     # -- list_medical_documents draft visibility for non-assigned doctor --
     def test_list_medical_documents_draft_visible_to_non_assigned(self):

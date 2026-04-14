@@ -535,3 +535,64 @@ class DoctorTextTemplate(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ExternalPdfStatus(models.TextChoices):
+    MATCHED = "MATCHED", "Matched"
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
+    MERGE_FAILED = "MERGE_FAILED", "Merge failed"
+
+
+class ExternalPdfAttachment(models.Model):
+    """HiDrive /incoming PDF matched to a medical document (no local cache path)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    medical_document = models.ForeignKey(
+        MedicalDocument,
+        on_delete=models.CASCADE,
+        related_name="external_pdfs",
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_document", "Medical document"
+        ),
+    )
+    hidrive_remote_path = models.CharField(
+        max_length=500,
+        verbose_name="HiDrive path",
+    )
+    original_filename = models.CharField(
+        max_length=255,
+        verbose_name="Original filename",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ExternalPdfStatus.choices,
+        default=ExternalPdfStatus.MATCHED,
+        verbose_name=db_gettext_lazy("administration.field_status", "Status"),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+
+    class Meta:
+        db_table = "external_pdf_attachment"
+        verbose_name = db_gettext_lazy(
+            "administration.model_externalpdfattachment", "External PDF attachment"
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_externalpdfattachment_plural",
+            "External PDF attachments",
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["medical_document", "hidrive_remote_path"],
+                name="external_pdf_attachment_doc_path_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["medical_document", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.original_filename} ({self.status})"

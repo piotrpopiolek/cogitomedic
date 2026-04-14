@@ -25,6 +25,11 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from apps.intake.models import IntakeStatus
+from apps.medical.external_pdf_service import (
+    check_external_pdf_gate,
+    create_attachment_records,
+)
+from apps.medical.models import MedicalDocument
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
@@ -33,7 +38,7 @@ from apps.medical.services import (
     list_doctor_work_queue,
     parse_medical_documents_list_params,
 )
-from apps.reception.models import QueueEntry
+from apps.reception.models import Patient, QueueEntry
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
@@ -255,6 +260,30 @@ def doctor_document_detail_view(
             or ("en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"),
             user=request.user,
         )
+        patient_summary = (context.get("intake_summary") or {}).get("patient") or {}
+        patient_pk = patient_summary.get("id")
+        patient = Patient.objects.get(pk=patient_pk) if patient_pk else None
+        if patient is None:
+            raise ObjectDoesNotExist()
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file=ui["external_pdf_gate_no_file"],
+            error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
+            error_ambiguous=ui["external_pdf_gate_ambiguous"],
+            error_hidrive=ui["external_pdf_gate_hidrive_error"],
+        )
+        if not gate.passed:
+            return _render_doctor(
+                request,
+                "doctor/error.html",
+                {
+                    "message": gate.error_message or ui["external_pdf_gate_no_file"],
+                    "ui": ui,
+                    "lang": lang,
+                },
+                status=422,
+            )
+
         granted, lock_holder = acquire_document_lock(
             medical_document_id=medical_document_id, user=request.user
         )
@@ -285,6 +314,10 @@ def doctor_document_detail_view(
             {"message": message, "ui": ui, "lang": lang},
             status=423,
         )
+    doc = MedicalDocument.objects.get(pk=medical_document_id)
+    if not gate.skip_attachment_sync:
+        create_attachment_records(doc, gate.matched_files)
+
     fitzpatrick_choices = get_fitzpatrick_choices(lang)
     authoring_locale = "en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"
     if "authoring_locale" not in context:
@@ -308,5 +341,8 @@ def doctor_document_detail_view(
             "fitzpatrick_choices": fitzpatrick_choices,
             "ui": ui,
             "lang": lang,
+            "external_pdf_hidrive_warning": (
+                gate.error_message if gate.passed and gate.error_message else None
+            ),
         },
     )

@@ -3,13 +3,32 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
+  <title>Einwilligungen</title>
+  <meta name="description" content="{{ pdf_document_subject }}" />
+  {% if pdf_dcterms_created %}
+  <meta name="dcterms.created" content="{{ pdf_dcterms_created }}" />
+  {% endif %}
+  {% if pdf_dcterms_modified %}
+  <meta name="dcterms.modified" content="{{ pdf_dcterms_modified }}" />
+  {% endif %}
+  {% if intake_form_id %}
+  <meta name="cogitointakeformid" content="{{ intake_form_id }}" />
+  {% endif %}
+  {% if queue_entry_id %}
+  <meta name="cogitoqueueentryid" content="{{ queue_entry_id }}" />
+  {% endif %}
+  {% if pdf_consent_acceptance_meta %}
+  <meta name="cogitoconsentacceptance" content="{{ pdf_consent_acceptance_meta }}" />
+  {% endif %}
+  {% if pdf_signature_sha256 %}
+  <meta name="cogitosignaturesha256" content="{{ pdf_signature_sha256 }}" />
+  {% endif %}
   <style>
     @page { size: A4; margin: 16mm; }
     body { font-family: Arial, sans-serif; color: #1a1a1a; font-size: 12px; line-height: 1.35; }
     h1, h2 { margin: 0 0 8px 0; }
     h1 { font-size: 20px; color: #075255; }
     h2 { font-size: 15px; margin-top: 14px; color: #0a4a4d; border-bottom: 2px solid #b8d4d4; padding-bottom: 4px; }
-    .meta { color: #4a5568; font-size: 11px; margin-bottom: 8px; padding: 8px 10px; background: #f8fafb; border-left: 3px solid #075255; border-radius: 0 4px 4px 0; }
     .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
     .row { display: table-row; }
     .cell { display: table-cell; border: 1px solid #cfe3e3; padding: 6px 8px; vertical-align: top; }
@@ -21,39 +40,35 @@
     .muted { color: #5a6a6a; }
     .sig-box { border: 1px solid #b8d4d4; border-radius: 4px; padding: 8px; margin-top: 8px; background: #fafdfd; }
     img.signature { max-width: 100%; max-height: 120px; }
-    .mono { font-family: Consolas, "Courier New", monospace; font-size: 10px; }
     .option-row { margin: 4px 0 4px 0; padding-left: 2px; }
     .option-row .cb { font-size: 14px; margin-right: 6px; color: #075255; }
     .free-text-box { border: 1px solid #a8c8c8; border-radius: 4px; padding: 8px 10px; margin-top: 6px; background: #f5fbfb; min-height: 2em; }
     .pdf-header { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #e0f0f0; padding-bottom: 8px; }
     .pdf-header td { vertical-align: top; }
-    .pdf-header-title h1 { margin: 0 0 4px 0; color: #075255; }
+    .pdf-header-title h1 { margin: 0 0 2px 0; color: #075255; }
+    .pdf-header-date { margin: 0; font-size: 11px; color: #5a6a6a; }
     .pdf-header-logo { text-align: right; width: 30%; }
     .pdf-header-logo img { height: 72px; width: auto; max-width: 220px; object-fit: contain; }
     .consent-text h2, .consent-text h3, .consent-text h4 { color: #075255; font-size: 13px; font-weight: 700; margin: 8px 0 2px; }
     .consent-text h2 { font-size: 14px; }
     .consent-text p { margin: 2px 0; }
     .consent-text .text-center { text-align: center; }
+    .sig-caption { margin: 0 0 6px 0; font-size: 12px; color: #0a4a4d; }
+    .sig-caption-secondary { margin: 0 0 8px 0; font-size: 12px; color: #3d4f4f; }
   </style>
 </head>
 <body>
   <table class="pdf-header" role="presentation">
     <tr>
       <td class="pdf-header-title">
-        <h1>Intake PDF</h1>
+        <h1>Einwilligungen</h1>
+        <p class="pdf-header-date">{% now "d.m.Y" %}</p>
       </td>
       <td class="pdf-header-logo">
         <img src="static/lab/logo.png" alt="CogitoMedica" />
       </td>
     </tr>
   </table>
-  <div class="meta">
-    Intake form ID: {{ intake_form_id }}<br />
-    Queue entry ID: {{ queue_entry_id }}<br />
-    Generated at: {{ generated_at|date:"Y-m-d H:i:s" }}<br />
-    Locale: {{ base_locale }} + {{ form_locale }}<br />
-    Submitted at: {{ submitted_at|date:"Y-m-d H:i:s"|default:"-" }}
-  </div>
 
   <h2>Patient / Patient</h2>
   <div class="grid">
@@ -75,59 +90,115 @@
     </div>
   </div>
 
-  <h2>Einwilligungen / Consents</h2>
+  <h2>{% if form_locale and form_locale|slice:":2" != "de" %}Einwilligungen / Consents{% else %}Einwilligungen{% endif %}</h2>
   {% if consents %}
     {% for consent in consents %}
       <div class="item">
+        {% if form_locale and form_locale|slice:":2" != "de" %}
         <div class="item-title">
           {% if consent.is_required %}* {% endif %}{{ consent.title_de|default:"" }}
           <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
         </div>
-        {% if form_locale and form_locale|slice:":2" != "de" %}
-        <div class="item-subtitle">{{ consent.title_locale|default:consent.title_de|default:"" }}</div>
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_de|default:"-"|markdown_consent }}</div>
+        <div class="item-subtitle" style="margin-top:10px;">
+          {{ consent.title_locale|default:consent.title_de|default:"" }}
+          <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
+        </div>
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_locale|default:consent.content_de|default:"-"|markdown_consent }}</div>
+        {% else %}
+        <div class="item-title">
+          {% if consent.is_required %}* {% endif %}{{ consent.title_de|default:"" }}
+          <span class="cb">{% if consent.accepted %}☑{% else %}☐{% endif %}</span>
+        </div>
+        <div class="consent-text" style="margin-top:8px;">{{ consent.content_de|default:"-"|markdown_consent }}</div>
         {% endif %}
-        <div class="consent-text" style="margin-top:6px;"><strong>DE text:</strong><br/>{{ consent.content_de|default:"-"|markdown_consent }}</div>
-        {% if form_locale and form_locale|slice:":2" != "de" %}
-        <div class="consent-text" style="margin-top:4px;"><strong>{{ form_locale }} text:</strong><br/>{{ consent.content_locale|default:consent.content_de|default:"-"|markdown_consent }}</div>
+        {% if consent.contact_method_all_options %}
+        <div style="margin-top:8px;">
+          {% for option in consent.contact_method_all_options %}
+            {% if form_locale and form_locale|slice:":2" != "de" %}
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_de|default:option.option_code }}</span>
+            </div>
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_locale|default:option.label_de }}</span>
+            </div>
+            {% else %}
+            <div class="option-row">
+              <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+              <span>{{ option.label_de|default:option.option_code }}</span>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
         {% endif %}
-        <div class="muted" style="margin-top:6px;">accepted_at: {{ consent.accepted_at|default:"-" }}</div>
       </div>
     {% endfor %}
   {% else %}
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>Anamnesis / Anamnese</h2>
+  <h2>{% if form_locale and form_locale|slice:":2" != "de" %}Anamnese / Anamnesis{% else %}Anamnese{% endif %}</h2>
   {% if anamnesis.answers %}
     {% for answer in anamnesis.answers %}
       <div class="item">
-        <div class="item-title">{{ answer.question_text_de|default:answer.question_code }}</div>
         {% if form_locale and form_locale|slice:":2" != "de" %}
+        <div class="item-title">{{ answer.question_text_de|default:answer.question_code }}</div>
         <div class="item-subtitle">{{ answer.question_text_locale|default:answer.question_text_de }}</div>
+        {% else %}
+        <div class="item-title">{{ answer.question_text_de|default:answer.question_code }}</div>
         {% endif %}
         {% if answer.all_options %}
           <div style="margin-top:6px;">
             {% for option in answer.all_options %}
+              {% if form_locale and form_locale|slice:":2" != "de" %}
               <div class="option-row">
                 <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
-                <span>{{ option.label_de|default:option.option_code|default:"-" }}{% if form_locale and form_locale|slice:":2" != "de" %} / {{ option.label_locale|default:option.label_de|default:"" }}{% endif %}</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
               </div>
+              <div class="option-row">
+                <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+                <span>{{ option.label_locale|default:option.label_de|default:"-" }}</span>
+              </div>
+              {% else %}
+              <div class="option-row">
+                <span class="cb">{% if option.selected %}☑{% else %}☐{% endif %}</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
+              </div>
+              {% endif %}
             {% endfor %}
           </div>
         {% elif answer.selected_options %}
           <div style="margin-top:6px;">
             {% for option in answer.selected_options %}
+              {% if form_locale and form_locale|slice:":2" != "de" %}
               <div class="option-row">
                 <span class="cb">☑</span>
-                <span>{{ option.label_de|default:option.option_code|default:"-" }}{% if form_locale and form_locale|slice:":2" != "de" %} / {{ option.label_locale|default:option.label_de|default:"" }}{% endif %}</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
               </div>
+              <div class="option-row">
+                <span class="cb">☑</span>
+                <span>{{ option.label_locale|default:option.label_de|default:"-" }}</span>
+              </div>
+              {% else %}
+              <div class="option-row">
+                <span class="cb">☑</span>
+                <span>{{ option.label_de|default:option.option_code|default:"-" }}</span>
+              </div>
+              {% endif %}
             {% endfor %}
           </div>
         {% else %}
           <div class="muted" style="margin-top:6px;">No options.</div>
         {% endif %}
         {% if answer.free_text %}
-          <div style="margin-top:8px;"><strong>Eintrag / Wpis:</strong></div>
+          {% if form_locale and form_locale|slice:":2" != "de" %}
+          <div style="margin-top:8px;"><strong>Eintrag</strong></div>
+          <div style="margin-top:2px;"><strong>Wpis / Entry</strong> ({{ form_locale }})</div>
+          {% else %}
+          <div style="margin-top:8px;"><strong>Eintrag</strong></div>
+          {% endif %}
           <div class="free-text-box">{{ answer.free_text }}</div>
         {% endif %}
       </div>
@@ -136,14 +207,32 @@
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>Unterschrift / Signature</h2>
+  {% if form_locale and form_locale|slice:":2" != "de" %}
+  <h2>Unterschrift / {% if form_locale|slice:":2" == "pl" %}Podpis{% elif form_locale|slice:":2" == "en" %}Signature{% else %}Unterschrift{% endif %}</h2>
   <div class="sig-box">
+    <p class="sig-caption"><strong>Unterschrift</strong></p>
+    {% if form_locale|slice:":2" == "pl" %}
+    <p class="sig-caption-secondary"><strong>Podpis</strong></p>
+    {% elif form_locale|slice:":2" == "en" %}
+    <p class="sig-caption-secondary"><strong>Signature</strong></p>
+    {% else %}
+    <p class="sig-caption-secondary"><strong>{{ form_locale }}</strong></p>
+    {% endif %}
     {% if signature.data_url %}
       <img class="signature" src="{{ signature.data_url }}" alt="signature" />
     {% else %}
       <div class="muted">No signature image.</div>
     {% endif %}
-    <div class="mono" style="margin-top:6px;">sha256: {{ signature.sha256|default:"-" }}</div>
   </div>
+  {% else %}
+  <h2>Unterschrift</h2>
+  <div class="sig-box">
+    {% if signature.data_url %}
+      <img class="signature" src="{{ signature.data_url }}" alt="signature" />
+    {% else %}
+      <div class="muted">Keine Signatur.</div>
+    {% endif %}
+  </div>
+  {% endif %}
 </body>
 </html>
