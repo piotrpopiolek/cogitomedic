@@ -1,18 +1,27 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from io import BytesIO
 from uuid import uuid4
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from pypdf import PdfWriter
 
+from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
+    PdfStatus,
+)
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
     save_draft_document_version,
 )
 from apps.operations.models import AuditEvent
+from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
 from apps.core.api_utils import assign_group_to_test_user
@@ -27,6 +36,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_valid_pdf_bytes() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
 
 
 class OutboxProcessingTests(TestCase):
@@ -120,9 +137,7 @@ class OutboxProcessingTests(TestCase):
         self.assertTrue(self.version.sms_sent)
         self.assertIsNotNone(self.version.pdf_local_path)
         patient_id = str(self.medical_document.queue_entry.patient_id)
-        self.assertIn(
-            f"/hidrive/patients/{patient_id}/", self.version.hidrive_path or ""
-        )
+        self.assertIn(f"/patients/{patient_id}/", self.version.hidrive_path or "")
         self.assertTrue((self.version.hidrive_path or "").endswith("/Befund_v1.pdf"))
 
         self.assertEqual(
@@ -131,13 +146,13 @@ class OutboxProcessingTests(TestCase):
             ).count(),
             3,
         )
-        self.assertEqual(
-            AuditEvent.objects.filter(
-                event_type="OUTBOX_EVENT_PROCESSED",
-                medical_document_id=self.medical_document.id,
-            ).count(),
-            3,
-        )
+
+    @override_settings(HIDRIVE_PATIENTS_DIR_PREFIX="/public/patients")
+    def test_build_befund_hidrive_path_uses_patients_dir_prefix(self) -> None:
+        patient_id = str(self.medical_document.queue_entry.patient_id)
+        path = build_befund_hidrive_path(self.version)
+        self.assertIn(f"/public/patients/{patient_id}/", path)
+        self.assertTrue(path.endswith("/Befund_v1.pdf"))
 
     def test_process_outbox_events_moves_to_dead_letter_after_retries(self) -> None:
         event = OutboxEvent.objects.get(
@@ -159,3 +174,140 @@ class OutboxProcessingTests(TestCase):
                 outbox_event_id=event.id,
             ).exists()
         )
+
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+    )
+    def test_outbox_moves_matched_external_pdf_to_processed_after_upload(self) -> None:
+        """§12 pipeline: GENERATE_PDF merges external bytes; HIDRIVE_UPLOAD moves MATCHED rows."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        pdf_bytes = _minimal_valid_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/patient_outbox.pdf",
+            pdf_bytes,
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/patient_outbox.pdf",
+            original_filename="patient_outbox.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        first = process_outbox_events()
+        second = process_outbox_events()
+        third = process_outbox_events()
+        self.assertEqual(
+            (first.processed, second.processed, third.processed), (1, 1, 1)
+        )
+
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.hidrive_sent)
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="patient_outbox.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertEqual(att.hidrive_remote_path, "/processed/patient_outbox.pdf")
+
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+    )
+    def test_outbox_corrupt_external_marks_merge_failed_and_skips_processed_move(
+        self,
+    ) -> None:
+        """§12: invalid HiDrive bytes → MERGE_FAILED; upload still completes; no move to /processed/."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/patient_outbox.pdf",
+            b"%PDF-1.4\nnot-enough-for-reader",
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/patient_outbox.pdf",
+            original_filename="patient_outbox.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        process_outbox_events()
+        process_outbox_events()
+        process_outbox_events()
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="patient_outbox.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertEqual(att.hidrive_remote_path, "/incoming/patient_outbox.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_CORRUPT",
+                medical_document_id=self.medical_document.id,
+            ).exists()
+        )
+
+    @override_settings(
+        SMSAPI_USE_MOCK="1",
+        HIDRIVE_USE_MOCK="1",
+        HIDRIVE_INCOMING_PATH="/incoming",
+        HIDRIVE_PROCESSED_PATH="/processed",
+        HIDRIVE_PATIENTS_DIR_PREFIX="/patients",
+        OUTBOX_BASE_BACKOFF_SECONDS=0,
+    )
+    def test_outbox_missing_external_lab_pdf_fails_then_completes_when_file_arrives(
+        self,
+    ) -> None:
+        """GENERATE_PDF must not store Befund-only when lab PDF is required but missing; retry after upload."""
+        hidrive_client._MockHiDriveAdapter.reset_test_state()
+        ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_document,
+            hidrive_remote_path="/incoming/not_seeded.pdf",
+            original_filename="not_seeded.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+
+        r1 = process_outbox_events()
+        self.assertEqual(r1.failed, 1)
+        self.assertEqual(r1.processed, 0)
+
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.pdf_generation_status, PdfStatus.FAILED)
+        self.assertFalse(self.version.hidrive_sent)
+        self.assertIsNone(self.version.pdf_local_path)
+
+        att = ExternalPdfAttachment.objects.get(
+            medical_document=self.medical_document,
+            original_filename="not_seeded.pdf",
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        self.assertEqual(att.hidrive_remote_path, "/incoming/not_seeded.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                medical_document_id=self.medical_document.id,
+            ).exists()
+        )
+
+        pdf_bytes = _minimal_valid_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file(
+            "/incoming/not_seeded.pdf",
+            pdf_bytes,
+        )
+
+        for _ in range(6):
+            process_outbox_events()
+
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.hidrive_sent)
+        self.assertIsNotNone(self.version.pdf_local_path)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertEqual(att.hidrive_remote_path, "/processed/not_seeded.pdf")

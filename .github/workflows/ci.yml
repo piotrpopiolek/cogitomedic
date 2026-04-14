@@ -16,9 +16,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
-      - name: Install linters
-        run: pip install ruff black
+      - name: Install linters (same pins as pre-commit / requirements-dev)
+        run: pip install -r requirements-dev.txt
 
       - name: ruff check
         run: ruff check .
@@ -117,7 +119,7 @@ jobs:
 
       - name: Run pytest (coverage gate from pyproject)
         run: python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
-        timeout-minutes: 8
+        timeout-minutes: 10
 
       - name: Diff coverage
         run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=90

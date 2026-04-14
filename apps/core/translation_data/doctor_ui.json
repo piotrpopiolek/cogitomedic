@@ -663,5 +663,85 @@
     "de": "Freigeben",
     "en": "Unlock",
     "pl": "Odblokuj"
+  },
+  "doctor.external_pdf_section_title": {
+    "de": "Externe PDF (HiDrive /incoming)",
+    "en": "External PDF (HiDrive /incoming)",
+    "pl": "Zewnętrzny PDF (HiDrive /incoming)"
+  },
+  "doctor.external_pdf_iframe_title": {
+    "de": "Vorschau externe PDF",
+    "en": "External PDF preview",
+    "pl": "Podgląd zewnętrznego PDF"
+  },
+  "doctor.publish_requires_preview_hint": {
+    "de": "Nach jedem Speichern des Entwurfs ist eine PDF-Vorschau erforderlich, bevor Sie veröffentlichen können.",
+    "en": "After each draft save, use Preview PDF once before you can publish.",
+    "pl": "Po każdym zapisaniu szkicu użyj Podglądu PDF przed publikacją."
+  },
+  "doctor.external_pdf_gate_no_file": {
+    "de": "Keine passende PDF-Datei in HiDrive /incoming/. Bitte bitten Sie die Rezeption, die Datei hochzuladen oder den Dateinamen zu prüfen.",
+    "en": "No matching PDF in HiDrive /incoming/. Please ask reception to upload the file or fix the filename.",
+    "pl": "Brak pasującego PDF w HiDrive /incoming/. Poproś recepcję o wgranie pliku lub poprawę nazwy."
+  },
+  "doctor.external_pdf_gate_no_pdfs_in_folder": {
+    "de": "HiDrive /incoming/ ist erreichbar, enthält aber keine PDF-Datei. Bitte bitten Sie die Rezeption, eine Datei mit Endung .pdf hochzuladen.",
+    "en": "HiDrive /incoming/ is reachable but contains no PDF file. Please ask reception to upload a file whose name ends with .pdf.",
+    "pl": "Folder HiDrive /incoming/ jest dostępny, ale nie zawiera pliku PDF. Poproś recepcję o wgranie pliku z rozszerzeniem .pdf."
+  },
+  "doctor.external_pdf_gate_ambiguous": {
+    "de": "Mehrdeutiger Dateiname ohne Geburtsdatum. Bitte bitten Sie die Rezeption, das Geburtsdatum (RRRR_MM_DD) in den Dateinamen aufzunehmen.",
+    "en": "Ambiguous filename without date of birth. Please ask reception to add DOB (YYYY_MM_DD) to the filename.",
+    "pl": "Niejednoznaczna nazwa pliku bez daty urodzenia. Poproś recepcję o dopisanie daty (RRRR_MM_DD) do nazwy pliku."
+  },
+  "doctor.external_pdf_gate_hidrive_error": {
+    "de": "HiDrive-Verzeichnis konnte nicht gelesen werden. Bitte später erneut versuchen.",
+    "en": "Could not read HiDrive folder. Please try again shortly.",
+    "pl": "Nie udało się odczytać folderu HiDrive. Spróbuj ponownie za chwilę."
+  },
+  "doctor.external_pdf_upload_in_progress": {
+    "de": "Die Datei ist möglicherweise noch unvollständig — bitte in Kürze erneut versuchen.",
+    "en": "The file may still be uploading — please try again in a moment.",
+    "pl": "Plik może być w trakcie wgrywania — spróbuj ponownie za chwilę."
+  },
+  "doctor.external_pdf_status_matched": {
+    "de": "Zugeordnet",
+    "en": "Matched",
+    "pl": "Dopasowany"
+  },
+  "doctor.external_pdf_status_rejected": {
+    "de": "Abgelehnt",
+    "en": "Rejected",
+    "pl": "Odrzucony"
+  },
+  "doctor.external_pdf_status_merge_failed": {
+    "de": "Zusammenführung fehlgeschlagen",
+    "en": "Merge failed",
+    "pl": "Scalanie nieudane"
+  },
+  "doctor.external_pdf_status_accepted": {
+    "de": "Verarbeitet",
+    "en": "Processed",
+    "pl": "Przetworzony"
+  },
+  "doctor.external_pdf_reject_btn": {
+    "de": "Datei ablehnen",
+    "en": "Reject file",
+    "pl": "Odrzuć plik"
+  },
+  "doctor.external_pdf_preview_hint": {
+    "de": "Klicken Sie auf einen Dateinamen für die Vorschau.",
+    "en": "Click a filename to preview.",
+    "pl": "Kliknij nazwę pliku, aby podejrzeć."
+  },
+  "doctor.external_pdf_preview_merge_warning": {
+    "de": "Hinweis: Die PDF-Zusammenführung ist fehlgeschlagen oder eine Anlage war beschädigt — Vorschau zeigt nur den Befund.",
+    "en": "Note: PDF merge failed or an attachment was invalid — preview shows Befund only.",
+    "pl": "Uwaga: scalenie PDF nie powiodło się lub załącznik był uszkodzony — podgląd pokazuje tylko Befund."
+  },
+  "doctor.msg_publish_preview_required": {
+    "de": "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen.",
+    "en": "Please open PDF preview after your last save before publishing.",
+    "pl": "Przed publikacją otwórz podgląd PDF po ostatnim zapisie."
   }
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import Client, TestCase
@@ -12,6 +13,7 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.reception.models import (
     ClinicSite,
@@ -197,12 +199,40 @@ class DoctorDetailHappyPathTests(TestCase):
             current_version_no=0,
             created_by_user=self.doctor,
         )
+        # Default HiDrive /incoming listing is empty in tests → real gate returns 422.
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
 
     def test_detail_happy_path_returns_200(self):
         self.client.force_login(self.doctor)
         url = f"/doctor/{self.doc.id}/"
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_detail_shows_hidrive_soft_warning_banner(
+        self, mock_gate: MagicMock
+    ) -> None:
+        """Non-blocking HiDrive outage: gate passes but UI shows translated warning."""
+        mock_gate.return_value = GateResult(
+            True,
+            (),
+            "HiDrive folder read failed (test).",
+            skip_attachment_sync=True,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("HiDrive folder read failed (test).", resp.content.decode())
 
     def test_detail_panel_includes_body_map_image_url_and_stored_points(self):
         self.client.force_login(self.doctor)
@@ -257,3 +287,33 @@ class DoctorDetailHappyPathTests(TestCase):
         self.client.force_login(other)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
         self.assertEqual(resp.status_code, 200)
+
+    @patch(
+        "cogitomedica.doctor_views.check_external_pdf_gate",
+        return_value=GateResult(
+            False,
+            (),
+            "GATE_BLOCKED",
+            skip_attachment_sync=False,
+        ),
+    )
+    def test_detail_returns_422_when_external_pdf_gate_blocks(
+        self,
+        _mock_gate: MagicMock,
+    ) -> None:
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn("GATE_BLOCKED", resp.content.decode())
+
+    @patch(
+        "cogitomedica.doctor_views.get_medical_document_context",
+        return_value={"intake_summary": {"patient": {}}},
+    )
+    def test_detail_returns_404_when_intake_patient_id_missing(
+        self,
+        _mock_ctx: MagicMock,
+    ) -> None:
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 404)
