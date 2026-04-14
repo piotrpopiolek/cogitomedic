@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
+from apps.operations.prom_metrics import record_import_batch_finished
 from apps.operations.services import create_audit_event
 from apps.reception.models import (
     ClinicSite,
@@ -721,6 +722,11 @@ def process_patient_xlsx_import_batch(
             error_rows=0,
             failure_reason=str(e),
         )
+        record_import_batch_finished(
+            result="failed",
+            started_at=batch.created_at,
+            finished_at=batch.finished_at,
+        )
         return
     except DomainError as e:
         batch.status = ImportStatus.FAILED
@@ -742,6 +748,11 @@ def process_patient_xlsx_import_batch(
             error_rows=0,
             failure_reason=str(e),
         )
+        record_import_batch_finished(
+            result="failed",
+            started_at=batch.created_at,
+            finished_at=batch.finished_at,
+        )
         return
     except Exception as e:
         batch.status = ImportStatus.FAILED
@@ -762,6 +773,11 @@ def process_patient_xlsx_import_batch(
             matched_rows=0,
             error_rows=0,
             failure_reason=str(e),
+        )
+        record_import_batch_finished(
+            result="failed",
+            started_at=batch.created_at,
+            finished_at=batch.finished_at,
         )
         return
 
@@ -790,6 +806,11 @@ def process_patient_xlsx_import_batch(
         inserted_rows=inserted,
         matched_rows=matched,
         error_rows=errors_count,
+    )
+    record_import_batch_finished(
+        result="completed" if errors_count == 0 else "completed_with_errors",
+        started_at=batch.created_at,
+        finished_at=batch.finished_at,
     )
 
 

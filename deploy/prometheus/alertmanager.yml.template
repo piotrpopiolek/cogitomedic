@@ -1,0 +1,20 @@
+# Rendered at container start: __ALERTMANAGER_WEBHOOK_URL__ ← $ALERTMANAGER_WEBHOOK_URL (default http://127.0.0.1:5001/)
+# Uwaga: URL nie powinien zawierać znaku | (separator sed).
+route:
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+  receiver: webhook_default
+
+receivers:
+  - name: webhook_default
+    webhook_configs:
+      - url: "__ALERTMANAGER_WEBHOOK_URL__"
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname"]
