@@ -1,3 +1,5 @@
+# Image: otel/opentelemetry-collector-contrib (docker-compose).
+# Traces → Tempo + spanmetrics → Prometheus (self-scrape :8889, job otel_spanmetrics).
 receivers:
   otlp:
     protocols:
@@ -6,22 +8,39 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+connectors:
+  spanmetrics:
+    resource_metrics_key_attributes:
+      - service.name
+    histogram:
+      unit: ms
+      explicit:
+        buckets: [10ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s, 10s, 30s, 60s]
+
 processors:
-  batch:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch: {}
 
 exporters:
   otlp/tempo:
     endpoint: tempo:4317
     tls:
       insecure: true
-  
-  # Opcjonalnie logowanie w konsoli collectora
-  debug:
-    verbosity: detailed
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    const_labels:
+      source: otel_spanmetrics
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo, spanmetrics]
+    metrics:
+      receivers: [spanmetrics]
       processors: [batch]
-      exporters: [otlp/tempo, debug]
+      exporters: [prometheus]

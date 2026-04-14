@@ -34,28 +34,68 @@
     .section-text { white-space: pre-wrap; }
     ul { margin: 5px 0 0 18px; padding: 0; }
     li { margin: 2px 0; }
-    .pdf-header { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #e0f0f0; padding-bottom: 8px; }
-    .pdf-header td { vertical-align: top; }
-    .pdf-header-title h1 { margin: 0 0 2px 0; color: #075255; }
-    .pdf-header-date { margin: 0; font-size: 11px; color: #5a6a6a; }
-    .pdf-header-logo { text-align: right; width: 30%; }
-    .pdf-header-logo img { height: 72px; width: auto; max-width: 220px; object-fit: contain; }
+    .pdf-header {
+      width: 100%;
+      margin-bottom: 12px;
+      border-bottom: 2px solid #e0f0f0;
+      padding-bottom: 8px;
+      box-sizing: border-box;
+    }
+    /* Jedna linia flex: środek pionowy logo = środek pionowy „Ergebnisse” (nie całego bloku z datą) */
+    .pdf-header-top {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+    .pdf-header-title-line {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .pdf-header-title-line h1 {
+      margin: 0;
+      padding: 0;
+      color: #075255;
+      line-height: 1.15;
+      font-size: 20px;
+    }
+    .pdf-header-logo {
+      flex: 0 0 auto;
+      margin-left: 8mm;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .pdf-header-logo img {
+      display: block;
+      height: auto;
+      width: auto;
+      max-width: 38mm;
+      max-height: 34mm;
+      object-fit: contain;
+    }
+    .pdf-header-date {
+      margin: 4px 0 0 0;
+      font-size: 11px;
+      color: #5a6a6a;
+    }
     .physician-attribution { margin-top: 18px; padding-top: 10px; border-top: 1px solid #e0f0f0; font-size: 11px; color: #3d4d4d; }
     .physician-attribution strong { color: #0a4a4d; }
   </style>
 </head>
 <body>
-  <table class="pdf-header" role="presentation">
-    <tr>
-      <td class="pdf-header-title">
+  <header class="pdf-header">
+    <div class="pdf-header-top">
+      <div class="pdf-header-title-line">
         <h1>{{ labels.ergebnisse }}</h1>
-        <p class="pdf-header-date">{{ publication_date_display }}</p>
-      </td>
-      <td class="pdf-header-logo">
+      </div>
+      <div class="pdf-header-logo">
         <img src="static/lab/logo.png" alt="CogitoMedica" />
-      </td>
-    </tr>
-  </table>
+      </div>
+    </div>
+    <p class="pdf-header-date">{{ publication_date_display }}</p>
+  </header>
 
   <h2>{{ labels.patient }}</h2>
   <div class="grid">

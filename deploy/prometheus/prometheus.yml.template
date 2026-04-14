@@ -19,3 +19,13 @@ scrape_configs:
       credentials: "__PROMETHEUS_METRICS_TOKEN__"
     static_configs:
       - targets: ["web:8000"]
+
+  - job_name: "otel_spanmetrics"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: "postgres"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["postgres_exporter:9187"]

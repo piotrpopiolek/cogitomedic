@@ -9,6 +9,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from opentelemetry import trace
 
 from apps.intake.models import (
     IntakeDocumentVersion,
@@ -21,11 +22,14 @@ from apps.intake.pdf_builder import generate_intake_pdf
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
+from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
 from apps.outbox.services import _try_delete_file
 
 logger = logging.getLogger(__name__)
+
+tracer = trace.get_tracer(__name__)
 
 
 class IntakeOutboxEventNotRetryableError(DomainError):
@@ -39,7 +43,26 @@ class IntakeOutboxProcessingResult:
     dead_lettered: int
 
 
-def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
+def _execute_intake_outbox_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
+    with tracer.start_as_current_span(
+        f"execute_intake_outbox_event_{event.event_type.lower()}",
+        attributes={
+            "outbox.stream": "intake",
+            "intake_document_version_id": str(event.intake_document_version_id),
+            "intake_outbox_event_id": str(event.id),
+            "event_type": event.event_type,
+        },
+    ) as span:
+        try:
+            _execute_intake_outbox_event_internal(event, now=now)
+        except Exception as e:
+            span.record_exception(e)
+            raise
+
+
+def _execute_intake_outbox_event_internal(
+    event: IntakeOutboxEvent, *, now: datetime
+) -> None:
     version = (
         IntakeDocumentVersion.objects.select_for_update()
         .select_related(
@@ -50,6 +73,10 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
         )
         .get(id=event.intake_document_version_id)
     )
+
+    span = trace.get_current_span()
+    if span.is_recording():
+        span.set_attribute("cogito.intake_form_id", str(version.intake_form_id))
 
     if event.payload.get("simulate_error") is True:
         raise RuntimeError("Simulated intake outbox processing failure.")
@@ -113,6 +140,11 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
         return
 
     raise RuntimeError(f"Unsupported intake outbox event type: {event.event_type}")
+
+
+def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
+    """Backward-compatible name; delegates to traced implementation."""
+    _execute_intake_outbox_event(event, now=now)
 
 
 @transaction.atomic
@@ -179,6 +211,18 @@ def process_intake_outbox_events(
                     "event_type": event.event_type,
                     "patient_id": str(patient_id),
                 },
+            )
+            v_created = (
+                IntakeDocumentVersion.objects.filter(pk=version.id)
+                .values_list("created_at", flat=True)
+                .first()
+            )
+            record_outbox_execution(
+                stream="intake",
+                event_type=event.event_type,
+                result="success",
+                start_ts=v_created,
+                end_ts=effective_now,
             )
             processed += 1
         except Exception as exc:
@@ -249,6 +293,17 @@ def process_intake_outbox_events(
                         "patient_id": str(patient_id),
                     },
                 )
+            record_outbox_execution(
+                stream="intake",
+                event_type=event.event_type,
+                result=(
+                    "dead_letter"
+                    if event.status == IntakeOutboxStatus.DEAD_LETTER
+                    else "failed"
+                ),
+                start_ts=None,
+                end_ts=None,
+            )
 
     logger.info(
         "intake_outbox_batch_finished",
