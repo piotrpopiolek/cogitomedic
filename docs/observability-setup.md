@@ -13,6 +13,36 @@ Przy uruchomionym stosie Docker (`docker compose up`) usługi monitorowania są 
 | **Alertmanager** | http://localhost:9093 | Lista alertów, status wysyłek, konfiguracja receiverów. |
 | **Grafana Tempo** | http://localhost:3200 | Backend trace’ów; w praktyce używany z Grafany (Explore → wybór datasource **Tempo**). |
 | **OTel Collector** | `localhost:4317` (gRPC), `localhost:4318` (HTTP) | Odbiera trace’y OTLP z aplikacji; brak UI – tylko wewnętrzne połączenia z kontenerów `web` i `scheduler`. |
+| **postgres_exporter** | (brak mapowania na host) | Metryki PostgreSQL tylko w sieci Docker; Prometheus scrapuje `postgres_exporter:9187` (job `postgres`). Te same `DB_NAME` / `DB_USER` / `DB_PASSWORD` co aplikacja. |
+
+---
+
+## Alertmanager (webhook z `.env`)
+
+- Konfiguracja źródłowa: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template) z placeholderem `__ALERTMANAGER_WEBHOOK_URL__`.
+- Przy starcie kontenera `alertmanager` (dev i prod compose) plik jest renderowany do `/tmp/alertmanager.yml` przez `sed`, a URL pochodzi ze zmiennej **`ALERTMANAGER_WEBHOOK_URL`** (domyślnie `http://127.0.0.1:5001/`).
+- **Uwaga:** znak `|` w URL psuje `sed` — użyj URL bez `|` lub zmień separator w entrypointcie.
+- **Godziny pracy (PRD):** ograniczenie alertu backlogu do godzin recepcji ustaw w Alertmanagerze (`mute_time_intervals` / osobne route), zamiast skomplikowanego PromQL z `hour()` (łatwo o błąd etykiet).
+
+## PostgreSQL — postgres_exporter
+
+- Serwis **`postgres_exporter`** w [docker-compose.yml](../docker-compose.yml) / [docker-compose.prod.yml](../docker-compose.prod.yml): połączenie przez `DATA_SOURCE_URI` / `DATA_SOURCE_USER` / `DATA_SOURCE_PASS` (wartości z `.env`, spójne z kontenerem `db`).
+- Port **9187** nie jest wystawiany na host — wyłącznie scrape wewnętrzny z Prometheusa.
+- Alerty: [deploy/prometheus/alerts.yml](deploy/prometheus/alerts.yml) (`PostgresExporterTargetDown`, `PostgresDatabaseUnreachable`).
+
+## OTel Collector — spanmetrics → Prometheus
+
+- Kolektor eksportuje metryki RED ze spanów na porcie **8889** (job Prometheus `otel_spanmetrics` w [deploy/prometheus/prometheus.yml.template](deploy/prometheus/prometheus.yml.template)).
+- W Grafanie (Tempo → **Explore** z correlate to metrics) zapytania `tracesToMetrics` zakładają nazwy w stylu `calls_total` i `duration_milliseconds_bucket` — jeśli po upgrade OTel nazwy się zmienią, sprawdź w Prometheusie: **Status → Targets → otel_spanmetrics** i metryki z prefiksem `duration_` / `calls_`.
+
+---
+
+## Bezpieczeństwo endpointów observability
+
+- **`GET /api/v1/observability/health`** — odpowiedź anonimowa jest **minimalna** (status / DB). Szczegółowe `checks` tylko z nagłówkiem `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub po zalogowaniu jako ADMIN.
+- **`GET /api/v1/observability/metrics`** — wyłącznie **Bearer** ten sam co `PROMETHEUS_METRICS_TOKEN` lub sesja ADMIN; przeznaczone dla Prometheusa (tożsamość maszynowa), nie dla personelu w przeglądarce bez tokena.
+- **Sieć:** na produkcji nie wystawiaj publicznie portów Grafana/Prometheus/Alertmanager/Tempo ani portu aplikacji używanego wyłącznie do scrapingu — użyj sieci Docker, VPN lub firewalla (patrz komentarze w `docker-compose.prod.yml`).
+- **Alertmanager:** ustaw **`ALERTMANAGER_WEBHOOK_URL`** w `.env` (Slack, PagerDuty, n8n itd.); szablon: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template).
 
 ---
 
@@ -64,8 +94,12 @@ W nowym panelu:
 | Średni czas przetwarzania (publish→done) | `cogitomedica_outbox_processing_duration_seconds_sum / cogitomedica_outbox_processing_duration_seconds_count` |
 | Batche importu po statusie | `sum by (status) (cogitomedica_import_batches_total)` |
 | Wiersze importu (inserted / error) | `cogitomedica_import_rows_total` |
-| Success ratio HiDrive (ostatnia 1h) | `sum(rate(cogitomedica_outbox_events_total{event_type="HIDRIVE_UPLOAD",status="PROCESSED"}[1h])) / sum(rate(cogitomedica_outbox_events_total{event_type="HIDRIVE_UPLOAD"}[1h]))` |
-| Success ratio SMS (ostatnia 1h) | `sum(rate(cogitomedica_outbox_events_total{event_type="SMS_SEND",status="PROCESSED"}[1h])) / sum(rate(cogitomedica_outbox_events_total{event_type="SMS_SEND"}[1h]))` |
+| Success ratio HiDrive / SMS (runtime Counter; 1h) | `sum(rate(cogitomedica_outbox_executions_total{stream="befund",result="success",event_type="HIDRIVE_UPLOAD"}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream="befund",event_type="HIDRIVE_UPLOAD"}[1h]))` (analogicznie `SMS_SEND`) |
+| Intake outbox (snapshot DB) | `cogitomedica_intake_outbox_events_total` |
+| Intake pending age | `cogitomedica_intake_outbox_pending_age_seconds` |
+| Tempo zakończeń outbox (worker) | `sum by (stream,event_type,result) (rate(cogitomedica_outbox_executions_total[5m]))` |
+| Import batch zakończone (Counter) | `rate(cogitomedica_import_batches_completed_total[1h])` |
+| p95 publish→processed (Histogram) | `histogram_quantile(0.95, sum by (le, stream, event_type) (rate(cogitomedica_outbox_publish_to_processed_seconds_bucket[15m])))` |
 
 ### 4. Typ panelu
 
