@@ -150,10 +150,15 @@ services:
         DEFAULT="$${ALERTMANAGER_WEBHOOK_URL:-http://127.0.0.1:5001/}"
         CRITICAL="$${ALERTMANAGER_WEBHOOK_CRITICAL_URL:-$$DEFAULT}"
         WARNING="$${ALERTMANAGER_WEBHOOK_WARNING_URL:-$$DEFAULT}"
+        if [ "$${ALERTMANAGER_USE_DISCORD:-0}" = "1" ]; then
+          SRC="/etc/cogito-prometheus/alertmanager.discord.yml.template"
+        else
+          SRC="/etc/cogito-prometheus/alertmanager.yml.template"
+        fi
         sed -e "s#__WEBHOOK_DEFAULT__#$${DEFAULT}#g" \
             -e "s#__WEBHOOK_CRITICAL__#$${CRITICAL}#g" \
             -e "s#__WEBHOOK_WARNING__#$${WARNING}#g" \
-            /etc/cogito-prometheus/alertmanager.yml.template > /tmp/alertmanager.yml
+            "$$SRC" > /tmp/alertmanager.yml
         exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"

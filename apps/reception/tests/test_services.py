@@ -4,6 +4,7 @@ import importlib
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
@@ -35,12 +36,14 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
 )
+from apps.operations.prom_metrics import build_metrics_payload
 from apps.reception.phone_utils import normalize_phone
 from apps.reception.xlsx_import import (
     XlsxImportErrorCode,
@@ -580,6 +583,24 @@ class ReceptionDashboardScopeTests(TestCase):
         )
 
 
+def _write_xlsx_without_valid_patient_header(
+    path: Path,
+    *,
+    queue_date: date,
+    standort_name: str,
+) -> None:
+    """Date + Standort present, but no row with phone/email/name headers."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws["A1"] = queue_date.strftime("%d.%m.%Y")
+    ws["A2"] = f"Standort: {standort_name}"
+    ws.cell(4, 1, "not_a_patient_header_row")
+    wb.save(path)
+    wb.close()
+
+
 def _write_minimal_patient_xlsx(
     path: Path,
     *,
@@ -689,6 +710,8 @@ class PatientXlsxImportTests(TestCase):
         self.assertEqual(batch.error_rows, 0)
         norm = normalize_phone("+48 777 888 901")
         self.assertEqual(Patient.objects.filter(phone=norm).count(), 1)
+        payload = build_metrics_payload()
+        self.assertIn(b"cogitomedica_import_batches_total", payload)
 
     def test_import_existing_patient_reuses_record(self) -> None:
         Patient.objects.create(
@@ -763,6 +786,73 @@ class PatientXlsxImportTests(TestCase):
             batch=batch,
             error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
         )
+
+    def test_import_fails_when_no_valid_patient_header_row(self) -> None:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            path = Path(tmp.name)
+        try:
+            _write_xlsx_without_valid_patient_header(
+                path,
+                queue_date=self.import_day,
+                standort_name=self.clinic.name,
+            )
+            batch = PatientImportBatch.objects.create(
+                source_file_name="bad-header.xlsx",
+                source_file_sha256="d" * 64,
+                created_by_user=self.user,
+            )
+            process_patient_xlsx_import_batch(
+                batch_id=batch.id, stored_file_path=str(path)
+            )
+            batch.refresh_from_db()
+            self.assertEqual(batch.status, ImportStatus.FAILED)
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_import_domain_error_finishes_batch(self) -> None:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            path = Path(tmp.name)
+        try:
+            _write_minimal_patient_xlsx(
+                path,
+                queue_date=self.import_day,
+                standort_name=self.clinic.name,
+                data_rows=[],
+            )
+            batch = PatientImportBatch.objects.create(
+                source_file_name="domain.xlsx",
+                source_file_sha256="e" * 64,
+                created_by_user=self.user,
+            )
+            with patch(
+                "apps.reception.xlsx_import._extract_file_metadata",
+                side_effect=DomainError("forced domain error"),
+            ):
+                process_patient_xlsx_import_batch(
+                    batch_id=batch.id, stored_file_path=str(path)
+                )
+            batch.refresh_from_db()
+            self.assertEqual(batch.status, ImportStatus.FAILED)
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_import_openpyxl_unexpected_error_finishes_batch(self) -> None:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            path = Path(tmp.name)
+        try:
+            path.write_bytes(b"not an xlsx")
+            batch = PatientImportBatch.objects.create(
+                source_file_name="broken.xlsx",
+                source_file_sha256="f" * 64,
+                created_by_user=self.user,
+            )
+            process_patient_xlsx_import_batch(
+                batch_id=batch.id, stored_file_path=str(path)
+            )
+            batch.refresh_from_db()
+            self.assertEqual(batch.status, ImportStatus.FAILED)
+        finally:
+            path.unlink(missing_ok=True)
 
     def test_import_stale_anonymized_same_phone_errors(self) -> None:
         p = Patient.objects.create(
