@@ -231,7 +231,10 @@ def process_outbox_events(
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
 
     events = list(
-        OutboxEvent.objects.select_for_update(skip_locked=True)
+        OutboxEvent.objects.select_for_update(
+            skip_locked=True,
+            of=("self",),
+        )
         .select_related("medical_document_version")
         .filter(
             status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED],
