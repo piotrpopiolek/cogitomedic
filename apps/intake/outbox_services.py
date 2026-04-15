@@ -157,6 +157,7 @@ def process_intake_outbox_events(
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
     events = list(
         IntakeOutboxEvent.objects.select_for_update(skip_locked=True)
+        .select_related("intake_document_version")
         .filter(
             status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED],
             available_at__lte=effective_now,
@@ -176,6 +177,9 @@ def process_intake_outbox_events(
 
         version = event.intake_document_version
         patient_id = version.intake_form.queue_entry.patient_id
+        intake_processed_ok = False
+        version_created_at = version.created_at
+        intake_event_type = event.event_type
         try:
             with transaction.atomic():
                 _execute_event(event, now=effective_now)
@@ -212,19 +216,8 @@ def process_intake_outbox_events(
                     "patient_id": str(patient_id),
                 },
             )
-            v_created = (
-                IntakeDocumentVersion.objects.filter(pk=version.id)
-                .values_list("created_at", flat=True)
-                .first()
-            )
-            record_outbox_execution(
-                stream="intake",
-                event_type=event.event_type,
-                result="success",
-                start_ts=v_created,
-                end_ts=effective_now,
-            )
             processed += 1
+            intake_processed_ok = True
         except Exception as exc:
             if event.event_type == IntakeOutboxEventType.GENERATE_INTAKE_PDF:
                 IntakeDocumentVersion.objects.filter(
@@ -304,6 +297,21 @@ def process_intake_outbox_events(
                 start_ts=None,
                 end_ts=None,
             )
+
+        if intake_processed_ok:
+            try:
+                record_outbox_execution(
+                    stream="intake",
+                    event_type=intake_event_type,
+                    result="success",
+                    start_ts=version_created_at,
+                    end_ts=effective_now,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after successful intake outbox event %s",
+                    event.id,
+                )
 
     logger.info(
         "intake_outbox_batch_finished",

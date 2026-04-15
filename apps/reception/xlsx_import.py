@@ -760,7 +760,7 @@ def process_patient_xlsx_import_batch(
         batch.save(update_fields=["status", "finished_at"])
         PatientImportError.objects.create(
             batch=batch,
-            row_number=0,
+            row_number=1,
             error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
             error_message=str(e),
             raw_row=None,
