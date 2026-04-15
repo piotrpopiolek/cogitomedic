@@ -27,6 +27,8 @@
     .row { display: table-row; }
     .cell { display: table-cell; border: 1px solid #cfe3e3; padding: 6px 8px; vertical-align: top; }
     .head { background: #f0f6f6; color: #0d3d40; font-weight: 700; width: 36%; border-color: #cfe3e3; }
+    /* Pusta lewa komórka: szerokość jak .head, bez szarego tła nagłówka */
+    .head.cell-label-spacer { background: #fff; font-weight: 400; }
     .badge { display: inline-block; padding: 3px 8px; border: 1px solid #9dc4c4; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; color: #075255; background: #f4fafb; }
     .lesion { border: 1px solid #cfe3e3; border-left: 3px solid #075255; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafdfd; }
     .lesion-title { font-weight: 700; margin-bottom: 6px; color: #075255; }
@@ -104,10 +106,6 @@
       <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.examination_date }}</div>
-      <div class="cell">{{ examination_date_display }}</div>
-    </div>
-    <div class="row">
       <div class="cell head">{{ labels.date_of_birth }}</div>
       <div class="cell">{{ patient.date_of_birth }}</div>
     </div>
@@ -119,6 +117,10 @@
       <div class="cell head">{{ labels.email }}</div>
       <div class="cell">{{ patient.email }}</div>
     </div>
+    <div class="row">
+      <div class="cell head">{{ labels.examination_date }}</div>
+      <div class="cell">{{ examination_date_display }}</div>
+    </div>
   </div>
 
   <h2>{{ labels.global_assessment }}</h2>
@@ -128,19 +130,19 @@
       <div class="cell">{{ befund.fitzpatrick_type }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.overall_image_assessment }}</div>
+      <div class="cell head cell-label-spacer"></div>
       <div class="cell">{{ befund.overall_image_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.final_assessment }}</div>
+      <div class="cell head cell-label-spacer"></div>
       <div class="cell">{{ befund.final_assessment }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.diagnosis_code }}</div>
+      <div class="cell head cell-label-spacer"></div>
       <div class="cell">{{ befund.diagnosis_code }}</div>
     </div>
     <div class="row">
-      <div class="cell head">{{ labels.procedure_code }}</div>
+      <div class="cell head cell-label-spacer"></div>
       <div class="cell">{{ befund.procedure_code }}</div>
     </div>
   </div>
