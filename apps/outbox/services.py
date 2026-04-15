@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,9 +30,12 @@ from apps.medical.models import (
     MedicalDocumentVersion,
     PdfStatus,
 )
+from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,7 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
     with tracer.start_as_current_span(
         f"execute_outbox_event_{event.event_type.lower()}",
         attributes={
+            "outbox.stream": "befund",
             "medical_document_version_id": str(event.medical_document_version_id),
             "outbox_event_id": str(event.id),
             "event_type": event.event_type,
@@ -86,6 +91,15 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         )
         .get(id=event.medical_document_version_id)
     )
+
+    span = trace.get_current_span()
+    if span.is_recording():
+        span.set_attribute(
+            "cogito.medical_document_id", str(version.medical_document_id)
+        )
+        intake_form = getattr(version.medical_document, "intake_form", None)
+        if intake_form is not None:
+            span.set_attribute("cogito.intake_form_id", str(intake_form.id))
 
     if event.payload.get("simulate_error") is True:
         raise RuntimeError("Simulated outbox processing failure.")
@@ -217,7 +231,11 @@ def process_outbox_events(
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
 
     events = list(
-        OutboxEvent.objects.select_for_update(skip_locked=True)
+        OutboxEvent.objects.select_for_update(
+            skip_locked=True,
+            of=("self",),
+        )
+        .select_related("medical_document_version")
         .filter(
             status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED],
             available_at__lte=effective_now,
@@ -232,6 +250,8 @@ def process_outbox_events(
     for event in events:
         event_id = event.id
         sid = transaction.savepoint()
+        success_committed = False
+        pub_at = None
         try:
             event.status = OutboxStatus.PROCESSING
             event.locked_at = effective_now
@@ -270,8 +290,9 @@ def process_outbox_events(
                     "retry_count": event.retry_count,
                 },
             )
+            pub_at = event.medical_document_version.published_at
             transaction.savepoint_commit(sid)
-            processed += 1
+            success_committed = True
         except Exception as exc:
             transaction.savepoint_rollback(sid)
             if isinstance(exc, AllExternalPdfDownloadsFailed):
@@ -327,6 +348,39 @@ def process_outbox_events(
                     "error_message": ev.error_message or "",
                 },
             )
+            try:
+                record_outbox_execution(
+                    stream="befund",
+                    event_type=ev.event_type,
+                    result=(
+                        "dead_letter"
+                        if ev.status == OutboxStatus.DEAD_LETTER
+                        else "failed"
+                    ),
+                    start_ts=None,
+                    end_ts=None,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after failed outbox event %s",
+                    event_id,
+                )
+
+        if success_committed:
+            try:
+                record_outbox_execution(
+                    stream="befund",
+                    event_type=event.event_type,
+                    result="success",
+                    start_ts=pub_at,
+                    end_ts=effective_now,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after successful outbox event %s",
+                    event_id,
+                )
+            processed += 1
 
     return OutboxProcessingResult(
         processed=processed,

@@ -1,5 +1,8 @@
 .git
 .gitignore
+.env
+.env.local
+.env.production
 .cursor
 .ai
 venv
