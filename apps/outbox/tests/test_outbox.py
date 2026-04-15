@@ -4,9 +4,11 @@ from datetime import date, timedelta
 from io import BytesIO
 from uuid import uuid4
 
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from pypdf import PdfWriter
+from unittest.mock import MagicMock, patch
 
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -23,7 +25,9 @@ from apps.medical.services import (
 from apps.operations.models import AuditEvent
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+from apps.outbox import services as outbox_services
 from apps.outbox.services import process_outbox_events
+from apps.operations.prom_metrics import build_metrics_payload
 from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.models import (
     ClinicSite,
@@ -147,6 +151,31 @@ class OutboxProcessingTests(TestCase):
             3,
         )
 
+        payload = build_metrics_payload()
+        self.assertIn(b"cogitomedica_outbox_processing_duration_seconds_sum", payload)
+        self.assertIn(b"cogitomedica_outbox_events_total", payload)
+
+    def test_execute_event_internal_sets_span_attributes_when_recording(self) -> None:
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {"simulate_error": True}
+        event.save(update_fields=["payload"])
+        with patch.object(outbox_services.trace, "get_current_span") as gsm:
+            mock_span = MagicMock()
+            mock_span.is_recording.return_value = True
+            gsm.return_value = mock_span
+            with transaction.atomic():
+                with self.assertRaises(RuntimeError):
+                    outbox_services._execute_event_internal(event, now=timezone.now())
+        mock_span.set_attribute.assert_any_call(
+            "cogito.medical_document_id", str(self.medical_document.id)
+        )
+        mock_span.set_attribute.assert_any_call(
+            "cogito.intake_form_id", str(self.medical_document.intake_form_id)
+        )
+
     @override_settings(HIDRIVE_PATIENTS_DIR_PREFIX="/public/patients")
     def test_build_befund_hidrive_path_uses_patients_dir_prefix(self) -> None:
         patient_id = str(self.medical_document.queue_entry.patient_id)
@@ -171,6 +200,45 @@ class OutboxProcessingTests(TestCase):
         self.assertTrue(
             AuditEvent.objects.filter(
                 event_type="OUTBOX_EVENT_DEAD_LETTERED",
+                outbox_event_id=event.id,
+            ).exists()
+        )
+
+    def test_failed_outbox_event_persists_when_record_outbox_execution_raises(
+        self,
+    ) -> None:
+        """Metrics must not abort @transaction.atomic batch or roll back failure handling."""
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {"simulate_error": True}
+        event.max_retries = 10
+        event.retry_count = 0
+        event.status = OutboxStatus.PENDING
+        event.available_at = timezone.now() - timedelta(seconds=5)
+        event.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        with patch.object(
+            outbox_services,
+            "record_outbox_execution",
+            side_effect=RuntimeError("metrics unavailable"),
+        ):
+            result = process_outbox_events()
+        self.assertEqual(result.failed, 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.FAILED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="OUTBOX_EVENT_FAILED",
                 outbox_event_id=event.id,
             ).exists()
         )

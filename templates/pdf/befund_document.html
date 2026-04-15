@@ -26,46 +26,92 @@
     .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
     .row { display: table-row; }
     .cell { display: table-cell; border: 1px solid #cfe3e3; padding: 6px 8px; vertical-align: top; }
+    .grid-single-col .cell { width: 100%; }
     .head { background: #f0f6f6; color: #0d3d40; font-weight: 700; width: 36%; border-color: #cfe3e3; }
     .badge { display: inline-block; padding: 3px 8px; border: 1px solid #9dc4c4; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; color: #075255; background: #f4fafb; }
     .lesion { border: 1px solid #cfe3e3; border-left: 3px solid #075255; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafdfd; }
+    .lesion.lesion-first { margin-top: 14px; }
     .lesion-title { font-weight: 700; margin-bottom: 6px; color: #075255; }
     .muted { color: #5a6a6a; }
     .section-text { white-space: pre-wrap; }
     ul { margin: 5px 0 0 18px; padding: 0; }
     li { margin: 2px 0; }
-    .pdf-header { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #e0f0f0; padding-bottom: 8px; }
-    .pdf-header td { vertical-align: top; }
-    .pdf-header-title h1 { margin: 0 0 2px 0; color: #075255; }
-    .pdf-header-date { margin: 0; font-size: 11px; color: #5a6a6a; }
-    .pdf-header-logo { text-align: right; width: 30%; }
-    .pdf-header-logo img { height: 72px; width: auto; max-width: 220px; object-fit: contain; }
-    .physician-attribution { margin-top: 18px; padding-top: 10px; border-top: 1px solid #e0f0f0; font-size: 11px; color: #3d4d4d; }
-    .physician-attribution strong { color: #0a4a4d; }
+    .pdf-header {
+      width: 100%;
+      margin-bottom: 12px;
+      border-bottom: 2px solid #e0f0f0;
+      padding-bottom: 8px;
+      box-sizing: border-box;
+    }
+    /* Jedna linia flex: środek pionowy logo = środek pionowy „Ergebnisse” (nie całego bloku z datą) */
+    .pdf-header-top {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+    .pdf-header-title-line {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .pdf-header-title-line h1 {
+      margin: 0;
+      padding: 0;
+      color: #075255;
+      line-height: 1.15;
+      font-size: 20px;
+    }
+    .pdf-header-logo {
+      flex: 0 0 auto;
+      margin-left: 8mm;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .pdf-header-logo img {
+      display: block;
+      height: auto;
+      width: auto;
+      max-width: 38mm;
+      max-height: 34mm;
+      object-fit: contain;
+    }
+    .pdf-header-date {
+      margin: 4px 0 0 0;
+      font-size: 11px;
+      color: #5a6a6a;
+    }
+    .pdf-issuing-physician {
+      margin-top: 18px;
+      width: 100%;
+      text-align: right;
+    }
+    .pdf-issuing-physician-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0a4a4d;
+    }
   </style>
 </head>
 <body>
-  <table class="pdf-header" role="presentation">
-    <tr>
-      <td class="pdf-header-title">
+  <header class="pdf-header">
+    <div class="pdf-header-top">
+      <div class="pdf-header-title-line">
         <h1>{{ labels.ergebnisse }}</h1>
-        <p class="pdf-header-date">{{ publication_date_display }}</p>
-      </td>
-      <td class="pdf-header-logo">
+      </div>
+      <div class="pdf-header-logo">
         <img src="static/lab/logo.png" alt="CogitoMedica" />
-      </td>
-    </tr>
-  </table>
+      </div>
+    </div>
+    <p class="pdf-header-date">{{ publication_date_display }}</p>
+  </header>
 
   <h2>{{ labels.patient }}</h2>
   <div class="grid">
     <div class="row">
       <div class="cell head">{{ labels.name }}</div>
       <div class="cell">{{ patient.last_name }}, {{ patient.first_name }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head">{{ labels.examination_date }}</div>
-      <div class="cell">{{ examination_date_display }}</div>
     </div>
     <div class="row">
       <div class="cell head">{{ labels.date_of_birth }}</div>
@@ -79,31 +125,24 @@
       <div class="cell head">{{ labels.email }}</div>
       <div class="cell">{{ patient.email }}</div>
     </div>
+    <div class="row">
+      <div class="cell head">{{ labels.examination_date }}</div>
+      <div class="cell">{{ examination_date_display }}</div>
+    </div>
   </div>
 
   <h2>{{ labels.global_assessment }}</h2>
-  <div class="grid">
-    <div class="row">
-      <div class="cell head">{{ labels.fitzpatrick_type }}</div>
-      <div class="cell">{{ befund.fitzpatrick_type }}</div>
+  {% if global_assessment_lines %}
+    <div class="grid grid-single-col">
+      {% for line in global_assessment_lines %}
+      <div class="row">
+        <div class="cell">{{ line }}</div>
+      </div>
+      {% endfor %}
     </div>
-    <div class="row">
-      <div class="cell head">{{ labels.overall_image_assessment }}</div>
-      <div class="cell">{{ befund.overall_image_assessment }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head">{{ labels.final_assessment }}</div>
-      <div class="cell">{{ befund.final_assessment }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head">{{ labels.diagnosis_code }}</div>
-      <div class="cell">{{ befund.diagnosis_code }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head">{{ labels.procedure_code }}</div>
-      <div class="cell">{{ befund.procedure_code }}</div>
-    </div>
-  </div>
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
 
   <h2>{{ labels.examination_scope }}</h2>
   {% if befund.examination_scope %}
@@ -112,25 +151,21 @@
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>{{ labels.lesions }}</h2>
   {% if befund.lesions %}
     {% for lesion in befund.lesions %}
-      <div class="lesion">
-        <div class="lesion-title">{{ labels.group }} {{ lesion.index }} ({{ labels.numbers }}: {{ lesion.numbers }})</div>
+      <div class="lesion{% if forloop.first %} lesion-first{% endif %}">
+        <div class="lesion-title">{{ labels.lesion_numbers_heading }} {{ lesion.numbers }}</div>
         <div><strong>{{ labels.clinical_assessment }}:</strong> {{ lesion.clinical_assessment }}</div>
         <div><strong>{{ labels.malignancy_risk }}:</strong> {{ lesion.malignancy_risk }}</div>
+        {% if lesion.features %}
         <div>
           <strong>{{ labels.dermatoscopic_features }}:</strong>
-          {% if lesion.features %}
-            {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
-          {% else %}
-            <span class="muted">-</span>
-          {% endif %}
+          {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
         </div>
-        <div style="margin-top: 8px;">
-          <strong>{{ labels.final_text }}:</strong>
-          <div class="section-text">{{ lesion.final_text }}</div>
-        </div>
+        {% endif %}
+        {% if lesion.final_text and lesion.final_text != "-" %}
+        <div class="section-text" style="margin-top: 8px;">{{ lesion.final_text }}</div>
+        {% endif %}
       </div>
     {% endfor %}
   {% else %}
@@ -151,12 +186,11 @@
   <h2>{{ labels.summary }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
 
-  <div class="physician-attribution">
-    <strong>{{ labels.reporting_physician }}:</strong>
+  <div class="pdf-issuing-physician">
     {% if reporting_physician_display %}
-      {{ reporting_physician_display }}
+      <div class="pdf-issuing-physician-name">{{ reporting_physician_display }}</div>
     {% else %}
-      <span class="muted">–</span>
+      <div class="pdf-issuing-physician-name muted">-</div>
     {% endif %}
   </div>
 </body>

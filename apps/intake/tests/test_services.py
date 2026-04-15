@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -20,7 +21,9 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
+from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import process_intake_outbox_events
+from apps.operations.prom_metrics import build_metrics_payload
 from apps.intake.services import (
     InvalidSignatureError,
     RequiredAnamnesisMissingError,
@@ -268,6 +271,63 @@ class SubmitPatientIntakeFormTests(TestCase):
         patient_id = str(self.queue_entry.patient_id)
         self.assertIn(f"/patients/{patient_id}/", version.hidrive_path or "")
         self.assertTrue((version.hidrive_path or "").endswith("/Intake_v1.pdf"))
+
+        payload = build_metrics_payload()
+        self.assertIn(
+            b"cogitomedica_intake_outbox_processing_duration_seconds_sum", payload
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_process_intake_outbox_simulate_error_marks_failed_and_records_metrics(
+        self,
+    ) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        ev = IntakeOutboxEvent.objects.get(
+            intake_document_version__intake_form=self.intake_form,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+        )
+        ev.payload = {"simulate_error": True}
+        ev.max_retries = 10
+        ev.retry_count = 0
+        ev.status = IntakeOutboxStatus.PENDING
+        ev.available_at = timezone.now() - timedelta(seconds=5)
+        ev.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        result = process_intake_outbox_events()
+        self.assertEqual(result.failed, 1)
+        ev.refresh_from_db()
+        self.assertEqual(ev.status, IntakeOutboxStatus.FAILED)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_intake_outbox_internal_sets_span_attribute_when_recording(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        ev = IntakeOutboxEvent.objects.get(
+            intake_document_version__intake_form=self.intake_form,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+        )
+        ev.payload = {"simulate_error": True}
+        ev.available_at = timezone.now() - timedelta(seconds=5)
+        ev.save(update_fields=["payload", "available_at", "updated_at"])
+        with patch.object(intake_outbox_services.trace, "get_current_span") as gsm:
+            mock_span = MagicMock()
+            mock_span.is_recording.return_value = True
+            gsm.return_value = mock_span
+            process_intake_outbox_events()
+        mock_span.set_attribute.assert_any_call(
+            "cogito.intake_form_id", str(self.intake_form.id)
+        )
 
     def test_submit_is_idempotent_for_already_submitted_form(self) -> None:
         self._accept_all_required_consents_effective_today()

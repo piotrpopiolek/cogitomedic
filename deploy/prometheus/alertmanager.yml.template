@@ -1,0 +1,49 @@
+# Rendered przy starcie kontenera (sed w docker-compose):
+#   __WEBHOOK_DEFAULT__   ← ALERTMANAGER_WEBHOOK_URL
+#   __WEBHOOK_CRITICAL__  ← ALERTMANAGER_WEBHOOK_CRITICAL_URL lub domyślny URL
+#   __WEBHOOK_WARNING__   ← ALERTMANAGER_WEBHOOK_WARNING_URL lub domyślny URL
+# Separator sed: # — unikaj znaku # w URL (fragment); | w URL też psuje wcześniejsze warianty.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: webhook_default
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+  routes:
+    # Kolejność: pierwsze dopasowanie wygrywa (severity z reguł Prometheusa).
+    - match:
+        severity: critical
+      receiver: webhook_critical
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 30m
+    - match:
+        severity: warning
+      receiver: webhook_warning
+      group_wait: 30s
+      group_interval: 15m
+      repeat_interval: 4h
+
+receivers:
+  - name: webhook_default
+    webhook_configs:
+      - url: "__WEBHOOK_DEFAULT__"
+        send_resolved: true
+  - name: webhook_critical
+    webhook_configs:
+      - url: "__WEBHOOK_CRITICAL__"
+        send_resolved: true
+  - name: webhook_warning
+    webhook_configs:
+      - url: "__WEBHOOK_WARNING__"
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname"]

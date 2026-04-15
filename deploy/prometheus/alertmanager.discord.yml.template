@@ -1,0 +1,46 @@
+# Używany gdy ALERTMANAGER_USE_DISCORD=1 (entrypoint w docker-compose).
+# Te same placeholdery co alertmanager.yml.template — wartości to URL-e webhooków Discorda.
+# Dokumentacja: docs/observability-setup.md → „Integracja z Discordem”.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: webhook_default
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+  routes:
+    - match:
+        severity: critical
+      receiver: webhook_critical
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 30m
+    - match:
+        severity: warning
+      receiver: webhook_warning
+      group_wait: 30s
+      group_interval: 15m
+      repeat_interval: 4h
+
+receivers:
+  - name: webhook_default
+    discord_configs:
+      - webhook_url: "__WEBHOOK_DEFAULT__"
+        send_resolved: true
+  - name: webhook_critical
+    discord_configs:
+      - webhook_url: "__WEBHOOK_CRITICAL__"
+        send_resolved: true
+  - name: webhook_warning
+    discord_configs:
+      - webhook_url: "__WEBHOOK_WARNING__"
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname"]
