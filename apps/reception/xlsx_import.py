@@ -498,7 +498,7 @@ def _finalize_patient_xlsx_import_batch_failed(
     batch: PatientImportBatch,
     *,
     context_clinic_site_id: uuid.UUID | None,
-    error_code: XlsxImportErrorCode,
+    error_code: str,
     error_message: str,
 ) -> None:
     """Mark batch failed, persist row-1 error, audit, and record import metrics once."""
