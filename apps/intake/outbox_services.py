@@ -286,17 +286,23 @@ def process_intake_outbox_events(
                         "patient_id": str(patient_id),
                     },
                 )
-            record_outbox_execution(
-                stream="intake",
-                event_type=event.event_type,
-                result=(
-                    "dead_letter"
-                    if event.status == IntakeOutboxStatus.DEAD_LETTER
-                    else "failed"
-                ),
-                start_ts=None,
-                end_ts=None,
-            )
+            try:
+                record_outbox_execution(
+                    stream="intake",
+                    event_type=event.event_type,
+                    result=(
+                        "dead_letter"
+                        if event.status == IntakeOutboxStatus.DEAD_LETTER
+                        else "failed"
+                    ),
+                    start_ts=None,
+                    end_ts=None,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after failed intake outbox event %s",
+                    event.id,
+                )
 
         if intake_processed_ok:
             try:
