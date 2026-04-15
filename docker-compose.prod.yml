@@ -1,5 +1,5 @@
 # Produkcja: Gunicorn, PostgreSQL, scheduler, Nginx — bez devowych override'ów (brak SMSAPI_USE_MOCK, brak .:/app).
-# Domyślnie: tylko db, web, scheduler, nginx (port 80 na hoście). Bez wystawionych portów monitoringu.
+# Domyślnie: db, web, scheduler, nginx (porty 80 i 443 na hoście). Bez wystawionych portów monitoringu.
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
@@ -107,12 +107,14 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      # Po dodaniu bloku listen 443 ssl w nginx.prod.conf i zamontowaniu certyfikatów:
-      # - "443:443"
+      - "443:443"
     volumes:
       - ./deploy/nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
       - staticfiles_data:/var/www/static:ro
       - media_data:/var/www/media:ro
+      # Certbot na hoście: sudo certbot certonly --webroot -w .../deploy/nginx/certbot-webroot -d …
+      - ./deploy/nginx/certbot-webroot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       web:
         condition: service_healthy
