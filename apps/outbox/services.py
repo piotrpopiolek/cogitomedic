@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,8 @@ from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -229,6 +232,7 @@ def process_outbox_events(
 
     events = list(
         OutboxEvent.objects.select_for_update(skip_locked=True)
+        .select_related("medical_document_version")
         .filter(
             status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED],
             available_at__lte=effective_now,
@@ -243,6 +247,8 @@ def process_outbox_events(
     for event in events:
         event_id = event.id
         sid = transaction.savepoint()
+        success_committed = False
+        pub_at = None
         try:
             event.status = OutboxStatus.PROCESSING
             event.locked_at = effective_now
@@ -281,22 +287,9 @@ def process_outbox_events(
                     "retry_count": event.retry_count,
                 },
             )
+            pub_at = event.medical_document_version.published_at
             transaction.savepoint_commit(sid)
-            pub_at = (
-                MedicalDocumentVersion.objects.filter(
-                    id=event.medical_document_version_id
-                )
-                .values_list("published_at", flat=True)
-                .first()
-            )
-            record_outbox_execution(
-                stream="befund",
-                event_type=event.event_type,
-                result="success",
-                start_ts=pub_at,
-                end_ts=effective_now,
-            )
-            processed += 1
+            success_committed = True
         except Exception as exc:
             transaction.savepoint_rollback(sid)
             if isinstance(exc, AllExternalPdfDownloadsFailed):
@@ -361,6 +354,22 @@ def process_outbox_events(
                 start_ts=None,
                 end_ts=None,
             )
+
+        if success_committed:
+            try:
+                record_outbox_execution(
+                    stream="befund",
+                    event_type=event.event_type,
+                    result="success",
+                    start_ts=pub_at,
+                    end_ts=effective_now,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after successful outbox event %s",
+                    event_id,
+                )
+            processed += 1
 
     return OutboxProcessingResult(
         processed=processed,
