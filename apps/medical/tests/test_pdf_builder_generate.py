@@ -297,6 +297,28 @@ class GenerateBefundPdfExternalTests(TestCase):
         ctx = _build_render_context(self.version)
         self.assertEqual(ctx["reporting_physician_display"], "Schmidt, Anna")
 
+    def test_global_assessment_lines_skips_empty_and_dash_placeholder(self) -> None:
+        ctx = _build_render_context(self.version)
+        lines = ctx["global_assessment_lines"]
+        for line in lines:
+            self.assertTrue(line.strip())
+            self.assertNotEqual(line.strip(), "-")
+
+    def test_global_assessment_lines_empty_when_all_placeholders(self) -> None:
+        MedicalDocumentVersion.objects.filter(pk=self.version.pk).update(
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": [],
+            },
+            diagnosis_code="",
+            procedure_code="",
+        )
+        self.version.refresh_from_db()
+        ctx = _build_render_context(self.version)
+        self.assertEqual(ctx["global_assessment_lines"], [])
+
     def test_reporting_physician_display_falls_back_to_document_creator(self) -> None:
         self.doctor.first_name = "Ben"
         self.doctor.last_name = "Weber"
