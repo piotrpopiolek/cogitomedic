@@ -295,7 +295,7 @@ class GenerateBefundPdfExternalTests(TestCase):
         self.version.published_by_user = self.doctor
         self.version.save(update_fields=["published_by_user"])
         ctx = _build_render_context(self.version)
-        self.assertEqual(ctx["reporting_physician_display"], "Schmidt, Anna")
+        self.assertEqual(ctx["reporting_physician_display"], "Schmidt Anna")
 
     def test_global_assessment_lines_skips_empty_and_dash_placeholder(self) -> None:
         ctx = _build_render_context(self.version)
@@ -332,4 +332,4 @@ class GenerateBefundPdfExternalTests(TestCase):
         self.medical_doc.refresh_from_db()
         self.version.refresh_from_db()
         ctx = _build_render_context(self.version)
-        self.assertEqual(ctx["reporting_physician_display"], "Weber, Ben")
+        self.assertEqual(ctx["reporting_physician_display"], "Weber Ben")
