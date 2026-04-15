@@ -1,0 +1,40 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        gettext \
+        libpq-dev \
+        libcairo2 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libffi-dev \
+        shared-mime-info \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-prod.txt /app/requirements-prod.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements-prod.txt
+
+COPY . /app
+
+RUN python manage.py compilemessages
+
+# Skrypty z Windows mogą mieć CRLF — wtedy "exec /docker-entrypoint-prod.sh: no such file or directory" (shebang /bin/sh\r).
+COPY scripts/docker-entrypoint-prod.sh /docker-entrypoint-prod.sh
+COPY scripts/docker-healthcheck-web.sh /app/scripts/docker-healthcheck-web.sh
+RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh \
+    && chmod +x /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/docker-entrypoint-prod.sh"]
+CMD ["gunicorn", "cogitomedica.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]

@@ -16,7 +16,21 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_SOURCE_URI: "db:5432/${DB_NAME:-cogitomedica}?sslmode=disable"
+      DATA_SOURCE_USER: ${DB_USER:-cogito_user}
+      DATA_SOURCE_PASS: ${DB_PASSWORD:-1234}
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
+    image: cogitomedica-web:dev
     build: .
     restart: unless-stopped
     env_file:
@@ -42,6 +56,7 @@ services:
         condition: service_healthy
 
   scheduler:
+    image: cogitomedica-scheduler:dev
     build: .
     restart: unless-stopped
     env_file:
@@ -53,7 +68,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: cogitomedica-scheduler
     command: >
-      sh -c "python manage.py run_periodic_tasks --interval-seconds 300 --skip-import"
+      sh -c "python manage.py run_periodic_tasks --interval-seconds 30 --skip-import"
     volumes:
       - .:/app
     depends_on:
@@ -153,16 +168,33 @@ services:
       - "9090:9090"
     depends_on:
       - web
+      - postgres_exporter
 
   alertmanager:
     image: prom/alertmanager:latest
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
-      - ./deploy/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./deploy/prometheus:/etc/cogito-prometheus:ro
       - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        DEFAULT="$${ALERTMANAGER_WEBHOOK_URL:-http://127.0.0.1:5001/}"
+        CRITICAL="$${ALERTMANAGER_WEBHOOK_CRITICAL_URL:-$$DEFAULT}"
+        WARNING="$${ALERTMANAGER_WEBHOOK_WARNING_URL:-$$DEFAULT}"
+        if [ "$${ALERTMANAGER_USE_DISCORD:-0}" = "1" ]; then
+          SRC="/etc/cogito-prometheus/alertmanager.discord.yml.template"
+        else
+          SRC="/etc/cogito-prometheus/alertmanager.yml.template"
+        fi
+        sed -e "s#__WEBHOOK_DEFAULT__#$${DEFAULT}#g" \
+            -e "s#__WEBHOOK_CRITICAL__#$${CRITICAL}#g" \
+            -e "s#__WEBHOOK_WARNING__#$${WARNING}#g" \
+            "$$SRC" > /tmp/alertmanager.yml
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"
 
@@ -183,13 +215,14 @@ services:
       - tempo
 
   otel-collector:
-    image: otel/opentelemetry-collector:latest
+    image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./deploy/otel/otel-collector-config.yml:/etc/otel-collector-config.yml
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus exporter (spanmetrics)
     depends_on:
       - tempo
 
