@@ -283,13 +283,13 @@ def _lesion_final_text(lesion: dict[str, Any]) -> str:
 
 
 def _staff_user_display_name(user: Any) -> str | None:
-    """Last name, first name (clinical letter style); username if names missing."""
+    """Last name then first name, space-separated (Befund PDF footer); username if names missing."""
     if user is None:
         return None
     last = (getattr(user, "last_name", None) or "").strip()
     first = (getattr(user, "first_name", None) or "").strip()
     if last and first:
-        return f"{last}, {first}"
+        return f"{last} {first}"
     if last:
         return last
     if first:
