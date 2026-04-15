@@ -15,8 +15,9 @@ compactor:
   compaction:
     compaction_window: 1h
     max_block_bytes: 104857600
-    block_retention: 1h
-    compacted_block_retention: 1h
+    # Dev-friendly defaults; prod: extend if disk allows (e.g. 48h / 72h).
+    block_retention: 24h
+    compacted_block_retention: 48h
 
 storage:
   trace:
