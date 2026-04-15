@@ -255,7 +255,7 @@ make superuser
 
 - Keep secrets in `.env` (do not commit real credentials).
 - In Docker, `DB_HOST` is overridden to `db` automatically by `docker-compose.yml`.
-- For production: set `ENVIRONMENT=prod`, and **must** set `SECRET_KEY` and `ALLOWED_HOSTS` (app will not start in prod without `SECRET_KEY`). Pełny stack Docker (Gunicorn + Nginx + scheduler): [docker-compose.prod.yml](docker-compose.prod.yml) — sekcja poniżej.
+- For production: set `ENVIRONMENT=prod`, and **must** set `SECRET_KEY` and `ALLOWED_HOSTS` (app will not start in prod without `SECRET_KEY`). Docker prod: [docker-compose.prod.yml](docker-compose.prod.yml) (Gunicorn + Nginx + scheduler; observability opcjonalnie `--profile observability`) — sekcja poniżej.
 - Login is rate-limited (5 POSTs per IP per minute); 429 is returned when exceeded. For multi-worker production, configure a shared cache (e.g. Redis) in `CACHES` so the limit applies across processes.
 - For a clean database state:
 
@@ -266,10 +266,13 @@ make superuser
 
 ### 6) Produkcja na VPS (`docker-compose.prod.yml`)
 
-Serwisy: **db** (Postgres 16, **bez** publikacji portu 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod), [requirements-prod.txt](requirements-prod.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` i `/media/` z wolumenów), oraz **Prometheus**, **Alertmanager**, **Tempo**, **OpenTelemetry Collector**, **Grafana** (jak w dev — patrz [docs/observability-setup.md](docs/observability-setup.md)). Porty **3000, 9090, 9093, 3200, 4317–4318** są wystawione na host; na VPS ogranicz dostęp (firewall / VPN). `PROMETHEUS_METRICS_TOKEN` i **`web` w `ALLOWED_HOSTS`** są wymagane do scrapu; hasło Grafany: **`GF_SECURITY_ADMIN_PASSWORD`** w `.env` (domyślnie `admin`). Domyślny eksport trace’ów: `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces` (wyłączenie: `OTEL_EXPORTER_OTLP_ENDPOINT=` w `.env`; w compose używana jest substytucja `${VAR-url}` bez `:-`, żeby jawna pusta wartość nie wracała do domyślnego URL). Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
+**Domyślny** stack: **db** (Postgres 16, **bez** publikacji 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod), [requirements-prod.txt](requirements-prod.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` i `/media/` z wolumenów) — tylko port **80** na hoście. Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
+
+**Observability** (Prometheus, postgres_exporter, Alertmanager, Tempo, OTel Collector, Grafana — jak w dev, [docs/observability-setup.md](docs/observability-setup.md)): profil Compose `observability`. Porty **3000, 9090, 9093, 3200, 4317–4318, 8889** na hoście są domyślnie związane z **`127.0.0.1`** (brak nasłuchu na publicznym IP — dostęp z zewnątrz przez SSH tunnel, np. `ssh -L 3000:127.0.0.1:3000 user@vps`). Świadome wystawienie na LAN/Internet: **`OBSERVABILITY_BIND_ADDR=0.0.0.0`** w `.env` + firewall. Ustaw **`PROMETHEUS_METRICS_TOKEN`** i **`web` w `ALLOWED_HOSTS`** (scraping), **`GF_SECURITY_ADMIN_PASSWORD`** dla Grafany oraz **`OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces`**, jeśli chcesz trace’y do Tempo.
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml --profile observability up -d --build
 ```
 
 Domyślnie HTTP na porcie **80** (Nginx). Przy `ENVIRONMENT=prod` i TLS na Nginx ustaw m.in. `USE_TRUSTED_REVERSE_PROXY=1` oraz `CSRF_TRUSTED_ORIGINS`; przy pierwszym teście wyłącznie po HTTP możesz tymczasowo ustawić `SECURE_SSL_REDIRECT=0` (komentarze w [.env.example](.env.example)). Healthcheck kontenera `web` uruchamia [scripts/docker-healthcheck-web.sh](scripts/docker-healthcheck-web.sh) (połączenie z bazą przez `django.setup()` — bez HTTP, żeby uniknąć przekierowania HTTPS przy `SECURE_SSL_REDIRECT`). Przy dalszym `unhealthy` zobacz `docker compose -f docker-compose.prod.yml logs web` (np. `ImproperlyConfigured` z `.env` prod). Jeśli w logu jest **`exec /docker-entrypoint-prod.sh: no such file or directory`**, to zwykle **CRLF w `scripts/*.sh`** z Windows — w [Dockerfile.prod](Dockerfile.prod) jest `sed` usuwający `\r`; zrób `docker compose -f docker-compose.prod.yml build --no-cache web`.
