@@ -26,11 +26,11 @@
     .grid { display: table; width: 100%; border-collapse: collapse; margin-top: 8px; }
     .row { display: table-row; }
     .cell { display: table-cell; border: 1px solid #cfe3e3; padding: 6px 8px; vertical-align: top; }
+    .grid-single-col .cell { width: 100%; }
     .head { background: #f0f6f6; color: #0d3d40; font-weight: 700; width: 36%; border-color: #cfe3e3; }
-    /* Pusta lewa komórka: szerokość jak .head, bez szarego tła nagłówka */
-    .head.cell-label-spacer { background: #fff; font-weight: 400; }
     .badge { display: inline-block; padding: 3px 8px; border: 1px solid #9dc4c4; border-radius: 4px; margin: 0 4px 4px 0; font-size: 11px; color: #075255; background: #f4fafb; }
     .lesion { border: 1px solid #cfe3e3; border-left: 3px solid #075255; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafdfd; }
+    .lesion.lesion-first { margin-top: 14px; }
     .lesion-title { font-weight: 700; margin-bottom: 6px; color: #075255; }
     .muted { color: #5a6a6a; }
     .section-text { white-space: pre-wrap; }
@@ -82,8 +82,6 @@
       font-size: 11px;
       color: #5a6a6a;
     }
-    .physician-attribution { margin-top: 18px; padding-top: 10px; border-top: 1px solid #e0f0f0; font-size: 11px; color: #3d4d4d; }
-    .physician-attribution strong { color: #0a4a4d; }
   </style>
 </head>
 <body>
@@ -124,28 +122,17 @@
   </div>
 
   <h2>{{ labels.global_assessment }}</h2>
-  <div class="grid">
-    <div class="row">
-      <div class="cell head">{{ labels.fitzpatrick_type }}</div>
-      <div class="cell">{{ befund.fitzpatrick_type }}</div>
+  {% if global_assessment_lines %}
+    <div class="grid grid-single-col">
+      {% for line in global_assessment_lines %}
+      <div class="row">
+        <div class="cell">{{ line }}</div>
+      </div>
+      {% endfor %}
     </div>
-    <div class="row">
-      <div class="cell head cell-label-spacer"></div>
-      <div class="cell">{{ befund.overall_image_assessment }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head cell-label-spacer"></div>
-      <div class="cell">{{ befund.final_assessment }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head cell-label-spacer"></div>
-      <div class="cell">{{ befund.diagnosis_code }}</div>
-    </div>
-    <div class="row">
-      <div class="cell head cell-label-spacer"></div>
-      <div class="cell">{{ befund.procedure_code }}</div>
-    </div>
-  </div>
+  {% else %}
+    <div class="muted">-</div>
+  {% endif %}
 
   <h2>{{ labels.examination_scope }}</h2>
   {% if befund.examination_scope %}
@@ -154,25 +141,21 @@
     <div class="muted">-</div>
   {% endif %}
 
-  <h2>{{ labels.lesions }}</h2>
   {% if befund.lesions %}
     {% for lesion in befund.lesions %}
-      <div class="lesion">
-        <div class="lesion-title">{{ labels.group }} {{ lesion.index }} ({{ labels.numbers }}: {{ lesion.numbers }})</div>
+      <div class="lesion{% if forloop.first %} lesion-first{% endif %}">
+        <div class="lesion-title">{{ labels.lesion_numbers_heading }} {{ lesion.numbers }}</div>
         <div><strong>{{ labels.clinical_assessment }}:</strong> {{ lesion.clinical_assessment }}</div>
         <div><strong>{{ labels.malignancy_risk }}:</strong> {{ lesion.malignancy_risk }}</div>
+        {% if lesion.features %}
         <div>
           <strong>{{ labels.dermatoscopic_features }}:</strong>
-          {% if lesion.features %}
-            {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
-          {% else %}
-            <span class="muted">-</span>
-          {% endif %}
+          {% for feature in lesion.features %}<span class="badge">{{ feature }}</span>{% endfor %}
         </div>
-        <div style="margin-top: 8px;">
-          <strong>{{ labels.final_text }}:</strong>
-          <div class="section-text">{{ lesion.final_text }}</div>
-        </div>
+        {% endif %}
+        {% if lesion.final_text and lesion.final_text != "-" %}
+        <div class="section-text" style="margin-top: 8px;">{{ lesion.final_text }}</div>
+        {% endif %}
       </div>
     {% endfor %}
   {% else %}
@@ -192,14 +175,5 @@
 
   <h2>{{ labels.summary }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
-
-  <div class="physician-attribution">
-    <strong>{{ labels.reporting_physician }}:</strong>
-    {% if reporting_physician_display %}
-      {{ reporting_physician_display }}
-    {% else %}
-      <span class="muted">–</span>
-    {% endif %}
-  </div>
 </body>
 </html>
