@@ -102,7 +102,7 @@ Z katalogu z `docker-compose.yml`:
 docker compose up -d alertmanager
 ```
 
-(produkcja: `docker compose -f docker-compose.prod.yml up -d alertmanager`)
+(produkcja: `docker compose -f docker-compose.prod.yml --profile observability up -d alertmanager`)
 
 ### 4. Sprawdź, czy działa
 
@@ -143,7 +143,7 @@ Invoke-RestMethod -Uri "http://localhost:9093/api/v2/alerts" -Method Post -Conte
 
 ## PostgreSQL — postgres_exporter
 
-- Serwis **`postgres_exporter`** w [docker-compose.yml](../docker-compose.yml) / [docker-compose.prod.yml](../docker-compose.prod.yml): połączenie przez `DATA_SOURCE_URI` / `DATA_SOURCE_USER` / `DATA_SOURCE_PASS` (wartości z `.env`, spójne z kontenerem `db`).
+- Serwis **`postgres_exporter`** w [docker-compose.yml](../docker-compose.yml) (zawsze) oraz w [docker-compose.prod.yml](../docker-compose.prod.yml) z profilem **`observability`**: połączenie przez `DATA_SOURCE_URI` / `DATA_SOURCE_USER` / `DATA_SOURCE_PASS` (wartości z `.env`, spójne z kontenerem `db`).
 - Port **9187** nie jest wystawiany na host — wyłącznie scrape wewnętrzny z Prometheusa.
 - Alerty: [deploy/prometheus/alerts.yml](deploy/prometheus/alerts.yml) (`PostgresExporterTargetDown`, `PostgresDatabaseUnreachable`).
 
@@ -158,7 +158,7 @@ Invoke-RestMethod -Uri "http://localhost:9093/api/v2/alerts" -Method Post -Conte
 
 - **`GET /api/v1/observability/health`** — odpowiedź anonimowa jest **minimalna** (status / DB). Szczegółowe `checks` tylko z nagłówkiem `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub po zalogowaniu jako ADMIN.
 - **`GET /api/v1/observability/metrics`** — wyłącznie **Bearer** ten sam co `PROMETHEUS_METRICS_TOKEN` lub sesja ADMIN; przeznaczone dla Prometheusa (tożsamość maszynowa), nie dla personelu w przeglądarce bez tokena.
-- **Sieć:** na produkcji nie wystawiaj publicznie portów Grafana/Prometheus/Alertmanager/Tempo ani portu aplikacji używanego wyłącznie do scrapingu — użyj sieci Docker, VPN lub firewalla (patrz komentarze w `docker-compose.prod.yml`).
+- **Sieć (prod):** w [docker-compose.prod.yml](../docker-compose.prod.yml) stack monitoringu jest za profilem **`observability`**. Gdy profil jest włączony, porty **3000 / 9090 / 9093 / 3200 / 4317–4318 / 8889** są na hoście domyślnie związane z **`127.0.0.1`** (`OBSERVABILITY_BIND_ADDR`, domyślnie loopback) — **nie** nasłuchują na publicznym adresie VPS. Dostęp do Grafany z laptopa: tunel SSH, np. `ssh -L 3000:127.0.0.1:3000 user@twoj-vps`, potem http://127.0.0.1:3000 . Test Alertmanagera z maszyny operatorskiej: to samo z `-L 9093:127.0.0.1:9093`. Świadome wystawienie na wszystkie interfejsy: `OBSERVABILITY_BIND_ADDR=0.0.0.0` w `.env` **i** reguły firewalla.
 - **Alertmanager:** ustaw **`ALERTMANAGER_WEBHOOK_URL`** (oraz opcjonalnie `ALERTMANAGER_WEBHOOK_CRITICAL_URL` / `ALERTMANAGER_WEBHOOK_WARNING_URL`) w `.env`; dla Discorda dodatkowo **`ALERTMANAGER_USE_DISCORD=1`** — szablony: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template) / [deploy/prometheus/alertmanager.discord.yml.template](deploy/prometheus/alertmanager.discord.yml.template).
 
 ---
