@@ -103,7 +103,7 @@
       "gridPos": { "h": 6, "w": 8, "x": 8, "y": 22 },
       "id": 10,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream='befund',result='success',event_type='HIDRIVE_UPLOAD'}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream='befund',event_type='HIDRIVE_UPLOAD'}[1h]))", "legendFormat": "HiDrive 1h", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",result=\"success\",event_type=\"HIDRIVE_UPLOAD\"}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",event_type=\"HIDRIVE_UPLOAD\"}[1h]))", "legendFormat": "HiDrive 1h", "refId": "A" }],
       "title": "SLO — HiDrive success ratio (1h)",
       "type": "stat"
     },
@@ -113,7 +113,7 @@
       "gridPos": { "h": 6, "w": 8, "x": 16, "y": 22 },
       "id": 11,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream='befund',result='success',event_type='SMS_SEND'}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream='befund',event_type='SMS_SEND'}[1h]))", "legendFormat": "SMS 1h", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",result=\"success\",event_type=\"SMS_SEND\"}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",event_type=\"SMS_SEND\"}[1h]))", "legendFormat": "SMS 1h", "refId": "A" }],
       "title": "SLO — SMS success ratio (1h)",
       "type": "stat"
     },
