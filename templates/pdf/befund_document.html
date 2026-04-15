@@ -82,6 +82,16 @@
       font-size: 11px;
       color: #5a6a6a;
     }
+    .pdf-issuing-physician {
+      margin-top: 18px;
+      width: 100%;
+      text-align: right;
+    }
+    .pdf-issuing-physician-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0a4a4d;
+    }
   </style>
 </head>
 <body>
@@ -175,5 +185,13 @@
 
   <h2>{{ labels.summary }}</h2>
   <div class="section-text">{{ befund.summary_text }}</div>
+
+  <div class="pdf-issuing-physician">
+    {% if reporting_physician_display %}
+      <div class="pdf-issuing-physician-name">{{ reporting_physician_display }}</div>
+    {% else %}
+      <div class="pdf-issuing-physician-name muted">-</div>
+    {% endif %}
+  </div>
 </body>
 </html>
