@@ -494,6 +494,36 @@ def _try_record_import_batch_finished(
         )
 
 
+def _finalize_patient_xlsx_import_batch_failed(
+    batch: PatientImportBatch,
+    *,
+    context_clinic_site_id: uuid.UUID | None,
+    error_code: XlsxImportErrorCode,
+    error_message: str,
+) -> None:
+    """Mark batch failed, persist row-1 error, audit, and record import metrics once."""
+    batch.status = ImportStatus.FAILED
+    batch.finished_at = timezone.now()
+    batch.save(update_fields=["status", "finished_at"])
+    PatientImportError.objects.create(
+        batch=batch,
+        row_number=1,
+        error_code=error_code,
+        error_message=error_message,
+        raw_row=None,
+    )
+    _audit_xlsx_import_finished(
+        batch,
+        context_clinic_site_id=context_clinic_site_id,
+        status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
+        inserted_rows=0,
+        matched_rows=0,
+        error_rows=0,
+        failure_reason=error_message,
+    )
+    _try_record_import_batch_finished(batch, result="failed")
+
+
 def process_patient_xlsx_import_batch(
     *,
     batch_id: uuid.UUID,
@@ -725,70 +755,28 @@ def process_patient_xlsx_import_batch(
 
         wb.close()
     except XlsxImportFailure as e:
-        batch.status = ImportStatus.FAILED
-        batch.finished_at = timezone.now()
-        batch.save(update_fields=["status", "finished_at"])
-        PatientImportError.objects.create(
-            batch=batch,
-            row_number=1,
+        _finalize_patient_xlsx_import_batch_failed(
+            batch,
+            context_clinic_site_id=clinic_site_id,
             error_code=e.error_code,
             error_message=str(e),
-            raw_row=None,
         )
-        _audit_xlsx_import_finished(
-            batch,
-            context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
-            inserted_rows=0,
-            matched_rows=0,
-            error_rows=0,
-            failure_reason=str(e),
-        )
-        _try_record_import_batch_finished(batch, result="failed")
         return
     except DomainError as e:
-        batch.status = ImportStatus.FAILED
-        batch.finished_at = timezone.now()
-        batch.save(update_fields=["status", "finished_at"])
-        PatientImportError.objects.create(
-            batch=batch,
-            row_number=1,
+        _finalize_patient_xlsx_import_batch_failed(
+            batch,
+            context_clinic_site_id=clinic_site_id,
             error_code=XlsxImportErrorCode.TEMPLATE_HEADER_INVALID,
             error_message=str(e),
-            raw_row=None,
         )
-        _audit_xlsx_import_finished(
-            batch,
-            context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
-            inserted_rows=0,
-            matched_rows=0,
-            error_rows=0,
-            failure_reason=str(e),
-        )
-        _try_record_import_batch_finished(batch, result="failed")
         return
     except Exception as e:
-        batch.status = ImportStatus.FAILED
-        batch.finished_at = timezone.now()
-        batch.save(update_fields=["status", "finished_at"])
-        PatientImportError.objects.create(
-            batch=batch,
-            row_number=1,
-            error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
-            error_message=str(e),
-            raw_row=None,
-        )
-        _audit_xlsx_import_finished(
+        _finalize_patient_xlsx_import_batch_failed(
             batch,
             context_clinic_site_id=clinic_site_id,
-            status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
-            inserted_rows=0,
-            matched_rows=0,
-            error_rows=0,
-            failure_reason=str(e),
+            error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
+            error_message=str(e),
         )
-        _try_record_import_batch_finished(batch, result="failed")
         return
 
     batch.inserted_rows = inserted
