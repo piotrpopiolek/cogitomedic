@@ -1,35 +1,63 @@
 groups:
-- name: cogitomedica_outbox_alerts
-  rules:
-  - alert: OutboxBacklogTooOld
-    expr: cogitomedica_outbox_pending_age_seconds > 900
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: "Outbox event {{ $labels.event_type }} pending for more than 15 minutes."
-      description: "Zaległe zdarzenie asynchroniczne od 15 minut. Zobacz runbook: OUTBOX_BACKLOG_AGE.md"
+  - name: cogitomedica_outbox_alerts
+    rules:
+      # PRD: krytyczny w godzinach pracy — okno godzinowe ustaw w Alertmanagerze (mute_time_intervals / routes), nie w PromQL (unika błędów wektorów).
+      - alert: OutboxBacklogTooOld
+        expr: |
+          max(cogitomedica_outbox_pending_age_seconds) > 900
+          or
+          max(cogitomedica_intake_outbox_pending_age_seconds) > 900
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Medical or intake outbox pending age exceeds 15 minutes."
+          description: "Zaległe zdarzenie asynchroniczne od 15 minut. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md — dla PRD (tylko godziny pracy) dodaj mute/route w Alertmanagerze."
 
-  - alert: IntegrationErrorSpike
-    expr: rate(cogitomedica_outbox_events_total{status=~"FAILED|DEAD_LETTER"}[10m]) > 0
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: "High failure rate for {{ $labels.event_type }}."
-      description: "Pojawiły się błędy przetwarzania outbox w ostatnich 10 minutach. Zobacz runbook: INTEGRATION_ERROR.md"
+      - alert: IntegrationErrorSpike
+        expr: |
+          sum(increase(cogitomedica_outbox_executions_total{stream="befund",result=~"failed|dead_letter",event_type=~"HIDRIVE_UPLOAD|SMS_SEND"}[10m])) > 0
+          or
+          sum(increase(cogitomedica_outbox_executions_total{stream="intake",result=~"failed|dead_letter",event_type="HIDRIVE_UPLOAD_INTAKE_PDF"}[10m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox integration failures in the last 10 minutes (HiDrive/SMS or intake HiDrive)."
+          description: "Błędy przetwarzania outbox. Runbook: docs/runbooks/INTEGRATION_ERROR.md"
 
-  - alert: LowSuccessRatio
-    # Ratio: successful events / total events. Only alert if there is some traffic.
-    expr: |
-      sum by (event_type) (rate(cogitomedica_outbox_events_total{status="PROCESSED"}[1h])) 
-      / 
-      sum by (event_type) (rate(cogitomedica_outbox_events_total[1h])) < 0.98
-      and 
-      sum by (event_type) (rate(cogitomedica_outbox_events_total[1h])) > 0
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "Success ratio for {{ $labels.event_type }} dropped below 98% in the last hour."
-      description: "Wskaźnik sukcesu poniżej 98%. Możliwa degradacja usług integracyjnych (HiDrive/SMS)."
+      - alert: LowSuccessRatio
+        expr: |
+          (
+            sum by (event_type) (rate(cogitomedica_outbox_executions_total{stream="befund",result="success",event_type=~"HIDRIVE_UPLOAD|SMS_SEND"}[1h]))
+            /
+            sum by (event_type) (rate(cogitomedica_outbox_executions_total{stream="befund",event_type=~"HIDRIVE_UPLOAD|SMS_SEND"}[1h]))
+          ) < 0.98
+          and
+          sum by (event_type) (rate(cogitomedica_outbox_executions_total{stream="befund",event_type=~"HIDRIVE_UPLOAD|SMS_SEND"}[1h])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Success ratio for {{ $labels.event_type }} dropped below 98% in the last hour."
+          description: "Wskaźnik sukcesu poniżej 98%. Możliwa degradacja integracji."
+
+  - name: cogitomedica_postgres_infra
+    rules:
+      - alert: PostgresExporterTargetDown
+        expr: up{job="postgres"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus nie zbiera metryk z postgres_exporter."
+          description: "Sprawdź kontener postgres_exporter i sieć Docker (job postgres)."
+
+      - alert: PostgresDatabaseUnreachable
+        expr: up{job="postgres"} == 1 and pg_up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "postgres_exporter działa, ale nie łączy się z PostgreSQL (pg_up=0)."
+          description: "Weryfikuj DB_HOST/DB_USER/DB_PASSWORD/DB_NAME oraz stan kontenera db."

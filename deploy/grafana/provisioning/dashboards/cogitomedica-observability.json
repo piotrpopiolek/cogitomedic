@@ -66,6 +66,76 @@
       "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "cogitomedica_outbox_pending_age_seconds", "legendFormat": "{{event_type}}", "refId": "A" }],
       "title": "Outbox – wiek pending per typ (s)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }, "mappings": [] }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "desc" } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "cogitomedica_intake_outbox_events_total", "legendFormat": "{{event_type}} {{status}}", "refId": "A" }],
+      "title": "Intake outbox – zdarzenia (snapshot DB)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }, "mappings": [] }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "desc" } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (stream, event_type, result) (rate(cogitomedica_outbox_executions_total[5m]))", "legendFormat": "{{stream}} {{event_type}} {{result}}", "refId": "A" }],
+      "title": "Outbox – tempo zakończeń (Counter; success/failed/dead_letter)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 300}, {"color": "red", "value": 900}] }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 22 },
+      "id": 9,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum(rate(cogitomedica_outbox_publish_to_processed_seconds_bucket[15m])) by (le))", "legendFormat": "p95", "refId": "A" }],
+      "title": "SLO — p95 publish→processed (wszystkie typy)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.95}, {"color": "green", "value": 0.98}] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 22 },
+      "id": 10,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",result=\"success\",event_type=\"HIDRIVE_UPLOAD\"}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",event_type=\"HIDRIVE_UPLOAD\"}[1h]))", "legendFormat": "HiDrive 1h", "refId": "A" }],
+      "title": "SLO — HiDrive success ratio (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.95}, {"color": "green", "value": 0.98}] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 22 },
+      "id": 11,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",result=\"success\",event_type=\"SMS_SEND\"}[1h])) / sum(rate(cogitomedica_outbox_executions_total{stream=\"befund\",event_type=\"SMS_SEND\"}[1h]))", "legendFormat": "SMS 1h", "refId": "A" }],
+      "title": "SLO — SMS success ratio (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}] }, "unit": "none" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 28 },
+      "id": 12,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "pg_up{job=\"postgres\"}", "legendFormat": "pg_up", "refId": "A" }],
+      "title": "PostgreSQL — pg_up (exporter → DB)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }, "mappings": [], "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 28 },
+      "id": 13,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "desc" } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname) (pg_stat_database_numbackends{job=\"postgres\"})", "legendFormat": "{{datname}}", "refId": "A" }],
+      "title": "PostgreSQL — aktywne backendy (pg_stat_database_numbackends)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -78,6 +148,6 @@
   "timezone": "browser",
   "title": "Cogitomedica – Observability",
   "uid": "cogitomedica-observability",
-  "version": 1,
+  "version": 3,
   "weekStart": ""
 }

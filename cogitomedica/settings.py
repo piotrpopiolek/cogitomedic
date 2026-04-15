@@ -671,7 +671,19 @@ else:
 
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
-SECURE_SSL_REDIRECT = ENVIRONMENT == "prod"
+# Za reverse proxy (np. Nginx z TLS): USE_TRUSTED_REVERSE_PROXY=1 + nagłówki X-Forwarded-* w proxy.
+if os.environ.get("USE_TRUSTED_REVERSE_PROXY", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+
+# Gdy prod stoi za HTTP (np. pierwszy deploy przed certyfikatem), ustaw SECURE_SSL_REDIRECT=0 w .env.
+SECURE_SSL_REDIRECT = ENVIRONMENT == "prod" and os.environ.get(
+    "SECURE_SSL_REDIRECT", "1"
+).strip().lower() not in ("0", "false", "no")
 CSRF_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_HTTPONLY = True

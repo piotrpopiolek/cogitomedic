@@ -18,10 +18,14 @@ datasources:
       nodeGraph:
         enabled: true
       tracesToMetrics:
-        datasourceUid: 'prometheus'
-        spanStartTimeShift: '1h'
-        spanEndTimeShift: '-1h'
-        tags: [{ key: 'service.name', value: 'service' }]
+        datasourceUid: prometheus
+        spanStartTimeShift: -1h
+        spanEndTimeShift: 1h
+        tags:
+          - key: service.name
+            value: service
         queries:
-          - name: 'Sample query'
-            query: 'sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m]))'
+          - name: Span call rate
+            query: sum(rate(calls_total{$$__tags}[5m]))
+          - name: Span duration p95 ms
+            query: histogram_quantile(0.95, sum(rate(duration_milliseconds_bucket{$$__tags}[5m])) by (le))

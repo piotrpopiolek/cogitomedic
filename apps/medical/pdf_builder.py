@@ -200,6 +200,7 @@ def _pdf_labels(locale: str) -> dict[str, str]:
         "procedure_code",
         "examination_scope",
         "lesions",
+        "lesion_numbers_heading",
         "group",
         "numbers",
         "clinical_assessment",
@@ -227,6 +228,23 @@ def _authoring_locale_to_lang(authoring_locale: str) -> str:
     if authoring_locale.startswith("pl"):
         return "pl"
     return "de"
+
+
+def _pdf_global_assessment_lines(*display_parts: str | None) -> list[str]:
+    """
+    Gesamtbeurteilung: jedna linia PDF na każdą niepustą wartość.
+
+    Pomijamy brak danych oraz placeholder ``-`` (ten sam co przy pustym kodzie
+    w :func:`_translate_code` / :func:`_pretty_code` i brak ``diagnosis_code`` /
+    ``procedure_code`` na wersji). W szablonie, gdy lista jest pusta, pokazujemy
+    ``<div class="muted">-</div>`` — spójnie z pustym ``examination_scope``.
+    """
+    out: list[str] = []
+    for part in display_parts:
+        s = (part or "").strip()
+        if s and s != "-":
+            out.append(s)
+    return out
 
 
 def _translate_code(
@@ -265,13 +283,13 @@ def _lesion_final_text(lesion: dict[str, Any]) -> str:
 
 
 def _staff_user_display_name(user: Any) -> str | None:
-    """Last name, first name (clinical letter style); username if names missing."""
+    """Last name then first name, space-separated (Befund PDF footer); username if names missing."""
     if user is None:
         return None
     last = (getattr(user, "last_name", None) or "").strip()
     first = (getattr(user, "first_name", None) or "").strip()
     if last and first:
-        return f"{last}, {first}"
+        return f"{last} {first}"
     if last:
         return last
     if first:
@@ -367,6 +385,28 @@ def _build_render_context(
     if not fitzpatrick_type_label:
         fitzpatrick_type_label = _pretty_code(fp_code)
 
+    overall_image_assessment_display = _translate_code(
+        payload.get("overall_image_assessment"),
+        doctor_ui,
+        OVERALL_IMAGE_CODE_TO_UI_KEY,
+    )
+    final_assessment_display = _translate_code(
+        payload.get("final_assessment"),
+        doctor_ui,
+        FINAL_ASSESSMENT_CODE_TO_UI_KEY,
+    )
+    _diag = (version.diagnosis_code or "").strip()
+    diagnosis_code_display = _diag if _diag else "-"
+    _proc = (version.procedure_code or "").strip()
+    procedure_code_display = _proc if _proc else "-"
+    global_assessment_lines = _pdf_global_assessment_lines(
+        fitzpatrick_type_label,
+        overall_image_assessment_display,
+        final_assessment_display,
+        diagnosis_code_display,
+        procedure_code_display,
+    )
+
     generated_at = timezone.now()
     strict_published_at = version.published_at
     publication_dt = _effective_publication_datetime_for_header(
@@ -400,6 +440,7 @@ def _build_render_context(
         "pdf_meta_published_at": _w3c_profile_datetime(strict_published_at),
         "pdf_meta_generated_at": _w3c_profile_datetime(generated_at),
         "labels": labels,
+        "global_assessment_lines": global_assessment_lines,
         "patient": {
             "first_name": patient.first_name,
             "last_name": patient.last_name,
@@ -409,18 +450,10 @@ def _build_render_context(
         },
         "befund": {
             "fitzpatrick_type": fitzpatrick_type_label,
-            "overall_image_assessment": _translate_code(
-                payload.get("overall_image_assessment"),
-                doctor_ui,
-                OVERALL_IMAGE_CODE_TO_UI_KEY,
-            ),
-            "final_assessment": _translate_code(
-                payload.get("final_assessment"),
-                doctor_ui,
-                FINAL_ASSESSMENT_CODE_TO_UI_KEY,
-            ),
-            "diagnosis_code": version.diagnosis_code or "-",
-            "procedure_code": version.procedure_code or "-",
+            "overall_image_assessment": overall_image_assessment_display,
+            "final_assessment": final_assessment_display,
+            "diagnosis_code": diagnosis_code_display,
+            "procedure_code": procedure_code_display,
             "examination_scope": exam_scope,
             "recommendations": recommendations,
             "lesions": lesions,
