@@ -8,6 +8,7 @@ Queue date and clinic site are extracted from the file content
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import unicodedata
 import uuid
@@ -39,6 +40,8 @@ from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # --- Error codes (aligned with batch/PatientImportError) ---
@@ -472,6 +475,25 @@ def _audit_xlsx_import_finished(
     )
 
 
+def _try_record_import_batch_finished(
+    batch: PatientImportBatch,
+    *,
+    result: str,
+) -> None:
+    try:
+        record_import_batch_finished(
+            result=result,
+            started_at=batch.created_at,
+            finished_at=batch.finished_at,
+        )
+    except Exception:
+        logger.exception(
+            "record_import_batch_finished failed after batch %s (result=%s)",
+            batch.id,
+            result,
+        )
+
+
 def process_patient_xlsx_import_batch(
     *,
     batch_id: uuid.UUID,
@@ -722,11 +744,7 @@ def process_patient_xlsx_import_batch(
             error_rows=0,
             failure_reason=str(e),
         )
-        record_import_batch_finished(
-            result="failed",
-            started_at=batch.created_at,
-            finished_at=batch.finished_at,
-        )
+        _try_record_import_batch_finished(batch, result="failed")
         return
     except DomainError as e:
         batch.status = ImportStatus.FAILED
@@ -748,11 +766,7 @@ def process_patient_xlsx_import_batch(
             error_rows=0,
             failure_reason=str(e),
         )
-        record_import_batch_finished(
-            result="failed",
-            started_at=batch.created_at,
-            finished_at=batch.finished_at,
-        )
+        _try_record_import_batch_finished(batch, result="failed")
         return
     except Exception as e:
         batch.status = ImportStatus.FAILED
@@ -774,11 +788,7 @@ def process_patient_xlsx_import_batch(
             error_rows=0,
             failure_reason=str(e),
         )
-        record_import_batch_finished(
-            result="failed",
-            started_at=batch.created_at,
-            finished_at=batch.finished_at,
-        )
+        _try_record_import_batch_finished(batch, result="failed")
         return
 
     batch.inserted_rows = inserted
@@ -807,10 +817,9 @@ def process_patient_xlsx_import_batch(
         matched_rows=matched,
         error_rows=errors_count,
     )
-    record_import_batch_finished(
+    _try_record_import_batch_finished(
+        batch,
         result="completed" if errors_count == 0 else "completed_with_errors",
-        started_at=batch.created_at,
-        finished_at=batch.finished_at,
     )
 
 
