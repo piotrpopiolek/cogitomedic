@@ -84,6 +84,11 @@
     "en": "Lesions",
     "pl": "Zmiany"
   },
+  "doctor.pdf_label.lesion_numbers_heading": {
+    "de": "Läsionsnummern:",
+    "en": "Lesion numbers:",
+    "pl": "Numery zmian:"
+  },
   "doctor.pdf_label.locale": {
     "de": "Sprache",
     "en": "Locale",
