@@ -156,7 +156,10 @@ def process_intake_outbox_events(
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
     events = list(
-        IntakeOutboxEvent.objects.select_for_update(skip_locked=True)
+        IntakeOutboxEvent.objects.select_for_update(
+            skip_locked=True,
+            of=("self",),
+        )
         .select_related("intake_document_version")
         .filter(
             status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED],
