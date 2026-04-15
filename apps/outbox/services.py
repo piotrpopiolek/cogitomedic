@@ -345,15 +345,23 @@ def process_outbox_events(
                     "error_message": ev.error_message or "",
                 },
             )
-            record_outbox_execution(
-                stream="befund",
-                event_type=ev.event_type,
-                result=(
-                    "dead_letter" if ev.status == OutboxStatus.DEAD_LETTER else "failed"
-                ),
-                start_ts=None,
-                end_ts=None,
-            )
+            try:
+                record_outbox_execution(
+                    stream="befund",
+                    event_type=ev.event_type,
+                    result=(
+                        "dead_letter"
+                        if ev.status == OutboxStatus.DEAD_LETTER
+                        else "failed"
+                    ),
+                    start_ts=None,
+                    end_ts=None,
+                )
+            except Exception:
+                logger.exception(
+                    "record_outbox_execution failed after failed outbox event %s",
+                    event_id,
+                )
 
         if success_committed:
             try:
