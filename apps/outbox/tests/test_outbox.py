@@ -204,6 +204,45 @@ class OutboxProcessingTests(TestCase):
             ).exists()
         )
 
+    def test_failed_outbox_event_persists_when_record_outbox_execution_raises(
+        self,
+    ) -> None:
+        """Metrics must not abort @transaction.atomic batch or roll back failure handling."""
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {"simulate_error": True}
+        event.max_retries = 10
+        event.retry_count = 0
+        event.status = OutboxStatus.PENDING
+        event.available_at = timezone.now() - timedelta(seconds=5)
+        event.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        with patch.object(
+            outbox_services,
+            "record_outbox_execution",
+            side_effect=RuntimeError("metrics unavailable"),
+        ):
+            result = process_outbox_events()
+        self.assertEqual(result.failed, 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.FAILED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="OUTBOX_EVENT_FAILED",
+                outbox_event_id=event.id,
+            ).exists()
+        )
+
     @override_settings(
         SMSAPI_USE_MOCK="1",
         HIDRIVE_USE_MOCK="1",
