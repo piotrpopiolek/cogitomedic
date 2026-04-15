@@ -182,8 +182,13 @@ services:
       - /bin/sh
       - -c
       - |
-        WEBHOOK="$${ALERTMANAGER_WEBHOOK_URL:-http://127.0.0.1:5001/}"
-        sed "s|__ALERTMANAGER_WEBHOOK_URL__|$${WEBHOOK}|g" /etc/cogito-prometheus/alertmanager.yml.template > /tmp/alertmanager.yml
+        DEFAULT="$${ALERTMANAGER_WEBHOOK_URL:-http://127.0.0.1:5001/}"
+        CRITICAL="$${ALERTMANAGER_WEBHOOK_CRITICAL_URL:-$$DEFAULT}"
+        WARNING="$${ALERTMANAGER_WEBHOOK_WARNING_URL:-$$DEFAULT}"
+        sed -e "s#__WEBHOOK_DEFAULT__#$${DEFAULT}#g" \
+            -e "s#__WEBHOOK_CRITICAL__#$${CRITICAL}#g" \
+            -e "s#__WEBHOOK_WARNING__#$${WARNING}#g" \
+            /etc/cogito-prometheus/alertmanager.yml.template > /tmp/alertmanager.yml
         exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"

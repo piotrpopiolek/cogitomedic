@@ -17,11 +17,17 @@ Przy uruchomionym stosie Docker (`docker compose up`) usługi monitorowania są 
 
 ---
 
-## Alertmanager (webhook z `.env`)
+## Alertmanager (webhook z `.env` + routing po `severity`)
 
-- Konfiguracja źródłowa: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template) z placeholderem `__ALERTMANAGER_WEBHOOK_URL__`.
-- Przy starcie kontenera `alertmanager` (dev i prod compose) plik jest renderowany do `/tmp/alertmanager.yml` przez `sed`, a URL pochodzi ze zmiennej **`ALERTMANAGER_WEBHOOK_URL`** (domyślnie `http://127.0.0.1:5001/`).
-- **Uwaga:** znak `|` w URL psuje `sed` — użyj URL bez `|` lub zmień separator w entrypointcie.
+- Szablon: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template) — placeholdery `__WEBHOOK_DEFAULT__`, `__WEBHOOK_CRITICAL__`, `__WEBHOOK_WARNING__`.
+- Przy starcie kontenera `alertmanager` (dev i prod compose) plik trafia do `/tmp/alertmanager.yml` (`sed` z separatorem `#`).
+- **Zmienne:**
+  - **`ALERTMANAGER_WEBHOOK_URL`** — domyślny receiver (`webhook_default`) oraz wartość domyślna dla critical/warning, jeśli nie podasz dedykowanych URL-i (domyślnie `http://127.0.0.1:5001/`).
+  - **`ALERTMANAGER_WEBHOOK_CRITICAL_URL`** (opcjonalnie) — tylko alerty z etykietą `severity: critical` (np. backlog outbox, spike integracji).
+  - **`ALERTMANAGER_WEBHOOK_WARNING_URL`** (opcjonalnie) — alerty `severity: warning` (np. LowSuccessRatio, postgres_exporter).
+- **Routing:** `group_by: [alertname, severity]`; dla `critical` krótszy `group_wait` i częstszy `repeat_interval` niż dla `warning` (szczegóły w szablonie).
+- **Inhibicja:** alert `critical` o danym `alertname` tłumi powiązane `warning` z tym samym `alertname` (mniej duplikatów w kanale ostrzeżeń).
+- **Uwaga:** znaki `#` i `|` w URL mogą psuć `sed` — unikaj ich w webhooku lub zmień entrypoint na `envsubst` / inny mechanizm.
 - **Godziny pracy (PRD):** ograniczenie alertu backlogu do godzin recepcji ustaw w Alertmanagerze (`mute_time_intervals` / osobne route), zamiast skomplikowanego PromQL z `hour()` (łatwo o błąd etykiet).
 
 ## PostgreSQL — postgres_exporter
@@ -42,7 +48,7 @@ Przy uruchomionym stosie Docker (`docker compose up`) usługi monitorowania są 
 - **`GET /api/v1/observability/health`** — odpowiedź anonimowa jest **minimalna** (status / DB). Szczegółowe `checks` tylko z nagłówkiem `Authorization: Bearer <PROMETHEUS_METRICS_TOKEN>` lub po zalogowaniu jako ADMIN.
 - **`GET /api/v1/observability/metrics`** — wyłącznie **Bearer** ten sam co `PROMETHEUS_METRICS_TOKEN` lub sesja ADMIN; przeznaczone dla Prometheusa (tożsamość maszynowa), nie dla personelu w przeglądarce bez tokena.
 - **Sieć:** na produkcji nie wystawiaj publicznie portów Grafana/Prometheus/Alertmanager/Tempo ani portu aplikacji używanego wyłącznie do scrapingu — użyj sieci Docker, VPN lub firewalla (patrz komentarze w `docker-compose.prod.yml`).
-- **Alertmanager:** ustaw **`ALERTMANAGER_WEBHOOK_URL`** w `.env` (Slack, PagerDuty, n8n itd.); szablon: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template).
+- **Alertmanager:** ustaw **`ALERTMANAGER_WEBHOOK_URL`** (oraz opcjonalnie `ALERTMANAGER_WEBHOOK_CRITICAL_URL` / `ALERTMANAGER_WEBHOOK_WARNING_URL`) w `.env`; szablon: [deploy/prometheus/alertmanager.yml.template](deploy/prometheus/alertmanager.yml.template).
 
 ---
 
