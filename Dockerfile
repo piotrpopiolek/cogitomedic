@@ -2,6 +2,8 @@ FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Large wheels (e.g. playwright) can hit transient TLS/stream errors on slow or flaky links.
+ENV PIP_DEFAULT_TIMEOUT=300
 
 WORKDIR /app
 
@@ -22,7 +24,7 @@ RUN apt-get update \
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir --retries 15 --timeout 300 -r requirements.txt
 
 COPY . /app
 
