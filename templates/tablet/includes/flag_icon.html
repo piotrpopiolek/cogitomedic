@@ -1,0 +1,11 @@
+{% comment %}
+  Inline SVG flags for language switcher (no emoji — consistent on Android WebView / corporate fonts).
+  Expects: code — "de" | "en" | "pl"
+{% endcomment %}
+{% if code == "de" %}
+<svg class="form-lang-flag-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 3" width="28" height="17" aria-hidden="true" focusable="false"><rect width="5" height="1" y="0" fill="#000"/><rect width="5" height="1" y="1" fill="#DD0000"/><rect width="5" height="1" y="2" fill="#FFCE00"/></svg>
+{% elif code == "en" %}
+<svg class="form-lang-flag-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" width="28" height="14" aria-hidden="true" focusable="false"><rect fill="#012169" width="60" height="30"/><path stroke="#FFF" stroke-width="8" d="M0,0 L60,30 M60,0 L0,30"/><path stroke="#C8102E" stroke-width="4" d="M0,0 L60,30 M60,0 L0,30"/><path stroke="#FFF" stroke-width="12" d="M30,0 V30 M0,15 H60"/><path stroke="#C8102E" stroke-width="8" d="M30,0 V30 M0,15 H60"/></svg>
+{% else %}
+<svg class="form-lang-flag-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 10" width="28" height="18" aria-hidden="true" focusable="false"><rect width="16" height="5" y="0" fill="#fff"/><rect width="16" height="5" y="5" fill="#dc143c"/></svg>
+{% endif %}
