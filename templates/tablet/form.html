@@ -147,6 +147,7 @@
     window.__TABLET_FORM_CONFIG__ = {
       formId: "{{ intake_form_id|escapejs }}",
       apiBase: "/api/v1",
+      formLocale: "{{ form_locale|escapejs }}",
       schemaVersion: {{ anamnesis_schema_version }},
       bodyMapSchemaVersion: {{ body_map_schema_version }},
       hasSignature: {% if has_signature %}true{% else %}false{% endif %}

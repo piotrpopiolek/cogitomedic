@@ -1,0 +1,351 @@
+/* Tablet intake form – styles (Galaxy Tab S10 Lite: 1320×2112 px portrait) */
+body {
+  font-family: sans-serif;
+  max-width: min(94vw, 1240px);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+section {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.consent-block-msg {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.consent-block-msg.error {
+  color: var(--cm-danger, #c00);
+}
+
+.anamnesis-field-msg {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.anamnesis-field-msg.error {
+  color: var(--cm-danger, #c00);
+}
+
+.anamnesis-field-msg.success {
+  color: var(--cm-success, #0a0);
+}
+
+input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+
+button,
+.btn {
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  background: #0d6efd;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  margin: 0.25rem 0.25rem 0 0;
+  min-height: 44px;
+}
+
+button:disabled {
+  background: #999;
+  cursor: not-allowed;
+}
+
+.btn.secondary {
+  background: #6c757d;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.form-nav-lang .form-nav-back {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+  min-height: 0;
+  vertical-align: baseline;
+}
+
+.form-nav-lang-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.form-nav-lang {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.form-nav-lang a {
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.form-nav-lang a:hover {
+  opacity: 1;
+}
+
+.form-lang-flag {
+  display: inline-block;
+  font-size: 1.5rem;
+  line-height: 1;
+  min-width: 1.5em;
+  text-align: center;
+}
+
+.form-lang-current {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#signatureCanvas {
+  border: 1px solid #000;
+  touch-action: none;
+  display: block;
+  width: 100%;
+  height: 240px;
+  min-height: 180px;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
+}
+
+.error {
+  color: #b02a37;
+  margin: 0.5rem 0;
+}
+
+.success {
+  color: #0a0;
+  margin: 0.5rem 0;
+}
+
+.field {
+  margin: 0.5rem 0;
+}
+
+#anamnesis-section .field {
+  margin: 1rem 0;
+  line-height: 1.5;
+}
+
+#anamnesis-section .field strong {
+  display: block;
+  line-height: 1.55;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  margin-bottom: 0.35rem;
+}
+
+.consent-block {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.consent-block h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.consent-content {
+  white-space: pre-line;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: 0.75rem;
+  background: #fff;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.consent-check {
+  margin-top: 0.5rem;
+}
+
+#body-map-section .body-map-wrap {
+  position: relative;
+  max-width: 100%;
+  margin: 0.5rem 0;
+}
+
+#body-map-section .body-map-wrap img {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+}
+
+#body-map-markers {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#body-map-section .body-map-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: #0d6efd;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.form-steps-wrapper {
+  position: relative;
+}
+
+.form-step {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.form-step.active {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.step-header {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.step-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Step 3: center hint, errors, and Back + Submit under the signature block */
+.tablet-step3-footer {
+  text-align: center;
+}
+
+.tablet-step3-hint {
+  font-size: 0.9rem;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tablet-step3-footer #submit-msg {
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tablet-step3-actions {
+  justify-content: center;
+}
+
+/* Stepper (1 – 2 – 3) */
+.tablet-form-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tablet-form-stepper .stepper-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #e9ecef;
+  color: #495057;
+}
+
+.tablet-form-stepper .stepper-dot.current {
+  background: #0d6efd;
+  color: #fff;
+}
+
+.tablet-form-stepper .stepper-dot.done {
+  background: #198754;
+  color: #fff;
+}
+
+.tablet-form-stepper .stepper-line {
+  flex: 1;
+  max-width: 2rem;
+  height: 3px;
+  background: #dee2e6;
+}
+
+.tablet-form-stepper .stepper-line.done {
+  background: #198754;
+}
+
+/* Connection error banner */
+.tablet-form-connection-error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #f8d7da;
+  color: #721c24;
+  border-radius: 6px;
+  display: none;
+}
+
+.tablet-form-connection-error.visible {
+  display: block;
+}
+
+.tablet-form-connection-error .retry-btn {
+  margin-top: 0.5rem;
+  background: #721c24;
+  color: #fff;
+}
