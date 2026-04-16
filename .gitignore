@@ -151,6 +151,14 @@ staticfiles/
 !/static/admin/**
 !/static/lab/
 !/static/lab/**
+!/static/tablet/
+!/static/tablet/**
+!/static/doctor/
+!/static/doctor/**
+!/static/js/
+!/static/js/**
+!/static/css/
+!/static/css/**
 
 # Project specific
 pdf_files/

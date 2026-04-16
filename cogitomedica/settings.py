@@ -753,10 +753,7 @@ if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", 
             + ", ".join(missing_hidrive)
         )
 
-# Portal wyniki (patient results)
-PATIENT_RESULTS_BASE_URL = os.environ.get(
-    "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl"
-)
+PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "")
 PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
 if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
     raise ImproperlyConfigured(
