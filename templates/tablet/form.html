@@ -17,17 +17,17 @@
   <div class="form-nav-lang-wrap">
     <nav class="form-nav-lang" aria-label="{% db_trans 'waiting_room.form.choose_language' 'Choose language' %}">
       {% if locale_param == 'en' %}
-        <a href="?locale=de" title="{{ ui.lang_de }}"><span class="form-lang-flag" aria-hidden="true">🇩🇪</span></a>
-        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_en }}">🇬🇧</span>
-        <a href="?locale=pl" title="{{ ui.lang_pl }}"><span class="form-lang-flag" aria-hidden="true">🇵🇱</span></a>
+        <a href="?locale=de" title="{{ ui.lang_de }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_en }}">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span></a>
       {% elif locale_param == 'pl' %}
-        <a href="?locale=de" title="{{ ui.lang_de }}"><span class="form-lang-flag" aria-hidden="true">🇩🇪</span></a>
-        <a href="?locale=en" title="{{ ui.lang_en }}"><span class="form-lang-flag" aria-hidden="true">🇬🇧</span></a>
-        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_pl }}">🇵🇱</span>
+        <a href="?locale=de" title="{{ ui.lang_de }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span></a>
+        <a href="?locale=en" title="{{ ui.lang_en }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_pl }}">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span>
       {% else %}
-        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_de }}">🇩🇪</span>
-        <a href="?locale=en" title="{{ ui.lang_en }}"><span class="form-lang-flag" aria-hidden="true">🇬🇧</span></a>
-        <a href="?locale=pl" title="{{ ui.lang_pl }}"><span class="form-lang-flag" aria-hidden="true">🇵🇱</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_de }}">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span>
+        <a href="?locale=en" title="{{ ui.lang_en }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span></a>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span></a>
       {% endif %}
     </nav>
   </div>

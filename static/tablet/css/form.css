@@ -116,11 +116,19 @@ button:disabled {
 }
 
 .form-lang-flag {
-  display: inline-block;
-  font-size: 1.5rem;
-  line-height: 1;
-  min-width: 1.5em;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.form-lang-flag-svg {
+  display: block;
+  width: 28px;
+  height: auto;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
 }
 
 .form-lang-current {
