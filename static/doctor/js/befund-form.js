@@ -1,0 +1,1124 @@
+/**
+ * Doctor Befund form: intake summary, lesion groups, buildPayload, draft, publish.
+ * Expects #doctor-panel-data (json_script) with { documentId, apiBase, context, ui }.
+ */
+(function () {
+  "use strict";
+
+  const dataEl = document.getElementById("doctor-panel-data");
+  let PANEL = {};
+  if (dataEl && dataEl.textContent) {
+    try {
+      PANEL = JSON.parse(dataEl.textContent);
+    } catch (e) {
+      PANEL = {};
+    }
+  }
+  const DOC_ID =
+    PANEL.documentId ||
+    ((window.location.pathname.match(/[0-9a-fA-F-]{36}/) || [])[0] || "");
+  const API = PANEL.apiBase || "/api/v1";
+  const CTX = PANEL.context || {};
+  function uiText(key, fallback) {
+    return PANEL.ui && PANEL.ui[key] ? PANEL.ui[key] : fallback;
+  }
+  const UI = Object.freeze({
+    bodyMapTitle: uiText(
+      "body_map_title",
+      "Körperschema (vom Patient markiert)"
+    ),
+    bodyMapHint: uiText(
+      "body_map_hint",
+      "Vorder- und Rückansicht mit den vom Patient gesetzten Markierungen."
+    ),
+    bodyMapNoMarkers: uiText(
+      "body_map_no_markers",
+      "Keine Markierungen auf dem Körperschema (Patient hat keine Punkte gesetzt oder Daten fehlen)."
+    ),
+    bodyMapToggleHint: uiText(
+      "body_map_toggle_hint",
+      "Zum Ein- und Ausklappen klicken"
+    ),
+    templateSelectPlaceholder: uiText("template_select_placeholder", "Vorlage wählen…"),
+    msgFavoriteApplied: uiText("msg_favorite_applied", "Favorit angewendet."),
+    msgError: uiText("msg_error", "Fehler"),
+    msgNetwork: uiText("msg_network_error", "Netzwerkfehler."),
+    msgSaveSuccess: uiText("msg_save_success", "Entwurf gespeichert."),
+    msgPublishSuccess: uiText("msg_publish_success", "Veröffentlicht. PDF wird erstellt."),
+    msgRetrySuccess: uiText("msg_retry_success", "Retry queued."),
+    msgTemplateLoadError: uiText("msg_template_load_error", "Vorlagen konnten nicht geladen werden."),
+    msgLesionRequired: uiText("msg_lesion_required", "Bitte mindestens eine Läsion mit Nummern angeben."),
+    lesionHeader: uiText("lesion_header", "Merkmale und Einschätzung"),
+    externalPdfRejectBtn: uiText("external_pdf_reject_btn", "Datei ablehnen"),
+    externalPdfStatusMatched: uiText("external_pdf_status_matched", "Zugeordnet"),
+    externalPdfStatusRejected: uiText("external_pdf_status_rejected", "Abgelehnt"),
+    externalPdfStatusMergeFailed: uiText(
+      "external_pdf_status_merge_failed",
+      "Zusammenführung fehlgeschlagen"
+    ),
+    externalPdfStatusAccepted: uiText("external_pdf_status_accepted", "Verarbeitet"),
+    externalPdfPreviewHint: uiText(
+      "external_pdf_preview_hint",
+      "Klicken Sie auf einen Dateinamen für die Vorschau."
+    ),
+    externalPdfPreviewMergeWarning: uiText(
+      "external_pdf_preview_merge_warning",
+      "Hinweis: PDF-Zusammenführung fehlgeschlagen oder Anlage ungültig — Vorschau zeigt nur den Befund."
+    ),
+    msgPublishPreviewRequired: uiText(
+      "msg_publish_preview_required",
+      "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen."
+    ),
+  });
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+  function escapeHtml(s) {
+    if (s == null || s === undefined) return "";
+    const t = String(s);
+    return t
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  /** Read-only body map (same normalized coords as tablet: x,y in [0,1] on combined front|back image). */
+  function renderReadonlyBodyMapHtml(points, imgUrl) {
+    if (!imgUrl) return "";
+    var pts = Array.isArray(points) ? points : [];
+    var markers = "";
+    pts.forEach(function (p, i) {
+      var x = typeof p.x === "number" ? p.x : parseFloat(p.x);
+      var y = typeof p.y === "number" ? p.y : parseFloat(p.y);
+      if (isNaN(x) || isNaN(y)) return;
+      var left = x * 100;
+      var top = y * 100;
+      var side = p.side ? String(p.side) : "";
+      var label = (side ? side + " " : "") + "#" + (i + 1);
+      markers +=
+        '<span class="doctor-body-map-marker" style="left:' +
+        left +
+        "%;top:" +
+        top +
+        '%" title="' +
+        escapeHtml(label) +
+        '" role="img" aria-label="' +
+        escapeHtml(label) +
+        '"></span>';
+    });
+    var emptyNote = markers
+      ? ""
+      : '<p class="text-sm text-base-500 dark:text-base-400 mb-2">' +
+        escapeHtml(UI.bodyMapNoMarkers) +
+        "</p>";
+    return (
+      '<details class="doctor-body-map-details mt-3 pt-3 border-t border-base-200 dark:border-base-700" open>' +
+      '<summary class="doctor-body-map-summary">' +
+      '<span class="doctor-body-map-chevron" aria-hidden="true">▶</span>' +
+      '<span class="doctor-body-map-summary-text">' +
+      '<span class="doctor-body-map-summary-title">' +
+      escapeHtml(UI.bodyMapTitle) +
+      "</span>" +
+      '<span class="doctor-body-map-summary-hint">(' +
+      escapeHtml(UI.bodyMapToggleHint) +
+      ")</span>" +
+      "</span>" +
+      "</summary>" +
+      '<div class="doctor-body-map-details-inner">' +
+      '<p class="text-sm text-base-500 dark:text-base-400 mb-2">' +
+      escapeHtml(UI.bodyMapHint) +
+      "</p>" +
+      emptyNote +
+      '<div class="doctor-body-map-outer max-w-2xl">' +
+      '<div class="doctor-body-map-wrap relative w-full rounded border border-base-200 dark:border-base-600 overflow-hidden bg-base-50 dark:bg-base-950">' +
+      '<img src="' +
+      escapeHtml(imgUrl) +
+      '" alt="" class="w-full h-auto block" loading="lazy" decoding="async" />' +
+      '<div class="doctor-body-map-markers absolute left-0 top-0 w-full h-full pointer-events-none"' +
+      (markers ? ' aria-hidden="true"' : "") +
+      ">" +
+      markers +
+      "</div></div></div></div></details>"
+    );
+  }
+  function alertMsg(level, text) {
+    const wrap = el("alert-placeholder");
+    if (!wrap) return;
+    var skin =
+      level === "success"
+        ? "bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-100"
+        : level === "warning"
+          ? "bg-amber-50 border-amber-200 text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-100"
+          : "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/50 dark:border-red-800 dark:text-red-100";
+    wrap.innerHTML =
+      '<div role="alert" class="' +
+      skin +
+      ' rounded-default border px-4 py-3 text-sm leading-snug shadow-xs">' +
+      escapeHtml(text) +
+      "</div>";
+    try {
+      wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (eScroll) {}
+  }
+  function getCookie(name) {
+    const v = document.cookie.match("(^|;) ?" + name + "=([^;]*)(;|$)");
+    return v ? v[2] : null;
+  }
+  function getCsrfToken() {
+    const tokenEl = document.querySelector("[name=csrfmiddlewaretoken]");
+    return tokenEl ? tokenEl.value : (getCookie("csrftoken") || "").trim();
+  }
+  function apiFetch(url, opts) {
+    opts = opts || {};
+    opts.credentials = "same-origin";
+    opts.headers = opts.headers || {};
+    if (
+      opts.body &&
+      typeof opts.body === "string" &&
+      !opts.headers["Content-Type"]
+    )
+      opts.headers["Content-Type"] = "application/json";
+    opts.headers["Accept"] = "application/json";
+    const method = (opts.method || "GET").toUpperCase();
+    if (["POST", "PUT", "PATCH", "DELETE"].indexOf(method) !== -1)
+      opts.headers["X-CSRFToken"] = getCsrfToken();
+    function parseResponseBody(response) {
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
+      if (contentType.indexOf("application/json") !== -1) {
+        return response.json().catch(function () {
+          return {};
+        });
+      }
+      return response.text().then(function (text) {
+        if (!text) return {};
+        return { raw_response: text.slice(0, 300) };
+      }).catch(function () {
+        return {};
+      });
+    }
+    return fetch(url, opts).then(function (r) {
+      return parseResponseBody(r).then(function (j) {
+        return { ok: r.ok, status: r.status, json: j };
+      });
+    });
+  }
+
+  function docUrl(pathSuffix) {
+    return API + "/medical-documents/" + DOC_ID + pathSuffix;
+  }
+
+  var docStatusEarly = (CTX && CTX.status) || "";
+  var previewSeenSinceLastSave = docStatusEarly !== "DRAFT";
+
+  function setPublishEnabledFromPreviewFlag() {
+    var pub = el("btn-publish");
+    if (!pub) return;
+    pub.disabled = !previewSeenSinceLastSave;
+  }
+
+  var lastExternalPdfObjUrl = null;
+  function revokeLastExternalPdfObjectUrl() {
+    if (!lastExternalPdfObjUrl) return;
+    try {
+      URL.revokeObjectURL(lastExternalPdfObjUrl);
+    } catch (eRev) {}
+    lastExternalPdfObjUrl = null;
+  }
+
+  function openExternalPdfAttachmentInIframe(item) {
+    var iframe = el("external-pdf-iframe");
+    if (!iframe || !item || !item.id) return;
+    revokeLastExternalPdfObjectUrl();
+    iframe.src = "about:blank";
+    fetch(docUrl("/external-pdfs/" + item.id + "/content"), {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/pdf" },
+    })
+      .then(function (r) {
+        var ct = (r.headers.get("content-type") || "").toLowerCase();
+        if (!r.ok) {
+          if (ct.indexOf("application/json") !== -1) {
+            return r.json().then(function (j) {
+              alertMsg("danger", (j && j.error) || UI.msgError + " " + r.status);
+            });
+          }
+          alertMsg("danger", UI.msgError + " " + r.status);
+          return;
+        }
+        return r.blob().then(function (blob) {
+          var url = URL.createObjectURL(blob);
+          lastExternalPdfObjUrl = url;
+          iframe.src = url;
+        });
+      })
+      .catch(function () {
+        alertMsg("danger", UI.msgNetwork);
+      });
+  }
+
+  /** First previewable attachment: prefer MATCHED, then MERGE_FAILED / ACCEPTED; skip REJECTED-only lists. */
+  function pickDefaultExternalPdfItem(items) {
+    if (!items || !items.length) return null;
+    var i;
+    for (i = 0; i < items.length; i++) {
+      if (items[i].status === "MATCHED") return items[i];
+    }
+    for (i = 0; i < items.length; i++) {
+      var s = items[i].status;
+      if (s === "MERGE_FAILED" || s === "ACCEPTED") return items[i];
+    }
+    return null;
+  }
+
+  function loadExternalPdfs() {
+    var panel = el("external-pdfs-panel");
+    var listEl = el("external-pdfs-list");
+    var hintEl = el("external-pdfs-empty");
+    if (!panel || !listEl) return;
+    apiFetch(docUrl("/external-pdfs"), { method: "GET" }).then(function (res) {
+      if (!res.ok) return;
+      var items = (res.json && res.json.items) || [];
+      listEl.innerHTML = "";
+      if (hintEl) {
+        hintEl.textContent = UI.externalPdfPreviewHint;
+        hintEl.classList.toggle("hidden", items.length > 0);
+      }
+      panel.classList.toggle("hidden", items.length === 0);
+      items.forEach(function (item) {
+        var li = document.createElement("li");
+        li.className = "flex flex-wrap items-center gap-2 justify-between border border-base-200 dark:border-base-700 rounded-default px-3 py-2";
+        var left = document.createElement("div");
+        left.className = "flex flex-col gap-1 min-w-0";
+        var nameBtn = document.createElement("button");
+        nameBtn.type = "button";
+        nameBtn.className =
+          "text-left text-primary-600 hover:underline dark:text-primary-400 truncate font-medium bg-transparent border-0 p-0 cursor-pointer";
+        nameBtn.textContent = item.filename || item.id;
+        nameBtn.addEventListener("click", function () {
+          openExternalPdfAttachmentInIframe(item);
+        });
+        var st = document.createElement("span");
+        st.className = "text-xs text-base-500 dark:text-base-400";
+        var stLabel =
+          item.status === "REJECTED"
+            ? UI.externalPdfStatusRejected
+            : item.status === "MERGE_FAILED"
+              ? UI.externalPdfStatusMergeFailed
+              : item.status === "ACCEPTED"
+                ? UI.externalPdfStatusAccepted
+                : UI.externalPdfStatusMatched;
+        st.textContent = stLabel;
+        left.appendChild(nameBtn);
+        left.appendChild(st);
+        li.appendChild(left);
+        if (item.status === "MATCHED") {
+          var rej = document.createElement("button");
+          rej.type = "button";
+          rej.className =
+            "inline-flex items-center rounded-default border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 shrink-0";
+          rej.textContent = UI.externalPdfRejectBtn;
+          rej.addEventListener("click", function () {
+            apiFetch(docUrl("/external-pdfs/" + item.id + "/reject"), {
+              method: "POST",
+              body: "{}",
+            }).then(function (r2) {
+              if (!r2.ok) {
+                alertMsg(
+                  "danger",
+                  responseErrorMessage(r2, UI.msgError + " " + r2.status)
+                );
+                return;
+              }
+              alertMsg("success", UI.msgSaveSuccess);
+              loadExternalPdfs();
+            });
+          });
+          li.appendChild(rej);
+        }
+        listEl.appendChild(li);
+      });
+      var autoItem = pickDefaultExternalPdfItem(items);
+      if (autoItem) openExternalPdfAttachmentInIframe(autoItem);
+    });
+  }
+
+  if (!DOC_ID) {
+    console.warn("Doctor panel init aborted: missing medical document id.");
+    return;
+  }
+
+  var docStatus = docStatusEarly;
+  function releaseEditLockOnLeave() {
+    if (docStatus !== "DRAFT") return;
+    var token = getCsrfToken();
+    if (!token) return;
+    var url = docUrl("/unlock");
+    try {
+      fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: {
+          "X-CSRFToken": token,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  window.addEventListener("pagehide", releaseEditLockOnLeave);
+
+  // Intake summary: patient + anamnesis – escape all values to prevent XSS
+  if (CTX && CTX.intake_summary) {
+    const p = CTX.intake_summary.patient;
+    if (p) {
+      const nameEl = el("patient-name");
+      if (nameEl) nameEl.textContent = (p.last_name || "") + ", " + (p.first_name || "");
+      let html =
+        "<p><strong>Patient</strong> " +
+        escapeHtml(p.last_name) +
+        ", " +
+        escapeHtml(p.first_name) +
+        " · " +
+        escapeHtml(p.date_of_birth) +
+        "</p>";
+      const questions = CTX.intake_summary.anamnesis_questions || [];
+      if (questions.length) {
+        html += '<p class="mb-2 mt-2"><strong>Ankieta (wywiad)</strong></p>';
+        questions.forEach(function (q) {
+          const answer = q.answer || {};
+          const selected = answer.selected_option_codes || [];
+          const optionsByCode = {};
+          (q.options || []).forEach(function (opt) {
+            optionsByCode[opt.option_code] = opt.label || opt.option_code;
+          });
+          const labels = selected.map(function (code) {
+            return optionsByCode[code] || code;
+          });
+          let answerText = labels.join(", ");
+          if (answer.free_text)
+            answerText =
+              (answerText ? answerText + " — " : "") + answer.free_text;
+          html +=
+            '<p class="small mb-1"><strong>' +
+            escapeHtml(q.question_text || q.question_code) +
+            '</strong><br/><span class="text-muted">' +
+            escapeHtml(answerText || "—") +
+            "</span></p>";
+        });
+      }
+      const bodyMapPts = CTX.intake_summary.body_map_data;
+      const bodyMapUrl = PANEL.bodyMapImageUrl || "";
+      html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      const summaryEl = el("intake-summary");
+      if (summaryEl) summaryEl.innerHTML = html;
+    }
+  }
+
+  const container = el("lesion-groups-container");
+  const tpl = document.getElementById("lesion-group-tpl");
+  const hasLesionUi = !!(container && tpl);
+  const templateSelectEl = el("doctor-template-select");
+  const summaryFavoriteSelectEl = el("summary-favorite-select");
+  const applySummaryFavoriteBtn = el("btn-apply-summary-favorite");
+  let doctorTemplates = [];
+  let selectedTemplate = null;
+
+  function setSelectOptions(selectEl, options, placeholder) {
+    if (!selectEl) return;
+    selectEl.innerHTML = "";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = placeholder || "—";
+    selectEl.appendChild(empty);
+    options.forEach(function (opt) {
+      const optionEl = document.createElement("option");
+      optionEl.value = String(opt.value);
+      optionEl.textContent = opt.label;
+      selectEl.appendChild(optionEl);
+    });
+  }
+
+  function findTemplateById(templateId) {
+    if (!templateId) return null;
+    for (let i = 0; i < doctorTemplates.length; i++) {
+      if (String(doctorTemplates[i].id) === String(templateId)) return doctorTemplates[i];
+    }
+    return null;
+  }
+
+  function lesionFavorites() {
+    if (!selectedTemplate || !Array.isArray(selectedTemplate.lesion_group_favorites)) return [];
+    return selectedTemplate.lesion_group_favorites;
+  }
+
+  function summaryFavorites() {
+    if (!selectedTemplate) return [];
+    if (selectedTemplate.template_body) {
+      return [
+        {
+          name: selectedTemplate.name || "Template",
+          text: selectedTemplate.template_body,
+        },
+      ];
+    }
+    return [];
+  }
+
+  function refreshFavoriteSelects() {
+    const placeholder = UI.templateSelectPlaceholder;
+    const lesionOptions = lesionFavorites().map(function (fav, idx) {
+      return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+    });
+    const summaryOptions = summaryFavorites().map(function (fav, idx) {
+      return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+    });
+    if (container) {
+      container.querySelectorAll(".lesion-favorite-select").forEach(function (selectEl) {
+        setSelectOptions(selectEl, lesionOptions, placeholder);
+      });
+    }
+    setSelectOptions(summaryFavoriteSelectEl, summaryOptions, placeholder);
+  }
+
+  function applyLesionFavorite(section, favorite) {
+    if (!section || !favorite) return;
+    section.querySelectorAll(".lesion-feature").forEach(function (cb) {
+      cb.checked = false;
+    });
+    (favorite.dermatoscopic_features || []).forEach(function (feature) {
+      const cb = section.querySelector('.lesion-feature[value="' + feature + '"]');
+      if (cb) cb.checked = true;
+    });
+    section.querySelectorAll(".lesion-clinical").forEach(function (rb) {
+      rb.checked = false;
+    });
+    const clinical = section.querySelector(
+      '.lesion-clinical[value="' + (favorite.clinical_assessment || "UNREMARKABLE") + '"]'
+    );
+    if (clinical) clinical.checked = true;
+    section.querySelectorAll(".lesion-malignancy").forEach(function (rb) {
+      rb.checked = false;
+    });
+    const malignancy = section.querySelector(
+      '.lesion-malignancy[value="' + (favorite.malignancy_risk || "NO_SUSPICION") + '"]'
+    );
+    if (malignancy) malignancy.checked = true;
+    const textEl = section.querySelector(".lesion-text");
+    if (textEl) textEl.value = favorite.text || "";
+  }
+
+  let lesionGroupIndex = 0;
+  function addLesionGroup(initialData) {
+    if (!hasLesionUi) return;
+    const frag = tpl.content.cloneNode(true);
+    const section = frag.querySelector(".lesion-group");
+    section.setAttribute("data-group-index", String(lesionGroupIndex));
+    const titleEl = section.querySelector(".lesion-group-title");
+    if (titleEl)
+      titleEl.textContent =
+        "Gruppe " +
+        (lesionGroupIndex + 1) +
+        " – " +
+          UI.lesionHeader;
+    const clinicalRadios = section.querySelectorAll(".lesion-clinical");
+    const malignancyRadios = section.querySelectorAll(".lesion-malignancy");
+    clinicalRadios.forEach(function (r) {
+      r.name = "lesion_grp_" + lesionGroupIndex + "_clinical";
+    });
+    malignancyRadios.forEach(function (r) {
+      r.name = "lesion_grp_" + lesionGroupIndex + "_malignancy";
+    });
+    if (initialData) {
+      const nums = (
+        initialData.lesion_numbers ||
+        (initialData.lesion_no != null ? [initialData.lesion_no] : [])
+      ).slice();
+      const numsInput = section.querySelector(".lesion-numbers-input");
+      if (numsInput) numsInput.value = nums.join(", ");
+      (initialData.dermatoscopic_features || []).forEach(function (f) {
+        const c = section.querySelector('.lesion-feature[value="' + f + '"]');
+        if (c) c.checked = true;
+      });
+      const cr = section.querySelector(
+        '.lesion-clinical[value="' + (initialData.clinical_assessment || "UNREMARKABLE") + '"]'
+      );
+      if (cr) cr.checked = true;
+      const mr = section.querySelector(
+        '.lesion-malignancy[value="' + (initialData.malignancy_risk || "NO_SUSPICION") + '"]'
+      );
+      if (mr) mr.checked = true;
+      const ta = section.querySelector(".lesion-text");
+      if (ta && (initialData.edited_text || initialData.generated_text))
+        ta.value = initialData.edited_text || initialData.generated_text || "";
+    }
+    const removeBtn = section.querySelector(".btn-remove-group");
+    const lesionFavoriteSelect = section.querySelector(".lesion-favorite-select");
+    const applyFavoriteBtn = section.querySelector(".btn-apply-lesion-favorite");
+    const placeholder = UI.templateSelectPlaceholder;
+    if (lesionFavoriteSelect) {
+      const lesionOptions = lesionFavorites().map(function (fav, idx) {
+        return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+      });
+      setSelectOptions(lesionFavoriteSelect, lesionOptions, placeholder);
+    }
+    if (applyFavoriteBtn && lesionFavoriteSelect) {
+      applyFavoriteBtn.addEventListener("click", function () {
+        const idx = parseInt(lesionFavoriteSelect.value, 10);
+        if (isNaN(idx)) return;
+        const favorite = lesionFavorites()[idx];
+        if (!favorite) return;
+        applyLesionFavorite(section, favorite);
+        alertMsg(
+          "success",
+          UI.msgFavoriteApplied
+        );
+      });
+    }
+    if (removeBtn)
+      removeBtn.addEventListener("click", function () {
+        section.remove();
+        reindexLesionGroups();
+      });
+    container.appendChild(frag);
+    lesionGroupIndex++;
+  }
+  function reindexLesionGroups() {
+    if (!hasLesionUi) return;
+    const groups = container.querySelectorAll(".lesion-group");
+    groups.forEach(function (section, i) {
+      section.setAttribute("data-group-index", String(i));
+      const titleEl = section.querySelector(".lesion-group-title");
+      if (titleEl)
+        titleEl.textContent =
+          "Gruppe " +
+          (i + 1) +
+          " – " +
+          UI.lesionHeader;
+      section.querySelectorAll(".lesion-clinical").forEach(function (r) {
+        r.name = "lesion_grp_" + i + "_clinical";
+      });
+      section.querySelectorAll(".lesion-malignancy").forEach(function (r) {
+        r.name = "lesion_grp_" + i + "_malignancy";
+      });
+    });
+    lesionGroupIndex = groups.length;
+  }
+
+  const addBtn = el("btn-add-lesion-group");
+  if (addBtn) addBtn.addEventListener("click", function () {
+    addLesionGroup(null);
+  });
+
+  if (hasLesionUi && CTX && CTX.current_version && CTX.current_version.medical_payload) {
+    const pl = CTX.current_version.medical_payload;
+    (pl.examination_scope || []).forEach(function (v) {
+      const c = document.querySelector(
+        'input[name="examination_scope"][value="' + v + '"]'
+      );
+      if (c) c.checked = true;
+    });
+    const fp = document.querySelector(
+      'input[name="fitzpatrick_type"][value="' + (pl.fitzpatrick_type || "") + '"]'
+    );
+    if (fp) fp.checked = true;
+    const oa = document.querySelector(
+      'input[name="overall_image_assessment"][value="' +
+        (pl.overall_image_assessment || "NO_CONTROL_NEEDED") +
+        '"]'
+    );
+    if (oa) oa.checked = true;
+    (pl.recommendations || []).forEach(function (v) {
+      const c = document.querySelector(
+        'input[name="recommendations"][value="' + v + '"]'
+      );
+      if (c) c.checked = true;
+    });
+    const fa = document.querySelector(
+      'input[name="final_assessment"][value="' +
+        (pl.final_assessment || "NO_HIGH_GRADE_SUSPICION") +
+        '"]'
+    );
+    if (fa) fa.checked = true;
+    const summaryTextEl = el("summary_text");
+    if (summaryTextEl) {
+      if (pl.summary_edited_text) summaryTextEl.value = pl.summary_edited_text;
+      else if (pl.summary_generated_text)
+        summaryTextEl.value = pl.summary_generated_text;
+    }
+    const lesions = pl.lesions || [];
+    if (lesions.length === 0) addLesionGroup(null);
+    else lesions.forEach(function (l) {
+      addLesionGroup(l);
+    });
+  } else if (hasLesionUi) {
+    addLesionGroup(null);
+  }
+
+  function parseLesionNumbers(str) {
+    if (!str || typeof str !== "string") return [];
+    return str
+      .split(/[\s,]+/)
+      .map(function (s) {
+        return parseInt(s.trim(), 10);
+      })
+      .filter(function (n) {
+        return !isNaN(n) && n >= 1;
+      });
+  }
+
+  const authoringLocale =
+    CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
+  function buildPayload() {
+    const payload = {
+      schema_version: 1,
+      authoring_locale: authoringLocale,
+      examination_scope: [],
+      lesions: [],
+      recommendations: [],
+      final_assessment: "NO_HIGH_GRADE_SUSPICION",
+    };
+    document
+      .querySelectorAll('input[name="examination_scope"]:checked')
+      .forEach(function (c) {
+        payload.examination_scope.push(c.value);
+      });
+    const fp = document.querySelector('input[name="fitzpatrick_type"]:checked');
+    if (fp) payload.fitzpatrick_type = fp.value;
+    const oa = document.querySelector(
+      'input[name="overall_image_assessment"]:checked'
+    );
+    payload.overall_image_assessment = oa
+      ? oa.value
+      : "NO_CONTROL_NEEDED";
+    document
+      .querySelectorAll('input[name="final_assessment"]:checked')
+      .forEach(function (c) {
+        payload.final_assessment = c.value;
+      });
+    document
+      .querySelectorAll('input[name="recommendations"]:checked')
+      .forEach(function (c) {
+        payload.recommendations.push(c.value);
+      });
+    if (container) {
+      container.querySelectorAll(".lesion-group").forEach(function (section) {
+        const numsStr = section.querySelector(".lesion-numbers-input").value;
+        const lesion_numbers = parseLesionNumbers(numsStr);
+        if (lesion_numbers.length === 0) return;
+        const features = [];
+        section
+          .querySelectorAll(".lesion-feature:checked")
+          .forEach(function (c) {
+            features.push(c.value);
+          });
+        const clinical = section.querySelector(".lesion-clinical:checked");
+        const malignancy = section.querySelector(".lesion-malignancy:checked");
+        const textEl = section.querySelector(".lesion-text");
+        const lesion = {
+          lesion_numbers: lesion_numbers,
+          dermatoscopic_features: features,
+          clinical_assessment: clinical ? clinical.value : "UNREMARKABLE",
+          malignancy_risk: malignancy ? malignancy.value : "NO_SUSPICION",
+        };
+        if (textEl && textEl.value) lesion.edited_text = textEl.value;
+        payload.lesions.push(lesion);
+      });
+    }
+    const summaryEl = el("summary_text");
+    payload.summary_edited_text = summaryEl ? summaryEl.value || null : null;
+    if (selectedTemplate) {
+      payload.template_context = {
+        template_id: selectedTemplate.id,
+        template_name: selectedTemplate.name || null,
+        template_locale: selectedTemplate.template_locale || authoringLocale,
+      };
+    }
+    return payload;
+  }
+  function validatePayloadForSubmit(payload) {
+    if (
+      payload.overall_image_assessment === "CONTROL_NEEDED" &&
+      (!payload.lesions || payload.lesions.length === 0)
+    ) {
+      return UI.msgLesionRequired;
+    }
+    return null;
+  }
+  function responseErrorMessage(res, fallback) {
+    if (!res || !res.json) return fallback;
+    return res.json.error || res.json.detail || res.json.raw_response || fallback;
+  }
+
+  function setSelectedTemplateById(templateId) {
+    selectedTemplate = findTemplateById(templateId);
+    refreshFavoriteSelects();
+  }
+
+  function loadDoctorTemplates() {
+    if (!templateSelectEl) return Promise.resolve();
+    const templateCtx =
+      CTX &&
+      CTX.current_version &&
+      CTX.current_version.medical_payload &&
+      CTX.current_version.medical_payload.template_context
+        ? CTX.current_version.medical_payload.template_context
+        : null;
+    const currentTemplateId = templateCtx && templateCtx.template_id ? String(templateCtx.template_id) : "";
+    const placeholder = UI.templateSelectPlaceholder;
+    const localeUrl =
+      API +
+      "/doctor-text-templates?template_locale=" +
+      encodeURIComponent(authoringLocale) +
+      "&include_inactive=false";
+    const fallbackUrl = API + "/doctor-text-templates?include_inactive=false";
+    return apiFetch(localeUrl, { method: "GET" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("template list failed");
+        doctorTemplates = (res.json && res.json.results) || [];
+        if (doctorTemplates.length === 0) {
+          return apiFetch(fallbackUrl, { method: "GET" }).then(function (fallbackRes) {
+            if (!fallbackRes.ok) throw new Error("template fallback failed");
+            doctorTemplates = (fallbackRes.json && fallbackRes.json.results) || [];
+          });
+        }
+      })
+      .then(function () {
+        const templateOptions = doctorTemplates.map(function (template) {
+          return { value: template.id, label: template.name };
+        });
+        setSelectOptions(templateSelectEl, templateOptions, placeholder);
+        if (currentTemplateId && findTemplateById(currentTemplateId)) {
+          templateSelectEl.value = currentTemplateId;
+          setSelectedTemplateById(currentTemplateId);
+          return;
+        }
+        if (doctorTemplates.length > 0) {
+          const firstId = String(doctorTemplates[0].id);
+          templateSelectEl.value = firstId;
+          setSelectedTemplateById(firstId);
+          return;
+        }
+        selectedTemplate = null;
+        refreshFavoriteSelects();
+      })
+      .catch(function () {
+        doctorTemplates = [];
+        selectedTemplate = null;
+        refreshFavoriteSelects();
+        alertMsg("warning", UI.msgTemplateLoadError);
+      });
+  }
+
+  if (templateSelectEl) {
+    templateSelectEl.addEventListener("change", function () {
+      setSelectedTemplateById(this.value || "");
+    });
+  }
+  if (applySummaryFavoriteBtn && summaryFavoriteSelectEl) {
+    applySummaryFavoriteBtn.addEventListener("click", function () {
+      const idx = parseInt(summaryFavoriteSelectEl.value, 10);
+      if (isNaN(idx)) return;
+      const favorite = summaryFavorites()[idx];
+      if (!favorite) return;
+      const summaryEl = el("summary_text");
+      if (summaryEl) summaryEl.value = favorite.text || "";
+      alertMsg(
+        "success",
+        UI.msgFavoriteApplied
+      );
+    });
+  }
+  loadDoctorTemplates();
+  loadExternalPdfs();
+  setPublishEnabledFromPreviewFlag();
+
+  function statusClass(status) {
+    if (status === "COMPLETED") return "bg-success";
+    if (status === "FAILED") return "bg-danger";
+    if (status === "PROCESSING" || status === "PENDING") return "bg-warning text-dark";
+    return "bg-secondary";
+  }
+
+  function setStatusBadge(id, status) {
+    const badge = el(id);
+    if (!badge) return;
+    const safe = status || "—";
+    badge.className = "badge " + statusClass(safe);
+    badge.textContent = safe;
+  }
+
+  function renderProcessingStatus(currentVersion) {
+    const cv = currentVersion || {};
+    setStatusBadge("status-pdf", cv.pdf_generation_status || "—");
+    setStatusBadge("status-hidrive", cv.hidrive_status || "—");
+    setStatusBadge("status-sms", cv.sms_status || "—");
+
+    const errorEl = el("processing-error");
+    if (errorEl) {
+      const msg = (cv.processing_error_message || "").trim();
+      errorEl.textContent = msg;
+      if (msg) errorEl.classList.remove("d-none");
+      else errorEl.classList.add("d-none");
+    }
+
+    const retryBtn = el("btn-retry-processing");
+    if (retryBtn) {
+      if (cv.can_retry_processing) retryBtn.classList.remove("d-none");
+      else retryBtn.classList.add("d-none");
+    }
+  }
+
+  let refreshStatusInFlight = null;
+  let refreshStatusCooldownUntil = 0;
+  function refreshProcessingStatus(force) {
+    const now = Date.now();
+    if (!force && now < refreshStatusCooldownUntil) return Promise.resolve();
+    if (refreshStatusInFlight) return refreshStatusInFlight;
+    refreshStatusCooldownUntil = now + 1200;
+    refreshStatusInFlight = apiFetch(docUrl("?form_locale=" + encodeURIComponent(authoringLocale)), {
+      method: "GET",
+    }).then(function (res) {
+      if (!res.ok) return;
+      const updated = (res.json && res.json.current_version) || {};
+      renderProcessingStatus(updated);
+    }).finally(function () {
+      refreshStatusInFlight = null;
+    });
+    return refreshStatusInFlight;
+  }
+
+  renderProcessingStatus(CTX.current_version || {});
+
+  const refreshBtn = el("btn-refresh-status");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", function () {
+      refreshProcessingStatus(true);
+    });
+  }
+
+  const retryBtn = el("btn-retry-processing");
+  if (retryBtn) {
+    retryBtn.addEventListener("click", function () {
+      retryBtn.disabled = true;
+      apiFetch(docUrl("/retry-processing"), {
+        method: "POST",
+        body: JSON.stringify({ reason: "manual retry from doctor panel" }),
+      })
+        .then(function (res) {
+          retryBtn.disabled = false;
+          if (!res.ok) {
+            alertMsg("danger", responseErrorMessage(res, UI.msgError + " " + res.status));
+            return;
+          }
+          alertMsg("success", UI.msgRetrySuccess);
+          refreshProcessingStatus();
+        })
+        .catch(function () {
+          retryBtn.disabled = false;
+          alertMsg("danger", UI.msgNetwork);
+        });
+    });
+  }
+
+  const saveDraftBtn = el("btn-save-draft");
+  if (saveDraftBtn) {
+    saveDraftBtn.addEventListener("click", function () {
+      const payload = buildPayload();
+      const err = validatePayloadForSubmit(payload);
+      if (err) {
+        alertMsg("danger", err);
+        return;
+      }
+      const btn = this;
+      btn.disabled = true;
+      apiFetch(docUrl("/draft"), {
+        method: "PUT",
+        body: JSON.stringify({
+          medical_payload_schema_version: 1,
+          medical_payload: payload,
+        }),
+      })
+        .then(function (res) {
+          btn.disabled = false;
+          if (res.ok) {
+            previewSeenSinceLastSave = false;
+            setPublishEnabledFromPreviewFlag();
+            alertMsg("success", UI.msgSaveSuccess);
+          } else
+            alertMsg(
+              "danger",
+              responseErrorMessage(res, UI.msgError + " " + res.status)
+            );
+        })
+        .catch(function () {
+          btn.disabled = false;
+          alertMsg("danger", UI.msgNetwork);
+        });
+    });
+  }
+
+  const previewPdfBtn = el("btn-preview-pdf");
+  if (previewPdfBtn) {
+    previewPdfBtn.addEventListener("click", function (event) {
+      if (event && event.preventDefault) event.preventDefault();
+      const payload = buildPayload();
+      const err = validatePayloadForSubmit(payload);
+      if (err) {
+        alertMsg("danger", err);
+        return;
+      }
+      const previewBase =
+        previewPdfBtn.getAttribute("data-preview-url") ||
+        docUrl("/preview-pdf");
+      const sep = previewBase.indexOf("?") === -1 ? "?" : "&";
+      const previewUrl =
+        previewBase +
+        sep +
+        "form_locale=" +
+        encodeURIComponent(authoringLocale) +
+        "&t=" +
+        Date.now();
+      const previewTab = window.open("", "_blank");
+      const btn = this;
+      btn.disabled = true;
+      apiFetch(docUrl("/draft"), {
+        method: "PUT",
+        body: JSON.stringify({
+          medical_payload_schema_version: 1,
+          medical_payload: payload,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            btn.disabled = false;
+            alertMsg(
+              "danger",
+              responseErrorMessage(res, UI.msgError + " " + res.status)
+            );
+            if (previewTab) previewTab.close();
+            return;
+          }
+          return fetch(previewUrl, {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { Accept: "application/pdf" },
+          }).then(function (pdfRes) {
+            btn.disabled = false;
+            if (!pdfRes.ok) {
+              if (previewTab) previewTab.close();
+              var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
+              if (ct.indexOf("application/json") !== -1) {
+                return pdfRes.json().then(function (j) {
+                  alertMsg(
+                    "danger",
+                    (j && j.error) || UI.msgError + " " + pdfRes.status
+                  );
+                });
+              }
+              alertMsg("danger", UI.msgError + " " + pdfRes.status);
+              return;
+            }
+            var warn = pdfRes.headers.get("X-Befund-Preview-Warning");
+            return pdfRes.blob().then(function (blob) {
+              var objUrl = URL.createObjectURL(blob);
+              if (previewTab) previewTab.location = objUrl;
+              else window.location.href = objUrl;
+              previewSeenSinceLastSave = true;
+              setPublishEnabledFromPreviewFlag();
+              alertMsg("success", UI.msgSaveSuccess);
+              if (warn)
+                alertMsg("warning", UI.externalPdfPreviewMergeWarning);
+            });
+          });
+        })
+        .catch(function () {
+          btn.disabled = false;
+          if (previewTab) previewTab.close();
+          alertMsg("danger", UI.msgNetwork);
+        });
+    });
+  }
+
+  const publishBtn = el("btn-publish");
+  if (publishBtn) {
+    publishBtn.addEventListener("click", function () {
+      if (docStatus === "DRAFT" && !previewSeenSinceLastSave) {
+        alertMsg("warning", UI.msgPublishPreviewRequired);
+        return;
+      }
+      const payload = buildPayload();
+      const err = validatePayloadForSubmit(payload);
+      if (err) {
+        alertMsg("danger", err);
+        return;
+      }
+      const resendSmsEl = el("resend_sms");
+      const resendSms = resendSmsEl ? resendSmsEl.checked : false;
+      publishBtn.disabled = true;
+      const publishId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/x/g, function () {
+            return (Math.random() * 16 | 0).toString(16);
+          });
+      apiFetch(docUrl("/draft"), {
+        method: "PUT",
+        body: JSON.stringify({
+          medical_payload_schema_version: 1,
+          medical_payload: payload,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            publishBtn.disabled = false;
+            alertMsg(
+              "danger",
+              responseErrorMessage(res, UI.msgError + " " + res.status)
+            );
+            return;
+          }
+          return apiFetch(
+            docUrl("/publish"),
+            {
+              method: "POST",
+              body: JSON.stringify({
+                publish_request_id: publishId,
+                resend_sms: resendSms,
+                publish_locale: authoringLocale,
+              }),
+            }
+          );
+        })
+        .then(function (res) {
+          if (!res) return;
+          if (res.ok) {
+            alertMsg("success", UI.msgPublishSuccess);
+            publishBtn.disabled = true;
+            var listUrl =
+              (PANEL && PANEL.listUrl) ||
+              (function () {
+                var pathname = window.location.pathname || "";
+                var listPath = pathname.replace(/\/[^/]+\/?$/, "/") || "/doctor/";
+                return window.location.origin + listPath;
+              })();
+            setTimeout(function () {
+              window.location.href = listUrl;
+            }, 1200);
+          } else {
+            publishBtn.disabled = false;
+            alertMsg(
+              "danger",
+              responseErrorMessage(res, UI.msgError + " " + res.status)
+            );
+          }
+        })
+        .catch(function () {
+          publishBtn.disabled = false;
+          alertMsg("danger", UI.msgNetwork);
+        });
+    });
+  }
+})();
