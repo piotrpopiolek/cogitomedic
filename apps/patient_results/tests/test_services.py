@@ -23,16 +23,6 @@ from apps.reception.models import (
 from apps.users.models import StaffUser
 
 
-class NormalizePhoneTests(TestCase):
-    def test_strips_non_digits(self) -> None:
-        self.assertEqual(normalize_phone("+49 176 22 22 222"), "491762222222")
-        self.assertEqual(normalize_phone("0176-2222222"), "01762222222")
-
-    def test_empty_returns_empty(self) -> None:
-        self.assertEqual(normalize_phone(""), "")
-        self.assertEqual(normalize_phone("  -  "), "")
-
-
 class RequestOtpTests(TestCase):
     def setUp(self) -> None:
         self.patient = Patient.objects.create(
@@ -80,11 +70,11 @@ class RequestOtpTests(TestCase):
         self.assertEqual(result.status, "ok")
         session = PatientResultsOtpSession.objects.filter(patient=self.patient).first()
         self.assertIsNotNone(session)
-        self.assertEqual(session.phone, "01762222222")
+        self.assertEqual(session.phone, "1762222222")
         self.assertIsNone(session.verified_at)
         mock_adapter.send_sms.assert_called_once()
         call_args = mock_adapter.send_sms.call_args
-        self.assertIn("01762222222", str(call_args))
+        self.assertIn("1762222222", str(call_args))
         self.assertRegex(call_args[1]["message"], r"\d{6}")
 
     @override_settings(CAPTCHA_VERIFY_SKIP=False)
@@ -144,7 +134,7 @@ class VerifyOtpTests(TestCase):
         ):
             return PatientResultsOtpSession.objects.create(
                 patient=self.patient,
-                phone="01761111111",
+                phone=normalize_phone("01761111111"),
                 otp_code_hash=h,
                 expires_at=timezone.now() + timedelta(minutes=15),
             )

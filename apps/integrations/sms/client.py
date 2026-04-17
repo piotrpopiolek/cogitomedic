@@ -8,18 +8,14 @@ from typing import Protocol
 from django.conf import settings
 
 from apps.core.translation_service import get_translation_map, normalize_language_code
+from apps.reception.phone_utils import format_phone_e164_for_sms
 
 logger = logging.getLogger(__name__)
 
 
 def format_phone_for_smsapi(phone: str) -> str:
-    """Ensure phone has + prefix for international format (SMSAPI expects +48123456789)."""
-    digits = (phone or "").strip()
-    if not digits:
-        return ""
-    if digits.startswith("+"):
-        return digits
-    return "+" + digits
+    """E.164 (+…) for SMSAPI: PL ``48…`` as-is; DE national gets ``+49``; DE ``49…`` unchanged."""
+    return format_phone_e164_for_sms(phone)
 
 
 SMS_PATIENT_RESULTS_KEY = "other.sms.patient_results"
@@ -70,9 +66,10 @@ class _MockSmsAdapter:
     """Mock adapter – logs only, no HTTP."""
 
     def send_sms(self, to: str, message: str) -> None:
+        formatted = format_phone_for_smsapi(to)
         logger.info(
             "[MOCK SMS] to=%s*** message=%s",
-            to[: min(4, len(to))],
+            formatted[: min(8, len(formatted))],
             message[:50] + ("..." if len(message) > 50 else ""),
         )
 
