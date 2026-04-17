@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from django.test import TestCase
 
-from apps.integrations.sms.client import get_sms_patient_results_text
+from apps.integrations.sms.client import (
+    format_phone_for_smsapi,
+    get_sms_patient_results_text,
+)
 
 
 class GetSmsPatientResultsTextTests(TestCase):
@@ -29,3 +32,16 @@ class GetSmsPatientResultsTextTests(TestCase):
         result = get_sms_patient_results_text(None, "https://fallback.url")
         self.assertIn("Dokumentation", result)  # DE default
         self.assertIn("https://fallback.url", result)
+
+
+class FormatPhoneForSmsApiTests(TestCase):
+    """format_phone_for_smsapi matches E.164 rules for SMS dispatch."""
+
+    def test_polish_plus_48(self) -> None:
+        self.assertEqual(format_phone_for_smsapi("48500111222"), "+48500111222")
+
+    def test_german_prepends_49(self) -> None:
+        self.assertEqual(format_phone_for_smsapi("1761234567"), "+491761234567")
+
+    def test_german_already_has_49(self) -> None:
+        self.assertEqual(format_phone_for_smsapi("491761234567"), "+491761234567")
