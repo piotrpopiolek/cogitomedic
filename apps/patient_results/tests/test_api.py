@@ -138,7 +138,7 @@ class PatientResultsVerifyOtpApiTests(TestCase):
         h = hashlib.sha256(f"test-pepper{otp}".encode()).hexdigest()
         PatientResultsOtpSession.objects.create(
             patient=self.patient,
-            phone="01764444444",
+            phone="1764444444",
             otp_code_hash=h,
             expires_at=timezone.now() + timedelta(minutes=15),
         )
