@@ -20,6 +20,7 @@ class StaffUserAdminChangelistTests(TestCase):
     def test_single_edit_entrypoint_first_column(self) -> None:
         self.assertNotIn("edit_link", StaffUserAdmin.list_display)
         self.assertEqual(StaffUserAdmin.list_display_links, ("username",))
+        self.assertIn("primary_role", StaffUserAdmin.list_display)
 
     def test_changelist_has_no_duplicate_edit_button_column(self) -> None:
         StaffUser.objects.create_user(

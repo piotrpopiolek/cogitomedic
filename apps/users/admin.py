@@ -8,6 +8,7 @@ try:
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
+from apps.users.api_views import get_primary_role
 from apps.users.forms import StaffUserChangeForm, StaffUserCreationForm
 from apps.users.models import StaffUser
 
@@ -21,6 +22,7 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
         "email",
         "first_name",
         "last_name",
+        "primary_role",
         "is_staff",
         "is_active",
     )
@@ -87,8 +89,15 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
             return True
         return super().has_delete_permission(request, obj=obj)
 
+    @admin.display(description="Rola")
+    def primary_role(self, obj: StaffUser) -> str:
+        if obj.is_superuser:
+            return "SUPERUSER"
+        role = get_primary_role(obj)
+        return role if role else "—"
+
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).prefetch_related("groups")
         role = (request.GET.get("role") or "").upper()
         if role in {"RECEPTION", "DOCTOR", "ADMIN", "TABLET"}:
             qs = qs.filter(groups__name=role.capitalize()).distinct()
