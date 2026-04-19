@@ -40,13 +40,36 @@ def build_patient_filename_candidates(patient: Patient) -> list[str]:
     return candidates
 
 
+def _suffix_after_candidate_is_lab_or_multifile(norm: str, c: str) -> bool:
+    """True if ``norm`` is ``c`` + ``_`` + suffix allowed for multi-file or lab exports.
+
+    Rejects arbitrary extra tokens (e.g. ``…_wyniki_brata``) while allowing stems like
+    ``last_first_CMBER2026FR08_20260417103840`` (timestamp tail or alphanumeric lab code).
+    """
+    if not norm.startswith(c + "_"):
+        return False
+    suffix = norm[len(c) + 1 :]
+    if re.fullmatch(r"\d+", suffix):
+        return True
+    if re.search(r"_\d{12,}$", norm):
+        return True
+    first = suffix.split("_", 1)[0]
+    return (
+        len(first) >= 4
+        and any(ch.isdigit() for ch in first)
+        and any(ch.isalpha() for ch in first)
+    )
+
+
 def match_filename_to_candidates(filename_stem: str, candidates: list[str]) -> bool:
-    """Strict match: exact stem or stem equal to candidate + ``_`` + digits (multi-file)."""
+    """Match stem to candidates: exact, ``candidate_<n>`` multi-file, or lab-style suffix."""
     norm = normalize_name(_stem_without_pdf(filename_stem))
     for c in candidates:
         if norm == c:
             return True
         if re.fullmatch(re.escape(c) + r"_\d+", norm):
+            return True
+        if _suffix_after_candidate_is_lab_or_multifile(norm, c):
             return True
     return False
 
@@ -86,7 +109,8 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     Used with denormalized :class:`~apps.reception.models.Patient` fields so ambiguity
     checks need not scan the whole patient table. Includes a stripped ``_digits`` suffix
     for multi-file undated names (``Name_2``) but not when the tail looks like a DOB
-    segment (``…_YYYY_MM_DD``).
+    segment (``…_YYYY_MM_DD``). Long lab-style stems (``…_CMBER…_timestamp``) also add
+    leading segment prefixes so ``first_last`` / ``last_first`` keys match.
     """
     bases: set[str] = {norm}
     if _INCOMING_STEM_DOB_TAIL.search(norm):
@@ -94,4 +118,8 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     m = re.fullmatch(r"(.+)_(\d+)$", norm)
     if m:
         bases.add(m.group(1))
+    segments = norm.split("_")
+    if len(segments) >= 3:
+        for k in range(2, len(segments)):
+            bases.add("_".join(segments[:k]))
     return frozenset(bases)
