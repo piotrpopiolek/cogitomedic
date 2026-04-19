@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -248,21 +248,9 @@ class IntakeFormAnamnesisViewTests(TestCase):
 # ---------------------------------------------------------------
 
 
+@override_settings(RATELIMIT_ENABLE=False)
 class IntakeFormSubmitViewTests(TestCase):
-    """Submit is rate-limited to 5/min per IP; many POSTs in one class hit 429 without this patch."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        super().setUpClass()
-        cls._ratelimit_patcher = patch(
-            "django_ratelimit.decorators.is_ratelimited", return_value=False
-        )
-        cls._ratelimit_patcher.start()
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls._ratelimit_patcher.stop()
-        super().tearDownClass()
+    """Submit is rate-limited to 5/min per IP; many POSTs in one class hit 429 without disabling ratelimit here."""
 
     def setUp(self) -> None:
         self.client = Client()

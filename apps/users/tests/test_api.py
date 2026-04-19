@@ -4,6 +4,7 @@ import json
 from uuid import uuid4
 
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.test import Client, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -74,6 +75,7 @@ class UsersAuthApiTests(TestCase):
 
     def test_login_rate_limit_returns_429(self) -> None:
         """After 5 POSTs to login per IP per minute, the 6th returns 429."""
+        cache.clear()
         isolated_ip = "203.0.113.55"
         for _ in range(5):
             self.client.post(
