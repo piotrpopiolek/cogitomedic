@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth.models import Group
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.operations.models import AuditEvent
 from apps.reception.models import TabletDevice
+from apps.users import api_views
 from apps.users.models import StaffUser
 
 
@@ -92,6 +94,34 @@ class UsersAuthApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 429)
         self.assertTrue(response.json().get("error"))
+
+
+class AuthLoginRateLimitUnitTests(SimpleTestCase):
+    """No DB — exercises cache race handling in _auth_login_rate_limit_exceeded."""
+
+    def test_counts_request_that_lost_add_race(self) -> None:
+        """If incr misses then add loses the race, the second incr must count the hit."""
+        factory = RequestFactory()
+        request = factory.post("/api/v1/auth/login")
+        request.META["REMOTE_ADDR"] = "198.51.100.7"
+
+        incr_calls = 0
+
+        def fake_incr(_key: str) -> int:
+            nonlocal incr_calls
+            incr_calls += 1
+            if incr_calls == 1:
+                raise ValueError("missing key")
+            return 7
+
+        with (
+            patch.object(api_views.cache, "incr", side_effect=fake_incr),
+            patch.object(api_views.cache, "add", return_value=False),
+        ):
+            exceeded = api_views._auth_login_rate_limit_exceeded(request)
+
+        self.assertEqual(incr_calls, 2)
+        self.assertTrue(exceeded)
 
 
 class AuthLoginAndroidIdTests(TestCase):
