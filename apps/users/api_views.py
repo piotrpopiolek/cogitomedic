@@ -7,8 +7,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
+from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
-from django_ratelimit.decorators import ratelimit
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
@@ -84,10 +84,33 @@ def _serialize_staff_user(user: StaffUser) -> dict:
     }
 
 
-@ratelimit(key="ip", rate="5/m", method="POST", block=True)
+# Login brute-force guard: same budget as previous @ratelimit (5 POSTs / IP / minute).
+# Implemented with Django cache so the limit keys off get_client_ip (aligned with audit logs)
+# and is not affected by RATELIMIT_ENABLE or django-ratelimit IP resolution differences.
+_AUTH_LOGIN_POSTS_PER_MINUTE = 5
+_AUTH_LOGIN_RATE_WINDOW_SEC = 60
+
+
+def _auth_login_rate_limit_exceeded(request: HttpRequest) -> bool:
+    ip = get_client_ip(request) or "unknown"
+    key = f"rl:auth_login:{ip}"
+    try:
+        n = cache.incr(key)
+    except ValueError:
+        if cache.add(key, 1, timeout=_AUTH_LOGIN_RATE_WINDOW_SEC):
+            n = 1
+        else:
+            # Another request won the add race; count this attempt via incr.
+            n = cache.incr(key)
+    return n > _AUTH_LOGIN_POSTS_PER_MINUTE
+
+
 def auth_login_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
+
+    if _auth_login_rate_limit_exceeded(request):
+        return json_error("other.api.too_many_requests", status=429)
 
     try:
         body = AuthLoginRequest.model_validate(read_json_body(request))
