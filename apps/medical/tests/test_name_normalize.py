@@ -53,6 +53,91 @@ class NameNormalizeTests(SimpleTestCase):
         self.assertTrue(match_filename_to_candidates("kowalski_jan_1985_03_12_2", c))
         self.assertFalse(match_filename_to_candidates("kowalski_jan_wyniki_brata", c))
 
+    def test_match_filename_lab_export_with_cmber_and_timestamp(self) -> None:
+        """Lab PDFs: ``Nazwisko_Imię_CMBER2026FR##_…`` (ASCII w stemie), dopasowanie po ``normalize_name``.
+
+        Pokrycie niemieckich znaków w ``first_name`` / ``last_name``: ä Ä ö Ö ü Ü ß.
+        """
+        cases: list[tuple[str, str, str]] = [
+            ("Thomas", "Müller", "Muller_Thomas_CMBER2026FR01_20260418090102"),
+            ("Michael", "Schmidt", "Schmidt_Michael_CMBER2026FR02_20260418090215"),
+            ("Andreas", "Schneider", "Schneider_Andreas_CMBER2026FR03_20260418090328"),
+            ("Stefan", "Fischer", "Fischer_Stefan_CMBER2026FR04_20260418090441"),
+            ("Christian", "Weber", "Weber_Christian_CMBER2026FR05_20260418090554"),
+            ("Markus", "Meyer", "Meyer_Markus_CMBER2026FR06_20260418090707"),
+            ("Martin", "Wagner", "Wagner_Martin_CMBER2026FR07_20260418090820"),
+            ("Daniel", "Becker", "Becker_Daniel_CMBER2026FR08_20260418090933"),
+            ("Sebastian", "Schulz", "Schulz_Sebastian_CMBER2026FR09_20260418091046"),
+            (
+                "Alexander",
+                "Hoffmann",
+                "Hoffmann_Alexander_CMBER2026FR10_20260418091159",
+            ),
+            ("Anna", "Schäfer", "Schafer_Anna_CMBER2026FR11_20260418091312"),
+            ("Maria", "Koch", "Koch_Maria_CMBER2026FR12_20260418091425"),
+            ("Petra", "Bauer", "Bauer_Petra_CMBER2026FR13_20260418091538"),
+            ("Sabine", "Richter", "Richter_Sabine_CMBER2026FR14_20260418091651"),
+            ("Monika", "Klein", "Klein_Monika_CMBER2026FR15_20260418091804"),
+            ("Julia", "Wolf", "Wolf_Julia_CMBER2026FR16_20260418091917"),
+            ("Laura", "Schroeder", "Schroeder_Laura_CMBER2026FR17_20260418092030"),
+            ("Hannah", "Neumann", "Neumann_Hannah_CMBER2026FR18_20260418092143"),
+            ("Leon", "Schwarz", "Schwarz_Leon_CMBER2026FR19_20260418092256"),
+            ("Paul", "Zimmermann", "Zimmermann_Paul_CMBER2026FR20_20260418092409"),
+            ("Felix", "Braun", "Braun_Felix_CMBER2026FR21_20260418092522"),
+            ("Lukas", "Krüger", "Kruger_Lukas_CMBER2026FR22_20260418092635"),
+            (
+                "Maximilian",
+                "Hofmann",
+                "Hofmann_Maximilian_CMBER2026FR23_20260418092748",
+            ),
+            ("Emilia", "Hartmann", "Hartmann_Emilia_CMBER2026FR24_20260418092901"),
+            ("Sophie", "Werner", "Werner_Sophie_CMBER2026FR25_20260418093014"),
+            ("Äneas", "Wagner", "Wagner_Aneas_CMBER2026FR26_20260418100001"),
+            ("Björn", "Schäfer", "Schafer_Bjorn_CMBER2026FR27_20260418100114"),
+            ("Franz", "König", "Konig_Franz_CMBER2026FR28_20260418100227"),
+            ("Lena", "Groß", "Gross_Lena_CMBER2026FR29_20260418100340"),
+            ("Laura", "Schröder", "Schroder_Laura_CMBER2026FR30_20260418100453"),
+            ("Nina", "Köhler", "Kohler_Nina_CMBER2026FR31_20260418100606"),
+            ("Simon", "Bäcker", "Backer_Simon_CMBER2026FR32_20260418100719"),
+            ("Tim", "Jäger", "Jager_Tim_CMBER2026FR33_20260418100832"),
+            ("Uwe", "Höller", "Holler_Uwe_CMBER2026FR34_20260418100945"),
+            ("Mehmet", "Öztürk", "Ozturk_Mehmet_CMBER2026FR35_20260418101058"),
+            ("Klaus", "Weiß", "Weiss_Klaus_CMBER2026FR36_20260418101211"),
+            ("Oliver", "Götz", "Gotz_Oliver_CMBER2026FR37_20260418101324"),
+            ("Sandra", "Lübke", "Lubke_Sandra_CMBER2026FR38_20260418101437"),
+            ("Bärbel", "Möller", "Moller_Barbel_CMBER2026FR39_20260418101550"),
+            ("Leon", "Häßler", "Hassler_Leon_CMBER2026FR40_20260418101703"),
+            ("Anna", "Voß", "Voss_Anna_CMBER2026FR41_20260418101816"),
+            ("Max", "Zöller", "Zoller_Max_CMBER2026FR42_20260418101929"),
+            ("Eva-Maria", "Stöcker", "Stocker_Eva-Maria_CMBER2026FR43_20260418102042"),
+            ("Friedrich", "Preußen", "Preussen_Friedrich_CMBER2026FR44_20260418102155"),
+            ("Günther", "Überacker", "Uberacker_Gunther_CMBER2026FR45_20260418102308"),
+            ("Rüdiger", "Bähr", "Bahr_Rudiger_CMBER2026FR46_20260418102421"),
+            ("Käthe", "Weiß", "Weiss_Kathe_CMBER2026FR47_20260418102534"),
+            ("Sören", "Höfner", "Hofner_Soren_CMBER2026FR48_20260418102647"),
+            ("Dörte", "Müller", "Muller_Dorte_CMBER2026FR49_20260418102800"),
+            ("Jürgen", "Grün", "Grun_Jurgen_CMBER2026FR50_20260418102913"),
+        ]
+        for first_name, last_name, stem in cases:
+            with self.subTest(stem=stem):
+                p = Mock()
+                p.first_name = first_name
+                p.last_name = last_name
+                p.date_of_birth = None
+                c = build_patient_filename_candidates(p)
+                self.assertTrue(
+                    match_filename_to_candidates(stem, c),
+                    f"expected {stem}.pdf to match {first_name} {last_name}",
+                )
+
+    def test_incoming_stem_norm_lookup_bases_lab_stem_includes_name_prefix(
+        self,
+    ) -> None:
+        incoming_stem_norm_lookup_bases.cache_clear()
+        norm = normalize_name("Muller_Thomas_CMBER2026FR01_20260418090102")
+        bases = incoming_stem_norm_lookup_bases(norm)
+        self.assertIn("muller_thomas", bases)
+
     def test_stem_matches_dated_variant(self) -> None:
         p = Mock()
         p.first_name = "Jan"
