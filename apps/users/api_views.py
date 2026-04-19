@@ -97,8 +97,11 @@ def _auth_login_rate_limit_exceeded(request: HttpRequest) -> bool:
     try:
         n = cache.incr(key)
     except ValueError:
-        cache.add(key, 1, timeout=_AUTH_LOGIN_RATE_WINDOW_SEC)
-        n = 1
+        if cache.add(key, 1, timeout=_AUTH_LOGIN_RATE_WINDOW_SEC):
+            n = 1
+        else:
+            # Another request won the add race; count this attempt via incr.
+            n = cache.incr(key)
     return n > _AUTH_LOGIN_POSTS_PER_MINUTE
 
 
