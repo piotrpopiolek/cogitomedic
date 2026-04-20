@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils import timezone as django_timezone
 
 try:
     from unfold.admin import ModelAdmin as UnfoldModelAdmin
 except ImportError:
     UnfoldModelAdmin = admin.ModelAdmin
 
+from apps.core.translation_service import db_gettext_lazy
 from apps.users.api_views import get_primary_role
 from apps.users.forms import StaffUserChangeForm, StaffUserCreationForm
 from apps.users.models import StaffUser
@@ -25,6 +27,7 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
         "primary_role",
         "is_staff",
         "is_active",
+        "last_login_display",
     )
     list_display_links = ("username",)
     list_filter = ("groups", "is_staff", "is_active")
@@ -95,6 +98,15 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
             return "SUPERUSER"
         role = get_primary_role(obj)
         return role if role else "—"
+
+    @admin.display(
+        description=db_gettext_lazy("administration.col_last_login", "Last login"),
+        ordering="last_login",
+    )
+    def last_login_display(self, obj: StaffUser) -> str:
+        if obj.last_login is None:
+            return "—"
+        return django_timezone.localtime(obj.last_login).strftime("%d.%m.%Y %H:%M")
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).prefetch_related("groups")
