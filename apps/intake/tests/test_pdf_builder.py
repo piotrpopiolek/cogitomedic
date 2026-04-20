@@ -425,10 +425,12 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
         self.assertGreater(other_q, -1)
         self.assertLess(skin_q, korper)
         self.assertLess(korper, other_q)
-        self.assertEqual(html.count("body-map-wrap"), 1)
+        # Count markup divs only — the string "body-map-wrap" also appears in <style> (.body-map-wrap rules).
+        self.assertEqual(html.count('<div class="body-map-wrap">'), 1)
 
     def test_body_map_section_absent_when_not_in_snapshot(self) -> None:
         snap = self._base_snapshot(form_locale="de-DE")
         html = _render_intake_pdf_html(snap)
-        self.assertNotIn("body-map-marker", html)
+        self.assertNotIn('<div class="body-map-wrap">', html)
+        self.assertNotIn('<span class="body-map-marker"', html)
         self.assertNotIn("static/tablet/body.jpg", html)
