@@ -12,9 +12,7 @@ from django.utils.dateparse import parse_datetime
 from weasyprint import HTML
 
 from apps.intake.models import IntakeDocumentVersion
-
-# anamnesis payload question_code; must match NEW_SKIN_CHANGES_LOCATION in services.py
-_NEW_SKIN_CHANGES_QUESTION_CODE = "Q4_NEW_SKIN_CHANGES_LOCATION"
+from apps.intake.services import NEW_SKIN_CHANGES_LOCATION
 
 
 def _w3c_profile_datetime(dt: datetime | None) -> str | None:
@@ -91,7 +89,7 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(row, dict):
                 continue
             qc = row.get("question_code")
-            if not isinstance(qc, str) or qc.strip() != _NEW_SKIN_CHANGES_QUESTION_CODE:
+            if not isinstance(qc, str) or qc.strip() != NEW_SKIN_CHANGES_LOCATION:
                 continue
             if row.get("body_map"):
                 body_map_moved_under_skin_question = True
