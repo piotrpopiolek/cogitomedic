@@ -42,6 +42,20 @@ NEW_SKIN_CHANGES_LOCATION = "Q4_NEW_SKIN_CHANGES_LOCATION"
 NEW_SKIN_CHANGES_AFFIRMATIVE_CODES = frozenset({"YES", "TRUE"})
 
 
+def _body_map_coordinate_float(value: object) -> float | None:
+    """Parse JSON body-map x/y; rejects bool (subclass of int)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _patient_intake_consent_selected_codes(consent: PatientIntakeConsent) -> list[str]:
     raw = (
         consent.selected_option_codes
@@ -208,10 +222,9 @@ def _body_map_points_for_intake_pdf(body_map_data: Any) -> list[dict[str, Any]]:
     for i, p in enumerate(body_map_data):
         if not isinstance(p, dict):
             continue
-        try:
-            x = float(p.get("x"))
-            y = float(p.get("y"))
-        except (TypeError, ValueError):
+        x = _body_map_coordinate_float(p.get("x"))
+        y = _body_map_coordinate_float(p.get("y"))
+        if x is None or y is None:
             continue
         side = str(p.get("side") or "").strip()
         out.append(
@@ -411,7 +424,7 @@ def _build_intake_snapshot_payload(
             if question
             else _humanize_code(question_code)
         )
-        row: dict[str, Any] = {
+        answer_row: dict[str, Any] = {
             "question_code": question_code,
             "question_text_de": question_text_de,
             "question_text_locale": question_text_locale,
@@ -420,8 +433,8 @@ def _build_intake_snapshot_payload(
             "free_text": answer.get("free_text"),
         }
         if body_map_section is not None and question_code == NEW_SKIN_CHANGES_LOCATION:
-            row["body_map"] = body_map_section
-        anamnesis_answers.append(row)
+            answer_row["body_map"] = body_map_section
+        anamnesis_answers.append(answer_row)
 
     anamnesis_answers.sort(
         key=lambda r: (
