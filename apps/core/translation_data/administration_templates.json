@@ -109,6 +109,11 @@
     "en": "Created",
     "pl": "Utworzono"
   },
+  "administration.col_last_login": {
+    "de": "Letzte Anmeldung",
+    "en": "Last login",
+    "pl": "Ostatnie logowanie"
+  },
   "administration.col_actions": {
     "de": "Aktionen",
     "en": "Actions",
