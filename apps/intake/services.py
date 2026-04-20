@@ -200,11 +200,17 @@ def _anamnesis_selected_affirmative(
     intake_form: PatientIntakeForm, *, question_code: str, affirmative: frozenset[str]
 ) -> bool:
     """True if the given question has at least one selected option in *affirmative*."""
+    target = question_code.strip()
+    if not target:
+        return False
     payload = intake_form.anamnesis_payload or {}
     for answer in payload.get("answers") or []:
         if not isinstance(answer, dict):
             continue
-        if answer.get("question_code") != question_code:
+        raw_qc = answer.get("question_code")
+        if not isinstance(raw_qc, str):
+            continue
+        if raw_qc.strip() != target:
             continue
         raw = answer.get("selected_option_codes") or []
         if not isinstance(raw, list):

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+from typing import cast
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from apps.intake.models import (
@@ -18,7 +20,9 @@ from apps.intake.models import (
 )
 from apps.intake.services import (
     CONTACT_METHOD_CONSENT_CODE,
+    NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
     NEW_SKIN_CHANGES_LOCATION,
+    _anamnesis_selected_affirmative,
     _build_intake_snapshot_payload,
 )
 from apps.reception.models import (
@@ -159,6 +163,35 @@ class IntakeSnapshotPreventionContactTests(TestCase):
         assert skin_row is not None
         self.assertEqual(skin_row.get("body_map"), bm)
 
+    def test_snapshot_includes_body_map_when_question_code_has_whitespace(self) -> None:
+        """Strip question_code like _build_intake_snapshot_payload so PDF body map is not dropped."""
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": f"  {NEW_SKIN_CHANGES_LOCATION}  ",
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.22, "y": 0.35, "side": "front"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        self.assertIsNotNone(payload.get("body_map"))
+        answers = (payload.get("anamnesis") or {}).get("answers") or []
+        skin_row = next(
+            (a for a in answers if a.get("question_code") == NEW_SKIN_CHANGES_LOCATION),
+            None,
+        )
+        self.assertIsNotNone(skin_row)
+        assert skin_row is not None
+        self.assertIsNotNone(skin_row.get("body_map"))
+
     def test_snapshot_omits_body_map_when_q4_no(self) -> None:
         self.intake_form.anamnesis_payload = {
             "answers": [
@@ -178,3 +211,26 @@ class IntakeSnapshotPreventionContactTests(TestCase):
             intake_form=self.intake_form, now=timezone.now()
         )
         self.assertIsNone(payload.get("body_map"))
+
+
+class AnamnesisSelectedAffirmativeStripTests(SimpleTestCase):
+    """No DB: _anamnesis_selected_affirmative must strip question_code like the snapshot builder."""
+
+    def test_true_when_stored_question_code_has_surrounding_whitespace(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": f"  {NEW_SKIN_CHANGES_LOCATION}  ",
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
