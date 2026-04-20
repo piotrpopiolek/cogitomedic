@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+from typing import cast
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from apps.intake.models import (
@@ -18,6 +20,11 @@ from apps.intake.models import (
 )
 from apps.intake.services import (
     CONTACT_METHOD_CONSENT_CODE,
+    NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+    NEW_SKIN_CHANGES_LOCATION,
+    _anamnesis_selected_affirmative,
+    _body_map_coordinate_float,
+    _body_map_points_for_intake_pdf,
     _build_intake_snapshot_payload,
 )
 from apps.reception.models import (
@@ -120,3 +127,237 @@ class IntakeSnapshotPreventionContactTests(TestCase):
         self.assertTrue(by_code["EMAIL"]["selected"])
         self.assertFalse(by_code["SMS"]["selected"])
         self.assertTrue(by_code["PHONE"]["selected"])
+
+    def test_snapshot_includes_body_map_when_q4_new_skin_changes_yes(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.22, "y": 0.35, "side": "front"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        bm = payload.get("body_map")
+        self.assertIsNotNone(bm)
+        assert isinstance(bm, dict)
+        self.assertEqual(bm.get("image_rel_path"), "static/tablet/body.jpg")
+        self.assertEqual(len(bm.get("points") or []), 1)
+        pt = bm["points"][0]
+        self.assertEqual(pt["left_pct"], "22.0000")
+        self.assertEqual(pt["top_pct"], "35.0000")
+        self.assertEqual(pt["side"], "front")
+        answers = (payload.get("anamnesis") or {}).get("answers") or []
+        self.assertTrue(answers)
+        skin_row = next(
+            (a for a in answers if a.get("question_code") == NEW_SKIN_CHANGES_LOCATION),
+            None,
+        )
+        self.assertIsNotNone(skin_row)
+        assert skin_row is not None
+        self.assertEqual(skin_row.get("body_map"), bm)
+
+    def test_snapshot_includes_body_map_when_question_code_has_whitespace(self) -> None:
+        """Strip question_code like _build_intake_snapshot_payload so PDF body map is not dropped."""
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": f"  {NEW_SKIN_CHANGES_LOCATION}  ",
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.22, "y": 0.35, "side": "front"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        self.assertIsNotNone(payload.get("body_map"))
+        answers = (payload.get("anamnesis") or {}).get("answers") or []
+        skin_row = next(
+            (a for a in answers if a.get("question_code") == NEW_SKIN_CHANGES_LOCATION),
+            None,
+        )
+        self.assertIsNotNone(skin_row)
+        assert skin_row is not None
+        self.assertIsNotNone(skin_row.get("body_map"))
+
+    def test_snapshot_builder_skips_malformed_anamnesis_rows(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                "not-a-dict",
+                {"question_code": 404, "selected_option_codes": ["YES"]},
+                {"question_code": "   ", "selected_option_codes": []},
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.1, "y": 0.2, "side": "back"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        codes = [
+            a["question_code"]
+            for a in (payload.get("anamnesis") or {}).get("answers") or []
+        ]
+        self.assertEqual(codes.count(NEW_SKIN_CHANGES_LOCATION), 1)
+        self.assertIsNotNone(payload.get("body_map"))
+
+    def test_snapshot_omits_body_map_when_q4_no(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["NO"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.1, "y": 0.2, "side": "back"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        self.assertIsNone(payload.get("body_map"))
+
+
+class AnamnesisSelectedAffirmativeStripTests(SimpleTestCase):
+    """No DB: _anamnesis_selected_affirmative must strip question_code like the snapshot builder."""
+
+    def test_true_when_stored_question_code_has_surrounding_whitespace(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": f"  {NEW_SKIN_CHANGES_LOCATION}  ",
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+
+class BodyMapCoordinateAndPointsTests(SimpleTestCase):
+    def test_coordinate_rejects_bool(self) -> None:
+        self.assertIsNone(_body_map_coordinate_float(True))
+        self.assertIsNone(_body_map_coordinate_float(False))
+
+    def test_coordinate_parses_int_float_str(self) -> None:
+        self.assertEqual(_body_map_coordinate_float(1), 1.0)
+        self.assertEqual(_body_map_coordinate_float(0.25), 0.25)
+        self.assertEqual(_body_map_coordinate_float("0.375"), 0.375)
+
+    def test_coordinate_invalid_string_or_other_returns_none(self) -> None:
+        self.assertIsNone(_body_map_coordinate_float("not-a-number"))
+        self.assertIsNone(_body_map_coordinate_float(None))
+        self.assertIsNone(_body_map_coordinate_float([1]))
+
+    def test_body_map_points_skips_non_list_and_bad_points(self) -> None:
+        self.assertEqual(_body_map_points_for_intake_pdf({}), [])
+        self.assertEqual(
+            _body_map_points_for_intake_pdf(
+                [
+                    "bad",
+                    {"x": True, "y": 0.5, "side": "front"},
+                    {"x": 0.1, "y": 0.2, "side": "back"},
+                ]
+            ),
+            [
+                {
+                    "left_pct": "10.0000",
+                    "top_pct": "20.0000",
+                    "side": "back",
+                    "index": 3,
+                },
+            ],
+        )
+
+
+class AnamnesisSelectedAffirmativeEdgeTests(SimpleTestCase):
+    def test_blank_question_code_argument_returns_false(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertFalse(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code="   ",
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+    def test_skips_non_dict_answers_and_non_string_question_code(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    "skip",
+                    {"question_code": 123, "selected_option_codes": ["YES"]},
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+    def test_selected_option_codes_not_list_returns_false(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": "YES",
+                    },
+                ],
+            },
+        )
+        self.assertFalse(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )

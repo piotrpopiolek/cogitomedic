@@ -37,6 +37,24 @@ logger = logging.getLogger(__name__)
 CONTACT_METHOD_CONSENT_CODE = "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG"
 CONTACT_METHOD_ALLOWED_OPTIONS = {"EMAIL", "SMS", "PHONE"}
 
+# Melanoma intake: if NEW_SKIN_CHANGES_LOCATION is answered affirmatively, the PDF includes the body map.
+NEW_SKIN_CHANGES_LOCATION = "Q4_NEW_SKIN_CHANGES_LOCATION"
+NEW_SKIN_CHANGES_AFFIRMATIVE_CODES = frozenset({"YES", "TRUE"})
+
+
+def _body_map_coordinate_float(value: object) -> float | None:
+    """Parse JSON body-map x/y; rejects bool (subclass of int)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
 
 def _patient_intake_consent_selected_codes(consent: PatientIntakeConsent) -> list[str]:
     raw = (
@@ -178,6 +196,70 @@ def _read_signature_data_url(intake_form: PatientIntakeForm) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def _anamnesis_selected_affirmative(
+    intake_form: PatientIntakeForm, *, question_code: str, affirmative: frozenset[str]
+) -> bool:
+    """True if the given question has at least one selected option in *affirmative*."""
+    target = question_code.strip()
+    if not target:
+        return False
+    payload = intake_form.anamnesis_payload or {}
+    for answer in payload.get("answers") or []:
+        if not isinstance(answer, dict):
+            continue
+        raw_qc = answer.get("question_code")
+        if not isinstance(raw_qc, str):
+            continue
+        if raw_qc.strip() != target:
+            continue
+        raw = answer.get("selected_option_codes") or []
+        if not isinstance(raw, list):
+            return False
+        selected = {str(c).strip().upper() for c in raw if str(c).strip()}
+        return bool(selected & affirmative)
+    return False
+
+
+def _body_map_points_for_intake_pdf(body_map_data: Any) -> list[dict[str, Any]]:
+    """Normalize ``body_map_data`` JSON to marker dicts for the intake PDF template."""
+    if not isinstance(body_map_data, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for i, p in enumerate(body_map_data):
+        if not isinstance(p, dict):
+            continue
+        x = _body_map_coordinate_float(p.get("x"))
+        y = _body_map_coordinate_float(p.get("y"))
+        if x is None or y is None:
+            continue
+        side = str(p.get("side") or "").strip()
+        out.append(
+            {
+                "left_pct": f"{x * 100.0:.4f}",
+                "top_pct": f"{y * 100.0:.4f}",
+                "side": side,
+                "index": i + 1,
+            }
+        )
+    return out
+
+
+def _intake_pdf_body_map_section(
+    intake_form: PatientIntakeForm,
+) -> dict[str, Any] | None:
+    """Body map block for the intake PDF when NEW_SKIN_CHANGES_LOCATION is answered affirmatively."""
+    if not _anamnesis_selected_affirmative(
+        intake_form,
+        question_code=NEW_SKIN_CHANGES_LOCATION,
+        affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+    ):
+        return None
+    return {
+        "image_rel_path": "static/tablet/body.jpg",
+        "points": _body_map_points_for_intake_pdf(intake_form.body_map_data),
+    }
+
+
 def _build_intake_snapshot_payload(
     *, intake_form: PatientIntakeForm, now: datetime
 ) -> dict[str, Any]:
@@ -227,11 +309,17 @@ def _build_intake_snapshot_payload(
         consents.append(row)
 
     answers_raw = intake_form.anamnesis_payload.get("answers") or []
-    question_codes = [
-        answer.get("question_code")
-        for answer in answers_raw
-        if isinstance(answer, dict) and isinstance(answer.get("question_code"), str)
-    ]
+    question_codes_set: set[str] = set()
+    for answer in answers_raw:
+        if not isinstance(answer, dict):
+            continue
+        raw_code = answer.get("question_code")
+        if not isinstance(raw_code, str):
+            continue
+        qc = raw_code.strip()
+        if qc:
+            question_codes_set.add(qc)
+    question_codes = list(question_codes_set)
     active_options_prefetch = Prefetch(
         "options",
         queryset=AnamnesisOptionDefinition.objects.filter(is_active=True).order_by(
@@ -246,11 +334,15 @@ def _build_intake_snapshot_payload(
         .order_by("-version")
     )
     question_by_code = {q.code: q for q in questions}
-    anamnesis_answers = []
+    body_map_section = _intake_pdf_body_map_section(intake_form)
+    anamnesis_answers: list[dict[str, Any]] = []
     for answer in answers_raw:
         if not isinstance(answer, dict):
             continue
-        question_code = answer.get("question_code")
+        raw_qc = answer.get("question_code")
+        if not isinstance(raw_qc, str):
+            continue
+        question_code = raw_qc.strip()
         if not question_code:
             continue
         question = question_by_code.get(question_code)
@@ -338,16 +430,28 @@ def _build_intake_snapshot_payload(
             if question
             else _humanize_code(question_code)
         )
-        anamnesis_answers.append(
-            {
-                "question_code": question_code,
-                "question_text_de": question_text_de,
-                "question_text_locale": question_text_locale,
-                "selected_options": selected_options,
-                "all_options": all_options,
-                "free_text": answer.get("free_text"),
-            }
+        answer_row: dict[str, Any] = {
+            "question_code": question_code,
+            "question_text_de": question_text_de,
+            "question_text_locale": question_text_locale,
+            "selected_options": selected_options,
+            "all_options": all_options,
+            "free_text": answer.get("free_text"),
+        }
+        if body_map_section is not None and question_code == NEW_SKIN_CHANGES_LOCATION:
+            answer_row["body_map"] = body_map_section
+        anamnesis_answers.append(answer_row)
+
+    anamnesis_answers.sort(
+        key=lambda r: (
+            (
+                question_by_code[r["question_code"]].display_order,
+                question_by_code[r["question_code"]].code,
+            )
+            if r.get("question_code") in question_by_code
+            else (9999, r.get("question_code") or "")
         )
+    )
 
     return {
         "schema_version": 1,
@@ -375,6 +479,7 @@ def _build_intake_snapshot_payload(
             "file_path": intake_form.signature_file_path,
         },
         "submitted_at": now.isoformat(),
+        "body_map": body_map_section,
     }
 
 

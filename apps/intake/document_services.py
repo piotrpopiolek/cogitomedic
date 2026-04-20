@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.db.models import QuerySet
+from django.utils import timezone as django_timezone
 
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
@@ -23,6 +24,11 @@ from apps.intake.models import (
     IntakeOutboxEvent,
     IntakeOutboxStatus,
 )
+
+
+def _format_local_datetime(dt: datetime) -> str:
+    """Human-readable timestamp in local TZ (matches doctor/admin UI, e.g. 19.04.2026 21:08)."""
+    return django_timezone.localtime(dt).strftime("%d.%m.%Y %H:%M")
 
 
 def _latest_processing_error(version: IntakeDocumentVersion) -> str | None:
@@ -151,6 +157,7 @@ def get_intake_document_detail(version: IntakeDocumentVersion) -> dict[str, Any]
             version.hidrive_sent_at.isoformat() if version.hidrive_sent_at else None
         ),
         "created_at": version.created_at.isoformat(),
+        "created_at_display": _format_local_datetime(version.created_at),
         "pdf_available": (
             version.pdf_generation_status == "COMPLETED"
             and bool(version.pdf_local_path)
@@ -184,6 +191,7 @@ def get_intake_document_list_item(version: IntakeDocumentVersion) -> dict[str, A
         "form_locale": version.form_locale,
         "pdf_generation_status": version.pdf_generation_status,
         "created_at": version.created_at.isoformat(),
+        "created_at_display": _format_local_datetime(version.created_at),
         "queue_entry_id": str(entry.id),
         "intake_form_id": str(version.intake_form_id),
         "queue_date": queue.queue_date.isoformat(),
