@@ -23,6 +23,8 @@ from apps.intake.services import (
     NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
     NEW_SKIN_CHANGES_LOCATION,
     _anamnesis_selected_affirmative,
+    _body_map_coordinate_float,
+    _body_map_points_for_intake_pdf,
     _build_intake_snapshot_payload,
 )
 from apps.reception.models import (
@@ -192,6 +194,34 @@ class IntakeSnapshotPreventionContactTests(TestCase):
         assert skin_row is not None
         self.assertIsNotNone(skin_row.get("body_map"))
 
+    def test_snapshot_builder_skips_malformed_anamnesis_rows(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                "not-a-dict",
+                {"question_code": 404, "selected_option_codes": ["YES"]},
+                {"question_code": "   ", "selected_option_codes": []},
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.1, "y": 0.2, "side": "back"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        codes = [
+            a["question_code"]
+            for a in (payload.get("anamnesis") or {}).get("answers") or []
+        ]
+        self.assertEqual(codes.count(NEW_SKIN_CHANGES_LOCATION), 1)
+        self.assertIsNotNone(payload.get("body_map"))
+
     def test_snapshot_omits_body_map_when_q4_no(self) -> None:
         self.intake_form.anamnesis_payload = {
             "answers": [
@@ -228,6 +258,103 @@ class AnamnesisSelectedAffirmativeStripTests(SimpleTestCase):
             },
         )
         self.assertTrue(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+
+class BodyMapCoordinateAndPointsTests(SimpleTestCase):
+    def test_coordinate_rejects_bool(self) -> None:
+        self.assertIsNone(_body_map_coordinate_float(True))
+        self.assertIsNone(_body_map_coordinate_float(False))
+
+    def test_coordinate_parses_int_float_str(self) -> None:
+        self.assertEqual(_body_map_coordinate_float(1), 1.0)
+        self.assertEqual(_body_map_coordinate_float(0.25), 0.25)
+        self.assertEqual(_body_map_coordinate_float("0.375"), 0.375)
+
+    def test_coordinate_invalid_string_or_other_returns_none(self) -> None:
+        self.assertIsNone(_body_map_coordinate_float("not-a-number"))
+        self.assertIsNone(_body_map_coordinate_float(None))
+        self.assertIsNone(_body_map_coordinate_float([1]))
+
+    def test_body_map_points_skips_non_list_and_bad_points(self) -> None:
+        self.assertEqual(_body_map_points_for_intake_pdf({}), [])
+        self.assertEqual(
+            _body_map_points_for_intake_pdf(
+                [
+                    "bad",
+                    {"x": True, "y": 0.5, "side": "front"},
+                    {"x": 0.1, "y": 0.2, "side": "back"},
+                ]
+            ),
+            [
+                {
+                    "left_pct": "10.0000",
+                    "top_pct": "20.0000",
+                    "side": "back",
+                    "index": 3,
+                },
+            ],
+        )
+
+
+class AnamnesisSelectedAffirmativeEdgeTests(SimpleTestCase):
+    def test_blank_question_code_argument_returns_false(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertFalse(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code="   ",
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+    def test_skips_non_dict_answers_and_non_string_question_code(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    "skip",
+                    {"question_code": 123, "selected_option_codes": ["YES"]},
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": ["YES"],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(
+            _anamnesis_selected_affirmative(
+                cast(PatientIntakeForm, form),
+                question_code=NEW_SKIN_CHANGES_LOCATION,
+                affirmative=NEW_SKIN_CHANGES_AFFIRMATIVE_CODES,
+            )
+        )
+
+    def test_selected_option_codes_not_list_returns_false(self) -> None:
+        form = SimpleNamespace(
+            anamnesis_payload={
+                "answers": [
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "selected_option_codes": "YES",
+                    },
+                ],
+            },
+        )
+        self.assertFalse(
             _anamnesis_selected_affirmative(
                 cast(PatientIntakeForm, form),
                 question_code=NEW_SKIN_CHANGES_LOCATION,
