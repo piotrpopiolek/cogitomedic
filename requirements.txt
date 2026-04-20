@@ -23,7 +23,7 @@ prometheus-client==0.24.1
 psycopg==3.3.2
 pycryptodome==3.23.0
 pydantic==2.12.5
-pypdf==6.10.0
+pypdf==6.10.2
 PyYAML==6.0.3
 python-dotenv==1.2.1
 requests==2.33.0
@@ -38,4 +38,3 @@ weasyprint==68.1
 django-unfold==0.89.0
 bleach==6.3.0
 markdown==3.10.2
-freezegun==1.5.5

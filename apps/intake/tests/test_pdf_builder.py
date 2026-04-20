@@ -12,7 +12,7 @@ from django.test import SimpleTestCase
 from pypdf import PdfReader
 
 from apps.intake.pdf_builder import _normalize_snapshot, build_intake_pdf_bytes
-from apps.intake.services import CONTACT_METHOD_CONSENT_CODE
+from apps.intake.services import CONTACT_METHOD_CONSENT_CODE, NEW_SKIN_CHANGES_LOCATION
 
 
 def _render_intake_pdf_html(snapshot: dict) -> str:
@@ -359,3 +359,158 @@ class IntakePdfBilingualLayoutTests(SimpleTestCase):
             html,
             r'<span class="cb">☑</span>\s*<span>SMS</span>',
         )
+
+    def test_body_map_section_renders_when_present_in_snapshot(self) -> None:
+        snap = self._base_snapshot(form_locale="de-DE")
+        snap["body_map"] = {
+            "image_rel_path": "static/tablet/body.jpg",
+            "points": [
+                {
+                    "left_pct": "22.0000",
+                    "top_pct": "35.0000",
+                    "side": "front",
+                    "index": 1,
+                },
+            ],
+        }
+        html = _render_intake_pdf_html(snap)
+        self.assertIn("Körperschema", html)
+        self.assertIn("static/tablet/body.jpg", html)
+        self.assertIn("body-map-marker", html)
+        self.assertIn("left:22.0000%", html)
+        self.assertIn("top:35.0000%", html)
+
+    def test_body_map_section_placed_under_new_skin_question_not_at_end(self) -> None:
+        snap = self._base_snapshot(form_locale="de-DE")
+        snap["body_map"] = {
+            "image_rel_path": "static/tablet/body.jpg",
+            "points": [
+                {
+                    "left_pct": "22.0000",
+                    "top_pct": "35.0000",
+                    "side": "front",
+                    "index": 1,
+                },
+            ],
+        }
+        snap["anamnesis"] = {
+            "answers": [
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "question_text_de": "COGITO_SKIN_Q_MARKER",
+                    "question_text_locale": "COGITO_SKIN_Q_MARKER",
+                    "all_options": [
+                        {
+                            "option_code": "YES",
+                            "label_de": "Ja",
+                            "label_locale": "Tak",
+                            "selected": True,
+                        },
+                    ],
+                },
+                {
+                    "question_code": "Q_OTHER_MELANOMA",
+                    "question_text_de": "COGITO_OTHER_Q_MARKER",
+                    "question_text_locale": "COGITO_OTHER_Q_MARKER",
+                    "all_options": [],
+                },
+            ]
+        }
+        html = _render_intake_pdf_html(snap)
+        skin_q = html.find("COGITO_SKIN_Q_MARKER")
+        korper = html.find("Körperschema")
+        other_q = html.find("COGITO_OTHER_Q_MARKER")
+        self.assertGreater(skin_q, -1)
+        self.assertGreater(korper, -1)
+        self.assertGreater(other_q, -1)
+        self.assertLess(skin_q, korper)
+        self.assertLess(korper, other_q)
+        # Count markup divs only — the string "body-map-wrap" also appears in <style> (.body-map-wrap rules).
+        self.assertEqual(html.count('<div class="body-map-wrap">'), 1)
+
+    def test_body_map_section_absent_when_not_in_snapshot(self) -> None:
+        snap = self._base_snapshot(form_locale="de-DE")
+        html = _render_intake_pdf_html(snap)
+        self.assertNotIn('<div class="body-map-wrap">', html)
+        self.assertNotIn('<span class="body-map-marker"', html)
+        self.assertNotIn("static/tablet/body.jpg", html)
+
+
+class IntakePdfNormalizeSnapshotBodyMapTests(SimpleTestCase):
+    """Exercise _normalize_snapshot body-map inlining without rendering HTML (diff-cover)."""
+
+    def test_answers_truthy_non_list_coerced_to_empty(self) -> None:
+        # Non-list survives ``.get("answers") or []`` when truthy (e.g. str), then line 76–77 normalizes.
+        snap: dict = {
+            "patient": {},
+            "anamnesis": {"answers": "invalid"},
+            "body_map": {"image_rel_path": "static/tablet/body.jpg", "points": []},
+        }
+        out = _normalize_snapshot(snap)
+        self.assertEqual(out["anamnesis"]["answers"], [])
+        self.assertIsNotNone(out["body_map"])
+
+    def test_non_dict_answer_rows_preserved_for_body_map_scan(self) -> None:
+        bm = {"image_rel_path": "static/tablet/body.jpg", "points": []}
+        snap: dict = {
+            "patient": {},
+            "anamnesis": {
+                "answers": [
+                    "skip-me",
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "question_text_de": "Q",
+                        "all_options": [],
+                    },
+                ],
+            },
+            "body_map": bm,
+        }
+        out = _normalize_snapshot(snap)
+        rows = out["anamnesis"]["answers"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0], "skip-me")
+        self.assertEqual(rows[1].get("body_map"), bm)
+        self.assertIsNone(out["body_map"])
+
+    def test_body_map_skipped_row_non_dict_or_bad_question_code(self) -> None:
+        bm = {"image_rel_path": "static/tablet/body.jpg", "points": []}
+        snap: dict = {
+            "patient": {},
+            "anamnesis": {
+                "answers": [
+                    {"question_code": None, "all_options": []},
+                    {"question_code": 404, "all_options": []},
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "all_options": [],
+                    },
+                ],
+            },
+            "body_map": bm,
+        }
+        out = _normalize_snapshot(snap)
+        skin = out["anamnesis"]["answers"][2]
+        self.assertEqual(skin.get("body_map"), bm)
+        self.assertIsNone(out["body_map"])
+
+    def test_body_map_row_already_present_skips_attach_from_root(self) -> None:
+        existing = {"image_rel_path": "inline.jpg", "points": []}
+        root = {"image_rel_path": "root.jpg", "points": []}
+        snap: dict = {
+            "patient": {},
+            "anamnesis": {
+                "answers": [
+                    {
+                        "question_code": NEW_SKIN_CHANGES_LOCATION,
+                        "body_map": existing,
+                        "all_options": [],
+                    },
+                ],
+            },
+            "body_map": root,
+        }
+        out = _normalize_snapshot(snap)
+        row = out["anamnesis"]["answers"][0]
+        self.assertIs(row.get("body_map"), existing)
+        self.assertIsNone(out["body_map"])

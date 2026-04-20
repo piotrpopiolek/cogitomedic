@@ -19,56 +19,60 @@
     ((window.location.pathname.match(/[0-9a-fA-F-]{36}/) || [])[0] || "");
   const API = PANEL.apiBase || "/api/v1";
   const CTX = PANEL.context || {};
-  function uiText(key, fallback) {
-    return PANEL.ui && PANEL.ui[key] ? PANEL.ui[key] : fallback;
+  /** Doctor UI strings from ``PANEL.ui`` (``get_doctor_ui`` / TranslationValue); no hardcoded fallbacks. */
+  function uiText(key) {
+    const v = PANEL.ui && PANEL.ui[key];
+    return v == null || v === "" ? "" : String(v);
+  }
+  function formatUiPlaceholders(template, values) {
+    if (!template) return "";
+    const m = values || {};
+    return String(template).replace(/\{(\w+)\}/g, function (_, name) {
+      return Object.prototype.hasOwnProperty.call(m, name)
+        ? String(m[name])
+        : "{" + name + "}";
+    });
+  }
+  function lesionGroupTitleLine(zeroBasedIndex) {
+    return (
+      uiText("lesion_group_prefix") +
+      " " +
+      (zeroBasedIndex + 1) +
+      " – " +
+      uiText("lesion_header")
+    );
+  }
+  function unnamedPresetLabel(zeroBasedIndex) {
+    return formatUiPlaceholders(uiText("favorite_preset_unnamed"), {
+      n: zeroBasedIndex + 1,
+    });
   }
   const UI = Object.freeze({
-    bodyMapTitle: uiText(
-      "body_map_title",
-      "Körperschema (vom Patient markiert)"
-    ),
-    bodyMapHint: uiText(
-      "body_map_hint",
-      "Vorder- und Rückansicht mit den vom Patient gesetzten Markierungen."
-    ),
-    bodyMapNoMarkers: uiText(
-      "body_map_no_markers",
-      "Keine Markierungen auf dem Körperschema (Patient hat keine Punkte gesetzt oder Daten fehlen)."
-    ),
-    bodyMapToggleHint: uiText(
-      "body_map_toggle_hint",
-      "Zum Ein- und Ausklappen klicken"
-    ),
-    templateSelectPlaceholder: uiText("template_select_placeholder", "Vorlage wählen…"),
-    msgFavoriteApplied: uiText("msg_favorite_applied", "Favorit angewendet."),
-    msgError: uiText("msg_error", "Fehler"),
-    msgNetwork: uiText("msg_network_error", "Netzwerkfehler."),
-    msgSaveSuccess: uiText("msg_save_success", "Entwurf gespeichert."),
-    msgPublishSuccess: uiText("msg_publish_success", "Veröffentlicht. PDF wird erstellt."),
-    msgRetrySuccess: uiText("msg_retry_success", "Retry queued."),
-    msgTemplateLoadError: uiText("msg_template_load_error", "Vorlagen konnten nicht geladen werden."),
-    msgLesionRequired: uiText("msg_lesion_required", "Bitte mindestens eine Läsion mit Nummern angeben."),
-    lesionHeader: uiText("lesion_header", "Merkmale und Einschätzung"),
-    externalPdfRejectBtn: uiText("external_pdf_reject_btn", "Datei ablehnen"),
-    externalPdfStatusMatched: uiText("external_pdf_status_matched", "Zugeordnet"),
-    externalPdfStatusRejected: uiText("external_pdf_status_rejected", "Abgelehnt"),
-    externalPdfStatusMergeFailed: uiText(
-      "external_pdf_status_merge_failed",
-      "Zusammenführung fehlgeschlagen"
-    ),
-    externalPdfStatusAccepted: uiText("external_pdf_status_accepted", "Verarbeitet"),
-    externalPdfPreviewHint: uiText(
-      "external_pdf_preview_hint",
-      "Klicken Sie auf einen Dateinamen für die Vorschau."
-    ),
-    externalPdfPreviewMergeWarning: uiText(
-      "external_pdf_preview_merge_warning",
-      "Hinweis: PDF-Zusammenführung fehlgeschlagen oder Anlage ungültig — Vorschau zeigt nur den Befund."
-    ),
-    msgPublishPreviewRequired: uiText(
-      "msg_publish_preview_required",
-      "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen."
-    ),
+    bodyMapTitle: uiText("body_map_title"),
+    bodyMapHint: uiText("body_map_hint"),
+    bodyMapNoMarkers: uiText("body_map_no_markers"),
+    bodyMapToggleHint: uiText("body_map_toggle_hint"),
+    templateSelectPlaceholder: uiText("template_select_placeholder"),
+    msgFavoriteApplied: uiText("msg_favorite_applied"),
+    msgError: uiText("msg_error"),
+    msgNetwork: uiText("msg_network_error"),
+    msgSaveSuccess: uiText("msg_save_success"),
+    msgPublishSuccess: uiText("msg_publish_success"),
+    msgRetrySuccess: uiText("msg_retry_success"),
+    msgTemplateLoadError: uiText("msg_template_load_error"),
+    msgLesionRequired: uiText("msg_lesion_required"),
+    lesionHeader: uiText("lesion_header"),
+    patientLabel: uiText("patient_label"),
+    intakeAnamnesisHeading: uiText("intake_summary_anamnesis_heading"),
+    templateNameFallback: uiText("template_name_fallback"),
+    externalPdfRejectBtn: uiText("external_pdf_reject_btn"),
+    externalPdfStatusMatched: uiText("external_pdf_status_matched"),
+    externalPdfStatusRejected: uiText("external_pdf_status_rejected"),
+    externalPdfStatusMergeFailed: uiText("external_pdf_status_merge_failed"),
+    externalPdfStatusAccepted: uiText("external_pdf_status_accepted"),
+    externalPdfPreviewHint: uiText("external_pdf_preview_hint"),
+    externalPdfPreviewMergeWarning: uiText("external_pdf_preview_merge_warning"),
+    msgPublishPreviewRequired: uiText("msg_publish_preview_required"),
   });
 
   function el(id) {
@@ -378,7 +382,9 @@
       const nameEl = el("patient-name");
       if (nameEl) nameEl.textContent = (p.last_name || "") + ", " + (p.first_name || "");
       let html =
-        "<p><strong>Patient</strong> " +
+        "<p><strong>" +
+        escapeHtml(UI.patientLabel) +
+        "</strong> " +
         escapeHtml(p.last_name) +
         ", " +
         escapeHtml(p.first_name) +
@@ -387,7 +393,10 @@
         "</p>";
       const questions = CTX.intake_summary.anamnesis_questions || [];
       if (questions.length) {
-        html += '<p class="mb-2 mt-2"><strong>Ankieta (wywiad)</strong></p>';
+        html +=
+          '<p class="mb-2 mt-2"><strong>' +
+          escapeHtml(UI.intakeAnamnesisHeading) +
+          "</strong></p>";
         questions.forEach(function (q) {
           const answer = q.answer || {};
           const selected = answer.selected_option_codes || [];
@@ -460,7 +469,7 @@
     if (selectedTemplate.template_body) {
       return [
         {
-          name: selectedTemplate.name || "Template",
+          name: selectedTemplate.name || UI.templateNameFallback,
           text: selectedTemplate.template_body,
         },
       ];
@@ -471,10 +480,10 @@
   function refreshFavoriteSelects() {
     const placeholder = UI.templateSelectPlaceholder;
     const lesionOptions = lesionFavorites().map(function (fav, idx) {
-      return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+      return { value: idx, label: fav.name || unnamedPresetLabel(idx) };
     });
     const summaryOptions = summaryFavorites().map(function (fav, idx) {
-      return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+      return { value: idx, label: fav.name || unnamedPresetLabel(idx) };
     });
     if (container) {
       container.querySelectorAll(".lesion-favorite-select").forEach(function (selectEl) {
@@ -518,12 +527,7 @@
     const section = frag.querySelector(".lesion-group");
     section.setAttribute("data-group-index", String(lesionGroupIndex));
     const titleEl = section.querySelector(".lesion-group-title");
-    if (titleEl)
-      titleEl.textContent =
-        "Gruppe " +
-        (lesionGroupIndex + 1) +
-        " – " +
-          UI.lesionHeader;
+    if (titleEl) titleEl.textContent = lesionGroupTitleLine(lesionGroupIndex);
     const clinicalRadios = section.querySelectorAll(".lesion-clinical");
     const malignancyRadios = section.querySelectorAll(".lesion-malignancy");
     clinicalRadios.forEach(function (r) {
@@ -561,7 +565,7 @@
     const placeholder = UI.templateSelectPlaceholder;
     if (lesionFavoriteSelect) {
       const lesionOptions = lesionFavorites().map(function (fav, idx) {
-        return { value: idx, label: fav.name || ("Preset " + (idx + 1)) };
+        return { value: idx, label: fav.name || unnamedPresetLabel(idx) };
       });
       setSelectOptions(lesionFavoriteSelect, lesionOptions, placeholder);
     }
@@ -592,12 +596,7 @@
     groups.forEach(function (section, i) {
       section.setAttribute("data-group-index", String(i));
       const titleEl = section.querySelector(".lesion-group-title");
-      if (titleEl)
-        titleEl.textContent =
-          "Gruppe " +
-          (i + 1) +
-          " – " +
-          UI.lesionHeader;
+      if (titleEl) titleEl.textContent = lesionGroupTitleLine(i);
       section.querySelectorAll(".lesion-clinical").forEach(function (r) {
         r.name = "lesion_grp_" + i + "_clinical";
       });
