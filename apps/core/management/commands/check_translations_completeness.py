@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.models import TranslationKey, TranslationKeyStatus, TranslationValue
@@ -9,7 +11,7 @@ from apps.core.translation_service import ALLOWED_LANGUAGE_CODES
 class Command(BaseCommand):
     help = "Validate that each ACTIVE translation key has values for all required languages."
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         missing: list[str] = []
         active_keys = TranslationKey.objects.filter(
             status=TranslationKeyStatus.ACTIVE

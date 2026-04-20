@@ -29,6 +29,11 @@
     "en": "Click to expand or collapse",
     "pl": "Kliknij, aby rozwinąć lub zwinąć"
   },
+  "doctor.body_map_no_markers": {
+    "de": "Keine Markierungen auf dem Körperschema (Patient hat keine Punkte gesetzt oder Daten fehlen).",
+    "en": "No markings on the body map (the patient set no points or data is missing).",
+    "pl": "Brak oznaczeń na schemacie ciała (pacjent nie ustawił punktów lub brak danych)."
+  },
   "doctor.btn_apply_favorite": {
     "de": "Anwenden",
     "en": "Apply",
@@ -139,6 +144,11 @@
     "en": "Favorite for section 9",
     "pl": "Ulubiony tekst sekcji 9"
   },
+  "doctor.favorite_preset_unnamed": {
+    "de": "Preset {n}",
+    "en": "Preset {n}",
+    "pl": "Preset {n}"
+  },
   "doctor.feature_asymmetry": {
     "de": "Asymmetrie",
     "en": "Asymmetry",
@@ -244,6 +254,11 @@
     "en": "Anamnesis / Intake",
     "pl": "Wywiad / Ankieta"
   },
+  "doctor.intake_summary_anamnesis_heading": {
+    "de": "Anamnesebogen",
+    "en": "Anamnesis",
+    "pl": "Ankieta"
+  },
   "doctor.lang_de": {
     "de": "DE",
     "en": "DE",
@@ -263,6 +278,11 @@
     "de": "Merkmale und Einschätzung",
     "en": "Features and assessment",
     "pl": "Cechy i ocena"
+  },
+  "doctor.lesion_group_prefix": {
+    "de": "Gruppe",
+    "en": "Group",
+    "pl": "Grupa"
   },
   "doctor.lesion_no": {
     "de": "Läsion Nr.",
@@ -558,6 +578,11 @@
     "de": "Vorlage wählen…",
     "en": "Select template…",
     "pl": "Wybierz szablon…"
+  },
+  "doctor.template_name_fallback": {
+    "de": "Vorlage",
+    "en": "Template",
+    "pl": "Szablon"
   },
   "doctor.text_placeholder": {
     "de": "Text hier anzeigen und bearbeiten",
