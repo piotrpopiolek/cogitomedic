@@ -13,6 +13,9 @@ from weasyprint import HTML
 
 from apps.intake.models import IntakeDocumentVersion
 
+# anamnesis payload question_code; must match NEW_SKIN_CHANGES_LOCATION in services.py
+_NEW_SKIN_CHANGES_QUESTION_CODE = "Q4_NEW_SKIN_CHANGES_LOCATION"
+
 
 def _w3c_profile_datetime(dt: datetime | None) -> str | None:
     """Format for WeasyPrint <meta name=dcterms.*> (W3C datetime profile)."""
@@ -70,6 +73,35 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Provide safe defaults expected by the intake PDF template."""
     patient = snapshot.get("patient") or {}
 
+    anamnesis_raw = snapshot.get("anamnesis") or {"answers": []}
+    answers_orig = anamnesis_raw.get("answers") or []
+    if not isinstance(answers_orig, list):
+        answers_orig = []
+    answers_out: list[Any] = []
+    for a in answers_orig:
+        if isinstance(a, dict):
+            answers_out.append(dict(a))
+        else:
+            answers_out.append(a)
+
+    body_map_root = snapshot.get("body_map")
+    body_map_moved_under_skin_question = False
+    if body_map_root:
+        for row in answers_out:
+            if not isinstance(row, dict):
+                continue
+            qc = row.get("question_code")
+            if not isinstance(qc, str) or qc.strip() != _NEW_SKIN_CHANGES_QUESTION_CODE:
+                continue
+            if row.get("body_map"):
+                body_map_moved_under_skin_question = True
+                break
+            row["body_map"] = body_map_root
+            body_map_moved_under_skin_question = True
+            break
+
+    body_map_for_footer = None if body_map_moved_under_skin_question else body_map_root
+
     captured_at_str = snapshot.get("captured_at")
     generated_at = (
         parse_datetime(captured_at_str) if captured_at_str else timezone.now()
@@ -93,8 +125,9 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "email": patient.get("email") or "",
         },
         "consents": snapshot.get("consents") or [],
-        "anamnesis": snapshot.get("anamnesis") or {"answers": []},
+        "anamnesis": {**anamnesis_raw, "answers": answers_out},
         "signature": snapshot.get("signature") or {},
+        "body_map": body_map_for_footer,
     }
     base["pdf_consent_acceptance_meta"] = _pdf_consent_acceptance_summary(
         base["consents"]

@@ -18,6 +18,7 @@ from apps.intake.models import (
 )
 from apps.intake.services import (
     CONTACT_METHOD_CONSENT_CODE,
+    NEW_SKIN_CHANGES_LOCATION,
     _build_intake_snapshot_payload,
 )
 from apps.reception.models import (
@@ -120,3 +121,60 @@ class IntakeSnapshotPreventionContactTests(TestCase):
         self.assertTrue(by_code["EMAIL"]["selected"])
         self.assertFalse(by_code["SMS"]["selected"])
         self.assertTrue(by_code["PHONE"]["selected"])
+
+    def test_snapshot_includes_body_map_when_q4_new_skin_changes_yes(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["YES"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.22, "y": 0.35, "side": "front"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        bm = payload.get("body_map")
+        self.assertIsNotNone(bm)
+        assert isinstance(bm, dict)
+        self.assertEqual(bm.get("image_rel_path"), "static/tablet/body.jpg")
+        self.assertEqual(len(bm.get("points") or []), 1)
+        pt = bm["points"][0]
+        self.assertEqual(pt["left_pct"], "22.0000")
+        self.assertEqual(pt["top_pct"], "35.0000")
+        self.assertEqual(pt["side"], "front")
+        answers = (payload.get("anamnesis") or {}).get("answers") or []
+        self.assertTrue(answers)
+        skin_row = next(
+            (a for a in answers if a.get("question_code") == NEW_SKIN_CHANGES_LOCATION),
+            None,
+        )
+        self.assertIsNotNone(skin_row)
+        assert skin_row is not None
+        self.assertEqual(skin_row.get("body_map"), bm)
+
+    def test_snapshot_omits_body_map_when_q4_no(self) -> None:
+        self.intake_form.anamnesis_payload = {
+            "answers": [
+                {
+                    "question_code": NEW_SKIN_CHANGES_LOCATION,
+                    "selected_option_codes": ["NO"],
+                },
+            ],
+        }
+        self.intake_form.body_map_data = [
+            {"x": 0.1, "y": 0.2, "side": "back"},
+        ]
+        self.intake_form.save(
+            update_fields=["anamnesis_payload", "body_map_data", "updated_at"]
+        )
+        payload = _build_intake_snapshot_payload(
+            intake_form=self.intake_form, now=timezone.now()
+        )
+        self.assertIsNone(payload.get("body_map"))
