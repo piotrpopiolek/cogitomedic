@@ -52,7 +52,7 @@
                     </span>
                 </dd>
             </div>
-            <div><dt class="text-gray-500">{% admin_trans "administration.col_created_at" "Utworzono" %}</dt><dd>{{ doc.created_at }}</dd></div>
+            <div><dt class="text-gray-500">{% admin_trans "administration.col_created_at" "Utworzono" %}</dt><dd>{{ doc.created_at_display }}</dd></div>
             {% if doc.processing_error_message %}
             <div class="md:col-span-2"><dt class="text-gray-500">{% admin_trans "administration.field_processing_error" "Błąd przetwarzania" %}</dt><dd class="text-red-600">{{ doc.processing_error_message }}</dd></div>
             {% endif %}

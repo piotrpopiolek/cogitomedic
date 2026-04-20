@@ -55,6 +55,9 @@
     .consent-text .text-center { text-align: center; }
     .sig-caption { margin: 0 0 6px 0; font-size: 12px; color: #0a4a4d; }
     .sig-caption-secondary { margin: 0 0 8px 0; font-size: 12px; color: #3d4f4f; }
+    .body-map-wrap { position: relative; max-width: 520px; margin-top: 8px; border: 1px solid #cfe3e3; border-radius: 6px; overflow: hidden; background: #fafdfd; }
+    .body-map-wrap img { display: block; width: 100%; height: auto; vertical-align: top; }
+    .body-map-marker { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #2563eb; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
   </style>
 </head>
 <body>
@@ -201,10 +204,31 @@
           {% endif %}
           <div class="free-text-box">{{ answer.free_text }}</div>
         {% endif %}
+        {% if answer.body_map %}
+        <h2 style="margin-top:14px;">{% if form_locale and form_locale|slice:":2" != "de" %}Körperschema / Body map{% else %}Körperschema (Patientenmarkierungen){% endif %}</h2>
+        <p class="muted" style="margin-top:4px;">{% if form_locale and form_locale|slice:":2" != "de" %}Vorder- und Rückansicht mit Markierungen des Patienten. / Front and back with patient markings.{% else %}Vorder- und Rückansicht mit Markierungen des Patienten.{% endif %}</p>
+        <div class="body-map-wrap">
+          <img src="{{ answer.body_map.image_rel_path }}" alt="" />
+          {% for m in answer.body_map.points %}
+          <span class="body-map-marker" style="left:{{ m.left_pct }}%; top:{{ m.top_pct }}%;" title="#{{ m.index }}{% if m.side %} {{ m.side }}{% endif %}"></span>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     {% endfor %}
   {% else %}
     <div class="muted">-</div>
+  {% endif %}
+
+  {% if body_map %}
+  <h2>{% if form_locale and form_locale|slice:":2" != "de" %}Körperschema / Body map{% else %}Körperschema (Patientenmarkierungen){% endif %}</h2>
+  <p class="muted" style="margin-top:4px;">{% if form_locale and form_locale|slice:":2" != "de" %}Vorder- und Rückansicht mit Markierungen des Patienten. / Front and back with patient markings.{% else %}Vorder- und Rückansicht mit Markierungen des Patienten.{% endif %}</p>
+  <div class="body-map-wrap">
+    <img src="{{ body_map.image_rel_path }}" alt="" />
+    {% for m in body_map.points %}
+    <span class="body-map-marker" style="left:{{ m.left_pct }}%; top:{{ m.top_pct }}%;" title="#{{ m.index }}{% if m.side %} {{ m.side }}{% endif %}"></span>
+    {% endfor %}
+  </div>
   {% endif %}
 
   {% if form_locale and form_locale|slice:":2" != "de" %}

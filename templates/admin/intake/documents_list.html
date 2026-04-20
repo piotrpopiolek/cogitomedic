@@ -98,7 +98,7 @@
                                 {{ item.pdf_generation_status }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-sm text-gray-500">{{ item.created_at }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">{{ item.created_at_display }}</td>
                         <td class="px-4 py-3 text-sm text-right">
                             <a href="{% url 'admin_intake_document_detail' item.id %}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium mr-3">{% admin_trans "administration.link_details" "Szczegóły" %}</a>
                             {% if item.pdf_available %}
