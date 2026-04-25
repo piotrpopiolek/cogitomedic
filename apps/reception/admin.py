@@ -272,6 +272,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
             request.user.is_authenticated
             and (
                 request.user.is_admin_role
+                or getattr(request.user, "is_manager", False)
                 or request.user.is_reception
                 or request.user.is_superuser
             )

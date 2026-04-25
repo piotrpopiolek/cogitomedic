@@ -152,13 +152,25 @@ def match_filename_to_candidates(filename_stem: str, candidates: list[str]) -> b
 
 
 def dated_match_candidates(patient: Patient) -> list[str]:
-    """Normalized stems that include date of birth (may be empty if no DOB)."""
+    """Normalized stems that include date of birth (may be empty if no DOB).
+
+    Uses the same name variants as :func:`build_patient_filename_candidates` so
+    transliterated dated stems (e.g. ``Mueller_`` for ``Müller``) match and are not
+    misclassified as undated/ambiguous.
+    """
     if not patient.date_of_birth:
         return []
-    first = normalize_name(patient.first_name)
-    last = normalize_name(patient.last_name)
+    first_variants = normalized_name_variants(patient.first_name)
+    last_variants = normalized_name_variants(patient.last_name)
     dob_us = patient.date_of_birth.isoformat().replace("-", "_")
-    return [f"{first}_{last}_{dob_us}", f"{last}_{first}_{dob_us}"]
+    candidates: list[str] = []
+    for first in first_variants:
+        for last in last_variants:
+            for base in (f"{first}_{last}", f"{last}_{first}"):
+                dated = f"{base}_{dob_us}"
+                if dated not in candidates:
+                    candidates.append(dated)
+    return candidates
 
 
 def stem_matches_dated_variant(filename_stem: str, patient: Patient) -> bool:
