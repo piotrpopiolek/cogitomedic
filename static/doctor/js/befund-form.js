@@ -59,6 +59,7 @@
     msgSaveSuccess: uiText("msg_save_success"),
     msgPublishSuccess: uiText("msg_publish_success"),
     msgRetrySuccess: uiText("msg_retry_success"),
+    msgSessionExpired: uiText("msg_session_expired"),
     msgTemplateLoadError: uiText("msg_template_load_error"),
     msgLesionRequired: uiText("msg_lesion_required"),
     lesionHeader: uiText("lesion_header"),
@@ -174,6 +175,21 @@
     const tokenEl = document.querySelector("[name=csrfmiddlewaretoken]");
     return tokenEl ? tokenEl.value : (getCookie("csrftoken") || "").trim();
   }
+  function buildDoctorLoginUrl() {
+    return "/doctor/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+  }
+  var authExpiredHandled = false;
+  function handleAuthExpired(message) {
+    if (authExpiredHandled) return;
+    authExpiredHandled = true;
+    alertMsg("warning", message || UI.msgSessionExpired || "Session expired.");
+    window.setTimeout(function () {
+      window.location.href = buildDoctorLoginUrl();
+    }, 300);
+  }
+  function isAuthExpiredResponse(res) {
+    return !!(res && res.authExpired);
+  }
   function apiFetch(url, opts) {
     opts = opts || {};
     opts.credentials = "same-origin";
@@ -204,6 +220,10 @@
     }
     return fetch(url, opts).then(function (r) {
       return parseResponseBody(r).then(function (j) {
+        if (r.status === 401) {
+          handleAuthExpired((j && j.error) || UI.msgSessionExpired);
+          return { ok: false, status: r.status, json: j, authExpired: true };
+        }
         return { ok: r.ok, status: r.status, json: j };
       });
     });
@@ -243,6 +263,10 @@
     })
       .then(function (r) {
         var ct = (r.headers.get("content-type") || "").toLowerCase();
+        if (r.status === 401) {
+          handleAuthExpired(UI.msgSessionExpired);
+          return;
+        }
         if (!r.ok) {
           if (ct.indexOf("application/json") !== -1) {
             return r.json().then(function (j) {
@@ -283,6 +307,7 @@
     var hintEl = el("external-pdfs-empty");
     if (!panel || !listEl) return;
     apiFetch(docUrl("/external-pdfs"), { method: "GET" }).then(function (res) {
+      if (isAuthExpiredResponse(res)) return;
       if (!res.ok) return;
       var items = (res.json && res.json.items) || [];
       listEl.innerHTML = "";
@@ -329,6 +354,7 @@
               method: "POST",
               body: "{}",
             }).then(function (r2) {
+              if (isAuthExpiredResponse(r2)) return;
               if (!r2.ok) {
                 alertMsg(
                   "danger",
@@ -748,6 +774,7 @@
     return null;
   }
   function responseErrorMessage(res, fallback) {
+    if (isAuthExpiredResponse(res)) return "";
     if (!res || !res.json) return fallback;
     return res.json.error || res.json.detail || res.json.raw_response || fallback;
   }
@@ -881,6 +908,7 @@
     refreshStatusInFlight = apiFetch(docUrl("?form_locale=" + encodeURIComponent(authoringLocale)), {
       method: "GET",
     }).then(function (res) {
+      if (isAuthExpiredResponse(res)) return;
       if (!res.ok) return;
       const updated = (res.json && res.json.current_version) || {};
       renderProcessingStatus(updated);
@@ -909,6 +937,7 @@
       })
         .then(function (res) {
           retryBtn.disabled = false;
+          if (isAuthExpiredResponse(res)) return;
           if (!res.ok) {
             alertMsg("danger", responseErrorMessage(res, UI.msgError + " " + res.status));
             return;
@@ -943,6 +972,7 @@
       })
         .then(function (res) {
           btn.disabled = false;
+          if (isAuthExpiredResponse(res)) return;
           if (res.ok) {
             previewSeenSinceLastSave = false;
             setPublishEnabledFromPreviewFlag();
@@ -992,6 +1022,11 @@
         }),
       })
         .then(function (res) {
+          if (isAuthExpiredResponse(res)) {
+            btn.disabled = false;
+            if (previewTab) previewTab.close();
+            return;
+          }
           if (!res.ok) {
             btn.disabled = false;
             alertMsg(
@@ -1007,6 +1042,11 @@
             headers: { Accept: "application/pdf" },
           }).then(function (pdfRes) {
             btn.disabled = false;
+            if (pdfRes.status === 401) {
+              if (previewTab) previewTab.close();
+              handleAuthExpired(UI.msgSessionExpired);
+              return;
+            }
             if (!pdfRes.ok) {
               if (previewTab) previewTab.close();
               var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
@@ -1071,6 +1111,10 @@
         }),
       })
         .then(function (res) {
+          if (isAuthExpiredResponse(res)) {
+            publishBtn.disabled = false;
+            return;
+          }
           if (!res.ok) {
             publishBtn.disabled = false;
             alertMsg(
@@ -1093,6 +1137,10 @@
         })
         .then(function (res) {
           if (!res) return;
+          if (isAuthExpiredResponse(res)) {
+            publishBtn.disabled = false;
+            return;
+          }
           if (res.ok) {
             alertMsg("success", UI.msgPublishSuccess);
             publishBtn.disabled = true;
