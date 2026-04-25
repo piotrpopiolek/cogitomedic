@@ -14,6 +14,7 @@ from apps.medical.name_normalize import (
     incoming_stem_norm_lookup_bases,
     match_filename_to_candidates,
     normalize_name,
+    normalized_name_variants,
     stem_matches_dated_variant,
 )
 
@@ -185,6 +186,20 @@ class NameNormalizeTests(SimpleTestCase):
         self.assertEqual(normalize_name("Straße"), "strasse")
         self.assertEqual(normalize_name("Żołnierz"), "zolnierz")
         self.assertEqual(normalize_name("Świątek"), "swiatek")
+
+    def test_normalized_name_variants_cover_umlaut_and_transliteration(self) -> None:
+        self.assertEqual(
+            normalized_name_variants("Müller"),
+            ("muller", "mueller"),
+        )
+        self.assertEqual(
+            normalized_name_variants("Mueller"),
+            ("mueller", "muller"),
+        )
+        self.assertEqual(
+            normalized_name_variants("Schröder"),
+            ("schroder", "schroeder"),
+        )
 
     def test_normalize_name_fifty_german_full_name_stems(self) -> None:
         """Fifty full-name stems (spaces): DE orderings, Zweitname, von/zu, hyphens, ß/umlauts.
@@ -364,6 +379,27 @@ class NameNormalizeTests(SimpleTestCase):
         c = build_patient_filename_candidates(p)
         self.assertTrue(match_filename_to_candidates("Kowalski Jan", c))
 
+    def test_match_filename_accepts_mueller_and_umlaut_variants_both_directions(
+        self,
+    ) -> None:
+        p = Mock()
+        p.first_name = "Thomas"
+        p.last_name = "Müller"
+        p.date_of_birth = None
+        candidates = build_patient_filename_candidates(p)
+
+        self.assertTrue(match_filename_to_candidates("Mueller_Thomas", candidates))
+        self.assertTrue(match_filename_to_candidates("Muller_Thomas", candidates))
+
+        p2 = Mock()
+        p2.first_name = "Thomas"
+        p2.last_name = "Mueller"
+        p2.date_of_birth = None
+        candidates2 = build_patient_filename_candidates(p2)
+
+        self.assertTrue(match_filename_to_candidates("Müller_Thomas", candidates2))
+        self.assertTrue(match_filename_to_candidates("Muller_Thomas", candidates2))
+
     def test_match_undated_multi_file_suffix_kowalski_jan_2(self) -> None:
         """§12: ``kowalski_jan_2`` matches undated candidate ``kowalski_jan``."""
         p = Mock()
@@ -373,6 +409,15 @@ class NameNormalizeTests(SimpleTestCase):
         c = build_patient_filename_candidates(p)
         self.assertTrue(match_filename_to_candidates("kowalski_jan_2", c))
         self.assertFalse(stem_matches_dated_variant("kowalski_jan_2", p))
+
+    def test_incoming_stem_lookup_bases_include_collapsed_umlaut_transliteration(
+        self,
+    ) -> None:
+        incoming_stem_norm_lookup_bases.cache_clear()
+        norm = normalize_name("Mueller_Thomas_CMBER2026FR01_20260418090102")
+        bases = incoming_stem_norm_lookup_bases(norm)
+        self.assertIn("mueller_thomas", bases)
+        self.assertIn("muller_thomas", bases)
 
     def test_match_digit_in_last_name(self) -> None:
         p = Mock()
