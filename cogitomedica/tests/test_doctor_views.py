@@ -307,6 +307,28 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertIn("GATE_BLOCKED", resp.content.decode())
 
     @patch(
+        "cogitomedica.doctor_views.check_external_pdf_gate",
+        return_value=GateResult(
+            False,
+            (),
+            "GATE_BLOCKED",
+            skip_attachment_sync=False,
+        ),
+    )
+    def test_detail_bypasses_external_pdf_gate_for_published_document(
+        self,
+        mock_gate: MagicMock,
+    ) -> None:
+        self.doc.status = MedicalDocStatus.PUBLISHED
+        self.doc.save(update_fields=["status", "updated_at"])
+
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+
+        self.assertEqual(resp.status_code, 200)
+        mock_gate.assert_not_called()
+
+    @patch(
         "cogitomedica.doctor_views.get_medical_document_context",
         return_value={"intake_summary": {"patient": {}}},
     )

@@ -179,6 +179,11 @@
     "en": "Matched rows",
     "pl": "Dopasowane wiersze"
   },
+  "administration.field_skipped_already_present_count": {
+    "de": "Uebersprungene bereits vorhandene Zeilen",
+    "en": "Skipped already present rows",
+    "pl": "Pominiete juz obecne wiersze"
+  },
   "administration.field_value": {
     "de": "Wert",
     "en": "Value",

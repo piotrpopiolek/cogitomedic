@@ -11,14 +11,56 @@ if TYPE_CHECKING:
     from apps.reception.models import Patient
 
 
-def normalize_name(name: str) -> str:
-    """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
-    raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
-    raw = " ".join(raw.split())
+_GERMAN_TRANSLIT_TABLE = str.maketrans(
+    {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "Ä": "Ae",
+        "Ö": "Oe",
+        "Ü": "Ue",
+        "ß": "ss",
+        "ẞ": "SS",
+    }
+)
+
+
+def _normalize_ascii_name(name: str) -> str:
+    raw = " ".join((name or "").split())
     nfkd = unicodedata.normalize("NFKD", raw)
     ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
     ascii_only = ascii_only.replace("ł", "l").replace("Ł", "L")
     return ascii_only.strip().replace("-", "_").replace(" ", "_").lower()
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
+    raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
+    return _normalize_ascii_name(raw)
+
+
+def normalized_name_variants(name: str) -> tuple[str, ...]:
+    """Return normalized variants for German transliterations, e.g. ``Müller``/``Mueller``."""
+    variants: list[str] = []
+    base = normalize_name(name)
+    if base:
+        variants.append(base)
+
+    transliterated = _normalize_ascii_name(
+        (name or "").translate(_GERMAN_TRANSLIT_TABLE)
+    )
+    if transliterated and transliterated not in variants:
+        variants.append(transliterated)
+
+    collapsed = (
+        transliterated.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+        if transliterated
+        else ""
+    )
+    if collapsed and collapsed not in variants:
+        variants.append(collapsed)
+
+    return tuple(variants)
 
 
 def _stem_without_pdf(filename_stem: str) -> str:
@@ -31,12 +73,20 @@ def _stem_without_pdf(filename_stem: str) -> str:
 
 def build_patient_filename_candidates(patient: Patient) -> list[str]:
     """Return four normalized filename stems (no ``.pdf``) for the patient."""
-    first = normalize_name(patient.first_name)
-    last = normalize_name(patient.last_name)
-    candidates = [f"{first}_{last}", f"{last}_{first}"]
+    first_variants = normalized_name_variants(patient.first_name)
+    last_variants = normalized_name_variants(patient.last_name)
+    candidates: list[str] = []
+    for first in first_variants:
+        for last in last_variants:
+            for candidate in (f"{first}_{last}", f"{last}_{first}"):
+                if candidate not in candidates:
+                    candidates.append(candidate)
     if patient.date_of_birth:
         dob_us = patient.date_of_birth.isoformat().replace("-", "_")
-        candidates += [f"{first}_{last}_{dob_us}", f"{last}_{first}_{dob_us}"]
+        dated_candidates = [f"{candidate}_{dob_us}" for candidate in candidates]
+        for candidate in dated_candidates:
+            if candidate not in candidates:
+                candidates.append(candidate)
     return candidates
 
 
@@ -114,6 +164,9 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     """
     bases: set[str] = {norm}
     if _INCOMING_STEM_DOB_TAIL.search(norm):
+        collapsed = norm.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+        if collapsed:
+            bases.add(collapsed)
         return frozenset(bases)
     m = re.fullmatch(r"(.+)_(\d+)$", norm)
     if m:
@@ -122,4 +175,8 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     if len(segments) >= 3:
         for k in range(2, len(segments)):
             bases.add("_".join(segments[:k]))
+    collapsed_bases = {
+        base.replace("ae", "a").replace("oe", "o").replace("ue", "u") for base in bases
+    }
+    bases.update(base for base in collapsed_bases if base)
     return frozenset(bases)

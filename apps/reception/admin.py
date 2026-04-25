@@ -493,6 +493,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
         "total_rows",
         "inserted_rows",
         "matched_rows",
+        "skipped_already_present_count",
         "error_rows",
         "created_by_user",
         "created_at",

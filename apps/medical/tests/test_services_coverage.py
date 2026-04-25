@@ -953,6 +953,26 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertEqual(len(found), 1)
         self.assertFalse(found[0]["row_is_fully_delivered"])
 
+    def test_work_queue_keeps_published_status_while_pipeline_is_pending(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            pdf_generation_status=PdfStatus.PENDING,
+            hidrive_sent=False,
+            sms_sent=False,
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertGreaterEqual(total, 1)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["status"], MedicalDocStatus.PUBLISHED)
+        self.assertEqual(found[0]["pdf_generation_status"], PdfStatus.PENDING)
+        self.assertEqual(found[0]["hidrive_status"], "PENDING")
+        self.assertEqual(found[0]["sms_status"], "PENDING")
+        self.assertFalse(found[0]["row_is_fully_delivered"])
+
     # -- list_medical_documents draft visibility for non-assigned doctor --
     def test_list_medical_documents_draft_visible_to_non_assigned(self):
         self._make_draft_doc()
