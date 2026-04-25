@@ -24,7 +24,7 @@ pycryptodome==3.23.0
 pydantic==2.12.5
 pypdf==6.10.0
 PyYAML==6.0.3
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 requests==2.33.0
 sentry-sdk==2.53.0
 smsapi-client==2.9.6
