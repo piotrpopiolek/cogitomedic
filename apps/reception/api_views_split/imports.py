@@ -25,6 +25,7 @@ def _serialize_batch(batch: PatientImportBatch) -> dict:
         "total_rows": batch.total_rows,
         "inserted_rows": batch.inserted_rows,
         "matched_rows": batch.matched_rows,
+        "skipped_already_present_count": batch.skipped_already_present_count,
         "error_rows": batch.error_rows,
         "created_by_user_id": str(batch.created_by_user_id),
         "created_at": batch.created_at.isoformat(),

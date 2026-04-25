@@ -787,6 +787,30 @@ class PatientXlsxImportTests(TestCase):
             error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
         )
 
+    def test_reimport_same_daily_queue_skips_existing_queue_entry(self) -> None:
+        row = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 906",
+            "erika@example.com",
+        )
+
+        first_batch = self._run_import([row])
+        second_batch = self._run_import([row])
+
+        self.assertEqual(first_batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(first_batch.inserted_rows, 1)
+        self.assertEqual(first_batch.skipped_already_present_count, 0)
+
+        self.assertEqual(second_batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(second_batch.inserted_rows, 0)
+        self.assertEqual(second_batch.matched_rows, 0)
+        self.assertEqual(second_batch.error_rows, 0)
+        self.assertEqual(second_batch.skipped_already_present_count, 1)
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(QueueEntry.objects.count(), 1)
+
     def test_import_fails_when_no_valid_patient_header_row(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             path = Path(tmp.name)
