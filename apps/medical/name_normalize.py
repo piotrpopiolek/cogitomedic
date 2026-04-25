@@ -25,6 +25,9 @@ _GERMAN_TRANSLIT_TABLE = str.maketrans(
 )
 
 
+_PROBABLE_UMLAUT_TRANSLIT_RE = re.compile(r"(?i)(?:^|[^aeiouy])(ae|oe|ue)(?=[^aeiouy])")
+
+
 def _normalize_ascii_name(name: str) -> str:
     raw = " ".join((name or "").split())
     nfkd = unicodedata.normalize("NFKD", raw)
@@ -37,6 +40,27 @@ def normalize_name(name: str) -> str:
     """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
     raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
     return _normalize_ascii_name(raw)
+
+
+def _contains_german_umlaut(name: str) -> bool:
+    return any(ch in name for ch in "äöüÄÖÜ")
+
+
+def _is_probable_umlaut_transliteration(value: str) -> bool:
+    return bool(_PROBABLE_UMLAUT_TRANSLIT_RE.search(value))
+
+
+def _collapse_umlaut_transliteration_tokens(value: str) -> str:
+    tokens = value.split("_")
+    collapsed_tokens: list[str] = []
+    for token in tokens:
+        if _is_probable_umlaut_transliteration(token):
+            collapsed_tokens.append(
+                token.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+            )
+        else:
+            collapsed_tokens.append(token)
+    return "_".join(collapsed_tokens)
 
 
 def normalized_name_variants(name: str) -> tuple[str, ...]:
@@ -52,9 +76,12 @@ def normalized_name_variants(name: str) -> tuple[str, ...]:
     if transliterated and transliterated not in variants:
         variants.append(transliterated)
 
+    should_collapse = _contains_german_umlaut(
+        name
+    ) or _is_probable_umlaut_transliteration(transliterated)
     collapsed = (
-        transliterated.replace("ae", "a").replace("oe", "o").replace("ue", "u")
-        if transliterated
+        _collapse_umlaut_transliteration_tokens(transliterated)
+        if transliterated and should_collapse
         else ""
     )
     if collapsed and collapsed not in variants:
@@ -164,7 +191,7 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     """
     bases: set[str] = {norm}
     if _INCOMING_STEM_DOB_TAIL.search(norm):
-        collapsed = norm.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+        collapsed = _collapse_umlaut_transliteration_tokens(norm)
         if collapsed:
             bases.add(collapsed)
         return frozenset(bases)
@@ -175,8 +202,6 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     if len(segments) >= 3:
         for k in range(2, len(segments)):
             bases.add("_".join(segments[:k]))
-    collapsed_bases = {
-        base.replace("ae", "a").replace("oe", "o").replace("ue", "u") for base in bases
-    }
+    collapsed_bases = {_collapse_umlaut_transliteration_tokens(base) for base in bases}
     bases.update(base for base in collapsed_bases if base)
     return frozenset(bases)

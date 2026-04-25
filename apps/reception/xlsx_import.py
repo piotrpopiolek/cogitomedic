@@ -456,6 +456,7 @@ def _audit_xlsx_import_finished(
     status: str,
     inserted_rows: int,
     matched_rows: int,
+    skipped_already_present_count: int,
     error_rows: int,
     failure_reason: str | None = None,
 ) -> None:
@@ -464,6 +465,7 @@ def _audit_xlsx_import_finished(
         "status": status,
         "inserted_rows": inserted_rows,
         "matched_rows": matched_rows,
+        "skipped_already_present_count": skipped_already_present_count,
         "error_rows": error_rows,
     }
     if failure_reason:
@@ -519,6 +521,7 @@ def _finalize_patient_xlsx_import_batch_failed(
         status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
         inserted_rows=0,
         matched_rows=0,
+        skipped_already_present_count=0,
         error_rows=0,
         failure_reason=error_message,
     )
@@ -815,6 +818,7 @@ def process_patient_xlsx_import_batch(
         status=batch.status,
         inserted_rows=inserted,
         matched_rows=matched,
+        skipped_already_present_count=skipped_already_present,
         error_rows=errors_count,
     )
     _try_record_import_batch_finished(

@@ -200,6 +200,14 @@ class NameNormalizeTests(SimpleTestCase):
             normalized_name_variants("Schröder"),
             ("schroder", "schroeder"),
         )
+        self.assertEqual(
+            normalized_name_variants("Blue"),
+            ("blue",),
+        )
+        self.assertEqual(
+            normalized_name_variants("Queenie"),
+            ("queenie",),
+        )
 
     def test_normalize_name_fifty_german_full_name_stems(self) -> None:
         """Fifty full-name stems (spaces): DE orderings, Zweitname, von/zu, hyphens, ß/umlauts.
@@ -418,6 +426,16 @@ class NameNormalizeTests(SimpleTestCase):
         bases = incoming_stem_norm_lookup_bases(norm)
         self.assertIn("mueller_thomas", bases)
         self.assertIn("muller_thomas", bases)
+
+    def test_incoming_stem_lookup_bases_do_not_collapse_non_umlaut_like_tokens(
+        self,
+    ) -> None:
+        incoming_stem_norm_lookup_bases.cache_clear()
+        norm = normalize_name("Blue_Queenie_CMBER2026FR01_20260418090102")
+        bases = incoming_stem_norm_lookup_bases(norm)
+        self.assertIn("blue_queenie", bases)
+        self.assertNotIn("blu_queenie", bases)
+        self.assertNotIn("blue_quenie", bases)
 
     def test_match_digit_in_last_name(self) -> None:
         p = Mock()
