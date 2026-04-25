@@ -348,6 +348,29 @@ class RoleBasedSessionExpiryMiddlewareTests(TestCase):
                 "is_doctor": True,
                 "is_admin_role": False,
                 "is_reception": False,
+                "is_manager": False,
+                "is_tablet": False,
+            },
+        )()
+        request = self._request_with_user(user)
+
+        self.middleware(request)
+
+        self.assertGreaterEqual(
+            request.session.get_expiry_age(),
+            settings.STAFF_SESSION_COOKIE_AGE - 5,
+        )
+
+    def test_manager_role_gets_extended_session_expiry(self) -> None:
+        user = type(
+            "UserStub",
+            (),
+            {
+                "is_authenticated": True,
+                "is_doctor": False,
+                "is_admin_role": False,
+                "is_reception": False,
+                "is_manager": True,
                 "is_tablet": False,
             },
         )()
@@ -369,6 +392,7 @@ class RoleBasedSessionExpiryMiddlewareTests(TestCase):
                 "is_doctor": False,
                 "is_admin_role": False,
                 "is_reception": False,
+                "is_manager": False,
                 "is_tablet": True,
             },
         )()
@@ -390,6 +414,7 @@ class RoleBasedSessionExpiryMiddlewareTests(TestCase):
                 "is_doctor": False,
                 "is_admin_role": False,
                 "is_reception": False,
+                "is_manager": False,
                 "is_tablet": False,
             },
         )()

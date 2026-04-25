@@ -13,7 +13,12 @@ _PREFERRED_LOCALE_TO_DJANGO_LANG: dict[str, str] = {
     "pl-PL": "pl",
 }
 
-_SESSION_EXPIRY_ROLES = ("is_doctor", "is_admin_role", "is_reception")
+_SESSION_EXPIRY_ROLES = (
+    "is_doctor",
+    "is_admin_role",
+    "is_reception",
+    "is_manager",
+)
 
 
 class CsrfTrustTunnelOriginMiddleware:
@@ -33,7 +38,8 @@ class CsrfTrustTunnelOriginMiddleware:
 
 class RoleBasedSessionExpiryMiddleware:
     """
-    Refresh session expiry for authenticated staff roles using per-role timeouts.
+    Refresh session expiry for authenticated staff roles using per-role timeouts
+    (doctor, admin, reception, manager, tablet).
 
     Global ``SESSION_COOKIE_AGE`` remains the fallback for anonymous or non-staff flows.
     """
