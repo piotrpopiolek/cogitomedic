@@ -113,6 +113,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.core.middleware.RoleBasedSessionExpiryMiddleware",
     "apps.core.middleware.StaffLocaleMiddleware",
     "apps.core.middleware.TranslationRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -689,6 +690,12 @@ SESSION_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_COOKIE_AGE_SECONDS", "1800"))
+STAFF_SESSION_COOKIE_AGE = int(
+    os.environ.get("STAFF_SESSION_COOKIE_AGE_SECONDS", str(8 * 60 * 60))
+)
+TABLET_SESSION_COOKIE_AGE = int(
+    os.environ.get("TABLET_SESSION_COOKIE_AGE_SECONDS", str(7 * 24 * 60 * 60))
+)
 SESSION_SAVE_EVERY_REQUEST = True
 SECURE_HSTS_SECONDS = 31536000 if ENVIRONMENT == "prod" else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = ENVIRONMENT == "prod"

@@ -369,6 +369,11 @@
     "en": "Retry has been queued.",
     "pl": "Ponowienie zostało dodane do kolejki."
   },
+  "doctor.msg_session_expired": {
+    "de": "Sitzung abgelaufen. Bitte erneut einloggen.",
+    "en": "Session expired. Please log in again.",
+    "pl": "Sesja wygasła. Zaloguj się ponownie."
+  },
   "doctor.msg_save_success": {
     "de": "Entwurf gespeichert.",
     "en": "Draft saved.",
