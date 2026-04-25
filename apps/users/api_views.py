@@ -32,7 +32,7 @@ from apps.users.api_schemas import (
     UpdateStaffUserClinicSitesRequest,
     UpdateStaffUserRequest,
 )
-from apps.users.models import StaffUser
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
 from apps.users.services import (
     create_staff_user,
     deactivate_staff_user,
@@ -45,6 +45,8 @@ def get_primary_role(user) -> str | None:
         return None
     if user.is_admin_role:
         return "ADMIN"
+    elif user.is_manager:
+        return "MANAGER"
     elif user.is_doctor:
         return "DOCTOR"
     elif user.is_reception:
@@ -196,10 +198,9 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         qs = StaffUser.objects.all().order_by("username")
         role = request.GET.get("role")
         if role:
-            valid_roles = {"RECEPTION", "DOCTOR", "ADMIN", "TABLET"}
-            if role not in valid_roles:
+            if role not in VALID_STAFF_ROLES:
                 return json_error("other.api.invalid_role_query", status=400)
-            group_name = role.capitalize()
+            group_name = ROLE_GROUP_NAME_MAP[role]
             qs = qs.filter(groups__name=group_name).distinct()
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:

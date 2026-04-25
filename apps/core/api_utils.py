@@ -166,6 +166,8 @@ def require_user_role(
         has_role = True
     elif "ADMIN" in allowed_roles and user.is_admin_role:
         has_role = True
+    elif "MANAGER" in allowed_roles and getattr(user, "is_manager", False):
+        has_role = True
     elif "RECEPTION" in allowed_roles and user.is_reception:
         has_role = True
     elif "TABLET" in allowed_roles and user.is_tablet:
@@ -179,11 +181,15 @@ def require_user_role(
 def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
     """
     Return clinic_site IDs for object-level scope, or None for no filter (ADMIN).
-    RECEPTION, DOCTOR and TABLET see only data for their assigned clinic_sites (staff_user_clinic_site).
+    MANAGER, RECEPTION, DOCTOR and TABLET see only data for their assigned
+    clinic_sites (staff_user_clinic_site).
     Returns empty list if user has no clinic_sites assigned (they see nothing).
     """
     if getattr(user, "is_admin_role", False) and user.is_admin_role:
         return None
+    if getattr(user, "is_manager", False) and user.is_manager:
+        ids = list(user.clinic_sites.values_list("id", flat=True))
+        return ids
     if getattr(user, "is_reception", False) and user.is_reception:
         ids = list(user.clinic_sites.values_list("id", flat=True))
         return ids

@@ -7,6 +7,15 @@ from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
 
+ROLE_GROUP_NAME_MAP = {
+    "DOCTOR": "Doctor",
+    "RECEPTION": "Reception",
+    "ADMIN": "Admin",
+    "TABLET": "Tablet",
+    "MANAGER": "Manager",
+}
+VALID_STAFF_ROLES = frozenset(ROLE_GROUP_NAME_MAP.keys())
+
 
 class StaffUserPreferredLocale(models.TextChoices):
     DE_DE = "de-DE", db_gettext_lazy(
@@ -120,18 +129,25 @@ class StaffUser(AbstractUser):
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}".strip() or self.username
 
+    def _has_role_group(self, group_name: str) -> bool:
+        return self.groups.filter(name=group_name).exists()
+
     @property
     def is_doctor(self) -> bool:
-        return self.groups.filter(name="Doctor").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["DOCTOR"])
 
     @property
     def is_reception(self) -> bool:
-        return self.groups.filter(name="Reception").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["RECEPTION"])
 
     @property
     def is_admin_role(self) -> bool:
-        return self.groups.filter(name="Admin").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["ADMIN"])
 
     @property
     def is_tablet(self) -> bool:
-        return self.groups.filter(name="Tablet").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["TABLET"])
+
+    @property
+    def is_manager(self) -> bool:
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["MANAGER"])

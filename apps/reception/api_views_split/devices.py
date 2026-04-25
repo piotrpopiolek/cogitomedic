@@ -57,7 +57,9 @@ def _is_device_in_scope(
 
 @require_auth
 def tablet_devices_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -113,7 +115,9 @@ def tablet_devices_view(request: HttpRequest) -> JsonResponse:
 def tablet_device_detail_view(
     request: HttpRequest, tablet_device_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method not in ("GET", "PATCH", "DELETE"):
@@ -174,7 +178,9 @@ def tablet_device_detail_view(
 def tablet_device_heartbeat_view(
     request: HttpRequest, tablet_device_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":

@@ -54,7 +54,9 @@ def _visible_batches(request: HttpRequest):
 
 @require_auth
 def import_batches_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -67,7 +69,9 @@ def import_batches_view(request: HttpRequest) -> JsonResponse:
 
 @require_auth
 def import_batch_detail_view(request: HttpRequest, batch_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -82,7 +86,9 @@ def import_batch_detail_view(request: HttpRequest, batch_id: UUID) -> JsonRespon
 
 @require_auth
 def import_batch_errors_view(request: HttpRequest, batch_id: UUID) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":

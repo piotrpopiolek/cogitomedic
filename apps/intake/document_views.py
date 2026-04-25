@@ -24,7 +24,9 @@ from apps.intake.document_services import (
 @require_auth
 def intake_documents_view(request: HttpRequest) -> JsonResponse:
     """GET: list intake document versions (RECEPTION/ADMIN), scoped by clinic_site."""
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -79,7 +81,9 @@ def intake_document_detail_view(
     request: HttpRequest, intake_document_version_id: UUID
 ) -> JsonResponse:
     """GET: detail of one intake document version (RECEPTION/ADMIN)."""
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -118,7 +122,9 @@ def intake_document_preview_pdf_view(
     request: HttpRequest, intake_document_version_id: UUID
 ) -> HttpResponse | JsonResponse:
     """GET: serve PDF file inline (RECEPTION/ADMIN). 404 if not generated or file missing."""
-    role_error = require_user_role(request, allowed_roles={"RECEPTION", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "MANAGER", "ADMIN"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
