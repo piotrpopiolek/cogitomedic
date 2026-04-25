@@ -147,6 +147,19 @@ class NameNormalizeTests(SimpleTestCase):
         self.assertTrue(stem_matches_dated_variant("Kowalski_Jan_1985_03_12.pdf", p))
         self.assertFalse(stem_matches_dated_variant("Kowalski_Jan.pdf", p))
 
+    def test_stem_matches_dated_variant_umlaut_transliteration_stems(self) -> None:
+        """Dated HiDrive stems may use ``Mueller``/``Muller`` for ``Müller`` (ASCII)."""
+        p = Mock()
+        p.first_name = "Thomas"
+        p.last_name = "Müller"
+        p.date_of_birth = datetime.date(1990, 1, 1)
+        self.assertTrue(stem_matches_dated_variant("Mueller_Thomas_1990_01_01.pdf", p))
+        self.assertTrue(stem_matches_dated_variant("Muller_Thomas_1990_01_01.pdf", p))
+        self.assertTrue(stem_matches_dated_variant("Thomas_Mueller_1990_01_01.pdf", p))
+        dc = dated_match_candidates(p)
+        self.assertIn("mueller_thomas_1990_01_01", dc)
+        self.assertIn("muller_thomas_1990_01_01", dc)
+
     def test_dated_match_candidates_empty_when_no_dob(self) -> None:
         p = Mock()
         p.first_name = "Jan"

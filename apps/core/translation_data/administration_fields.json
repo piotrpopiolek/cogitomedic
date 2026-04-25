@@ -180,9 +180,9 @@
     "pl": "Dopasowane wiersze"
   },
   "administration.field_skipped_already_present_count": {
-    "de": "Uebersprungene bereits vorhandene Zeilen",
+    "de": "Übersprungene bereits vorhandene Zeilen",
     "en": "Skipped already present rows",
-    "pl": "Pominiete juz obecne wiersze"
+    "pl": "Pominięte już obecne wiersze"
   },
   "administration.field_value": {
     "de": "Wert",

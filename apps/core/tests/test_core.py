@@ -405,3 +405,8 @@ class RoleBasedSessionExpiryMiddlewareTests(TestCase):
             request.session.get_expiry_age(),
             settings.SESSION_COOKIE_AGE + 5,
         )
+
+
+class AuthRedirectSettingsTests(TestCase):
+    def test_login_redirect_url_points_to_admin(self) -> None:
+        self.assertEqual(settings.LOGIN_REDIRECT_URL, "/admin/")

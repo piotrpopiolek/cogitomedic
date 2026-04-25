@@ -671,7 +671,9 @@ def medical_document_version_detail_view(
 def medical_document_retry_processing_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
