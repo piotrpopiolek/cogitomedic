@@ -248,7 +248,8 @@ class Patient(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        norm = normalize_phone(self.phone)
+        region = (self.country_code or "DE").strip().upper()
+        norm = normalize_phone(self.phone, default_region=region)
         if norm:
             self.phone = norm
         fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
