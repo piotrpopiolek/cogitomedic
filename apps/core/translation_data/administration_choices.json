@@ -114,6 +114,11 @@
     "en": "In progress",
     "pl": "W trakcie"
   },
+  "administration.choice_intake_status_reopened": {
+    "de": "Zur Korrektur wieder geöffnet",
+    "en": "Reopened for corrections",
+    "pl": "Ponownie otwarta do poprawek"
+  },
   "administration.choice_intake_status_submitted": {
     "de": "Eingereicht",
     "en": "Submitted",

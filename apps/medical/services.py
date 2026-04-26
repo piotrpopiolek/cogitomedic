@@ -276,7 +276,10 @@ def create_or_get_medical_document(
             domain_message("other.domain.intake_form_wrong_queue_entry"),
             api_message_key="other.domain.intake_form_wrong_queue_entry",
         )
-    if intake_form.form_status != IntakeStatus.SUBMITTED:
+    if intake_form.form_status not in (
+        IntakeStatus.SUBMITTED,
+        IntakeStatus.REOPENED,
+    ):
         raise DomainError(
             domain_message("other.domain.intake_form_must_be_submitted"),
             api_message_key="other.domain.intake_form_must_be_submitted",
@@ -946,7 +949,7 @@ def list_doctor_work_queue(
     List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
     """
     qs = PatientIntakeForm.objects.filter(
-        form_status=IntakeStatus.SUBMITTED
+        form_status__in=(IntakeStatus.SUBMITTED, IntakeStatus.REOPENED)
     ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
     if user is not None:
         personal = (
