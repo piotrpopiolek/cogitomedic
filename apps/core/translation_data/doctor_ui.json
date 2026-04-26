@@ -239,6 +239,16 @@
     "en": "Published by me",
     "pl": "Opublikowane przeze mnie"
   },
+  "doctor.filter_scope_in_revision": {
+    "de": "Revision offen",
+    "en": "In revision",
+    "pl": "W rewizji"
+  },
+  "doctor.list_status_in_revision": {
+    "de": "Revision",
+    "en": "In revision",
+    "pl": "Rewizja"
+  },
   "doctor.banner_published_title": {
     "de": "Dokument veröffentlicht",
     "en": "Document published",

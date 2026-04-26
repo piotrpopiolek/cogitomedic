@@ -650,8 +650,8 @@ COGITO_PATHS = {
             "summary": "List medical documents",
             "description": (
                 "Doctor work queue (DOCTOR, ADMIN, MANAGER). Paginated: page (default 1), "
-                "page_size (default 20, max 100). Query `scope`: `all` (default), `mine`, or "
-                "`published_by_me` — filters which documents appear for the authenticated user."
+                "page_size (default 20, max 100). Query `scope`: `all` (default), `mine`, "
+                "`published_by_me`, or `in_revision` (published document with pending revision only)."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -667,7 +667,7 @@ COGITO_PATHS = {
                     "in": "query",
                     "schema": {
                         "type": "string",
-                        "enum": ["all", "mine", "published_by_me"],
+                        "enum": ["all", "mine", "published_by_me", "in_revision"],
                         "default": "all",
                     },
                     "description": "Row filter for the work queue (see `list_medical_documents`).",

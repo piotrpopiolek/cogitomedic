@@ -507,3 +507,25 @@ class DoctorListScopeAndPreviewTests(TestCase):
             f"/api/v1/medical-documents/{matching_doc.id}/preview-pdf",
             html,
         )
+
+    def test_scope_in_revision_filters_pending_revision_rows(self) -> None:
+        rev_doc = self._create_published_document(
+            patient_last_name="InRevisionOnly",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.doctor,
+        )
+        MedicalDocument.objects.filter(pk=rev_doc.pk).update(has_pending_revision=True)
+        self._create_published_document(
+            patient_last_name="PublishedStable",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.doctor,
+        )
+        self.client.force_login(self.doctor)
+
+        response = self.client.get("/doctor/?scope=in_revision")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("InRevisionOnly", html)
+        self.assertNotIn("PublishedStable", html)
+        self.assertIn('option value="in_revision" selected', html)

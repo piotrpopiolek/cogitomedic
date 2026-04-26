@@ -17,6 +17,18 @@ ROLE_GROUP_NAME_MAP = {
 VALID_STAFF_ROLES = frozenset(ROLE_GROUP_NAME_MAP.keys())
 
 
+class StaffUserGender(models.TextChoices):
+    """Stored on ``StaffUser`` for PDF footer (Facharzt / Fachärztin) and admin display."""
+
+    UNSPECIFIED = "UNSPECIFIED", db_gettext_lazy(
+        "administration.choice_staff_gender_unspecified", "Not specified"
+    )
+    FEMALE = "FEMALE", db_gettext_lazy(
+        "administration.choice_staff_gender_female", "Female"
+    )
+    MALE = "MALE", db_gettext_lazy("administration.choice_staff_gender_male", "Male")
+
+
 class StaffUserPreferredLocale(models.TextChoices):
     DE_DE = "de-DE", db_gettext_lazy(
         "administration.choice_staff_locale_de_de", "German (Germany)"
@@ -83,6 +95,20 @@ class StaffUser(AbstractUser):
         verbose_name=db_gettext_lazy(
             "administration.field_preferred_locale", "Preferred locale"
         ),
+    )
+    professional_title = models.CharField(
+        max_length=80,
+        default="Dr. med.",
+        blank=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_professional_title", "Professional title"
+        ),
+    )
+    gender = models.CharField(
+        max_length=20,
+        choices=StaffUserGender.choices,
+        default=StaffUserGender.UNSPECIFIED,
+        verbose_name=db_gettext_lazy("administration.field_gender", "Gender"),
     )
     consulting_room = models.ForeignKey(
         "reception.ConsultingRoom",

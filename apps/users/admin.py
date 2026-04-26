@@ -37,7 +37,19 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        ("Personal", {"fields": ("first_name", "last_name", "email", "phone_number")}),
+        (
+            "Personal",
+            {
+                "fields": (
+                    "first_name",
+                    "last_name",
+                    "email",
+                    "phone_number",
+                    "professional_title",
+                    "gender",
+                )
+            },
+        ),
         ("Access", {"fields": ("preferred_locale", "is_staff", "is_active")}),
         (
             "Kliniki (dla roli Lekarz)",
@@ -60,7 +72,18 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
                 "fields": ("username", "email", "password1", "password2"),
             },
         ),
-        ("Personal", {"fields": ("first_name", "last_name", "phone_number")}),
+        (
+            "Personal",
+            {
+                "fields": (
+                    "first_name",
+                    "last_name",
+                    "phone_number",
+                    "professional_title",
+                    "gender",
+                )
+            },
+        ),
         ("Access", {"fields": ("preferred_locale", "is_staff", "is_active")}),
         ("Permissions", {"fields": ("groups",)}),
     )
