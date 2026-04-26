@@ -25,6 +25,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
             {
                 "username": "new-staff",
                 "email": "new-staff@example.com",
+                "usable_password": "true",
                 "password1": "ComplexPass123!",
                 "password2": "ComplexPass123!",
                 "first_name": "New",
@@ -46,6 +47,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
             {
                 "username": "new-staff-2",
                 "email": "new-staff-2@example.com",
+                "usable_password": "true",
                 "password1": "ComplexPass123!",
                 "password2": "ComplexPass123!",
                 "first_name": "New",

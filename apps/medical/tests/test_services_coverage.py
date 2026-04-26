@@ -196,6 +196,43 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             ctx.exception.api_message_key,
         )
 
+    def test_intake_form_reopened_raises_on_create_medical_document(self):
+        other_patient = Patient.objects.create(
+            first_name="Ewa",
+            last_name="Kowal",
+            date_of_birth=date(1991, 3, 3),
+            phone="48600333444",
+            email="ewa@example.com",
+        )
+        other_qe = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PUBLISHED,
+            position_no=4,
+            created_by_user=self.doctor,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        reopened_intake = PatientIntakeForm.objects.create(
+            queue_entry=other_qe,
+            session=other_session,
+            form_status=IntakeStatus.REOPENED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_or_get_medical_document(
+                queue_entry_id=other_qe.id,
+                intake_form_id=reopened_intake.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "intake_form_must_be_submitted",
+            ctx.exception.api_message_key,
+        )
+
 
 # ------------------------------------------------------------------
 # 2. save_draft_document_version — republish after retention

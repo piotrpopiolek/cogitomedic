@@ -268,7 +268,12 @@ def create_or_get_medical_document(
     intake_form_id: uuid.UUID,
     created_by_user_id: uuid.UUID,
 ) -> MedicalDocument:
-    """Create medical document for queue entry if not existing. Intake must be SUBMITTED."""
+    """Create medical document for queue entry if not existing.
+
+    Intake must be **SUBMITTED** (final). If reception has reopened the intake
+    (**REOPENED**, patient editing again), creation is blocked until the form is
+    submitted again — avoids Befund against a changing intake snapshot.
+    """
     QueueEntry.objects.get(id=queue_entry_id)
     intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
     if intake_form.queue_entry_id != queue_entry_id:
@@ -276,10 +281,7 @@ def create_or_get_medical_document(
             domain_message("other.domain.intake_form_wrong_queue_entry"),
             api_message_key="other.domain.intake_form_wrong_queue_entry",
         )
-    if intake_form.form_status not in (
-        IntakeStatus.SUBMITTED,
-        IntakeStatus.REOPENED,
-    ):
+    if intake_form.form_status != IntakeStatus.SUBMITTED:
         raise DomainError(
             domain_message("other.domain.intake_form_must_be_submitted"),
             api_message_key="other.domain.intake_form_must_be_submitted",

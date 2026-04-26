@@ -479,6 +479,8 @@
 
 ### 2.9 Formularze intake i zgody (Tablet)
 
+- **Status `form_status`:** `IN_PROGRESS`, `REOPENED` (formularz ponownie otwarty przez recepcję/admina — pacjent znów edytuje na tablecie), `SUBMITTED`. Zapis mapy ciała, zgód, anamnezy i podpisu jest dozwolony przy **`IN_PROGRESS`** lub **`REOPENED`**; przy **`SUBMITTED`** mutacje zwracają **409** (`StateTransitionError` + `error_key` z domeny, np. `other.domain.intake_*_in_progress_only`).
+
 - **GET** `/intake-forms/by-session/{session_id}` (opcjonalnie, kompatybilność wsteczna)
 - **GET** `/intake-forms/{id}` (lub równoważny endpoint kontekstu)
   - Opis: Pobiera kontekst formularza intake dla tabletu. **Tablet (rola TABLET)** jest uwierzytelniony sesją; brak tokenu. Dostęp dozwolony, gdy formularz intake należy do wpisu kolejki w kolejce dostępnej dla użytkownika (TABLET). Używane do: ekran weryfikacji danych pacjenta i formularza (zgody, anamneza, podpis, submit).
@@ -535,7 +537,7 @@
     ```
   - Response JSON: zaktualizowany formularz.
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409` (formularz nie w stanie edycji — nie `IN_PROGRESS` ani `REOPENED`).
 
 - **PUT** `/intake-forms/{id}/consents`
   - Opis: Podmienia zestaw akceptacji zgód dla formularza intake.
@@ -559,7 +561,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`, `409` (formularz nie w stanie edycji).
 
 - **PUT** `/intake-forms/{id}/anamnesis`
   - Opis: Podmienia odpowiedzi ankiety anamnestycznej dla formularza intake.
@@ -589,7 +591,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409` (formularz nie w stanie edycji).
 
 - **POST** `/intake-forms/{id}/signature`
   - Opis: Upload podpisu pacjenta.
@@ -608,7 +610,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409` (formularz nie w stanie edycji).
 
 - **POST** `/intake-forms/{id}/submit`
   - Opis: Finalizuje formularz w jednej transakcji (US-005/006/007). **Bez tokenu** – wywołujący jest uwierzytelniony (TABLET lub RECEPTION/ADMIN). Sesja oznaczana jako zużyta/zakończona w razie potrzeby; status wpisu kolejki ustawiany na PATIENT_COMPLETED.
@@ -627,7 +629,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409` / `400` (m.in. `StateTransitionError` gdy brak edycji).
 
 ### 2.10 Dokumenty medyczne i workflow lekarza
 
@@ -697,7 +699,7 @@
     ```
   - Response JSON: utworzony lub istniejący dokument.
   - Kody sukcesu: `201 CREATED` lub `200 OK` (idempotentnie).
-  - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
+  - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `400` (m.in. `other.domain.intake_form_must_be_submitted` — intake musi być **`SUBMITTED`**; przy **`REOPENED`** tworzenie dokumentu medycznego jest zablokowane do ponownego wysłania ankiety).
 
 - **PUT** `/medical-documents/{id}/draft`
   - Opis: Zapisuje szkic części medycznej (US-008/009). Dla dokumentu już **PUBLISHED** wymagane jest jawne `"intent": "amend"` (rewizja opublikowanej wersji); inaczej **409** z `error_key` = `other.api.amend_intent_required`. Wartość `intent` musi być dokładnie `edit` lub `amend`; inny string → **400** z `error_key` = `other.api.invalid_save_draft_intent`. Przy dokumencie w stanie **DRAFT** aktywna blokada innego użytkownika daje **423** z `locked_by_username` (ADMIN i MANAGER mogą obejść blokadę jak w serwisie blokad).

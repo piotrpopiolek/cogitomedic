@@ -919,7 +919,7 @@ def save_intake_signature(
     Decode base64 signature, store file under MEDIA_ROOT/signatures/YYYY/MM/<uuid>.png,
     set signature_file_path and signature_sha256 on the intake form.
     Raises InvalidSignatureError if payload is invalid or too large.
-    Raises StateTransitionError if form is not IN_PROGRESS.
+    Raises StateTransitionError if form is not editable.
     """
     intake_form = (
         PatientIntakeForm.objects.select_for_update()

@@ -482,6 +482,8 @@
 
 ### 2.9 Intake forms and consents (Tablet flow)
 
+- **`form_status` values:** `IN_PROGRESS`, `REOPENED` (reception/admin reopened the form — patient edits again on tablet), `SUBMITTED`. Saving body map, consents, anamnesis, and signature is allowed in **`IN_PROGRESS`** or **`REOPENED`**; in **`SUBMITTED`**, those mutations return **409** (`StateTransitionError` + domain `error_key`, e.g. `other.domain.intake_*_in_progress_only`).
+
 - **GET** `/intake-forms/by-session/{session_id}` (optional, for backward compatibility)
 - **GET** `/intake-forms/{id}` (or equivalent context endpoint)
   - Description: Fetch intake form context for tablet. **Tablet (role TABLET)** is authenticated by session; no token. Access allowed if the intake form belongs to a queue entry in a queue the user (TABLET) is allowed to access. Used for: patient data verification screen and form (consents, anamnesis, signature, submit).
@@ -538,7 +540,7 @@
     ```
   - Response JSON: updated form.
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409` (form not editable — not `IN_PROGRESS` or `REOPENED`).
 
 - **PUT** `/intake-forms/{id}/consents`
   - Description: Replace consent acceptance set for intake form.
@@ -562,7 +564,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`.
+  - Errors: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`, `409` (form not editable).
 
 - **PUT** `/intake-forms/{id}/anamnesis`
   - Description: Replace anamnesis questionnaire answers for the intake form.
@@ -592,7 +594,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409` (form not editable).
 
 - **POST** `/intake-forms/{id}/signature`
   - Description: Upload patient signature.
@@ -611,7 +613,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409` (form not editable).
 
 - **POST** `/intake-forms/{id}/submit`
   - Description: Finalize form in one transaction (US-005/006/007). **No token** – caller is authenticated (TABLET or RECEPTION/ADMIN). Session is marked consumed / completed as needed; queue entry status set to PATIENT_COMPLETED.
@@ -630,7 +632,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409` / `400` (including `StateTransitionError` when the form is not in an editable state).
 
 ### 2.10 Medical documents and doctor workflow
 
@@ -710,7 +712,7 @@
     ```
   - Response JSON: created or existing document.
   - Success: `201 CREATED` or `200 OK` (idempotent).
-  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
+  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `400` (e.g. `other.domain.intake_form_must_be_submitted` — intake must be **`SUBMITTED`**; **`REOPENED`** blocks creating a medical document until the patient resubmits).
 
 - **PUT** `/medical-documents/{id}/draft`
   - Description: Save draft medical section (US-008/009). For a document already **PUBLISHED**, explicit `"intent": "amend"` is required (revision of the published version); otherwise **409** with `error_key` = `other.api.amend_intent_required`. `intent` must be exactly `edit` or `amend`; any other string → **400** with `error_key` = `other.api.invalid_save_draft_intent`. For a **DRAFT** document, another user’s active lock yields **423** with `locked_by_username` (**ADMIN** and **MANAGER** can bypass the lock per lock service rules).
