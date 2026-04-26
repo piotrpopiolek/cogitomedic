@@ -309,6 +309,11 @@ def create_or_get_medical_document(
     return doc
 
 
+SAVE_DRAFT_INTENT_EDIT = "edit"
+SAVE_DRAFT_INTENT_AMEND = "amend"
+_VALID_SAVE_DRAFT_INTENTS = frozenset({SAVE_DRAFT_INTENT_EDIT, SAVE_DRAFT_INTENT_AMEND})
+
+
 @transaction.atomic
 def save_draft_document_version(
     *,
@@ -318,13 +323,35 @@ def save_draft_document_version(
     medical_payload: dict,
     diagnosis_code: str | None = None,
     procedure_code: str | None = None,
+    intent: str = SAVE_DRAFT_INTENT_EDIT,
 ) -> MedicalDocumentVersion:
     """
     Save draft payload for a medical document.
 
-    If latest version is DRAFT it is updated in place; otherwise a new draft
-    version is created with incremented `version_no`.
+    - If the document is in DRAFT and the latest version is DRAFT, the latest
+      DRAFT version is updated in place. ``intent`` is ignored here.
+    - If the document is in DRAFT and there is no DRAFT version yet (e.g. only
+      a previously DRAFT-revoked or initial state), a new DRAFT version is
+      created and ``current_version_no`` advances. ``intent`` is ignored.
+    - If the document is in PUBLISHED status, ``intent`` MUST be
+      ``"amend"``. The function then creates a new DRAFT version with
+      ``version_no = max_published_version_no + 1`` (or updates the existing
+      pending DRAFT in place on subsequent saves), keeps
+      ``MedicalDocument.status = PUBLISHED`` and only flips
+      ``has_pending_revision = True``. ``current_version_no`` does NOT advance –
+      the patient still sees ``published_version_no`` until the doctor
+      republishes or discards.
+    - If the document is PUBLISHED but ``intent != "amend"``, raises
+      ``DomainError("other.api.amend_intent_required")``. The API layer turns
+      this into HTTP 409 to make accidental reverts impossible from any path
+      (UI, retries, scripts).
     """
+    if intent not in _VALID_SAVE_DRAFT_INTENTS:
+        raise DomainError(
+            domain_message("other.api.amend_intent_required"),
+            api_message_key="other.api.amend_intent_required",
+        )
+
     medical_document = MedicalDocument.objects.select_for_update().get(
         id=medical_document_id
     )
@@ -335,6 +362,13 @@ def save_draft_document_version(
         .order_by("-version_no")
         .first()
     )
+
+    is_published_doc = medical_document.status == MedicalDocStatus.PUBLISHED
+    if is_published_doc and intent != SAVE_DRAFT_INTENT_AMEND:
+        raise DomainError(
+            domain_message("other.api.amend_intent_required"),
+            api_message_key="other.api.amend_intent_required",
+        )
 
     if latest_version and latest_version.version_status == DocVersionStatus.PUBLISHED:
         if latest_version.local_pdf_deleted_at is not None:
@@ -368,6 +402,8 @@ def save_draft_document_version(
                 "medical_document_version_id": str(latest_version.id),
                 "version_no": latest_version.version_no,
                 "mode": "update",
+                "intent": intent,
+                "is_revision_of_published": medical_document.has_pending_revision,
                 **assigned_doctor_audit_metadata(medical_document),
             },
         )
@@ -389,17 +425,44 @@ def save_draft_document_version(
         diagnosis_code=diagnosis_code,
         procedure_code=procedure_code,
     )
-    medical_document.current_version_no = created_version.version_no
-    medical_document.status = MedicalDocStatus.DRAFT
+
     medical_document.updated_by_user_id = updated_by_user_id
-    medical_document.save(
-        update_fields=[
-            "current_version_no",
-            "status",
-            "updated_by_user",
-            "updated_at",
-        ]
-    )
+    if is_published_doc:
+        # Amend mode: keep status PUBLISHED, do NOT advance current_version_no
+        # (the patient still sees published_version_no), only mark pending revision.
+        medical_document.has_pending_revision = True
+        medical_document.save(
+            update_fields=[
+                "has_pending_revision",
+                "updated_by_user",
+                "updated_at",
+            ]
+        )
+        create_audit_event(
+            event_type="DOCUMENT_REVISION_STARTED",
+            actor_user_id=updated_by_user_id,
+            patient_id=medical_document.queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "medical_document_version_id": str(created_version.id),
+                "version_no": created_version.version_no,
+                "previous_published_version_no": medical_document.published_version_no,
+                **assigned_doctor_audit_metadata(medical_document),
+            },
+        )
+    else:
+        medical_document.current_version_no = created_version.version_no
+        medical_document.status = MedicalDocStatus.DRAFT
+        medical_document.save(
+            update_fields=[
+                "current_version_no",
+                "status",
+                "updated_by_user",
+                "updated_at",
+            ]
+        )
+
     create_audit_event(
         event_type="DOCUMENT_DRAFT_SAVED",
         actor_user_id=updated_by_user_id,
@@ -410,10 +473,88 @@ def save_draft_document_version(
             "medical_document_version_id": str(created_version.id),
             "version_no": created_version.version_no,
             "mode": "create",
+            "intent": intent,
+            "is_revision_of_published": is_published_doc,
             **assigned_doctor_audit_metadata(medical_document),
         },
     )
     return created_version
+
+
+@transaction.atomic
+def discard_pending_revision(
+    *,
+    medical_document_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocument:
+    """
+    Discard a pending DRAFT revision on a PUBLISHED document.
+
+    Effect:
+    - delete the latest DRAFT version (and its outbox events – there should be
+      none, but we cascade defensively),
+    - clear ``has_pending_revision``,
+    - leave ``current_version_no`` and ``published_version_no`` untouched,
+    - emit ``DOCUMENT_REVISION_DISCARDED`` audit event.
+
+    If there is no pending revision, raises ``DomainError`` so the caller can
+    return HTTP 409 (or 404, depending on framing). The decision: 409 with
+    ``other.api.no_pending_revision_to_discard``.
+    """
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if not medical_document.has_pending_revision:
+        raise DomainError(
+            domain_message("other.api.no_pending_revision_to_discard"),
+            api_message_key="other.api.no_pending_revision_to_discard",
+        )
+    pending = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    if pending is None:
+        # Defensive: flag was set but no draft exists – just clear the flag.
+        medical_document.has_pending_revision = False
+        medical_document.save(update_fields=["has_pending_revision", "updated_at"])
+        return medical_document
+
+    discarded_version_no = pending.version_no
+    discarded_version_id = pending.id
+    pending.delete()
+
+    medical_document.has_pending_revision = False
+    medical_document.updated_by_user_id = actor_user_id
+    medical_document.locked_by_user_id = None
+    medical_document.locked_at = None
+    medical_document.save(
+        update_fields=[
+            "has_pending_revision",
+            "updated_by_user",
+            "updated_at",
+            "locked_by_user",
+            "locked_at",
+        ]
+    )
+    create_audit_event(
+        event_type="DOCUMENT_REVISION_DISCARDED",
+        actor_user_id=actor_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "discarded_version_no": discarded_version_no,
+            "discarded_version_id": str(discarded_version_id),
+            "published_version_no": medical_document.published_version_no,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    return medical_document
 
 
 @transaction.atomic
@@ -484,7 +625,14 @@ def publish_document_version(
         .order_by("-version_no")
         .first()
     )
-    if in_progress_version:
+    latest_draft_version_no = MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document_id,
+        version_status=DocVersionStatus.DRAFT,
+    ).aggregate(max_no=Max("version_no"))["max_no"]
+    if in_progress_version and (
+        latest_draft_version_no is None
+        or in_progress_version.version_no >= latest_draft_version_no
+    ):
         return in_progress_version
 
     draft_version = (
@@ -525,8 +673,16 @@ def publish_document_version(
         ]
     )
 
+    is_republish = (
+        medical_document.published_version_no is not None
+        and medical_document.published_version_no < draft_version.version_no
+    )
+    previous_published_version_no = medical_document.published_version_no
+
     medical_document.status = MedicalDocStatus.PUBLISHED
     medical_document.current_version_no = draft_version.version_no
+    medical_document.published_version_no = draft_version.version_no
+    medical_document.has_pending_revision = False
     medical_document.last_published_at = requested_at
     medical_document.updated_by_user_id = published_by_user_id
     medical_document.locked_by_user_id = None
@@ -535,6 +691,8 @@ def publish_document_version(
         update_fields=[
             "status",
             "current_version_no",
+            "published_version_no",
+            "has_pending_revision",
             "last_published_at",
             "updated_by_user",
             "updated_at",
@@ -570,9 +728,26 @@ def publish_document_version(
             "version_no": draft_version.version_no,
             "publish_request_id": str(publish_request_id),
             "publish_locale": publish_locale,
+            "is_republish": is_republish,
+            "previous_published_version_no": previous_published_version_no,
             **assigned_doctor_audit_metadata(medical_document),
         },
     )
+    if is_republish:
+        create_audit_event(
+            event_type="DOCUMENT_REPUBLISHED",
+            actor_user_id=published_by_user_id,
+            patient_id=medical_document.queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "medical_document_version_id": str(draft_version.id),
+                "new_published_version_no": draft_version.version_no,
+                "previous_published_version_no": previous_published_version_no,
+                "publish_request_id": str(publish_request_id),
+                **assigned_doctor_audit_metadata(medical_document),
+            },
+        )
     return draft_version
 
 
@@ -883,6 +1058,8 @@ def list_doctor_work_queue(
             and latest.hidrive_sent
             and latest.sms_sent
         )
+        has_pending_revision = bool(doc and doc.has_pending_revision)
+        published_version_no = doc.published_version_no if doc else None
         list_items.append(
             {
                 "document_id": str(doc.id) if doc else None,
@@ -896,6 +1073,8 @@ def list_doctor_work_queue(
                 },
                 "queue_date": queue.queue_date.isoformat(),
                 "status": doc.status if doc else "—",
+                "has_pending_revision": has_pending_revision,
+                "published_version_no": published_version_no,
                 "locked_by_username": locked_name,
                 "locked_at": locked_at.isoformat() if locked_at else None,
                 "is_locked_by_other": is_locked_by_other,
@@ -1066,6 +1245,8 @@ def get_medical_document_context(
         "intake_form_id": str(doc.intake_form_id),
         "status": doc.status,
         "current_version_no": doc.current_version_no,
+        "published_version_no": doc.published_version_no,
+        "has_pending_revision": doc.has_pending_revision,
         "last_published_at": (
             doc.last_published_at.isoformat() if doc.last_published_at else None
         ),

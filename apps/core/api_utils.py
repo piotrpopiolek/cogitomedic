@@ -63,7 +63,10 @@ def json_domain_error(exc: BaseException, *, status: int | None = None) -> JsonR
     default = OTHER_I18N_KEY_DEFAULT_EN.get(key, str(exc))
     request = get_current_request()
     message = resolve_other_message(request, key, default, **params)
-    return JsonResponse({"error": message}, status=effective_status)
+    return JsonResponse(
+        {"error": message, "error_key": key},
+        status=effective_status,
+    )
 
 
 def read_json_body(request: HttpRequest) -> dict:

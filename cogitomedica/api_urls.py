@@ -21,6 +21,7 @@ from apps.medical.api_views import (
     doctor_text_template_detail_view,
     doctor_text_templates_view,
     medical_document_detail_view,
+    medical_document_discard_revision_view,
     medical_document_draft_view,
     medical_document_external_pdf_content_view,
     medical_document_external_pdf_reject_view,
@@ -216,6 +217,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/draft",
         medical_document_draft_view,
         name="medical-document-draft",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/discard-revision",
+        medical_document_discard_revision_view,
+        name="medical-document-discard-revision",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/unlock",
