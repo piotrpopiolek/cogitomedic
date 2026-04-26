@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from apps.users.models import StaffUser, StaffUserGender
+from apps.users.models import StaffUser
 
 
 class StaffUserAdminGroupsRequiredTests(TestCase):
@@ -32,7 +32,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
                 "last_name": "Staff",
                 "phone_number": "",
                 "professional_title": "Dr. med.",
-                "gender": StaffUserGender.UNSPECIFIED.value,
+                "gender": "UNSPECIFIED",
                 "preferred_locale": "de-DE",
                 "is_staff": "on",
                 "is_active": "on",
@@ -57,7 +57,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
                 "last_name": "Staff",
                 "phone_number": "",
                 "professional_title": "Dr. med.",
-                "gender": StaffUserGender.UNSPECIFIED.value,
+                "gender": "UNSPECIFIED",
                 "preferred_locale": "de-DE",
                 "is_staff": "on",
                 "is_active": "on",
