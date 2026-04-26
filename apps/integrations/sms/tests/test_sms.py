@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from django.test import TestCase
+from unittest.mock import MagicMock, patch
+
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.integrations.sms.client import get_sms_patient_results_text
 
@@ -29,3 +31,22 @@ class GetSmsPatientResultsTextTests(TestCase):
         result = get_sms_patient_results_text(None, "https://fallback.url")
         self.assertIn("Dokumentation", result)  # DE default
         self.assertIn("https://fallback.url", result)
+
+
+@override_settings(SMSAPI_USE_MOCK=False, SMSAPI_ACCESS_TOKEN="test-token")
+class SmsApiAdapterSendSmsTests(SimpleTestCase):
+    @patch("smsapi.client.SmsApiPlClient")
+    def test_real_adapter_send_sms_calls_smsapi_with_e164(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client.sms.send.return_value = MagicMock(id="msg-1", status="QUEUED")
+        mock_client_cls.return_value = mock_client
+
+        from apps.integrations.sms.client import _SmsApiAdapter
+
+        adapter = _SmsApiAdapter()
+        adapter.send_sms("1761234567", "Hello", default_region="DE")
+
+        mock_client.sms.send.assert_called_once()
+        call_kw = mock_client.sms.send.call_args.kwargs
+        self.assertTrue(call_kw["to"].startswith("+49"))
+        self.assertEqual(call_kw["message"], "Hello")

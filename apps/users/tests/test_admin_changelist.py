@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.contrib.auth.models import Group
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.users.admin import StaffUserAdmin
 from apps.users.models import StaffUser
 
@@ -70,3 +71,40 @@ class StaffUserAdminChangelistTests(TestCase):
         self.assertFalse(
             StaffUserAdmin(StaffUser, admin.site).has_module_permission(request)
         )
+
+    def test_manager_has_no_add_or_delete_permission_on_staffuser(self) -> None:
+        manager = StaffUser.objects.create_user(
+            username="mgr-add-del",
+            email="mgr-add-del@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        request = type("RequestStub", (), {"user": manager})()
+        ma = StaffUserAdmin(StaffUser, admin.site)
+        self.assertFalse(ma.has_add_permission(request))
+        self.assertFalse(ma.has_delete_permission(request))
+
+    def test_changelist_role_query_filters_by_doctor_group(self) -> None:
+        """``?role=DOCTOR`` is applied in ``get_queryset`` (changelist may 302 in Unfold)."""
+        doc = StaffUser.objects.create_user(
+            username="role-filter-doc",
+            email="role-filter-doc@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(doc, "Doctor")
+        rec = StaffUser.objects.create_user(
+            username="role-filter-rec",
+            email="role-filter-rec@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(rec, "Reception")
+        request = RequestFactory().get("/admin/users/staffuser/", {"role": "DOCTOR"})
+        request.user = self.superuser
+        ma = StaffUserAdmin(StaffUser, admin.site)
+        qs = ma.get_queryset(request)
+        usernames = set(qs.values_list("username", flat=True))
+        self.assertIn("role-filter-doc", usernames)
+        self.assertNotIn("role-filter-rec", usernames)
