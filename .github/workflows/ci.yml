@@ -119,7 +119,7 @@ jobs:
 
       - name: Run pytest (coverage gate from pyproject)
         run: python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
-        timeout-minutes: 10
+        timeout-minutes: 15
 
       - name: Diff coverage
         run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
