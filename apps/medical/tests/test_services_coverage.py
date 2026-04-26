@@ -218,6 +218,7 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
                 medical_document_id=doc.id,
                 updated_by_user_id=self.doctor.id,
                 medical_payload={"authoring_locale": "de-DE"},
+                intent="amend",
             )
         self.assertIn(
             "republish_after_retention_not_allowed",

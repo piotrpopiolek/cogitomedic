@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,6 +43,9 @@ class SaveDraftMedicalDocumentRequest(BaseModel):
     medical_payload: MedicalPayloadMinimal
     diagnosis_code: str | None = None
     procedure_code: str | None = None
+    # explicit "amend" intent is required to start a revision of an
+    # already PUBLISHED document. ``edit`` is the legacy DRAFT-only behaviour.
+    intent: Literal["edit", "amend"] = "edit"
 
 
 class PublishMedicalDocumentRequest(BaseModel):

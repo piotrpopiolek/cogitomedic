@@ -485,6 +485,17 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     """
     Generate and store Befund PDF for medical document version.
 
+    Selects external PDF attachments to merge:
+
+    - ``MATCHED`` attachments (newly accepted in this publish/republish cycle,
+      still residing in HiDrive ``/incoming``) — they will be flipped to
+      ``ACCEPTED`` after a successful merge so the outbox HiDrive uploader can
+      move them to ``/processed``.
+    - ``ACCEPTED`` attachments (historical, already moved to ``/processed`` by
+      the previous publish) — needed when the user republishes a revision so
+      the new PDF still contains the lab results that the patient already had
+      in v1. Their status stays ``ACCEPTED`` (they are not re-moved).
+
     When there are ``MATCHED`` external (lab) PDF attachments and every download
     fails with an infrastructure error (not :class:`ExternalPdfCorruptError`),
     raises :class:`AllExternalPdfDownloadsFailed` — Befund must not be archived
@@ -502,8 +513,8 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     attachments = list(
         ExternalPdfAttachment.objects.filter(
             medical_document=doc,
-            status=ExternalPdfStatus.MATCHED,
-        ).order_by("original_filename", "hidrive_remote_path")
+            status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
+        ).order_by("original_filename", "hidrive_remote_path", "id")
     )
     external_bytes_list: list[bytes] = []
     attachments_used: list[ExternalPdfAttachment] = []
@@ -512,8 +523,11 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
         try:
             ext_bytes = download_external_pdf(att)
         except ExternalPdfCorruptError:
-            att.status = ExternalPdfStatus.MERGE_FAILED
-            att.save(update_fields=["status"])
+            # Corrupt: only flip newly MATCHED to MERGE_FAILED. Historical
+            # ACCEPTED attachments keep their state (audit log captures it).
+            if att.status == ExternalPdfStatus.MATCHED:
+                att.status = ExternalPdfStatus.MERGE_FAILED
+                att.save(update_fields=["status"])
             create_audit_event(
                 event_type="EXTERNAL_PDF_CORRUPT",
                 patient_id=patient.id,
@@ -521,6 +535,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                 metadata={
                     "hidrive_remote_path": att.hidrive_remote_path,
                     "external_pdf_attachment_id": str(att.id),
+                    "previous_status": att.status,
                 },
             )
             continue
@@ -542,6 +557,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                 "hidrive_remote_path": att.hidrive_remote_path,
                 "external_pdf_attachment_id": str(att.id),
                 "error_type": type(download_error).__name__,
+                "attachment_status": att.status,
             }
             for att, download_error in infra_errors
         ]
@@ -555,8 +571,12 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
         )
 
     for att, download_error in infra_errors:
-        att.status = ExternalPdfStatus.MERGE_FAILED
-        att.save(update_fields=["status"])
+        # Only newly MATCHED attachments should flip to MERGE_FAILED on
+        # transient download failure. Historical ACCEPTED stay as-is so a
+        # transient HiDrive blip during republish does not erase v1 history.
+        if att.status == ExternalPdfStatus.MATCHED:
+            att.status = ExternalPdfStatus.MERGE_FAILED
+            att.save(update_fields=["status"])
         create_audit_event(
             event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
             patient_id=patient.id,
@@ -565,19 +585,31 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
                 "hidrive_remote_path": att.hidrive_remote_path,
                 "external_pdf_attachment_id": str(att.id),
                 "error_type": type(download_error).__name__,
+                "attachment_status": att.status,
             },
         )
 
     if external_bytes_list:
         pdf_bytes, merge_ok = safe_merge_pdfs(befund_bytes, external_bytes_list)
         if merge_ok:
-            for att in attachments_used:
+            # Promote freshly merged MATCHED → ACCEPTED. ACCEPTED stay ACCEPTED
+            # (idempotent on republish); HiDrive uploader moves only the new
+            # ones from /incoming to /processed.
+            promote = [
+                a for a in attachments_used if a.status == ExternalPdfStatus.MATCHED
+            ]
+            for att in promote:
                 att.status = ExternalPdfStatus.ACCEPTED
-            ExternalPdfAttachment.objects.bulk_update(attachments_used, ["status"])
+            if promote:
+                ExternalPdfAttachment.objects.bulk_update(promote, ["status"])
         else:
-            for att in attachments_used:
+            demote = [
+                a for a in attachments_used if a.status == ExternalPdfStatus.MATCHED
+            ]
+            for att in demote:
                 att.status = ExternalPdfStatus.MERGE_FAILED
-            ExternalPdfAttachment.objects.bulk_update(attachments_used, ["status"])
+            if demote:
+                ExternalPdfAttachment.objects.bulk_update(demote, ["status"])
             create_audit_event(
                 event_type="EXTERNAL_PDF_MERGE_FAILED",
                 patient_id=patient.id,
@@ -613,6 +645,12 @@ def build_merged_preview_pdf_bytes(
     """
     Build Befund + external HiDrive PDFs for doctor preview (no DB status changes).
 
+    Includes both ``MATCHED`` (new lab files awaiting publish) and ``ACCEPTED``
+    (already merged & moved to ``/processed`` by an earlier publish)
+    attachments, so the preview rendered for a published or in-revision
+    document mirrors what the patient saw / will see, not just the Befund
+    page. Statuses are never mutated here – this is a pure read.
+
     Returns ``(pdf_bytes, warning_key_or_none)`` where warning is a pipe-separated
     hint for the client (e.g. ``external_pdf_download_failed``, merge failed, corrupt attachment).
     """
@@ -623,8 +661,8 @@ def build_merged_preview_pdf_bytes(
     attachments = list(
         ExternalPdfAttachment.objects.filter(
             medical_document=doc,
-            status=ExternalPdfStatus.MATCHED,
-        ).order_by("original_filename", "hidrive_remote_path")
+            status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
+        ).order_by("original_filename", "hidrive_remote_path", "id")
     )
     external_bytes_list: list[bytes] = []
     corrupt = False
