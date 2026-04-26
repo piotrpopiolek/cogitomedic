@@ -230,7 +230,10 @@ def doctor_open_by_queue_view(
             status=404,
         )
     intake_form = entry.intake_form
-    if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
+    if getattr(intake_form, "form_status", None) not in (
+        IntakeStatus.SUBMITTED,
+        IntakeStatus.REOPENED,
+    ):
         return _render_doctor(
             request,
             "doctor/error.html",

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.urls import reverse
 
+from apps.core.exceptions import StateTransitionError
 from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
@@ -12,6 +13,7 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
+from apps.intake.services import reopen_patient_intake_form
 
 _MARKDOWN_HELP = (
     "Markdown-Formatierung wird unterstützt. "
@@ -120,20 +122,42 @@ class AnamnesisOptionDefinitionAdmin(UnfoldModelAdmin):
 
 @admin.register(PatientIntakeForm)
 class PatientIntakeFormAdmin(UnfoldModelAdmin):
+    actions = ("reopen_intake_for_patient_editing",)
+
     list_display = (
         "queue_entry",
         "form_status",
         "submitted_at",
+        "reception_note_updated_at",
         "created_at",
         "updated_at",
     )
     list_display_links = ("queue_entry",)
     list_filter = ("form_status",)
     ordering = ["-created_at"]
-    readonly_fields = ("id", "created_at", "updated_at")
+    readonly_fields = (
+        "id",
+        "created_at",
+        "updated_at",
+        "reception_note_updated_at",
+        "reception_note_updated_by",
+    )
     date_hierarchy = "created_at"
     fieldsets = (
-        (None, {"fields": ("queue_entry", "session", "form_status", "submitted_at")}),
+        (
+            None,
+            {
+                "fields": (
+                    "queue_entry",
+                    "session",
+                    "form_status",
+                    "submitted_at",
+                    "reception_note",
+                    "reception_note_updated_at",
+                    "reception_note_updated_by",
+                )
+            },
+        ),
         ("Mapa ciała", {"fields": ("body_map_schema_version", "body_map_data")}),
         ("Wywiad", {"fields": ("anamnesis_schema_version", "anamnesis_payload")}),
         ("Podpis", {"fields": ("signature_file_path", "signature_sha256")}),
@@ -143,6 +167,38 @@ class PatientIntakeFormAdmin(UnfoldModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related("queue_entry", "queue_entry__patient", "session")
+
+    @admin.action(description="Reopen intake for patient editing (tablet)")
+    def reopen_intake_for_patient_editing(self, request, queryset):
+        if not (
+            request.user.is_superuser
+            or getattr(request.user, "is_admin_role", False)
+            or getattr(request.user, "is_manager", False)
+            or getattr(request.user, "is_reception", False)
+        ):
+            self.message_user(
+                request,
+                "You do not have permission to reopen intake forms.",
+                level=messages.ERROR,
+            )
+            return
+        reopened = 0
+        skipped = 0
+        for form in queryset.select_related("queue_entry"):
+            try:
+                reopen_patient_intake_form(
+                    intake_form_id=form.id,
+                    actor_user_id=request.user.id,
+                    reception_note=(form.reception_note or "").strip(),
+                )
+                reopened += 1
+            except StateTransitionError:
+                skipped += 1
+        self.message_user(
+            request,
+            f"Reopened {reopened} intake form(s); skipped {skipped}.",
+            level=messages.WARNING if skipped else messages.INFO,
+        )
 
 
 @admin.register(PatientIntakeConsent)
