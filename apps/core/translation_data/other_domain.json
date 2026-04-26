@@ -165,14 +165,14 @@
     "pl": "Niezgodna suma kontrolna podpisu."
   },
   "other.domain.intake_body_map_in_progress_only": {
-    "de": "Die Körperkarte kann nur bei Anamnese mit Status IN_PROGRESS bearbeitet werden.",
-    "en": "Body map can be edited only for IN_PROGRESS intake form.",
-    "pl": "Mapę ciała można edytować tylko dla ankiety w stanie IN_PROGRESS."
+    "de": "Die Körperkarte kann nur bearbeitet werden, solange die Anamnese in Bearbeitung ist oder zur Korrektur wieder geöffnet wurde.",
+    "en": "Body map can be edited only while the intake is in progress or reopened for corrections.",
+    "pl": "Mapę ciała można edytować tylko, gdy ankieta jest w trakcie lub została ponownie otwarta do poprawek."
   },
   "other.domain.intake_consents_in_progress_only": {
-    "de": "Einwilligungen können nur bei Anamnese mit Status IN_PROGRESS bearbeitet werden.",
-    "en": "Consents can be edited only for IN_PROGRESS intake form.",
-    "pl": "Zgody można edytować tylko dla ankiety w stanie IN_PROGRESS."
+    "de": "Einwilligungen können nur bearbeitet werden, solange die Anamnese in Bearbeitung ist oder zur Korrektur wieder geöffnet wurde.",
+    "en": "Consents can be edited only while the intake is in progress or reopened for corrections.",
+    "pl": "Zgody można edytować tylko, gdy ankieta jest w trakcie lub została ponownie otwarta do poprawek."
   },
   "other.domain.consent_definition_not_active": {
     "de": "Die Einwilligungsdefinition {consent_id} ist am {date} nicht aktiv.",
@@ -180,9 +180,9 @@
     "pl": "Definicja zgody {consent_id} nie jest aktywna w dniu {date}."
   },
   "other.domain.intake_signature_in_progress_only": {
-    "de": "Die Signatur kann nur bei Anamnese mit Status IN_PROGRESS gesetzt werden.",
-    "en": "Signature can be set only for IN_PROGRESS intake form.",
-    "pl": "Podpis można zapisać tylko dla ankiety w stanie IN_PROGRESS."
+    "de": "Die Signatur kann nur gesetzt werden, solange die Anamnese in Bearbeitung ist oder zur Korrektur wieder geöffnet wurde.",
+    "en": "Signature can be set only while the intake is in progress or reopened for corrections.",
+    "pl": "Podpis można zapisać tylko, gdy ankieta jest w trakcie lub została ponownie otwarta do poprawek."
   },
   "other.domain.signature_payload_too_large_before_decode": {
     "de": "Signaturdaten überschreiten die maximale Größe vor der Dekodierung.",
@@ -210,9 +210,9 @@
     "pl": "Nieprawidłowy format obrazu. Obsługiwane są tylko PNG i JPEG."
   },
   "other.domain.intake_submit_in_progress_only": {
-    "de": "Nur Anamnese mit Status IN_PROGRESS kann eingereicht werden.",
-    "en": "Only IN_PROGRESS intake form can be submitted.",
-    "pl": "Złożyć można tylko ankietę w stanie IN_PROGRESS."
+    "de": "Die Anamnese kann nur eingereicht werden, wenn sie in Bearbeitung ist oder zur Korrektur wieder geöffnet wurde.",
+    "en": "The intake can only be submitted while it is in progress or reopened for corrections.",
+    "pl": "Ankietę można złożyć tylko, gdy jest w trakcie lub została ponownie otwarta do poprawek."
   },
   "other.domain.intake_submit_signature_required": {
     "de": "Vor dem Einreichen der Anamnese ist eine Signatur erforderlich.",
@@ -245,8 +245,18 @@
     "pl": "Wymagane aktywne pytania anamnezy pozostają bez odpowiedzi."
   },
   "other.domain.intake_anamnesis_in_progress_only": {
-    "de": "Die Anamnese kann nur bei Status IN_PROGRESS bearbeitet werden.",
-    "en": "Anamnesis can be edited only for IN_PROGRESS intake form.",
-    "pl": "Anamnezę można edytować tylko dla ankiety w stanie IN_PROGRESS."
+    "de": "Die Anamnese kann nur bearbeitet werden, solange sie in Bearbeitung ist oder zur Korrektur wieder geöffnet wurde.",
+    "en": "Anamnesis can be edited only while the intake is in progress or reopened for corrections.",
+    "pl": "Anamnezę można edytować tylko, gdy ankieta jest w trakcie lub została ponownie otwarta do poprawek."
+  },
+  "other.domain.intake_reopen_submitted_only": {
+    "de": "Eine Anamnese kann nur wieder geöffnet werden, wenn sie bereits eingereicht wurde.",
+    "en": "An intake form can only be reopened after it has been submitted.",
+    "pl": "Ankietę można ponownie otworzyć dopiero po jej złożeniu."
+  },
+  "other.domain.intake_reopen_already_open": {
+    "de": "Die Anamnese ist bereits zur Korrektur wieder geöffnet.",
+    "en": "This intake form is already reopened for corrections.",
+    "pl": "Ta ankieta jest już ponownie otwarta do poprawek."
   }
 }

@@ -719,6 +719,21 @@
     "en": "Form status",
     "pl": "Status formularza"
   },
+  "administration.field_reception_note": {
+    "de": "Empfangsnotiz",
+    "en": "Reception note",
+    "pl": "Notatka recepcji"
+  },
+  "administration.field_reception_note_updated_at": {
+    "de": "Notiz zuletzt geändert am",
+    "en": "Reception note last updated at",
+    "pl": "Notatka zaktualizowana"
+  },
+  "administration.field_reception_note_updated_by": {
+    "de": "Notiz zuletzt geändert von",
+    "en": "Reception note last updated by",
+    "pl": "Notatkę zaktualizował"
+  },
   "administration.field_queue_entry": {
     "de": "Warteschlangeneintrag",
     "en": "Queue entry",
