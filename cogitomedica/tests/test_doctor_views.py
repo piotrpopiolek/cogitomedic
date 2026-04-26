@@ -14,7 +14,13 @@ from django.utils import timezone
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.external_pdf_service import GateResult
-from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.medical.models import (
+    DocVersionStatus,
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentVersion,
+    PdfStatus,
+)
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -359,3 +365,145 @@ class DoctorDetailHappyPathTests(TestCase):
         self.client.force_login(self.doctor)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
         self.assertEqual(resp.status_code, 404)
+
+
+class DoctorListScopeAndPreviewTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.doctor = StaffUser.objects.create_user(
+            username="scope-doc",
+            email="scope-doc@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor, "Doctor")
+        self.other_doctor = StaffUser.objects.create_user(
+            username="scope-doc-other",
+            email="scope-doc-other@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.other_doctor, "Doctor")
+        self.reception = StaffUser.objects.create_user(
+            username="scope-rec",
+            email="scope-rec@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception, "Reception")
+        self.clinic = ClinicSite.objects.create(code="SC", name="Scope Clinic")
+        self.room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic,
+            code="R1",
+            name="Room 1",
+        )
+
+    def _create_published_document(
+        self,
+        *,
+        patient_last_name: str,
+        published_by: StaffUser,
+        queue_assigned_doctor: StaffUser | None = None,
+    ) -> MedicalDocument:
+        patient = Patient.objects.create(
+            first_name="Jan",
+            last_name=patient_last_name,
+            date_of_birth=date(1985, 6, 15),
+            phone=f"+48500{uuid4().int % 1000000:06d}",
+            email=f"{patient_last_name.lower()}@example.com",
+        )
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date()
+            + timedelta(days=DailyQueue.objects.count()),
+            clinic_site=self.clinic,
+            consulting_room=self.room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=queue_assigned_doctor,
+            created_by_user=self.reception,
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="a" * 64,
+            body_map_data=[],
+        )
+        doc = MedicalDocument.objects.create(
+            queue_entry=entry,
+            intake_form=intake,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.reception,
+            updated_by_user=published_by,
+        )
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/test.pdf",
+            publish_request_id=uuid4(),
+            published_at=timezone.now(),
+            publish_locale="de-DE",
+            published_by_user=published_by,
+        )
+        return doc
+
+    def test_default_list_keeps_published_document_visible_for_publishing_doctor(self):
+        published_doc = self._create_published_document(
+            patient_last_name="HistoryVisible",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.other_doctor,
+        )
+        self.client.force_login(self.doctor)
+
+        response = self.client.get("/doctor/")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("HistoryVisible", html)
+        self.assertIn(
+            f"/api/v1/medical-documents/{published_doc.id}/preview-pdf",
+            html,
+        )
+
+    def test_scope_published_by_me_filters_list_and_keeps_preview_link(self):
+        matching_doc = self._create_published_document(
+            patient_last_name="PublishedByMe",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.other_doctor,
+        )
+        self._create_published_document(
+            patient_last_name="PublishedByOther",
+            published_by=self.other_doctor,
+            queue_assigned_doctor=self.other_doctor,
+        )
+        self.client.force_login(self.doctor)
+
+        response = self.client.get("/doctor/?scope=published_by_me")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("PublishedByMe", html)
+        self.assertNotIn("PublishedByOther", html)
+        self.assertIn('option value="published_by_me" selected', html)
+        self.assertIn(
+            f"/api/v1/medical-documents/{matching_doc.id}/preview-pdf",
+            html,
+        )

@@ -656,7 +656,7 @@ def revoke_document_version(
 def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
     """
     Parse GET parameters for medical documents list (work queue).
-    Returns dict with status, queue_date, patient_search, page, page_size.
+    Returns dict with status, queue_date, patient_search, scope, page, page_size.
     """
     status = get_params.get("status") or None
     queue_date = None
@@ -668,6 +668,9 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         except (ValueError, TypeError):
             pass
     patient_search = get_params.get("patient_search") or None
+    scope = (get_params.get("scope") or "all").strip()
+    if scope not in {"all", "mine", "published_by_me"}:
+        scope = "all"
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(
         get_params.get("page_size"),
@@ -678,6 +681,7 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         "status": status,
         "queue_date": queue_date,
         "patient_search": patient_search,
+        "scope": scope,
         "page": page,
         "page_size": page_size,
     }
@@ -688,6 +692,7 @@ def list_medical_documents(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    scope: str = "all",
     user: Any = None,
     page: int = 1,
     page_size: int = DEFAULT_LIST_LIMIT,
@@ -696,6 +701,8 @@ def list_medical_documents(
     List medical documents for doctor work queue.
     If user is DOCTOR (not admin), returns documents where user is author OR assigned
     to queue, plus every document still in DRAFT (shared describing queue).
+    ``scope`` is accepted for API/doctor-list param parity; the API currently keeps
+    the historical "all visible" behavior and does not branch on it here.
     """
     qs = (
         MedicalDocument.objects.select_related(
@@ -747,6 +754,7 @@ def list_doctor_work_queue(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    scope: str = "all",
     user: Any = None,
     page: int = 1,
     page_size: int = DEFAULT_LIST_LIMIT,
@@ -757,14 +765,31 @@ def list_doctor_work_queue(
     qs = PatientIntakeForm.objects.filter(
         form_status=IntakeStatus.SUBMITTED
     ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
-    if not _is_admin_or_manager_medical_oversight(user) and user is not None:
+    if user is not None:
+        personal = (
+            Q(queue_entry__medical_document__created_by_user_id=user.id)
+            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
+            | Q(queue_entry__medical_document__versions__published_by_user_id=user.id)
+        )
         shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
             queue_entry__medical_document__status=MedicalDocStatus.DRAFT
         )
-        personal = Q(queue_entry__medical_document__created_by_user_id=user.id) | Q(
-            queue_entry__daily_queue__assigned_doctor_id=user.id
-        )
-        qs = qs.filter(shared_draft_or_pending | personal)
+        if _is_admin_or_manager_medical_oversight(user):
+            if scope == "mine":
+                qs = qs.filter(personal)
+            elif scope == "published_by_me":
+                qs = qs.filter(
+                    queue_entry__medical_document__versions__published_by_user_id=user.id
+                )
+        else:
+            if scope == "mine":
+                qs = qs.filter(personal)
+            elif scope == "published_by_me":
+                qs = qs.filter(
+                    queue_entry__medical_document__versions__published_by_user_id=user.id
+                )
+            else:
+                qs = qs.filter(shared_draft_or_pending | personal)
     if status:
         qs = qs.filter(
             queue_entry_id__in=MedicalDocument.objects.filter(
@@ -779,7 +804,9 @@ def list_doctor_work_queue(
             Q(queue_entry__patient__last_name__icontains=term)
             | Q(queue_entry__patient__first_name__icontains=term)
         )
-    qs = qs.order_by("-queue_entry__daily_queue__queue_date", "-submitted_at")
+    qs = qs.distinct().order_by(
+        "-queue_entry__daily_queue__queue_date", "-submitted_at"
+    )
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size

@@ -414,7 +414,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_patientimporterror_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
