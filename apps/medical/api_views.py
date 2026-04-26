@@ -60,6 +60,7 @@ from apps.medical.services import (
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
+    discard_pending_revision,
     get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
@@ -587,8 +588,6 @@ def medical_document_discard_revision_view(
         check_doctor_document_access(doc, request.user)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
-
-    from apps.medical.services import discard_pending_revision
 
     try:
         doc = discard_pending_revision(
