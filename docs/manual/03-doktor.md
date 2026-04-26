@@ -1,12 +1,12 @@
-# Instrukcja: Lekarz (rola Doctor) i administrator w panelu medycznym
+# Instrukcja: Lekarz (rola Doctor), Manager i administrator w panelu medycznym
 
 Panel pod **`/doctor/`** służy do przeglądania **kolejki dokumentów medycznych**, uzupełniania **Befund** (opis badania), zapisywania **szkicu**, **publikacji** oraz — w razie potrzeby — **ponownej publikacji** z nową wersją PDF.
 
-Dostęp: grupy **Doctor** lub **Admin** (oba typy kont używają tego samego interfejsu HTML).
+Dostęp: grupy **Doctor**, **Admin** lub **Manager** (te konta korzystają z tego samego interfejsu HTML; **Manager** — nadzór operacyjny, patrz [Przegląd](00-przeglad.md)).
 
 ## Wymagania wstępne
 
-- Konto z grupą **Doctor** (lub **Admin**).
+- Konto z grupą **Doctor**, **Admin** lub **Manager** (dla Managera: zakres zgodny z polityką placówki i uprawnieniami grupy).
 - Lekarz ma przypisane **placówki (`clinic_sites`)** tam, gdzie moduły rejestracji/tabletu tego wymagają. **Kolejka dokumentów Befund** w panelu `/doctor/` nie opiera się na przypisaniu lekarza do zmiany: szkice (**DRAFT**) i wpisy z ukończoną ankietą bez jeszcze utworzonego dokumentu są **wspólne dla wszystkich lekarzy**; dokument **opublikowany** (**PUBLISHED**) widzi zwykle **twórca dokumentu** (lekarz, który pierwszy utworzył rekord z wpisu kolejki), a dodatkowo lekarz **przypisany do zmiany** w kolejce — jeśli pole przypisania jest używane w danej placówce.
 - Przeglądarka z obsługą JavaScript (panel szczegółów dokumentu komunikuje się z API `/api/v1/`).
 
@@ -27,7 +27,7 @@ Dostęp: grupy **Doctor** lub **Admin** (oba typy kont używają tego samego int
 
 ## 2. Lista dokumentów (Work queue) — `/doctor/`
 
-Na liście pojawiają się wpisy z **ukończoną ankietą** (`SUBMITTED`) oraz powiązany dokument medyczny (lub możliwość jego utworzenia). **Szkice (DRAFT)** oraz wpisy **oczekujące na pierwsze utworzenie dokumentu** są widoczne dla **każdego** lekarza z grupą Doctor — można przejąć opisanie od kolegi po blokadzie edycji (patrz niżej). **Dokument opublikowany** w tej samej tabeli zobaczysz, jeśli **Ty go utworzyłeś** (jesteś twórcą rekordu) lub jesteś **lekarzem przypisanym do danej zmiany** w kolejce (gdy to pole jest wypełnione).
+Na liście pojawiają się wpisy z **ukończoną ankietą** (`SUBMITTED`) oraz powiązany dokument medyczny (lub możliwość jego utworzenia). **Szkice (DRAFT)** oraz wpisy **oczekujące na pierwsze utworzenie dokumentu** są widoczne dla **każdego** użytkownika z dostępem do panelu w roli **Doctor** (oraz **Admin** / **Manager** w tym samym widoku) — można przejąć opisanie od kolegi po blokadzie edycji (patrz niżej); **Admin** i **Manager** mogą w razie potrzeby zapisać szkic lub opublikować mimo aktywnej blokady innego użytkownika (nadzór). **Dokument opublikowany** w tej samej tabeli zobaczysz, jeśli **Ty go utworzyłeś** (jesteś twórcą rekordu) lub jesteś **lekarzem przypisanym do danej zmiany** w kolejce (gdy to pole jest wypełnione).
 
 Tabela pokazuje m.in.:
 
@@ -51,8 +51,8 @@ Tabela pokazuje m.in.:
 
 ### Otwieranie dokumentu
 
-- Jeśli dokument już istnieje: link prowadzi do **`/doctor/<medical_document_id>/`** (dostęp do szkicu mają wszyscy lekarze; do opublikowanego — wg zasad powyżej).
-- Jeśli jeszcze nie: link używa **`/doctor/open/<queue_entry_id>/`** — serwer tworzy lub pobiera dokument medyczny dla wpisu kolejki z **ukończonym** formularzem intake (`SUBMITTED`). Każdy lekarz może wykonać ten krok dla wspólnej kolejki. Gdy ankieta nie jest zakończona, zobaczysz **komunikat błędu** (np. ankieta nieukończona).
+- Jeśli dokument już istnieje: link prowadzi do **`/doctor/<medical_document_id>/`** (dostęp do szkicu: wspólna kolejka dla **Doctor**; **Admin** i **Manager** — jak wyżej; do opublikowanego — wg zasad listy).
+- Jeśli jeszcze nie: link używa **`/doctor/open/<queue_entry_id>/`** — serwer tworzy lub pobiera dokument medyczny dla wpisu kolejki z **ukończonym** formularzem intake (`SUBMITTED`). Każdy użytkownik z odpowiednią rolą może wykonać ten krok dla wspólnej kolejki. Gdy ankieta nie jest zakończona, zobaczysz **komunikat błędu** (np. ankieta nieukończona).
 
 **Audyt:** odczyty i zapis przez API `/api/v1/` są rejestrowane w dzienniku zdarzeń (np. podgląd dokumentu); przy współdzieleniu szkiców kolejne wejścia różnych lekarzy dają **osobne wpisy** z identyfikatorem użytkownika.
 

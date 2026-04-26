@@ -476,6 +476,25 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.medical_document.refresh_from_db()
         return published
 
+    def test_save_draft_invalid_intent_raises_distinct_key(self) -> None:
+        from apps.core.exceptions import DomainError
+
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "lesions": []},
+        )
+        with self.assertRaises(DomainError) as ctx:
+            save_draft_document_version(
+                medical_document_id=self.medical_document.id,
+                updated_by_user_id=self.doctor_user.id,
+                medical_payload={"authoring_locale": "de-DE", "lesions": [], "x": 1},
+                intent="typo",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.api.invalid_save_draft_intent"
+        )
+
     def test_save_draft_on_published_without_amend_intent_raises(self) -> None:
         from apps.core.exceptions import DomainError
 

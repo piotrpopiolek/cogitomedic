@@ -348,8 +348,8 @@ def save_draft_document_version(
     """
     if intent not in _VALID_SAVE_DRAFT_INTENTS:
         raise DomainError(
-            domain_message("other.api.amend_intent_required"),
-            api_message_key="other.api.amend_intent_required",
+            domain_message("other.api.invalid_save_draft_intent"),
+            api_message_key="other.api.invalid_save_draft_intent",
         )
 
     medical_document = MedicalDocument.objects.select_for_update().get(
@@ -491,8 +491,10 @@ def discard_pending_revision(
     Discard a pending DRAFT revision on a PUBLISHED document.
 
     Effect:
-    - delete the latest DRAFT version (and its outbox events – there should be
-      none, but we cascade defensively),
+    - delete the latest DRAFT version. Related ``OutboxEvent`` rows use
+      ``ForeignKey(..., on_delete=CASCADE)`` to the version (see ``outbox`` app),
+      so they are removed with the version; keep this in mind if new FKs to
+      ``MedicalDocumentVersion`` are added without CASCADE.
     - clear ``has_pending_revision``,
     - leave ``current_version_no`` and ``published_version_no`` untouched,
     - emit ``DOCUMENT_REVISION_DISCARDED`` audit event.

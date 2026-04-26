@@ -700,10 +700,11 @@
   - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
 
 - **PUT** `/medical-documents/{id}/draft`
-  - Opis: Zapisuje szkic części medycznej (US-008/009). Gdy aktywna blokada innego użytkownika: `423 Locked` z `locked_by_username`.
+  - Opis: Zapisuje szkic części medycznej (US-008/009). Dla dokumentu już **PUBLISHED** wymagane jest jawne `"intent": "amend"` (rewizja opublikowanej wersji); inaczej **409** z `error_key` = `other.api.amend_intent_required`. Wartość `intent` musi być dokładnie `edit` lub `amend`; inny string → **400** z `error_key` = `other.api.invalid_save_draft_intent`. Przy dokumencie w stanie **DRAFT** aktywna blokada innego użytkownika daje **423** z `locked_by_username` (ADMIN i MANAGER mogą obejść blokadę jak w serwisie blokad).
   - Request JSON:
     ```json
     {
+      "intent": "edit",
       "medical_payload_schema_version": 1,
       "medical_payload": {
         "authoring_locale": "de-DE",
@@ -734,12 +735,18 @@
       "procedure_code": "PROC-001"
     }
     ```
-  - Response JSON: najnowsza wersja szkicu.
+  - Response JSON (m.in.): `medical_document_version_id`, `version_no`, `version_status`, `document_status`, `has_pending_revision`, `published_version_no` (stan rewizji / ostatnia publikacja).
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`, `423 LOCKED`.
+  - Kody błędów: `400` (m.in. walidacja ładunku, `other.api.invalid_save_draft_intent`), `409` (`other.api.amend_intent_required`), `423 LOCKED` (tylko DRAFT + blokada).
   - Uwagi:
     - `generated_text` i `edited_text` przyjmują wyłącznie plain text (bez znaczników HTML/JS).
     - Logika zapisu po stronie backendu nigdy automatycznie nie nadpisuje `edited_text`.
+
+- **POST** `/medical-documents/{id}/discard-revision`
+  - Opis: Odrzuca oczekującą rewizję (usuwa najnowszą wersję **DRAFT** na dokumencie **PUBLISHED** z `has_pending_revision`, czyści flagę i blokadę). Brak rewizji → **409** z `error_key` = `other.api.no_pending_revision_to_discard`.
+  - Request JSON: brak (pusty obiekt lub bez body zgodnie z klientem).
+  - Response JSON: m.in. `discarded`, `document_id`, `status`, `current_version_no`, `published_version_no`, `has_pending_revision`.
+  - Kody sukcesu: `200 OK`.
 
 - **POST** `/medical-documents/{id}/publish`
   - Opis: Publikuje wersję dokumentu i idempotentnie kolejkuje łańcuch outbox (US-009/010).
