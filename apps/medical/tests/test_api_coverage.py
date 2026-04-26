@@ -58,6 +58,13 @@ class Tests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception, "Reception")
+        self.manager = StaffUser.objects.create_user(
+            username="cov-mgr",
+            email="m@ex.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.manager, "Manager")
 
         clinic = ClinicSite.objects.create(code="MC", name="MC Clinic")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="M1", name="M1")
@@ -111,6 +118,9 @@ class Tests(TestCase):
 
     def _login_reception(self):
         self.client.login(username="cov-rec", password="x")
+
+    def _login_manager(self):
+        self.client.login(username="cov-mgr", password="x")
 
     def _doc_url(self, suffix: str = "") -> str:
         return f"{BASE}medical-documents/{self.medical_doc.id}{suffix}"
@@ -217,6 +227,18 @@ class Tests(TestCase):
         self._login_doctor()
         r = self.client.delete(f"{BASE}medical-documents")
         self.assertEqual(r.status_code, 405)
+
+    def test_documents_get_as_manager_returns_200(self):
+        self._login_manager()
+        r = self.client.get(f"{BASE}medical-documents")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("items", r.json())
+
+    def test_medical_document_detail_get_as_manager_returns_200(self):
+        self._login_manager()
+        r = self.client.get(self._doc_url(""))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("id", r.json())
 
     def test_documents_post_validation_error_returns_400(self):
         self._login_doctor()

@@ -23,7 +23,7 @@ Wejdź na **`/admin/`** — masz dostęp do wszystkich zarejestrowanych modeli (
 
 ### 2.1 Tworzenie konta
 
-- Użyj formularza dodawania; **grupy** (`Reception`, `Doctor`, `Admin`, `Tablet`) określają rolę.
+- Użyj formularza dodawania; **grupy** (`Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`) określają rolę.
 - **Admin** musi mieć **is_staff=True** — system może to wymuszać przy zapisie.
 - Pole **clinic_sites** (wiele do wielu): przypisz placówki dla **lekarza** i personelu, którego zakres widoczności danych ograniczają placówki.
 
@@ -31,7 +31,7 @@ Wejdź na **`/admin/`** — masz dostęp do wszystkich zarejestrowanych modeli (
 
 ### 2.2 Filtrowanie listy po roli
 
-Na liście użytkowników można dodać parametr URL **`?role=RECEPTION`** (lub `DOCTOR`, `ADMIN`, `TABLET`) — filtrowanie po grupie (implementacja w `StaffUserAdmin`).
+Na liście użytkowników można dodać parametr URL **`?role=RECEPTION`** (lub `DOCTOR`, `ADMIN`, `TABLET`, `MANAGER`) — filtrowanie po grupie (implementacja w `StaffUserAdmin`).
 
 ---
 
@@ -105,10 +105,18 @@ Metryki Prometheus, Grafana, Alertmanager — opis w [README.md](../../README.md
 
 ---
 
-## 11. Dobre praktyki
+## 11. Konto kierownicze (grupa `Manager`)
+
+Grupa **Manager** służy do **nadzoru operacyjnego** bez pełni praw **Admin** (migracja `0013_create_manager_role_group` w `users` przypisuje ograniczony zestaw uprawnień modeli: recepcja, kolejki, import XLSX, podgląd dokumentów medycznych itd.).
+
+- Logowanie do **Django Admin** i **reception-dashboard** jak uprawniony personel recepcji w tym scope.
+- Panel **Lekarz** (`/doctor/`) oraz odpowiadające **REST API v1** (np. `GET/POST /api/v1/medical-documents` i podkatalogi) — konto `Manager` ma te same role w dekoratorach co lekarz i admin w module medycznym (pełen widok kolejki / nadzór; mutacje nadal ograniczają uprawnienia Django, np. brak `change_medicaldocument` w migracji grupy).
+- Czas trwania **sesji** (cookie) dla personelu, w tym Manager, jest taki sam jak dla pozostałych ról kadry operacyjnej (middleware sesji w `RoleBasedSessionExpiryMiddleware` — patrz ustawienia).
+
+## 12. Dobre praktyki
 
 - **Kopie zapasowe** i testy zmian na stagingu przed produkcją.
-- **Minimalne uprawnienia:** personelowi nie przypisuj grupy Admin bez potrzeby.
+- **Minimalne uprawnienia:** personelowi nie przypisuj grupy Admin bez potrzeby; **Manager** tylko tam, gdzie wymagany jest nadzór wielu modułów z ograniczonym CRUD względem pełnego Admina.
 - **Audyt:** zmiany krytycznych ustawień dokumentuj w systemie ticketów placówki.
 
-Powiązane: [Przegląd](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md).
+Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md).

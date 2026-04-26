@@ -25,7 +25,7 @@
 - Ensure data security and compliance
 - Automate archiving and patient notifications
 
-**User manuals (Polish):** step-by-step guides for Reception, Tablet, Doctor, Admin, and the patient results portal — see [`docs/manual/README.md`](docs/manual/README.md).
+**User manuals (Polish):** step-by-step guides for Reception, Tablet, Doctor, Manager, Admin, and the patient results portal — see [`docs/manual/README.md`](docs/manual/README.md).
 
 **Main capabilities:**
 

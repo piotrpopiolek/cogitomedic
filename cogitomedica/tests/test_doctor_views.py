@@ -48,6 +48,14 @@ class DoctorViewsSmokeTests(TestCase):
         )
         assign_group_to_test_user(self.reception_user, "Reception")
 
+        self.manager_user = StaffUser.objects.create_user(
+            username="mgr",
+            email="mgr@example.com",
+            password=self.password,
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.manager_user, "Manager")
+
     # -- helpers ------------------------------------------------
 
     def _login_doctor(self):
@@ -65,6 +73,13 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.post(
             "/doctor/login/",
             {"username": "doc", "password": self.password},
+        )
+        self.assertEqual(resp.status_code, 302)
+
+    def test_login_post_valid_manager_redirects(self):
+        resp = self.client.post(
+            "/doctor/login/",
+            {"username": "mgr", "password": self.password},
         )
         self.assertEqual(resp.status_code, 302)
 
@@ -89,6 +104,11 @@ class DoctorViewsSmokeTests(TestCase):
 
     def test_list_doctor_returns_200(self):
         self._login_doctor()
+        resp = self.client.get("/doctor/")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_list_manager_returns_200(self):
+        self.client.force_login(self.manager_user)
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
 
