@@ -288,6 +288,7 @@ class RequireUserRoleTests(TestCase):
         req = self._make_request(user)
         resp = require_user_role(req, allowed_roles={"NOT_A_DEFINED_ROLE"})
         self.assertIsNotNone(resp)
+        assert resp is not None  # narrow for mypy
         self.assertEqual(resp.status_code, 403)
 
 
