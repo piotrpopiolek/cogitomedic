@@ -883,5 +883,30 @@
     "de": "Mindestens eine Gruppe auswählen.",
     "en": "Select at least one group.",
     "pl": "Wybierz co najmniej jedną grupę."
+  },
+  "administration.field_professional_title": {
+    "de": "Berufstitel",
+    "en": "Professional title",
+    "pl": "Tytuł zawodowy"
+  },
+  "administration.field_gender": {
+    "de": "Geschlecht",
+    "en": "Gender",
+    "pl": "Płeć"
+  },
+  "administration.choice_staff_gender_unspecified": {
+    "de": "Keine Angabe",
+    "en": "Not specified",
+    "pl": "Nie podano"
+  },
+  "administration.choice_staff_gender_female": {
+    "de": "Weiblich",
+    "en": "Female",
+    "pl": "Kobieta"
+  },
+  "administration.choice_staff_gender_male": {
+    "de": "Männlich",
+    "en": "Male",
+    "pl": "Mężczyzna"
   }
 }

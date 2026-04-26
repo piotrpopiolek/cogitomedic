@@ -42,7 +42,7 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.users.models import StaffUser
+from apps.users.models import StaffUser, StaffUserGender
 
 
 def _minimal_pdf_bytes() -> bytes:
@@ -333,3 +333,56 @@ class GenerateBefundPdfExternalTests(TestCase):
         self.version.refresh_from_db()
         ctx = _build_render_context(self.version)
         self.assertEqual(ctx["reporting_physician_display"], "Weber Ben")
+
+    def test_pdf_signoff_footer_uses_female_specialty_when_gender_female(self) -> None:
+        self.doctor.first_name = "Anna"
+        self.doctor.last_name = "Schmidt"
+        self.doctor.gender = StaffUserGender.FEMALE
+        self.doctor.professional_title = "Dr. med."
+        self.doctor.save(
+            update_fields=["first_name", "last_name", "gender", "professional_title"]
+        )
+        self.version.published_by_user = self.doctor
+        self.version.save(update_fields=["published_by_user"])
+        ctx = _build_render_context(self.version)
+        lines = ctx["pdf_signoff_footer_lines"]
+        self.assertIsNotNone(lines)
+        self.assertGreaterEqual(len(lines), 4)
+        self.assertEqual(lines[1], "Dr. med. Anna Schmidt")
+        self.assertIn("Fachärztin", lines[2])
+        self.assertIn("Teledermatologische", lines[3])
+
+    def test_pdf_signoff_footer_uses_male_specialty_when_gender_male(self) -> None:
+        self.doctor.first_name = "Paul"
+        self.doctor.last_name = "Meyer"
+        self.doctor.gender = StaffUserGender.MALE
+        self.doctor.professional_title = "Dr. med."
+        self.doctor.save(
+            update_fields=["first_name", "last_name", "gender", "professional_title"]
+        )
+        self.version.published_by_user = self.doctor
+        self.version.save(update_fields=["published_by_user"])
+        ctx = _build_render_context(self.version)
+        lines = ctx["pdf_signoff_footer_lines"]
+        self.assertIsNotNone(lines)
+        self.assertEqual(lines[1], "Dr. med. Paul Meyer")
+        self.assertEqual(lines[2], "Facharzt für Dermatologie")
+
+    def test_pdf_signoff_unspecified_gender_uses_male_specialty_and_first_last_name(
+        self,
+    ) -> None:
+        """Legacy accounts without gender: male German line (not Facharzt/-in slash form)."""
+        self.doctor.first_name = "Piotr"
+        self.doctor.last_name = "Popiołek"
+        self.doctor.gender = StaffUserGender.UNSPECIFIED
+        self.doctor.professional_title = "Dr. med."
+        self.doctor.save(
+            update_fields=["first_name", "last_name", "gender", "professional_title"]
+        )
+        self.version.published_by_user = self.doctor
+        self.version.save(update_fields=["published_by_user"])
+        ctx = _build_render_context(self.version)
+        lines = ctx["pdf_signoff_footer_lines"]
+        self.assertIsNotNone(lines)
+        self.assertEqual(lines[1], "Dr. med. Piotr Popiołek")
+        self.assertEqual(lines[2], "Facharzt für Dermatologie")
