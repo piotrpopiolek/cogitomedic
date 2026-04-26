@@ -175,6 +175,39 @@ def _is_patient_directory_role(request) -> bool:
     )
 
 
+def _is_panele_lekarz_item(request) -> bool:
+    """Lekarz, Manager, Admin (nie sama Recepcja)."""
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_doctor or user.is_admin_role or getattr(user, "is_manager", False))
+    )
+
+
+def _is_panele_rejestracja_item(request) -> bool:
+    """Rejestracja, Manager, Admin (nie sam Lekarz)."""
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_reception
+            or user.is_admin_role
+            or getattr(user, "is_manager", False)
+        )
+    )
+
+
+def _is_panele_section_visible(request) -> bool:
+    """Widoczność sekcji = suma uprawnień do poszczególnych skrótów (DRY względem helperów poniżej)."""
+    return bool(
+        _is_panele_lekarz_item(request)
+        or _is_panele_rejestracja_item(request)
+        or _is_admin_role(request)
+    )
+
+
 if HAS_UNFOLD:
     from apps.core.translation_service import db_gettext_lazy
 
@@ -188,43 +221,6 @@ if HAS_UNFOLD:
         ),
         "SIDEBAR": {
             "navigation": [
-                {
-                    "title": db_gettext_lazy("administration.side_panels", "Panele"),
-                    "separator": True,
-                    "permission": lambda request: _is_admin_role(request),
-                    "items": [
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_lekarz", "Lekarz"
-                            ),
-                            "icon": "stethoscope",
-                            "link": lambda request: reverse_lazy("doctor-list"),
-                            "permission": lambda request: _is_doctor_or_admin_role(
-                                request
-                            ),
-                        },
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_rejestracja", "Rejestracja"
-                            ),
-                            "icon": "groups",
-                            "link": lambda request: reverse_lazy(
-                                "admin_reception_dashboard"
-                            ),
-                            "permission": lambda request: _is_reception_or_admin_role(
-                                request
-                            ),
-                        },
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_admin", "Admin"
-                            ),
-                            "icon": "admin_panel_settings",
-                            "link": lambda request: reverse_lazy("admin:index"),
-                            "permission": lambda request: _is_admin_role(request),
-                        },
-                    ],
-                },
                 {
                     "title": db_gettext_lazy(
                         "administration.side_users_permissions",
@@ -576,6 +572,43 @@ if HAS_UNFOLD:
                             ),
                             "icon": "description",
                             "link": lambda request: reverse_lazy("api-swagger"),
+                            "permission": lambda request: _is_admin_role(request),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy("administration.side_panels", "Panele"),
+                    "separator": True,
+                    "permission": lambda request: _is_panele_section_visible(request),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_lekarz", "Lekarz"
+                            ),
+                            "icon": "stethoscope",
+                            "link": lambda request: reverse_lazy("doctor-list"),
+                            "permission": lambda request: _is_panele_lekarz_item(
+                                request
+                            ),
+                        },
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_rejestracja", "Rejestracja"
+                            ),
+                            "icon": "groups",
+                            "link": lambda request: reverse_lazy(
+                                "admin_reception_dashboard"
+                            ),
+                            "permission": lambda request: _is_panele_rejestracja_item(
+                                request
+                            ),
+                        },
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_admin", "Admin"
+                            ),
+                            "icon": "admin_panel_settings",
+                            "link": lambda request: reverse_lazy("admin:index"),
                             "permission": lambda request: _is_admin_role(request),
                         },
                     ],

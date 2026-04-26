@@ -1,6 +1,6 @@
 """
 Doctor panel: list of medical documents and document detail with Befund form.
-Requires authenticated user with role DOCTOR or ADMIN.
+Requires authenticated user with role DOCTOR, ADMIN, or MANAGER (nadzór).
 Staff login (HTML) shares Django session with API auth.
 
 UI strings and error messages use the ``doctor`` translation category (see
@@ -73,7 +73,7 @@ def _safe_redirect_next(request: HttpRequest, default_view_name: str):
 @require_http_methods(["GET", "POST"])
 @csrf_protect
 def doctor_login_view(request: HttpRequest) -> HttpResponse:
-    """Staff login (DOCTOR/ADMIN). Same session as API. Redirects to /doctor/ or next."""
+    """Staff login (DOCTOR/ADMIN/MANAGER). Same session as API. Redirects to /doctor/ or next."""
     if request.user.is_authenticated and _doctor_role_ok(request):
         next_url = (request.GET.get("next") or "").strip()
         if next_url and not url_has_allowed_host_and_scheme(
@@ -118,7 +118,9 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
 
 
 def _doctor_role_ok_request(user) -> bool:
-    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
+    return user.is_authenticated and (
+        user.is_doctor or user.is_admin_role or user.is_manager
+    )
 
 
 @login_required(login_url="doctor-login")
@@ -131,7 +133,9 @@ def doctor_logout_view(request: HttpRequest) -> HttpResponse:
 
 def _doctor_role_ok(request: HttpRequest) -> bool:
     user = request.user
-    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
+    return user.is_authenticated and (
+        user.is_doctor or user.is_admin_role or user.is_manager
+    )
 
 
 def _get_doctor_lang(request: HttpRequest) -> str:

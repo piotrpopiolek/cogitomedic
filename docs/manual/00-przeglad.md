@@ -14,13 +14,14 @@ Interfejs personelu i pacjenta obsługuje języki: **niemiecki, angielski, polsk
 
 ## Role w systemie
 
-Uprawnienia personelu wynikają z **grup Django** przypisanych do konta: `Reception`, `Doctor`, `Admin`, `Tablet`. Jedno konto może mieć jedną logiczną rolę operacyjną (typowo jedna grupa).
+Uprawnienia personelu wynikają z **grup Django** przypisanych do konta: `Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`. Jedno konto może mieć jedną logiczną rolę operacyjną (typowo jedna grupa).
 
 | Grupa / rola | Główny dostęp |
 |--------------|----------------|
 | **Reception** | Panel administracyjny Django (`/admin/`) — kolejki dzienne, pacjenci, wpisy kolejki, importy, podgląd PDF intake, dashboard recepcji |
 | **Tablet** | Interfejs `/tablet/` — wybór kolejki i pacjenta, uruchomienie formularza dla pacjenta |
 | **Doctor** | Panel `/doctor/` — kolejka pracy medycznej, formularz Befund, szkic / publikacja |
+| **Manager** | Django Admin i dashboard recepcji w **zakresie uprawnień** grupy (kolejki, pacjenci, urządzenia, import, dokumenty w podglądzie) + panel `/doctor/` z pełną listą (nadzór operacyjny) — w menu Unfold sekcja **Panele** z skrótami m.in. do rejestracji i panelu lekarza |
 | **Admin** | Pełny Django Admin + te same panele co lekarz i (według potrzeb) recepcja/tablet |
 
 Uwaga: konto **Admin** lub **Reception** może zalogować się na `/tablet/` (np. awaria dedykowanego konta TABLET). Zalecane jest jednak **osobne konto Tablet** na urządzeniu w poczekalni.

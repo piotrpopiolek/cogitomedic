@@ -24,7 +24,7 @@ alwaysApply: false
 - Używaj blokad wierszy tam, gdzie chronisz przejścia stanów (`select_for_update`).
 
 ## 4) Reguły domenowe specyficzne dla projektu
-- Obsługuj role `RECEPTION`, `DOCTOR`, `ADMIN` zgodnie z PRD.
+- Obsługuj role `RECEPTION`, `DOCTOR`, `ADMIN`, `MANAGER` (oraz `TABLET` tam, gdzie dotyczy) zgodnie z PRD i implementacją grup Django.
 - Dla manualnie dodanych pacjentów bez `Doctolib Patient ID` utrzymuj status tymczasowy i alert administracyjny.
 - Dla sesji tabletu stosuj model `latest-wins`: nowy token unieważnia poprzedni aktywny.
 - Wymuszaj walidację wymaganych zgód i pytań anamnestycznych przed `SUBMITTED`.

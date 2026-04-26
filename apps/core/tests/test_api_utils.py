@@ -262,6 +262,19 @@ class RequireUserRoleTests(TestCase):
         resp = require_user_role(req, allowed_roles={"TABLET"})
         self.assertIsNone(resp)
 
+    def test_any_of_multiple_allowed_roles_or_semantics(self) -> None:
+        """Recepcja pasuje, gdy ``allowed_roles`` zawiera DOCTOR lub RECEPTION (OR)."""
+        user = Mock(
+            is_authenticated=True,
+            is_doctor=False,
+            is_admin_role=False,
+            is_manager=False,
+            is_reception=True,
+            is_tablet=False,
+        )
+        req = self._make_request(user)
+        self.assertIsNone(require_user_role(req, allowed_roles={"DOCTOR", "RECEPTION"}))
+
 
 class RequireActorMatchTests(TestCase):
     def _make_request(self, user_id):
