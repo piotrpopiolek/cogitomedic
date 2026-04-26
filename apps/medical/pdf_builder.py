@@ -29,6 +29,7 @@ from apps.medical.models import (
 )
 from apps.medical.pdf_merge import safe_merge_pdfs
 from apps.operations.services import create_audit_event
+from apps.users.models import StaffUser, StaffUserGender
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,10 @@ def _pdf_labels(locale: str) -> dict[str, str]:
         "reporting_physician",
         "summary",
         "no_lesions",
+        "signoff_greeting",
+        "specialty_female",
+        "specialty_male",
+        "teledermatology_line",
     ]
     labels: dict[str, str] = {}
     for key in keys:
@@ -282,8 +287,24 @@ def _lesion_final_text(lesion: dict[str, Any]) -> str:
     return "-"
 
 
+def _staff_user_pdf_signoff_name(staff: Any | None) -> str | None:
+    """German letter style after academic title: ``Vorname Nachname`` (not ``Nachname, Vorname``)."""
+    if staff is None:
+        return None
+    first = (getattr(staff, "first_name", None) or "").strip()
+    last = (getattr(staff, "last_name", None) or "").strip()
+    if first and last:
+        return f"{first} {last}"
+    if first:
+        return first
+    if last:
+        return last
+    un = (getattr(staff, "username", None) or "").strip()
+    return un or None
+
+
 def _staff_user_display_name(user: Any) -> str | None:
-    """Last name then first name, space-separated (Befund PDF footer); username if names missing."""
+    """Last name then first name, space-separated (list/metadata); username if names missing."""
     if user is None:
         return None
     last = (getattr(user, "last_name", None) or "").strip()
@@ -298,22 +319,88 @@ def _staff_user_display_name(user: Any) -> str | None:
     return un or None
 
 
-def _reporting_physician_display(version: MedicalDocumentVersion) -> str | None:
-    """
-    Doctor who authored the report text: publisher for published versions, else
-    last document editor, else document creator.
-    """
+def _reporting_physician_user(version: MedicalDocumentVersion) -> Any | None:
+    """User whose name and PDF footer fields appear on the Befund PDF."""
     u = getattr(version, "published_by_user", None)
     if u is not None:
-        return _staff_user_display_name(u)
+        return u
     doc = version.medical_document
     if doc is None:
         return None
     u = getattr(doc, "updated_by_user", None)
     if u is not None:
-        return _staff_user_display_name(u)
-    u = getattr(doc, "created_by_user", None)
-    return _staff_user_display_name(u) if u is not None else None
+        return u
+    return getattr(doc, "created_by_user", None)
+
+
+def _reporting_physician_display(version: MedicalDocumentVersion) -> str | None:
+    """
+    Doctor who authored the report text: publisher for published versions, else
+    last document editor, else document creator.
+    """
+    return _staff_user_display_name(_reporting_physician_user(version))
+
+
+def _staff_user_for_pdf_footer(user: Any) -> Any | None:
+    """Load title/gender from DB so PDF footer does not depend on join state on ``version``."""
+    if user is None:
+        return None
+    pk = getattr(user, "pk", None)
+    if pk is None:
+        return user
+    try:
+        return StaffUser.objects.only(
+            "first_name",
+            "last_name",
+            "username",
+            "professional_title",
+            "gender",
+        ).get(pk=pk)
+    except StaffUser.DoesNotExist:
+        return user
+
+
+def _pdf_signoff_footer_lines(
+    *,
+    staff: Any | None,
+    name_display: str | None,
+    labels: dict[str, str],
+) -> list[str] | None:
+    """Mit freundlichen Grüßen + ``Dr. med. Vorname Nachname`` + Facharzt/Fachärztin + Teledermatologie.
+
+    Specialty line: explicit ``FEMALE`` / ``MALE`` from ``StaffUser.gender``. If gender is still
+    ``UNSPECIFIED`` (legacy accounts), we use the **male** German line — Klaudia's spec avoids the
+    slash form ``Facharzt/-in`` on patient-facing PDFs; female doctors should set gender to
+    *Weiblich* in admin for ``Fachärztin``.
+    """
+    signoff_name = (_staff_user_pdf_signoff_name(staff) or "").strip()
+    if not signoff_name:
+        signoff_name = (name_display or "").strip()
+    title = ""
+    gender_val = StaffUserGender.UNSPECIFIED
+    if staff is not None:
+        title = (getattr(staff, "professional_title", None) or "").strip()
+        gender_val = getattr(staff, "gender", None) or StaffUserGender.UNSPECIFIED
+    if not title:
+        title = "Dr. med."
+    name_line = f"{title} {signoff_name}".strip() if signoff_name else title
+    if gender_val == StaffUserGender.FEMALE:
+        spec = (labels.get("specialty_female") or "").strip()
+    else:
+        # MALE or UNSPECIFIED: same German wording as Klaudia for Antczak / Rubens et al.
+        spec = (labels.get("specialty_male") or "").strip()
+    tele = (labels.get("teledermatology_line") or "").strip()
+    greeting = (labels.get("signoff_greeting") or "").strip()
+    lines: list[str] = []
+    if greeting:
+        lines.append(greeting)
+    if name_line:
+        lines.append(name_line)
+    if spec:
+        lines.append(spec)
+    if tele:
+        lines.append(tele)
+    return lines or None
 
 
 def _build_render_context(
@@ -424,6 +511,12 @@ def _build_render_context(
     )
     created_for_meta = strict_published_at or version.created_at
     reporting_physician_display = _reporting_physician_display(version)
+    reporting_staff = _staff_user_for_pdf_footer(_reporting_physician_user(version))
+    pdf_signoff_footer_lines = _pdf_signoff_footer_lines(
+        staff=reporting_staff,
+        name_display=reporting_physician_display,
+        labels=labels,
+    )
     return {
         "document_id": str(version.medical_document_id),
         "version_no": version.version_no,
@@ -432,6 +525,7 @@ def _build_render_context(
         "publication_date_display": publication_date_display,
         "examination_date_display": examination_date_display,
         "reporting_physician_display": reporting_physician_display,
+        "pdf_signoff_footer_lines": pdf_signoff_footer_lines,
         "pdf_document_subject": pdf_document_subject,
         "pdf_dcterms_created": _w3c_profile_datetime(created_for_meta),
         "pdf_dcterms_modified": _w3c_profile_datetime(

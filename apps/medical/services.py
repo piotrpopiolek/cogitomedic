@@ -846,7 +846,7 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
             pass
     patient_search = get_params.get("patient_search") or None
     scope = (get_params.get("scope") or "all").strip()
-    if scope not in {"all", "mine", "published_by_me"}:
+    if scope not in {"all", "mine", "published_by_me", "in_revision"}:
         scope = "all"
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(
@@ -878,8 +878,9 @@ def list_medical_documents(
     List medical documents for doctor work queue.
     If user is DOCTOR (not admin), returns documents where user is author OR assigned
     to queue, plus every document still in DRAFT (shared describing queue).
-    ``scope`` is accepted for API/doctor-list param parity; the API currently keeps
-    the historical "all visible" behavior and does not branch on it here.
+    ``scope``:
+    - ``all`` / ``mine`` / ``published_by_me``: parity with doctor HTML list (doctor-only subset still applies).
+    - ``in_revision``: only ``PUBLISHED`` documents with ``has_pending_revision``.
     """
     qs = (
         MedicalDocument.objects.select_related(
@@ -919,6 +920,11 @@ def list_medical_documents(
             Q(queue_entry__patient__last_name__icontains=term)
             | Q(queue_entry__patient__first_name__icontains=term)
         )
+    if scope == "in_revision":
+        qs = qs.filter(
+            status=MedicalDocStatus.PUBLISHED,
+            has_pending_revision=True,
+        )
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
@@ -951,6 +957,10 @@ def list_doctor_work_queue(
         shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
             queue_entry__medical_document__status=MedicalDocStatus.DRAFT
         )
+        in_revision_q = Q(
+            queue_entry__medical_document__status=MedicalDocStatus.PUBLISHED,
+            queue_entry__medical_document__has_pending_revision=True,
+        )
         if _is_admin_or_manager_medical_oversight(user):
             if scope == "mine":
                 qs = qs.filter(personal)
@@ -958,6 +968,8 @@ def list_doctor_work_queue(
                 qs = qs.filter(
                     queue_entry__medical_document__versions__published_by_user_id=user.id
                 )
+            elif scope == "in_revision":
+                qs = qs.filter(in_revision_q)
         else:
             if scope == "mine":
                 qs = qs.filter(personal)
@@ -965,6 +977,8 @@ def list_doctor_work_queue(
                 qs = qs.filter(
                     queue_entry__medical_document__versions__published_by_user_id=user.id
                 )
+            elif scope == "in_revision":
+                qs = qs.filter(in_revision_q & personal)
             else:
                 qs = qs.filter(shared_draft_or_pending | personal)
     if status:

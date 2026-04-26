@@ -23,6 +23,7 @@
         <option value="all" {% if filters.scope == "all" %}selected{% endif %}>{{ ui.filter_scope_all }}</option>
         <option value="mine" {% if filters.scope == "mine" %}selected{% endif %}>{{ ui.filter_scope_mine }}</option>
         <option value="published_by_me" {% if filters.scope == "published_by_me" %}selected{% endif %}>{{ ui.filter_scope_published_by_me }}</option>
+        <option value="in_revision" {% if filters.scope == "in_revision" %}selected{% endif %}>{{ ui.filter_scope_in_revision }}</option>
       </select>
     </div>
     <div>
@@ -68,10 +69,15 @@
         </td>
         <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.queue_date }}</td>
         <td class="px-4 py-3">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
-            {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
-            {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
-            {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status }}</span>
+          <span class="inline-flex flex-wrap items-center gap-1.5">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
+              {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
+              {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
+              {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status }}</span>
+            {% if item.has_pending_revision %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100">{{ ui.list_status_in_revision }}</span>
+            {% endif %}
+          </span>
         </td>
         <td class="px-4 py-3">{% if item.pdf_generation_status %}<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase
             {% if item.pdf_generation_status == 'COMPLETED' %}bg-primary-600 text-white dark:bg-primary-500
