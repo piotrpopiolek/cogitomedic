@@ -154,7 +154,8 @@ def request_otp(
         )
         sms_text = _get_otp_sms_text(otp_code)
         adapter = get_sms_adapter()
-        adapter.send_sms(to=patient.phone, message=sms_text)
+        region = (patient.country_code or "DE").strip().upper()
+        adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
 
     return RequestOtpResult(
         status="ok",
