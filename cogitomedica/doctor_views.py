@@ -174,6 +174,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         "doctor/list.html",
         {
             "items": list_items,
+            "api_base": "/api/v1",
             "pagination": {
                 "page": list_params["page"],
                 "page_size": list_params["page_size"],
@@ -183,6 +184,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
                 "patient_search": list_params["patient_search"] or "",
+                "scope": list_params["scope"],
             },
             "ui": get_doctor_ui(lang),
             "lang": lang,
