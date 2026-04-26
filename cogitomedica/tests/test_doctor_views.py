@@ -153,6 +153,50 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 404)
 
+    def test_open_by_queue_returns_400_when_intake_reopened(self):
+        """Befund must not be created while intake is REOPENED (patient editing again)."""
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="RO", name="Reopen Open Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ReopenBlock",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500999111",
+            email="reopenblock@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"reopened", resp.content.lower())
+
 
 class DoctorDetailHappyPathTests(TestCase):
     """Full data chain for the document detail view."""

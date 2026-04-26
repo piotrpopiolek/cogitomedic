@@ -4,6 +4,10 @@ from django.contrib import admin, messages
 from django.urls import reverse
 
 from apps.core.exceptions import StateTransitionError
+from apps.core.translation_service import (
+    db_gettext_lazy,
+    format_administration_message,
+)
 from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
@@ -168,7 +172,12 @@ class PatientIntakeFormAdmin(UnfoldModelAdmin):
         qs = super().get_queryset(request)
         return qs.select_related("queue_entry", "queue_entry__patient", "session")
 
-    @admin.action(description="Reopen intake for patient editing (tablet)")
+    @admin.action(
+        description=db_gettext_lazy(
+            "administration.admin_action_reopen_intake_short",
+            "Reopen intake for patient editing (tablet)",
+        )
+    )
     def reopen_intake_for_patient_editing(self, request, queryset):
         if not (
             request.user.is_superuser
@@ -178,7 +187,11 @@ class PatientIntakeFormAdmin(UnfoldModelAdmin):
         ):
             self.message_user(
                 request,
-                "You do not have permission to reopen intake forms.",
+                format_administration_message(
+                    "administration.admin_intake_reopen_permission_denied",
+                    "You do not have permission to reopen intake forms.",
+                    request=request,
+                ),
                 level=messages.ERROR,
             )
             return
@@ -196,7 +209,13 @@ class PatientIntakeFormAdmin(UnfoldModelAdmin):
                 skipped += 1
         self.message_user(
             request,
-            f"Reopened {reopened} intake form(s); skipped {skipped}.",
+            format_administration_message(
+                "administration.admin_intake_reopen_result",
+                "Reopened {reopened} intake form(s); skipped {skipped}.",
+                request=request,
+                reopened=reopened,
+                skipped=skipped,
+            ),
             level=messages.WARNING if skipped else messages.INFO,
         )
 

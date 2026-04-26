@@ -683,7 +683,10 @@ COGITO_PATHS = {
         },
         "post": {
             "summary": "Create medical document",
-            "description": "DOCTOR, ADMIN, or MANAGER. Links queue entry and intake form.",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Links queue entry and intake form. "
+                "Requires intake `form_status` **SUBMITTED** (not `REOPENED` — patient must finish edits first)."
+            ),
             "tags": ["Medical"],
             "requestBody": {
                 "required": True,
@@ -705,6 +708,9 @@ COGITO_PATHS = {
             },
             "responses": {
                 "201": {"description": "Created"},
+                "400": {
+                    "description": "Domain error (e.g. intake not **SUBMITTED** yet — `other.domain.intake_form_must_be_submitted`, or queue/intake mismatch)."
+                },
                 "404": {"description": "Queue entry or intake form not found"},
             },
         },
@@ -1728,7 +1734,7 @@ COGITO_PATHS = {
     f"{PREFIX}/intake-forms/{{intake_form_id}}": {
         "get": {
             "summary": "Get intake form context",
-            "description": "Context for tablet: patient (read-only), consents, anamnesis questions with options and current answer, body_map, form status. TABLET restricted to today's queues.",
+            "description": "Context for tablet: patient (read-only), consents, anamnesis questions with options and current answer, body_map, form status. `form_status` is one of `IN_PROGRESS`, `REOPENED` (reopened by reception/admin for patient to edit again), or `SUBMITTED`. TABLET restricted to today's queues.",
             "tags": ["Intake"],
             "parameters": [
                 {
@@ -1767,7 +1773,9 @@ COGITO_PATHS = {
                     "description": "intake_form_id, body_map_schema_version, body_map_data"
                 },
                 "404": {"description": "Not found"},
-                "409": {"description": "Form not IN_PROGRESS"},
+                "409": {
+                    "description": "State transition not allowed — body map edits only when `form_status` is `IN_PROGRESS` or `REOPENED` (see `error_key` / domain message)."
+                },
             },
         },
     },
@@ -1800,7 +1808,9 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "OK"},
                 "404": {"description": "Not found"},
-                "409": {"description": "Conflict"},
+                "409": {
+                    "description": "State transition not allowed — anamnesis edits only when `form_status` is `IN_PROGRESS` or `REOPENED` (see `error_key`)."
+                },
             },
         },
     },
@@ -1824,7 +1834,9 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "intake_form_id, consents"},
                 "404": {"description": "Not found"},
-                "409": {"description": "Form not IN_PROGRESS or consent not active"},
+                "409": {
+                    "description": "State transition not allowed — consents editable only when `form_status` is `IN_PROGRESS` or `REOPENED`, and consent definitions must be active for the date (see `error_key`)."
+                },
             },
         },
     },
@@ -1849,7 +1861,9 @@ COGITO_PATHS = {
                 "200": {"description": "signature_file_path, signature_sha256"},
                 "400": {"description": "Invalid signature"},
                 "404": {"description": "Not found"},
-                "409": {"description": "Form already submitted"},
+                "409": {
+                    "description": "State transition not allowed — signature upload only when `form_status` is `IN_PROGRESS` or `REOPENED` (see `error_key`)."
+                },
                 "413": {"description": "Payload too large"},
             },
         },
@@ -1885,7 +1899,9 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "OK"},
                 "404": {"description": "Not found"},
-                "400": {"description": "Validation error"},
+                "400": {
+                    "description": "Validation or business rule (e.g. missing consents/anamnesis/signature); may include `error_key`."
+                },
             },
         },
     },

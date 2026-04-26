@@ -114,6 +114,11 @@
     "en": "Questionnaire not yet completed.",
     "pl": "Ankieta nie została jeszcze zakończona."
   },
+  "doctor.error_intake_reopened_patient_editing": {
+    "de": "Ankiete wurde zur Bearbeitung wieder geöffnet. Bitte warten Sie, bis der Patient sie erneut abgeschickt hat.",
+    "en": "The questionnaire was reopened for editing. Please wait until the patient submits it again.",
+    "pl": "Ankieta została ponownie otwarta do edycji. Poczekaj, aż pacjent ponownie ją wyśle."
+  },
   "doctor.error_no_intake_for_entry": {
     "de": "Keine Ankiete für diesen Eintrag.",
     "en": "No questionnaire for this entry.",
