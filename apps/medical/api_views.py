@@ -55,6 +55,7 @@ from apps.medical.models import (
 )
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
@@ -514,7 +515,7 @@ def medical_document_draft_view(
                 if (
                     eff
                     and doc.locked_by_user_id != request.user.id
-                    and not request.user.is_admin_role
+                    and not _is_admin_or_manager_medical_oversight(request.user)
                 ):
                     raise _MedicalDocumentEditLocked(holder_name)
 
@@ -690,7 +691,7 @@ def medical_document_publish_view(
                 if (
                     eff
                     and doc.locked_by_user_id != request.user.id
-                    and not request.user.is_admin_role
+                    and not _is_admin_or_manager_medical_oversight(request.user)
                 ):
                     raise _MedicalDocumentEditLocked(holder_name)
 

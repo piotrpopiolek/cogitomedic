@@ -17,12 +17,18 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from cogitomedica.openapi_schemas import (
+    COMPONENTS_REF_PREFIX,
     get_components_schemas,
     get_request_body_schema_for,
     get_response_schema_for,
 )
 
 PREFIX = "/api/v1"
+
+# Standard domain error JSON (``json_domain_error``); matches ``ApiLocalizedErrorBody`` in components.
+_API_LOCALIZED_ERROR_SCHEMA: dict[str, Any] = {
+    "$ref": f"{COMPONENTS_REF_PREFIX}ApiLocalizedErrorBody"
+}
 
 # Staff list pagination — aligned with apps.core.api_utils (DEFAULT_LIST_LIMIT=20, MAX_LIST_LIMIT=100).
 _OPENAPI_PAGE_SCHEMA = {
@@ -642,7 +648,11 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents": {
         "get": {
             "summary": "List medical documents",
-            "description": "Doctor work queue. Paginated: page (default 1), page_size (default 20, max 100).",
+            "description": (
+                "Doctor work queue (DOCTOR, ADMIN, MANAGER). Paginated: page (default 1), "
+                "page_size (default 20, max 100). Query `scope`: `all` (default), `mine`, or "
+                "`published_by_me` — filters which documents appear for the authenticated user."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {"name": "status", "in": "query", "schema": {"type": "string"}},
@@ -652,6 +662,16 @@ COGITO_PATHS = {
                     "schema": {"type": "string", "format": "date"},
                 },
                 {"name": "patient_search", "in": "query", "schema": {"type": "string"}},
+                {
+                    "name": "scope",
+                    "in": "query",
+                    "schema": {
+                        "type": "string",
+                        "enum": ["all", "mine", "published_by_me"],
+                        "default": "all",
+                    },
+                    "description": "Row filter for the work queue (see `list_medical_documents`).",
+                },
                 PAGE_Q,
                 PAGE_SIZE_Q,
             ],
@@ -663,7 +683,7 @@ COGITO_PATHS = {
         },
         "post": {
             "summary": "Create medical document",
-            "description": "Doctor or Admin. Links queue entry and intake form.",
+            "description": "DOCTOR, ADMIN, or MANAGER. Links queue entry and intake form.",
             "tags": ["Medical"],
             "requestBody": {
                 "required": True,
@@ -692,7 +712,14 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}": {
         "get": {
             "summary": "Get medical document context",
-            "description": "Full document context for doctor panel: intake summary and current version (draft or published). Includes edit-lock fields when applicable: locked_by_user_id, locked_by_username, locked_at (effective lock only, max 24h).",
+            "description": (
+                "Full document context for the doctor panel (DOCTOR, ADMIN, MANAGER): intake "
+                "summary and current version payload. Top-level fields include `status`, "
+                "`current_version_no`, `published_version_no` (last published version number; "
+                "null until first publish), `has_pending_revision` (true when a PUBLISHED "
+                "document has an in-progress DRAFT amendment), lock fields (`locked_by_user_id`, "
+                "`locked_by_username`, `locked_at` — effective lock only, max 24h)."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -704,7 +731,9 @@ COGITO_PATHS = {
                 {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
             ],
             "responses": {
-                "200": {"description": "Context (intake, version, patient, etc.)"},
+                "200": {
+                    "description": "Context (intake, version, patient, revision flags, etc.)"
+                },
                 "404": {"description": "Not found"},
             },
         },
@@ -713,9 +742,13 @@ COGITO_PATHS = {
         "get": {
             "summary": "Preview PDF",
             "description": (
-                "Returns PDF for the latest saved version (draft or published). When external "
-                "HiDrive PDFs are matched to the document, the response merges them with the "
-                "Befund PDF in that order. Content-Type: application/pdf."
+                "Returns PDF for a selected document version (DOCTOR, ADMIN, MANAGER). When "
+                "external HiDrive PDFs are matched or already accepted, the response merges them "
+                "with the Befund PDF. Query `source`: `published` (last published row), `draft` "
+                "(latest DRAFT), or omit for default behaviour (published-only doc → published; "
+                "published with pending revision → draft; legacy DRAFT-only doc → latest). "
+                "Response headers `X-Befund-Preview-Source` and `X-Befund-Preview-Version-No` "
+                "echo the resolved version. Content-Type: application/pdf."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -724,6 +757,12 @@ COGITO_PATHS = {
                     "in": "path",
                     "required": True,
                     "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "source",
+                    "in": "query",
+                    "schema": {"type": "string", "enum": ["published", "draft"]},
+                    "description": "Optional; when invalid, API returns 400 (`other.api.preview_source_invalid`).",
                 },
                 {"name": "form_locale", "in": "query", "schema": {"type": "string"}},
                 {
@@ -753,8 +792,8 @@ COGITO_PATHS = {
         "get": {
             "summary": "List external HiDrive PDF attachments",
             "description": (
-                "DOCTOR/ADMIN. Returns rows linked to the medical document (matched/rejected/etc.) "
-                "from HiDrive /incoming flow."
+                "DOCTOR, ADMIN, or MANAGER. Returns rows linked to the medical document "
+                "(matched/rejected/etc.) from HiDrive /incoming flow."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -777,7 +816,7 @@ COGITO_PATHS = {
         "get": {
             "summary": "Download external PDF (inline)",
             "description": (
-                "DOCTOR/ADMIN. Streams the file from HiDrive on demand (no local cache). "
+                "DOCTOR, ADMIN, or MANAGER. Streams the file from HiDrive on demand (no local cache). "
                 "Content-Type: application/pdf."
             ),
             "tags": ["Medical"],
@@ -817,7 +856,7 @@ COGITO_PATHS = {
         "post": {
             "summary": "Reject external PDF on HiDrive",
             "description": (
-                "DOCTOR/ADMIN. Renames the file on HiDrive with prefix rejected_ and sets "
+                "DOCTOR, ADMIN, or MANAGER. Renames the file on HiDrive with prefix rejected_ and sets "
                 "attachment status to REJECTED."
             ),
             "tags": ["Medical"],
@@ -879,7 +918,9 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/audit-trail": {
         "get": {
             "summary": "List audit events for document",
-            "description": "DOCTOR/ADMIN. Pagination: page (default 1), page_size (default 20, max 100).",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Pagination: page (default 1), page_size (default 20, max 100)."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -900,7 +941,10 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/retry-processing": {
         "post": {
             "summary": "Retry document processing",
-            "description": "Retry latest failed outbox step (e.g. PDF generation, HiDrive, SMS). ADMIN or RECEPTION.",
+            "description": (
+                "Retry latest failed outbox step (e.g. PDF generation, HiDrive, SMS). "
+                "ADMIN, MANAGER, or RECEPTION."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -949,6 +993,16 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/draft": {
         "put": {
             "summary": "Save draft",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Persists Befund payload. For a document already in "
+                '**PUBLISHED** status, the client must send `"intent": "amend"` to start or '
+                "continue a revision; otherwise the API returns **409** with "
+                "`error_key` = `other.api.amend_intent_required`. While a revision is open, "
+                "the document row stays `PUBLISHED` and `has_pending_revision` is true until "
+                "publish or discard. Invalid `intent` strings (not `edit` or `amend`) yield **400** "
+                "with `error_key` = `other.api.invalid_save_draft_intent`. ADMIN and MANAGER "
+                "bypass the DRAFT edit-lock held by another user (same semantics as lock service)."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -963,10 +1017,68 @@ COGITO_PATHS = {
                 "content": {"application/json": {"schema": {"type": "object"}}},
             },
             "responses": {
-                "200": {"description": "Version"},
+                "200": {
+                    "description": (
+                        "Saved version plus document revision flags (`document_status`, "
+                        "`has_pending_revision`, `published_version_no`)."
+                    )
+                },
+                "400": {
+                    "description": (
+                        "Validation or domain error; body includes `error` and usually `error_key` "
+                        "(e.g. `other.api.invalid_save_draft_intent`)."
+                    ),
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
                 "404": {"description": "Not found"},
+                "409": {
+                    "description": (
+                        "Published document requires explicit revision intent (`intent=amend`); "
+                        "`error_key` = `other.api.amend_intent_required`."
+                    ),
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
                 "423": {
-                    "description": "Edit lock held by another user (draft only); error body includes locked_by_username"
+                    "description": (
+                        "Edit lock held by another user (DRAFT document only); JSON includes "
+                        "`locked_by_username` (not the same shape as ApiLocalizedErrorBody)."
+                    )
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/discard-revision": {
+        "post": {
+            "summary": "Discard pending revision",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Deletes the latest **DRAFT** version on a **PUBLISHED** "
+                "document that has `has_pending_revision=true`, clears the flag, and clears the "
+                "edit lock. Returns **409** with `error_key` = `other.api.no_pending_revision_to_discard` "
+                "when there is nothing to discard."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Pending revision discarded; document flags updated."
+                },
+                "404": {"description": "Medical document not found"},
+                "409": {
+                    "description": "No pending revision (`error_key`: `other.api.no_pending_revision_to_discard`).",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
                 },
             },
         },
@@ -974,7 +1086,10 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/unlock": {
         "post": {
             "summary": "Release edit lock",
-            "description": "Clears edit lock for this document when the caller holds the lock (or is admin). Intended for page unload from the doctor panel.",
+            "description": (
+                "Clears edit lock when the caller holds the lock or has ADMIN/MANAGER oversight. "
+                "Intended for page unload from the doctor panel."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -994,6 +1109,10 @@ COGITO_PATHS = {
     f"{PREFIX}/medical-documents/{{medical_document_id}}/publish": {
         "post": {
             "summary": "Publish document",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Publishes the latest DRAFT (or completes a revision). "
+                "DRAFT edit-lock rules match PUT …/draft (MANAGER/ADMIN may bypass another user's lock)."
+            ),
             "tags": ["Medical"],
             "parameters": [
                 {
@@ -1013,6 +1132,9 @@ COGITO_PATHS = {
                 "404": {"description": "Not found"},
                 "409": {
                     "description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"
+                },
+                "423": {
+                    "description": "Edit lock held by another user while document is DRAFT (same as PUT …/draft)."
                 },
             },
         },

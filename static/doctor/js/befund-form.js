@@ -264,6 +264,10 @@
   var hasPendingRevisionEarly = !!(CTX && CTX.has_pending_revision);
   var previewSeenSinceLastSave = docStatusEarly !== "DRAFT";
 
+  function hasPublishedHistory() {
+    return docStatus === "PUBLISHED" || publishedVersionNo != null;
+  }
+
   function isDraftAuthoring() {
     return docStatus === "DRAFT" || hasPendingRevision;
   }
@@ -275,12 +279,10 @@
   function setPublishEnabledFromPreviewFlag() {
     var pub = el("btn-publish");
     if (!pub) return;
-    if (isPublishedReadOnly()) {
+    if (hasPublishedHistory() && !hasPendingRevision) {
       pub.disabled = true;
-      pub.classList.add("hidden");
       return;
     }
-    pub.classList.remove("hidden");
     pub.disabled = !previewSeenSinceLastSave;
   }
 
@@ -912,8 +914,32 @@
     node.textContent = text || "";
   }
 
+  function setHiddenState(node, shouldHide) {
+    if (!node) return;
+    node.hidden = !!shouldHide;
+    if (shouldHide) node.classList.add("hidden");
+    else node.classList.remove("hidden");
+  }
+
+  function currentPublishedVersionNo() {
+    if (publishedVersionNo != null) return publishedVersionNo;
+    if (docStatus === "PUBLISHED" && CTX && CTX.current_version) {
+      return CTX.current_version.version_no || "";
+    }
+    return "";
+  }
+
+  function revisionMessage(text) {
+    return formatUiPlaceholders(text, {
+      published_version_no: currentPublishedVersionNo(),
+    });
+  }
+
   function refreshRevisionUi() {
     var banner = el("revision-state-banner");
+    var actionNotice = el("revision-action-notice");
+    var publishedDocument = hasPublishedHistory();
+    var publishedReadOnly = publishedDocument && !hasPendingRevision;
     if (banner) {
       banner.classList.remove(
         "border-blue-200",
@@ -930,8 +956,8 @@
         "dark:text-amber-100"
       );
       banner.innerHTML = "";
-      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
-        banner.classList.remove("hidden");
+      if (publishedReadOnly) {
+        setHiddenState(banner, false);
         banner.classList.add(
           "border-blue-200",
           "bg-blue-50",
@@ -945,11 +971,11 @@
         titleP.textContent = UI.bannerPublishedTitle;
         var bodyP = document.createElement("p");
         bodyP.className = "mb-0";
-        bodyP.textContent = UI.bannerPublishedBody;
+        bodyP.textContent = revisionMessage(UI.bannerPublishedBody);
         banner.appendChild(titleP);
         banner.appendChild(bodyP);
-      } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
-        banner.classList.remove("hidden");
+      } else if (publishedDocument && hasPendingRevision) {
+        setHiddenState(banner, false);
         banner.classList.add(
           "border-amber-200",
           "bg-amber-50",
@@ -963,11 +989,67 @@
         titleP2.textContent = UI.bannerRevisionTitle;
         var bodyP2 = document.createElement("p");
         bodyP2.className = "mb-0";
-        bodyP2.textContent = UI.bannerRevisionBody;
+        bodyP2.textContent = revisionMessage(UI.bannerRevisionBody);
         banner.appendChild(titleP2);
         banner.appendChild(bodyP2);
       } else {
-        banner.classList.add("hidden");
+        setHiddenState(banner, true);
+      }
+    }
+
+    if (actionNotice) {
+      actionNotice.classList.remove(
+        "hidden",
+        "border-blue-200",
+        "bg-blue-50",
+        "text-blue-900",
+        "dark:border-blue-800",
+        "dark:bg-blue-950/40",
+        "dark:text-blue-100",
+        "border-amber-200",
+        "bg-amber-50",
+        "text-amber-900",
+        "dark:border-amber-800",
+        "dark:bg-amber-950/40",
+        "dark:text-amber-100"
+      );
+      actionNotice.innerHTML = "";
+      if (publishedReadOnly) {
+        setHiddenState(actionNotice, false);
+        actionNotice.classList.add(
+          "border-blue-200",
+          "bg-blue-50",
+          "text-blue-900",
+          "dark:border-blue-800",
+          "dark:bg-blue-950/40",
+          "dark:text-blue-100"
+        );
+        actionNotice.innerHTML =
+          '<p class="mb-1 font-semibold">' +
+          escapeHtml(UI.bannerPublishedTitle) +
+          "</p>" +
+          '<p class="mb-0">' +
+          escapeHtml(revisionMessage(UI.bannerPublishedBody)) +
+          "</p>";
+      } else if (publishedDocument && hasPendingRevision) {
+        setHiddenState(actionNotice, false);
+        actionNotice.classList.add(
+          "border-amber-200",
+          "bg-amber-50",
+          "text-amber-900",
+          "dark:border-amber-800",
+          "dark:bg-amber-950/40",
+          "dark:text-amber-100"
+        );
+        actionNotice.innerHTML =
+          '<p class="mb-1 font-semibold">' +
+          escapeHtml(UI.bannerRevisionTitle) +
+          "</p>" +
+          '<p class="mb-0">' +
+          escapeHtml(revisionMessage(UI.bannerRevisionBody)) +
+          "</p>";
+      } else {
+        setHiddenState(actionNotice, true);
       }
     }
 
@@ -978,42 +1060,38 @@
     var previewBtn = el("btn-preview-pdf");
 
     if (startBtn) {
-      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
-        startBtn.classList.remove("hidden");
+      if (publishedDocument) {
+        setHiddenState(startBtn, false);
+        startBtn.disabled = hasPendingRevision;
       } else {
-        startBtn.classList.add("hidden");
+        setHiddenState(startBtn, true);
+        startBtn.disabled = false;
       }
     }
     if (discardBtn) {
-      if (docStatus === "PUBLISHED" && hasPendingRevision) {
-        discardBtn.classList.remove("hidden");
+      if (publishedDocument) {
+        setHiddenState(discardBtn, false);
+        discardBtn.disabled = !hasPendingRevision;
       } else {
-        discardBtn.classList.add("hidden");
+        setHiddenState(discardBtn, true);
+        discardBtn.disabled = false;
       }
     }
     if (saveBtn) {
-      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
-        saveBtn.classList.add("hidden");
-      } else {
-        saveBtn.classList.remove("hidden");
-      }
+      saveBtn.classList.remove("hidden");
+      saveBtn.disabled = false;
       setBtnText("btn-save-draft", UI.btnSaveDraft);
     }
     if (publishBtnNode) {
-      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
-        publishBtnNode.classList.add("hidden");
-      } else {
-        publishBtnNode.classList.remove("hidden");
-        publishBtnNode.textContent =
-          docStatus === "PUBLISHED" && hasPendingRevision
-            ? UI.btnRepublish
-            : UI.btnPublish;
-      }
+      publishBtnNode.classList.remove("hidden");
+      publishBtnNode.textContent = publishedDocument
+        ? UI.btnRepublish
+        : UI.btnPublish;
     }
     if (previewBtn) {
-      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+      if (publishedReadOnly) {
         previewBtn.textContent = UI.btnPreviewPublished;
-      } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
+      } else if (publishedDocument && hasPendingRevision) {
         previewBtn.textContent = UI.btnPreviewRevision;
       } else {
         previewBtn.textContent = UI.btnPreviewPdf;
@@ -1035,14 +1113,18 @@
       var confirmBtn = el("revision-modal-confirm");
       var cancelBtn = el("revision-modal-cancel");
       if (titleEl) titleEl.textContent = opts.title || "";
-      if (bodyEl) bodyEl.textContent = opts.body || "";
+      if (bodyEl) {
+        bodyEl.textContent = revisionMessage(opts.body || "");
+        bodyEl.className =
+          "mt-2 text-sm leading-6 text-base-700 dark:text-base-300";
+      }
       if (confirmBtn) confirmBtn.textContent = opts.confirm || "OK";
       if (cancelBtn) cancelBtn.textContent = opts.cancel || "Cancel";
-      modal.classList.remove("hidden");
+      setHiddenState(modal, false);
       modal.classList.add("flex");
 
       function cleanup() {
-        modal.classList.add("hidden");
+        setHiddenState(modal, true);
         modal.classList.remove("flex");
         if (confirmBtn) confirmBtn.removeEventListener("click", onConfirm);
         if (cancelBtn) cancelBtn.removeEventListener("click", onCancel);
@@ -1116,12 +1198,10 @@
           );
           return;
         }
-        return readJsonSafe(res).then(function (json) {
-          applyRevisionStateFromResponse(json);
-          previewSeenSinceLastSave = false;
-          setPublishEnabledFromPreviewFlag();
-          alertMsg("success", UI.msgRevisionStarted);
-        });
+        applyRevisionStateFromResponse(getResJson(res));
+        previewSeenSinceLastSave = false;
+        setPublishEnabledFromPreviewFlag();
+        alertMsg("success", UI.msgRevisionStarted);
       })
       .catch(function () {
         if (saveBtn) saveBtn.disabled = false;
@@ -1154,23 +1234,23 @@
             discardRevisionBtn.disabled = false;
             if (isAuthExpiredResponse(res)) return;
             if (res.status === 409) {
-              return readJsonSafe(res).then(function (json) {
-                if (
-                  json &&
-                  (json.error_key ===
-                    "other.api.no_pending_revision_to_discard" ||
-                    json.api_message_key ===
-                      "other.api.no_pending_revision_to_discard")
-                ) {
-                  alertMsg("warning", UI.msgNoPendingRevision);
-                  return;
-                }
-                alertMsg(
-                  "danger",
-                  (json && (json.error || json.detail)) ||
-                    UI.msgError + " " + res.status
-                );
-              });
+              var json409 = getResJson(res);
+              if (
+                json409 &&
+                (json409.error_key ===
+                  "other.api.no_pending_revision_to_discard" ||
+                  json409.api_message_key ===
+                    "other.api.no_pending_revision_to_discard")
+              ) {
+                alertMsg("warning", UI.msgNoPendingRevision);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409 && (json409.error || json409.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
             }
             if (!res.ok) {
               alertMsg(
@@ -1179,12 +1259,10 @@
               );
               return;
             }
-            return readJsonSafe(res).then(function (json) {
-              applyRevisionStateFromResponse(json);
-              previewSeenSinceLastSave = true;
-              setPublishEnabledFromPreviewFlag();
-              alertMsg("success", UI.msgRevisionDiscarded);
-            });
+            applyRevisionStateFromResponse(getResJson(res));
+            previewSeenSinceLastSave = true;
+            setPublishEnabledFromPreviewFlag();
+            alertMsg("success", UI.msgRevisionDiscarded);
           })
           .catch(function () {
             discardRevisionBtn.disabled = false;
@@ -1317,13 +1395,8 @@
     refreshRevisionUi();
   }
 
-  function readJsonSafe(res) {
-    return res
-      .clone()
-      .json()
-      .catch(function () {
-        return null;
-      });
+  function getResJson(res) {
+    return res && res.json ? res.json : null;
   }
 
   const saveDraftBtn = el("btn-save-draft");
@@ -1352,28 +1425,27 @@
           if (isAuthExpiredResponse(res)) return;
           if (res.ok) {
             previewSeenSinceLastSave = false;
-            return readJsonSafe(res).then(function (json) {
-              applyRevisionStateFromResponse(json);
-              setPublishEnabledFromPreviewFlag();
-              alertMsg("success", UI.msgSaveSuccess);
-            });
+            applyRevisionStateFromResponse(getResJson(res));
+            setPublishEnabledFromPreviewFlag();
+            alertMsg("success", UI.msgSaveSuccess);
+            return;
           }
           if (res.status === 409) {
-            return readJsonSafe(res).then(function (json) {
-              if (
-                json &&
-                (json.error_key === "other.api.amend_intent_required" ||
-                  json.api_message_key === "other.api.amend_intent_required")
-              ) {
-                alertMsg("warning", UI.msgAmendIntentRequired);
-                return;
-              }
-              alertMsg(
-                "danger",
-                (json && (json.error || json.detail)) ||
-                  UI.msgError + " " + res.status
-              );
-            });
+            var json409s = getResJson(res);
+            if (
+              json409s &&
+              (json409s.error_key === "other.api.amend_intent_required" ||
+                json409s.api_message_key === "other.api.amend_intent_required")
+            ) {
+              alertMsg("warning", UI.msgAmendIntentRequired);
+              return;
+            }
+            alertMsg(
+              "danger",
+              (json409s && (json409s.error || json409s.detail)) ||
+                UI.msgError + " " + res.status
+            );
+            return;
           }
           alertMsg(
             "danger",
@@ -1486,23 +1558,23 @@
           }
           if (!res.ok) {
             if (res.status === 409) {
-              return readJsonSafe(res).then(function (json) {
-                btn.disabled = false;
-                if (previewTab) previewTab.close();
-                if (
-                  json &&
-                  (json.error_key === "other.api.amend_intent_required" ||
-                    json.api_message_key === "other.api.amend_intent_required")
-                ) {
-                  alertMsg("warning", UI.msgAmendIntentRequired);
-                  return;
-                }
-                alertMsg(
-                  "danger",
-                  (json && (json.error || json.detail)) ||
-                    UI.msgError + " " + res.status
-                );
-              });
+              var json409p = getResJson(res);
+              btn.disabled = false;
+              if (previewTab) previewTab.close();
+              if (
+                json409p &&
+                (json409p.error_key === "other.api.amend_intent_required" ||
+                  json409p.api_message_key === "other.api.amend_intent_required")
+              ) {
+                alertMsg("warning", UI.msgAmendIntentRequired);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409p && (json409p.error || json409p.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
             }
             btn.disabled = false;
             alertMsg(
@@ -1512,15 +1584,13 @@
             if (previewTab) previewTab.close();
             return;
           }
-          return readJsonSafe(res).then(function (json) {
-            applyRevisionStateFromResponse(json);
-            return openPreviewBlobInTab(
-              previewTab,
-              btn,
-              buildPreviewUrl("draft"),
-              { markPreviewSeen: true }
-            );
-          });
+          applyRevisionStateFromResponse(getResJson(res));
+          return openPreviewBlobInTab(
+            previewTab,
+            btn,
+            buildPreviewUrl("draft"),
+            { markPreviewSeen: true }
+          );
         })
         .catch(function () {
           btn.disabled = false;
@@ -1564,22 +1634,22 @@
           }
           if (!res.ok) {
             if (res.status === 409) {
-              return readJsonSafe(res).then(function (json) {
-                publishBtn.disabled = false;
-                if (
-                  json &&
-                  (json.error_key === "other.api.amend_intent_required" ||
-                    json.api_message_key === "other.api.amend_intent_required")
-                ) {
-                  alertMsg("warning", UI.msgAmendIntentRequired);
-                  return;
-                }
-                alertMsg(
-                  "danger",
-                  (json && (json.error || json.detail)) ||
-                    UI.msgError + " " + res.status
-                );
-              });
+              var json409pub = getResJson(res);
+              publishBtn.disabled = false;
+              if (
+                json409pub &&
+                (json409pub.error_key === "other.api.amend_intent_required" ||
+                  json409pub.api_message_key === "other.api.amend_intent_required")
+              ) {
+                alertMsg("warning", UI.msgAmendIntentRequired);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409pub && (json409pub.error || json409pub.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
             }
             publishBtn.disabled = false;
             alertMsg(
