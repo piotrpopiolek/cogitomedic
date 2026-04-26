@@ -70,6 +70,19 @@ class MedicalDocument(models.Model):
             "administration.field_current_version_no", "Current version no"
         ),
     )
+    published_version_no = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_published_version_no", "Published version no"
+        ),
+    )
+    has_pending_revision = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy(
+            "administration.field_has_pending_revision", "Has pending revision"
+        ),
+    )
     last_published_at = models.DateTimeField(
         blank=True,
         null=True,
@@ -129,11 +142,20 @@ class MedicalDocument(models.Model):
             models.CheckConstraint(
                 condition=Q(current_version_no__gte=0),
                 name="medical_document_current_version_non_negative",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(published_version_no__isnull=True)
+                | Q(published_version_no__gte=0),
+                name="medical_document_published_version_non_negative",
+            ),
         ]
         indexes = [
             models.Index(fields=["status", "-updated_at"]),
             models.Index(fields=["created_by_user", "-created_at"]),
+            models.Index(
+                fields=["status", "has_pending_revision", "-updated_at"],
+                name="med_doc_status_rev_idx",
+            ),
         ]
 
     def __str__(self) -> str:

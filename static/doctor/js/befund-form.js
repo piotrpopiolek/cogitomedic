@@ -74,6 +74,29 @@
     externalPdfPreviewHint: uiText("external_pdf_preview_hint"),
     externalPdfPreviewMergeWarning: uiText("external_pdf_preview_merge_warning"),
     msgPublishPreviewRequired: uiText("msg_publish_preview_required"),
+    bannerPublishedTitle: uiText("banner_published_title"),
+    bannerPublishedBody: uiText("banner_published_body"),
+    bannerRevisionTitle: uiText("banner_revision_title"),
+    bannerRevisionBody: uiText("banner_revision_body"),
+    btnSaveDraft: uiText("btn_save_draft"),
+    btnPreviewPdf: uiText("btn_preview_pdf"),
+    btnPreviewPublished: uiText("btn_preview_published"),
+    btnPreviewRevision: uiText("btn_preview_revision"),
+    btnPublish: uiText("btn_publish"),
+    btnRepublish: uiText("btn_republish"),
+    btnStartRevision: uiText("btn_start_revision"),
+    btnDiscardRevision: uiText("btn_discard_revision"),
+    modalStartRevisionTitle: uiText("modal_start_revision_title"),
+    modalStartRevisionBody: uiText("modal_start_revision_body"),
+    modalStartRevisionConfirm: uiText("modal_start_revision_confirm"),
+    modalStartRevisionCancel: uiText("modal_start_revision_cancel"),
+    modalDiscardRevisionTitle: uiText("modal_discard_revision_title"),
+    modalDiscardRevisionBody: uiText("modal_discard_revision_body"),
+    modalDiscardRevisionConfirm: uiText("modal_discard_revision_confirm"),
+    msgRevisionStarted: uiText("msg_revision_started"),
+    msgRevisionDiscarded: uiText("msg_revision_discarded"),
+    msgAmendIntentRequired: uiText("msg_amend_intent_required"),
+    msgNoPendingRevision: uiText("msg_no_pending_revision"),
   });
 
   function el(id) {
@@ -234,11 +257,30 @@
   }
 
   var docStatusEarly = (CTX && CTX.status) || "";
+  var publishedVersionNoEarly =
+    CTX && typeof CTX.published_version_no !== "undefined"
+      ? CTX.published_version_no
+      : null;
+  var hasPendingRevisionEarly = !!(CTX && CTX.has_pending_revision);
   var previewSeenSinceLastSave = docStatusEarly !== "DRAFT";
+
+  function isDraftAuthoring() {
+    return docStatus === "DRAFT" || hasPendingRevision;
+  }
+
+  function isPublishedReadOnly() {
+    return docStatus === "PUBLISHED" && !hasPendingRevision;
+  }
 
   function setPublishEnabledFromPreviewFlag() {
     var pub = el("btn-publish");
     if (!pub) return;
+    if (isPublishedReadOnly()) {
+      pub.disabled = true;
+      pub.classList.add("hidden");
+      return;
+    }
+    pub.classList.remove("hidden");
     pub.disabled = !previewSeenSinceLastSave;
   }
 
@@ -381,8 +423,11 @@
   }
 
   var docStatus = docStatusEarly;
+  var publishedVersionNo = publishedVersionNoEarly;
+  var hasPendingRevision = hasPendingRevisionEarly;
+
   function releaseEditLockOnLeave() {
-    if (docStatus !== "DRAFT") return;
+    if (!isDraftAuthoring()) return;
     var token = getCsrfToken();
     if (!token) return;
     var url = docUrl("/unlock");
@@ -860,6 +905,296 @@
   }
   loadDoctorTemplates();
   loadExternalPdfs();
+
+  function setBtnText(id, text) {
+    var node = el(id);
+    if (!node) return;
+    node.textContent = text || "";
+  }
+
+  function refreshRevisionUi() {
+    var banner = el("revision-state-banner");
+    if (banner) {
+      banner.classList.remove(
+        "border-blue-200",
+        "bg-blue-50",
+        "text-blue-900",
+        "dark:border-blue-800",
+        "dark:bg-blue-950/40",
+        "dark:text-blue-100",
+        "border-amber-200",
+        "bg-amber-50",
+        "text-amber-900",
+        "dark:border-amber-800",
+        "dark:bg-amber-950/40",
+        "dark:text-amber-100"
+      );
+      banner.innerHTML = "";
+      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+        banner.classList.remove("hidden");
+        banner.classList.add(
+          "border-blue-200",
+          "bg-blue-50",
+          "text-blue-900",
+          "dark:border-blue-800",
+          "dark:bg-blue-950/40",
+          "dark:text-blue-100"
+        );
+        var titleP = document.createElement("p");
+        titleP.className = "font-semibold mb-1";
+        titleP.textContent = UI.bannerPublishedTitle;
+        var bodyP = document.createElement("p");
+        bodyP.className = "mb-0";
+        bodyP.textContent = UI.bannerPublishedBody;
+        banner.appendChild(titleP);
+        banner.appendChild(bodyP);
+      } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
+        banner.classList.remove("hidden");
+        banner.classList.add(
+          "border-amber-200",
+          "bg-amber-50",
+          "text-amber-900",
+          "dark:border-amber-800",
+          "dark:bg-amber-950/40",
+          "dark:text-amber-100"
+        );
+        var titleP2 = document.createElement("p");
+        titleP2.className = "font-semibold mb-1";
+        titleP2.textContent = UI.bannerRevisionTitle;
+        var bodyP2 = document.createElement("p");
+        bodyP2.className = "mb-0";
+        bodyP2.textContent = UI.bannerRevisionBody;
+        banner.appendChild(titleP2);
+        banner.appendChild(bodyP2);
+      } else {
+        banner.classList.add("hidden");
+      }
+    }
+
+    var startBtn = el("btn-start-revision");
+    var discardBtn = el("btn-discard-revision");
+    var saveBtn = el("btn-save-draft");
+    var publishBtnNode = el("btn-publish");
+    var previewBtn = el("btn-preview-pdf");
+
+    if (startBtn) {
+      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+        startBtn.classList.remove("hidden");
+      } else {
+        startBtn.classList.add("hidden");
+      }
+    }
+    if (discardBtn) {
+      if (docStatus === "PUBLISHED" && hasPendingRevision) {
+        discardBtn.classList.remove("hidden");
+      } else {
+        discardBtn.classList.add("hidden");
+      }
+    }
+    if (saveBtn) {
+      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+        saveBtn.classList.add("hidden");
+      } else {
+        saveBtn.classList.remove("hidden");
+      }
+      setBtnText("btn-save-draft", UI.btnSaveDraft);
+    }
+    if (publishBtnNode) {
+      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+        publishBtnNode.classList.add("hidden");
+      } else {
+        publishBtnNode.classList.remove("hidden");
+        publishBtnNode.textContent =
+          docStatus === "PUBLISHED" && hasPendingRevision
+            ? UI.btnRepublish
+            : UI.btnPublish;
+      }
+    }
+    if (previewBtn) {
+      if (docStatus === "PUBLISHED" && !hasPendingRevision) {
+        previewBtn.textContent = UI.btnPreviewPublished;
+      } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
+        previewBtn.textContent = UI.btnPreviewRevision;
+      } else {
+        previewBtn.textContent = UI.btnPreviewPdf;
+      }
+    }
+
+    setPublishEnabledFromPreviewFlag();
+  }
+
+  function showRevisionModal(opts) {
+    return new Promise(function (resolve) {
+      var modal = el("revision-modal");
+      if (!modal) {
+        resolve(false);
+        return;
+      }
+      var titleEl = el("revision-modal-title");
+      var bodyEl = el("revision-modal-body");
+      var confirmBtn = el("revision-modal-confirm");
+      var cancelBtn = el("revision-modal-cancel");
+      if (titleEl) titleEl.textContent = opts.title || "";
+      if (bodyEl) bodyEl.textContent = opts.body || "";
+      if (confirmBtn) confirmBtn.textContent = opts.confirm || "OK";
+      if (cancelBtn) cancelBtn.textContent = opts.cancel || "Cancel";
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+
+      function cleanup() {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        if (confirmBtn) confirmBtn.removeEventListener("click", onConfirm);
+        if (cancelBtn) cancelBtn.removeEventListener("click", onCancel);
+        modal.removeEventListener("click", onBackdrop);
+      }
+      function onConfirm() {
+        cleanup();
+        resolve(true);
+      }
+      function onCancel() {
+        cleanup();
+        resolve(false);
+      }
+      function onBackdrop(ev) {
+        if (ev.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      }
+      if (confirmBtn) confirmBtn.addEventListener("click", onConfirm);
+      if (cancelBtn) cancelBtn.addEventListener("click", onCancel);
+      modal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  function confirmStartRevision() {
+    return showRevisionModal({
+      title: UI.modalStartRevisionTitle,
+      body: UI.modalStartRevisionBody,
+      confirm: UI.modalStartRevisionConfirm,
+      cancel: UI.modalStartRevisionCancel,
+    });
+  }
+
+  function confirmDiscardRevision() {
+    return showRevisionModal({
+      title: UI.modalDiscardRevisionTitle,
+      body: UI.modalDiscardRevisionBody,
+      confirm: UI.modalDiscardRevisionConfirm,
+      cancel: UI.modalStartRevisionCancel,
+    });
+  }
+
+  function performStartRevisionAndSave() {
+    var payload = buildPayload();
+    var validationErr = validatePayloadForSubmit(payload);
+    if (validationErr) {
+      alertMsg("danger", validationErr);
+      return;
+    }
+    var saveBtn = el("btn-save-draft");
+    var startBtn = el("btn-start-revision");
+    if (saveBtn) saveBtn.disabled = true;
+    if (startBtn) startBtn.disabled = true;
+    apiFetch(docUrl("/draft"), {
+      method: "PUT",
+      body: JSON.stringify({
+        medical_payload_schema_version: 1,
+        medical_payload: payload,
+        intent: "amend",
+      }),
+    })
+      .then(function (res) {
+        if (saveBtn) saveBtn.disabled = false;
+        if (startBtn) startBtn.disabled = false;
+        if (isAuthExpiredResponse(res)) return;
+        if (!res.ok) {
+          alertMsg(
+            "danger",
+            responseErrorMessage(res, UI.msgError + " " + res.status)
+          );
+          return;
+        }
+        return readJsonSafe(res).then(function (json) {
+          applyRevisionStateFromResponse(json);
+          previewSeenSinceLastSave = false;
+          setPublishEnabledFromPreviewFlag();
+          alertMsg("success", UI.msgRevisionStarted);
+        });
+      })
+      .catch(function () {
+        if (saveBtn) saveBtn.disabled = false;
+        if (startBtn) startBtn.disabled = false;
+        alertMsg("danger", UI.msgNetwork);
+      });
+  }
+
+  var startRevisionBtn = el("btn-start-revision");
+  if (startRevisionBtn) {
+    startRevisionBtn.addEventListener("click", function () {
+      confirmStartRevision().then(function (confirmed) {
+        if (!confirmed) return;
+        performStartRevisionAndSave();
+      });
+    });
+  }
+
+  var discardRevisionBtn = el("btn-discard-revision");
+  if (discardRevisionBtn) {
+    discardRevisionBtn.addEventListener("click", function () {
+      confirmDiscardRevision().then(function (confirmed) {
+        if (!confirmed) return;
+        discardRevisionBtn.disabled = true;
+        apiFetch(docUrl("/discard-revision"), {
+          method: "POST",
+          body: JSON.stringify({}),
+        })
+          .then(function (res) {
+            discardRevisionBtn.disabled = false;
+            if (isAuthExpiredResponse(res)) return;
+            if (res.status === 409) {
+              return readJsonSafe(res).then(function (json) {
+                if (
+                  json &&
+                  (json.error_key ===
+                    "other.api.no_pending_revision_to_discard" ||
+                    json.api_message_key ===
+                      "other.api.no_pending_revision_to_discard")
+                ) {
+                  alertMsg("warning", UI.msgNoPendingRevision);
+                  return;
+                }
+                alertMsg(
+                  "danger",
+                  (json && (json.error || json.detail)) ||
+                    UI.msgError + " " + res.status
+                );
+              });
+            }
+            if (!res.ok) {
+              alertMsg(
+                "danger",
+                responseErrorMessage(res, UI.msgError + " " + res.status)
+              );
+              return;
+            }
+            return readJsonSafe(res).then(function (json) {
+              applyRevisionStateFromResponse(json);
+              previewSeenSinceLastSave = true;
+              setPublishEnabledFromPreviewFlag();
+              alertMsg("success", UI.msgRevisionDiscarded);
+            });
+          })
+          .catch(function () {
+            discardRevisionBtn.disabled = false;
+            alertMsg("danger", UI.msgNetwork);
+          });
+      });
+    });
+  }
+
+  refreshRevisionUi();
   setPublishEnabledFromPreviewFlag();
 
   function statusClass(status) {
@@ -952,36 +1287,98 @@
     });
   }
 
+  function buildDraftPayloadBody() {
+    const payload = buildPayload();
+    const err = validatePayloadForSubmit(payload);
+    if (err) return { error: err };
+    const body = {
+      medical_payload_schema_version: 1,
+      medical_payload: payload,
+    };
+    if (docStatus === "PUBLISHED") {
+      body.intent = "amend";
+    } else {
+      body.intent = "edit";
+    }
+    return { body: body };
+  }
+
+  function applyRevisionStateFromResponse(json) {
+    if (!json) return;
+    if (typeof json.document_status === "string" && json.document_status) {
+      docStatus = json.document_status;
+    }
+    if (typeof json.has_pending_revision === "boolean") {
+      hasPendingRevision = json.has_pending_revision;
+    }
+    if (typeof json.published_version_no !== "undefined") {
+      publishedVersionNo = json.published_version_no;
+    }
+    refreshRevisionUi();
+  }
+
+  function readJsonSafe(res) {
+    return res
+      .clone()
+      .json()
+      .catch(function () {
+        return null;
+      });
+  }
+
   const saveDraftBtn = el("btn-save-draft");
   if (saveDraftBtn) {
     saveDraftBtn.addEventListener("click", function () {
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      if (isPublishedReadOnly()) {
+        confirmStartRevision().then(function (confirmed) {
+          if (!confirmed) return;
+          performStartRevisionAndSave();
+        });
+        return;
+      }
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
         return;
       }
       const btn = this;
       btn.disabled = true;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
           btn.disabled = false;
           if (isAuthExpiredResponse(res)) return;
           if (res.ok) {
             previewSeenSinceLastSave = false;
-            setPublishEnabledFromPreviewFlag();
-            alertMsg("success", UI.msgSaveSuccess);
-          } else
-            alertMsg(
-              "danger",
-              responseErrorMessage(res, UI.msgError + " " + res.status)
-            );
+            return readJsonSafe(res).then(function (json) {
+              applyRevisionStateFromResponse(json);
+              setPublishEnabledFromPreviewFlag();
+              alertMsg("success", UI.msgSaveSuccess);
+            });
+          }
+          if (res.status === 409) {
+            return readJsonSafe(res).then(function (json) {
+              if (
+                json &&
+                (json.error_key === "other.api.amend_intent_required" ||
+                  json.api_message_key === "other.api.amend_intent_required")
+              ) {
+                alertMsg("warning", UI.msgAmendIntentRequired);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json && (json.error || json.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+            });
+          }
+          alertMsg(
+            "danger",
+            responseErrorMessage(res, UI.msgError + " " + res.status)
+          );
         })
         .catch(function () {
           btn.disabled = false;
@@ -990,36 +1387,96 @@
     });
   }
 
+  function buildPreviewUrl(source) {
+    const previewBase =
+      (el("btn-preview-pdf") &&
+        el("btn-preview-pdf").getAttribute("data-preview-url")) ||
+      docUrl("/preview-pdf");
+    const sep = previewBase.indexOf("?") === -1 ? "?" : "&";
+    var url =
+      previewBase +
+      sep +
+      "form_locale=" +
+      encodeURIComponent(authoringLocale) +
+      "&t=" +
+      Date.now();
+    if (source) {
+      url += "&source=" + encodeURIComponent(source);
+    }
+    return url;
+  }
+
+  function openPreviewBlobInTab(previewTab, btn, previewUrl, opts) {
+    return fetch(previewUrl, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/pdf" },
+    }).then(function (pdfRes) {
+      if (btn) btn.disabled = false;
+      if (pdfRes.status === 401) {
+        if (previewTab) previewTab.close();
+        handleAuthExpired(UI.msgSessionExpired);
+        return;
+      }
+      if (!pdfRes.ok) {
+        if (previewTab) previewTab.close();
+        var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
+        if (ct.indexOf("application/json") !== -1) {
+          return pdfRes.json().then(function (j) {
+            alertMsg(
+              "danger",
+              (j && j.error) || UI.msgError + " " + pdfRes.status
+            );
+          });
+        }
+        alertMsg("danger", UI.msgError + " " + pdfRes.status);
+        return;
+      }
+      var warn = pdfRes.headers.get("X-Befund-Preview-Warning");
+      return pdfRes.blob().then(function (blob) {
+        var objUrl = URL.createObjectURL(blob);
+        if (previewTab) previewTab.location = objUrl;
+        else window.location.href = objUrl;
+        if (opts && opts.markPreviewSeen) {
+          previewSeenSinceLastSave = true;
+          setPublishEnabledFromPreviewFlag();
+          alertMsg("success", UI.msgSaveSuccess);
+        }
+        if (warn) alertMsg("warning", UI.externalPdfPreviewMergeWarning);
+      });
+    });
+  }
+
   const previewPdfBtn = el("btn-preview-pdf");
   if (previewPdfBtn) {
     previewPdfBtn.addEventListener("click", function (event) {
       if (event && event.preventDefault) event.preventDefault();
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      const btn = this;
+      if (isPublishedReadOnly()) {
+        const previewTab = window.open("", "_blank");
+        btn.disabled = true;
+        openPreviewBlobInTab(
+          previewTab,
+          btn,
+          buildPreviewUrl("published"),
+          { markPreviewSeen: false }
+        ).catch(function () {
+          btn.disabled = false;
+          if (previewTab) previewTab.close();
+          alertMsg("danger", UI.msgNetwork);
+        });
         return;
       }
-      const previewBase =
-        previewPdfBtn.getAttribute("data-preview-url") ||
-        docUrl("/preview-pdf");
-      const sep = previewBase.indexOf("?") === -1 ? "?" : "&";
-      const previewUrl =
-        previewBase +
-        sep +
-        "form_locale=" +
-        encodeURIComponent(authoringLocale) +
-        "&t=" +
-        Date.now();
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
+        return;
+      }
       const previewTab = window.open("", "_blank");
-      const btn = this;
       btn.disabled = true;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
           if (isAuthExpiredResponse(res)) {
@@ -1028,6 +1485,25 @@
             return;
           }
           if (!res.ok) {
+            if (res.status === 409) {
+              return readJsonSafe(res).then(function (json) {
+                btn.disabled = false;
+                if (previewTab) previewTab.close();
+                if (
+                  json &&
+                  (json.error_key === "other.api.amend_intent_required" ||
+                    json.api_message_key === "other.api.amend_intent_required")
+                ) {
+                  alertMsg("warning", UI.msgAmendIntentRequired);
+                  return;
+                }
+                alertMsg(
+                  "danger",
+                  (json && (json.error || json.detail)) ||
+                    UI.msgError + " " + res.status
+                );
+              });
+            }
             btn.disabled = false;
             alertMsg(
               "danger",
@@ -1036,42 +1512,14 @@
             if (previewTab) previewTab.close();
             return;
           }
-          return fetch(previewUrl, {
-            method: "GET",
-            credentials: "same-origin",
-            headers: { Accept: "application/pdf" },
-          }).then(function (pdfRes) {
-            btn.disabled = false;
-            if (pdfRes.status === 401) {
-              if (previewTab) previewTab.close();
-              handleAuthExpired(UI.msgSessionExpired);
-              return;
-            }
-            if (!pdfRes.ok) {
-              if (previewTab) previewTab.close();
-              var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
-              if (ct.indexOf("application/json") !== -1) {
-                return pdfRes.json().then(function (j) {
-                  alertMsg(
-                    "danger",
-                    (j && j.error) || UI.msgError + " " + pdfRes.status
-                  );
-                });
-              }
-              alertMsg("danger", UI.msgError + " " + pdfRes.status);
-              return;
-            }
-            var warn = pdfRes.headers.get("X-Befund-Preview-Warning");
-            return pdfRes.blob().then(function (blob) {
-              var objUrl = URL.createObjectURL(blob);
-              if (previewTab) previewTab.location = objUrl;
-              else window.location.href = objUrl;
-              previewSeenSinceLastSave = true;
-              setPublishEnabledFromPreviewFlag();
-              alertMsg("success", UI.msgSaveSuccess);
-              if (warn)
-                alertMsg("warning", UI.externalPdfPreviewMergeWarning);
-            });
+          return readJsonSafe(res).then(function (json) {
+            applyRevisionStateFromResponse(json);
+            return openPreviewBlobInTab(
+              previewTab,
+              btn,
+              buildPreviewUrl("draft"),
+              { markPreviewSeen: true }
+            );
           });
         })
         .catch(function () {
@@ -1085,14 +1533,16 @@
   const publishBtn = el("btn-publish");
   if (publishBtn) {
     publishBtn.addEventListener("click", function () {
-      if (docStatus === "DRAFT" && !previewSeenSinceLastSave) {
+      if (isPublishedReadOnly()) {
+        return;
+      }
+      if (!previewSeenSinceLastSave) {
         alertMsg("warning", UI.msgPublishPreviewRequired);
         return;
       }
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
         return;
       }
       const resendSmsEl = el("resend_sms");
@@ -1105,10 +1555,7 @@
           });
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
           if (isAuthExpiredResponse(res)) {
@@ -1116,6 +1563,24 @@
             return;
           }
           if (!res.ok) {
+            if (res.status === 409) {
+              return readJsonSafe(res).then(function (json) {
+                publishBtn.disabled = false;
+                if (
+                  json &&
+                  (json.error_key === "other.api.amend_intent_required" ||
+                    json.api_message_key === "other.api.amend_intent_required")
+                ) {
+                  alertMsg("warning", UI.msgAmendIntentRequired);
+                  return;
+                }
+                alertMsg(
+                  "danger",
+                  (json && (json.error || json.detail)) ||
+                    UI.msgError + " " + res.status
+                );
+              });
+            }
             publishBtn.disabled = false;
             alertMsg(
               "danger",
