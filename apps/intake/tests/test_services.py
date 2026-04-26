@@ -417,6 +417,23 @@ class SubmitPatientIntakeFormTests(TestCase):
             ctx.exception.api_message_key, "other.domain.intake_reopen_submitted_only"
         )
 
+    def test_reopen_raises_when_already_reopened(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        reopen_patient_intake_form(
+            intake_form_id=self.intake_form.id,
+            actor_user_id=self.reception_user.id,
+        )
+        with self.assertRaises(StateTransitionError) as ctx:
+            reopen_patient_intake_form(
+                intake_form_id=self.intake_form.id,
+                actor_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.domain.intake_reopen_already_open"
+        )
+
     def test_reopen_then_resubmit_creates_second_intake_document_version(self) -> None:
         self._accept_all_required_consents_effective_today()
         self._ensure_all_required_questions_answered_today()

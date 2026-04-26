@@ -275,6 +275,21 @@ class RequireUserRoleTests(TestCase):
         req = self._make_request(user)
         self.assertIsNone(require_user_role(req, allowed_roles={"DOCTOR", "RECEPTION"}))
 
+    def test_unknown_role_name_in_allowed_roles_returns_403(self) -> None:
+        """``_matches_allowed_role`` falls through to ``False`` for unknown role strings."""
+        user = Mock(
+            is_authenticated=True,
+            is_doctor=True,
+            is_admin_role=True,
+            is_manager=True,
+            is_reception=True,
+            is_tablet=True,
+        )
+        req = self._make_request(user)
+        resp = require_user_role(req, allowed_roles={"NOT_A_DEFINED_ROLE"})
+        self.assertIsNotNone(resp)
+        self.assertEqual(resp.status_code, 403)
+
 
 class RequireActorMatchTests(TestCase):
     def _make_request(self, user_id):

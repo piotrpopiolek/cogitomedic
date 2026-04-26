@@ -197,6 +197,48 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"reopened", resp.content.lower())
 
+    def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
+        """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="IP", name="In Progress Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="InProgress",
+            date_of_birth=date(1992, 2, 2),
+            phone="+48500888777",
+            email="inprogress@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"completed", resp.content.lower())
+
 
 class DoctorDetailHappyPathTests(TestCase):
     """Full data chain for the document detail view."""

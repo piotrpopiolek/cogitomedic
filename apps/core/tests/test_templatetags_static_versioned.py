@@ -55,3 +55,26 @@ class StaticVersionedTagTests(TestCase):
         self.assertIn("/static/foo.js?bar=1", output)
         self.assertIn("v=42", output)
         self.assertNotIn("?v=42", output)
+
+    def test_resolve_mtime_returns_none_when_finder_raises(self) -> None:
+        with patch(
+            "apps.core.templatetags.static_versioned.finders.find",
+            side_effect=RuntimeError("finder boom"),
+        ):
+            output = self._render(
+                "{% load static_versioned %}{% static_v 'any/path.js' %}"
+            )
+        self.assertNotIn("?v=", output)
+
+    def test_resolve_mtime_returns_none_when_getmtime_raises_oserror(self) -> None:
+        with patch(
+            "apps.core.templatetags.static_versioned.finders.find",
+            return_value="/abs/path.js",
+        ), patch(
+            "apps.core.templatetags.static_versioned.os.path.getmtime",
+            side_effect=OSError("no mtime"),
+        ):
+            output = self._render(
+                "{% load static_versioned %}{% static_v 'doctor/js/x.js' %}"
+            )
+        self.assertNotIn("?v=", output)
