@@ -73,6 +73,7 @@ class FormatPhoneSupportedSmsRegionsTests(SimpleTestCase):
             with self.subTest(region=region):
                 ex = phonenumbers.example_number(region)
                 self.assertIsNotNone(ex, msg=region)
+                assert ex is not None  # narrow for mypy
                 e164 = phonenumbers.format_number(
                     ex, phonenumbers.PhoneNumberFormat.E164
                 )
