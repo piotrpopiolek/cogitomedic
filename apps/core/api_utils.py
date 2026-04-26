@@ -156,24 +156,28 @@ def require_user_role(
     """
     Return 401 when not authenticated (same semantics as require_auth).
     Return 403 when authenticated but role is not in allowed_roles.
+
+    Użytkownik ma dostęp, jeśli spełnia **którąkolwiek** z ról w ``allowed_roles``
+    (semantyka OR; niezależna od kolejności w zbiorze).
     """
     user = request.user
     if not user.is_authenticated:
         return json_error("other.api.authentication_required", status=401)
 
-    has_role = False
-    if "DOCTOR" in allowed_roles and user.is_doctor:
-        has_role = True
-    elif "ADMIN" in allowed_roles and user.is_admin_role:
-        has_role = True
-    elif "MANAGER" in allowed_roles and getattr(user, "is_manager", False):
-        has_role = True
-    elif "RECEPTION" in allowed_roles and user.is_reception:
-        has_role = True
-    elif "TABLET" in allowed_roles and user.is_tablet:
-        has_role = True
+    def _matches_allowed_role(role: str) -> bool:
+        if role == "DOCTOR":
+            return bool(user.is_doctor)
+        if role == "ADMIN":
+            return bool(user.is_admin_role)
+        if role == "MANAGER":
+            return bool(getattr(user, "is_manager", False))
+        if role == "RECEPTION":
+            return bool(user.is_reception)
+        if role == "TABLET":
+            return bool(user.is_tablet)
+        return False
 
-    if not has_role:
+    if not any(_matches_allowed_role(role) for role in allowed_roles):
         return json_error("other.api.forbidden", status=403)
     return None
 

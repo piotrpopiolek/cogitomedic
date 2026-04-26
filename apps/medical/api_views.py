@@ -172,7 +172,9 @@ def _serialize_medical_document_list_item(doc) -> dict:
 
 @require_auth
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -245,7 +247,9 @@ def medical_document_detail_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET full document context: intake summary + current version (for doctor panel)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -281,7 +285,9 @@ def medical_document_preview_pdf_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> HttpResponse:
     """GET: return PDF preview from the latest saved version (draft or published). Opens inline in browser."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -344,7 +350,9 @@ def medical_document_versions_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET: list versions of a medical document."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -405,7 +413,9 @@ def medical_document_versions_view(
 def medical_document_draft_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "PUT":
@@ -500,7 +510,9 @@ def medical_document_unlock_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """POST: release edit lock (session holder or admin). Used on page unload from doctor panel."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -537,7 +549,9 @@ def medical_document_unlock_view(
 def medical_document_publish_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -606,7 +620,9 @@ def medical_document_version_detail_view(
     request: HttpRequest, version_id: UUID
 ) -> JsonResponse:
     """GET: single medical document version by id (MedicalDocumentVersion.id)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -720,7 +736,9 @@ def medical_document_revoke_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """POST: Revoke the current published version. Patient loses access in ergebnisse portal."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -752,7 +770,9 @@ def medical_document_revoke_view(
 
 @require_auth
 def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -867,7 +887,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 def doctor_text_template_detail_view(
     request: HttpRequest, template_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -950,7 +972,9 @@ def doctor_text_template_detail_view(
 def medical_document_audit_trail_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -990,7 +1014,9 @@ def medical_document_external_pdfs_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET: list external HiDrive PDF attachments for this document."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -1027,7 +1053,9 @@ def medical_document_external_pdf_content_view(
     Same-origin framing is allowed so the doctor panel can show this URL in an
     ``iframe`` (blob: URLs break multi-page PDF in some browsers).
     """
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -1086,7 +1114,9 @@ def medical_document_external_pdf_reject_view(
     request: HttpRequest, medical_document_id: UUID, attachment_id: UUID
 ) -> JsonResponse:
     """POST: reject external PDF (rename on HiDrive + REJECTED)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":

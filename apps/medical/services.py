@@ -47,6 +47,13 @@ def _staff_user_display_name(user: StaffUser | None) -> str:
     return name or (user.username or "")
 
 
+def _is_admin_or_manager_medical_oversight(user: Any) -> bool:
+    """Pełen widok kolejki / dokumentów jak admin (rola Manager = nadzór operacyjny)."""
+    return bool(
+        getattr(user, "is_admin_role", False) or getattr(user, "is_manager", False)
+    )
+
+
 def get_document_lock_state(
     doc: MedicalDocument, *, now: datetime | None = None
 ) -> tuple[bool, str | None, datetime | None]:
@@ -92,7 +99,7 @@ def acquire_document_lock(
             doc.locked_at = now
             doc.save(update_fields=["locked_at", "updated_at"])
             return True, None
-        if getattr(user, "is_admin_role", False):
+        if _is_admin_or_manager_medical_oversight(user):
             doc.locked_by_user_id = user.id
             doc.locked_at = now
             doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
@@ -115,7 +122,9 @@ def release_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
     if not doc.locked_by_user_id:
         return True
-    if doc.locked_by_user_id != user.id and not getattr(user, "is_admin_role", False):
+    if doc.locked_by_user_id != user.id and not _is_admin_or_manager_medical_oversight(
+        user
+    ):
         return False
     doc.locked_by_user_id = None
     doc.locked_at = None
@@ -142,7 +151,7 @@ def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     )
 
     if locked and doc.locked_by_user_id != user.id:
-        if getattr(user, "is_admin_role", False):
+        if _is_admin_or_manager_medical_oversight(user):
             doc.locked_by_user_id = user.id
             doc.locked_at = now
             doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
@@ -217,9 +226,9 @@ def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
     Raise ObjectDoesNotExist if user (doctor) does not have access.
     Access is granted if user is the author OR is assigned to the document's queue.
     Any doctor may access a document in DRAFT (shared work queue for describing).
-    ADMIN has access to all.
+    ADMIN and Manager (nadzór) have access to all.
     """
-    if user.is_admin_role:
+    if _is_admin_or_manager_medical_oversight(user):
         return
     if document.created_by_user_id == user.id:
         return
@@ -234,11 +243,11 @@ def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
     """
     Raise ObjectDoesNotExist if user does not have access to the queue entry.
 
-    Allowed: admin; doctor assigned to the daily queue; creator of an existing
+    Allowed: admin or manager; doctor assigned to the daily queue; creator of an existing
     medical document for this entry; any doctor when there is no document yet
     or the document is still DRAFT (shared queue).
     """
-    if user.is_admin_role:
+    if _is_admin_or_manager_medical_oversight(user):
         return
     if queue_entry.daily_queue.assigned_doctor_id == user.id:
         return
@@ -710,7 +719,7 @@ def list_medical_documents(
         )
         .order_by("-updated_at")
     )
-    if not user.is_admin_role and user is not None:
+    if not _is_admin_or_manager_medical_oversight(user) and user is not None:
         qs = qs.filter(
             Q(created_by_user_id=user.id)
             | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
@@ -748,7 +757,7 @@ def list_doctor_work_queue(
     qs = PatientIntakeForm.objects.filter(
         form_status=IntakeStatus.SUBMITTED
     ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
-    if not user.is_admin_role and user is not None:
+    if not _is_admin_or_manager_medical_oversight(user) and user is not None:
         shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
             queue_entry__medical_document__status=MedicalDocStatus.DRAFT
         )
@@ -832,7 +841,7 @@ def list_doctor_work_queue(
             doc
             and locked_eff
             and doc.locked_by_user_id != user.id
-            and not getattr(user, "is_admin_role", False)
+            and not _is_admin_or_manager_medical_oversight(user)
         )
         # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT
         row_has_edit_semaphore = bool(
@@ -978,6 +987,7 @@ def get_medical_document_context(
                 and (
                     getattr(user, "is_admin_role", False)
                     or getattr(user, "is_reception", False)
+                    or getattr(user, "is_manager", False)
                 ),
                 "publish_locale": current_version.publish_locale,
                 "published_at": (
@@ -1012,6 +1022,7 @@ def get_medical_document_context(
                 and (
                     getattr(user, "is_admin_role", False)
                     or getattr(user, "is_reception", False)
+                    or getattr(user, "is_manager", False)
                 ),
                 "publish_locale": current_version.publish_locale,
                 "published_at": (
@@ -1048,7 +1059,9 @@ def retry_latest_document_processing(
     actor: StaffUser,
     reason: str,
 ) -> OutboxEvent:
-    if not (actor.is_admin_role or actor.is_reception):
+    if not (
+        actor.is_admin_role or actor.is_reception or getattr(actor, "is_manager", False)
+    ):
         raise DomainError(
             domain_message("other.domain.document_processing_retry_role"),
             api_message_key="other.domain.document_processing_retry_role",
