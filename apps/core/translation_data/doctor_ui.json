@@ -219,6 +219,26 @@
     "en": "Patient (name)",
     "pl": "Pacjent (nazwisko)"
   },
+  "doctor.filter_scope": {
+    "de": "Bereich",
+    "en": "Scope",
+    "pl": "Zakres"
+  },
+  "doctor.filter_scope_all": {
+    "de": "Alle sichtbaren",
+    "en": "All visible",
+    "pl": "Wszystkie widoczne"
+  },
+  "doctor.filter_scope_mine": {
+    "de": "Meine",
+    "en": "Mine",
+    "pl": "Moje"
+  },
+  "doctor.filter_scope_published_by_me": {
+    "de": "Von mir veröffentlicht",
+    "en": "Published by me",
+    "pl": "Opublikowane przeze mnie"
+  },
   "doctor.filter_published": {
     "de": "Veröffentlicht",
     "en": "Published",
