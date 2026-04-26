@@ -69,7 +69,13 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("username", "email", "password1", "password2"),
+                "fields": (
+                    "username",
+                    "email",
+                    "usable_password",
+                    "password1",
+                    "password2",
+                ),
             },
         ),
         (
