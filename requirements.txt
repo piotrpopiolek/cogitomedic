@@ -17,8 +17,8 @@ opentelemetry-instrumentation-django==0.51b0
 opentelemetry-instrumentation-requests==0.51b0
 opentelemetry-instrumentation-psycopg==0.51b0
 openpyxl==3.1.5
+phonenumbers==9.0.29
 pillow==12.2.0
-playwright==1.50.0
 prometheus-client==0.24.1
 psycopg==3.3.2
 pycryptodome==3.23.0
@@ -38,3 +38,4 @@ weasyprint==68.1
 django-unfold==0.89.0
 bleach==6.3.0
 markdown==3.10.2
+gunicorn==23.0.0
