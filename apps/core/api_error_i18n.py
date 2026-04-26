@@ -64,6 +64,9 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.invalid_or_expired_code": "Invalid or expired code.",
     "other.api.invalid_request_encoding": "Request body is not valid UTF-8.",
     "other.api.invalid_role_query": "Invalid role query parameter.",
+    "other.api.invalid_save_draft_intent": (
+        "Invalid intent for PUT …/draft. Allowed values: edit, amend."
+    ),
     "other.api.medical_document_not_found": "Medical document not found.",
     "other.api.external_pdf_rejected": "This external PDF was already rejected.",
     "other.api.external_pdf_reject_failed": "Could not reject the file on HiDrive.",

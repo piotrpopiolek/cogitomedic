@@ -978,6 +978,77 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(ok.status_code, 200)
 
+    def test_draft_manager_bypasses_lock_when_other_doctor_blocked(self) -> None:
+        other = StaffUser.objects.create_user(
+            username="api-doc-lock-mgr",
+            email="api.doc.lock.mgr@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        manager = StaffUser.objects.create_user(
+            username="api-manager-draft-lock",
+            email="api.manager.draft@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        site = self.queue_entry.daily_queue.clinic_site
+        manager.clinic_sites.add(site)
+
+        self.client.force_login(self.doctor_user)
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        mid = create_response.json()["medical_document_id"]
+
+        dq = self.queue_entry.daily_queue
+        dq.assigned_doctor = other
+        dq.save(update_fields=["assigned_doctor", "updated_at"])
+
+        MedicalDocument.objects.filter(id=mid).update(
+            locked_by_user_id=self.doctor_user.id,
+            locked_at=timezone.now(),
+        )
+
+        draft_body = {
+            "medical_payload_schema_version": 1,
+            "medical_payload": {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        }
+
+        self.client.force_login(other)
+        blocked = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.assertEqual(blocked.status_code, 423)
+
+        self.client.force_login(manager)
+        ok = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.assertEqual(ok.status_code, 200)
+
     def test_publish_423_when_locked_by_other_doctor(self) -> None:
         other = StaffUser.objects.create_user(
             username="api-doc-pub-lock",
@@ -1581,6 +1652,37 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         doc = MedicalDocument.objects.get(id=medical_document_id)
         self.assertEqual(doc.status, MedicalDocStatus.PUBLISHED)
         self.assertFalse(doc.has_pending_revision)
+
+    def test_draft_invalid_intent_returns_400(self) -> None:
+        self.client.force_login(self.doctor_user)
+        create_response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": self.VALID_PAYLOAD,
+                    "intent": "typo",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json().get("error_key"), "other.api.invalid_save_draft_intent"
+        )
 
     def test_draft_on_published_with_amend_intent_returns_200_pending_revision(
         self,
