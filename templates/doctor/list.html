@@ -8,13 +8,22 @@
 <h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-6">{{ ui.list_title }}</h1>
 
 <form method="get" class="mb-6 p-4 bg-white dark:bg-base-900 rounded-default border border-base-200 dark:border-base-700 shadow-xs">
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
     <div>
       <label for="id_status" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_status }}</label>
       <select name="status" id="id_status" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100">
         <option value="">{{ ui.filter_all }}</option>
         <option value="DRAFT" {% if filters.status == "DRAFT" %}selected{% endif %}>{{ ui.filter_draft }}</option>
         <option value="PUBLISHED" {% if filters.status == "PUBLISHED" %}selected{% endif %}>{{ ui.filter_published }}</option>
+      </select>
+    </div>
+    <div>
+      <label for="id_scope" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_scope }}</label>
+      <select name="scope" id="id_scope" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100">
+        <option value="all" {% if filters.scope == "all" %}selected{% endif %}>{{ ui.filter_scope_all }}</option>
+        <option value="mine" {% if filters.scope == "mine" %}selected{% endif %}>{{ ui.filter_scope_mine }}</option>
+        <option value="published_by_me" {% if filters.scope == "published_by_me" %}selected{% endif %}>{{ ui.filter_scope_published_by_me }}</option>
+        <option value="in_revision" {% if filters.scope == "in_revision" %}selected{% endif %}>{{ ui.filter_scope_in_revision }}</option>
       </select>
     </div>
     <div>
@@ -60,10 +69,15 @@
         </td>
         <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.queue_date }}</td>
         <td class="px-4 py-3">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
-            {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
-            {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
-            {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status }}</span>
+          <span class="inline-flex flex-wrap items-center gap-1.5">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
+              {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
+              {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
+              {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status }}</span>
+            {% if item.has_pending_revision %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100">{{ ui.list_status_in_revision }}</span>
+            {% endif %}
+          </span>
         </td>
         <td class="px-4 py-3">{% if item.pdf_generation_status %}<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase
             {% if item.pdf_generation_status == 'COMPLETED' %}bg-primary-600 text-white dark:bg-primary-500
@@ -86,7 +100,11 @@
           {% else %}–{% endif %}
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
+          <div class="inline-flex items-center gap-2">
           {% if item.document_id %}
+            {% if item.row_is_published %}
+            <a href="{{ api_base|default:'/api/v1' }}/medical-documents/{{ item.document_id }}/preview-pdf" target="_blank" rel="noopener" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ ui.btn_preview_pdf }}</a>
+            {% endif %}
             {% if item.is_locked_by_other %}
             <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500" title="{{ ui.list_open_locked_tooltip }}">{{ ui.open }}</span>
             {% else %}
@@ -95,6 +113,7 @@
           {% else %}
           <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
           {% endif %}
+          </div>
         </td>
       </tr>
       {% if item.processing_error_message %}

@@ -92,6 +92,18 @@
       font-weight: 700;
       color: #0a4a4d;
     }
+    .pdf-signoff-line {
+      font-size: 12px;
+      color: #0a4a4d;
+      margin: 0 0 3px 0;
+    }
+    .pdf-signoff-line--greeting {
+      font-weight: 400;
+      margin-bottom: 6px;
+    }
+    .pdf-signoff-line--name {
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -187,7 +199,11 @@
   <div class="section-text">{{ befund.summary_text }}</div>
 
   <div class="pdf-issuing-physician">
-    {% if reporting_physician_display %}
+    {% if pdf_signoff_footer_lines %}
+      {% for line in pdf_signoff_footer_lines %}
+        <div class="pdf-signoff-line {% if forloop.first %}pdf-signoff-line--greeting{% elif forloop.counter == 2 %}pdf-signoff-line--name{% endif %}">{{ line }}</div>
+      {% endfor %}
+    {% elif reporting_physician_display %}
       <div class="pdf-issuing-physician-name">{{ reporting_physician_display }}</div>
     {% else %}
       <div class="pdf-issuing-physician-name muted">-</div>

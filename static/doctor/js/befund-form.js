@@ -59,6 +59,7 @@
     msgSaveSuccess: uiText("msg_save_success"),
     msgPublishSuccess: uiText("msg_publish_success"),
     msgRetrySuccess: uiText("msg_retry_success"),
+    msgSessionExpired: uiText("msg_session_expired"),
     msgTemplateLoadError: uiText("msg_template_load_error"),
     msgLesionRequired: uiText("msg_lesion_required"),
     lesionHeader: uiText("lesion_header"),
@@ -73,6 +74,29 @@
     externalPdfPreviewHint: uiText("external_pdf_preview_hint"),
     externalPdfPreviewMergeWarning: uiText("external_pdf_preview_merge_warning"),
     msgPublishPreviewRequired: uiText("msg_publish_preview_required"),
+    bannerPublishedTitle: uiText("banner_published_title"),
+    bannerPublishedBody: uiText("banner_published_body"),
+    bannerRevisionTitle: uiText("banner_revision_title"),
+    bannerRevisionBody: uiText("banner_revision_body"),
+    btnSaveDraft: uiText("btn_save_draft"),
+    btnPreviewPdf: uiText("btn_preview_pdf"),
+    btnPreviewPublished: uiText("btn_preview_published"),
+    btnPreviewRevision: uiText("btn_preview_revision"),
+    btnPublish: uiText("btn_publish"),
+    btnRepublish: uiText("btn_republish"),
+    btnStartRevision: uiText("btn_start_revision"),
+    btnDiscardRevision: uiText("btn_discard_revision"),
+    modalStartRevisionTitle: uiText("modal_start_revision_title"),
+    modalStartRevisionBody: uiText("modal_start_revision_body"),
+    modalStartRevisionConfirm: uiText("modal_start_revision_confirm"),
+    modalStartRevisionCancel: uiText("modal_start_revision_cancel"),
+    modalDiscardRevisionTitle: uiText("modal_discard_revision_title"),
+    modalDiscardRevisionBody: uiText("modal_discard_revision_body"),
+    modalDiscardRevisionConfirm: uiText("modal_discard_revision_confirm"),
+    msgRevisionStarted: uiText("msg_revision_started"),
+    msgRevisionDiscarded: uiText("msg_revision_discarded"),
+    msgAmendIntentRequired: uiText("msg_amend_intent_required"),
+    msgNoPendingRevision: uiText("msg_no_pending_revision"),
   });
 
   function el(id) {
@@ -174,6 +198,21 @@
     const tokenEl = document.querySelector("[name=csrfmiddlewaretoken]");
     return tokenEl ? tokenEl.value : (getCookie("csrftoken") || "").trim();
   }
+  function buildDoctorLoginUrl() {
+    return "/doctor/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+  }
+  var authExpiredHandled = false;
+  function handleAuthExpired(message) {
+    if (authExpiredHandled) return;
+    authExpiredHandled = true;
+    alertMsg("warning", message || UI.msgSessionExpired || "Session expired.");
+    window.setTimeout(function () {
+      window.location.href = buildDoctorLoginUrl();
+    }, 300);
+  }
+  function isAuthExpiredResponse(res) {
+    return !!(res && res.authExpired);
+  }
   function apiFetch(url, opts) {
     opts = opts || {};
     opts.credentials = "same-origin";
@@ -204,6 +243,10 @@
     }
     return fetch(url, opts).then(function (r) {
       return parseResponseBody(r).then(function (j) {
+        if (r.status === 401) {
+          handleAuthExpired((j && j.error) || UI.msgSessionExpired);
+          return { ok: false, status: r.status, json: j, authExpired: true };
+        }
         return { ok: r.ok, status: r.status, json: j };
       });
     });
@@ -214,11 +257,32 @@
   }
 
   var docStatusEarly = (CTX && CTX.status) || "";
+  var publishedVersionNoEarly =
+    CTX && typeof CTX.published_version_no !== "undefined"
+      ? CTX.published_version_no
+      : null;
+  var hasPendingRevisionEarly = !!(CTX && CTX.has_pending_revision);
   var previewSeenSinceLastSave = docStatusEarly !== "DRAFT";
+
+  function hasPublishedHistory() {
+    return docStatus === "PUBLISHED" || publishedVersionNo != null;
+  }
+
+  function isDraftAuthoring() {
+    return docStatus === "DRAFT" || hasPendingRevision;
+  }
+
+  function isPublishedReadOnly() {
+    return docStatus === "PUBLISHED" && !hasPendingRevision;
+  }
 
   function setPublishEnabledFromPreviewFlag() {
     var pub = el("btn-publish");
     if (!pub) return;
+    if (hasPublishedHistory() && !hasPendingRevision) {
+      pub.disabled = true;
+      return;
+    }
     pub.disabled = !previewSeenSinceLastSave;
   }
 
@@ -243,6 +307,10 @@
     })
       .then(function (r) {
         var ct = (r.headers.get("content-type") || "").toLowerCase();
+        if (r.status === 401) {
+          handleAuthExpired(UI.msgSessionExpired);
+          return;
+        }
         if (!r.ok) {
           if (ct.indexOf("application/json") !== -1) {
             return r.json().then(function (j) {
@@ -283,6 +351,7 @@
     var hintEl = el("external-pdfs-empty");
     if (!panel || !listEl) return;
     apiFetch(docUrl("/external-pdfs"), { method: "GET" }).then(function (res) {
+      if (isAuthExpiredResponse(res)) return;
       if (!res.ok) return;
       var items = (res.json && res.json.items) || [];
       listEl.innerHTML = "";
@@ -329,6 +398,7 @@
               method: "POST",
               body: "{}",
             }).then(function (r2) {
+              if (isAuthExpiredResponse(r2)) return;
               if (!r2.ok) {
                 alertMsg(
                   "danger",
@@ -355,8 +425,11 @@
   }
 
   var docStatus = docStatusEarly;
+  var publishedVersionNo = publishedVersionNoEarly;
+  var hasPendingRevision = hasPendingRevisionEarly;
+
   function releaseEditLockOnLeave() {
-    if (docStatus !== "DRAFT") return;
+    if (!isDraftAuthoring()) return;
     var token = getCsrfToken();
     if (!token) return;
     var url = docUrl("/unlock");
@@ -748,6 +821,7 @@
     return null;
   }
   function responseErrorMessage(res, fallback) {
+    if (isAuthExpiredResponse(res)) return "";
     if (!res || !res.json) return fallback;
     return res.json.error || res.json.detail || res.json.raw_response || fallback;
   }
@@ -833,6 +907,372 @@
   }
   loadDoctorTemplates();
   loadExternalPdfs();
+
+  function setBtnText(id, text) {
+    var node = el(id);
+    if (!node) return;
+    node.textContent = text || "";
+  }
+
+  function setHiddenState(node, shouldHide) {
+    if (!node) return;
+    node.hidden = !!shouldHide;
+    if (shouldHide) node.classList.add("hidden");
+    else node.classList.remove("hidden");
+  }
+
+  function currentPublishedVersionNo() {
+    if (publishedVersionNo != null) return publishedVersionNo;
+    if (docStatus === "PUBLISHED" && CTX && CTX.current_version) {
+      return CTX.current_version.version_no || "";
+    }
+    return "";
+  }
+
+  function revisionMessage(text) {
+    return formatUiPlaceholders(text, {
+      published_version_no: currentPublishedVersionNo(),
+    });
+  }
+
+  function refreshRevisionUi() {
+    var banner = el("revision-state-banner");
+    var actionNotice = el("revision-action-notice");
+    var publishedDocument = hasPublishedHistory();
+    var publishedReadOnly = publishedDocument && !hasPendingRevision;
+    if (banner) {
+      banner.classList.remove(
+        "border-blue-200",
+        "bg-blue-50",
+        "text-blue-900",
+        "dark:border-blue-800",
+        "dark:bg-blue-950/40",
+        "dark:text-blue-100",
+        "border-amber-200",
+        "bg-amber-50",
+        "text-amber-900",
+        "dark:border-amber-800",
+        "dark:bg-amber-950/40",
+        "dark:text-amber-100"
+      );
+      banner.innerHTML = "";
+      if (publishedReadOnly) {
+        setHiddenState(banner, false);
+        banner.classList.add(
+          "border-blue-200",
+          "bg-blue-50",
+          "text-blue-900",
+          "dark:border-blue-800",
+          "dark:bg-blue-950/40",
+          "dark:text-blue-100"
+        );
+        var titleP = document.createElement("p");
+        titleP.className = "font-semibold mb-1";
+        titleP.textContent = UI.bannerPublishedTitle;
+        var bodyP = document.createElement("p");
+        bodyP.className = "mb-0";
+        bodyP.textContent = revisionMessage(UI.bannerPublishedBody);
+        banner.appendChild(titleP);
+        banner.appendChild(bodyP);
+      } else if (publishedDocument && hasPendingRevision) {
+        setHiddenState(banner, false);
+        banner.classList.add(
+          "border-amber-200",
+          "bg-amber-50",
+          "text-amber-900",
+          "dark:border-amber-800",
+          "dark:bg-amber-950/40",
+          "dark:text-amber-100"
+        );
+        var titleP2 = document.createElement("p");
+        titleP2.className = "font-semibold mb-1";
+        titleP2.textContent = UI.bannerRevisionTitle;
+        var bodyP2 = document.createElement("p");
+        bodyP2.className = "mb-0";
+        bodyP2.textContent = revisionMessage(UI.bannerRevisionBody);
+        banner.appendChild(titleP2);
+        banner.appendChild(bodyP2);
+      } else {
+        setHiddenState(banner, true);
+      }
+    }
+
+    if (actionNotice) {
+      actionNotice.classList.remove(
+        "hidden",
+        "border-blue-200",
+        "bg-blue-50",
+        "text-blue-900",
+        "dark:border-blue-800",
+        "dark:bg-blue-950/40",
+        "dark:text-blue-100",
+        "border-amber-200",
+        "bg-amber-50",
+        "text-amber-900",
+        "dark:border-amber-800",
+        "dark:bg-amber-950/40",
+        "dark:text-amber-100"
+      );
+      actionNotice.innerHTML = "";
+      if (publishedReadOnly) {
+        setHiddenState(actionNotice, false);
+        actionNotice.classList.add(
+          "border-blue-200",
+          "bg-blue-50",
+          "text-blue-900",
+          "dark:border-blue-800",
+          "dark:bg-blue-950/40",
+          "dark:text-blue-100"
+        );
+        actionNotice.innerHTML =
+          '<p class="mb-1 font-semibold">' +
+          escapeHtml(UI.bannerPublishedTitle) +
+          "</p>" +
+          '<p class="mb-0">' +
+          escapeHtml(revisionMessage(UI.bannerPublishedBody)) +
+          "</p>";
+      } else if (publishedDocument && hasPendingRevision) {
+        setHiddenState(actionNotice, false);
+        actionNotice.classList.add(
+          "border-amber-200",
+          "bg-amber-50",
+          "text-amber-900",
+          "dark:border-amber-800",
+          "dark:bg-amber-950/40",
+          "dark:text-amber-100"
+        );
+        actionNotice.innerHTML =
+          '<p class="mb-1 font-semibold">' +
+          escapeHtml(UI.bannerRevisionTitle) +
+          "</p>" +
+          '<p class="mb-0">' +
+          escapeHtml(revisionMessage(UI.bannerRevisionBody)) +
+          "</p>";
+      } else {
+        setHiddenState(actionNotice, true);
+      }
+    }
+
+    var startBtn = el("btn-start-revision");
+    var discardBtn = el("btn-discard-revision");
+    var saveBtn = el("btn-save-draft");
+    var publishBtnNode = el("btn-publish");
+    var previewBtn = el("btn-preview-pdf");
+
+    if (startBtn) {
+      if (publishedDocument) {
+        setHiddenState(startBtn, false);
+        startBtn.disabled = hasPendingRevision;
+      } else {
+        setHiddenState(startBtn, true);
+        startBtn.disabled = false;
+      }
+    }
+    if (discardBtn) {
+      if (publishedDocument) {
+        setHiddenState(discardBtn, false);
+        discardBtn.disabled = !hasPendingRevision;
+      } else {
+        setHiddenState(discardBtn, true);
+        discardBtn.disabled = false;
+      }
+    }
+    if (saveBtn) {
+      saveBtn.classList.remove("hidden");
+      saveBtn.disabled = false;
+      setBtnText("btn-save-draft", UI.btnSaveDraft);
+    }
+    if (publishBtnNode) {
+      publishBtnNode.classList.remove("hidden");
+      publishBtnNode.textContent = publishedDocument
+        ? UI.btnRepublish
+        : UI.btnPublish;
+    }
+    if (previewBtn) {
+      if (publishedReadOnly) {
+        previewBtn.textContent = UI.btnPreviewPublished;
+      } else if (publishedDocument && hasPendingRevision) {
+        previewBtn.textContent = UI.btnPreviewRevision;
+      } else {
+        previewBtn.textContent = UI.btnPreviewPdf;
+      }
+    }
+
+    setPublishEnabledFromPreviewFlag();
+  }
+
+  function showRevisionModal(opts) {
+    return new Promise(function (resolve) {
+      var modal = el("revision-modal");
+      if (!modal) {
+        resolve(false);
+        return;
+      }
+      var titleEl = el("revision-modal-title");
+      var bodyEl = el("revision-modal-body");
+      var confirmBtn = el("revision-modal-confirm");
+      var cancelBtn = el("revision-modal-cancel");
+      if (titleEl) titleEl.textContent = opts.title || "";
+      if (bodyEl) {
+        bodyEl.textContent = revisionMessage(opts.body || "");
+        bodyEl.className =
+          "mt-2 text-sm leading-6 text-base-700 dark:text-base-300";
+      }
+      if (confirmBtn) confirmBtn.textContent = opts.confirm || "OK";
+      if (cancelBtn) cancelBtn.textContent = opts.cancel || "Cancel";
+      setHiddenState(modal, false);
+      modal.classList.add("flex");
+
+      function cleanup() {
+        setHiddenState(modal, true);
+        modal.classList.remove("flex");
+        if (confirmBtn) confirmBtn.removeEventListener("click", onConfirm);
+        if (cancelBtn) cancelBtn.removeEventListener("click", onCancel);
+        modal.removeEventListener("click", onBackdrop);
+      }
+      function onConfirm() {
+        cleanup();
+        resolve(true);
+      }
+      function onCancel() {
+        cleanup();
+        resolve(false);
+      }
+      function onBackdrop(ev) {
+        if (ev.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      }
+      if (confirmBtn) confirmBtn.addEventListener("click", onConfirm);
+      if (cancelBtn) cancelBtn.addEventListener("click", onCancel);
+      modal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  function confirmStartRevision() {
+    return showRevisionModal({
+      title: UI.modalStartRevisionTitle,
+      body: UI.modalStartRevisionBody,
+      confirm: UI.modalStartRevisionConfirm,
+      cancel: UI.modalStartRevisionCancel,
+    });
+  }
+
+  function confirmDiscardRevision() {
+    return showRevisionModal({
+      title: UI.modalDiscardRevisionTitle,
+      body: UI.modalDiscardRevisionBody,
+      confirm: UI.modalDiscardRevisionConfirm,
+      cancel: UI.modalStartRevisionCancel,
+    });
+  }
+
+  function performStartRevisionAndSave() {
+    var payload = buildPayload();
+    var validationErr = validatePayloadForSubmit(payload);
+    if (validationErr) {
+      alertMsg("danger", validationErr);
+      return;
+    }
+    var saveBtn = el("btn-save-draft");
+    var startBtn = el("btn-start-revision");
+    if (saveBtn) saveBtn.disabled = true;
+    if (startBtn) startBtn.disabled = true;
+    apiFetch(docUrl("/draft"), {
+      method: "PUT",
+      body: JSON.stringify({
+        medical_payload_schema_version: 1,
+        medical_payload: payload,
+        intent: "amend",
+      }),
+    })
+      .then(function (res) {
+        if (saveBtn) saveBtn.disabled = false;
+        if (startBtn) startBtn.disabled = false;
+        if (isAuthExpiredResponse(res)) return;
+        if (!res.ok) {
+          alertMsg(
+            "danger",
+            responseErrorMessage(res, UI.msgError + " " + res.status)
+          );
+          return;
+        }
+        applyRevisionStateFromResponse(getResJson(res));
+        previewSeenSinceLastSave = false;
+        setPublishEnabledFromPreviewFlag();
+        alertMsg("success", UI.msgRevisionStarted);
+      })
+      .catch(function () {
+        if (saveBtn) saveBtn.disabled = false;
+        if (startBtn) startBtn.disabled = false;
+        alertMsg("danger", UI.msgNetwork);
+      });
+  }
+
+  var startRevisionBtn = el("btn-start-revision");
+  if (startRevisionBtn) {
+    startRevisionBtn.addEventListener("click", function () {
+      confirmStartRevision().then(function (confirmed) {
+        if (!confirmed) return;
+        performStartRevisionAndSave();
+      });
+    });
+  }
+
+  var discardRevisionBtn = el("btn-discard-revision");
+  if (discardRevisionBtn) {
+    discardRevisionBtn.addEventListener("click", function () {
+      confirmDiscardRevision().then(function (confirmed) {
+        if (!confirmed) return;
+        discardRevisionBtn.disabled = true;
+        apiFetch(docUrl("/discard-revision"), {
+          method: "POST",
+          body: JSON.stringify({}),
+        })
+          .then(function (res) {
+            discardRevisionBtn.disabled = false;
+            if (isAuthExpiredResponse(res)) return;
+            if (res.status === 409) {
+              var json409 = getResJson(res);
+              if (
+                json409 &&
+                (json409.error_key ===
+                  "other.api.no_pending_revision_to_discard" ||
+                  json409.api_message_key ===
+                    "other.api.no_pending_revision_to_discard")
+              ) {
+                alertMsg("warning", UI.msgNoPendingRevision);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409 && (json409.error || json409.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
+            }
+            if (!res.ok) {
+              alertMsg(
+                "danger",
+                responseErrorMessage(res, UI.msgError + " " + res.status)
+              );
+              return;
+            }
+            applyRevisionStateFromResponse(getResJson(res));
+            previewSeenSinceLastSave = true;
+            setPublishEnabledFromPreviewFlag();
+            alertMsg("success", UI.msgRevisionDiscarded);
+          })
+          .catch(function () {
+            discardRevisionBtn.disabled = false;
+            alertMsg("danger", UI.msgNetwork);
+          });
+      });
+    });
+  }
+
+  refreshRevisionUi();
   setPublishEnabledFromPreviewFlag();
 
   function statusClass(status) {
@@ -881,6 +1321,7 @@
     refreshStatusInFlight = apiFetch(docUrl("?form_locale=" + encodeURIComponent(authoringLocale)), {
       method: "GET",
     }).then(function (res) {
+      if (isAuthExpiredResponse(res)) return;
       if (!res.ok) return;
       const updated = (res.json && res.json.current_version) || {};
       renderProcessingStatus(updated);
@@ -909,6 +1350,7 @@
       })
         .then(function (res) {
           retryBtn.disabled = false;
+          if (isAuthExpiredResponse(res)) return;
           if (!res.ok) {
             alertMsg("danger", responseErrorMessage(res, UI.msgError + " " + res.status));
             return;
@@ -923,35 +1365,92 @@
     });
   }
 
+  function buildDraftPayloadBody() {
+    const payload = buildPayload();
+    const err = validatePayloadForSubmit(payload);
+    if (err) return { error: err };
+    const body = {
+      medical_payload_schema_version: 1,
+      medical_payload: payload,
+    };
+    if (docStatus === "PUBLISHED") {
+      body.intent = "amend";
+    } else {
+      body.intent = "edit";
+    }
+    return { body: body };
+  }
+
+  function applyRevisionStateFromResponse(json) {
+    if (!json) return;
+    if (typeof json.document_status === "string" && json.document_status) {
+      docStatus = json.document_status;
+    }
+    if (typeof json.has_pending_revision === "boolean") {
+      hasPendingRevision = json.has_pending_revision;
+    }
+    if (typeof json.published_version_no !== "undefined") {
+      publishedVersionNo = json.published_version_no;
+    }
+    refreshRevisionUi();
+  }
+
+  function getResJson(res) {
+    return res && res.json ? res.json : null;
+  }
+
   const saveDraftBtn = el("btn-save-draft");
   if (saveDraftBtn) {
     saveDraftBtn.addEventListener("click", function () {
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      if (isPublishedReadOnly()) {
+        confirmStartRevision().then(function (confirmed) {
+          if (!confirmed) return;
+          performStartRevisionAndSave();
+        });
+        return;
+      }
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
         return;
       }
       const btn = this;
       btn.disabled = true;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
           btn.disabled = false;
+          if (isAuthExpiredResponse(res)) return;
           if (res.ok) {
             previewSeenSinceLastSave = false;
+            applyRevisionStateFromResponse(getResJson(res));
             setPublishEnabledFromPreviewFlag();
             alertMsg("success", UI.msgSaveSuccess);
-          } else
+            return;
+          }
+          if (res.status === 409) {
+            var json409s = getResJson(res);
+            if (
+              json409s &&
+              (json409s.error_key === "other.api.amend_intent_required" ||
+                json409s.api_message_key === "other.api.amend_intent_required")
+            ) {
+              alertMsg("warning", UI.msgAmendIntentRequired);
+              return;
+            }
             alertMsg(
               "danger",
-              responseErrorMessage(res, UI.msgError + " " + res.status)
+              (json409s && (json409s.error || json409s.detail)) ||
+                UI.msgError + " " + res.status
             );
+            return;
+          }
+          alertMsg(
+            "danger",
+            responseErrorMessage(res, UI.msgError + " " + res.status)
+          );
         })
         .catch(function () {
           btn.disabled = false;
@@ -960,39 +1459,123 @@
     });
   }
 
+  function buildPreviewUrl(source) {
+    const previewBase =
+      (el("btn-preview-pdf") &&
+        el("btn-preview-pdf").getAttribute("data-preview-url")) ||
+      docUrl("/preview-pdf");
+    const sep = previewBase.indexOf("?") === -1 ? "?" : "&";
+    var url =
+      previewBase +
+      sep +
+      "form_locale=" +
+      encodeURIComponent(authoringLocale) +
+      "&t=" +
+      Date.now();
+    if (source) {
+      url += "&source=" + encodeURIComponent(source);
+    }
+    return url;
+  }
+
+  function openPreviewBlobInTab(previewTab, btn, previewUrl, opts) {
+    return fetch(previewUrl, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/pdf" },
+    }).then(function (pdfRes) {
+      if (btn) btn.disabled = false;
+      if (pdfRes.status === 401) {
+        if (previewTab) previewTab.close();
+        handleAuthExpired(UI.msgSessionExpired);
+        return;
+      }
+      if (!pdfRes.ok) {
+        if (previewTab) previewTab.close();
+        var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
+        if (ct.indexOf("application/json") !== -1) {
+          return pdfRes.json().then(function (j) {
+            alertMsg(
+              "danger",
+              (j && j.error) || UI.msgError + " " + pdfRes.status
+            );
+          });
+        }
+        alertMsg("danger", UI.msgError + " " + pdfRes.status);
+        return;
+      }
+      var warn = pdfRes.headers.get("X-Befund-Preview-Warning");
+      return pdfRes.blob().then(function (blob) {
+        var objUrl = URL.createObjectURL(blob);
+        if (previewTab) previewTab.location = objUrl;
+        else window.location.href = objUrl;
+        if (opts && opts.markPreviewSeen) {
+          previewSeenSinceLastSave = true;
+          setPublishEnabledFromPreviewFlag();
+          alertMsg("success", UI.msgSaveSuccess);
+        }
+        if (warn) alertMsg("warning", UI.externalPdfPreviewMergeWarning);
+      });
+    });
+  }
+
   const previewPdfBtn = el("btn-preview-pdf");
   if (previewPdfBtn) {
     previewPdfBtn.addEventListener("click", function (event) {
       if (event && event.preventDefault) event.preventDefault();
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      const btn = this;
+      if (isPublishedReadOnly()) {
+        const previewTab = window.open("", "_blank");
+        btn.disabled = true;
+        openPreviewBlobInTab(
+          previewTab,
+          btn,
+          buildPreviewUrl("published"),
+          { markPreviewSeen: false }
+        ).catch(function () {
+          btn.disabled = false;
+          if (previewTab) previewTab.close();
+          alertMsg("danger", UI.msgNetwork);
+        });
         return;
       }
-      const previewBase =
-        previewPdfBtn.getAttribute("data-preview-url") ||
-        docUrl("/preview-pdf");
-      const sep = previewBase.indexOf("?") === -1 ? "?" : "&";
-      const previewUrl =
-        previewBase +
-        sep +
-        "form_locale=" +
-        encodeURIComponent(authoringLocale) +
-        "&t=" +
-        Date.now();
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
+        return;
+      }
       const previewTab = window.open("", "_blank");
-      const btn = this;
       btn.disabled = true;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
+          if (isAuthExpiredResponse(res)) {
+            btn.disabled = false;
+            if (previewTab) previewTab.close();
+            return;
+          }
           if (!res.ok) {
+            if (res.status === 409) {
+              var json409p = getResJson(res);
+              btn.disabled = false;
+              if (previewTab) previewTab.close();
+              if (
+                json409p &&
+                (json409p.error_key === "other.api.amend_intent_required" ||
+                  json409p.api_message_key === "other.api.amend_intent_required")
+              ) {
+                alertMsg("warning", UI.msgAmendIntentRequired);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409p && (json409p.error || json409p.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
+            }
             btn.disabled = false;
             alertMsg(
               "danger",
@@ -1001,38 +1584,13 @@
             if (previewTab) previewTab.close();
             return;
           }
-          return fetch(previewUrl, {
-            method: "GET",
-            credentials: "same-origin",
-            headers: { Accept: "application/pdf" },
-          }).then(function (pdfRes) {
-            btn.disabled = false;
-            if (!pdfRes.ok) {
-              if (previewTab) previewTab.close();
-              var ct = (pdfRes.headers.get("content-type") || "").toLowerCase();
-              if (ct.indexOf("application/json") !== -1) {
-                return pdfRes.json().then(function (j) {
-                  alertMsg(
-                    "danger",
-                    (j && j.error) || UI.msgError + " " + pdfRes.status
-                  );
-                });
-              }
-              alertMsg("danger", UI.msgError + " " + pdfRes.status);
-              return;
-            }
-            var warn = pdfRes.headers.get("X-Befund-Preview-Warning");
-            return pdfRes.blob().then(function (blob) {
-              var objUrl = URL.createObjectURL(blob);
-              if (previewTab) previewTab.location = objUrl;
-              else window.location.href = objUrl;
-              previewSeenSinceLastSave = true;
-              setPublishEnabledFromPreviewFlag();
-              alertMsg("success", UI.msgSaveSuccess);
-              if (warn)
-                alertMsg("warning", UI.externalPdfPreviewMergeWarning);
-            });
-          });
+          applyRevisionStateFromResponse(getResJson(res));
+          return openPreviewBlobInTab(
+            previewTab,
+            btn,
+            buildPreviewUrl("draft"),
+            { markPreviewSeen: true }
+          );
         })
         .catch(function () {
           btn.disabled = false;
@@ -1045,14 +1603,16 @@
   const publishBtn = el("btn-publish");
   if (publishBtn) {
     publishBtn.addEventListener("click", function () {
-      if (docStatus === "DRAFT" && !previewSeenSinceLastSave) {
+      if (isPublishedReadOnly()) {
+        return;
+      }
+      if (!previewSeenSinceLastSave) {
         alertMsg("warning", UI.msgPublishPreviewRequired);
         return;
       }
-      const payload = buildPayload();
-      const err = validatePayloadForSubmit(payload);
-      if (err) {
-        alertMsg("danger", err);
+      const built = buildDraftPayloadBody();
+      if (built.error) {
+        alertMsg("danger", built.error);
         return;
       }
       const resendSmsEl = el("resend_sms");
@@ -1065,13 +1625,32 @@
           });
       apiFetch(docUrl("/draft"), {
         method: "PUT",
-        body: JSON.stringify({
-          medical_payload_schema_version: 1,
-          medical_payload: payload,
-        }),
+        body: JSON.stringify(built.body),
       })
         .then(function (res) {
+          if (isAuthExpiredResponse(res)) {
+            publishBtn.disabled = false;
+            return;
+          }
           if (!res.ok) {
+            if (res.status === 409) {
+              var json409pub = getResJson(res);
+              publishBtn.disabled = false;
+              if (
+                json409pub &&
+                (json409pub.error_key === "other.api.amend_intent_required" ||
+                  json409pub.api_message_key === "other.api.amend_intent_required")
+              ) {
+                alertMsg("warning", UI.msgAmendIntentRequired);
+                return;
+              }
+              alertMsg(
+                "danger",
+                (json409pub && (json409pub.error || json409pub.detail)) ||
+                  UI.msgError + " " + res.status
+              );
+              return;
+            }
             publishBtn.disabled = false;
             alertMsg(
               "danger",
@@ -1093,6 +1672,10 @@
         })
         .then(function (res) {
           if (!res) return;
+          if (isAuthExpiredResponse(res)) {
+            publishBtn.disabled = false;
+            return;
+          }
           if (res.ok) {
             alertMsg("success", UI.msgPublishSuccess);
             publishBtn.disabled = true;

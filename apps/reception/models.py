@@ -248,7 +248,8 @@ class Patient(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        norm = normalize_phone(self.phone)
+        region = (self.country_code or "DE").strip().upper()
+        norm = normalize_phone(self.phone, default_region=region)
         if norm:
             self.phone = norm
         fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
@@ -787,6 +788,13 @@ class PatientImportBatch(models.Model):
             "administration.field_matched_rows", "Matched rows"
         ),
     )
+    skipped_already_present_count = models.IntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_skipped_already_present_count",
+            "Skipped already present rows",
+        ),
+    )
     error_rows = models.IntegerField(
         default=0,
         verbose_name=db_gettext_lazy("administration.field_error_rows", "Error rows"),
@@ -828,6 +836,7 @@ class PatientImportBatch(models.Model):
                 condition=Q(total_rows__gte=0)
                 & Q(inserted_rows__gte=0)
                 & Q(matched_rows__gte=0)
+                & Q(skipped_already_present_count__gte=0)
                 & Q(error_rows__gte=0),
                 name="import_batch_non_negative_counts",
             )

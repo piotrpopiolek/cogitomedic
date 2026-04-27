@@ -47,6 +47,7 @@ from apps.operations.prom_metrics import build_metrics_payload
 from apps.reception.phone_utils import normalize_phone
 from apps.reception.xlsx_import import (
     XlsxImportErrorCode,
+    _audit_xlsx_import_finished,
     _cleanup_clinic_name,
     _parse_date,
     _split_full_name,
@@ -787,6 +788,30 @@ class PatientXlsxImportTests(TestCase):
             error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
         )
 
+    def test_reimport_same_daily_queue_skips_existing_queue_entry(self) -> None:
+        row = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 906",
+            "erika@example.com",
+        )
+
+        first_batch = self._run_import([row])
+        second_batch = self._run_import([row])
+
+        self.assertEqual(first_batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(first_batch.inserted_rows, 1)
+        self.assertEqual(first_batch.skipped_already_present_count, 0)
+
+        self.assertEqual(second_batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(second_batch.inserted_rows, 0)
+        self.assertEqual(second_batch.matched_rows, 0)
+        self.assertEqual(second_batch.error_rows, 0)
+        self.assertEqual(second_batch.skipped_already_present_count, 1)
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(QueueEntry.objects.count(), 1)
+
     def test_import_fails_when_no_valid_patient_header_row(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             path = Path(tmp.name)
@@ -875,6 +900,30 @@ class PatientXlsxImportTests(TestCase):
             error_code=XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD,
         )
         self.assertEqual(Patient.objects.count(), 1)
+
+    def test_audit_finished_event_includes_skipped_already_present_count(self) -> None:
+        batch = PatientImportBatch.objects.create(
+            source_file_name="audit.xlsx",
+            source_file_sha256="1" * 64,
+            created_by_user=self.user,
+        )
+        with patch("apps.reception.xlsx_import.create_audit_event") as mocked_audit:
+            _audit_xlsx_import_finished(
+                batch,
+                context_clinic_site_id=self.clinic.id,
+                status=ImportStatus.COMPLETED.value,  # type: ignore[attr-defined]
+                inserted_rows=2,
+                matched_rows=1,
+                skipped_already_present_count=3,
+                error_rows=0,
+            )
+
+        mocked_audit.assert_called_once()
+        metadata = mocked_audit.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["inserted_rows"], 2)
+        self.assertEqual(metadata["matched_rows"], 1)
+        self.assertEqual(metadata["skipped_already_present_count"], 3)
+        self.assertEqual(metadata["error_rows"], 0)
 
 
 class PurgeSeedClinicDataTests(TestCase):

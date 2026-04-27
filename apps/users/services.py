@@ -7,11 +7,17 @@ from django.db import transaction
 
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
-from apps.users.models import StaffUser
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
 
 
 def _get_required_role_group(*, role: str) -> Group:
-    group_name = role.capitalize()
+    group_name = ROLE_GROUP_NAME_MAP.get(role)
+    if group_name is None:
+        raise DomainError(
+            domain_message("other.domain.invalid_staff_role", role=role),
+            api_message_key="other.domain.invalid_staff_role",
+            api_message_params={"role": role},
+        )
     group = Group.objects.filter(name=group_name).first()
     if group is None:
         raise DomainError(
@@ -40,8 +46,7 @@ def create_staff_user(
     is_staff: bool = True,
     is_active: bool = True,
 ) -> StaffUser:
-    VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
-    if role not in VALID_ROLES:
+    if role not in VALID_STAFF_ROLES:
         raise DomainError(
             domain_message("other.domain.invalid_staff_role", role=role),
             api_message_key="other.domain.invalid_staff_role",
@@ -93,8 +98,7 @@ def update_staff_user(
         user.phone_number = phone_number
         update_fields.append("phone_number")
     if role is not None:
-        VALID_ROLES = {"DOCTOR", "RECEPTION", "ADMIN", "TABLET"}
-        if role not in VALID_ROLES:
+        if role not in VALID_STAFF_ROLES:
             raise DomainError(
                 domain_message("other.domain.invalid_staff_role", role=role),
                 api_message_key="other.domain.invalid_staff_role",

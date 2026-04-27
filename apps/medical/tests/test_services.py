@@ -448,3 +448,202 @@ class LesionGroupFavoritesAdminTests(TestCase):
         )
         form.is_valid()
         self.assertIn("lesion_group_favorites", form.errors)
+
+
+class DocumentRevisionStateTests(MedicalServicesTests):
+
+    def _publish_initial_version(self):
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                "version": 1,
+            },
+        )
+        published = publish_document_version(
+            medical_document_id=self.medical_document.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+        self.medical_document.refresh_from_db()
+        return published
+
+    def test_save_draft_invalid_intent_raises_distinct_key(self) -> None:
+        from apps.core.exceptions import DomainError
+
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "lesions": []},
+        )
+        with self.assertRaises(DomainError) as ctx:
+            save_draft_document_version(
+                medical_document_id=self.medical_document.id,
+                updated_by_user_id=self.doctor_user.id,
+                medical_payload={"authoring_locale": "de-DE", "lesions": [], "x": 1},
+                intent="typo",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.api.invalid_save_draft_intent"
+        )
+
+    def test_save_draft_on_published_without_amend_intent_raises(self) -> None:
+        from apps.core.exceptions import DomainError
+
+        self._publish_initial_version()
+
+        with self.assertRaises(DomainError) as ctx:
+            save_draft_document_version(
+                medical_document_id=self.medical_document.id,
+                updated_by_user_id=self.doctor_user.id,
+                medical_payload={"authoring_locale": "de-DE", "version": 2},
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.api.amend_intent_required"
+        )
+
+        self.medical_document.refresh_from_db()
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertFalse(self.medical_document.has_pending_revision)
+
+    def test_save_draft_amend_keeps_status_published_and_flags_pending(self) -> None:
+        published = self._publish_initial_version()
+        self.assertEqual(self.medical_document.published_version_no, 1)
+        self.assertFalse(self.medical_document.has_pending_revision)
+
+        revision = save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "version": 2},
+            intent="amend",
+        )
+        self.medical_document.refresh_from_db()
+
+        self.assertEqual(revision.version_no, 2)
+        self.assertEqual(revision.version_status, DocVersionStatus.DRAFT)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertEqual(self.medical_document.published_version_no, 1)
+        self.assertEqual(self.medical_document.current_version_no, 1)
+        self.assertTrue(self.medical_document.has_pending_revision)
+        self.assertNotEqual(revision.id, published.id)
+
+        revision_started = AuditEvent.objects.filter(
+            event_type="DOCUMENT_REVISION_STARTED",
+            medical_document_id=self.medical_document.id,
+        ).first()
+        self.assertIsNotNone(revision_started)
+
+    def test_save_draft_amend_updates_existing_pending_revision_in_place(self) -> None:
+        self._publish_initial_version()
+        first = save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "rev": 1},
+            intent="amend",
+        )
+        second = save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "rev": 2},
+            intent="amend",
+        )
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(second.medical_payload["rev"], 2)
+        self.assertEqual(self.medical_document.versions.count(), 2)
+
+    def test_discard_pending_revision_removes_draft_and_clears_flag(self) -> None:
+        from apps.medical.services import discard_pending_revision
+
+        self._publish_initial_version()
+        revision = save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "rev": 1},
+            intent="amend",
+        )
+
+        discard_pending_revision(
+            medical_document_id=self.medical_document.id,
+            actor_user_id=self.doctor_user.id,
+        )
+        self.medical_document.refresh_from_db()
+
+        self.assertFalse(self.medical_document.has_pending_revision)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertEqual(self.medical_document.current_version_no, 1)
+        self.assertFalse(self.medical_document.versions.filter(pk=revision.id).exists())
+
+        discarded = AuditEvent.objects.filter(
+            event_type="DOCUMENT_REVISION_DISCARDED",
+            medical_document_id=self.medical_document.id,
+        ).first()
+        self.assertIsNotNone(discarded)
+
+    def test_discard_pending_revision_without_pending_raises(self) -> None:
+        from apps.core.exceptions import DomainError
+        from apps.medical.services import discard_pending_revision
+
+        self._publish_initial_version()
+
+        with self.assertRaises(DomainError) as ctx:
+            discard_pending_revision(
+                medical_document_id=self.medical_document.id,
+                actor_user_id=self.doctor_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.api.no_pending_revision_to_discard",
+        )
+
+    def test_publish_after_amend_emits_republished_audit_and_updates_state(
+        self,
+    ) -> None:
+        self._publish_initial_version()
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                "rev": 1,
+            },
+            intent="amend",
+        )
+
+        republished = publish_document_version(
+            medical_document_id=self.medical_document.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+        self.medical_document.refresh_from_db()
+
+        self.assertEqual(republished.version_no, 2)
+        self.assertEqual(republished.version_status, DocVersionStatus.PUBLISHED)
+        self.assertEqual(self.medical_document.published_version_no, 2)
+        self.assertEqual(self.medical_document.current_version_no, 2)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertFalse(self.medical_document.has_pending_revision)
+
+        republished_audit = AuditEvent.objects.filter(
+            event_type="DOCUMENT_REPUBLISHED",
+            medical_document_id=self.medical_document.id,
+        ).first()
+        self.assertIsNotNone(republished_audit)
+        self.assertEqual(republished_audit.metadata.get("new_published_version_no"), 2)
+        self.assertEqual(
+            republished_audit.metadata.get("previous_published_version_no"), 1
+        )

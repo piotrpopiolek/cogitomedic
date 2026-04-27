@@ -30,12 +30,22 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
+from apps.reception.services import issue_tablet_session_latest_wins
 from apps.core.translation_service import get_form_ui_strings
 
 logger = logging.getLogger(__name__)
 
 CONTACT_METHOD_CONSENT_CODE = "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG"
 CONTACT_METHOD_ALLOWED_OPTIONS = {"EMAIL", "SMS", "PHONE"}
+
+_INTAKE_STATUSES_ALLOWING_PATIENT_EDITS = frozenset(
+    {IntakeStatus.IN_PROGRESS, IntakeStatus.REOPENED}
+)
+
+
+def _intake_allows_patient_edits(form_status: str) -> bool:
+    return form_status in _INTAKE_STATUSES_ALLOWING_PATIENT_EDITS
+
 
 # Melanoma intake: if NEW_SKIN_CHANGES_LOCATION is answered affirmatively, the PDF includes the body map.
 NEW_SKIN_CHANGES_LOCATION = "Q4_NEW_SKIN_CHANGES_LOCATION"
@@ -767,7 +777,7 @@ def save_intake_body_map(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+    if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_body_map_in_progress_only"),
             api_message_key="other.domain.intake_body_map_in_progress_only",
@@ -818,7 +828,7 @@ def save_intake_consents(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+    if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_consents_in_progress_only"),
             api_message_key="other.domain.intake_consents_in_progress_only",
@@ -909,7 +919,7 @@ def save_intake_signature(
     Decode base64 signature, store file under MEDIA_ROOT/signatures/YYYY/MM/<uuid>.png,
     set signature_file_path and signature_sha256 on the intake form.
     Raises InvalidSignatureError if payload is invalid or too large.
-    Raises StateTransitionError if form is not IN_PROGRESS.
+    Raises StateTransitionError if form is not editable.
     """
     intake_form = (
         PatientIntakeForm.objects.select_for_update()
@@ -920,7 +930,7 @@ def save_intake_signature(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+    if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_signature_in_progress_only"),
             api_message_key="other.domain.intake_signature_in_progress_only",
@@ -990,6 +1000,77 @@ def save_intake_signature(
 
 
 @transaction.atomic
+def reopen_patient_intake_form(
+    *,
+    intake_form_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    reception_note: str = "",
+    allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
+) -> PatientIntakeForm:
+    """
+    Move a submitted intake back to patient-editable state (REOPENED).
+
+    Issues a fresh tablet session (latest-wins), wires it as the intake session,
+    and records an optional reception note plus audit metadata.
+    """
+    intake_form = (
+        PatientIntakeForm.objects.select_for_update()
+        .select_related("session", "queue_entry", "queue_entry__daily_queue")
+        .get(id=intake_form_id)
+    )
+    _assert_intake_form_clinic_scope(
+        intake_form=intake_form,
+        allowed_clinic_site_ids=allowed_clinic_site_ids,
+    )
+    if intake_form.form_status == IntakeStatus.REOPENED:
+        raise StateTransitionError(
+            domain_message("other.domain.intake_reopen_already_open"),
+            api_message_key="other.domain.intake_reopen_already_open",
+        )
+    if intake_form.form_status != IntakeStatus.SUBMITTED:
+        raise StateTransitionError(
+            domain_message("other.domain.intake_reopen_submitted_only"),
+            api_message_key="other.domain.intake_reopen_submitted_only",
+        )
+    locale = (intake_form.session.form_locale or "de-DE")[:10]
+    issue_tablet_session_latest_wins(
+        queue_entry_id=intake_form.queue_entry_id,
+        created_by_user_id=actor_user_id,
+        form_locale=locale,
+    )
+    intake_form.refresh_from_db()
+    now = timezone.now()
+    note = (reception_note or "").strip()
+    intake_form.form_status = IntakeStatus.REOPENED
+    intake_form.reception_note = note
+    intake_form.reception_note_updated_at = now
+    intake_form.reception_note_updated_by_id = actor_user_id
+    intake_form.save(
+        update_fields=[
+            "form_status",
+            "reception_note",
+            "reception_note_updated_at",
+            "reception_note_updated_by_id",
+            "updated_at",
+        ]
+    )
+    queue_entry = intake_form.queue_entry
+    create_audit_event(
+        event_type="INTAKE_REOPENED",
+        actor_user_id=actor_user_id,
+        patient_id=queue_entry.patient_id,
+        context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "intake_form_id": str(intake_form.id),
+            "queue_entry_id": str(queue_entry.id),
+            "session_id": str(intake_form.session_id),
+            "reception_note": note,
+        },
+    )
+    return intake_form
+
+
+@transaction.atomic
 def submit_patient_intake_form(
     *,
     intake_form_id: uuid.UUID,
@@ -1025,7 +1106,7 @@ def submit_patient_intake_form(
 
     if intake_form.form_status == IntakeStatus.SUBMITTED:
         return intake_form
-    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+    if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_submit_in_progress_only"),
             api_message_key="other.domain.intake_submit_in_progress_only",
@@ -1090,7 +1171,10 @@ def submit_patient_intake_form(
     # Optimistic lock style transition: only one concurrent submit wins.
     updated_rows = PatientIntakeForm.objects.filter(
         id=intake_form.id,
-        form_status=IntakeStatus.IN_PROGRESS,
+        form_status__in=(
+            IntakeStatus.IN_PROGRESS,
+            IntakeStatus.REOPENED,
+        ),
     ).update(
         form_status=IntakeStatus.SUBMITTED,
         submitted_at=now,
@@ -1185,7 +1269,7 @@ def save_intake_anamnesis_payload(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if intake_form.form_status != IntakeStatus.IN_PROGRESS:
+    if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_anamnesis_in_progress_only"),
             api_message_key="other.domain.intake_anamnesis_in_progress_only",

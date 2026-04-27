@@ -247,6 +247,45 @@ class StaffUsersApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["role"], "TABLET")
 
+    def test_post_staff_user_creates_manager_role_user(self) -> None:
+        Group.objects.get_or_create(name="Manager")
+        response = self.client.post(
+            "/api/v1/staff-users",
+            data=json.dumps(
+                {
+                    "username": "manager2",
+                    "email": "manager2@example.com",
+                    "first_name": "Klinik",
+                    "last_name": "Leitung",
+                    "phone_number": "+49111222333",
+                    "role": "MANAGER",
+                    "is_staff": True,
+                    "is_active": True,
+                    "password": "StrongPassword123!",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["role"], "MANAGER")
+        manager = StaffUser.objects.get(username="manager2")
+        self.assertTrue(manager.groups.filter(name="Manager").exists())
+
+    def test_get_staff_users_filters_by_manager_role(self) -> None:
+        manager = StaffUser.objects.create_user(
+            username="manager-filter",
+            email="manager-filter@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        Group.objects.get_or_create(name="Manager")[0].user_set.add(manager)
+        response = self.client.get("/api/v1/staff-users?role=MANAGER")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        usernames = {item["username"] for item in items}
+        self.assertIn("manager-filter", usernames)
+
     def test_post_staff_user_returns_400_when_group_for_role_is_missing(self) -> None:
         Group.objects.filter(name="Reception").delete()
         response = self.client.post(
