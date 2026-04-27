@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from django.test import TestCase
+from unittest.mock import MagicMock, patch
 
-from apps.integrations.sms.client import (
-    format_phone_for_smsapi,
-    get_sms_patient_results_text,
-)
+from django.test import SimpleTestCase, TestCase, override_settings
+
+from apps.integrations.sms.client import get_sms_patient_results_text
 
 
 class GetSmsPatientResultsTextTests(TestCase):
@@ -34,14 +33,20 @@ class GetSmsPatientResultsTextTests(TestCase):
         self.assertIn("https://fallback.url", result)
 
 
-class FormatPhoneForSmsApiTests(TestCase):
-    """format_phone_for_smsapi matches E.164 rules for SMS dispatch."""
+@override_settings(SMSAPI_USE_MOCK=False, SMSAPI_ACCESS_TOKEN="test-token")
+class SmsApiAdapterSendSmsTests(SimpleTestCase):
+    @patch("smsapi.client.SmsApiPlClient")
+    def test_real_adapter_send_sms_calls_smsapi_with_e164(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client.sms.send.return_value = MagicMock(id="msg-1", status="QUEUED")
+        mock_client_cls.return_value = mock_client
 
-    def test_polish_plus_48(self) -> None:
-        self.assertEqual(format_phone_for_smsapi("48500111222"), "+48500111222")
+        from apps.integrations.sms.client import _SmsApiAdapter
 
-    def test_german_prepends_49(self) -> None:
-        self.assertEqual(format_phone_for_smsapi("1761234567"), "+491761234567")
+        adapter = _SmsApiAdapter()
+        adapter.send_sms("1761234567", "Hello", default_region="DE")
 
-    def test_german_already_has_49(self) -> None:
-        self.assertEqual(format_phone_for_smsapi("491761234567"), "+491761234567")
+        mock_client.sms.send.assert_called_once()
+        call_kw = mock_client.sms.send.call_args.kwargs
+        self.assertTrue(call_kw["to"].startswith("+49"))
+        self.assertEqual(call_kw["message"], "Hello")

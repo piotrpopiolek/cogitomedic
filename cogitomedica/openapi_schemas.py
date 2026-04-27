@@ -26,14 +26,26 @@ class AnamnesisUpdateResponse(BaseModel):
     answer_count: int
 
 
-class MedicalDocumentVersionResponse(BaseModel):
-    """Response for PUT .../draft and POST .../publish (version info)."""
+class ApiLocalizedErrorBody(BaseModel):
+    """JSON body for many domain errors (``json_domain_error``): human message + stable key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    error: str
+    error_key: str
+
+
+class SaveDraftMedicalDocumentResponse(BaseModel):
+    """Response for PUT /medical-documents/{id}/draft (version + revision state on document)."""
 
     model_config = ConfigDict(extra="forbid")
 
     medical_document_version_id: str
     version_no: int
     version_status: str
+    document_status: str
+    has_pending_revision: bool
+    published_version_no: int | None = None
 
 
 class PublishDocumentVersionResponse(BaseModel):
@@ -45,6 +57,19 @@ class PublishDocumentVersionResponse(BaseModel):
     version_no: int
     version_status: str
     publish_request_id: str | None = None
+
+
+class DiscardMedicalDocumentRevisionResponse(BaseModel):
+    """Response for POST /medical-documents/{id}/discard-revision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    discarded: bool
+    document_id: str
+    status: str
+    current_version_no: int
+    published_version_no: int | None = None
+    has_pending_revision: bool
 
 
 class CreateQueueEntrySessionResponse(BaseModel):
@@ -246,7 +271,9 @@ def _get_request_model_registry() -> list[type]:
         UpdatePatientRequest,
         # Response models (documentation; §2)
         AnamnesisUpdateResponse,
-        MedicalDocumentVersionResponse,
+        ApiLocalizedErrorBody,
+        SaveDraftMedicalDocumentResponse,
+        DiscardMedicalDocumentRevisionResponse,
         PublishDocumentVersionResponse,
         CreateQueueEntrySessionResponse,
     ]
@@ -400,8 +427,12 @@ def _response_schema_map() -> dict[tuple[str, str], dict[str, type]]:
             "200": AnamnesisUpdateResponse
         },
         (f"{P}/medical-documents/{{medical_document_id}}/draft", "put"): {
-            "200": MedicalDocumentVersionResponse
+            "200": SaveDraftMedicalDocumentResponse
         },
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/discard-revision",
+            "post",
+        ): {"200": DiscardMedicalDocumentRevisionResponse},
         (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {
             "200": PublishDocumentVersionResponse
         },

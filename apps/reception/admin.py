@@ -272,6 +272,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
             request.user.is_authenticated
             and (
                 request.user.is_admin_role
+                or getattr(request.user, "is_manager", False)
                 or request.user.is_reception
                 or request.user.is_superuser
             )
@@ -493,6 +494,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
         "total_rows",
         "inserted_rows",
         "matched_rows",
+        "skipped_already_present_count",
         "error_rows",
         "created_by_user",
         "created_at",

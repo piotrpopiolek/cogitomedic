@@ -114,6 +114,11 @@
     "en": "Questionnaire not yet completed.",
     "pl": "Ankieta nie została jeszcze zakończona."
   },
+  "doctor.error_intake_reopened_patient_editing": {
+    "de": "Ankiete wurde zur Bearbeitung wieder geöffnet. Bitte warten Sie, bis der Patient sie erneut abgeschickt hat.",
+    "en": "The questionnaire was reopened for editing. Please wait until the patient submits it again.",
+    "pl": "Ankieta została ponownie otwarta do edycji. Poczekaj, aż pacjent ponownie ją wyśle."
+  },
   "doctor.error_no_intake_for_entry": {
     "de": "Keine Ankiete für diesen Eintrag.",
     "en": "No questionnaire for this entry.",
@@ -218,6 +223,141 @@
     "de": "Patient (Name)",
     "en": "Patient (name)",
     "pl": "Pacjent (nazwisko)"
+  },
+  "doctor.filter_scope": {
+    "de": "Bereich",
+    "en": "Scope",
+    "pl": "Zakres"
+  },
+  "doctor.filter_scope_all": {
+    "de": "Alle sichtbaren",
+    "en": "All visible",
+    "pl": "Wszystkie widoczne"
+  },
+  "doctor.filter_scope_mine": {
+    "de": "Meine",
+    "en": "Mine",
+    "pl": "Moje"
+  },
+  "doctor.filter_scope_published_by_me": {
+    "de": "Von mir veröffentlicht",
+    "en": "Published by me",
+    "pl": "Opublikowane przeze mnie"
+  },
+  "doctor.filter_scope_in_revision": {
+    "de": "Revision offen",
+    "en": "In revision",
+    "pl": "W rewizji"
+  },
+  "doctor.list_status_in_revision": {
+    "de": "Revision",
+    "en": "In revision",
+    "pl": "Rewizja"
+  },
+  "doctor.banner_published_title": {
+    "de": "Dokument veröffentlicht",
+    "en": "Document published",
+    "pl": "Dokument opublikowany"
+  },
+  "doctor.banner_published_body": {
+    "de": "Die Patientin / der Patient sieht bereits Version {published_version_no}. Klicken Sie auf „Änderungen vornehmen…“, um eine neue Revision zu starten.",
+    "en": "The patient already sees version {published_version_no}. Click \"Make changes…\" to start a new revision.",
+    "pl": "Pacjent widzi już wersję {published_version_no}. Kliknij „Wprowadź zmiany…”, aby rozpocząć nową rewizję."
+  },
+  "doctor.banner_revision_title": {
+    "de": "Revision in Bearbeitung",
+    "en": "Revision in progress",
+    "pl": "Rewizja w toku"
+  },
+  "doctor.banner_revision_body": {
+    "de": "Sie bearbeiten eine Revision der veröffentlichten Version {published_version_no}. Beim erneuten Veröffentlichen erhält die Patientin / der Patient eine neue SMS und ein aktualisiertes PDF.",
+    "en": "You are editing a revision of the published version {published_version_no}. Republishing sends the patient a new SMS and an updated PDF.",
+    "pl": "Edytujesz rewizję opublikowanej wersji {published_version_no}. Po ponownej publikacji pacjent otrzyma nowy SMS i zaktualizowany PDF."
+  },
+  "doctor.btn_start_revision": {
+    "de": "Änderungen vornehmen…",
+    "en": "Make changes…",
+    "pl": "Wprowadź zmiany…"
+  },
+  "doctor.btn_discard_revision": {
+    "de": "Änderungen verwerfen",
+    "en": "Discard changes",
+    "pl": "Odrzuć zmiany"
+  },
+  "doctor.btn_republish": {
+    "de": "Erneut veröffentlichen",
+    "en": "Republish",
+    "pl": "Opublikuj ponownie"
+  },
+  "doctor.btn_preview_published": {
+    "de": "Veröffentlichte Version anzeigen",
+    "en": "View published version",
+    "pl": "Pokaż opublikowaną wersję"
+  },
+  "doctor.btn_preview_revision": {
+    "de": "Revisionsentwurf anzeigen",
+    "en": "View revision draft",
+    "pl": "Pokaż projekt rewizji"
+  },
+  "doctor.modal_start_revision_title": {
+    "de": "Revision starten?",
+    "en": "Start a revision?",
+    "pl": "Rozpocząć rewizję?"
+  },
+  "doctor.modal_start_revision_body": {
+    "de": "Dieses Dokument ist bereits veröffentlicht. Wenn Sie fortfahren, wird ein neuer Entwurf erstellt. Die Patientin / der Patient sieht weiterhin die alte Version, bis Sie erneut veröffentlichen.",
+    "en": "This document is already published. If you continue, a new draft will be created. The patient continues to see the old version until you republish.",
+    "pl": "Ten dokument jest już opublikowany. Jeśli kontynuujesz, zostanie utworzona nowa wersja robocza. Pacjent nadal widzi starą wersję, dopóki nie opublikujesz ponownie."
+  },
+  "doctor.modal_start_revision_confirm": {
+    "de": "Revision starten",
+    "en": "Start revision",
+    "pl": "Rozpocznij rewizję"
+  },
+  "doctor.modal_start_revision_cancel": {
+    "de": "Abbrechen",
+    "en": "Cancel",
+    "pl": "Anuluj"
+  },
+  "doctor.modal_discard_revision_title": {
+    "de": "Revision verwerfen?",
+    "en": "Discard revision?",
+    "pl": "Odrzucić rewizję?"
+  },
+  "doctor.modal_discard_revision_body": {
+    "de": "Alle nicht veröffentlichten Änderungen gehen verloren. Die Patientensicht (Version {published_version_no}) bleibt unverändert.",
+    "en": "All unpublished changes will be lost. The patient view (version {published_version_no}) remains unchanged.",
+    "pl": "Wszystkie nieopublikowane zmiany zostaną utracone. Widok pacjenta (wersja {published_version_no}) pozostanie bez zmian."
+  },
+  "doctor.modal_discard_revision_confirm": {
+    "de": "Revision verwerfen",
+    "en": "Discard revision",
+    "pl": "Odrzuć rewizję"
+  },
+  "doctor.msg_revision_started": {
+    "de": "Revision gestartet. Die alte Version bleibt für die Patientin / den Patienten sichtbar, bis Sie erneut veröffentlichen.",
+    "en": "Revision started. The old version stays visible to the patient until you republish.",
+    "pl": "Rewizja rozpoczęta. Stara wersja pozostaje widoczna dla pacjenta do czasu ponownej publikacji."
+  },
+  "doctor.msg_revision_discarded": {
+    "de": "Revision verworfen. Es bleibt die zuletzt veröffentlichte Version aktiv.",
+    "en": "Revision discarded. The most recently published version remains active.",
+    "pl": "Rewizja odrzucona. Aktywna pozostaje ostatnio opublikowana wersja."
+  },
+  "doctor.msg_amend_intent_required": {
+    "de": "Dieses Dokument ist bereits veröffentlicht. Klicken Sie auf „Änderungen vornehmen…“, um eine Revision zu starten.",
+    "en": "This document is already published. Click \"Make changes…\" to start a revision.",
+    "pl": "Ten dokument jest już opublikowany. Kliknij „Wprowadź zmiany…”, aby rozpocząć rewizję."
+  },
+  "doctor.msg_no_pending_revision": {
+    "de": "Keine offene Revision zum Verwerfen.",
+    "en": "No pending revision to discard.",
+    "pl": "Brak rozpoczętej rewizji do odrzucenia."
+  },
+  "doctor.list_status_revision_chip": {
+    "de": "Revision in Bearbeitung",
+    "en": "Revision in progress",
+    "pl": "Rewizja w toku"
   },
   "doctor.filter_published": {
     "de": "Veröffentlicht",
@@ -368,6 +508,11 @@
     "de": "Erneuter Versuch wurde eingeplant.",
     "en": "Retry has been queued.",
     "pl": "Ponowienie zostało dodane do kolejki."
+  },
+  "doctor.msg_session_expired": {
+    "de": "Sitzung abgelaufen. Bitte erneut einloggen.",
+    "en": "Session expired. Please log in again.",
+    "pl": "Sesja wygasła. Zaloguj się ponownie."
   },
   "doctor.msg_save_success": {
     "de": "Entwurf gespeichert.",

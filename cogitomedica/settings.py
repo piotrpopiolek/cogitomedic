@@ -113,6 +113,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.core.middleware.RoleBasedSessionExpiryMiddleware",
     "apps.core.middleware.StaffLocaleMiddleware",
     "apps.core.middleware.TranslationRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -131,6 +132,15 @@ def _is_admin_role(request) -> bool:
     return bool(user and user.is_authenticated and user.is_admin_role)
 
 
+def _is_manager_or_admin_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_admin_role or getattr(user, "is_manager", False))
+    )
+
+
 def _is_reception_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
     return bool(
@@ -142,6 +152,59 @@ def _is_doctor_or_admin_role(request) -> bool:
     user = getattr(request, "user", None)
     return bool(
         user and user.is_authenticated and (user.is_admin_role or user.is_doctor)
+    )
+
+
+def _is_reception_manager_or_admin_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_admin_role
+            or getattr(user, "is_manager", False)
+            or user.is_reception
+        )
+    )
+
+
+def _is_patient_directory_role(request) -> bool:
+    return bool(
+        _is_doctor_or_admin_role(request)
+        or _is_reception_manager_or_admin_role(request)
+    )
+
+
+def _is_panele_lekarz_item(request) -> bool:
+    """Lekarz, Manager, Admin (nie sama Recepcja)."""
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_doctor or user.is_admin_role or getattr(user, "is_manager", False))
+    )
+
+
+def _is_panele_rejestracja_item(request) -> bool:
+    """Rejestracja, Manager, Admin (nie sam Lekarz)."""
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_reception
+            or user.is_admin_role
+            or getattr(user, "is_manager", False)
+        )
+    )
+
+
+def _is_panele_section_visible(request) -> bool:
+    """Widoczność sekcji = suma uprawnień do poszczególnych skrótów (DRY względem helperów poniżej)."""
+    return bool(
+        _is_panele_lekarz_item(request)
+        or _is_panele_rejestracja_item(request)
+        or _is_admin_role(request)
     )
 
 
@@ -158,43 +221,6 @@ if HAS_UNFOLD:
         ),
         "SIDEBAR": {
             "navigation": [
-                {
-                    "title": db_gettext_lazy("administration.side_panels", "Panele"),
-                    "separator": True,
-                    "permission": lambda request: _is_doctor_or_admin_role(request),
-                    "items": [
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_lekarz", "Lekarz"
-                            ),
-                            "icon": "stethoscope",
-                            "link": lambda request: reverse_lazy("doctor-list"),
-                            "permission": lambda request: _is_doctor_or_admin_role(
-                                request
-                            ),
-                        },
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_rejestracja", "Rejestracja"
-                            ),
-                            "icon": "groups",
-                            "link": lambda request: reverse_lazy(
-                                "admin_reception_dashboard"
-                            ),
-                            "permission": lambda request: _is_reception_or_admin_role(
-                                request
-                            ),
-                        },
-                        {
-                            "title": db_gettext_lazy(
-                                "administration.side_admin", "Admin"
-                            ),
-                            "icon": "admin_panel_settings",
-                            "link": lambda request: reverse_lazy("admin:index"),
-                            "permission": lambda request: _is_admin_role(request),
-                        },
-                    ],
-                },
                 {
                     "title": db_gettext_lazy(
                         "administration.side_users_permissions",
@@ -229,8 +255,7 @@ if HAS_UNFOLD:
                         "administration.side_patients_readonly",
                         "Pacjenci i kliniki (tylko odczyt)",
                     ),
-                    "permission": lambda request: _is_doctor_or_admin_role(request)
-                    or _is_reception_or_admin_role(request),
+                    "permission": lambda request: _is_patient_directory_role(request),
                     "items": [
                         {
                             "title": db_gettext_lazy(
@@ -240,10 +265,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_patient_changelist"
                             ),
-                            "permission": lambda request: _is_doctor_or_admin_role(
+                            "permission": lambda request: _is_patient_directory_role(
                                 request
-                            )
-                            or _is_reception_or_admin_role(request),
+                            ),
                         },
                         {
                             "title": db_gettext_lazy(
@@ -253,10 +277,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_clinicsite_changelist"
                             ),
-                            "permission": lambda request: _is_doctor_or_admin_role(
+                            "permission": lambda request: _is_patient_directory_role(
                                 request
-                            )
-                            or _is_reception_or_admin_role(request),
+                            ),
                         },
                         {
                             "title": db_gettext_lazy(
@@ -266,10 +289,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_consultingroom_changelist"
                             ),
-                            "permission": lambda request: _is_doctor_or_admin_role(
+                            "permission": lambda request: _is_patient_directory_role(
                                 request
-                            )
-                            or _is_reception_or_admin_role(request),
+                            ),
                         },
                     ],
                 },
@@ -277,7 +299,9 @@ if HAS_UNFOLD:
                     "title": db_gettext_lazy(
                         "administration.side_reception_admin", "Rejestracja (Admin)"
                     ),
-                    "permission": lambda request: _is_reception_or_admin_role(request),
+                    "permission": lambda request: _is_reception_manager_or_admin_role(
+                        request
+                    ),
                     "items": [
                         {
                             "title": db_gettext_lazy(
@@ -288,7 +312,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin_reception_dashboard"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -300,7 +324,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_dailyqueue_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -313,7 +337,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_dailyqueue_master_detail"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -325,7 +349,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_queueentry_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -338,7 +362,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_tabletdevice_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -351,7 +375,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_patientformsession_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -364,7 +388,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin_intake_documents"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -377,7 +401,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_patientimportbatch_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -390,7 +414,7 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:reception_patientimporterror_changelist"
                             ),
-                            "permission": lambda request: _is_reception_or_admin_role(
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
                                 request
                             ),
                         },
@@ -398,7 +422,7 @@ if HAS_UNFOLD:
                 },
                 {
                     "title": db_gettext_lazy("administration.side_intake", "Intake"),
-                    "permission": lambda request: _is_admin_role(request),
+                    "permission": lambda request: _is_manager_or_admin_role(request),
                     "items": [
                         {
                             "title": db_gettext_lazy(
@@ -441,7 +465,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:intake_patientintakeform_changelist"
                             ),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
                         },
                         {
                             "title": db_gettext_lazy(
@@ -452,13 +478,16 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:intake_patientintakeconsent_changelist"
                             ),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
                         },
                     ],
                 },
                 {
                     "title": db_gettext_lazy("administration.side_medical", "Medical"),
-                    "permission": lambda request: _is_doctor_or_admin_role(request),
+                    "permission": lambda request: _is_doctor_or_admin_role(request)
+                    or _is_manager_or_admin_role(request),
                     "items": [
                         {
                             "title": db_gettext_lazy(
@@ -469,7 +498,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:medical_medicaldocument_changelist"
                             ),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
                         },
                         {
                             "title": db_gettext_lazy(
@@ -480,7 +511,9 @@ if HAS_UNFOLD:
                             "link": lambda request: reverse_lazy(
                                 "admin:medical_medicaldocumentversion_changelist"
                             ),
-                            "permission": lambda request: _is_admin_role(request),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
                         },
                         {
                             "title": db_gettext_lazy(
@@ -543,6 +576,43 @@ if HAS_UNFOLD:
                         },
                     ],
                 },
+                {
+                    "title": db_gettext_lazy("administration.side_panels", "Panele"),
+                    "separator": True,
+                    "permission": lambda request: _is_panele_section_visible(request),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_lekarz", "Lekarz"
+                            ),
+                            "icon": "stethoscope",
+                            "link": lambda request: reverse_lazy("doctor-list"),
+                            "permission": lambda request: _is_panele_lekarz_item(
+                                request
+                            ),
+                        },
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_rejestracja", "Rejestracja"
+                            ),
+                            "icon": "groups",
+                            "link": lambda request: reverse_lazy(
+                                "admin_reception_dashboard"
+                            ),
+                            "permission": lambda request: _is_panele_rejestracja_item(
+                                request
+                            ),
+                        },
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_admin", "Admin"
+                            ),
+                            "icon": "admin_panel_settings",
+                            "link": lambda request: reverse_lazy("admin:index"),
+                            "permission": lambda request: _is_admin_role(request),
+                        },
+                    ],
+                },
             ],
         },
         "LOGIN": {
@@ -591,6 +661,7 @@ if HAS_UNFOLD:
         ],
         "SCRIPTS": [
             lambda request: static("admin/js/unfold-force-light.js"),
+            lambda request: static("cogitomedica/js/unfold-sidebar-scroll.js"),
         ],
     }
 
@@ -689,6 +760,12 @@ SESSION_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_COOKIE_AGE_SECONDS", "1800"))
+STAFF_SESSION_COOKIE_AGE = int(
+    os.environ.get("STAFF_SESSION_COOKIE_AGE_SECONDS", str(8 * 60 * 60))
+)
+TABLET_SESSION_COOKIE_AGE = int(
+    os.environ.get("TABLET_SESSION_COOKIE_AGE_SECONDS", str(7 * 24 * 60 * 60))
+)
 SESSION_SAVE_EVERY_REQUEST = True
 SECURE_HSTS_SECONDS = 31536000 if ENVIRONMENT == "prod" else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = ENVIRONMENT == "prod"
@@ -698,6 +775,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Redirect unauthenticated users to doctor panel login (panel lekarza)
 LOGIN_URL = "/doctor/login/"
+LOGIN_REDIRECT_URL = "/admin/"
 
 TASKS = {
     "default": {

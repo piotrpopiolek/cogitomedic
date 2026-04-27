@@ -479,6 +479,8 @@
 
 ### 2.9 Formularze intake i zgody (Tablet)
 
+- **Status `form_status`:** `IN_PROGRESS`, `REOPENED` (formularz ponownie otwarty przez recepcję/admina — pacjent znów edytuje na tablecie), `SUBMITTED`. Zapis mapy ciała, zgód, anamnezy i podpisu jest dozwolony przy **`IN_PROGRESS`** lub **`REOPENED`**; przy **`SUBMITTED`** mutacje zwracają **409** (`StateTransitionError` + `error_key` z domeny, np. `other.domain.intake_*_in_progress_only`).
+
 - **GET** `/intake-forms/by-session/{session_id}` (opcjonalnie, kompatybilność wsteczna)
 - **GET** `/intake-forms/{id}` (lub równoważny endpoint kontekstu)
   - Opis: Pobiera kontekst formularza intake dla tabletu. **Tablet (rola TABLET)** jest uwierzytelniony sesją; brak tokenu. Dostęp dozwolony, gdy formularz intake należy do wpisu kolejki w kolejce dostępnej dla użytkownika (TABLET). Używane do: ekran weryfikacji danych pacjenta i formularza (zgody, anamneza, podpis, submit).
@@ -535,7 +537,7 @@
     ```
   - Response JSON: zaktualizowany formularz.
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409` (formularz nie w stanie edycji — nie `IN_PROGRESS` ani `REOPENED`).
 
 - **PUT** `/intake-forms/{id}/consents`
   - Opis: Podmienia zestaw akceptacji zgód dla formularza intake.
@@ -559,7 +561,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`.
+  - Kody błędów: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`, `409` (formularz nie w stanie edycji).
 
 - **PUT** `/intake-forms/{id}/anamnesis`
   - Opis: Podmienia odpowiedzi ankiety anamnestycznej dla formularza intake.
@@ -589,7 +591,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409` (formularz nie w stanie edycji).
 
 - **POST** `/intake-forms/{id}/signature`
   - Opis: Upload podpisu pacjenta.
@@ -608,7 +610,7 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409` (formularz nie w stanie edycji).
 
 - **POST** `/intake-forms/{id}/submit`
   - Opis: Finalizuje formularz w jednej transakcji (US-005/006/007). **Bez tokenu** – wywołujący jest uwierzytelniony (TABLET lub RECEPTION/ADMIN). Sesja oznaczana jako zużyta/zakończona w razie potrzeby; status wpisu kolejki ustawiany na PATIENT_COMPLETED.
@@ -627,13 +629,13 @@
     }
     ```
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409 FORM_ALREADY_SUBMITTED`.
+  - Kody błędów: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409` / `400` (m.in. `StateTransitionError` gdy brak edycji).
 
 ### 2.10 Dokumenty medyczne i workflow lekarza
 
 **Flow lekarza (Wideodermatoskop):** Numery zmian i zdjęcia pochodzą z Wideodermatoskopu. (1) Lekarz wpisuje numery zmian z urządzenia (np. 2, 3, 12, 13, 22, 25, 56). (2) Dla każdej **grupy** numerów lekarz podaje listę numerów w `lesion_numbers` (np. `[2, 13, 56]`), wypełnia **jeden wspólny opis** (cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości) oraz korzysta z tekstu generowanego i ewentualnie go edytuje (`generated_text` / `edited_text`). (3) Przykład: grupa 1 `lesion_numbers: [2, 13, 56]` → jeden opis; grupa 2 `lesion_numbers: [3, 12, 22, 25]` → drugi opis. (4) Reszta Befundu bez zmian: zakres badania, Fitzpatrick, ocena globalna, rekomendacje, ocena końcowa, zapis szkicu / publikacja. Schemat ciała nie jest używany w formularzu Befund. Do PDF trafia tekst końcowy (`edited_text` lub `generated_text`) per grupa.
 
-**Dostęp (rola DOCTOR, nie admin):** Każdy lekarz może listować i otwierać dokumenty w stanie **DRAFT**, wpisy kolejki z ukończonym intake bez jeszcze utworzonego dokumentu medycznego oraz wywołać **POST** utworzenia/pobrania dokumentu dla takich wpisów. Dokumenty **PUBLISHED** pozostają widoczne i obsługiwalne dla **twórcy** rekordu (`created_by_user`) oraz opcjonalnie **lekarza przypisanego do zmiany** w kolejce dnia (`assigned_doctor`), jeśli pole jest ustawione. Administratorzy nie mają ograniczeń. Udane odczyty nadal generują zdarzenia audytu (np. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
+**Dostęp (rola DOCTOR, nie admin w sensie „pojedynczego lekarza”):** Każdy lekarz może listować i otwierać dokumenty w stanie **DRAFT**, wpisy kolejki z ukończonym intake bez jeszcze utworzonego dokumentu medycznego oraz wywołać **POST** utworzenia/pobrania dokumentu dla takich wpisów. Dokumenty **PUBLISHED** pozostają widoczne i obsługiwalne dla **twórcy** rekordu (`created_by_user`) oraz opcjonalnie **lekarza przypisanego do zmiany** w kolejce dnia (`assigned_doctor`), jeśli pole jest ustawione. **Administratorzy** i konto **MANAGER** (nadzór; patrz `require_user_role` + `apps.medical.services`) nie mają ograniczeń listy w tym serwisie. Udane odczyty nadal generują zdarzenia audytu (np. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
 
 - **GET** `/medical-documents`
   - Opis: Lista robocza lekarza.
@@ -697,13 +699,14 @@
     ```
   - Response JSON: utworzony lub istniejący dokument.
   - Kody sukcesu: `201 CREATED` lub `200 OK` (idempotentnie).
-  - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
+  - Kody błędów: `404 QUEUE_ENTRY_NOT_FOUND`, `400` (m.in. `other.domain.intake_form_must_be_submitted` — intake musi być **`SUBMITTED`**; przy **`REOPENED`** tworzenie dokumentu medycznego jest zablokowane do ponownego wysłania ankiety).
 
 - **PUT** `/medical-documents/{id}/draft`
-  - Opis: Zapisuje szkic części medycznej (US-008/009). Gdy aktywna blokada innego użytkownika: `423 Locked` z `locked_by_username`.
+  - Opis: Zapisuje szkic części medycznej (US-008/009). Dla dokumentu już **PUBLISHED** wymagane jest jawne `"intent": "amend"` (rewizja opublikowanej wersji); inaczej **409** z `error_key` = `other.api.amend_intent_required`. Wartość `intent` musi być dokładnie `edit` lub `amend`; inny string → **400** z `error_key` = `other.api.invalid_save_draft_intent`. Przy dokumencie w stanie **DRAFT** aktywna blokada innego użytkownika daje **423** z `locked_by_username` (ADMIN i MANAGER mogą obejść blokadę jak w serwisie blokad).
   - Request JSON:
     ```json
     {
+      "intent": "edit",
       "medical_payload_schema_version": 1,
       "medical_payload": {
         "authoring_locale": "de-DE",
@@ -734,12 +737,18 @@
       "procedure_code": "PROC-001"
     }
     ```
-  - Response JSON: najnowsza wersja szkicu.
+  - Response JSON (m.in.): `medical_document_version_id`, `version_no`, `version_status`, `document_status`, `has_pending_revision`, `published_version_no` (stan rewizji / ostatnia publikacja).
   - Kody sukcesu: `200 OK`.
-  - Kody błędów: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `400 INVALID_TEXT_CONTENT`, `409 DOCUMENT_NOT_EDITABLE`, `423 LOCKED`.
+  - Kody błędów: `400` (m.in. walidacja ładunku, `other.api.invalid_save_draft_intent`), `409` (`other.api.amend_intent_required`), `423 LOCKED` (tylko DRAFT + blokada).
   - Uwagi:
     - `generated_text` i `edited_text` przyjmują wyłącznie plain text (bez znaczników HTML/JS).
     - Logika zapisu po stronie backendu nigdy automatycznie nie nadpisuje `edited_text`.
+
+- **POST** `/medical-documents/{id}/discard-revision`
+  - Opis: Odrzuca oczekującą rewizję (usuwa najnowszą wersję **DRAFT** na dokumencie **PUBLISHED** z `has_pending_revision`, czyści flagę i blokadę). Brak rewizji → **409** z `error_key` = `other.api.no_pending_revision_to_discard`.
+  - Request JSON: brak (pusty obiekt lub bez body zgodnie z klientem).
+  - Response JSON: m.in. `discarded`, `document_id`, `status`, `current_version_no`, `published_version_no`, `has_pending_revision`.
+  - Kody sukcesu: `200 OK`.
 
 - **POST** `/medical-documents/{id}/publish`
   - Opis: Publikuje wersję dokumentu i idempotentnie kolejkuje łańcuch outbox (US-009/010).
@@ -990,6 +999,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - **TABLET**: tylko: lista kolejek na dziś (wybór), lista wpisów kolejki, POST queue-entries/{id}/sessions, GET kontekstu formularza intake, PUT anamneza/zgody, upload podpisu, POST submit intake. Brak wyszukiwarki pacjentów, braku CRUD kolejek, braku zarządzania użytkownikami.
   - `RECEPTION`: kolejki, wpisy kolejki, tworzenie/aktualizacja pacjentów, generacja sesji (POST sessions), importy read/write.
   - `DOCTOR`: odczyt/zapis dokumentów medycznych, publikacja/republikacja, podgląd wersji.
+  - `MANAGER`: nadzór operacyjny; w **API v1** m.in. import, urządzenia, wybrane outbox, a w module **medical** te same dekoratory co `DOCTOR`/`ADMIN` (`require_user_role` w `apps.medical.api_views`); w Django Admin ograniczenia wg uprawnień grupy.
   - `ADMIN`: zarządzanie użytkownikami, słownik zgód, operacje techniczne, pełny podgląd audytu/outbox.
   - Ochrona endpointów przez klasy uprawnień Django + kontrole na poziomie obiektu.
 
@@ -1015,7 +1025,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 ### 4.1 Reguły walidacji zasobów
 
 - `staff_user`
-  - `username` unikalny, `email` unikalny (case-insensitive), `role` w `RECEPTION|DOCTOR|ADMIN|TABLET`.
+  - `username` unikalny, `email` unikalny (case-insensitive), `role` w `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER` (konto kierownicze; szczegółowe dozwolone role per endpoint: dekoratory w odpowiednich `api_views`).
   - `phone_number` regex: `^[0-9+() -]{7,20}$`.
 
 - `patient`

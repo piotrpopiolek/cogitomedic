@@ -46,6 +46,7 @@ from apps.medical.pdf_builder import (
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.core.translation_service import resolve_other_message
 from apps.medical.models import (
+    DocVersionStatus,
     ExternalPdfAttachment,
     ExternalPdfStatus,
     MedicalDocStatus,
@@ -54,10 +55,12 @@ from apps.medical.models import (
 )
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_or_get_medical_document,
+    discard_pending_revision,
     get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
@@ -172,7 +175,9 @@ def _serialize_medical_document_list_item(doc) -> dict:
 
 @require_auth
 def medical_documents_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -245,7 +250,9 @@ def medical_document_detail_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET full document context: intake summary + current version (for doctor panel)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -280,8 +287,22 @@ def medical_document_detail_view(
 def medical_document_preview_pdf_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> HttpResponse:
-    """GET: return PDF preview from the latest saved version (draft or published). Opens inline in browser."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    """GET: return PDF preview for a document.
+
+    - ``?source=published``: render the currently published version. Returns
+      404 if the document has no published version.
+    - ``?source=draft``: render the pending DRAFT version (latest by
+      ``version_no``). Returns 404 if there is no DRAFT.
+    - Default (no ``source``):
+      - PUBLISHED + no pending revision → published version
+      - PUBLISHED + pending revision → draft version
+      - DRAFT → latest version (legacy behaviour)
+
+    Statuses are never mutated here – previewing must be a pure read.
+    """
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -294,19 +315,50 @@ def medical_document_preview_pdf_view(
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
-    version = (
-        MedicalDocumentVersion.objects.filter(medical_document_id=medical_document_id)
-        .select_related(
-            "medical_document",
-            "medical_document__queue_entry",
-            "medical_document__queue_entry__patient",
-            "medical_document__created_by_user",
-            "medical_document__updated_by_user",
-            "published_by_user",
-        )
-        .order_by("-version_no")
-        .first()
+    source = (request.GET.get("source") or "").strip().lower()
+    if source and source not in ("published", "draft"):
+        return json_error("other.api.preview_source_invalid", status=400)
+
+    base_qs = MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document_id
+    ).select_related(
+        "medical_document",
+        "medical_document__queue_entry",
+        "medical_document__queue_entry__patient",
+        "medical_document__created_by_user",
+        "medical_document__updated_by_user",
+        "published_by_user",
     )
+
+    if not source:
+        if doc.status == MedicalDocStatus.PUBLISHED and not doc.has_pending_revision:
+            source = "published"
+        elif doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision:
+            source = "draft"
+        else:
+            source = "draft"  # legacy DRAFT-only flow → latest is DRAFT
+
+    if source == "published":
+        version = (
+            base_qs.filter(
+                version_status=DocVersionStatus.PUBLISHED,
+            )
+            .order_by("-version_no")
+            .first()
+        )
+    else:
+        version = (
+            base_qs.filter(
+                version_status=DocVersionStatus.DRAFT,
+            )
+            .order_by("-version_no")
+            .first()
+        )
+        # Fallback for legacy data: no DRAFT row but document is DRAFT –
+        # take whatever latest version exists so the doctor can still preview.
+        if version is None and doc.status == MedicalDocStatus.DRAFT:
+            version = base_qs.order_by("-version_no").first()
+
     if not version:
         return json_error("other.api.no_version_to_preview", status=404)
 
@@ -326,6 +378,9 @@ def medical_document_preview_pdf_view(
         metadata={
             "client_ip": get_client_ip(request),
             "version_no": version.version_no,
+            "source": source,
+            "document_status": doc.status,
+            "has_pending_revision": doc.has_pending_revision,
             **assigned_doctor_audit_metadata(doc),
         },
     )
@@ -334,6 +389,8 @@ def medical_document_preview_pdf_view(
     response["Cache-Control"] = "no-store, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
+    response["X-Befund-Preview-Source"] = source
+    response["X-Befund-Preview-Version-No"] = str(version.version_no)
     if preview_warn:
         response["X-Befund-Preview-Warning"] = preview_warn
     return response
@@ -344,7 +401,9 @@ def medical_document_versions_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET: list versions of a medical document."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -405,7 +464,9 @@ def medical_document_versions_view(
 def medical_document_draft_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "PUT":
@@ -455,7 +516,7 @@ def medical_document_draft_view(
                 if (
                     eff
                     and doc.locked_by_user_id != request.user.id
-                    and not request.user.is_admin_role
+                    and not _is_admin_or_manager_medical_oversight(request.user)
                 ):
                     raise _MedicalDocumentEditLocked(holder_name)
 
@@ -466,6 +527,7 @@ def medical_document_draft_view(
                 medical_payload=payload_dict,
                 diagnosis_code=body.diagnosis_code,
                 procedure_code=body.procedure_code,
+                intent=body.intent,
             )
             doc.refresh_from_db()
 
@@ -483,6 +545,10 @@ def medical_document_draft_view(
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
+        # 409 specifically for the amend-intent guardrail so the UI can show a
+        # confirmation modal instead of a generic validation toast.
+        if exc.api_message_key == "other.api.amend_intent_required":
+            return json_domain_error(exc, status=409)
         return json_domain_error(exc, status=400)
 
     return JsonResponse(
@@ -490,6 +556,59 @@ def medical_document_draft_view(
             "medical_document_version_id": str(version.id),
             "version_no": version.version_no,
             "version_status": version.version_status,
+            "document_status": doc.status,
+            "has_pending_revision": doc.has_pending_revision,
+            "published_version_no": doc.published_version_no,
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_document_discard_revision_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    """POST: discard a pending DRAFT revision on a PUBLISHED document.
+
+    Returns 200 with cleared state, 404 if the document is unknown, 409 if
+    there is no pending revision to discard.
+    """
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(doc, request.user)
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+
+    try:
+        doc = discard_pending_revision(
+            medical_document_id=medical_document_id,
+            actor_user_id=request.user.id,
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    except DomainError as exc:
+        if exc.api_message_key == "other.api.no_pending_revision_to_discard":
+            return json_domain_error(exc, status=409)
+        return json_domain_error(exc, status=400)
+
+    return JsonResponse(
+        {
+            "discarded": True,
+            "document_id": str(doc.id),
+            "status": doc.status,
+            "current_version_no": doc.current_version_no,
+            "published_version_no": doc.published_version_no,
+            "has_pending_revision": doc.has_pending_revision,
         },
         status=200,
     )
@@ -500,7 +619,9 @@ def medical_document_unlock_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """POST: release edit lock (session holder or admin). Used on page unload from doctor panel."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -537,7 +658,9 @@ def medical_document_unlock_view(
 def medical_document_publish_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -567,7 +690,7 @@ def medical_document_publish_view(
                 if (
                     eff
                     and doc.locked_by_user_id != request.user.id
-                    and not request.user.is_admin_role
+                    and not _is_admin_or_manager_medical_oversight(request.user)
                 ):
                     raise _MedicalDocumentEditLocked(holder_name)
 
@@ -606,7 +729,9 @@ def medical_document_version_detail_view(
     request: HttpRequest, version_id: UUID
 ) -> JsonResponse:
     """GET: single medical document version by id (MedicalDocumentVersion.id)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -671,7 +796,9 @@ def medical_document_version_detail_view(
 def medical_document_retry_processing_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -718,7 +845,9 @@ def medical_document_revoke_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """POST: Revoke the current published version. Patient loses access in ergebnisse portal."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":
@@ -750,7 +879,9 @@ def medical_document_revoke_view(
 
 @require_auth
 def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -865,7 +996,9 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 def doctor_text_template_detail_view(
     request: HttpRequest, template_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method == "GET":
@@ -948,7 +1081,9 @@ def doctor_text_template_detail_view(
 def medical_document_audit_trail_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -988,7 +1123,9 @@ def medical_document_external_pdfs_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
     """GET: list external HiDrive PDF attachments for this document."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -1025,7 +1162,9 @@ def medical_document_external_pdf_content_view(
     Same-origin framing is allowed so the doctor panel can show this URL in an
     ``iframe`` (blob: URLs break multi-page PDF in some browsers).
     """
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -1084,7 +1223,9 @@ def medical_document_external_pdf_reject_view(
     request: HttpRequest, medical_document_id: UUID, attachment_id: UUID
 ) -> JsonResponse:
     """POST: reject external PDF (rename on HiDrive + REJECTED)."""
-    role_error = require_user_role(request, allowed_roles={"DOCTOR", "ADMIN"})
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":

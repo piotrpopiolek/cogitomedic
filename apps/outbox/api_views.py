@@ -36,7 +36,9 @@ from apps.outbox.services import (
 
 @require_auth
 def outbox_events_view(request: HttpRequest) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -139,7 +141,9 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
 def outbox_event_retry_view(
     request: HttpRequest, outbox_event_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":

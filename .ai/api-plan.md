@@ -43,7 +43,7 @@
 - `audit-events` -> `audit_event`
 - `operations` -> domain actions not pure CRUD (publish, retry, retention)
 - `observability` -> metrics/health surfaces for operations
-- `patient-results` -> portal wyniki (US-018): request-otp, verify-otp, download PDF; no staff auth – patient login by phone+DOB, OTP 15 min
+- `patient-results` -> patient results portal (US-018): request-otp, verify-otp, download PDF; no staff auth — patient login by phone+DOB, OTP 15 min
 
 ## 2. Endpoints
 
@@ -482,6 +482,8 @@
 
 ### 2.9 Intake forms and consents (Tablet flow)
 
+- **`form_status` values:** `IN_PROGRESS`, `REOPENED` (reception/admin reopened the form — patient edits again on tablet), `SUBMITTED`. Saving body map, consents, anamnesis, and signature is allowed in **`IN_PROGRESS`** or **`REOPENED`**; in **`SUBMITTED`**, those mutations return **409** (`StateTransitionError` + domain `error_key`, e.g. `other.domain.intake_*_in_progress_only`).
+
 - **GET** `/intake-forms/by-session/{session_id}` (optional, for backward compatibility)
 - **GET** `/intake-forms/{id}` (or equivalent context endpoint)
   - Description: Fetch intake form context for tablet. **Tablet (role TABLET)** is authenticated by session; no token. Access allowed if the intake form belongs to a queue entry in a queue the user (TABLET) is allowed to access. Used for: patient data verification screen and form (consents, anamnesis, signature, submit).
@@ -538,7 +540,7 @@
     ```
   - Response JSON: updated form.
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `401 TOKEN_INVALID_OR_EXPIRED`, `409` (form not editable — not `IN_PROGRESS` or `REOPENED`).
 
 - **PUT** `/intake-forms/{id}/consents`
   - Description: Replace consent acceptance set for intake form.
@@ -562,7 +564,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`.
+  - Errors: `400 VALIDATION_ERROR`, `409 CONSENT_NOT_ACTIVE_FOR_DATE`, `409` (form not editable).
 
 - **PUT** `/intake-forms/{id}/anamnesis`
   - Description: Replace anamnesis questionnaire answers for the intake form.
@@ -592,7 +594,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_JSON_SCHEMA`, `400 UNKNOWN_QUESTION_OR_OPTION_CODE`, `409` (form not editable).
 
 - **POST** `/intake-forms/{id}/signature`
   - Description: Upload patient signature.
@@ -611,7 +613,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 INVALID_SIGNATURE`, `413 PAYLOAD_TOO_LARGE`, `409` (form not editable).
 
 - **POST** `/intake-forms/{id}/submit`
   - Description: Finalize form in one transaction (US-005/006/007). **No token** – caller is authenticated (TABLET or RECEPTION/ADMIN). Session is marked consumed / completed as needed; queue entry status set to PATIENT_COMPLETED.
@@ -630,32 +632,35 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409 FORM_ALREADY_SUBMITTED`.
+  - Errors: `400 REQUIRED_CONSENTS_MISSING`, `400 REQUIRED_ANAMNESIS_MISSING`, `400 SIGNATURE_REQUIRED`, `403 FORBIDDEN`, `409` / `400` (including `StateTransitionError` when the form is not in an editable state).
 
 ### 2.10 Medical documents and doctor workflow
 
 **Doctor flow (Wideodermatoskop):** Lesion numbers and images come from the Wideodermatoskop device. (1) The doctor enters lesion numbers from the device (e.g. 2, 3, 12, 13, 22, 25, 56). (2) For each **group** of numbers the doctor provides the list in `lesion_numbers` (e.g. `[2, 13, 56]`), fills in **one shared description** (dermatoscopic features, clinical assessment, malignancy risk) and uses generated text, optionally editing it (`generated_text` / `edited_text`). (3) Example: group 1 `lesion_numbers: [2, 13, 56]` → one description; group 2 `lesion_numbers: [3, 12, 22, 25]` → second description. (4) Rest of Befund unchanged: examination scope, Fitzpatrick, global assessment, recommendations, final assessment, draft save / publish. Body schema is not used in the Befund form. The final text (`edited_text` or `generated_text`) per group goes to PDF.
 
-**Access (role DOCTOR, not admin):** Any doctor may list and open **DRAFT** documents (shared describing queue), queue entries with submitted intake but **no** medical document yet, and **POST** create-or-get for those entries. **PUBLISHED** documents remain visible and actionable only for the document **creator** (`created_by_user`) or the **assigned doctor** on the daily queue (if set). Admins are not restricted. Successful reads still emit audit events (e.g. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
+**Access (role DOCTOR — not “single-doctor admin” semantics):** Any doctor may list and open **DRAFT** documents, queue entries with submitted intake but **no** medical document yet, and **POST** create-or-get for those entries. **PUBLISHED** documents remain visible and actionable for the document **creator** (`created_by_user`) and optionally the **assigned doctor** on the daily queue (`assigned_doctor`) when that field is set. **ADMIN** and **MANAGER** (oversight; see `require_user_role` and `apps.medical.services`) are not subject to the same list scoping rules. Successful reads still emit audit events (e.g. `MEDICAL_DOCUMENTS_LISTED`, `MEDICAL_DOCUMENT_VIEWED`).
 
 - **GET** `/medical-documents`
-  - Description: List doctor work queue.
-  - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `page` (default `1`), `page_size` (default **20**, max **100**).
+  - Description: Doctor work queue list.
+  - Query params: `status`, `queue_date`, `doctor_view` (`pending_review`, `published`, `failed`), `patient_search`, `scope` (`all` default, `mine`, `published_by_me` — which documents the authenticated user sees), `page` (default `1`), `page_size` (default **20**, max **100**).
   - Request JSON: none.
-  - Response JSON: paginated document list with latest version status flags (`pdf_generation_status`, `hidrive_sent`, `sms_sent`) oraz pola blokady edycji: `locked_by_username`, `locked_at` (gdy aktywna blokada, max 24h).
+  - Response JSON: paginated document list with latest-version status flags (`pdf_generation_status`, `hidrive_sent`, `sms_sent`) and lock fields `locked_by_username`, `locked_at` (when an active lock exists, max 24h).
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`.
 
 - **GET** `/medical-documents/{id}`
   - Description: Full document context (patient intake + medical draft/current version).
-  - Query params: `include_versions=true|false`.
-  - Response JSON:
+  - Query params: `include_versions=true|false`, `form_locale` (intake narrative locale for embedded questions).
+  - Response JSON (representative; actual payload includes `intake_form_id`, `published_version_no`, `has_pending_revision`, `last_published_at`, processing flags on `current_version` when not retention-stripped):
     ```json
     {
       "id": "uuid",
       "queue_entry_id": "uuid",
+      "intake_form_id": "uuid",
       "status": "DRAFT",
       "current_version_no": 2,
+      "published_version_no": null,
+      "has_pending_revision": false,
       "locked_by_user_id": "uuid-or-null",
       "locked_by_username": "string-or-null",
       "locked_at": "iso8601-or-null",
@@ -683,10 +688,17 @@
   - Success: `200 OK`.
   - Errors: `404 NOT_FOUND`, `403 FORBIDDEN`.
 
+- **GET** `/medical-documents/{id}/preview-pdf`
+  - Description: Returns a merged Befund+intake PDF for inline preview (`Content-Type: application/pdf`, `Content-Disposition: inline`). Roles: **DOCTOR**, **ADMIN**, **MANAGER** (same access checks as other medical document reads).
+  - Query params: `source` — `published` (last published row), `draft` (latest DRAFT), or omit for default behaviour: PUBLISHED without pending revision → published; PUBLISHED with pending revision → draft; legacy DRAFT-only document → latest. Optional `form_locale` / `authoring_locale` override for rendering. Invalid `source` → **400** with domain `error_key` (e.g. `other.api.preview_source_invalid`). No matching version → **404**.
+  - Response headers: `X-Befund-Preview-Source`, `X-Befund-Preview-Version-No`; optional `X-Befund-Preview-Warning` when generation used a non-fatal fallback.
+  - Success: `200 OK`.
+  - Errors: `400 BAD_REQUEST`, `403 FORBIDDEN`, `404 NOT_FOUND`.
+
 - **POST** `/medical-documents/{id}/unlock`
-  - Description: Zwolnienie blokady edycji (właściciel blokady lub admin); wywoływane m.in. przy opuszczeniu strony Befund (`pagehide` + `fetch` z `keepalive`).
-  - Request JSON: opcjonalnie pusty `{}`.
-  - Response JSON: `{ "released": true }` lub `{ "released": false, "error": "..." }` przy `403`.
+  - Description: Release edit lock (lock holder, or **ADMIN** / **MANAGER** per `release_document_lock` rules). Invoked when leaving the Befund page (e.g. `pagehide` + `fetch` with `keepalive`).
+  - Request JSON: optional empty `{}`.
+  - Response JSON: `{ "released": true }` or `{ "released": false, "error": "..." }` with **403** when release is not allowed.
   - Success: `200 OK`.
   - Errors: `403 FORBIDDEN`, `404 NOT_FOUND`.
 
@@ -700,13 +712,14 @@
     ```
   - Response JSON: created or existing document.
   - Success: `201 CREATED` or `200 OK` (idempotent).
-  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `409 INTAKE_NOT_SUBMITTED`.
+  - Errors: `404 QUEUE_ENTRY_NOT_FOUND`, `400` (e.g. `other.domain.intake_form_must_be_submitted` — intake must be **`SUBMITTED`**; **`REOPENED`** blocks creating a medical document until the patient resubmits).
 
 - **PUT** `/medical-documents/{id}/draft`
-  - Description: Save draft medical section (US-008/009). Przy aktywnej blokadzie należącej do innego użytkownika: `423 Locked` z `error` i `locked_by_username`.
+  - Description: Save draft medical section (US-008/009). For a document already **PUBLISHED**, explicit `"intent": "amend"` is required (revision of the published version); otherwise **409** with `error_key` = `other.api.amend_intent_required`. `intent` must be exactly `edit` or `amend`; any other string → **400** with `error_key` = `other.api.invalid_save_draft_intent`. For a **DRAFT** document, another user’s active lock yields **423** with `locked_by_username` (**ADMIN** and **MANAGER** can bypass the lock per lock service rules).
   - Request JSON:
     ```json
     {
+      "intent": "edit",
       "medical_payload_schema_version": 1,
       "medical_payload": {
         "authoring_locale": "de-DE",
@@ -737,12 +750,22 @@
       "procedure_code": "PROC-001"
     }
     ```
-  - Response JSON: latest draft version.
+  - Response JSON (among others): `medical_document_version_id`, `version_no`, `version_status`, `document_status`, `has_pending_revision`, `published_version_no` (revision state / last publication).
   - Success: `200 OK`.
-  - Errors: `400 INVALID_JSON_SCHEMA`, `400 REQUIRED_MEDICAL_FIELDS_MISSING`, `409 DOCUMENT_NOT_EDITABLE`, `423 LOCKED` (inny lekarz edytuje szkic).
+  - Errors: `400` (including payload validation, `other.api.invalid_save_draft_intent`), `409` (`other.api.amend_intent_required`, other domain conflicts), `423 LOCKED` (DRAFT + foreign lock only).
+  - Notes:
+    - `generated_text` and `edited_text` accept **plain text** only (no HTML/JS markup).
+    - Backend never silently overwrites `edited_text` with generated content.
+
+- **POST** `/medical-documents/{id}/discard-revision`
+  - Description: Drops a pending revision (removes the latest **DRAFT** row on a **PUBLISHED** document with `has_pending_revision`, clears the flag and lock). No pending revision → **409** with `error_key` = `other.api.no_pending_revision_to_discard`.
+  - Request JSON: none (empty body is fine).
+  - Response JSON: includes `discarded`, `document_id`, `status`, `current_version_no`, `published_version_no`, `has_pending_revision`.
+  - Success: `200 OK`.
+  - Errors: `400` (domain validation), `403 FORBIDDEN`, `404 NOT_FOUND`, `409` (no revision to discard).
 
 - **POST** `/medical-documents/{id}/publish`
-  - Description: Publish document version and enqueue outbox chain idempotently (US-009/010).
+  - Description: Publish document version and enqueue outbox chain idempotently (US-009/010). Same lock bypass as draft save: **ADMIN** / **MANAGER** may publish while another user holds the DRAFT lock.
   - Query params: none.
   - Request JSON:
     ```json
@@ -767,7 +790,7 @@
     }
     ```
   - Success: `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`.
+  - Errors: `400 VALIDATION_ERROR`, `409 PUBLICATION_IN_PROGRESS`, `422 BUSINESS_RULE_VIOLATION`, `423 LOCKED` (DRAFT held by another user — doctors only).
 
 ### 2.10a Doctor text templates
 
@@ -791,7 +814,10 @@
     }
     ```
   - Success: `201 CREATED`, `200 OK`.
-  - Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
+  - Errors: `400 VALIDATION_ERROR`, `400 TEMPLATE_PLACEHOLDER_NOT_ALLOWED`, `400 INVALID_TEXT_CONTENT`, `403 FORBIDDEN`, `409 TEMPLATE_NAME_CONFLICT`.
+  - Notes:
+    - Template body is plain text only (no HTML/JS).
+    - Placeholders are supported only from an allowlist (no conditional logic, loops, or DSL).
 
 - **GET** `/medical-documents/{id}/versions`
   - Description: Version history. Doctor can view only if document is authored by them or in their assigned clinic scope.
@@ -987,6 +1013,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - **TABLET**: only: list today's queues (choice), list queue entries for a queue, POST queue-entries/{id}/sessions, GET intake form context, PUT anamnesis/consents, signature upload, POST intake submit. No patient search, no queue CRUD, no user management.
   - `RECEPTION`: queues, queue entries, patient create/update, session generation (POST sessions), import operations read/write.
   - `DOCTOR`: medical document read/write, publish/republish, version view.
+  - `MANAGER`: operational oversight; in **API v1** also imports, devices, selected outbox surfaces, and in the **medical** module the same `require_user_role` sets as `DOCTOR`/`ADMIN` (`apps.medical.api_views`); Django Admin remains limited by the Manager group permissions.
   - `ADMIN`: user management, consent dictionary, operational controls, full audit/outbox visibility.
   - Endpoint guards implemented via Django permission classes + object-level checks.
 
@@ -1003,6 +1030,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - write endpoints default: 60 req/min/user.
     - admin operations: 10 req/min/user.
   - Request size limits for signatures/uploads.
+  - Plain-text sanitization for doctor narrative fields and template bodies before persistence / PDF generation.
   - Input sanitization and allowlists for ordering/filter fields.
   - Audit logging for all security-sensitive actions (login failures, publish, retries, retention runs).
 
@@ -1011,7 +1039,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 ### 4.1 Resource validation rules
 
 - `staff_user`
-  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN|TABLET`.
+  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER` (oversight account; per-endpoint allowed roles are enforced in the respective `api_views` decorators).
   - `phone_number` regex: `^[0-9+() -]{7,20}$`.
 
 - `patient`
@@ -1102,16 +1130,18 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - Doctor workflow:
   - Draft save updates/creates latest draft version; doctor enters/edits text in `medical_payload` (e.g. `edited_text`, `summary_edited_text`).
+  - **Published-document revisions:** saving over a **PUBLISHED** document requires request field `intent: "amend"`; otherwise the API responds with **409** (`error_key` `other.api.amend_intent_required`). Invalid `intent` values yield **400** (`other.api.invalid_save_draft_intent`). A pending draft revision on a published document can be removed with **POST** `/medical-documents/{id}/discard-revision` (**409** with `other.api.no_pending_revision_to_discard` when nothing to drop).
   - Doctor persists final edited text (and optional generated text from template) in `medical_payload`.
   - Publish request must provide `publish_locale`; backend persists it on `medical_document_version` and uses it as the authoritative PDF language for outbox generation.
   - Publish uses row lock on `medical_document` and idempotency checks:
     - same `publish_request_id` returns success replay;
     - publication already in progress returns idempotent success (no duplicate outbox chain).
+  - Many domain validation errors return JSON with `error` plus stable `error_key` (and optional `details`) for client-side / translated messaging (`json_domain_error`).
 
 - Transactional outbox chain:
   - Publish transaction enqueues `GENERATE_PDF`.
   - Django Tasks processing enqueues `HIDRIVE_UPLOAD` after successful PDF.
-  - Django Tasks processing enqueues `SMS_SEND` after successful upload. **SMS content:** logistic only – „Nowa dokumentacja w Cogito“ (no link; patient fetches via portal wyniki).
+  - Django Tasks processing enqueues `SMS_SEND` after successful upload. **SMS content:** logistic only — „Nowa dokumentacja w Cogito“ (no link; patient fetches via the patient results portal).
   - Retries and dead-letter managed via outbox status/retry fields.
 
 - Patient results portal (US-018, PRD 3.4a):
@@ -1168,6 +1198,7 @@ Option code mapping for Q1–Q11:
   - lesion groups (`lesions[]`) – each group has a list of Wideodermatoskop numbers and one shared description,
   - generated and final text (`generated_text`, `edited_text` per group; `summary_generated_text`, `summary_edited_text`).
 - Text persistence is language-agnostic; `authoring_locale` records the doctor's working language.
+- Narrative fields are plain text and are length-limited and sanitized on the backend.
 
 **`lesions[]` element structure:**
 

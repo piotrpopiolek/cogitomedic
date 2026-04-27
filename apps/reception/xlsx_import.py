@@ -32,6 +32,7 @@ from apps.reception.models import (
     Patient,
     PatientImportBatch,
     PatientImportError,
+    QueueEntry,
     QueueSource,
 )
 from apps.reception.phone_utils import normalize_phone
@@ -455,6 +456,7 @@ def _audit_xlsx_import_finished(
     status: str,
     inserted_rows: int,
     matched_rows: int,
+    skipped_already_present_count: int,
     error_rows: int,
     failure_reason: str | None = None,
 ) -> None:
@@ -463,6 +465,7 @@ def _audit_xlsx_import_finished(
         "status": status,
         "inserted_rows": inserted_rows,
         "matched_rows": matched_rows,
+        "skipped_already_present_count": skipped_already_present_count,
         "error_rows": error_rows,
     }
     if failure_reason:
@@ -518,6 +521,7 @@ def _finalize_patient_xlsx_import_batch_failed(
         status=ImportStatus.FAILED.value,  # type: ignore[attr-defined]
         inserted_rows=0,
         matched_rows=0,
+        skipped_already_present_count=0,
         error_rows=0,
         failure_reason=error_message,
     )
@@ -539,6 +543,7 @@ def process_patient_xlsx_import_batch(
 
     inserted = 0
     matched = 0
+    skipped_already_present = 0
     errors_count = 0
     seen_phones: set[str] = set()
     header_indices: dict[str, int] = {}
@@ -722,6 +727,14 @@ def process_patient_xlsx_import_batch(
                 )
 
             try:
+                already_present = QueueEntry.objects.filter(
+                    daily_queue_id=daily_queue_id,
+                    patient_id=patient.id,
+                ).exists()
+                if already_present:
+                    skipped_already_present += 1
+                    continue
+
                 create_queue_entry(
                     daily_queue_id=daily_queue_id,
                     patient_id=patient.id,
@@ -781,6 +794,7 @@ def process_patient_xlsx_import_batch(
 
     batch.inserted_rows = inserted
     batch.matched_rows = matched
+    batch.skipped_already_present_count = skipped_already_present
     batch.error_rows = errors_count
     batch.status = (
         ImportStatus.COMPLETED
@@ -792,6 +806,7 @@ def process_patient_xlsx_import_batch(
         update_fields=[
             "inserted_rows",
             "matched_rows",
+            "skipped_already_present_count",
             "error_rows",
             "status",
             "finished_at",
@@ -803,6 +818,7 @@ def process_patient_xlsx_import_batch(
         status=batch.status,
         inserted_rows=inserted,
         matched_rows=matched,
+        skipped_already_present_count=skipped_already_present,
         error_rows=errors_count,
     )
     _try_record_import_batch_finished(

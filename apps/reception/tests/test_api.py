@@ -1237,6 +1237,7 @@ class ImportBatchesApiTests(TestCase):
         body = detail_response.json()
         self.assertEqual(body["id"], str(batch.id))
         self.assertEqual(body["matched_rows"], 0)
+        self.assertEqual(body["skipped_already_present_count"], 0)
 
         errors_response = self.client.get(f"/api/v1/imports/batches/{batch.id}/errors")
         self.assertEqual(errors_response.status_code, 200)

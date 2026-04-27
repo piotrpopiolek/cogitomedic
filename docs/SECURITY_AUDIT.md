@@ -1,11 +1,11 @@
 # Audyt bezpieczeństwa – CogitoMedica
 
-Data: 2025-03  
+Data: 2025-03 (aktualizacja: 2026-04 — rola `Manager`, panel lekarza HTML)  
 Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub rejestracji; luki w systemie.
 
 ## Podsumowanie
 
-- **Panel lekarza (`/doctor/`)**: chroniony – wymaga logowania i roli DOCTOR lub ADMIN.
+- **Panel lekarza (`/doctor/`)** (HTML) oraz **REST API v1** pod ścieżkami `medical-documents` / powiązanych: wymagają logowania i roli **DOCTOR**, **ADMIN** albo **MANAGER** (dekoratory `require_user_role` w `apps.medical.api_views` — spójnie z serwisem i panelem HTML).
 - **Administracja (`/admin/`)**: chroniona – Django admin wymaga `is_staff`; widoki własne (reception-dashboard, intake-documents) używają `@staff_member_required` i roli RECEPTION/ADMIN.
 - **Rejestracja / tablet (`/tablet/`)**: chronione – wymaga roli TABLET, RECEPTION lub ADMIN.
 - **API v1**: endpointy wewnętrzne wymagają uwierzytelnienia i odpowiedniej roli (require_auth + require_user_role). Portal wyników pacjenta (request-otp, verify-otp, documents, download) jest oddzielony – sesja pacjenta (patient_results_patient_id) nie daje dostępu do żadnego panelu staff.
@@ -28,13 +28,13 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 ## Integralność danych – blokada edycji Befund
 
-- Dla dokumentów w stanie **DRAFT** stosowana jest **aplikacyjna blokada** na rekordzie `medical_document` (`locked_by_user`, `locked_at`), aby ograniczyć równoległe nadpisywanie szkicu przez dwóch lekarzy. Blokada wygasa po **24 godzinach** (bez osobnego schedulera) i jest zwalniana przy **publikacji** oraz **best-effort** przy zamknięciu karty (żądanie `POST /api/v1/medical-documents/{id}/unlock`). **Admin** może przejąć lub zwolnić blokadę zgodnie z logiką serwisu.
+- Dla dokumentów w stanie **DRAFT** stosowana jest **aplikacyjna blokada** na rekordzie `medical_document` (`locked_by_user`, `locked_at`), aby ograniczyć równoległe nadpisywanie szkicu przez dwóch lekarzy. Blokada wygasa po **24 godzinach** (bez osobnego schedulera) i jest zwalniana przy **publikacji** oraz **best-effort** przy zamknięciu karty (żądanie `POST /api/v1/medical-documents/{id}/unlock`). **Admin** i **Manager** (nadzór medyczny w module Befund) mogą zapisywać szkic i publikować mimo blokady innego użytkownika — zgodnie z logiką serwisu.
 
 ## Weryfikacja zabezpieczeń
 
 ### Panel lekarza (`cogitomedica/doctor_views.py`)
 
-- Logowanie: `doctor_login_view` – tylko użytkownicy z `user.is_doctor` lub `user.is_admin_role` mogą się zalogować.
+- Logowanie: `doctor_login_view` – użytkownicy z `user.is_doctor`, `user.is_admin_role` lub `user.is_manager` mogą się zalogować (kolejka Befund w `apps.medical.services` traktuje admina i managera jak pełen nadzór przy dostępie do listy / dokumentu w panelu HTML).
 - Wszystkie widoki chronione: `@login_required(login_url="doctor-login")` oraz na początku widoku `if not _doctor_role_ok(request): return redirect("doctor-login")`.
 - Pacjent (model `Patient`) nie ma konta w `StaffUser` – nie może zalogować się do panelu lekarza.
 
@@ -52,7 +52,7 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 ### API v1 (`cogitomedica/api_urls.py`, aplikacje)
 
-- Endpointy staff: używają `@require_auth` i `require_user_role(request, allowed_roles={...})` (DOCTOR, ADMIN, RECEPTION, TABLET w zależności od endpointu).
+- Endpointy staff: używają `@require_auth` i `require_user_role(request, allowed_roles={...})` (DOCTOR, ADMIN, RECEPTION, TABLET, ewent. **MANAGER** przy operacjach recepcji/importu/monitoringu — w zależności od endpointu).
 - Portal wyników pacjenta:
   - `patient-results/request-otp`, `verify-otp`: publiczne z rozsądnym rate limitem i CAPTCHA (Turnstile).
   - `patient-results/documents`, `patient-results/documents/<id>/download`: dostęp tylko gdy w sesji jest `patient_results_patient_id` (ustawiane po poprawnym verify_otp). Pobieranie PDF sprawdza, że `version_id` należy do tego pacjenta (`get_patient_pdf_version(version_id, patient_id)`).

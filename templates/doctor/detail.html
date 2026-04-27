@@ -1,5 +1,6 @@
 {% extends "doctor/base.html" %}
 {% load static %}
+{% load static_versioned %}
 {% block title %}{{ ui.detail_head_title }} {{ document_id|truncatechars:8 }}{% endblock %}
 {% block doctor_extrahead %}
 <style>
@@ -79,6 +80,14 @@
   {{ external_pdf_hidrive_warning }}
 </div>
 {% endif %}
+
+<div
+  id="revision-state-banner"
+  class="mb-4 hidden rounded-default border px-4 py-3 text-sm"
+  hidden
+  role="status"
+  aria-live="polite"
+></div>
 
 <section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
   <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.intake_header }}</div>
@@ -241,16 +250,55 @@
     </div>
   </section>
 
+  <div
+    id="revision-action-notice"
+    class="mb-3 hidden rounded-default border px-4 py-3 text-sm"
+    hidden
+    role="status"
+    aria-live="polite"
+  ></div>
   <div class="flex flex-wrap items-center gap-3">
-    <button type="button" class="inline-flex items-center justify-center rounded-default border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-800 hover:bg-base-200 dark:bg-base-800 dark:border-base-600 dark:text-base-100 dark:hover:bg-base-700" id="btn-save-draft">{{ ui.btn_save_draft }}</button>
+    <button type="button" class="inline-flex items-center justify-center rounded-default border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-800 hover:bg-base-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-base-800 dark:border-base-600 dark:text-base-100 dark:hover:bg-base-700" id="btn-save-draft">{{ ui.btn_save_draft }}</button>
+    <button type="button" class="hidden inline-flex items-center justify-center rounded-default border border-primary-600/40 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/10 disabled:opacity-50 disabled:pointer-events-none dark:border-primary-500/50 dark:text-primary-400" id="btn-start-revision" hidden>{{ ui.btn_start_revision }}</button>
+    <button type="button" class="hidden inline-flex items-center justify-center rounded-default border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:pointer-events-none dark:border-red-800 dark:text-red-400 dark:hover:bg-red-500/10" id="btn-discard-revision" hidden>{{ ui.btn_discard_revision }}</button>
     <a class="inline-flex items-center justify-center rounded-default border border-primary-600/40 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/50 dark:text-primary-400" id="btn-preview-pdf" href="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" data-preview-url="{{ api_base }}/medical-documents/{{ document_id }}/preview-pdf" target="_blank" rel="noopener">{{ ui.btn_preview_pdf }}</a>
     <button type="button" class="inline-flex items-center justify-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 disabled:opacity-50 disabled:pointer-events-none" id="btn-publish" disabled aria-describedby="publish-preview-hint">{{ ui.btn_publish }}</button>
     <p id="publish-preview-hint" class="w-full text-xs text-base-500 dark:text-base-400 mb-0">{{ ui.publish_requires_preview_hint }}</p>
     <label class="inline-flex items-center gap-2 text-sm text-base-700 dark:text-base-300"><input type="checkbox" id="resend_sms" class="rounded border-base-300 text-primary-600 dark:border-base-600 dark:bg-base-900" /> {{ ui.resend_sms }}</label>
   </div>
 </form>
+
+<div
+  id="revision-modal"
+  class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4"
+  hidden
+  style="position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.4);"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="revision-modal-title"
+>
+  <div
+    class="w-full max-w-md rounded-default bg-white p-5 shadow-xl dark:bg-base-900"
+    style="width: 100%; max-width: 32rem; background: white;"
+  >
+    <h2 id="revision-modal-title" class="text-lg font-semibold text-base-900 dark:text-base-100"></h2>
+    <p id="revision-modal-body" class="mt-2 text-sm text-base-700 dark:text-base-300"></p>
+    <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        id="revision-modal-cancel"
+        class="inline-flex items-center justify-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800"
+      ></button>
+      <button
+        type="button"
+        id="revision-modal-confirm"
+        class="inline-flex items-center justify-center rounded-default bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+      ></button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extrajs %}
-<script src="{% static 'doctor/js/befund-form.js' %}"></script>
+<script src="{% static_v 'doctor/js/befund-form.js' %}"></script>
 {% endblock %}

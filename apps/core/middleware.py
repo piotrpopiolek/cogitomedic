@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.utils import translation
 
 from apps.core.translation_service import normalize_language_code, set_current_request
@@ -11,6 +12,13 @@ _PREFERRED_LOCALE_TO_DJANGO_LANG: dict[str, str] = {
     "en-GB": "en",
     "pl-PL": "pl",
 }
+
+_SESSION_EXPIRY_ROLES = (
+    "is_doctor",
+    "is_admin_role",
+    "is_reception",
+    "is_manager",
+)
 
 
 class CsrfTrustTunnelOriginMiddleware:
@@ -26,6 +34,35 @@ class CsrfTrustTunnelOriginMiddleware:
 
     def __call__(self, request):
         return self.get_response(request)
+
+
+class RoleBasedSessionExpiryMiddleware:
+    """
+    Refresh session expiry for authenticated staff roles using per-role timeouts
+    (doctor, admin, reception, manager, tablet).
+
+    Global ``SESSION_COOKIE_AGE`` remains the fallback for anonymous or non-staff flows.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        session = getattr(request, "session", None)
+        if user and getattr(user, "is_authenticated", False) and session is not None:
+            expiry_seconds = self._resolve_expiry_seconds(user)
+            if expiry_seconds is not None:
+                session.set_expiry(expiry_seconds)
+        return self.get_response(request)
+
+    @staticmethod
+    def _resolve_expiry_seconds(user) -> int | None:
+        if getattr(user, "is_tablet", False):
+            return int(getattr(settings, "TABLET_SESSION_COOKIE_AGE", 7 * 24 * 60 * 60))
+        if any(getattr(user, role_attr, False) for role_attr in _SESSION_EXPIRY_ROLES):
+            return int(getattr(settings, "STAFF_SESSION_COOKIE_AGE", 8 * 60 * 60))
+        return None
 
 
 class StaffLocaleMiddleware:

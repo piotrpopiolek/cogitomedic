@@ -1,6 +1,6 @@
 # Instrukcje użytkowania portalu Cogitomedica
 
-Dokumentacja dla personelu (Recepcja, Tablet, Lekarz, Administrator) oraz dla pacjenta (portal wyników).
+Dokumentacja dla personelu (Recepcja, Tablet, Lekarz, Manager, Administrator) oraz dla pacjenta (portal wyników).
 
 ## Jak otworzyć instrukcje, żeby widzieć zrzuty ekranu
 
@@ -36,8 +36,8 @@ Skrypt zamienia ścieżki obrazów z formy `/docs/manual/assets/...` na względn
 | [00-przeglad.md](00-przeglad.md) | Wszyscy — słownik, proces dnia, odnośniki |
 | [01-rejestracja.md](01-rejestracja.md) | Recepcja (`RECEPTION`) |
 | [02-tablet.md](02-tablet.md) | Tablet poczekalni (`TABLET`; także recepcja/admin na `/tablet/`) |
-| [03-doktor.md](03-doktor.md) | Lekarz i administrator w panelu medycznym (`DOCTOR`, `ADMIN`) |
-| [04-administrator.md](04-administrator.md) | Administrator systemu (`ADMIN`) |
+| [03-doktor.md](03-doktor.md) | Lekarz w panelu medycznym (`DOCTOR`); `ADMIN` / `MANAGER` — pełen widok kolejki w HTML |
+| [04-administrator.md](04-administrator.md) | Administrator systemu (`ADMIN`); w sekcji 11 również konto kierownicze (`Manager`) |
 | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) | Pacjent — pobieranie dokumentacji po SMS |
 | [screenshot-checklist.md](screenshot-checklist.md) | Lista plików PNG i odpowiadających im ekranów |
 
@@ -45,4 +45,4 @@ Zrzuty ekranu: katalog [assets/screenshots/](/docs/manual/assets/screenshots/REA
 
 **Filmy WebM (instruktaż ekranu):** katalog [assets/videos/](/docs/manual/assets/videos/README.md) — skrypt [`scripts/record_manual_videos.py`](../../scripts/record_manual_videos.py); Docker: `docker compose --profile manual-videos run --rm manual-videos`. Pliki `.webm` nie są wersjonowane w git (`.gitignore`).
 
-**Wersja treści:** 2026-03-23 (dopasuj datę przy aktualizacji UI).
+**Wersja treści:** 2026-04-25 (dopasuj datę przy aktualizacji UI).

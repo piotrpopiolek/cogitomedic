@@ -63,7 +63,10 @@ def json_domain_error(exc: BaseException, *, status: int | None = None) -> JsonR
     default = OTHER_I18N_KEY_DEFAULT_EN.get(key, str(exc))
     request = get_current_request()
     message = resolve_other_message(request, key, default, **params)
-    return JsonResponse({"error": message}, status=effective_status)
+    return JsonResponse(
+        {"error": message, "error_key": key},
+        status=effective_status,
+    )
 
 
 def read_json_body(request: HttpRequest) -> dict:
@@ -156,22 +159,28 @@ def require_user_role(
     """
     Return 401 when not authenticated (same semantics as require_auth).
     Return 403 when authenticated but role is not in allowed_roles.
+
+    Użytkownik ma dostęp, jeśli spełnia **którąkolwiek** z ról w ``allowed_roles``
+    (semantyka OR; niezależna od kolejności w zbiorze).
     """
     user = request.user
     if not user.is_authenticated:
         return json_error("other.api.authentication_required", status=401)
 
-    has_role = False
-    if "DOCTOR" in allowed_roles and user.is_doctor:
-        has_role = True
-    elif "ADMIN" in allowed_roles and user.is_admin_role:
-        has_role = True
-    elif "RECEPTION" in allowed_roles and user.is_reception:
-        has_role = True
-    elif "TABLET" in allowed_roles and user.is_tablet:
-        has_role = True
+    def _matches_allowed_role(role: str) -> bool:
+        if role == "DOCTOR":
+            return bool(user.is_doctor)
+        if role == "ADMIN":
+            return bool(user.is_admin_role)
+        if role == "MANAGER":
+            return bool(getattr(user, "is_manager", False))
+        if role == "RECEPTION":
+            return bool(user.is_reception)
+        if role == "TABLET":
+            return bool(user.is_tablet)
+        return False
 
-    if not has_role:
+    if not any(_matches_allowed_role(role) for role in allowed_roles):
         return json_error("other.api.forbidden", status=403)
     return None
 
@@ -179,11 +188,15 @@ def require_user_role(
 def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
     """
     Return clinic_site IDs for object-level scope, or None for no filter (ADMIN).
-    RECEPTION, DOCTOR and TABLET see only data for their assigned clinic_sites (staff_user_clinic_site).
+    MANAGER, RECEPTION, DOCTOR and TABLET see only data for their assigned
+    clinic_sites (staff_user_clinic_site).
     Returns empty list if user has no clinic_sites assigned (they see nothing).
     """
     if getattr(user, "is_admin_role", False) and user.is_admin_role:
         return None
+    if getattr(user, "is_manager", False) and user.is_manager:
+        ids = list(user.clinic_sites.values_list("id", flat=True))
+        return ids
     if getattr(user, "is_reception", False) and user.is_reception:
         ids = list(user.clinic_sites.values_list("id", flat=True))
         return ids
