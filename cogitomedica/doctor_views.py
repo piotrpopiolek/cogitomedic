@@ -1,6 +1,6 @@
 """
 Doctor panel: list of medical documents and document detail with Befund form.
-Requires authenticated user with role DOCTOR or ADMIN.
+Requires authenticated user with role DOCTOR, ADMIN, or MANAGER (nadzór).
 Staff login (HTML) shares Django session with API auth.
 
 UI strings and error messages use the ``doctor`` translation category (see
@@ -26,10 +26,11 @@ from django.views.decorators.http import require_http_methods
 
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
+    GateResult,
     check_external_pdf_gate,
     create_attachment_records,
 )
-from apps.medical.models import MedicalDocument
+from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
@@ -72,7 +73,7 @@ def _safe_redirect_next(request: HttpRequest, default_view_name: str):
 @require_http_methods(["GET", "POST"])
 @csrf_protect
 def doctor_login_view(request: HttpRequest) -> HttpResponse:
-    """Staff login (DOCTOR/ADMIN). Same session as API. Redirects to /doctor/ or next."""
+    """Staff login (DOCTOR/ADMIN/MANAGER). Same session as API. Redirects to /doctor/ or next."""
     if request.user.is_authenticated and _doctor_role_ok(request):
         next_url = (request.GET.get("next") or "").strip()
         if next_url and not url_has_allowed_host_and_scheme(
@@ -117,7 +118,9 @@ def doctor_login_view(request: HttpRequest) -> HttpResponse:
 
 
 def _doctor_role_ok_request(user) -> bool:
-    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
+    return user.is_authenticated and (
+        user.is_doctor or user.is_admin_role or user.is_manager
+    )
 
 
 @login_required(login_url="doctor-login")
@@ -130,7 +133,9 @@ def doctor_logout_view(request: HttpRequest) -> HttpResponse:
 
 def _doctor_role_ok(request: HttpRequest) -> bool:
     user = request.user
-    return user.is_authenticated and (user.is_doctor or user.is_admin_role)
+    return user.is_authenticated and (
+        user.is_doctor or user.is_admin_role or user.is_manager
+    )
 
 
 def _get_doctor_lang(request: HttpRequest) -> str:
@@ -169,6 +174,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         "doctor/list.html",
         {
             "items": list_items,
+            "api_base": "/api/v1",
             "pagination": {
                 "page": list_params["page"],
                 "page_size": list_params["page_size"],
@@ -178,6 +184,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
                 "patient_search": list_params["patient_search"] or "",
+                "scope": list_params["scope"],
             },
             "ui": get_doctor_ui(lang),
             "lang": lang,
@@ -223,7 +230,19 @@ def doctor_open_by_queue_view(
             status=404,
         )
     intake_form = entry.intake_form
-    if getattr(intake_form, "form_status", None) != IntakeStatus.SUBMITTED:
+    form_status = getattr(intake_form, "form_status", None)
+    if form_status == IntakeStatus.REOPENED:
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": ui["error_intake_reopened_patient_editing"],
+                "ui": ui,
+                "lang": lang,
+            },
+            status=400,
+        )
+    if form_status != IntakeStatus.SUBMITTED:
         return _render_doctor(
             request,
             "doctor/error.html",
@@ -260,18 +279,27 @@ def doctor_document_detail_view(
             or ("en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"),
             user=request.user,
         )
+        doc = MedicalDocument.objects.get(pk=medical_document_id)
         patient_summary = (context.get("intake_summary") or {}).get("patient") or {}
         patient_pk = patient_summary.get("id")
         patient = Patient.objects.get(pk=patient_pk) if patient_pk else None
         if patient is None:
             raise ObjectDoesNotExist()
-        gate = check_external_pdf_gate(
-            patient,
-            error_no_file=ui["external_pdf_gate_no_file"],
-            error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
-            error_ambiguous=ui["external_pdf_gate_ambiguous"],
-            error_hidrive=ui["external_pdf_gate_hidrive_error"],
-        )
+        if doc.status == MedicalDocStatus.PUBLISHED:
+            gate = GateResult(
+                passed=True,
+                matched_files=(),
+                error_message=None,
+                skip_attachment_sync=True,
+            )
+        else:
+            gate = check_external_pdf_gate(
+                patient,
+                error_no_file=ui["external_pdf_gate_no_file"],
+                error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
+                error_ambiguous=ui["external_pdf_gate_ambiguous"],
+                error_hidrive=ui["external_pdf_gate_hidrive_error"],
+            )
         if not gate.passed:
             return _render_doctor(
                 request,
@@ -314,7 +342,6 @@ def doctor_document_detail_view(
             {"message": message, "ui": ui, "lang": lang},
             status=423,
         )
-    doc = MedicalDocument.objects.get(pk=medical_document_id)
     if not gate.skip_attachment_sync:
         create_attachment_records(doc, gate.matched_files)
 

@@ -342,7 +342,9 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
 @require_auth
 def intake_outbox_events_view(request: HttpRequest) -> JsonResponse:
     """GET list of intake outbox events (ADMIN, RECEPTION)."""
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "GET":
@@ -408,7 +410,9 @@ def intake_outbox_event_retry_view(
     request: HttpRequest, intake_outbox_event_id: UUID
 ) -> JsonResponse:
     """POST retry a single intake outbox event (ADMIN, RECEPTION)."""
-    role_error = require_user_role(request, allowed_roles={"ADMIN", "RECEPTION"})
+    role_error = require_user_role(
+        request, allowed_roles={"ADMIN", "MANAGER", "RECEPTION"}
+    )
     if role_error:
         return role_error
     if request.method != "POST":

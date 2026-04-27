@@ -179,6 +179,11 @@
     "en": "Matched rows",
     "pl": "Dopasowane wiersze"
   },
+  "administration.field_skipped_already_present_count": {
+    "de": "Übersprungene bereits vorhandene Zeilen",
+    "en": "Skipped already present rows",
+    "pl": "Pominięte już obecne wiersze"
+  },
   "administration.field_value": {
     "de": "Wert",
     "en": "Value",
@@ -714,6 +719,21 @@
     "en": "Form status",
     "pl": "Status formularza"
   },
+  "administration.field_reception_note": {
+    "de": "Empfangsnotiz",
+    "en": "Reception note",
+    "pl": "Notatka recepcji"
+  },
+  "administration.field_reception_note_updated_at": {
+    "de": "Notiz zuletzt geändert am",
+    "en": "Reception note last updated at",
+    "pl": "Notatka zaktualizowana"
+  },
+  "administration.field_reception_note_updated_by": {
+    "de": "Notiz zuletzt geändert von",
+    "en": "Reception note last updated by",
+    "pl": "Notatkę zaktualizował"
+  },
   "administration.field_queue_entry": {
     "de": "Warteschlangeneintrag",
     "en": "Queue entry",
@@ -878,5 +898,45 @@
     "de": "Mindestens eine Gruppe auswählen.",
     "en": "Select at least one group.",
     "pl": "Wybierz co najmniej jedną grupę."
+  },
+  "administration.field_professional_title": {
+    "de": "Berufstitel",
+    "en": "Professional title",
+    "pl": "Tytuł zawodowy"
+  },
+  "administration.field_gender": {
+    "de": "Geschlecht",
+    "en": "Gender",
+    "pl": "Płeć"
+  },
+  "administration.choice_staff_gender_unspecified": {
+    "de": "Keine Angabe",
+    "en": "Not specified",
+    "pl": "Nie podano"
+  },
+  "administration.choice_staff_gender_female": {
+    "de": "Weiblich",
+    "en": "Female",
+    "pl": "Kobieta"
+  },
+  "administration.choice_staff_gender_male": {
+    "de": "Männlich",
+    "en": "Male",
+    "pl": "Mężczyzna"
+  },
+  "administration.admin_action_reopen_intake_short": {
+    "de": "Intake für Patientenbearbeitung (Tablet) wieder öffnen",
+    "en": "Reopen intake for patient editing (tablet)",
+    "pl": "Ponownie otwórz intake do edycji przez pacjenta (tablet)"
+  },
+  "administration.admin_intake_reopen_permission_denied": {
+    "de": "Sie haben keine Berechtigung, Intake-Formulare wieder zu öffnen.",
+    "en": "You do not have permission to reopen intake forms.",
+    "pl": "Brak uprawnień do ponownego otwarcia formularzy intake."
+  },
+  "administration.admin_intake_reopen_result": {
+    "de": "{reopened} Intake-Formular(e) wieder geöffnet; {skipped} übersprungen.",
+    "en": "Reopened {reopened} intake form(s); skipped {skipped}.",
+    "pl": "Ponownie otwarto {reopened} formularz(y) intake; pominięto {skipped}."
   }
 }

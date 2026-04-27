@@ -13,9 +13,9 @@ from apps.reception.phone_utils import format_phone_e164_for_sms
 logger = logging.getLogger(__name__)
 
 
-def format_phone_for_smsapi(phone: str) -> str:
-    """E.164 (+…) for SMSAPI: PL ``48…`` as-is; DE national gets ``+49``; DE ``49…`` unchanged."""
-    return format_phone_e164_for_sms(phone)
+def format_phone_for_smsapi(phone: str, default_region: str = "DE") -> str:
+    """E.164 (+…) for SMSAPI using supported country prefixes and ``default_region`` for national digits."""
+    return format_phone_e164_for_sms(phone, default_region=default_region)
 
 
 SMS_PATIENT_RESULTS_KEY = "other.sms.patient_results"
@@ -33,7 +33,7 @@ def get_sms_patient_results_text(locale: str | None, url: str) -> str:
 class SmsAdapterProtocol(Protocol):
     """Protocol for SMS sending."""
 
-    def send_sms(self, to: str, message: str) -> None:
+    def send_sms(self, to: str, message: str, *, default_region: str = "DE") -> None:
         """Send SMS to the given number."""
         ...
 
@@ -51,8 +51,8 @@ class _SmsApiAdapter:
 
         self._client = SmsApiPlClient(access_token=token)
 
-    def send_sms(self, to: str, message: str) -> None:
-        formatted = format_phone_for_smsapi(to)
+    def send_sms(self, to: str, message: str, *, default_region: str = "DE") -> None:
+        formatted = format_phone_for_smsapi(to, default_region=default_region)
         result = self._client.sms.send(to=formatted, message=message)
         logger.info(
             "[SMSAPI] SMS sent to %s***, id=%s, status=%s",
@@ -65,8 +65,8 @@ class _SmsApiAdapter:
 class _MockSmsAdapter:
     """Mock adapter – logs only, no HTTP."""
 
-    def send_sms(self, to: str, message: str) -> None:
-        formatted = format_phone_for_smsapi(to)
+    def send_sms(self, to: str, message: str, *, default_region: str = "DE") -> None:
+        formatted = format_phone_for_smsapi(to, default_region=default_region)
         logger.info(
             "[MOCK SMS] to=%s*** message=%s",
             formatted[: min(8, len(formatted))],

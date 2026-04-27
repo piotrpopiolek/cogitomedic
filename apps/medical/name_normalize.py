@@ -11,14 +11,83 @@ if TYPE_CHECKING:
     from apps.reception.models import Patient
 
 
-def normalize_name(name: str) -> str:
-    """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
-    raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
-    raw = " ".join(raw.split())
+_GERMAN_TRANSLIT_TABLE = str.maketrans(
+    {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "Ä": "Ae",
+        "Ö": "Oe",
+        "Ü": "Ue",
+        "ß": "ss",
+        "ẞ": "SS",
+    }
+)
+
+
+_PROBABLE_UMLAUT_TRANSLIT_RE = re.compile(r"(?i)(?:^|[^aeiouy])(ae|oe|ue)(?=[^aeiouy])")
+
+
+def _normalize_ascii_name(name: str) -> str:
+    raw = " ".join((name or "").split())
     nfkd = unicodedata.normalize("NFKD", raw)
     ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
     ascii_only = ascii_only.replace("ł", "l").replace("Ł", "L")
     return ascii_only.strip().replace("-", "_").replace(" ", "_").lower()
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a name or filename stem: NFKD, strip diacritics, lowercase, `_` separator."""
+    raw = (name or "").replace("ß", "ss").replace("ẞ", "SS")
+    return _normalize_ascii_name(raw)
+
+
+def _contains_german_umlaut(name: str) -> bool:
+    return any(ch in name for ch in "äöüÄÖÜ")
+
+
+def _is_probable_umlaut_transliteration(value: str) -> bool:
+    return bool(_PROBABLE_UMLAUT_TRANSLIT_RE.search(value))
+
+
+def _collapse_umlaut_transliteration_tokens(value: str) -> str:
+    tokens = value.split("_")
+    collapsed_tokens: list[str] = []
+    for token in tokens:
+        if _is_probable_umlaut_transliteration(token):
+            collapsed_tokens.append(
+                token.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+            )
+        else:
+            collapsed_tokens.append(token)
+    return "_".join(collapsed_tokens)
+
+
+def normalized_name_variants(name: str) -> tuple[str, ...]:
+    """Return normalized variants for German transliterations, e.g. ``Müller``/``Mueller``."""
+    variants: list[str] = []
+    base = normalize_name(name)
+    if base:
+        variants.append(base)
+
+    transliterated = _normalize_ascii_name(
+        (name or "").translate(_GERMAN_TRANSLIT_TABLE)
+    )
+    if transliterated and transliterated not in variants:
+        variants.append(transliterated)
+
+    should_collapse = _contains_german_umlaut(
+        name
+    ) or _is_probable_umlaut_transliteration(transliterated)
+    collapsed = (
+        _collapse_umlaut_transliteration_tokens(transliterated)
+        if transliterated and should_collapse
+        else ""
+    )
+    if collapsed and collapsed not in variants:
+        variants.append(collapsed)
+
+    return tuple(variants)
 
 
 def _stem_without_pdf(filename_stem: str) -> str:
@@ -31,12 +100,20 @@ def _stem_without_pdf(filename_stem: str) -> str:
 
 def build_patient_filename_candidates(patient: Patient) -> list[str]:
     """Return four normalized filename stems (no ``.pdf``) for the patient."""
-    first = normalize_name(patient.first_name)
-    last = normalize_name(patient.last_name)
-    candidates = [f"{first}_{last}", f"{last}_{first}"]
+    first_variants = normalized_name_variants(patient.first_name)
+    last_variants = normalized_name_variants(patient.last_name)
+    candidates: list[str] = []
+    for first in first_variants:
+        for last in last_variants:
+            for candidate in (f"{first}_{last}", f"{last}_{first}"):
+                if candidate not in candidates:
+                    candidates.append(candidate)
     if patient.date_of_birth:
         dob_us = patient.date_of_birth.isoformat().replace("-", "_")
-        candidates += [f"{first}_{last}_{dob_us}", f"{last}_{first}_{dob_us}"]
+        dated_candidates = [f"{candidate}_{dob_us}" for candidate in candidates]
+        for candidate in dated_candidates:
+            if candidate not in candidates:
+                candidates.append(candidate)
     return candidates
 
 
@@ -75,13 +152,25 @@ def match_filename_to_candidates(filename_stem: str, candidates: list[str]) -> b
 
 
 def dated_match_candidates(patient: Patient) -> list[str]:
-    """Normalized stems that include date of birth (may be empty if no DOB)."""
+    """Normalized stems that include date of birth (may be empty if no DOB).
+
+    Uses the same name variants as :func:`build_patient_filename_candidates` so
+    transliterated dated stems (e.g. ``Mueller_`` for ``Müller``) match and are not
+    misclassified as undated/ambiguous.
+    """
     if not patient.date_of_birth:
         return []
-    first = normalize_name(patient.first_name)
-    last = normalize_name(patient.last_name)
+    first_variants = normalized_name_variants(patient.first_name)
+    last_variants = normalized_name_variants(patient.last_name)
     dob_us = patient.date_of_birth.isoformat().replace("-", "_")
-    return [f"{first}_{last}_{dob_us}", f"{last}_{first}_{dob_us}"]
+    candidates: list[str] = []
+    for first in first_variants:
+        for last in last_variants:
+            for base in (f"{first}_{last}", f"{last}_{first}"):
+                dated = f"{base}_{dob_us}"
+                if dated not in candidates:
+                    candidates.append(dated)
+    return candidates
 
 
 def stem_matches_dated_variant(filename_stem: str, patient: Patient) -> bool:
@@ -114,6 +203,9 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     """
     bases: set[str] = {norm}
     if _INCOMING_STEM_DOB_TAIL.search(norm):
+        collapsed = _collapse_umlaut_transliteration_tokens(norm)
+        if collapsed:
+            bases.add(collapsed)
         return frozenset(bases)
     m = re.fullmatch(r"(.+)_(\d+)$", norm)
     if m:
@@ -122,4 +214,6 @@ def incoming_stem_norm_lookup_bases(norm: str) -> frozenset[str]:
     if len(segments) >= 3:
         for k in range(2, len(segments)):
             bases.add("_".join(segments[:k]))
+    collapsed_bases = {_collapse_umlaut_transliteration_tokens(base) for base in bases}
+    bases.update(base for base in collapsed_bases if base)
     return frozenset(bases)

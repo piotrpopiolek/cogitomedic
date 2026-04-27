@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from apps.core.translation_service import db_gettext_lazy
@@ -11,6 +12,9 @@ from django.db.models import F, Q
 class IntakeStatus(models.TextChoices):
     IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy(
         "administration.choice_intake_status_in_progress", "In progress"
+    )
+    REOPENED = "REOPENED", db_gettext_lazy(
+        "administration.choice_intake_status_reopened", "Reopened for patient"
     )
     SUBMITTED = "SUBMITTED", db_gettext_lazy(
         "administration.choice_intake_status_submitted", "Submitted"
@@ -404,6 +408,32 @@ class PatientIntakeForm(models.Model):
             "administration.field_submitted_at", "Submitted at"
         ),
     )
+    reception_note = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=db_gettext_lazy(
+            "administration.field_reception_note", "Reception note"
+        ),
+    )
+    reception_note_updated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_reception_note_updated_at",
+            "Reception note updated at",
+        ),
+    )
+    reception_note_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="intake_reception_notes_updated",
+        verbose_name=db_gettext_lazy(
+            "administration.field_reception_note_updated_by",
+            "Reception note updated by",
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -436,9 +466,15 @@ class PatientIntakeForm(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=Q(form_status=IntakeStatus.IN_PROGRESS)
+                condition=Q(
+                    form_status__in=[
+                        IntakeStatus.IN_PROGRESS,
+                        IntakeStatus.REOPENED,
+                    ]
+                )
                 | (
-                    Q(submitted_at__isnull=False)
+                    Q(form_status=IntakeStatus.SUBMITTED)
+                    & Q(submitted_at__isnull=False)
                     & (
                         Q(signature_file_path__isnull=False)
                         | (Q(signature_sha256__isnull=False) & ~Q(signature_sha256=""))

@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.conf import settings
 from django.template import Context, Template
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
@@ -28,6 +29,7 @@ from apps.core.translation_service import (
     get_translation_map,
     resolve_other_message,
 )
+from apps.core.middleware import RoleBasedSessionExpiryMiddleware
 
 
 class TranslationServiceTests(TestCase):
@@ -322,3 +324,114 @@ class SafeHrefTemplateFilterTests(TestCase):
     def test_safe_href_blocks_javascript_urls(self) -> None:
         tpl = Template("{% load safe_urls %}{{ url|safe_href }}")
         self.assertEqual(tpl.render(Context({"url": "javascript:alert(1)"})), "#")
+
+
+class RoleBasedSessionExpiryMiddlewareTests(TestCase):
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+        self.middleware = RoleBasedSessionExpiryMiddleware(lambda req: HttpResponse())
+
+    def _request_with_user(self, user) -> Any:
+        request = self.factory.get("/")
+        session_middleware = SessionMiddleware(lambda req: HttpResponse())
+        session_middleware.process_request(request)
+        request.session.save()
+        request.user = user
+        return request
+
+    def test_staff_role_gets_extended_session_expiry(self) -> None:
+        user = type(
+            "UserStub",
+            (),
+            {
+                "is_authenticated": True,
+                "is_doctor": True,
+                "is_admin_role": False,
+                "is_reception": False,
+                "is_manager": False,
+                "is_tablet": False,
+            },
+        )()
+        request = self._request_with_user(user)
+
+        self.middleware(request)
+
+        self.assertGreaterEqual(
+            request.session.get_expiry_age(),
+            settings.STAFF_SESSION_COOKIE_AGE - 5,
+        )
+
+    def test_manager_role_gets_extended_session_expiry(self) -> None:
+        user = type(
+            "UserStub",
+            (),
+            {
+                "is_authenticated": True,
+                "is_doctor": False,
+                "is_admin_role": False,
+                "is_reception": False,
+                "is_manager": True,
+                "is_tablet": False,
+            },
+        )()
+        request = self._request_with_user(user)
+
+        self.middleware(request)
+
+        self.assertGreaterEqual(
+            request.session.get_expiry_age(),
+            settings.STAFF_SESSION_COOKIE_AGE - 5,
+        )
+
+    def test_tablet_role_gets_long_session_expiry(self) -> None:
+        user = type(
+            "UserStub",
+            (),
+            {
+                "is_authenticated": True,
+                "is_doctor": False,
+                "is_admin_role": False,
+                "is_reception": False,
+                "is_manager": False,
+                "is_tablet": True,
+            },
+        )()
+        request = self._request_with_user(user)
+
+        self.middleware(request)
+
+        self.assertGreaterEqual(
+            request.session.get_expiry_age(),
+            settings.TABLET_SESSION_COOKIE_AGE - 5,
+        )
+
+    def test_anonymous_user_keeps_default_session_expiry(self) -> None:
+        user = type(
+            "UserStub",
+            (),
+            {
+                "is_authenticated": False,
+                "is_doctor": False,
+                "is_admin_role": False,
+                "is_reception": False,
+                "is_manager": False,
+                "is_tablet": False,
+            },
+        )()
+        request = self._request_with_user(user)
+
+        self.middleware(request)
+
+        self.assertGreaterEqual(
+            request.session.get_expiry_age(),
+            settings.SESSION_COOKIE_AGE - 5,
+        )
+        self.assertLessEqual(
+            request.session.get_expiry_age(),
+            settings.SESSION_COOKIE_AGE + 5,
+        )
+
+
+class AuthRedirectSettingsTests(TestCase):
+    def test_login_redirect_url_points_to_admin(self) -> None:
+        self.assertEqual(settings.LOGIN_REDIRECT_URL, "/admin/")

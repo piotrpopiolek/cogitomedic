@@ -7,6 +7,27 @@ from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
 
+ROLE_GROUP_NAME_MAP = {
+    "DOCTOR": "Doctor",
+    "RECEPTION": "Reception",
+    "ADMIN": "Admin",
+    "TABLET": "Tablet",
+    "MANAGER": "Manager",
+}
+VALID_STAFF_ROLES = frozenset(ROLE_GROUP_NAME_MAP.keys())
+
+
+class StaffUserGender(models.TextChoices):
+    """Stored on ``StaffUser`` for PDF footer (Facharzt / Fachärztin) and admin display."""
+
+    UNSPECIFIED = "UNSPECIFIED", db_gettext_lazy(
+        "administration.choice_staff_gender_unspecified", "Not specified"
+    )
+    FEMALE = "FEMALE", db_gettext_lazy(
+        "administration.choice_staff_gender_female", "Female"
+    )
+    MALE = "MALE", db_gettext_lazy("administration.choice_staff_gender_male", "Male")
+
 
 class StaffUserPreferredLocale(models.TextChoices):
     DE_DE = "de-DE", db_gettext_lazy(
@@ -75,6 +96,20 @@ class StaffUser(AbstractUser):
             "administration.field_preferred_locale", "Preferred locale"
         ),
     )
+    professional_title = models.CharField(
+        max_length=80,
+        default="Dr. med.",
+        blank=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_professional_title", "Professional title"
+        ),
+    )
+    gender = models.CharField(
+        max_length=20,
+        choices=StaffUserGender.choices,
+        default=StaffUserGender.UNSPECIFIED,
+        verbose_name=db_gettext_lazy("administration.field_gender", "Gender"),
+    )
     consulting_room = models.ForeignKey(
         "reception.ConsultingRoom",
         on_delete=models.SET_NULL,
@@ -120,18 +155,25 @@ class StaffUser(AbstractUser):
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}".strip() or self.username
 
+    def _has_role_group(self, group_name: str) -> bool:
+        return self.groups.filter(name=group_name).exists()
+
     @property
     def is_doctor(self) -> bool:
-        return self.groups.filter(name="Doctor").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["DOCTOR"])
 
     @property
     def is_reception(self) -> bool:
-        return self.groups.filter(name="Reception").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["RECEPTION"])
 
     @property
     def is_admin_role(self) -> bool:
-        return self.groups.filter(name="Admin").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["ADMIN"])
 
     @property
     def is_tablet(self) -> bool:
-        return self.groups.filter(name="Tablet").exists()
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["TABLET"])
+
+    @property
+    def is_manager(self) -> bool:
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["MANAGER"])

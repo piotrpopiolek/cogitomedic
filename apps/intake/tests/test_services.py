@@ -34,9 +34,11 @@ from apps.intake.services import (
     _effective_consent_filter,
     _effective_question_filter,
     get_intake_form_context,
+    reopen_patient_intake_form,
     submit_patient_intake_form,
 )
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import StateTransitionError
 from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
@@ -373,3 +375,80 @@ class SubmitPatientIntakeFormTests(TestCase):
 
         with self.assertRaises(InvalidSignatureError):
             _read_signature_data_url(self.intake_form)
+
+    def test_reopen_submitted_intake_sets_reopened_and_new_session(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        consumed_session_id = self.session.id
+        self.session.refresh_from_db()
+        self.assertIsNotNone(self.session.consumed_at)
+
+        reopened = reopen_patient_intake_form(
+            intake_form_id=self.intake_form.id,
+            actor_user_id=self.reception_user.id,
+            reception_note="Bitte Geburtsdatum prüfen",
+        )
+        reopened.refresh_from_db()
+        self.queue_entry.refresh_from_db()
+
+        self.assertEqual(reopened.form_status, IntakeStatus.REOPENED)
+        self.assertEqual(reopened.reception_note, "Bitte Geburtsdatum prüfen")
+        self.assertIsNotNone(reopened.reception_note_updated_at)
+        self.assertEqual(reopened.reception_note_updated_by_id, self.reception_user.id)
+        self.assertNotEqual(reopened.session_id, consumed_session_id)
+        self.assertEqual(self.queue_entry.active_session_id, reopened.session_id)
+        new_session = PatientFormSession.objects.get(id=reopened.session_id)
+        self.assertIsNone(new_session.consumed_at)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="INTAKE_REOPENED",
+                patient_id=self.queue_entry.patient_id,
+            ).exists()
+        )
+
+    def test_reopen_raises_when_intake_not_submitted(self) -> None:
+        with self.assertRaises(StateTransitionError) as ctx:
+            reopen_patient_intake_form(
+                intake_form_id=self.intake_form.id,
+                actor_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.domain.intake_reopen_submitted_only"
+        )
+
+    def test_reopen_raises_when_already_reopened(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        reopen_patient_intake_form(
+            intake_form_id=self.intake_form.id,
+            actor_user_id=self.reception_user.id,
+        )
+        with self.assertRaises(StateTransitionError) as ctx:
+            reopen_patient_intake_form(
+                intake_form_id=self.intake_form.id,
+                actor_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.domain.intake_reopen_already_open"
+        )
+
+    def test_reopen_then_resubmit_creates_second_intake_document_version(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        reopen_patient_intake_form(
+            intake_form_id=self.intake_form.id,
+            actor_user_id=self.reception_user.id,
+        )
+        again = submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        self.assertEqual(again.form_status, IntakeStatus.SUBMITTED)
+        versions = list(
+            IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).order_by(
+                "version_no"
+            )
+        )
+        self.assertEqual(len(versions), 2)
+        self.assertEqual(versions[0].version_no, 1)
+        self.assertEqual(versions[1].version_no, 2)

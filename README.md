@@ -25,7 +25,7 @@
 - Ensure data security and compliance
 - Automate archiving and patient notifications
 
-**User manuals (Polish):** step-by-step guides for Reception, Tablet, Doctor, Admin, and the patient results portal — see [`docs/manual/README.md`](docs/manual/README.md).
+**User manuals (Polish):** step-by-step guides for Reception, Tablet, Doctor, Manager, Admin, and the patient results portal — see [`docs/manual/README.md`](docs/manual/README.md).
 
 **Main capabilities:**
 
@@ -266,7 +266,7 @@ make superuser
 
 ### 6) Produkcja na VPS (`docker-compose.prod.yml`)
 
-**Domyślny** stack: **db** (Postgres 16, **bez** publikacji 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod), [requirements-prod.txt](requirements-prod.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` i `/media/` z wolumenów) — tylko port **80** na hoście. Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
+**Domyślny** stack: **db** (Postgres 16, **bez** publikacji 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod) instaluje [requirements.txt](requirements.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` i `/media/` z wolumenów) — tylko port **80** na hoście. Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
 
 **Observability** (Prometheus, postgres_exporter, Alertmanager, Tempo, OTel Collector, Grafana — jak w dev, [docs/observability-setup.md](docs/observability-setup.md)): profil Compose `observability`. Porty **3000, 9090, 9093, 3200, 4317–4318, 8889** na hoście są domyślnie związane z **`127.0.0.1`** (brak nasłuchu na publicznym IP — dostęp z zewnątrz przez SSH tunnel, np. `ssh -L 3000:127.0.0.1:3000 user@vps`). Świadome wystawienie na LAN/Internet: **`OBSERVABILITY_BIND_ADDR=0.0.0.0`** w `.env` + firewall. Ustaw **`PROMETHEUS_METRICS_TOKEN`** i **`web` w `ALLOWED_HOSTS`** (scraping), **`GF_SECURITY_ADMIN_PASSWORD`** dla Grafany oraz **`OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces`**, jeśli chcesz trace’y do Tempo.
 

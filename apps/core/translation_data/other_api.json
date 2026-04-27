@@ -174,6 +174,11 @@
     "en": "Invalid role query parameter.",
     "pl": "Nieprawidłowy parametr zapytania roli."
   },
+  "other.api.invalid_save_draft_intent": {
+    "de": "Ungültiger intent für PUT …/draft. Erlaubt: edit, amend.",
+    "en": "Invalid intent for PUT …/draft. Allowed values: edit, amend.",
+    "pl": "Nieprawidłowy intent dla PUT …/draft. Dozwolone wartości: edit, amend."
+  },
   "other.api.medical_document_not_found": {
     "de": "Medizinisches Dokument nicht gefunden.",
     "en": "Medical document not found.",
@@ -203,6 +208,21 @@
     "de": "Kein Entwurf verfügbar. Speichern Sie zuerst einen Entwurf (PUT .../draft) mit validierter Nutzlast.",
     "en": "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing.",
     "pl": "Brak wersji roboczej. Najpierw zapisz szkic (PUT .../draft) ze zweryfikowanym ładunkiem przed publikacją."
+  },
+  "other.api.amend_intent_required": {
+    "de": "Dieses Dokument ist bereits veröffentlicht. Um Änderungen vorzunehmen, bestätigen Sie das Starten einer Revision (intent=amend).",
+    "en": "This document is already published. To make changes, confirm starting a revision (intent=amend).",
+    "pl": "Ten dokument jest już opublikowany. Aby wprowadzić zmiany, potwierdź rozpoczęcie rewizji (intent=amend)."
+  },
+  "other.api.no_pending_revision_to_discard": {
+    "de": "Keine laufende Revision zum Verwerfen für dieses Dokument.",
+    "en": "No pending revision to discard for this document.",
+    "pl": "Brak rozpoczętej rewizji do odrzucenia dla tego dokumentu."
+  },
+  "other.api.preview_source_invalid": {
+    "de": "Ungültige Vorschauquelle. Erlaubt: published, draft.",
+    "en": "Invalid preview source. Allowed values: published, draft.",
+    "pl": "Nieprawidłowe źródło podglądu. Dozwolone: published, draft."
   },
   "other.api.no_version_to_preview": {
     "de": "Keine Version zur Vorschau. Zuerst Entwurf speichern.",

@@ -188,6 +188,7 @@ class RequireUserRoleTests(TestCase):
             is_authenticated=True,
             is_doctor=False,
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_tablet=False,
         )
@@ -201,6 +202,7 @@ class RequireUserRoleTests(TestCase):
             is_authenticated=True,
             is_doctor=True,
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_tablet=False,
         )
@@ -213,6 +215,7 @@ class RequireUserRoleTests(TestCase):
             is_authenticated=True,
             is_doctor=False,
             is_admin_role=True,
+            is_manager=False,
             is_reception=False,
             is_tablet=False,
         )
@@ -220,11 +223,25 @@ class RequireUserRoleTests(TestCase):
         resp = require_user_role(req, allowed_roles={"ADMIN"})
         self.assertIsNone(resp)
 
+    def test_manager_allowed(self):
+        user = Mock(
+            is_authenticated=True,
+            is_doctor=False,
+            is_admin_role=False,
+            is_manager=True,
+            is_reception=False,
+            is_tablet=False,
+        )
+        req = self._make_request(user)
+        resp = require_user_role(req, allowed_roles={"MANAGER"})
+        self.assertIsNone(resp)
+
     def test_reception_allowed(self):
         user = Mock(
             is_authenticated=True,
             is_doctor=False,
             is_admin_role=False,
+            is_manager=False,
             is_reception=True,
             is_tablet=False,
         )
@@ -237,12 +254,42 @@ class RequireUserRoleTests(TestCase):
             is_authenticated=True,
             is_doctor=False,
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_tablet=True,
         )
         req = self._make_request(user)
         resp = require_user_role(req, allowed_roles={"TABLET"})
         self.assertIsNone(resp)
+
+    def test_any_of_multiple_allowed_roles_or_semantics(self) -> None:
+        """Recepcja pasuje, gdy ``allowed_roles`` zawiera DOCTOR lub RECEPTION (OR)."""
+        user = Mock(
+            is_authenticated=True,
+            is_doctor=False,
+            is_admin_role=False,
+            is_manager=False,
+            is_reception=True,
+            is_tablet=False,
+        )
+        req = self._make_request(user)
+        self.assertIsNone(require_user_role(req, allowed_roles={"DOCTOR", "RECEPTION"}))
+
+    def test_unknown_role_name_in_allowed_roles_returns_403(self) -> None:
+        """``_matches_allowed_role`` falls through to ``False`` for unknown role strings."""
+        user = Mock(
+            is_authenticated=True,
+            is_doctor=True,
+            is_admin_role=True,
+            is_manager=True,
+            is_reception=True,
+            is_tablet=True,
+        )
+        req = self._make_request(user)
+        resp = require_user_role(req, allowed_roles={"NOT_A_DEFINED_ROLE"})
+        self.assertIsNotNone(resp)
+        assert resp is not None  # narrow for mypy
+        self.assertEqual(resp.status_code, 403)
 
 
 class RequireActorMatchTests(TestCase):
@@ -270,12 +317,23 @@ class RequireActorMatchTests(TestCase):
 
 class GetScopedClinicSiteIdsTests(SimpleTestCase):
     def test_admin_returns_none(self):
-        user = Mock(is_admin_role=True)
+        user = Mock(is_admin_role=True, is_manager=False)
         self.assertIsNone(get_scoped_clinic_site_ids(user))
+
+    def test_manager_returns_ids(self):
+        user = Mock(
+            is_admin_role=False,
+            is_manager=True,
+            is_reception=False,
+        )
+        user.clinic_sites.values_list.return_value = [uuid4()]
+        result = get_scoped_clinic_site_ids(user)
+        self.assertEqual(len(result), 1)
 
     def test_reception_returns_ids(self):
         user = Mock(
             is_admin_role=False,
+            is_manager=False,
             is_reception=True,
         )
         user.clinic_sites.values_list.return_value = [uuid4()]
@@ -286,6 +344,7 @@ class GetScopedClinicSiteIdsTests(SimpleTestCase):
     def test_doctor_returns_ids(self):
         user = Mock(
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_doctor=True,
         )
@@ -296,6 +355,7 @@ class GetScopedClinicSiteIdsTests(SimpleTestCase):
     def test_tablet_returns_ids(self):
         user = Mock(
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_doctor=False,
             is_tablet=True,
@@ -310,6 +370,7 @@ class GetScopedClinicSiteIdsTests(SimpleTestCase):
     def test_unknown_role_returns_empty(self):
         user = Mock(
             is_admin_role=False,
+            is_manager=False,
             is_reception=False,
             is_doctor=False,
             is_tablet=False,

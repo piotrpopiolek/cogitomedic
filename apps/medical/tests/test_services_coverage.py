@@ -196,6 +196,43 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             ctx.exception.api_message_key,
         )
 
+    def test_intake_form_reopened_raises_on_create_medical_document(self):
+        other_patient = Patient.objects.create(
+            first_name="Ewa",
+            last_name="Kowal",
+            date_of_birth=date(1991, 3, 3),
+            phone="48600333444",
+            email="ewa@example.com",
+        )
+        other_qe = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PUBLISHED,
+            position_no=4,
+            created_by_user=self.doctor,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        reopened_intake = PatientIntakeForm.objects.create(
+            queue_entry=other_qe,
+            session=other_session,
+            form_status=IntakeStatus.REOPENED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_or_get_medical_document(
+                queue_entry_id=other_qe.id,
+                intake_form_id=reopened_intake.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "intake_form_must_be_submitted",
+            ctx.exception.api_message_key,
+        )
+
 
 # ------------------------------------------------------------------
 # 2. save_draft_document_version — republish after retention
@@ -218,6 +255,7 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
                 medical_document_id=doc.id,
                 updated_by_user_id=self.doctor.id,
                 medical_payload={"authoring_locale": "de-DE"},
+                intent="amend",
             )
         self.assertIn(
             "republish_after_retention_not_allowed",
@@ -951,6 +989,26 @@ class DocumentLockTests(ServicesCoverageBase):
         items, total = list_doctor_work_queue(user=self.doctor)
         found = [i for i in items if i["document_id"] == str(doc.id)]
         self.assertEqual(len(found), 1)
+        self.assertFalse(found[0]["row_is_fully_delivered"])
+
+    def test_work_queue_keeps_published_status_while_pipeline_is_pending(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            pdf_generation_status=PdfStatus.PENDING,
+            hidrive_sent=False,
+            sms_sent=False,
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertGreaterEqual(total, 1)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["status"], MedicalDocStatus.PUBLISHED)
+        self.assertEqual(found[0]["pdf_generation_status"], PdfStatus.PENDING)
+        self.assertEqual(found[0]["hidrive_status"], "PENDING")
+        self.assertEqual(found[0]["sms_status"], "PENDING")
         self.assertFalse(found[0]["row_is_fully_delivered"])
 
     # -- list_medical_documents draft visibility for non-assigned doctor --

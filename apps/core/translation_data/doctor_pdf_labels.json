@@ -153,6 +153,31 @@
     "de": "Versionsnummer",
     "en": "Version",
     "pl": "Wersja"
+  },
+  "doctor.pdf_label.signoff_greeting": {
+    "de": "Mit freundlichen Grüßen",
+    "en": "Kind regards",
+    "pl": "Z poważaniem"
+  },
+  "doctor.pdf_label.specialty_female": {
+    "de": "Fachärztin für Dermatologie",
+    "en": "Dermatology specialist",
+    "pl": "Lekarka specjalistka dermatologii"
+  },
+  "doctor.pdf_label.specialty_male": {
+    "de": "Facharzt für Dermatologie",
+    "en": "Dermatology specialist",
+    "pl": "Lekarz specjalista dermatologii"
+  },
+  "doctor.pdf_label.specialty_unspecified": {
+    "de": "Facharzt/-in für Dermatologie",
+    "en": "Gender-neutral placeholder",
+    "pl": "Forma neutralna"
+  },
+  "doctor.pdf_label.teledermatology_line": {
+    "de": "Teledermatologische Befundung",
+    "en": "Teledermatological assessment",
+    "pl": "Ocena teledermatologiczna"
   }
 }
 
