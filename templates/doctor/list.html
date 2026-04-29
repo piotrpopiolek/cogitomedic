@@ -50,6 +50,7 @@
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_pdf }}</th>
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_hidrive }}</th>
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_sms }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_published_by }}</th>
         <th class="px-4 py-3 text-right font-medium text-base-700 dark:text-base-300"></th>
       </tr>
     </thead>
@@ -99,6 +100,7 @@
             {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.sms_status }}</span>
           {% else %}–{% endif %}
         </td>
+        <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.published_by }}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           <div class="inline-flex items-center gap-2">
           {% if item.document_id %}
@@ -118,11 +120,11 @@
       </tr>
       {% if item.processing_error_message %}
       <tr>
-        <td colspan="7" class="px-4 py-2 text-xs text-red-700 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20">{{ item.processing_error_message }}</td>
+        <td colspan="8" class="px-4 py-2 text-xs text-red-700 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20">{{ item.processing_error_message }}</td>
       </tr>
       {% endif %}
       {% empty %}
-      <tr><td colspan="7" class="px-4 py-6 text-center text-base-500 dark:text-base-400">{{ ui.no_documents }}</td></tr>
+      <tr><td colspan="8" class="px-4 py-6 text-center text-base-500 dark:text-base-400">{{ ui.no_documents }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

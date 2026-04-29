@@ -935,6 +935,7 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertIn("locked_by_username", item)
         self.assertIn("locked_at", item)
         self.assertIn("is_locked_by_other", item)
+        self.assertIn("published_by", item)
         self.assertIn("row_is_published", item)
         self.assertIn("row_has_edit_semaphore", item)
         self.assertIn("row_is_fully_delivered", item)
@@ -977,6 +978,22 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertEqual(len(found), 1)
         self.assertTrue(found[0]["row_is_fully_delivered"])
         self.assertFalse(found[0]["row_has_edit_semaphore"])
+
+    def test_work_queue_includes_published_by_doctor_name(self):
+        doc = self._make_medical_doc()
+        self._make_published_version(
+            doc,
+            published_by_user=self.doctor,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        self.assertGreaterEqual(total, 1)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["published_by"])
 
     def test_work_queue_row_not_fully_delivered_when_sms_pending(self):
         doc = self._make_medical_doc()
