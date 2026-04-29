@@ -724,7 +724,7 @@ COGITO_PATHS = {
                 "`current_version_no`, `published_version_no` (last published version number; "
                 "null until first publish), `has_pending_revision` (true when a PUBLISHED "
                 "document has an in-progress DRAFT amendment), lock fields (`locked_by_user_id`, "
-                "`locked_by_username`, `locked_at` — effective lock only, max 24h)."
+                "`locked_by_username`, `locked_at` — effective lock only, max 6h)."
             ),
             "tags": ["Medical"],
             "parameters": [
