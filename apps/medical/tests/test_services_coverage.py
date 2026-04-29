@@ -23,6 +23,7 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.services import (
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
     acquire_document_lock,
     create_or_get_medical_document,
     get_document_lock_state,
@@ -729,7 +730,9 @@ class DocumentLockTests(ServicesCoverageBase):
     def test_lock_state_expired_lock(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
-        doc.locked_at = timezone.now() - timedelta(hours=25)
+        doc.locked_at = timezone.now() - timedelta(
+            hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1
+        )
         doc.save(update_fields=["locked_by_user", "locked_at"])
         eff, name, at = get_document_lock_state(doc)
         self.assertFalse(eff)
@@ -808,7 +811,9 @@ class DocumentLockTests(ServicesCoverageBase):
         doc = self._make_draft_doc()
         other = self._other_doctor("acq-exp")
         doc.locked_by_user = other
-        doc.locked_at = timezone.now() - timedelta(hours=25)
+        doc.locked_at = timezone.now() - timedelta(
+            hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1
+        )
         doc.save(update_fields=["locked_by_user", "locked_at"])
         granted, holder = acquire_document_lock(
             medical_document_id=doc.id, user=self.doctor

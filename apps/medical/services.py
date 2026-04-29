@@ -37,7 +37,7 @@ from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry
 from apps.users.models import StaffUser
 
-DOCUMENT_LOCK_TIMEOUT_HOURS = 24
+DOCUMENT_LOCK_TIMEOUT_HOURS = 6
 
 
 def _staff_user_display_name(user: StaffUser | None) -> str:
