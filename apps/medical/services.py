@@ -1028,6 +1028,22 @@ def list_doctor_work_queue(
         )
     )
     doc_by_entry: dict[uuid.UUID, MedicalDocument] = {d.queue_entry_id: d for d in docs}
+    doc_ids = [d.id for d in docs]
+    published_versions = (
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id__in=doc_ids,
+            version_status=DocVersionStatus.PUBLISHED,
+        )
+        .select_related("published_by_user")
+        .order_by("medical_document_id", "-version_no")
+    )
+    published_by_display_by_doc_id: dict[uuid.UUID, str] = {}
+    for ver in published_versions:
+        if ver.medical_document_id in published_by_display_by_doc_id:
+            continue
+        published_by_display_by_doc_id[ver.medical_document_id] = (
+            _staff_user_display_name(ver.published_by_user)
+        )
     list_items = []
     for intake_form in intake_forms:
         entry = intake_form.queue_entry
@@ -1094,6 +1110,9 @@ def list_doctor_work_queue(
                 },
                 "queue_date": queue.queue_date.isoformat(),
                 "status": doc.status if doc else "—",
+                "published_by": (
+                    published_by_display_by_doc_id.get(doc.id, "") if doc else ""
+                ),
                 "has_pending_revision": has_pending_revision,
                 "published_version_no": published_version_no,
                 "locked_by_username": locked_name,
