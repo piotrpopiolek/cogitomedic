@@ -1,10 +1,15 @@
+# Black: use ``python -m black`` from the active env (language: system) so Windows
+# WDAC/AppLocker does not block the standalone black.exe from pre-commit's cache
+# (WinError 4551). Requires ``black`` in that Python (``pip install -r requirements-dev.txt``).
 repos:
-  - repo: https://github.com/psf/black
-    rev: "26.1.0"
+  - repo: local
     hooks:
       - id: black
-        exclude: /migrations/
+        name: black
+        entry: python -m black
+        language: system
         types: [python]
+        exclude: /migrations/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.15.1"

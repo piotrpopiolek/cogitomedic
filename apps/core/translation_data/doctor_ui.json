@@ -704,6 +704,11 @@
     "en": "SMS",
     "pl": "SMS"
   },
+  "doctor.table_published_by": {
+    "de": "Veröffentlicht von",
+    "en": "Published by",
+    "pl": "Opublikował"
+  },
   "doctor.table_status": {
     "de": "Status",
     "en": "Status",
