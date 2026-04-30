@@ -60,8 +60,9 @@ class QueueEntryStatus(models.TextChoices):
         "administration.choice_queue_entry_status_doctor_in_progress",
         "Doctor in progress",
     )
-    PUBLISHED = "PUBLISHED", db_gettext_lazy(
-        "administration.choice_queue_entry_status_published", "Published"
+    PAPER_INTAKE_COMPLETED = "PAPER_INTAKE_COMPLETED", db_gettext_lazy(
+        "administration.choice_queue_entry_status_paper_intake_completed",
+        "Paper intake completed",
     )
     CANCELLED = "CANCELLED", db_gettext_lazy(
         "administration.choice_queue_entry_status_cancelled", "Cancelled"

@@ -59,10 +59,10 @@
     "en": "Doctor in progress",
     "pl": "Lekarz w trakcie"
   },
-  "administration.choice_queue_entry_status_published": {
-    "de": "Veröffentlicht",
-    "en": "Published",
-    "pl": "Opublikowano"
+  "administration.choice_queue_entry_status_paper_intake_completed": {
+    "de": "Papierfragebogen abgeschlossen",
+    "en": "Paper intake completed",
+    "pl": "Ankieta papierowa zakończona"
   },
   "administration.choice_queue_entry_status_cancelled": {
     "de": "Storniert",
