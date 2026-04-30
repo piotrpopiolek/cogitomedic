@@ -4,10 +4,10 @@ overview: "Dziś dokument medyczny jest sztywno powiązany z `PatientIntakeForm`
 todos:
   - id: schema-null-intake
     content: "Migracja: `MedicalDocument.intake_form` nullable + `source_type=PAPER_INTAKE` + `QueueEntryStatus.PAPER_INTAKE_COMPLETED` + ewentualne poprawki constraintów/indeksów"
-    status: pending
+    status: completed
   - id: drop-queue-published-status
     content: "Cleanup martwego `QueueEntryStatus.PUBLISHED`: usunięcie z enuma + `AlterField` w nowej migracji + defensywny data update + przepisanie `_TERMINAL_QUEUE_STATUSES` + przepisanie 6 testów używających PUBLISHED jako trick na active-visit + usunięcie wpisu tłumaczenia + aktualizacja `.ai/db-plan.md` i `.ai/prd.md` + grep-guard w CI"
-    status: pending
+    status: completed
   - id: service-create-no-intake
     content: "`create_medical_document_without_intake` + `QueueEntry.select_for_update()` + `source_type=PAPER_INTAKE` + audyt + atomowe przejście `QueueEntry` `WAITING` → `PAPER_INTAKE_COMPLETED`; `create_or_get_medical_document` bez zmiany zachowania tabletowego"
     status: pending

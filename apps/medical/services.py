@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
@@ -28,13 +28,14 @@ from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
-from apps.reception.models import QueueEntry
+from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.models import StaffUser
 
 DOCUMENT_LOCK_TIMEOUT_HOURS = 6
@@ -312,6 +313,82 @@ def create_or_get_medical_document(
             metadata=meta,
         )
     return doc
+
+
+@transaction.atomic
+def create_medical_document_without_intake(
+    *,
+    queue_entry_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
+    reason: str | None = None,
+) -> MedicalDocument:
+    queue_entry = (
+        QueueEntry.objects.select_for_update()
+        .select_related("daily_queue", "patient")
+        .get(id=queue_entry_id)
+    )
+    if queue_entry.entry_status != QueueEntryStatus.WAITING:
+        raise DomainError(
+            domain_message("other.domain.queue_entry_must_be_waiting_for_paper_intake"),
+            api_message_key="other.domain.queue_entry_must_be_waiting_for_paper_intake",
+        )
+    if queue_entry.appointment_time is None:
+        raise DomainError(
+            domain_message("other.domain.paper_intake_requires_appointment_time"),
+            api_message_key="other.domain.paper_intake_requires_appointment_time",
+        )
+    if timezone.now() < queue_entry.appointment_time + timedelta(hours=3):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_earliest_after_appointment"),
+            api_message_key="other.domain.paper_intake_earliest_after_appointment",
+        )
+
+    existing_doc = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
+    if existing_doc is not None:
+        raise DomainError(
+            domain_message(
+                "other.domain.medical_document_already_exists_for_queue_entry"
+            ),
+            api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+        )
+
+    try:
+        medical_document = MedicalDocument.objects.create(
+            queue_entry_id=queue_entry.id,
+            intake_form_id=None,
+            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+            created_by_user_id=created_by_user_id,
+            updated_by_user_id=created_by_user_id,
+        )
+    except IntegrityError as exc:
+        raise DomainError(
+            domain_message(
+                "other.domain.medical_document_already_exists_for_queue_entry"
+            ),
+            api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+        ) from exc
+
+    status_before = queue_entry.entry_status
+    queue_entry.entry_status = QueueEntryStatus.PAPER_INTAKE_COMPLETED
+    queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        actor_user_id=created_by_user_id,
+        patient_id=queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "queue_entry_id": str(queue_entry.id),
+            "intake_form_id": None,
+            "source_type": MedicalDocumentSourceType.PAPER_INTAKE,
+            "queue_entry_status_before": status_before,
+            "queue_entry_status_after": queue_entry.entry_status,
+            "reason": reason,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    return medical_document
 
 
 SAVE_DRAFT_INTENT_EDIT = "edit"
