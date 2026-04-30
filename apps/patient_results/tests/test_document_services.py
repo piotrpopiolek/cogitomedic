@@ -65,7 +65,7 @@ class DocumentServicesBaseTestCase(TestCase):
         cls.queue_entry = QueueEntry.objects.create(
             daily_queue=cls.daily_queue,
             patient=cls.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=1,
             created_by_user=cls.actor,
         )
