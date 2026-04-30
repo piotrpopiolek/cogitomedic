@@ -3,12 +3,20 @@ from __future__ import annotations
 from datetime import date, timedelta
 from uuid import uuid4
 
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import DocVersionStatus, MedicalDocStatus, MedicalDocument
+from apps.medical.models import (
+    DocVersionStatus,
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
+)
 from apps.medical.services import (
+    create_medical_document_without_intake,
     create_or_get_medical_document,
     publish_document_version,
     save_draft_document_version,
@@ -100,6 +108,233 @@ class MedicalServicesTests(TestCase):
             queue_entry_id=self.queue_entry.id,
             intake_form_id=self.intake_form.id,
             created_by_user_id=self.doctor_user.id,
+        )
+
+    def test_medical_document_defaults_to_digital_intake(self) -> None:
+        self.assertEqual(
+            self.medical_document.source_type,
+            MedicalDocumentSourceType.DIGITAL_INTAKE,
+        )
+
+    def test_medical_document_consistency_constraint_blocks_paper_with_intake(
+        self,
+    ) -> None:
+        other_patient = Patient.objects.create(
+            first_name="Other",
+            last_name="Patient",
+            date_of_birth=date(1988, 4, 4),
+            phone="+48700111222",
+            email="other.patient@example.com",
+        )
+        other_queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=2,
+            created_by_user=self.reception_user,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_queue_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.reception_user,
+        )
+        other_intake_form = PatientIntakeForm.objects.create(
+            queue_entry=other_queue_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_sha256="d" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"answers": []},
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                MedicalDocument.objects.create(
+                    queue_entry=other_queue_entry,
+                    intake_form=other_intake_form,
+                    source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+                    created_by_user=self.doctor_user,
+                )
+
+    def test_medical_document_consistency_constraint_blocks_digital_without_intake(
+        self,
+    ) -> None:
+        other_patient = Patient.objects.create(
+            first_name="Queue",
+            last_name="NoIntake",
+            date_of_birth=date(1989, 5, 5),
+            phone="+48700111333",
+            email="queue.nointake@example.com",
+        )
+        other_queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=3,
+            created_by_user=self.reception_user,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                MedicalDocument.objects.create(
+                    queue_entry=other_queue_entry,
+                    intake_form=None,
+                    source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+                    created_by_user=self.doctor_user,
+                )
+
+    def test_create_medical_document_without_intake_happy_path(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Paper",
+            last_name="Candidate",
+            date_of_birth=date(1980, 6, 6),
+            phone="+48700222444",
+            email="paper.candidate@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=5,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+
+        doc = create_medical_document_without_intake(
+            queue_entry_id=queue_entry.id,
+            created_by_user_id=self.doctor_user.id,
+            reason="paper fallback",
+        )
+
+        queue_entry.refresh_from_db()
+        self.assertEqual(doc.queue_entry_id, queue_entry.id)
+        self.assertIsNone(doc.intake_form_id)
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertEqual(
+            queue_entry.entry_status, QueueEntryStatus.PAPER_INTAKE_COMPLETED
+        )
+
+    def test_create_medical_document_without_intake_requires_waiting_status(
+        self,
+    ) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_medical_document_without_intake(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=self.doctor_user.id,
+                reason="paper fallback",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.queue_entry_must_be_waiting_for_paper_intake",
+        )
+
+    def test_create_medical_document_without_intake_requires_appointment_time(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="No",
+            last_name="Appointment",
+            date_of_birth=date(1979, 7, 7),
+            phone="+48700333555",
+            email="no.appointment@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=6,
+            appointment_time=None,
+            created_by_user=self.reception_user,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_medical_document_without_intake(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.doctor_user.id,
+                reason="paper fallback",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.paper_intake_requires_appointment_time",
+        )
+
+    def test_create_medical_document_without_intake_enforces_three_hour_window(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="Too",
+            last_name="Early",
+            date_of_birth=date(1978, 8, 8),
+            phone="+48700444666",
+            email="too.early@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=7,
+            appointment_time=timezone.now() - timedelta(hours=2, minutes=59),
+            created_by_user=self.reception_user,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_medical_document_without_intake(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.doctor_user.id,
+                reason="paper fallback",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.paper_intake_earliest_after_appointment",
+        )
+
+    def test_create_medical_document_without_intake_rejects_existing_document(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="Existing",
+            last_name="Document",
+            date_of_birth=date(1977, 9, 9),
+            phone="+48700555777",
+            email="existing.document@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=8,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=queue_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.reception_user,
+        )
+        intake_form = PatientIntakeForm.objects.create(
+            queue_entry=queue_entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_sha256="e" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"answers": []},
+        )
+        MedicalDocument.objects.create(
+            queue_entry=queue_entry,
+            intake_form=intake_form,
+            source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+            created_by_user=self.doctor_user,
+            updated_by_user=self.doctor_user,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_medical_document_without_intake(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.doctor_user.id,
+                reason="paper fallback",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.medical_document_already_exists_for_queue_entry",
         )
 
     def test_save_draft_document_version_creates_new_version(self) -> None:

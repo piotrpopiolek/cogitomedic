@@ -44,6 +44,17 @@ class PdfStatus(models.TextChoices):
     )
 
 
+class MedicalDocumentSourceType(models.TextChoices):
+    DIGITAL_INTAKE = "DIGITAL_INTAKE", db_gettext_lazy(
+        "administration.choice_medical_document_source_type_digital_intake",
+        "Digital intake",
+    )
+    PAPER_INTAKE = "PAPER_INTAKE", db_gettext_lazy(
+        "administration.choice_medical_document_source_type_paper_intake",
+        "Paper intake",
+    )
+
+
 class MedicalDocument(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     queue_entry = models.OneToOneField(
@@ -55,8 +66,19 @@ class MedicalDocument(models.Model):
     intake_form = models.OneToOneField(
         "intake.PatientIntakeForm",
         on_delete=models.RESTRICT,
+        blank=True,
+        null=True,
         related_name="medical_document",
         verbose_name=db_gettext_lazy("administration.field_intake_form", "Intake form"),
+    )
+    source_type = models.CharField(
+        max_length=32,
+        choices=MedicalDocumentSourceType.choices,
+        default=MedicalDocumentSourceType.DIGITAL_INTAKE,
+        verbose_name=db_gettext_lazy(
+            "administration.field_medical_document_source_type",
+            "Document source type",
+        ),
     )
     status = models.CharField(
         max_length=20,
@@ -147,6 +169,17 @@ class MedicalDocument(models.Model):
                 condition=Q(published_version_no__isnull=True)
                 | Q(published_version_no__gte=0),
                 name="medical_document_published_version_non_negative",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(source_type=MedicalDocumentSourceType.DIGITAL_INTAKE)
+                    & Q(intake_form__isnull=False)
+                )
+                | (
+                    Q(source_type=MedicalDocumentSourceType.PAPER_INTAKE)
+                    & Q(intake_form__isnull=True)
+                ),
+                name="medical_document_source_type_intake_consistency",
             ),
         ]
         indexes = [
