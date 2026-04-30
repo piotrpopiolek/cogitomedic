@@ -491,7 +491,7 @@
 - `queue_shift_enum`: `FULL_DAY`, `MORNING`, `AFTERNOON`, `EVENING`
 - `queue_source_enum`: `MANUAL`, `IMPORT`
 - `queue_status_enum`: `OPEN`, `CLOSED`
-- `queue_entry_status_enum`: `WAITING`, `IN_PROGRESS`, `PATIENT_COMPLETED`, `DOCTOR_IN_PROGRESS`, `PUBLISHED`, `CANCELLED`
+- `queue_entry_status_enum`: `WAITING`, `IN_PROGRESS`, `PATIENT_COMPLETED`, `DOCTOR_IN_PROGRESS`, `PAPER_INTAKE_COMPLETED`, `CANCELLED`
 - `intake_status_enum`: `IN_PROGRESS`, `SUBMITTED`
 - `medical_doc_status_enum`: `DRAFT`, `PUBLISHED`
 - `doc_version_status_enum`: `DRAFT`, `PUBLISHED`

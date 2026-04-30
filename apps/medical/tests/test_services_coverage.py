@@ -91,7 +91,7 @@ class ServicesCoverageBase(TestCase):
         cls.queue_entry = QueueEntry.objects.create(
             daily_queue=cls.daily_queue,
             patient=cls.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=1,
             created_by_user=cls.doctor,
         )
@@ -145,7 +145,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=self.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=2,
             created_by_user=self.doctor,
         )
@@ -171,7 +171,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=other_patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=3,
             created_by_user=self.doctor,
         )
@@ -208,7 +208,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=other_patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=4,
             created_by_user=self.doctor,
         )

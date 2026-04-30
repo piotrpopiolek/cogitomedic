@@ -354,7 +354,7 @@ Jako wskaźniki operacyjne (niewymagane w raportowaniu biznesowym, ale kluczowe 
 ## 7. Zasady ograniczania złożoności (MVP)
 
 - Faza 1 ma ograniczoną maszynę stanów:
-  - `queue_entry`: `WAITING -> IN_PROGRESS -> PATIENT_COMPLETED -> DOCTOR_IN_PROGRESS -> PUBLISHED` (+ `CANCELLED`).
+  - `queue_entry`: `WAITING -> IN_PROGRESS -> (PATIENT_COMPLETED | PAPER_INTAKE_COMPLETED) -> DOCTOR_IN_PROGRESS` (+ `CANCELLED`).
   - `outbox_event`: `PENDING -> PROCESSING -> PROCESSED` (+ `FAILED`, `DEAD_LETTER`).
 - Logika domenowa jest implementowana w warstwie aplikacyjnej (serwisy domenowe), a nie przez triggery DB.
 - Każde przejście stanu musi mieć testy pozytywne i negatywne.
