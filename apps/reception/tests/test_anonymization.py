@@ -81,7 +81,7 @@ class AnonymizationIntegrationTests(TestCase):
         )
 
     def _terminal_entry(
-        self, patient: Patient, *, status: str = QueueEntryStatus.CANCELLED
+        self, patient: Patient, *, status: str = "CANCELLED"
     ) -> QueueEntry:
         return QueueEntry.objects.create(
             daily_queue=self.daily_queue,

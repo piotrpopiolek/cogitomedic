@@ -709,6 +709,11 @@
     "en": "Intake form",
     "pl": "Formularz intake"
   },
+  "administration.field_medical_document_source_type": {
+    "de": "Dokumentquelle",
+    "en": "Document source type",
+    "pl": "Typ źródła dokumentu"
+  },
   "administration.field_patient_form_session": {
     "de": "Formularsitzung",
     "en": "Patient form session",

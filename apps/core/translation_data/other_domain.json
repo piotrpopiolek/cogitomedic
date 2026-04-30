@@ -59,6 +59,26 @@
     "en": "Intake form must be submitted.",
     "pl": "Ankieta musi być złożona."
   },
+  "other.domain.queue_entry_must_be_waiting_for_paper_intake": {
+    "de": "Für den papierbasierten Intake muss der Warteschlangeneintrag im Status WAITING sein.",
+    "en": "Queue entry must be in WAITING status for paper intake.",
+    "pl": "Wpis kolejki musi mieć status WAITING, aby utworzyć dokument bez ankiety."
+  },
+  "other.domain.paper_intake_requires_appointment_time": {
+    "de": "Für papierbasierten Intake ist appointment_time erforderlich.",
+    "en": "appointment_time is required for paper intake.",
+    "pl": "appointment_time jest wymagane dla ścieżki papierowej."
+  },
+  "other.domain.paper_intake_earliest_after_appointment": {
+    "de": "Dokument ohne digitalen Intake kann erst 3 Stunden nach appointment_time erstellt werden.",
+    "en": "Document without digital intake can be created only 3 hours after appointment_time.",
+    "pl": "Dokument bez ankiety cyfrowej można utworzyć dopiero 3 godziny po appointment_time."
+  },
+  "other.domain.medical_document_already_exists_for_queue_entry": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument.",
+    "en": "A medical document already exists for this queue entry.",
+    "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny."
+  },
   "other.domain.publish_locale_required": {
     "de": "publish_locale ist für die Veröffentlichung erforderlich.",
     "en": "publish_locale is required for publish.",

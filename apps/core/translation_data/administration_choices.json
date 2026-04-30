@@ -209,6 +209,16 @@
     "en": "Published",
     "pl": "Opublikowano"
   },
+  "administration.choice_medical_document_source_type_digital_intake": {
+    "de": "Digitaler Intake",
+    "en": "Digital intake",
+    "pl": "Intake cyfrowy"
+  },
+  "administration.choice_medical_document_source_type_paper_intake": {
+    "de": "Papier-Intake",
+    "en": "Paper intake",
+    "pl": "Intake papierowy"
+  },
   "administration.choice_doc_version_status_draft": {
     "de": "Entwurf",
     "en": "Draft",
