@@ -1256,6 +1256,7 @@ def get_medical_document_context(
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 
+    intake_summary: dict[str, Any]
     if doc.intake_form_id is None:
         patient = doc.queue_entry.patient
         intake_summary = {
@@ -1270,6 +1271,8 @@ def get_medical_document_context(
                 "date_of_birth": (
                     patient.date_of_birth.isoformat() if patient.date_of_birth else None
                 ),
+                "phone": patient.phone,
+                "email": patient.email,
             },
         }
     else:
@@ -1278,7 +1281,10 @@ def get_medical_document_context(
             form_locale=form_locale,
             tablet_restrict_to_today=False,
         )
-        anamnesis_questions = intake_context.get("anamnesis_questions", [])
+        anamnesis_questions_raw = intake_context.get("anamnesis_questions", [])
+        anamnesis_questions: list[dict[str, Any]] = (
+            anamnesis_questions_raw if isinstance(anamnesis_questions_raw, list) else []
+        )
         intake_summary = {
             "consents": intake_context.get("consents", []),
             "body_map_data": intake_context.get("body_map_data", []),

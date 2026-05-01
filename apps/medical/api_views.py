@@ -15,6 +15,7 @@ from apps.core.api_utils import (
     MAX_LIST_LIMIT,
     json_domain_error,
     json_error,
+    json_pydantic_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
@@ -218,9 +219,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             entry = QueueEntry.objects.select_related("daily_queue").get(
@@ -265,9 +264,7 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         entry = QueueEntry.objects.select_related("daily_queue").get(
@@ -280,7 +277,7 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
             reason=body.reason,
         )
     except ObjectDoesNotExist:
-        return json_error("other.api.queue_entry_or_intake_not_found", status=404)
+        return json_error("other.api.queue_entry_not_found", status=404)
     except DomainError as exc:
         return json_domain_error(exc, status=400)
 
@@ -528,9 +525,7 @@ def medical_document_draft_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("other.api.medical_payload_schema_mismatch", status=400)
@@ -722,9 +717,7 @@ def medical_document_publish_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         with transaction.atomic():
@@ -860,9 +853,7 @@ def medical_document_retry_processing_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
@@ -946,9 +937,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 }
             )
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             templates = list_templates(
@@ -999,9 +988,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             template = create_template(
@@ -1086,9 +1073,7 @@ def doctor_text_template_detail_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         template = update_template(

@@ -18,6 +18,7 @@ from apps.medical.models import (
 from apps.medical.services import (
     create_medical_document_without_intake,
     create_or_get_medical_document,
+    get_medical_document_context,
     publish_document_version,
     save_draft_document_version,
 )
@@ -213,6 +214,52 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(
             queue_entry.entry_status, QueueEntryStatus.PAPER_INTAKE_COMPLETED
         )
+        ctx = get_medical_document_context(
+            medical_document_id=doc.id,
+            form_locale="de-DE",
+            user=self.doctor_user,
+        )
+        p = ctx["intake_summary"]["patient"]
+        self.assertEqual(
+            set(p.keys()),
+            {"id", "first_name", "last_name", "date_of_birth", "phone", "email"},
+        )
+        self.assertEqual(p["id"], str(patient.id))
+        self.assertEqual(p["first_name"], patient.first_name)
+        self.assertEqual(p["last_name"], patient.last_name)
+        self.assertEqual(p["date_of_birth"], patient.date_of_birth.isoformat())
+        self.assertEqual(p["phone"], patient.phone)
+        self.assertEqual(p["email"], patient.email)
+
+    def test_get_medical_document_context_paper_intake_patient_allows_null_dob(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="No",
+            last_name="Dob",
+            date_of_birth=None,
+            phone="+48700555666",
+            email="no.dob@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=51,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        doc = create_medical_document_without_intake(
+            queue_entry_id=queue_entry.id,
+            created_by_user_id=self.doctor_user.id,
+            reason="paper no dob",
+        )
+        ctx = get_medical_document_context(
+            medical_document_id=doc.id,
+            form_locale="de-DE",
+            user=self.doctor_user,
+        )
+        self.assertIsNone(ctx["intake_summary"]["patient"]["date_of_birth"])
 
     def test_create_medical_document_without_intake_requires_waiting_status(
         self,
