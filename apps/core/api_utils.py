@@ -7,6 +7,7 @@ from uuid import UUID
 from django.contrib.auth.models import Group
 from django.http import HttpRequest
 from django.http import JsonResponse
+from pydantic import ValidationError
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
 from apps.core.domain_messages import domain_message
@@ -66,6 +67,29 @@ def json_domain_error(exc: BaseException, *, status: int | None = None) -> JsonR
     return JsonResponse(
         {"error": message, "error_key": key},
         status=effective_status,
+    )
+
+
+def json_pydantic_validation_error(
+    exc: ValidationError,
+    *,
+    error_key: str = "other.api.invalid_request_body",
+) -> JsonResponse:
+    """HTTP 400 for Pydantic request-body validation; same shape family as ``json_domain_error``."""
+    default = OTHER_I18N_KEY_DEFAULT_EN.get(error_key, "Invalid request body.")
+    request = get_current_request()
+    if request is not None:
+        message = resolve_other_message(request, error_key, default)
+    else:
+        # No HTTP request (e.g. tasks); avoid DB lookup via ``get_translation_map``.
+        message = default
+    return JsonResponse(
+        {
+            "error": message,
+            "error_key": error_key,
+            "details": exc.errors(include_url=False),
+        },
+        status=400,
     )
 
 

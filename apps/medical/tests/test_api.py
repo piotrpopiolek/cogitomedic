@@ -334,6 +334,19 @@ class MedicalApiTests(TestCase):
             payload["intake_summary"]["patient"]["id"],
             str(self.queue_entry.patient_id),
         )
+        patient = self.queue_entry.patient
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["first_name"], patient.first_name
+        )
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["last_name"], patient.last_name
+        )
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["date_of_birth"],
+            patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+        )
+        self.assertEqual(payload["intake_summary"]["patient"]["phone"], patient.phone)
+        self.assertEqual(payload["intake_summary"]["patient"]["email"], patient.email)
 
     def test_published_version_keeps_template_snapshot_after_template_change(
         self,
@@ -817,7 +830,10 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(publish_response.status_code, 400)
-        self.assertEqual(publish_response.json().get("error"), "Validation error.")
+        self.assertEqual(
+            publish_response.json().get("error_key"),
+            "other.api.invalid_request_body",
+        )
 
     def test_publish_same_request_id_with_different_locale_returns_409(self) -> None:
         create_response = self.client.post(

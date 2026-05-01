@@ -9,10 +9,13 @@ from uuid import uuid4
 from django.http import HttpRequest
 from django.test import SimpleTestCase, TestCase, RequestFactory
 
+from pydantic import BaseModel, ValidationError
+
 from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
+    json_pydantic_validation_error,
     parse_bool_query,
     parse_list_limit,
     parse_positive_int,
@@ -142,6 +145,23 @@ class JsonErrorTests(SimpleTestCase):
         self.assertEqual(resp.status_code, 400)
         data = json.loads(resp.content)
         self.assertEqual(data["error"], "Something went wrong")
+
+
+class JsonPydanticValidationErrorTests(SimpleTestCase):
+    def test_returns_400_with_error_key_and_details(self):
+        class _M(BaseModel):
+            x: int
+
+        with self.assertRaises(ValidationError) as ctx:
+            _M.model_validate({"x": "not-int"})
+        exc = ctx.exception
+        resp = json_pydantic_validation_error(exc)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertEqual(data["error_key"], "other.api.invalid_request_body")
+        self.assertIn("error", data)
+        self.assertIsInstance(data.get("details"), list)
+        self.assertGreater(len(data["details"]), 0)
 
 
 class JsonDomainErrorTests(TestCase):
