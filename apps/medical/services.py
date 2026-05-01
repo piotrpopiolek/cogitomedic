@@ -1256,29 +1256,46 @@ def get_medical_document_context(
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 
-    intake_context = get_intake_form_context(
-        intake_form_id=doc.intake_form_id,
-        form_locale=form_locale,
-        tablet_restrict_to_today=False,
-    )
-    anamnesis_questions = intake_context.get("anamnesis_questions", [])
-    intake_summary = {
-        "consents": intake_context.get("consents", []),
-        "body_map_data": intake_context.get("body_map_data", []),
-        "anamnesis_questions": anamnesis_questions,
-        "anamnesis_answers": [
-            {
-                "question_code": q.get("question_code"),
-                "selected_option_codes": (q.get("answer") or {}).get(
-                    "selected_option_codes"
-                )
-                or [],
-                "free_text": (q.get("answer") or {}).get("free_text"),
-            }
-            for q in anamnesis_questions
-        ],
-        "patient": intake_context.get("patient"),
-    }
+    if doc.intake_form_id is None:
+        patient = doc.queue_entry.patient
+        intake_summary = {
+            "consents": [],
+            "body_map_data": [],
+            "anamnesis_questions": [],
+            "anamnesis_answers": [],
+            "patient": {
+                "id": str(patient.id),
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "date_of_birth": (
+                    patient.date_of_birth.isoformat() if patient.date_of_birth else None
+                ),
+            },
+        }
+    else:
+        intake_context = get_intake_form_context(
+            intake_form_id=doc.intake_form_id,
+            form_locale=form_locale,
+            tablet_restrict_to_today=False,
+        )
+        anamnesis_questions = intake_context.get("anamnesis_questions", [])
+        intake_summary = {
+            "consents": intake_context.get("consents", []),
+            "body_map_data": intake_context.get("body_map_data", []),
+            "anamnesis_questions": anamnesis_questions,
+            "anamnesis_answers": [
+                {
+                    "question_code": q.get("question_code"),
+                    "selected_option_codes": (q.get("answer") or {}).get(
+                        "selected_option_codes"
+                    )
+                    or [],
+                    "free_text": (q.get("answer") or {}).get("free_text"),
+                }
+                for q in anamnesis_questions
+            ],
+            "patient": intake_context.get("patient"),
+        }
 
     current_version_payload: dict[str, Any] | None = None
     if current_version:
@@ -1359,7 +1376,7 @@ def get_medical_document_context(
     return {
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
-        "intake_form_id": str(doc.intake_form_id),
+        "intake_form_id": str(doc.intake_form_id) if doc.intake_form_id else None,
         "status": doc.status,
         "current_version_no": doc.current_version_no,
         "published_version_no": doc.published_version_no,

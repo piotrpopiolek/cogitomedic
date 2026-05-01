@@ -18,6 +18,7 @@ from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -238,6 +239,76 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"completed", resp.content.lower())
+
+    def test_open_by_queue_without_intake_creates_paper_document(self) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="NO", name="No Intake Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="PaperFlow",
+            date_of_birth=date(1995, 3, 3),
+            phone="+48500777666",
+            email="paperflow@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 302)
+        document = MedicalDocument.objects.get(queue_entry=entry)
+        entry.refresh_from_db()
+        self.assertEqual(document.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertIsNone(document.intake_form_id)
+        self.assertEqual(entry.entry_status, QueueEntryStatus.PAPER_INTAKE_COMPLETED)
+        self.assertIn(f"/doctor/{document.id}/", resp.url)
+
+    def test_open_by_queue_without_intake_before_3h_returns_400(self) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="N3", name="No Intake Guard Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="TooEarly",
+            date_of_birth=date(1996, 4, 4),
+            phone="+48500666555",
+            email="tooearly@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"3", resp.content)
+        self.assertFalse(MedicalDocument.objects.filter(queue_entry=entry).exists())
 
 
 class DoctorDetailHappyPathTests(TestCase):
