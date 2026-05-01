@@ -733,7 +733,15 @@ COGITO_PATHS = {
                             "type": "object",
                             "properties": {
                                 "queue_entry_id": {"type": "string", "format": "uuid"},
-                                "reason": {"type": "string"},
+                                "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500,
+                                    "description": (
+                                        "Audit trail / operator note (matches Pydantic "
+                                        "`CreateMedicalDocumentWithoutIntakeRequest.reason`)."
+                                    ),
+                                },
                                 "created_by_user_id": {
                                     "type": "string",
                                     "format": "uuid",
@@ -746,7 +754,22 @@ COGITO_PATHS = {
             },
             "responses": {
                 "201": {"description": "Created"},
-                "400": {"description": "Domain validation error"},
+                "400": {
+                    "description": (
+                        "Domain rules failed (e.g. queue not WAITING, missing "
+                        "`appointment_time`, document already exists, 3-hour guard) — "
+                        "`error_key` + `error` via `json_domain_error`. Or request body "
+                        "schema validation — `error_key` `other.api.invalid_request_body` "
+                        "with `details` (Pydantic)."
+                    )
+                },
+                "401": {"description": "Authentication required"},
+                "403": {
+                    "description": (
+                        "Forbidden — caller is not DOCTOR, ADMIN, or MANAGER "
+                        "(`other.api.forbidden`)."
+                    )
+                },
                 "404": {"description": "Queue entry not found"},
             },
         },
@@ -760,7 +783,11 @@ COGITO_PATHS = {
                 "`current_version_no`, `published_version_no` (last published version number; "
                 "null until first publish), `has_pending_revision` (true when a PUBLISHED "
                 "document has an in-progress DRAFT amendment), lock fields (`locked_by_user_id`, "
-                "`locked_by_username`, `locked_at` — effective lock only, max 6h)."
+                "`locked_by_username`, `locked_at` — effective lock only, max 6h). "
+                "`intake_summary.patient` uses the same keys for digital intake and paper "
+                "fallback (`id`, `first_name`, `last_name`, `date_of_birth` ISO string or null, "
+                "`phone`, `email`); digital rows come from intake context, paper from "
+                "`queue_entry.patient`."
             ),
             "tags": ["Medical"],
             "parameters": [
