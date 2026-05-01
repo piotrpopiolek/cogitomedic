@@ -35,6 +35,7 @@ from apps.medical.api_views import (
     medical_document_versions_view,
     medical_document_audit_trail_view,
     medical_documents_view,
+    medical_documents_no_intake_view,
 )
 from apps.outbox.api_views import (
     operations_outbox_process_view,
@@ -177,6 +178,11 @@ urlpatterns = [
         "medical-documents",
         medical_documents_view,
         name="medical-documents",
+    ),
+    path(
+        "medical-documents/no-intake",
+        medical_documents_no_intake_view,
+        name="medical-documents-no-intake",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>",

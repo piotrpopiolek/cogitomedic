@@ -715,6 +715,42 @@ COGITO_PATHS = {
             },
         },
     },
+    f"{PREFIX}/medical-documents/no-intake": {
+        "post": {
+            "summary": "Create medical document without digital intake",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Creates a medical document in paper fallback mode "
+                "(`source_type=PAPER_INTAKE`) for a `WAITING` queue entry and moves queue status "
+                "to `PAPER_INTAKE_COMPLETED` atomically. Requires `appointment_time` and enforces "
+                "3-hour guard window after appointment time."
+            ),
+            "tags": ["Medical"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "queue_entry_id": {"type": "string", "format": "uuid"},
+                                "reason": {"type": "string"},
+                                "created_by_user_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                },
+                            },
+                            "required": ["queue_entry_id", "reason"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "400": {"description": "Domain validation error"},
+                "404": {"description": "Queue entry not found"},
+            },
+        },
+    },
     f"{PREFIX}/medical-documents/{{medical_document_id}}": {
         "get": {
             "summary": "Get medical document context",

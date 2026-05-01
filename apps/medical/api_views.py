@@ -28,6 +28,7 @@ from apps.core.exceptions import (
 )
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
+    CreateMedicalDocumentWithoutIntakeRequest,
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
@@ -59,6 +60,7 @@ from apps.medical.services import (
     assigned_doctor_audit_metadata,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
+    create_medical_document_without_intake,
     create_or_get_medical_document,
     discard_pending_revision,
     get_document_lock_state,
@@ -243,6 +245,54 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             status=201,
         )
     return json_error("other.api.method_not_allowed", status=405)
+
+
+@require_auth
+def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = CreateMedicalDocumentWithoutIntakeRequest.model_validate(
+            read_json_body(request)
+        )
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return JsonResponse(
+            {"error": "Validation error.", "details": exc.errors()}, status=400
+        )
+
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(
+            id=body.queue_entry_id
+        )
+        check_doctor_queue_entry_access(entry, request.user)
+        document = create_medical_document_without_intake(
+            queue_entry_id=body.queue_entry_id,
+            created_by_user_id=request.user.id,
+            reason=body.reason,
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.queue_entry_or_intake_not_found", status=404)
+    except DomainError as exc:
+        return json_domain_error(exc, status=400)
+
+    return JsonResponse(
+        {
+            "medical_document_id": str(document.id),
+            "queue_entry_id": str(document.queue_entry_id),
+            "status": document.status,
+            "source_type": document.source_type,
+        },
+        status=201,
+    )
 
 
 @require_auth

@@ -14,6 +14,7 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
@@ -229,6 +230,110 @@ class MedicalApiTests(TestCase):
 
         missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
         self.assertEqual(missing.status_code, 404)
+
+    def test_create_medical_document_no_intake_happy_path(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=2,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                    "reason": "Paper form verified by doctor.",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        document = MedicalDocument.objects.get(id=body["medical_document_id"])
+        waiting_entry.refresh_from_db()
+        self.assertEqual(document.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertIsNone(document.intake_form_id)
+        self.assertEqual(
+            waiting_entry.entry_status,
+            QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+        )
+
+    def test_create_medical_document_no_intake_reception_forbidden(self) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(uuid4()),
+                    "reason": "no access",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_medical_document_no_intake_before_3h_returns_400(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=3,
+            appointment_time=timezone.now() - timedelta(hours=2, minutes=59),
+            created_by_user=self.reception_user,
+        )
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                    "reason": "paper fallback",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json().get("error_key"),
+            "other.domain.paper_intake_earliest_after_appointment",
+        )
+
+    def test_medical_document_detail_get_for_no_intake_returns_null_intake(
+        self,
+    ) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=4,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        create_response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                    "reason": "Paper fallback path.",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        self.assertIsNone(payload["intake_form_id"])
+        self.assertEqual(payload["intake_summary"]["consents"], [])
+        self.assertEqual(payload["intake_summary"]["anamnesis_questions"], [])
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["id"],
+            str(self.queue_entry.patient_id),
+        )
 
     def test_published_version_keeps_template_snapshot_after_template_change(
         self,
