@@ -772,10 +772,15 @@ COGITO_PATHS = {
             "description": (
                 "Full document context for the doctor panel (DOCTOR, ADMIN, MANAGER): intake "
                 "summary and current version payload. Top-level fields include `status`, "
-                "`current_version_no`, `published_version_no` (last published version number; "
+                "`source_type` (`DIGITAL_INTAKE` or `PAPER_INTAKE`), `current_version_no`, "
+                "`published_version_no` (last published version number; "
                 "null until first publish), `has_pending_revision` (true when a PUBLISHED "
                 "document has an in-progress DRAFT amendment), lock fields (`locked_by_user_id`, "
                 "`locked_by_username`, `locked_at` — effective lock only, max 6h). "
+                "`intake_form_id` is null for paper documents. For `source_type=PAPER_INTAKE`, "
+                "`paper_intake_authorization` holds the manager authorization snapshot "
+                "(`authorized_by_user_id`, `authorized_by_username`, `authorized_at` ISO string, "
+                "`reason`) from audit metadata; null for digital intake. "
                 "`intake_summary.patient` uses the same keys for digital intake and paper "
                 "fallback (`id`, `first_name`, `last_name`, `date_of_birth` ISO string or null, "
                 "`phone`, `email`); digital rows come from intake context, paper from "
@@ -1652,6 +1657,72 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "OK"},
                 "404": {"description": "Not found"},
+            },
+        },
+    },
+    f"{PREFIX}/queue-entries/{{queue_entry_id}}/paper-intake-authorization": {
+        "post": {
+            "summary": "Authorize paper intake path",
+            "description": (
+                "ADMIN or MANAGER only. Creates `PaperIntakeAuthorization` for a WAITING queue "
+                "entry (does not change `entry_status`). Body: `reason` (10–500 chars). "
+                "Same business rules as internal `authorize_paper_intake` (appointment_time + "
+                "3h, no SUBMITTED digital intake, no existing document, no duplicate auth). "
+                "Clinic scope applies like other queue-entry mutations."
+            ),
+            "tags": ["Reception – Queues", "Medical"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {
+                    "description": (
+                        "Created. Body: `paper_intake_authorization_id`, `queue_entry_id`, "
+                        "`authorized_at` (ISO)."
+                    )
+                },
+                "400": {"description": "Domain or validation error"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden (role or clinic scope)"},
+                "404": {"description": "Queue entry not found"},
+            },
+        },
+        "delete": {
+            "summary": "Revoke paper intake authorization",
+            "description": (
+                "ADMIN or MANAGER only. Removes active authorization when no medical document "
+                "exists yet for the queue entry. Body: `reason` (10–500 chars) recorded on audit."
+            ),
+            "tags": ["Reception – Queues", "Medical"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": "Revoked. Body: `queue_entry_id`, `revoked`: true"
+                },
+                "400": {"description": "Domain or validation error"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden (role or clinic scope)"},
+                "404": {"description": "Queue entry not found"},
             },
         },
     },

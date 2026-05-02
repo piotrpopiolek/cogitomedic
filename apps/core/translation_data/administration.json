@@ -469,6 +469,11 @@
     "en": "Outbox and operations",
     "pl": "Outbox i operacje"
   },
+  "administration.side_paper_intake": {
+    "de": "Papier-Anamnese",
+    "en": "Paper intake",
+    "pl": "Ścieżka papierowa"
+  },
   "administration.side_pacjenci": {
     "de": "Patienten",
     "en": "Patients",
