@@ -104,6 +104,25 @@ class OpenAPISchemaIntegrationTests(TestCase):
         self.assertEqual(post_ref, expected)
         self.assertEqual(del_ref, expected)
 
+    def test_paper_intake_authorization_delete_documents_required_json_body(
+        self,
+    ) -> None:
+        schema = build_cogito_openapi_schema()
+        delete_op = (
+            schema["paths"]
+            .get(
+                "/api/v1/queue-entries/{queue_entry_id}/paper-intake-authorization", {}
+            )
+            .get("delete", {})
+        )
+        rb = delete_op.get("requestBody", {})
+        self.assertTrue(rb.get("required"))
+        self.assertIn("PaperIntakeAuthorizationRequest", rb.get("description", ""))
+        self.assertIn("reason", rb.get("description", ""))
+        op_desc = (delete_op.get("description") or "").lower()
+        self.assertIn("not a typical", op_desc)
+        self.assertIn("body-less", op_desc)
+
     def test_metrics_endpoint_is_marked_as_authenticated_in_openapi(self) -> None:
         schema = build_cogito_openapi_schema()
         metrics = (

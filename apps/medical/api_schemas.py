@@ -46,7 +46,15 @@ class PaperIntakeAuthorizationRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    reason: str = Field(min_length=10, max_length=500)
+    reason: str = Field(
+        min_length=10,
+        max_length=500,
+        description=(
+            "Justification for authorize (POST) or revoke (DELETE), 10–500 characters. "
+            "DELETE uses the same `application/json` body as POST (including this field); "
+            "it is not a body-less delete."
+        ),
+    )
 
 
 class SaveDraftMedicalDocumentRequest(BaseModel):

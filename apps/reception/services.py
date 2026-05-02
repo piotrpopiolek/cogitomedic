@@ -513,7 +513,7 @@ def create_queue_entry(
         )
 
     next_position = (
-        QueueEntry.objects.select_for_update()
+        QueueEntry.objects.select_for_update(of=("self",))
         .filter(daily_queue_id=daily_queue_id)
         .aggregate(max_position=Max("position_no"))
         .get("max_position")
