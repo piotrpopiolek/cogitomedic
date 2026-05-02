@@ -28,7 +28,6 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
-from apps.medical.models import PaperIntakeAuthorization
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.reception.services import issue_tablet_session_latest_wins
@@ -1227,29 +1226,17 @@ def submit_patient_intake_form(
         update_fields=["entry_status", "doctor_list_sort_at", "updated_at"]
     )
 
-    paper_auth = PaperIntakeAuthorization.objects.filter(
-        queue_entry_id=queue_entry.id
-    ).first()
-    if paper_auth is not None:
-        prev = {
-            "id": str(paper_auth.id),
-            "authorized_by_id": str(paper_auth.authorized_by_id),
-            "authorized_at": paper_auth.authorized_at.isoformat(),
-            "reason": paper_auth.reason,
-        }
-        paper_auth.delete()
-        create_audit_event(
-            event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
-            actor_user_id=submitted_by_user_id,
-            patient_id=queue_entry.patient_id,
-            context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
-            metadata={
-                "queue_entry_id": str(queue_entry.id),
-                "intake_form_id": str(intake_form.id),
-                "trigger": "intake_form_submitted",
-                "previous_authorization": prev,
-            },
-        )
+    # Lazy import: ``medical.services`` already imports this module at load time;
+    # importing medical here at module level would risk a circular import.
+    from apps.medical.services import (
+        autorevoke_paper_intake_authorization_after_intake_submit,
+    )
+
+    autorevoke_paper_intake_authorization_after_intake_submit(
+        queue_entry_id=queue_entry.id,
+        intake_form_id=intake_form.id,
+        actor_user_id=submitted_by_user_id,
+    )
 
     create_audit_event(
         event_type="INTAKE_SUBMITTED",
