@@ -719,10 +719,11 @@ COGITO_PATHS = {
         "post": {
             "summary": "Create medical document without digital intake",
             "description": (
-                "DOCTOR, ADMIN, or MANAGER. Creates a medical document in paper fallback mode "
-                "(`source_type=PAPER_INTAKE`) for a `WAITING` queue entry and moves queue status "
-                "to `PAPER_INTAKE_COMPLETED` atomically. Requires `appointment_time` and enforces "
-                "3-hour guard window after appointment time."
+                "DOCTOR, ADMIN, or MANAGER. Creates a medical document in paper mode "
+                "(`source_type=PAPER_INTAKE`) after an ADMIN/MANAGER has created a "
+                "`PaperIntakeAuthorization` for the queue entry. Atomically moves queue status "
+                "to `PAPER_INTAKE_COMPLETED`. Requires `appointment_time` and enforces the "
+                "3-hour guard after appointment time (same rule as authorization)."
             ),
             "tags": ["Medical"],
             "requestBody": {
@@ -733,21 +734,12 @@ COGITO_PATHS = {
                             "type": "object",
                             "properties": {
                                 "queue_entry_id": {"type": "string", "format": "uuid"},
-                                "reason": {
-                                    "type": "string",
-                                    "minLength": 1,
-                                    "maxLength": 500,
-                                    "description": (
-                                        "Audit trail / operator note (matches Pydantic "
-                                        "`CreateMedicalDocumentWithoutIntakeRequest.reason`)."
-                                    ),
-                                },
                                 "created_by_user_id": {
                                     "type": "string",
                                     "format": "uuid",
                                 },
                             },
-                            "required": ["queue_entry_id", "reason"],
+                            "required": ["queue_entry_id"],
                         }
                     }
                 },

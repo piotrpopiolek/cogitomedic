@@ -274,7 +274,6 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
         document = create_medical_document_without_intake(
             queue_entry_id=body.queue_entry_id,
             created_by_user_id=request.user.id,
-            reason=body.reason,
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
