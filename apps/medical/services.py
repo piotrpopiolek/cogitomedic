@@ -65,6 +65,55 @@ def _staff_user_display_name(user: StaffUser | None) -> str:
     return name or (user.username or "")
 
 
+def _paper_intake_authorization_context_for_document(
+    doc: MedicalDocument,
+) -> dict[str, Any] | None:
+    """Snapshot from ``MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE`` audit (authorization row is deleted at create)."""
+    if doc.source_type != MedicalDocumentSourceType.PAPER_INTAKE:
+        return None
+    from apps.operations.models import AuditEvent
+
+    ev = (
+        AuditEvent.objects.filter(
+            medical_document_id=doc.id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        )
+        .order_by("-event_time")
+        .first()
+    )
+    if ev is None or not isinstance(ev.metadata, dict):
+        return None
+    meta = ev.metadata
+    raw_by = meta.get("paper_intake_authorized_by_id")
+    by_uuid: uuid.UUID | None = None
+    if raw_by:
+        try:
+            by_uuid = uuid.UUID(str(raw_by))
+        except (ValueError, TypeError):
+            by_uuid = None
+    display = ""
+    if by_uuid is not None:
+        try:
+            authorizer = StaffUser.objects.only(
+                "username", "first_name", "last_name"
+            ).get(id=by_uuid)
+            display = _staff_user_display_name(authorizer) or (
+                authorizer.username or ""
+            )
+        except StaffUser.DoesNotExist:
+            display = str(by_uuid)
+
+    reason = meta.get("paper_intake_authorization_reason_snapshot")
+    authorized_at = meta.get("paper_intake_authorized_at")
+
+    return {
+        "authorized_by_user_id": str(by_uuid) if by_uuid else None,
+        "authorized_by_username": display or None,
+        "authorized_at": authorized_at if isinstance(authorized_at, str) else None,
+        "reason": reason if isinstance(reason, str) else None,
+    }
+
+
 def _is_admin_or_manager_medical_oversight(user: Any) -> bool:
     """Pełen widok kolejki / dokumentów jak admin (rola Manager = nadzór operacyjny)."""
     return bool(
@@ -1783,6 +1832,7 @@ def get_medical_document_context(
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
         "intake_form_id": str(doc.intake_form_id) if doc.intake_form_id else None,
+        "source_type": doc.source_type,
         "status": doc.status,
         "current_version_no": doc.current_version_no,
         "published_version_no": doc.published_version_no,
@@ -1796,6 +1846,9 @@ def get_medical_document_context(
         "locked_by_username": lock_name if lock_eff else None,
         "locked_at": lock_at.isoformat() if lock_at and lock_eff else None,
         "intake_summary": intake_summary,
+        "paper_intake_authorization": _paper_intake_authorization_context_for_document(
+            doc
+        ),
         "current_version": current_version_payload,
     }
 

@@ -249,6 +249,11 @@ class MedicalServicesTests(TestCase):
             form_locale="de-DE",
             user=self.doctor_user,
         )
+        self.assertEqual(ctx["source_type"], MedicalDocumentSourceType.PAPER_INTAKE)
+        paper = ctx["paper_intake_authorization"]
+        self.assertIsNotNone(paper)
+        self.assertEqual(paper["reason"], _PAPER_AUTH_REASON)
+        self.assertEqual(paper["authorized_by_user_id"], str(self.admin_user.id))
         p = ctx["intake_summary"]["patient"]
         self.assertEqual(
             set(p.keys()),
