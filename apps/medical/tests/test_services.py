@@ -19,6 +19,7 @@ from apps.medical.models import (
 )
 from apps.medical.services import (
     authorize_paper_intake,
+    autorevoke_paper_intake_authorization_after_intake_submit,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
@@ -551,6 +552,70 @@ class MedicalServicesTests(TestCase):
             ).exists()
         )
 
+    def test_autorevoke_paper_intake_after_intake_submit_removes_authorization(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="Auto",
+            last_name="Revoke",
+            date_of_birth=date(1984, 4, 4),
+            phone="+48700666777",
+            email="auto.revoke@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=57,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=queue_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        intake_form = PatientIntakeForm.objects.create(
+            queue_entry=queue_entry,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+            anamnesis_payload={"schema_version": 1, "answers": []},
+        )
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        self.assertTrue(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=queue_entry.id
+            ).exists()
+        )
+
+        autorevoke_paper_intake_authorization_after_intake_submit(
+            queue_entry_id=queue_entry.id,
+            intake_form_id=intake_form.id,
+            actor_user_id=self.doctor_user.id,
+        )
+
+        self.assertFalse(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=queue_entry.id
+            ).exists()
+        )
+        ev = (
+            AuditEvent.objects.filter(
+                event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+                patient_id=patient.id,
+            )
+            .order_by("-event_time")
+            .first()
+        )
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("trigger"), "intake_form_submitted")
+        self.assertEqual(ev.metadata.get("intake_form_id"), str(intake_form.id))
+
     def test_update_queue_entry_cancel_autorevokes_paper_authorization(self) -> None:
         patient = Patient.objects.create(
             first_name="Cancel",
@@ -572,18 +637,26 @@ class MedicalServicesTests(TestCase):
             authorized_by_user_id=self.admin_user.id,
             reason=_PAPER_AUTH_REASON,
         )
-        update_queue_entry(queue_entry.id, entry_status=QueueEntryStatus.CANCELLED)
+        update_queue_entry(
+            queue_entry.id,
+            entry_status=QueueEntryStatus.CANCELLED,
+            actor_user_id=self.admin_user.id,
+        )
         self.assertFalse(
             PaperIntakeAuthorization.objects.filter(
                 queue_entry_id=queue_entry.id
             ).exists()
         )
-        self.assertTrue(
+        cancel_ev = (
             AuditEvent.objects.filter(
                 event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
                 patient_id=patient.id,
-            ).exists()
+            )
+            .order_by("-event_time")
+            .first()
         )
+        self.assertIsNotNone(cancel_ev)
+        self.assertEqual(cancel_ev.actor_user_id, self.admin_user.id)
 
     def test_save_draft_document_version_creates_new_version(self) -> None:
         version = save_draft_document_version(

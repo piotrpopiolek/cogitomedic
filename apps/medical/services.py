@@ -358,8 +358,8 @@ def authorize_paper_intake(
 
     try:
         entry = (
-            QueueEntry.objects.select_for_update()
-            .select_related("daily_queue", "patient", "intake_form")
+            QueueEntry.objects.select_for_update(of=("self",))
+            .select_related("daily_queue", "patient")
             .get(id=queue_entry_id)
         )
     except QueueEntry.DoesNotExist as exc:
@@ -390,7 +390,12 @@ def authorize_paper_intake(
             ),
             api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
         )
-    if entry.intake_form_id and entry.intake_form.form_status == IntakeStatus.SUBMITTED:
+    intake_row = (
+        PatientIntakeForm.objects.filter(queue_entry_id=entry.id)
+        .only("id", "form_status")
+        .first()
+    )
+    if intake_row is not None and intake_row.form_status == IntakeStatus.SUBMITTED:
         raise DomainError(
             domain_message(
                 "other.domain.paper_intake_authorization_intake_form_submitted"
@@ -413,7 +418,7 @@ def authorize_paper_intake(
     entry.doctor_list_sort_at = now
     entry.save(update_fields=["doctor_list_sort_at", "updated_at"])
 
-    intake_status = entry.intake_form.form_status if entry.intake_form_id else None
+    intake_status = intake_row.form_status if intake_row is not None else None
     create_audit_event(
         event_type="PAPER_INTAKE_AUTHORIZED",
         actor_user_id=authorized_by_user_id,
@@ -425,7 +430,7 @@ def authorize_paper_intake(
             "authorization_reason": validated_reason,
             "appointment_time": entry.appointment_time.isoformat(),
             "intake_form_id_at_authorization": (
-                str(entry.intake_form_id) if entry.intake_form_id else None
+                str(intake_row.id) if intake_row is not None else None
             ),
             "intake_form_status_at_authorization": intake_status,
         },
@@ -455,8 +460,8 @@ def create_medical_document_without_intake(
 
     try:
         queue_entry = (
-            QueueEntry.objects.select_for_update()
-            .select_related("daily_queue", "patient", "intake_form")
+            QueueEntry.objects.select_for_update(of=("self",))
+            .select_related("daily_queue", "patient")
             .get(id=queue_entry_id)
         )
     except QueueEntry.DoesNotExist as exc:
@@ -489,9 +494,12 @@ def create_medical_document_without_intake(
             api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
         )
 
-    if queue_entry.intake_form_id and (
-        queue_entry.intake_form.form_status == IntakeStatus.SUBMITTED
-    ):
+    intake_row = (
+        PatientIntakeForm.objects.filter(queue_entry_id=queue_entry.id)
+        .only("form_status")
+        .first()
+    )
+    if intake_row is not None and intake_row.form_status == IntakeStatus.SUBMITTED:
         raise DomainError(
             domain_message(
                 "other.domain.paper_intake_intake_form_appeared_after_authorization"
@@ -499,17 +507,17 @@ def create_medical_document_without_intake(
             api_message_key="other.domain.paper_intake_intake_form_appeared_after_authorization",
         )
 
-    auth = (
-        PaperIntakeAuthorization.objects.select_for_update()
-        .filter(queue_entry_id=queue_entry.id)
-        .select_related("authorized_by")
-        .first()
-    )
-    if auth is None:
+    try:
+        auth = (
+            PaperIntakeAuthorization.objects.select_for_update()
+            .select_related("authorized_by")
+            .get(queue_entry_id=queue_entry.id)
+        )
+    except PaperIntakeAuthorization.DoesNotExist as exc:
         raise DomainError(
             domain_message("other.domain.paper_intake_not_authorized"),
             api_message_key="other.domain.paper_intake_not_authorized",
-        )
+        ) from exc
 
     snap_id = auth.id
     snap_reason = auth.reason
@@ -590,21 +598,22 @@ def revoke_paper_intake_authorization(
     validated_reason = _validate_paper_intake_authorization_reason(reason)
 
     entry = (
-        QueueEntry.objects.select_for_update()
+        QueueEntry.objects.select_for_update(of=("self",))
         .select_related("daily_queue", "patient")
         .get(id=queue_entry_id)
     )
 
-    auth = (
-        PaperIntakeAuthorization.objects.select_related("queue_entry")
-        .filter(queue_entry_id=entry.id)
-        .first()
-    )
-    if auth is None:
+    try:
+        auth = (
+            PaperIntakeAuthorization.objects.select_for_update()
+            .select_related("authorized_by")
+            .get(queue_entry_id=entry.id)
+        )
+    except PaperIntakeAuthorization.DoesNotExist as exc:
         raise DomainError(
             domain_message("other.domain.paper_intake_authorization_not_found"),
             api_message_key="other.domain.paper_intake_authorization_not_found",
-        )
+        ) from exc
 
     if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
         raise DomainError(
@@ -635,6 +644,90 @@ def revoke_paper_intake_authorization(
             "previously_authorized_at": snapshot_at.isoformat(),
             "previous_authorization_reason": snapshot_auth_reason,
         },
+    )
+
+
+def _autorevoke_paper_intake_authorization_if_present(
+    *,
+    queue_entry_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    trigger: str,
+    extra_audit_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Delete active paper auth for ``queue_entry_id`` if any; audit or no-op.
+
+    Caller must run inside ``transaction.atomic`` and already hold
+    ``select_for_update`` on the related ``QueueEntry`` (lock order: entry, then
+    this row) to avoid deadlocks with other paper-intake flows.
+    """
+    try:
+        paper_auth = (
+            PaperIntakeAuthorization.objects.select_for_update()
+            .select_related("queue_entry", "queue_entry__daily_queue")
+            .get(queue_entry_id=queue_entry_id)
+        )
+    except PaperIntakeAuthorization.DoesNotExist:
+        return
+    entry = paper_auth.queue_entry
+    prev = {
+        "id": str(paper_auth.id),
+        "authorized_by_id": str(paper_auth.authorized_by_id),
+        "authorized_at": paper_auth.authorized_at.isoformat(),
+        "reason": paper_auth.reason,
+    }
+    paper_auth.delete()
+    metadata: dict[str, Any] = {
+        "queue_entry_id": str(entry.id),
+        "trigger": trigger,
+        "previous_authorization": prev,
+    }
+    if extra_audit_metadata:
+        metadata.update(extra_audit_metadata)
+    create_audit_event(
+        event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+        actor_user_id=actor_user_id,
+        patient_id=entry.patient_id,
+        context_clinic_site_id=entry.daily_queue.clinic_site_id,
+        metadata=metadata,
+    )
+
+
+def autorevoke_paper_intake_authorization_after_intake_submit(
+    *,
+    queue_entry_id: uuid.UUID,
+    intake_form_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """
+    Remove paper-intake authorization when the patient submits digital intake.
+
+    Must run inside the caller's ``transaction.atomic`` (e.g. ``submit_patient_intake_form``).
+    Intentionally **not** wrapped in ``@transaction.atomic`` here to avoid nested blocks.
+    """
+    _autorevoke_paper_intake_authorization_if_present(
+        queue_entry_id=queue_entry_id,
+        actor_user_id=actor_user_id,
+        trigger="intake_form_submitted",
+        extra_audit_metadata={"intake_form_id": str(intake_form_id)},
+    )
+
+
+def autorevoke_paper_intake_authorization_after_queue_entry_cancelled(
+    *,
+    queue_entry_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """
+    Remove paper-intake authorization when a queue entry is cancelled.
+
+    Must run inside the caller's ``transaction.atomic`` (e.g. ``update_queue_entry``)
+    with the ``QueueEntry`` row already locked via ``select_for_update``.
+    Intentionally **not** wrapped in ``@transaction.atomic`` here.
+    """
+    _autorevoke_paper_intake_authorization_if_present(
+        queue_entry_id=queue_entry_id,
+        actor_user_id=actor_user_id,
+        trigger="queue_entry_cancelled",
     )
 
 
