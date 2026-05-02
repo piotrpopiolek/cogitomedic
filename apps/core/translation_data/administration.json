@@ -214,6 +214,76 @@
     "en": "Medical document versions",
     "pl": "Wersje dokumentów medycznych"
   },
+  "administration.model_paperintakeauthorization": {
+    "de": "Papier-Intake-Autorisierung",
+    "en": "Paper intake authorization",
+    "pl": "Autoryzacja ścieżki papierowej"
+  },
+  "administration.model_paperintakeauthorization_plural": {
+    "de": "Papier-Intake-Autorisierungen",
+    "en": "Paper intake authorizations",
+    "pl": "Autoryzacje ścieżek papierowych"
+  },
+  "administration.label_paper_intake_authorization": {
+    "de": "Papier-Intake-Autorisierung",
+    "en": "Paper intake authorization",
+    "pl": "Autoryzacja ścieżki papierowej"
+  },
+  "administration.label_paper_intake_authorized_at": {
+    "de": "Autorisiert am",
+    "en": "Authorized at",
+    "pl": "Autoryzowano"
+  },
+  "administration.label_paper_intake_authorized_by": {
+    "de": "Autorisiert von",
+    "en": "Authorized by",
+    "pl": "Autoryzował"
+  },
+  "administration.label_paper_intake_authorization_reason": {
+    "de": "Autorisierungsgrund",
+    "en": "Authorization reason",
+    "pl": "Powód autoryzacji"
+  },
+  "administration.label_paper_intake_has_medical_document": {
+    "de": "Medizinisches Dokument vorhanden",
+    "en": "Has medical document",
+    "pl": "Ma dokument medyczny"
+  },
+  "administration.action_authorize_paper_intake": {
+    "de": "Papier-Intake autorisieren",
+    "en": "Authorize paper intake",
+    "pl": "Autoryzuj ścieżkę papierową"
+  },
+  "administration.action_revoke_paper_intake_authorization": {
+    "de": "Autorisierung widerrufen",
+    "en": "Revoke authorization",
+    "pl": "Cofnij autoryzację"
+  },
+  "administration.action_create_paper_document": {
+    "de": "Papier-Dokument erstellen",
+    "en": "Create paper document",
+    "pl": "Utwórz dokument papierowy"
+  },
+  "administration.badge_paper_authorized_pending_document": {
+    "de": "Papier autorisiert, wartet auf Dokument",
+    "en": "Paper authorized, awaiting document",
+    "pl": "Papier autoryzowany, czeka na dokument"
+  },
+  "administration.admin_action_revoke_paper_intake_authorization": {
+    "de": "Ausgewählte Papier-Intake-Autorisierungen widerrufen",
+    "en": "Revoke selected paper intake authorizations",
+    "pl": "Cofnij wybrane autoryzacje ścieżki papierowej"
+  },
+  "administration.admin_paper_intake_revoke_permission_denied": {
+    "de": "Nur Administratoren oder Manager können Papier-Intake-Autorisierungen widerrufen.",
+    "en": "Only administrators or managers can revoke paper intake authorization.",
+    "pl": "Tylko administrator lub manager może cofnąć autoryzację ścieżki papierowej."
+  },
+  "administration.admin_paper_intake_revoke_result": {
+    "de": "{ok} Autorisierung(en) widerrufen; {failed} konnten nicht widerrufen werden.",
+    "en": "Revoked {ok} authorization(s); {failed} could not be revoked.",
+    "pl": "Cofnięto {ok} autoryzację(-e); {failed} nie udało się cofnąć."
+  },
   "administration.model_outboxevent": {
     "de": "Ausgangsereignis",
     "en": "Outbox event",
