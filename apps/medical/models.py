@@ -195,6 +195,63 @@ class MedicalDocument(models.Model):
         return f"Dokument medyczny: {self.queue_entry.patient} ({self.get_status_display()})"
 
 
+class PaperIntakeAuthorization(models.Model):
+    """Manager/admin authorization to open the paper intake path for a queue entry.
+
+    Revoking is implemented as deleting this row (see ``revoke_paper_intake_authorization``);
+    audit retains the decision trail.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    queue_entry = models.OneToOneField(
+        "reception.QueueEntry",
+        on_delete=models.CASCADE,
+        related_name="paper_intake_authorization",
+        verbose_name=db_gettext_lazy("administration.field_queue_entry", "Queue entry"),
+    )
+    authorized_at = models.DateTimeField(
+        verbose_name=db_gettext_lazy(
+            "administration.label_paper_intake_authorized_at", "Authorized at"
+        ),
+    )
+    authorized_by = models.ForeignKey(
+        "users.StaffUser",
+        on_delete=models.PROTECT,
+        related_name="paper_intake_authorizations_granted",
+        verbose_name=db_gettext_lazy(
+            "administration.label_paper_intake_authorized_by", "Authorized by"
+        ),
+    )
+    reason = models.TextField(
+        verbose_name=db_gettext_lazy(
+            "administration.label_paper_intake_authorization_reason",
+            "Authorization reason",
+        ),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
+    )
+
+    class Meta:
+        db_table = "paper_intake_authorization"
+        verbose_name = db_gettext_lazy(
+            "administration.model_paperintakeauthorization",
+            "Paper intake authorization",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_paperintakeauthorization_plural",
+            "Paper intake authorizations",
+        )
+        indexes = [
+            models.Index(fields=["authorized_at"], name="paper_auth_authorized_at_idx"),
+            models.Index(fields=["authorized_by"], name="paper_auth_authorized_by_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Paper intake auth: {self.queue_entry_id}"
+
+
 class MedicalDocumentVersion(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     medical_document = models.ForeignKey(

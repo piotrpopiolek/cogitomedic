@@ -61,6 +61,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
         "value",
         "allowed",
     ],
+    "administration.admin_paper_intake_revoke_result": ["ok", "failed"],
 }
 
 _KEY_DESCRIPTIONS: dict[str, str] = {
