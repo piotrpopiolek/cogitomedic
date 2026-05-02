@@ -550,6 +550,14 @@ class QueueEntry(models.Model):
         auto_now=True,
         verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
     )
+    doctor_list_sort_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_queue_entry_doctor_list_sort_at",
+            "Doctor list sort time",
+        ),
+    )
 
     class Meta:
         db_table = "queue_entry"
@@ -570,6 +578,11 @@ class QueueEntry(models.Model):
                         QueueEntryStatus.IN_PROGRESS,
                     ]
                 ),
+            ),
+            models.Index(
+                fields=["-doctor_list_sort_at"],
+                name="qentry_doctor_sort_idx",
+                condition=Q(doctor_list_sort_at__isnull=False),
             ),
         ]
         constraints = [

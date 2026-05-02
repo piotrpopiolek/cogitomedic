@@ -319,18 +319,152 @@ def create_or_get_medical_document(
     return doc
 
 
+def _validate_paper_intake_authorization_reason(reason: str) -> str:
+    text = (reason or "").strip()
+    if len(text) < _PAPER_INTAKE_AUTH_REASON_MIN_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_required"),
+            api_message_key="other.api.paper_intake_authorization_reason_required",
+        )
+    if len(text) > _PAPER_INTAKE_AUTH_REASON_MAX_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_too_long"),
+            api_message_key="other.api.paper_intake_authorization_reason_too_long",
+        )
+    return text
+
+
+@transaction.atomic
+def authorize_paper_intake(
+    *,
+    queue_entry_id: uuid.UUID,
+    authorized_by_user_id: uuid.UUID,
+    reason: str,
+) -> PaperIntakeAuthorization:
+    """ADMIN/MANAGER: authorize paper-intake path for a WAITING entry (does not flip entry_status)."""
+    try:
+        actor = StaffUser.objects.get(id=authorized_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_invalid_role"),
+            api_message_key="other.domain.paper_intake_authorization_invalid_role",
+        )
+    validated_reason = _validate_paper_intake_authorization_reason(reason)
+
+    try:
+        entry = (
+            QueueEntry.objects.select_for_update()
+            .select_related("daily_queue", "patient", "intake_form")
+            .get(id=queue_entry_id)
+        )
+    except QueueEntry.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_not_found"),
+            api_message_key="other.api.queue_entry_not_found",
+        ) from exc
+
+    if entry.entry_status != QueueEntryStatus.WAITING:
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_invalid_status"),
+            api_message_key="other.domain.paper_intake_authorization_invalid_status",
+        )
+    if entry.appointment_time is None:
+        raise DomainError(
+            domain_message("other.domain.paper_intake_requires_appointment_time"),
+            api_message_key="other.domain.paper_intake_requires_appointment_time",
+        )
+    if timezone.now() < entry.appointment_time + timedelta(hours=3):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_too_early"),
+            api_message_key="other.domain.paper_intake_authorization_too_early",
+        )
+    if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
+        raise DomainError(
+            domain_message(
+                "other.domain.medical_document_already_exists_for_queue_entry"
+            ),
+            api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+        )
+    if entry.intake_form_id and entry.intake_form.form_status == IntakeStatus.SUBMITTED:
+        raise DomainError(
+            domain_message(
+                "other.domain.paper_intake_authorization_intake_form_submitted"
+            ),
+            api_message_key="other.domain.paper_intake_authorization_intake_form_submitted",
+        )
+    if PaperIntakeAuthorization.objects.filter(queue_entry_id=entry.id).exists():
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_already_exists"),
+            api_message_key="other.domain.paper_intake_authorization_already_exists",
+        )
+
+    now = timezone.now()
+    authorization = PaperIntakeAuthorization.objects.create(
+        queue_entry=entry,
+        authorized_at=now,
+        authorized_by_id=authorized_by_user_id,
+        reason=validated_reason,
+    )
+    entry.doctor_list_sort_at = now
+    entry.save(update_fields=["doctor_list_sort_at", "updated_at"])
+
+    intake_status = entry.intake_form.form_status if entry.intake_form_id else None
+    create_audit_event(
+        event_type="PAPER_INTAKE_AUTHORIZED",
+        actor_user_id=authorized_by_user_id,
+        patient_id=entry.patient_id,
+        context_clinic_site_id=entry.daily_queue.clinic_site_id,
+        metadata={
+            "queue_entry_id": str(entry.id),
+            "authorization_id": str(authorization.id),
+            "authorization_reason": validated_reason,
+            "appointment_time": entry.appointment_time.isoformat(),
+            "intake_form_id_at_authorization": (
+                str(entry.intake_form_id) if entry.intake_form_id else None
+            ),
+            "intake_form_status_at_authorization": intake_status,
+        },
+    )
+    return authorization
+
+
 @transaction.atomic
 def create_medical_document_without_intake(
     *,
     queue_entry_id: uuid.UUID,
     created_by_user_id: uuid.UUID,
-    reason: str | None = None,
 ) -> MedicalDocument:
-    queue_entry = (
-        QueueEntry.objects.select_for_update()
-        .select_related("daily_queue", "patient")
-        .get(id=queue_entry_id)
-    )
+    """DOCTOR/ADMIN/MANAGER: create PAPER_INTAKE document after manager paper authorization (T2)."""
+    try:
+        creator = StaffUser.objects.get(id=created_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (creator.is_doctor or creator.is_admin_role or creator.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_create_document_invalid_role"),
+            api_message_key="other.domain.paper_intake_create_document_invalid_role",
+        )
+
+    try:
+        queue_entry = (
+            QueueEntry.objects.select_for_update()
+            .select_related("daily_queue", "patient", "intake_form")
+            .get(id=queue_entry_id)
+        )
+    except QueueEntry.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_not_found"),
+            api_message_key="other.api.queue_entry_not_found",
+        ) from exc
+
     if queue_entry.entry_status != QueueEntryStatus.WAITING:
         raise DomainError(
             domain_message("other.domain.queue_entry_must_be_waiting_for_paper_intake"),
@@ -347,14 +481,41 @@ def create_medical_document_without_intake(
             api_message_key="other.domain.paper_intake_earliest_after_appointment",
         )
 
-    existing_doc = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
-    if existing_doc is not None:
+    if MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).exists():
         raise DomainError(
             domain_message(
                 "other.domain.medical_document_already_exists_for_queue_entry"
             ),
             api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
         )
+
+    if queue_entry.intake_form_id and (
+        queue_entry.intake_form.form_status == IntakeStatus.SUBMITTED
+    ):
+        raise DomainError(
+            domain_message(
+                "other.domain.paper_intake_intake_form_appeared_after_authorization"
+            ),
+            api_message_key="other.domain.paper_intake_intake_form_appeared_after_authorization",
+        )
+
+    auth = (
+        PaperIntakeAuthorization.objects.select_for_update()
+        .filter(queue_entry_id=queue_entry.id)
+        .select_related("authorized_by")
+        .first()
+    )
+    if auth is None:
+        raise DomainError(
+            domain_message("other.domain.paper_intake_not_authorized"),
+            api_message_key="other.domain.paper_intake_not_authorized",
+        )
+
+    snap_id = auth.id
+    snap_reason = auth.reason
+    snap_by_id = auth.authorized_by_id
+    snap_at = auth.authorized_at
+    snap_age_seconds = (timezone.now() - snap_at).total_seconds()
 
     try:
         medical_document = MedicalDocument.objects.create(
@@ -373,8 +534,15 @@ def create_medical_document_without_intake(
         ) from exc
 
     status_before = queue_entry.entry_status
+    now = timezone.now()
     queue_entry.entry_status = QueueEntryStatus.PAPER_INTAKE_COMPLETED
-    queue_entry.save(update_fields=["entry_status", "updated_at"])
+    # UX: fresh paper document should sort like a new row (overrides authorize-time stamp).
+    queue_entry.doctor_list_sort_at = now
+    queue_entry.save(
+        update_fields=["entry_status", "doctor_list_sort_at", "updated_at"]
+    )
+
+    PaperIntakeAuthorization.objects.filter(id=snap_id).delete()
 
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
@@ -388,26 +556,15 @@ def create_medical_document_without_intake(
             "source_type": MedicalDocumentSourceType.PAPER_INTAKE,
             "queue_entry_status_before": status_before,
             "queue_entry_status_after": queue_entry.entry_status,
-            "reason": reason,
+            "paper_intake_authorization_id": str(snap_id),
+            "paper_intake_authorization_reason_snapshot": snap_reason,
+            "paper_intake_authorized_by_id": str(snap_by_id),
+            "paper_intake_authorized_at": snap_at.isoformat(),
+            "paper_intake_authorization_age_seconds": snap_age_seconds,
             **assigned_doctor_audit_metadata(medical_document),
         },
     )
     return medical_document
-
-
-def _validate_paper_intake_authorization_reason(reason: str) -> str:
-    text = (reason or "").strip()
-    if len(text) < _PAPER_INTAKE_AUTH_REASON_MIN_LEN:
-        raise DomainError(
-            domain_message("other.api.paper_intake_authorization_reason_required"),
-            api_message_key="other.api.paper_intake_authorization_reason_required",
-        )
-    if len(text) > _PAPER_INTAKE_AUTH_REASON_MAX_LEN:
-        raise DomainError(
-            domain_message("other.api.paper_intake_authorization_reason_too_long"),
-            api_message_key="other.api.paper_intake_authorization_reason_too_long",
-        )
-    return text
 
 
 @transaction.atomic
@@ -418,7 +575,13 @@ def revoke_paper_intake_authorization(
     reason: str,
 ) -> None:
     """Remove an active paper intake authorization (ADMIN/MANAGER). Audits the snapshot."""
-    actor = StaffUser.objects.get(id=revoked_by_user_id)
+    try:
+        actor = StaffUser.objects.get(id=revoked_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
     if not (actor.is_admin_role or actor.is_manager):
         raise DomainError(
             domain_message("other.domain.paper_intake_authorization_invalid_role"),
@@ -455,6 +618,9 @@ def revoke_paper_intake_authorization(
     snapshot_auth_reason = auth.reason
 
     auth.delete()
+
+    entry.doctor_list_sort_at = None
+    entry.save(update_fields=["doctor_list_sort_at", "updated_at"])
 
     create_audit_event(
         event_type="PAPER_INTAKE_AUTHORIZATION_REVOKED",

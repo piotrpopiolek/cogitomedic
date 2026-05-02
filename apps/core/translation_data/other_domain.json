@@ -109,6 +109,11 @@
     "en": "Cannot revoke authorization after the medical document has been created.",
     "pl": "Nie można cofnąć autoryzacji po utworzeniu dokumentu medycznego."
   },
+  "other.domain.paper_intake_create_document_invalid_role": {
+    "de": "Nur Arzt, Administrator oder Manager können ein Papierdokument ohne digitale Anamnese anlegen.",
+    "en": "Only a doctor, administrator, or manager can create a paper document without digital intake.",
+    "pl": "Tylko lekarz, administrator lub manager może utworzyć dokument papierowy bez cyfrowej ankiety."
+  },
   "other.domain.paper_intake_not_authorized": {
     "de": "Papierdokument kann nicht erstellt werden: zuvor erforderliche Autorisierung durch Administrator oder Manager.",
     "en": "Cannot create paper document: prior authorization by an administrator or manager is required.",

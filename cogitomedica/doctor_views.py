@@ -24,7 +24,6 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
     GateResult,
@@ -35,7 +34,6 @@ from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
-    create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
@@ -199,7 +197,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
 def doctor_open_by_queue_view(
     request: HttpRequest, queue_entry_id: UUID
 ) -> HttpResponse:
-    """Open queue entry in Befund flow (digital intake first, paper fallback when missing)."""
+    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document)."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     lang = _get_doctor_lang(request)
@@ -226,28 +224,16 @@ def doctor_open_by_queue_view(
     else:
         intake_form = getattr(entry, "intake_form", None)
         if intake_form is None:
-            try:
-                doc = create_medical_document_without_intake(
-                    queue_entry_id=entry.id,
-                    created_by_user_id=request.user.id,
-                    reason="doctor_open_by_queue_fallback",
-                )
-            except DomainError as exc:
-                message = resolve_other_message(
-                    request,
-                    exc.api_message_key or "other.api.invalid_request",
-                    str(exc),
-                )
-                return _render_doctor(
-                    request,
-                    "doctor/error.html",
-                    {
-                        "message": message,
-                        "ui": ui,
-                        "lang": lang,
-                    },
-                    status=400,
-                )
+            return _render_doctor(
+                request,
+                "doctor/error.html",
+                {
+                    "message": ui["error_no_intake_for_entry"],
+                    "ui": ui,
+                    "lang": lang,
+                },
+                status=400,
+            )
         else:
             form_status = getattr(intake_form, "form_status", None)
             if form_status == IntakeStatus.REOPENED:

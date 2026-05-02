@@ -38,7 +38,6 @@ class CreateMedicalDocumentWithoutIntakeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     queue_entry_id: UUID
-    reason: str = Field(min_length=1, max_length=500)
     created_by_user_id: UUID | None = None  # ignored; session user is used
 
 

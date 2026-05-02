@@ -17,6 +17,7 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
+from apps.medical.services import authorize_paper_intake
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
@@ -29,6 +30,10 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+_PAPER_AUTH_REASON = (
+    "Paper intake path authorized for this queue entry in test (long enough)."
+)
 
 
 class MedicalApiTests(TestCase):
@@ -240,12 +245,16 @@ class MedicalApiTests(TestCase):
             appointment_time=timezone.now() - timedelta(hours=4),
             created_by_user=self.reception_user,
         )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
         response = self.client.post(
             "/api/v1/medical-documents/no-intake",
             data=json.dumps(
                 {
                     "queue_entry_id": str(waiting_entry.id),
-                    "reason": "Paper form verified by doctor.",
                 }
             ),
             content_type="application/json",
@@ -268,7 +277,6 @@ class MedicalApiTests(TestCase):
             data=json.dumps(
                 {
                     "queue_entry_id": str(uuid4()),
-                    "reason": "no access",
                 }
             ),
             content_type="application/json",
@@ -289,7 +297,6 @@ class MedicalApiTests(TestCase):
             data=json.dumps(
                 {
                     "queue_entry_id": str(waiting_entry.id),
-                    "reason": "paper fallback",
                 }
             ),
             content_type="application/json",
@@ -311,12 +318,16 @@ class MedicalApiTests(TestCase):
             appointment_time=timezone.now() - timedelta(hours=4),
             created_by_user=self.reception_user,
         )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
         create_response = self.client.post(
             "/api/v1/medical-documents/no-intake",
             data=json.dumps(
                 {
                     "queue_entry_id": str(waiting_entry.id),
-                    "reason": "Paper fallback path.",
                 }
             ),
             content_type="application/json",
