@@ -18,6 +18,8 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
 )
 from apps.medical.services import (
+    PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED,
+    PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED,
     authorize_paper_intake,
     autorevoke_paper_intake_authorization_after_intake_submit,
     create_medical_document_without_intake,
@@ -305,6 +307,20 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(
             ctx.exception.api_message_key,
             "other.api.staff_user_not_found",
+        )
+
+    def test_revoke_paper_intake_authorization_queue_entry_not_found(
+        self,
+    ) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            revoke_paper_intake_authorization(
+                queue_entry_id=uuid4(),
+                revoked_by_user_id=self.admin_user.id,
+                reason="administrator revoke audit trail text here",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.api.queue_entry_not_found",
         )
 
     def test_create_medical_document_without_intake_requires_waiting_status(
@@ -613,7 +629,10 @@ class MedicalServicesTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
-        self.assertEqual(ev.metadata.get("trigger"), "intake_form_submitted")
+        self.assertEqual(
+            ev.metadata.get("trigger"),
+            PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED,
+        )
         self.assertEqual(ev.metadata.get("intake_form_id"), str(intake_form.id))
 
     def test_update_queue_entry_cancel_autorevokes_paper_authorization(self) -> None:
@@ -657,6 +676,10 @@ class MedicalServicesTests(TestCase):
         )
         self.assertIsNotNone(cancel_ev)
         self.assertEqual(cancel_ev.actor_user_id, self.admin_user.id)
+        self.assertEqual(
+            cancel_ev.metadata.get("trigger"),
+            PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED,
+        )
 
     def test_save_draft_document_version_creates_new_version(self) -> None:
         version = save_draft_document_version(
