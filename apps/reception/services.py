@@ -11,7 +11,6 @@ from django.utils import timezone
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
-from apps.medical.models import PaperIntakeAuthorization
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -25,7 +24,6 @@ from apps.reception.models import (
     QueueStatus,
     TabletDevice,
 )
-from apps.operations.services import create_audit_event
 from apps.users.models import StaffUser
 
 CLINIC_SITE_FIELD_NOT_PROVIDED = object()
@@ -447,8 +445,13 @@ def update_queue_entry(
     *,
     entry_status: str | None = None,
     notes: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> QueueEntry:
-    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED."""
+    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED.
+
+    ``actor_user_id`` (optional): who initiated the change; used for audit when
+    paper intake authorization is auto-revoked on ``CANCELLED``.
+    """
     if entry_status is not None and entry_status not in [
         c[0] for c in QueueEntryStatus.choices
     ]:
@@ -465,28 +468,15 @@ def update_queue_entry(
         entry.entry_status = entry_status
         update_fields.append("entry_status")
         if entry_status == QueueEntryStatus.CANCELLED:
-            paper_auth = PaperIntakeAuthorization.objects.filter(
-                queue_entry_id=entry.id
-            ).first()
-            if paper_auth is not None:
-                prev = {
-                    "id": str(paper_auth.id),
-                    "authorized_by_id": str(paper_auth.authorized_by_id),
-                    "authorized_at": paper_auth.authorized_at.isoformat(),
-                    "reason": paper_auth.reason,
-                }
-                paper_auth.delete()
-                create_audit_event(
-                    event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
-                    actor_user_id=None,
-                    patient_id=entry.patient_id,
-                    context_clinic_site_id=entry.daily_queue.clinic_site_id,
-                    metadata={
-                        "queue_entry_id": str(entry.id),
-                        "trigger": "queue_entry_cancelled",
-                        "previous_authorization": prev,
-                    },
-                )
+            # Lazy import: keep reception free of ``medical.models`` / paper-intake details.
+            from apps.medical.services import (
+                autorevoke_paper_intake_authorization_after_queue_entry_cancelled,
+            )
+
+            autorevoke_paper_intake_authorization_after_queue_entry_cancelled(
+                queue_entry_id=entry.id,
+                actor_user_id=actor_user_id,
+            )
             entry.doctor_list_sort_at = None
             update_fields.append("doctor_list_sort_at")
     if notes is not None:
