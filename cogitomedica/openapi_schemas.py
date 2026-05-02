@@ -196,6 +196,7 @@ def _get_request_model_registry() -> list[type]:
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
         MedicalPayloadMinimal,
+        PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
@@ -245,6 +246,7 @@ def _get_request_model_registry() -> list[type]:
         MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,
         CreateMedicalDocumentWithoutIntakeRequest,
+        PaperIntakeAuthorizationRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
@@ -307,6 +309,7 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         CreateMedicalDocumentWithoutIntakeRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
@@ -387,6 +390,14 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
             "post",
         ): CreateQueueEntryRequest,
         (f"{P}/queue-entries/{{queue_entry_id}}", "patch"): UpdateQueueEntryRequest,
+        (
+            f"{P}/queue-entries/{{queue_entry_id}}/paper-intake-authorization",
+            "post",
+        ): PaperIntakeAuthorizationRequest,
+        (
+            f"{P}/queue-entries/{{queue_entry_id}}/paper-intake-authorization",
+            "delete",
+        ): PaperIntakeAuthorizationRequest,
         (
             f"{P}/queue-entries/{{queue_entry_id}}/sessions",
             "post",

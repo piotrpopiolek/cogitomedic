@@ -41,6 +41,14 @@ class CreateMedicalDocumentWithoutIntakeRequest(BaseModel):
     created_by_user_id: UUID | None = None  # ignored; session user is used
 
 
+class PaperIntakeAuthorizationRequest(BaseModel):
+    """Body for POST (authorize) and DELETE (revoke) paper-intake authorization on a queue entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=10, max_length=500)
+
+
 class SaveDraftMedicalDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

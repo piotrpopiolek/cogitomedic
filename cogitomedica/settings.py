@@ -532,6 +532,28 @@ if HAS_UNFOLD:
                 },
                 {
                     "title": db_gettext_lazy(
+                        "administration.side_paper_intake",
+                        "Paper intake",
+                    ),
+                    "permission": lambda request: _is_manager_or_admin_role(request),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.model_paperintakeauthorization_plural",
+                                "Paper intake authorizations",
+                            ),
+                            "icon": "assignment_turned_in",
+                            "link": lambda request: reverse_lazy(
+                                "admin:medical_paperintakeauthorization_changelist"
+                            ),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy(
                         "administration.side_outbox_ops", "Outbox i operacje"
                     ),
                     "permission": lambda request: _is_doctor_or_admin_role(request),

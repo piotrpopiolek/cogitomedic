@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
+    get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
     json_pydantic_validation_error,
@@ -30,6 +31,7 @@ from apps.core.exceptions import (
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
     CreateMedicalDocumentWithoutIntakeRequest,
+    PaperIntakeAuthorizationRequest,
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
@@ -59,6 +61,7 @@ from apps.reception.models import QueueEntry
 from apps.medical.services import (
     _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
+    authorize_paper_intake,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
@@ -75,6 +78,7 @@ from apps.medical.services import (
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
+    revoke_paper_intake_authorization,
     retry_latest_document_processing,
     save_draft_document_version,
 )
@@ -288,6 +292,66 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
             "source_type": document.source_type,
         },
         status=201,
+    )
+
+
+@require_auth
+def queue_entry_paper_intake_authorization_view(
+    request: HttpRequest, queue_entry_id: UUID
+) -> JsonResponse:
+    """ADMIN/MANAGER: POST to authorize, DELETE to revoke (body ``reason`` in both cases)."""
+    role_error = require_user_role(request, allowed_roles={"ADMIN", "MANAGER"})
+    if role_error:
+        return role_error
+    if request.method not in ("POST", "DELETE"):
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
+    except ObjectDoesNotExist:
+        return json_error("other.api.queue_entry_not_found", status=404)
+
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
+        return json_error("other.api.queue_entry_not_in_scope", status=403)
+
+    try:
+        body = PaperIntakeAuthorizationRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    if request.method == "POST":
+        try:
+            authorization = authorize_paper_intake(
+                queue_entry_id=queue_entry_id,
+                authorized_by_user_id=request.user.id,
+                reason=body.reason,
+            )
+        except DomainError as exc:
+            return json_domain_error(exc, status=400)
+        return JsonResponse(
+            {
+                "paper_intake_authorization_id": str(authorization.id),
+                "queue_entry_id": str(authorization.queue_entry_id),
+                "authorized_at": authorization.authorized_at.isoformat(),
+            },
+            status=201,
+        )
+
+    try:
+        revoke_paper_intake_authorization(
+            queue_entry_id=queue_entry_id,
+            revoked_by_user_id=request.user.id,
+            reason=body.reason,
+        )
+    except DomainError as exc:
+        return json_domain_error(exc, status=400)
+    return JsonResponse(
+        {"queue_entry_id": str(queue_entry_id), "revoked": True},
+        status=200,
     )
 
 
