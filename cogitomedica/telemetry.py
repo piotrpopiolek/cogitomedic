@@ -1,4 +1,6 @@
+import logging
 import os
+
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -8,6 +10,8 @@ from opentelemetry.semconv.resource import ResourceAttributes
 from opentelemetry.instrumentation.django import DjangoInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+
+logger = logging.getLogger(__name__)
 
 
 def setup_telemetry():
@@ -39,4 +43,8 @@ def setup_telemetry():
                     enable_commenter=True, commenter_options={}
                 )
             except Exception:
-                pass  # Ignoruj jeśli już połączono z bazą lub inna wersja psycopg
+                logger.warning(
+                    "OpenTelemetry Psycopg instrumentation skipped (e.g. DB already "
+                    "connected or incompatible psycopg version).",
+                    exc_info=True,
+                )

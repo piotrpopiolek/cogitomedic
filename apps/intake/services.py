@@ -1099,7 +1099,7 @@ def submit_patient_intake_form(
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
     session = intake_form.session
-    queue_entry = QueueEntry.objects.select_for_update().get(
+    queue_entry = QueueEntry.objects.select_for_update(of=("self",)).get(
         id=intake_form.queue_entry_id
     )
     now = submitted_at or timezone.now()
