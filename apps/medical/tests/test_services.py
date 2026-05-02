@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import date, timedelta
 from uuid import uuid4
 
@@ -14,12 +15,15 @@ from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
+    PaperIntakeAuthorization,
 )
 from apps.medical.services import (
+    authorize_paper_intake,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     publish_document_version,
+    revoke_paper_intake_authorization,
     save_draft_document_version,
 )
 from apps.operations.models import AuditEvent
@@ -43,7 +47,12 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
+from apps.reception.services import update_queue_entry
 from apps.users.models import StaffUser
+
+_PAPER_AUTH_REASON = (
+    "Paper intake path authorized for this queue entry in test (long enough)."
+)
 
 
 class MedicalServicesTests(TestCase):
@@ -63,6 +72,20 @@ class MedicalServicesTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception_user, "Reception")
+        self.admin_user = StaffUser.objects.create_user(
+            username="admin_med",
+            email="admin.med@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin_user, "Admin")
+        self.manager_user = StaffUser.objects.create_user(
+            username="manager_med",
+            email="manager.med@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.manager_user, "Manager")
         clinic = ClinicSite.objects.create(code="MUC", name="Munich")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="M1", name="M1")
         queue = DailyQueue.objects.create(
@@ -201,10 +224,14 @@ class MedicalServicesTests(TestCase):
             created_by_user=self.reception_user,
         )
 
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
         doc = create_medical_document_without_intake(
             queue_entry_id=queue_entry.id,
             created_by_user_id=self.doctor_user.id,
-            reason="paper fallback",
         )
 
         queue_entry.refresh_from_db()
@@ -249,10 +276,14 @@ class MedicalServicesTests(TestCase):
             appointment_time=timezone.now() - timedelta(hours=4),
             created_by_user=self.reception_user,
         )
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.manager_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
         doc = create_medical_document_without_intake(
             queue_entry_id=queue_entry.id,
             created_by_user_id=self.doctor_user.id,
-            reason="paper no dob",
         )
         ctx = get_medical_document_context(
             medical_document_id=doc.id,
@@ -261,6 +292,20 @@ class MedicalServicesTests(TestCase):
         )
         self.assertIsNone(ctx["intake_summary"]["patient"]["date_of_birth"])
 
+    def test_revoke_paper_intake_authorization_unknown_staff_raises_domain_error(
+        self,
+    ) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            revoke_paper_intake_authorization(
+                queue_entry_id=self.queue_entry.id,
+                revoked_by_user_id=uuid4(),
+                reason="administrator revoke audit trail text here",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.api.staff_user_not_found",
+        )
+
     def test_create_medical_document_without_intake_requires_waiting_status(
         self,
     ) -> None:
@@ -268,7 +313,6 @@ class MedicalServicesTests(TestCase):
             create_medical_document_without_intake(
                 queue_entry_id=self.queue_entry.id,
                 created_by_user_id=self.doctor_user.id,
-                reason="paper fallback",
             )
         self.assertEqual(
             ctx.exception.api_message_key,
@@ -297,7 +341,6 @@ class MedicalServicesTests(TestCase):
             create_medical_document_without_intake(
                 queue_entry_id=queue_entry.id,
                 created_by_user_id=self.doctor_user.id,
-                reason="paper fallback",
             )
         self.assertEqual(
             ctx.exception.api_message_key,
@@ -326,7 +369,6 @@ class MedicalServicesTests(TestCase):
             create_medical_document_without_intake(
                 queue_entry_id=queue_entry.id,
                 created_by_user_id=self.doctor_user.id,
-                reason="paper fallback",
             )
         self.assertEqual(
             ctx.exception.api_message_key,
@@ -377,11 +419,170 @@ class MedicalServicesTests(TestCase):
             create_medical_document_without_intake(
                 queue_entry_id=queue_entry.id,
                 created_by_user_id=self.doctor_user.id,
-                reason="paper fallback",
             )
         self.assertEqual(
             ctx.exception.api_message_key,
             "other.domain.medical_document_already_exists_for_queue_entry",
+        )
+
+    def test_create_medical_document_without_intake_rejects_without_authorization(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="No",
+            last_name="Auth",
+            date_of_birth=date(1982, 2, 2),
+            phone="+48700111222",
+            email="no.auth@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=52,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_medical_document_without_intake(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.doctor_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.paper_intake_not_authorized",
+        )
+
+    def test_create_medical_document_without_intake_signature_has_no_reason_param(
+        self,
+    ) -> None:
+        sig = inspect.signature(create_medical_document_without_intake)
+        self.assertNotIn("reason", sig.parameters)
+
+    def test_authorize_paper_intake_sets_sort_at_and_audit(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Auth",
+            last_name="Paper",
+            date_of_birth=date(1983, 3, 3),
+            phone="+48700222333",
+            email="auth.paper@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=53,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        auth = authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.manager_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        queue_entry.refresh_from_db()
+        self.assertEqual(auth.queue_entry_id, queue_entry.id)
+        self.assertEqual(queue_entry.entry_status, QueueEntryStatus.WAITING)
+        self.assertIsNotNone(queue_entry.doctor_list_sort_at)
+        ev = AuditEvent.objects.filter(event_type="PAPER_INTAKE_AUTHORIZED").first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("authorization_id"), str(auth.id))
+
+    def test_authorize_paper_intake_rejects_doctor_role(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Doc",
+            last_name="TryAuth",
+            date_of_birth=date(1984, 4, 4),
+            phone="+48700333444",
+            email="doc.try@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=54,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            authorize_paper_intake(
+                queue_entry_id=queue_entry.id,
+                authorized_by_user_id=self.doctor_user.id,
+                reason=_PAPER_AUTH_REASON,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.paper_intake_authorization_invalid_role",
+        )
+
+    def test_revoke_paper_intake_clears_doctor_list_sort_at(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Rev",
+            last_name="Sort",
+            date_of_birth=date(1985, 5, 5),
+            phone="+48700444555",
+            email="rev.sort@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=55,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        queue_entry.refresh_from_db()
+        self.assertIsNotNone(queue_entry.doctor_list_sort_at)
+        revoke_paper_intake_authorization(
+            queue_entry_id=queue_entry.id,
+            revoked_by_user_id=self.admin_user.id,
+            reason="Administrative revoke with audit text long enough.",
+        )
+        queue_entry.refresh_from_db()
+        self.assertIsNone(queue_entry.doctor_list_sort_at)
+        self.assertFalse(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=queue_entry.id
+            ).exists()
+        )
+
+    def test_update_queue_entry_cancel_autorevokes_paper_authorization(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Cancel",
+            last_name="Paper",
+            date_of_birth=date(1986, 6, 6),
+            phone="+48700555666",
+            email="cancel.paper@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=56,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        update_queue_entry(queue_entry.id, entry_status=QueueEntryStatus.CANCELLED)
+        self.assertFalse(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=queue_entry.id
+            ).exists()
+        )
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+                patient_id=patient.id,
+            ).exists()
         )
 
     def test_save_draft_document_version_creates_new_version(self) -> None:

@@ -18,7 +18,6 @@ from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
-    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -240,7 +239,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"completed", resp.content.lower())
 
-    def test_open_by_queue_without_intake_creates_paper_document(self) -> None:
+    def test_open_by_queue_without_intake_returns_400_no_auto_document(self) -> None:
         self._login_doctor()
         clinic = ClinicSite.objects.create(code="NO", name="No Intake Clinic")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
@@ -269,15 +268,13 @@ class DoctorViewsSmokeTests(TestCase):
         )
 
         resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
-        self.assertEqual(resp.status_code, 302)
-        document = MedicalDocument.objects.get(queue_entry=entry)
-        entry.refresh_from_db()
-        self.assertEqual(document.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
-        self.assertIsNone(document.intake_form_id)
-        self.assertEqual(entry.entry_status, QueueEntryStatus.PAPER_INTAKE_COMPLETED)
-        self.assertIn(f"/doctor/{document.id}/", resp.url)
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(MedicalDocument.objects.filter(queue_entry=entry).exists())
+        self.assertIn(b"questionnaire", resp.content.lower())
 
-    def test_open_by_queue_without_intake_before_3h_returns_400(self) -> None:
+    def test_open_by_queue_without_intake_early_appointment_still_returns_400(
+        self,
+    ) -> None:
         self._login_doctor()
         clinic = ClinicSite.objects.create(code="N3", name="No Intake Guard Clinic")
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
@@ -307,7 +304,6 @@ class DoctorViewsSmokeTests(TestCase):
 
         resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
         self.assertEqual(resp.status_code, 400)
-        self.assertIn(b"3", resp.content)
         self.assertFalse(MedicalDocument.objects.filter(queue_entry=entry).exists())
 
 

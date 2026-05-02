@@ -744,6 +744,11 @@
     "en": "Queue entry",
     "pl": "Wpis kolejki"
   },
+  "administration.field_queue_entry_doctor_list_sort_at": {
+    "de": "Sortierzeitpunkt",
+    "en": "Doctor list sort time",
+    "pl": "Czas sortowania listy lekarza"
+  },
   "administration.field_consulting_room": {
     "de": "Praxisraum",
     "en": "Consulting room",
