@@ -30,6 +30,7 @@ from apps.medical.models import (
     MedicalDocument,
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
     PdfStatus,
 )
 from apps.operations.services import create_audit_event
@@ -39,6 +40,9 @@ from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.models import StaffUser
 
 DOCUMENT_LOCK_TIMEOUT_HOURS = 6
+
+_PAPER_INTAKE_AUTH_REASON_MIN_LEN = 10
+_PAPER_INTAKE_AUTH_REASON_MAX_LEN = 500
 
 
 def _staff_user_display_name(user: StaffUser | None) -> str:
@@ -389,6 +393,83 @@ def create_medical_document_without_intake(
         },
     )
     return medical_document
+
+
+def _validate_paper_intake_authorization_reason(reason: str) -> str:
+    text = (reason or "").strip()
+    if len(text) < _PAPER_INTAKE_AUTH_REASON_MIN_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_required"),
+            api_message_key="other.api.paper_intake_authorization_reason_required",
+        )
+    if len(text) > _PAPER_INTAKE_AUTH_REASON_MAX_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_too_long"),
+            api_message_key="other.api.paper_intake_authorization_reason_too_long",
+        )
+    return text
+
+
+@transaction.atomic
+def revoke_paper_intake_authorization(
+    *,
+    queue_entry_id: uuid.UUID,
+    revoked_by_user_id: uuid.UUID,
+    reason: str,
+) -> None:
+    """Remove an active paper intake authorization (ADMIN/MANAGER). Audits the snapshot."""
+    actor = StaffUser.objects.get(id=revoked_by_user_id)
+    if not (actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_invalid_role"),
+            api_message_key="other.domain.paper_intake_authorization_invalid_role",
+        )
+    validated_reason = _validate_paper_intake_authorization_reason(reason)
+
+    entry = (
+        QueueEntry.objects.select_for_update()
+        .select_related("daily_queue", "patient")
+        .get(id=queue_entry_id)
+    )
+
+    auth = (
+        PaperIntakeAuthorization.objects.select_related("queue_entry")
+        .filter(queue_entry_id=entry.id)
+        .first()
+    )
+    if auth is None:
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_not_found"),
+            api_message_key="other.domain.paper_intake_authorization_not_found",
+        )
+
+    if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
+        raise DomainError(
+            domain_message("other.domain.paper_intake_revoke_after_document_created"),
+            api_message_key="other.domain.paper_intake_revoke_after_document_created",
+        )
+
+    snapshot_id = auth.id
+    snapshot_by_id = auth.authorized_by_id
+    snapshot_at = auth.authorized_at
+    snapshot_auth_reason = auth.reason
+
+    auth.delete()
+
+    create_audit_event(
+        event_type="PAPER_INTAKE_AUTHORIZATION_REVOKED",
+        actor_user_id=revoked_by_user_id,
+        patient_id=entry.patient_id,
+        context_clinic_site_id=entry.daily_queue.clinic_site_id,
+        metadata={
+            "queue_entry_id": str(entry.id),
+            "revoke_reason": validated_reason,
+            "previous_authorization_id": str(snapshot_id),
+            "previously_authorized_by_id": str(snapshot_by_id),
+            "previously_authorized_at": snapshot_at.isoformat(),
+            "previous_authorization_reason": snapshot_auth_reason,
+        },
+    )
 
 
 SAVE_DRAFT_INTENT_EDIT = "edit"

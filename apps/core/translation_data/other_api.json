@@ -398,5 +398,15 @@
     "de": "Benutzername oder E-Mail existiert bereits.",
     "en": "Username or email already exists.",
     "pl": "Nazwa użytkownika lub e-mail już istnieje."
+  },
+  "other.api.paper_intake_authorization_reason_required": {
+    "de": "Das Feld „Grund“ ist erforderlich (10–500 Zeichen).",
+    "en": "The reason field is required (10–500 characters).",
+    "pl": "Pole „powód” jest wymagane (10–500 znaków)."
+  },
+  "other.api.paper_intake_authorization_reason_too_long": {
+    "de": "Das Feld „Grund“ ist zu lang (max. 500 Zeichen).",
+    "en": "The reason field is too long (max 500 characters).",
+    "pl": "Pole „powód” jest za długie (max 500 znaków)."
   }
 }
