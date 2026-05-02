@@ -1681,6 +1681,10 @@ COGITO_PATHS = {
             ],
             "requestBody": {
                 "required": True,
+                "description": (
+                    "JSON object with `reason` (10–500 chars). Schema: "
+                    "`PaperIntakeAuthorizationRequest` (see Components)."
+                ),
                 "content": {"application/json": {"schema": {"type": "object"}}},
             },
             "responses": {
@@ -1700,7 +1704,10 @@ COGITO_PATHS = {
             "summary": "Revoke paper intake authorization",
             "description": (
                 "ADMIN or MANAGER only. Removes active authorization when no medical document "
-                "exists yet for the queue entry. Body: `reason` (10–500 chars) recorded on audit."
+                "exists yet for the queue entry. **Request body is required (same as POST):** "
+                "send `application/json` with `reason` (10–500 chars) for audit — this is "
+                "not a typical body-less HTTP DELETE. Clients that omit the body will get "
+                "400 (invalid JSON / validation)."
             ),
             "tags": ["Reception – Queues", "Medical"],
             "parameters": [
@@ -1713,6 +1720,11 @@ COGITO_PATHS = {
             ],
             "requestBody": {
                 "required": True,
+                "description": (
+                    "**Required.** Same schema as POST: `PaperIntakeAuthorizationRequest` "
+                    "(`reason`, 10–500 characters). OpenAPI shows `$ref` to that component "
+                    "after schema merge."
+                ),
                 "content": {"application/json": {"schema": {"type": "object"}}},
             },
             "responses": {
