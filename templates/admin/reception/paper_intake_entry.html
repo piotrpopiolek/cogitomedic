@@ -35,7 +35,7 @@
         <p><span class="font-medium text-gray-700">{% admin_trans "administration.paper_intake_admin_label_appointment" "Appointment" %}:</span> {{ entry.appointment_time|date:"Y-m-d H:i" }}</p>
         {% endif %}
         {% if earliest_authorize_at %}
-        <p class="text-gray-600">{% admin_trans "administration.paper_intake_admin_earliest_hint" "Earliest authorization time (appointment + 3h)" %}: {{ earliest_authorize_at|date:"Y-m-d H:i" }}</p>
+        <p class="text-gray-600">{% db_transf "administration.paper_intake_admin_earliest_hint" "Earliest authorization time (appointment + {hours} h)" hours=paper_intake_min_hours_after_appointment %}: {{ earliest_authorize_at|date:"Y-m-d H:i" }}</p>
         {% endif %}
         <p class="pt-2"><a href="{{ admin_queue_entry_url }}" class="text-primary-600 hover:text-primary-800 font-medium">{% admin_trans "administration.paper_intake_admin_link_queue_entry" "Open queue entry in Django admin" %} →</a></p>
     </div>

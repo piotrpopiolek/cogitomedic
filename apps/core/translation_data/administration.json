@@ -320,9 +320,9 @@
     "pl": "Autoryzacja ścieżki papierowej"
   },
   "administration.paper_intake_admin_earliest_hint": {
-    "de": "Früheste Autorisierungszeit (Termin + 3 h)",
-    "en": "Earliest authorization time (appointment + 3h)",
-    "pl": "Najwcześniejszy moment autoryzacji (wizyta + 3 h)"
+    "de": "Früheste Autorisierungszeit (Termin + {hours} h)",
+    "en": "Earliest authorization time (appointment + {hours} h)",
+    "pl": "Najwcześniejszy moment autoryzacji (wizyta + {hours} h)"
   },
   "administration.paper_intake_admin_has_document": {
     "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument.",

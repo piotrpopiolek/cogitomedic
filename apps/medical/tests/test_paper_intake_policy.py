@@ -106,9 +106,14 @@ class PaperIntakeAuthorizeEligibilityTests(TestCase):
         self.entry.save(update_fields=["appointment_time", "updated_at"])
         e = paper_intake_authorize_eligibility(entry=self.entry)
         self.assertFalse(e.can_authorize)
+        too_early = e.blocking_blocks[-1]
         self.assertEqual(
-            e.blocking_blocks[-1].message_key,
+            too_early.message_key,
             "other.domain.paper_intake_authorization_too_early",
+        )
+        self.assertEqual(
+            too_early.format_params.get("hours"),
+            PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
         )
         self.assertIsNotNone(e.earliest_authorize_at)
 

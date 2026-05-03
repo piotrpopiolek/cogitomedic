@@ -366,7 +366,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json().get("error_key"), "other.api.invalid_request_body")
 
-    def test_paper_intake_authorization_manager_out_of_scope_returns_403(self) -> None:
+    def test_paper_intake_authorization_manager_out_of_assigned_clinic_succeeds(
+        self,
+    ) -> None:
         other_site = ClinicSite.objects.create(code="API-OTHER", name="Other Site")
         other_room = ConsultingRoom.objects.create(
             clinic_site=other_site, code="X1", name="X1"
@@ -401,8 +403,10 @@ class MedicalApiTests(TestCase):
             data=json.dumps({"reason": _PAPER_AUTH_REASON}),
             content_type="application/json",
         )
-        self.assertEqual(r.status_code, 403)
-        self.assertIn("error", r.json())
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertIn("paper_intake_authorization_id", body)
+        self.assertEqual(body["queue_entry_id"], str(waiting_entry.id))
 
     def test_paper_intake_authorization_post_admin_201_duplicate_400_delete_200(
         self,

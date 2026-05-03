@@ -70,9 +70,9 @@
     "pl": "appointment_time jest wymagane dla ścieżki papierowej."
   },
   "other.domain.paper_intake_earliest_after_appointment": {
-    "de": "Dokument ohne digitalen Intake kann erst 3 Stunden nach appointment_time erstellt werden.",
-    "en": "Document without digital intake can be created only 3 hours after appointment_time.",
-    "pl": "Dokument bez ankiety cyfrowej można utworzyć dopiero 3 godziny po appointment_time."
+    "de": "Dokument ohne digitalen Intake kann frühestens {hours} h nach appointment_time erstellt werden.",
+    "en": "Document without digital intake can be created only at least {hours} hours after appointment_time.",
+    "pl": "Dokument bez ankiety cyfrowej można utworzyć dopiero po min. {hours} h po appointment_time."
   },
   "other.domain.paper_intake_authorization_invalid_role": {
     "de": "Keine Berechtigung zur Papier-Intake-Autorisierung (Administrator oder Manager erforderlich).",
@@ -85,9 +85,9 @@
     "pl": "Autoryzacja papierowa wymaga wpisu kolejki w statusie WAITING."
   },
   "other.domain.paper_intake_authorization_too_early": {
-    "de": "Autorisierung frühestens 3 Stunden nach der Terminzeit möglich.",
-    "en": "Authorization is possible only 3 hours after the appointment time.",
-    "pl": "Autoryzacja możliwa dopiero 3 godziny po godzinie wizyty."
+    "de": "Autorisierung frühestens {hours} h nach der Terminzeit möglich.",
+    "en": "Authorization is possible only at least {hours} hours after the appointment time.",
+    "pl": "Autoryzacja możliwa dopiero po min. {hours} h od godziny wizyty."
   },
   "other.domain.paper_intake_authorization_intake_form_submitted": {
     "de": "Papier kann nicht autorisiert werden: Patient hat die digitale Anamnese eingereicht.",
