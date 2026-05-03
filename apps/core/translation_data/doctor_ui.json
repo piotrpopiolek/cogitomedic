@@ -639,6 +639,11 @@
     "en": "Create medical document?",
     "pl": "Utworzyć dokument medyczny?"
   },
+  "doctor.paper_intake_modal_cancel": {
+    "de": "Abbrechen",
+    "en": "Cancel",
+    "pl": "Anuluj"
+  },
   "doctor.password": {
     "de": "Passwort",
     "en": "Password",
