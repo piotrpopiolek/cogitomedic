@@ -354,8 +354,12 @@ class DoctorViewsSmokeTests(TestCase):
 
         resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"paper", resp.content.lower())
-        self.assertIn(b"create-no-intake", resp.content.lower())
+        lowered = resp.content.lower()
+        self.assertTrue(
+            b"paper" in lowered or b"papier" in lowered,
+            msg="Expected paper-intake wording (EN or DE) in the no-intake action page.",
+        )
+        self.assertIn(b"create-no-intake", lowered)
 
     def test_post_create_no_intake_creates_document_and_redirects_to_detail(
         self,

@@ -156,6 +156,7 @@ class PaperIntakeAuthorizationContextTests(TestCase):
         )
         ctx = _paper_intake_authorization_context_for_document(self.doc)
         self.assertIsNotNone(ctx)
+        assert ctx is not None
         self.assertIsNone(ctx["authorized_by_user_id"])
         self.assertIsNone(ctx["authorized_at"])
         self.assertIsNone(ctx["reason"])
@@ -175,6 +176,7 @@ class PaperIntakeAuthorizationContextTests(TestCase):
             },
         )
         ctx2 = _paper_intake_authorization_context_for_document(self.doc)
+        assert ctx2 is not None
         self.assertEqual(ctx2["authorized_by_username"], str(missing_id))
         self.assertEqual(ctx2["reason"], "snap reason ok")
         self.assertEqual(ctx2["authorized_at"], "2026-01-02T12:00:00+00:00")
