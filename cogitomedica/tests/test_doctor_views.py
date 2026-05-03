@@ -13,12 +13,15 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.operations.models import AuditEvent
 from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
     PdfStatus,
 )
 from apps.reception.models import (
@@ -67,6 +70,16 @@ class DoctorViewsSmokeTests(TestCase):
     def _login_doctor(self):
         self.client.force_login(self.doctor)
 
+    def _assert_paper_intake_modal_markup(self, html: str) -> None:
+        """Regression: in-page modal for paper create; no native window.confirm."""
+        self.assertIn('id="paper-intake-confirm-modal"', html)
+        self.assertIn("js-paper-intake-create-form", html)
+        self.assertNotIn(
+            "window.confirm",
+            html,
+            msg="Paper intake create must not use browser native confirm().",
+        )
+
     # ==========================================================
     # Login
     # ==========================================================
@@ -112,6 +125,14 @@ class DoctorViewsSmokeTests(TestCase):
         self._login_doctor()
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
+
+    def test_list_includes_published_by_doctor_select(self) -> None:
+        self._login_doctor()
+        resp = self.client.get("/doctor/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('name="published_by_user_id"', html)
+        self.assertIn('id="id_published_by_user_id"', html)
 
     def test_list_manager_returns_200(self):
         self.client.force_login(self.manager_user)
@@ -239,6 +260,448 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"completed", resp.content.lower())
 
+    def test_open_by_queue_without_intake_returns_400_no_auto_document(self) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="NO", name="No Intake Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="PaperFlow",
+            date_of_birth=date(1995, 3, 3),
+            phone="+48500777666",
+            email="paperflow@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(MedicalDocument.objects.filter(queue_entry=entry).exists())
+        self.assertIn(b"questionnaire", resp.content.lower())
+
+    def test_open_by_queue_without_intake_early_appointment_still_returns_400(
+        self,
+    ) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="N3", name="No Intake Guard Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="TooEarly",
+            date_of_birth=date(1996, 4, 4),
+            phone="+48500666555",
+            email="tooearly@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(MedicalDocument.objects.filter(queue_entry=entry).exists())
+
+    def test_open_by_queue_without_intake_with_paper_authorization_returns_action_page(
+        self,
+    ) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PA", name="Paper Auth Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="AuthorizedPaper",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48500555444",
+            email="authorizedpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake",
+        )
+
+        list_resp = self.client.get("/doctor/?lang=en")
+        self.assertEqual(list_resp.status_code, 302)
+        list_resp = self.client.get("/doctor/")
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertIn(
+            f"/doctor/open/{entry.id}/create-no-intake/", list_resp.content.decode()
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 200)
+        lowered = resp.content.lower()
+        self.assertTrue(
+            b"paper" in lowered or b"papier" in lowered,
+            msg="Expected paper-intake wording (EN or DE) in the no-intake action page.",
+        )
+        self.assertIn(b"create-no-intake", lowered)
+
+    def test_paper_intake_create_confirm_modal_on_list_and_no_intake_page(self) -> None:
+        """List + no-intake action page embed shared modal; forms use JS hook, not window.confirm."""
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PM", name="Paper Modal Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ModalPaper",
+            date_of_birth=date(1992, 2, 2),
+            phone="+48500333222",
+            email="modalpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake for modal regression test",
+        )
+
+        list_resp = self.client.get("/doctor/")
+        self.assertEqual(list_resp.status_code, 200)
+        self._assert_paper_intake_modal_markup(list_resp.content.decode())
+
+        action_resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(action_resp.status_code, 200)
+        self._assert_paper_intake_modal_markup(action_resp.content.decode())
+
+    def test_post_create_no_intake_creates_document_and_redirects_to_detail(
+        self,
+    ) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PC", name="Paper Create Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="CreatePaper",
+            date_of_birth=date(1991, 8, 8),
+            phone="+48500444333",
+            email="createpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake",
+        )
+
+        resp = self.client.post(f"/doctor/open/{entry.id}/create-no-intake/?lang=en")
+
+        self.assertEqual(resp.status_code, 302)
+        doc = MedicalDocument.objects.get(queue_entry=entry)
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertIsNone(doc.intake_form_id)
+        self.assertIn(f"/doctor/{doc.id}/?lang=en", resp.url)
+
+    def test_paper_intake_document_detail_panel_has_paper_context_and_ui_keys(
+        self,
+    ) -> None:
+        """Befund detail for PAPER_INTAKE: panel JSON exposes auth snapshot + new UI keys."""
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PD", name="Paper Detail Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="DetailPaper",
+            date_of_birth=date(1990, 1, 2),
+            phone="+48500111222",
+            email="detailpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake",
+        )
+        post_resp = self.client.post(
+            f"/doctor/open/{entry.id}/create-no-intake/?lang=en",
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        doc = MedicalDocument.objects.get(queue_entry=entry)
+
+        detail_resp = self.client.get(f"/doctor/{doc.id}/?lang=en")
+        self.assertEqual(detail_resp.status_code, 200)
+        html = detail_resp.content.decode()
+        self.assertIn('id="paper-intake-meta"', html)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        assert m is not None, "expected doctor-panel-data script in HTML"
+        panel = json.loads(m.group(1))
+        self.assertEqual(panel["context"]["source_type"], "PAPER_INTAKE")
+        auth = panel["context"]["paper_intake_authorization"]
+        self.assertIsNotNone(auth)
+        self.assertEqual(auth.get("reason"), "Patient delivered paper intake")
+        self.assertEqual(
+            auth.get("authorized_by_username"),
+            self.manager_user.username,
+        )
+        ui = panel["ui"]
+        self.assertIn("detail_paper_intake_notice", ui)
+        self.assertIn("detail_paper_auth_heading", ui)
+        self.assertTrue(len(ui.get("detail_paper_intake_notice", "")) > 5)
+
+    def test_paper_intake_document_detail_returns_422_when_audit_snapshot_missing(
+        self,
+    ) -> None:
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PX", name="Paper Missing Audit Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="NoAuditSnap",
+            date_of_birth=date(1988, 8, 8),
+            phone="+48500222333",
+            email="noauditsnap@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake for missing-audit test",
+        )
+        post_resp = self.client.post(
+            f"/doctor/open/{entry.id}/create-no-intake/?lang=en",
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        doc = MedicalDocument.objects.get(queue_entry=entry)
+        AuditEvent.objects.filter(
+            medical_document_id=doc.id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        ).delete()
+        detail_resp = self.client.get(f"/doctor/{doc.id}/?lang=en")
+        self.assertEqual(detail_resp.status_code, 422)
+        self.assertIn(b"audit", detail_resp.content.lower())
+
+    def test_open_by_queue_returns_404_when_published_document_not_accessible(
+        self,
+    ) -> None:
+        """Another doctor must not open queue entry guarded by published document."""
+        other = StaffUser.objects.create_user(
+            username="doc-other-queue",
+            email="doc.other.queue@example.com",
+            password=self.password,
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="NA", name="No Access Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="NoAccessQueue",
+            date_of_birth=date(1994, 4, 4),
+            phone="+48500333222",
+            email="noaccessqueue@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+        MedicalDocument.objects.create(
+            queue_entry=entry,
+            intake_form=intake,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        self.client.force_login(other)
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_create_no_intake_shows_error_when_appointment_too_recent(self) -> None:
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="TE", name="Too Early Create Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="TooEarlyCreate",
+            date_of_birth=date(1995, 5, 5),
+            phone="+48500222111",
+            email="tooearlycreate@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake for early-create test.",
+        )
+        resp = self.client.post(f"/doctor/open/{entry.id}/create-no-intake/?lang=en")
+        self.assertEqual(resp.status_code, 400)
+        self.assertContains(resp, "create-no-intake", status_code=400)
+
 
 class DoctorDetailHappyPathTests(TestCase):
     """Full data chain for the document detail view."""
@@ -311,7 +774,7 @@ class DoctorDetailHappyPathTests(TestCase):
             current_version_no=0,
             created_by_user=self.doctor,
         )
-        # Default HiDrive /incoming listing is empty in tests → real gate returns 422.
+        # Default HiDrive /incoming listing is empty in tests → real gate would return 424.
         gate_patcher = patch(
             "cogitomedica.doctor_views.check_external_pdf_gate",
             return_value=GateResult(
@@ -357,7 +820,7 @@ class DoctorDetailHappyPathTests(TestCase):
             html,
             re.DOTALL,
         )
-        self.assertIsNotNone(m)
+        assert m is not None, "expected doctor-panel-data script in HTML"
         panel = json.loads(m.group(1))
         self.assertIn("bodyMapImageUrl", panel)
         self.assertIn("tablet/body.jpg", panel["bodyMapImageUrl"])
@@ -409,13 +872,13 @@ class DoctorDetailHappyPathTests(TestCase):
             skip_attachment_sync=False,
         ),
     )
-    def test_detail_returns_422_when_external_pdf_gate_blocks(
+    def test_detail_returns_424_when_external_pdf_gate_blocks(
         self,
         _mock_gate: MagicMock,
     ) -> None:
         self.client.force_login(self.doctor)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 424)
         self.assertIn("GATE_BLOCKED", resp.content.decode())
 
     @patch(

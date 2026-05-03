@@ -24,12 +24,12 @@ from apps.intake.models import (
 from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import process_intake_outbox_events
 from apps.operations.prom_metrics import build_metrics_payload
+from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.intake.services import (
     InvalidSignatureError,
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
     IntakeSessionValidationError,
-    SIGNATURE_MAX_SIZE,
     _read_signature_data_url,
     _effective_consent_filter,
     _effective_question_filter,
@@ -196,6 +196,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertEqual(
             self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED
         )
+        self.assertIsNotNone(self.queue_entry.doctor_list_sort_at)
         self.assertTrue(
             AuditEvent.objects.filter(
                 event_type="INTAKE_SUBMITTED",
@@ -210,6 +211,51 @@ class SubmitPatientIntakeFormTests(TestCase):
             event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
         )
         self.assertEqual(event.status, IntakeOutboxStatus.PENDING)
+
+    def test_submit_patient_intake_form_autorevokes_paper_authorization(self) -> None:
+        from apps.medical.models import PaperIntakeAuthorization
+        from apps.medical.services import authorize_paper_intake
+
+        admin = StaffUser.objects.create_user(
+            username="intake-admin-paper",
+            email="intake.admin.paper@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(admin, "Admin")
+        self.queue_entry.entry_status = QueueEntryStatus.WAITING
+        self.queue_entry.appointment_time = timezone.now() - timedelta(hours=4)
+        self.queue_entry.save(
+            update_fields=["entry_status", "appointment_time", "updated_at"]
+        )
+        authorize_paper_intake(
+            queue_entry_id=self.queue_entry.id,
+            authorized_by_user_id=admin.id,
+            reason=(
+                "Paper intake path authorized for this queue entry in test (long enough)."
+            ),
+        )
+        self.assertTrue(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=self.queue_entry.id
+            ).exists()
+        )
+
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+        self.assertFalse(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=self.queue_entry.id
+            ).exists()
+        )
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+                patient_id=self.queue_entry.patient_id,
+            ).exists()
+        )
 
     def test_get_intake_form_context_uses_service_localdate_path(self) -> None:
         ctx = get_intake_form_context(

@@ -22,6 +22,10 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularRedocView, SpectacularSwaggerView
 
 from cogitomedica.openapi_extension import cogito_openapi_schema_view
+from apps.reception.paper_intake_admin_views import (
+    paper_intake_admin_entry_view,
+    paper_intake_admin_hub_view,
+)
 from apps.reception.views import reception_dashboard_view
 from apps.intake.views import (
     intake_documents_list_view,
@@ -39,6 +43,16 @@ urlpatterns = [
         "admin/reception-dashboard/",
         reception_dashboard_view,
         name="admin_reception_dashboard",
+    ),
+    path(
+        "admin/paper-intake/",
+        paper_intake_admin_hub_view,
+        name="admin_paper_intake_hub",
+    ),
+    path(
+        "admin/paper-intake/<uuid:queue_entry_id>/",
+        paper_intake_admin_entry_view,
+        name="admin_paper_intake_entry",
     ),
     path(
         "admin/intake-documents/",

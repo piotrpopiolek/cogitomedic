@@ -12,8 +12,8 @@
 - JSON is default payload format (`application/json`), except file upload endpoints (`multipart/form-data`).
 - Authentication is session-based for staff web UI (Django auth cookie + CSRF). Tablet (poczekalnia) uses the same session auth with role **TABLET**; there are **no one-time tokens or patient links**.
 - Time format is ISO 8601 UTC.
-- **Offset pagination** (`page` / `page_size`): default `page_size` **20**, maximum **100** — implemented as `DEFAULT_LIST_LIMIT` and `MAX_LIST_LIMIT` in `apps.core.api_utils` (staff list endpoints: patients, staff-users, medical documents list, intake documents list, global audit feed, per-document audit trail, etc.).
-- **Capped list length** (`limit`): reception/dictionary-style lists (e.g. clinic-sites, consulting-rooms, daily-queues, queue entries, tablet-devices, import batches) use query param `limit` with the **same default 20 and max 100** via `parse_list_limit` in the same module.
+- **Offset pagination** (`page` / `page_size`): default `page_size` **20**, maximum **100** — defined as `DEFAULT_LIST_LIMIT` and `MAX_LIST_LIMIT` in **`apps/core/constants.py`** (also importable from `apps.core.api_utils` for backward compatibility; used by staff list endpoints: patients, staff-users, medical documents list, intake documents list, global audit feed, per-document audit trail, etc.).
+- **Capped list length** (`limit`): reception/dictionary-style lists (e.g. clinic-sites, consulting-rooms, daily-queues, queue entries, tablet-devices, import batches) use query param `limit` with the **same default 20 and max 100** via `parse_list_limit` in `apps.core.api_utils`.
 - **Outbox / intake-outbox listing** (`GET /outbox-events`, `GET /intake-outbox-events`): query param `limit` uses **`parse_list_limit`** — same default **20** and max **100** as other staff lists.
 - Other common list/query parameters:
   - `page` (default `1`) where offset pagination applies
@@ -362,6 +362,40 @@
   - Response JSON: queue entry object.
   - Success: `200 OK`.
   - Errors: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 INVALID_STATE_TRANSITION`.
+
+### 2.5a Paper intake authorization (T1, REST)
+
+Two-step paper path — **T1** for **ADMIN** / **MANAGER** staff only; backed by `authorize_paper_intake` / `revoke_paper_intake_authorization` in `apps/medical/services.py`. Time windows and reason length: `apps/medical/constants.py` (e.g. `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`, `PAPER_INTAKE_AUTH_REASON_MIN_LEN` / `MAX`).
+
+- **POST** `/queue-entries/{queue_entry_id}/paper-intake-authorization` — creates a `PaperIntakeAuthorization` row (does **not** change `entry_status`; doctor list ordering uses `doctor_list_sort_at`).
+- **DELETE** `/queue-entries/{queue_entry_id}/paper-intake-authorization` — removes authorization while no `MedicalDocument` exists for that queue entry.
+
+**Roles:** **ADMIN** or **MANAGER** only (`require_user_role`); otherwise **`403`**.
+
+**Clinic scope:** this resource does **not** apply `get_scoped_clinic_site_ids` — ADMIN/MANAGER oversight matches `/admin/paper-intake/`. Other `/queue-entries/{queue_entry_id}/...` endpoints may still return **`403`** (`other.api.queue_entry_not_in_scope`) when the entry's clinic site is outside the caller's assigned sites.
+
+**Body (POST and DELETE):** JSON `{"reason": "<text>"}` — `reason` after `.strip()` must be **10–500** characters (`PaperIntakeAuthorizationRequest`); validation failures → **`400`**.
+
+**POST success — `201 Created`:**
+```json
+{
+  "paper_intake_authorization_id": "uuid",
+  "queue_entry_id": "uuid",
+  "authorized_at": "2026-05-02T12:00:00Z"
+}
+```
+
+**DELETE success — `200 OK`:**
+```json
+{
+  "queue_entry_id": "uuid",
+  "revoked": true
+}
+```
+
+**Common errors:** `404` (`other.api.queue_entry_not_found`), `405` for methods other than POST/DELETE; domain rule violations (status, appointment time + hour window, existing document, SUBMITTED intake, duplicate authorization, etc.) → **`400`** via `json_domain_error` (`other.domain.*` / `other.api.*` keys).
+
+**Staff HTML panel:** the same business actions are available at **`/admin/paper-intake/`** (Unfold); the hub + entry HTML views do **not** apply `get_scoped_clinic_site_ids` on the entry page (aligned with the global hub pick list). REST integrations that require clinic scoping should use this endpoint.
 
 ### 2.6 Tablet devices
 

@@ -320,7 +320,11 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         return JsonResponse(_serialize_entry(entry))
     if request.method == "DELETE":
         try:
-            entry = update_queue_entry(queue_entry_id, entry_status="CANCELLED")
+            entry = update_queue_entry(
+                queue_entry_id,
+                entry_status="CANCELLED",
+                actor_user_id=request.user.id,
+            )
         except ObjectDoesNotExist:
             return json_error("other.api.queue_entry_not_found", status=404)
         except DomainError as exc:
@@ -340,7 +344,10 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         return json_error("other.api.provide_entry_status_or_notes", status=400)
     try:
         entry = update_queue_entry(
-            queue_entry_id, entry_status=body.entry_status, notes=body.notes
+            queue_entry_id,
+            entry_status=body.entry_status,
+            notes=body.notes,
+            actor_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)

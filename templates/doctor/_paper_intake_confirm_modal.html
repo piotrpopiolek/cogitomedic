@@ -1,0 +1,120 @@
+{# Shared confirm dialog for paper-intake document creation (replaces window.confirm). #}
+{# Expects: confirm_btn_label — primary action label (e.g. paper_intake_create_cta / submit_label). #}
+<div
+  id="paper-intake-confirm-modal"
+  class="hidden items-center justify-center bg-black/40 p-4 dark:bg-black/50"
+  style="position: fixed; inset: 0; z-index: 99999; box-sizing: border-box"
+  hidden
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="paper-intake-confirm-title"
+  aria-describedby="paper-intake-confirm-body"
+>
+  <div
+    class="max-h-[min(90vh,32rem)] w-full max-w-md shrink-0 overflow-y-auto rounded-default border border-base-200 bg-white p-5 shadow-xl dark:border-base-700 dark:bg-base-900"
+    style="width: min(100%, 28rem); box-sizing: border-box"
+    role="document"
+  >
+    <h2 id="paper-intake-confirm-title" class="text-lg font-semibold text-base-900 dark:text-base-100">
+      {{ ui.paper_intake_modal_title }}
+    </h2>
+    <p
+      id="paper-intake-confirm-body"
+      class="mt-2 text-sm leading-6 text-base-700 dark:text-base-300 whitespace-pre-wrap"
+    ></p>
+    <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-2">
+      <button
+        type="button"
+        id="paper-intake-confirm-cancel"
+        class="inline-flex w-full items-center justify-center rounded-default border border-base-300 px-3 py-2 text-sm font-medium text-base-700 hover:bg-base-100 sm:w-auto sm:py-1.5 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800"
+      >
+        {{ ui.paper_intake_modal_cancel }}
+      </button>
+      <button
+        type="button"
+        id="paper-intake-confirm-ok"
+        class="inline-flex w-full items-center justify-center rounded-default bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 sm:w-auto sm:py-1.5 dark:bg-primary-500 dark:hover:bg-primary-600"
+      >
+        {{ confirm_btn_label }}
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById("paper-intake-confirm-modal");
+  var bodyEl = document.getElementById("paper-intake-confirm-body");
+  var okBtn = document.getElementById("paper-intake-confirm-ok");
+  var cancelBtn = document.getElementById("paper-intake-confirm-cancel");
+  if (!modal || !bodyEl || !okBtn || !cancelBtn) return;
+
+  /* Unfold/admin often uses transform on ancestors; fixed then anchors to that box and stretches oddly. */
+  if (modal.parentNode !== document.body) {
+    document.body.appendChild(modal);
+  }
+
+  var pendingForm = null;
+
+  function setModalVisible(visible) {
+    modal.hidden = !visible;
+    if (visible) {
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    } else {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+  }
+
+  function openModal(form) {
+    pendingForm = form;
+    var msg = form.getAttribute("data-paper-intake-confirm") || "";
+    bodyEl.textContent = msg;
+    setModalVisible(true);
+    okBtn.focus();
+  }
+
+  function closeModal() {
+    setModalVisible(false);
+    pendingForm = null;
+  }
+
+  function onBackdrop(ev) {
+    if (ev.target === modal) closeModal();
+  }
+
+  function onKeyDown(ev) {
+    if (ev.key === "Escape" && !modal.hidden) {
+      ev.preventDefault();
+      closeModal();
+    }
+  }
+
+  cancelBtn.addEventListener("click", closeModal);
+  modal.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onKeyDown);
+
+  okBtn.addEventListener("click", function () {
+    var form = pendingForm;
+    if (!form) return;
+    closeModal();
+    form.dataset.paperIntakeConfirmed = "yes";
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
+  });
+
+  document.querySelectorAll("form.js-paper-intake-create-form").forEach(function (form) {
+    form.addEventListener("submit", function (e) {
+      if (form.dataset.paperIntakeConfirmed === "yes") {
+        delete form.dataset.paperIntakeConfirmed;
+        return;
+      }
+      e.preventDefault();
+      openModal(form);
+    });
+  });
+})();
+</script>

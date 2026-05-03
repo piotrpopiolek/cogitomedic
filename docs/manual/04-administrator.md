@@ -43,6 +43,21 @@ Na liście użytkowników można dodać parametr URL **`?role=RECEPTION`** (lub 
 
 ---
 
+## 3a. Autoryzacja ścieżki papierowej (T1)
+
+**Role:** tylko **Admin** lub **Manager** (jak w API).
+
+**Adres:** **`/admin/paper-intake/`** (menu Unfold / link z panelu admina).
+
+- **Hub:** wybór wpisu kolejki w statusie **oczekiwania** z kolejek dziennych z ostatnich 30 dni (lista obejmuje wszystkie placówki — spójnie z wejściem na stronę wpisu).
+- **Strona wpisu:** autoryzacja lub cofnięcie autoryzacji z polem powodu (10–500 znaków), zgodnie z regułami domeny (m.in. minimalny odstęp od `appointment_time` — stała `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT` w kodzie, domyślnie **3** godziny pełne po `appointment_time`; brak dokumentu; brak cyfrowej ankiety w statusie wysłanym itd.). **Bez** osobnej bramki zakresu placówki dla Admin/Manager (ten sam model co hub).
+- **API (integracje / klient HTTP):** `POST` / `DELETE` na `/api/v1/queue-entries/<uuid>/paper-intake-authorization` — **bez** bramki zakresu placówki dla Admin/Manager (jak HTML). Inne endpointy API dotyczące wpisu kolejki mogą nadal zwracać **`403`** z kluczem `other.api.queue_entry_not_in_scope`, jeśli wpis jest poza przypisanymi placówkami (`get_scoped_clinic_site_ids`).
+
+**Instrukcja operacyjna (krok po kroku, diagram, auto-revoke):** [04-administrator-paper-intake.md](04-administrator-paper-intake.md) oraz [paper_intake_flow.md](paper_intake_flow.md).  
+Szczegóły techniczne / decyzje architektoniczne: plan [`.cursor/plans/dokument_medyczny_bez_ankiety.plan.md`](../../.cursor/plans/dokument_medyczny_bez_ankiety.plan.md).
+
+---
+
 ## 4. Urządzenia tabletów (`TabletDevice`)
 
 W **Reception → Tablet devices** (lub równoważna ścieżka):
@@ -119,4 +134,4 @@ Grupa **Manager** służy do **nadzoru operacyjnego** bez pełni praw **Admin** 
 - **Minimalne uprawnienia:** personelowi nie przypisuj grupy Admin bez potrzeby; **Manager** tylko tam, gdzie wymagany jest nadzór wielu modułów z ograniczonym CRUD względem pełnego Admina.
 - **Audyt:** zmiany krytycznych ustawień dokumentuj w systemie ticketów placówki.
 
-Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md).
+Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md), [Ścieżka papierowa — procedura](04-administrator-paper-intake.md), [Ścieżka papierowa — diagram](paper_intake_flow.md).

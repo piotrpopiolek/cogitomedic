@@ -192,9 +192,11 @@ def _get_request_model_registry() -> list[type]:
     )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
+        CreateMedicalDocumentWithoutIntakeRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
         MedicalPayloadMinimal,
+        PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
@@ -243,6 +245,8 @@ def _get_request_model_registry() -> list[type]:
         # Medical (MedicalPayloadMinimal is nested in SaveDraftMedicalDocumentRequest; §6 schema_version)
         MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,
+        CreateMedicalDocumentWithoutIntakeRequest,
+        PaperIntakeAuthorizationRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
@@ -302,8 +306,10 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
     )
     from apps.medical.api_schemas import (
         CreateMedicalDocumentRequest,
+        CreateMedicalDocumentWithoutIntakeRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
@@ -357,6 +363,10 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         (f"{P}/operations/retention/run", "post"): RetentionRunRequest,
         (f"{P}/medical-documents", "post"): CreateMedicalDocumentRequest,
         (
+            f"{P}/medical-documents/no-intake",
+            "post",
+        ): CreateMedicalDocumentWithoutIntakeRequest,
+        (
             f"{P}/medical-documents/{{medical_document_id}}/draft",
             "put",
         ): SaveDraftMedicalDocumentRequest,
@@ -380,6 +390,14 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
             "post",
         ): CreateQueueEntryRequest,
         (f"{P}/queue-entries/{{queue_entry_id}}", "patch"): UpdateQueueEntryRequest,
+        (
+            f"{P}/queue-entries/{{queue_entry_id}}/paper-intake-authorization",
+            "post",
+        ): PaperIntakeAuthorizationRequest,
+        (
+            f"{P}/queue-entries/{{queue_entry_id}}/paper-intake-authorization",
+            "delete",
+        ): PaperIntakeAuthorizationRequest,
         (
             f"{P}/queue-entries/{{queue_entry_id}}/sessions",
             "post",

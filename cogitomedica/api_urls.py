@@ -35,6 +35,8 @@ from apps.medical.api_views import (
     medical_document_versions_view,
     medical_document_audit_trail_view,
     medical_documents_view,
+    medical_documents_no_intake_view,
+    queue_entry_paper_intake_authorization_view,
 )
 from apps.outbox.api_views import (
     operations_outbox_process_view,
@@ -179,6 +181,11 @@ urlpatterns = [
         name="medical-documents",
     ),
     path(
+        "medical-documents/no-intake",
+        medical_documents_no_intake_view,
+        name="medical-documents-no-intake",
+    ),
+    path(
         "medical-documents/<uuid:medical_document_id>",
         medical_document_detail_view,
         name="medical-document-detail",
@@ -317,6 +324,11 @@ urlpatterns = [
         "queue-entries/<uuid:queue_entry_id>",
         queue_entry_detail_view,
         name="queue-entry-detail",
+    ),
+    path(
+        "queue-entries/<uuid:queue_entry_id>/paper-intake-authorization",
+        queue_entry_paper_intake_authorization_view,
+        name="queue-entry-paper-intake-authorization",
     ),
     path(
         "queue-entries/<uuid:queue_entry_id>/sessions",

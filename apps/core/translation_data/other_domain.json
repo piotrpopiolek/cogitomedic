@@ -59,6 +59,81 @@
     "en": "Intake form must be submitted.",
     "pl": "Ankieta musi być złożona."
   },
+  "other.domain.queue_entry_must_be_waiting_for_paper_intake": {
+    "de": "Für den papierbasierten Intake muss der Warteschlangeneintrag im Status WAITING sein.",
+    "en": "Queue entry must be in WAITING status for paper intake.",
+    "pl": "Wpis kolejki musi mieć status WAITING, aby utworzyć dokument bez ankiety."
+  },
+  "other.domain.paper_intake_requires_appointment_time": {
+    "de": "Für papierbasierten Intake ist appointment_time erforderlich.",
+    "en": "appointment_time is required for paper intake.",
+    "pl": "appointment_time jest wymagane dla ścieżki papierowej."
+  },
+  "other.domain.paper_intake_earliest_after_appointment": {
+    "de": "Dokument ohne digitalen Intake kann frühestens {hours} h nach appointment_time erstellt werden.",
+    "en": "Document without digital intake can be created only at least {hours} hours after appointment_time.",
+    "pl": "Dokument bez ankiety cyfrowej można utworzyć dopiero po min. {hours} h po appointment_time."
+  },
+  "other.domain.paper_intake_authorization_invalid_role": {
+    "de": "Keine Berechtigung zur Papier-Intake-Autorisierung (Administrator oder Manager erforderlich).",
+    "en": "Not allowed to manage paper intake authorization (administrator or manager required).",
+    "pl": "Brak uprawnień do autoryzacji ścieżki papierowej (wymagana rola Administrator lub Manager)."
+  },
+  "other.domain.paper_intake_authorization_invalid_status": {
+    "de": "Papier-Intake-Autorisierung erfordert einen Warteschlangeneintrag im Status WAITING.",
+    "en": "Paper intake authorization requires the queue entry to be in WAITING status.",
+    "pl": "Autoryzacja papierowa wymaga wpisu kolejki w statusie WAITING."
+  },
+  "other.domain.paper_intake_authorization_too_early": {
+    "de": "Autorisierung frühestens {hours} h nach der Terminzeit möglich.",
+    "en": "Authorization is possible only at least {hours} hours after the appointment time.",
+    "pl": "Autoryzacja możliwa dopiero po min. {hours} h od godziny wizyty."
+  },
+  "other.domain.paper_intake_authorization_intake_form_submitted": {
+    "de": "Papier kann nicht autorisiert werden: Patient hat die digitale Anamnese eingereicht.",
+    "en": "Cannot authorize paper intake: the patient has submitted the digital intake form.",
+    "pl": "Nie można autoryzować papieru: pacjent wypełnił cyfrową ankietę."
+  },
+  "other.domain.paper_intake_authorization_already_exists": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits eine Papier-Intake-Autorisierung.",
+    "en": "A paper intake authorization already exists for this queue entry.",
+    "pl": "Autoryzacja papierowa już istnieje dla tego wpisu kolejki."
+  },
+  "other.domain.paper_intake_authorization_not_found": {
+    "de": "Keine aktive Papier-Intake-Autorisierung für diesen Warteschlangeneintrag.",
+    "en": "No active paper intake authorization for this queue entry.",
+    "pl": "Brak aktywnej autoryzacji papierowej dla tego wpisu kolejki."
+  },
+  "other.domain.paper_intake_revoke_after_document_created": {
+    "de": "Autorisierung kann nach Erstellung des medizinischen Dokuments nicht widerrufen werden.",
+    "en": "Cannot revoke authorization after the medical document has been created.",
+    "pl": "Nie można cofnąć autoryzacji po utworzeniu dokumentu medycznego."
+  },
+  "other.domain.paper_intake_create_document_invalid_role": {
+    "de": "Nur Arzt, Administrator oder Manager können ein Papierdokument ohne digitale Anamnese anlegen.",
+    "en": "Only a doctor, administrator, or manager can create a paper document without digital intake.",
+    "pl": "Tylko lekarz, administrator lub manager może utworzyć dokument papierowy bez cyfrowej ankiety."
+  },
+  "other.domain.paper_intake_document_audit_snapshot_missing": {
+    "de": "Papierdokument ohne gespeicherte Autorisierungsdaten. Bitte IT/Support informieren — Anzeige nicht möglich.",
+    "en": "Paper document is missing the stored authorization audit snapshot. Contact IT/support — this page cannot be shown.",
+    "pl": "Dokument papierowy bez zapisu autoryzacji w audycie. Skontaktuj się z IT/wsparciem — strona nie może być wyświetlona."
+  },
+  "other.domain.paper_intake_not_authorized": {
+    "de": "Papierdokument kann nicht erstellt werden: zuvor erforderliche Autorisierung durch Administrator oder Manager.",
+    "en": "Cannot create paper document: prior authorization by an administrator or manager is required.",
+    "pl": "Nie można utworzyć dokumentu papierowego: wymagana wcześniejsza autoryzacja administratora lub managera."
+  },
+  "other.domain.paper_intake_intake_form_appeared_after_authorization": {
+    "de": "Digitale Anamnese nach Autorisierung eingegangen — Administrator muss entscheiden (Autorisierung widerrufen oder digitalen Weg nutzen).",
+    "en": "Digital intake appeared after authorization — an administrator must decide (revoke authorization or use the digital path).",
+    "pl": "Cyfrowa ankieta pojawiła się po autoryzacji — wymagana decyzja administratora (cofnięcie autoryzacji albo użycie ścieżki cyfrowej)."
+  },
+  "other.domain.medical_document_already_exists_for_queue_entry": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument.",
+    "en": "A medical document already exists for this queue entry.",
+    "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny."
+  },
   "other.domain.publish_locale_required": {
     "de": "publish_locale ist für die Veröffentlichung erforderlich.",
     "en": "publish_locale is required for publish.",

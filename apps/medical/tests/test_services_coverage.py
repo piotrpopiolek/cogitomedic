@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
+from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from freezegun import freeze_time
@@ -15,15 +18,17 @@ from freezegun import freeze_time
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
     PdfStatus,
 )
 from apps.medical.services import (
-    DOCUMENT_LOCK_TIMEOUT_HOURS,
     acquire_document_lock,
     create_or_get_medical_document,
     get_document_lock_state,
@@ -91,7 +96,7 @@ class ServicesCoverageBase(TestCase):
         cls.queue_entry = QueueEntry.objects.create(
             daily_queue=cls.daily_queue,
             patient=cls.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=1,
             created_by_user=cls.doctor,
         )
@@ -120,6 +125,17 @@ class ServicesCoverageBase(TestCase):
         defaults.update(overrides)
         return MedicalDocument.objects.create(**defaults)
 
+    def _make_queue_entry(self, **overrides):
+        defaults = dict(
+            daily_queue=self.daily_queue,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=99,
+            created_by_user=self.doctor,
+        )
+        defaults.update(overrides)
+        return QueueEntry.objects.create(**defaults)
+
     def _make_published_version(self, doc, *, version_no=1, **kw):
         defaults = dict(
             medical_document=doc,
@@ -145,7 +161,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=self.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=2,
             created_by_user=self.doctor,
         )
@@ -171,7 +187,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=other_patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=3,
             created_by_user=self.doctor,
         )
@@ -208,7 +224,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=other_patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=4,
             created_by_user=self.doctor,
         )
@@ -434,6 +450,57 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         item = items[0]
         self.assertIsNone(item["document_id"])
         self.assertEqual(item["status"], "—")
+        self.assertFalse(item["paper_intake_action_required"])
+
+    def test_paper_authorized_without_document_is_listed_with_action_flag(self):
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.submitted_at = None
+        self.intake.signature_sha256 = None
+        self.intake.save(
+            update_fields=[
+                "form_status",
+                "submitted_at",
+                "signature_sha256",
+            ]
+        )
+        paper_entry = self._make_queue_entry(position_no=2)
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=paper_entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.doctor,
+            reason="Papier od pacjenta",
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertEqual(total, 1)
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item["queue_entry_id"], str(paper_entry.id))
+        self.assertTrue(item["paper_intake_action_required"])
+        self.assertIsNone(item["document_id"])
+        self.assertIsNone(item["intake_form_id"])
+
+    def test_paper_intake_completed_with_document_is_listed(self):
+        paper_entry = self._make_queue_entry(
+            position_no=3,
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+        )
+        paper_doc = self._make_medical_doc(
+            queue_entry=paper_entry,
+            intake_form=None,
+            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+            status=MedicalDocStatus.DRAFT,
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertGreaterEqual(total, 2)
+        found = [i for i in items if i["queue_entry_id"] == str(paper_entry.id)]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["document_id"], str(paper_doc.id))
+        self.assertFalse(found[0]["paper_intake_action_required"])
+        self.assertIsNone(found[0]["intake_form_id"])
 
     def test_queue_date_filter(self):
         items, total = list_doctor_work_queue(
@@ -459,6 +526,30 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         )
         self.assertEqual(total, 0)
 
+    def test_published_by_user_id_filter(self) -> None:
+        publisher = StaffUser.objects.create_user(
+            username="cov-publisher-z",
+            email="cov.publisher.z@example.com",
+            password="x",
+            is_staff=True,
+            first_name="Zed",
+            last_name="UniquePubLastName",
+        )
+        assign_group_to_test_user(publisher, "Doctor")
+        doc = self._make_medical_doc()
+        self._make_published_version(doc, published_by_user=publisher)
+
+        items, total = list_doctor_work_queue(
+            user=self.doctor, published_by_user_id=publisher.id
+        )
+        self.assertEqual(total, 1)
+        self.assertEqual(items[0]["document_id"], str(doc.id))
+
+        items, total = list_doctor_work_queue(
+            user=self.doctor, published_by_user_id=self.doctor.id
+        )
+        self.assertEqual(total, 0)
+
     def test_non_assigned_doctor_sees_pending_intake_without_document(self):
         other = StaffUser.objects.create_user(
             username="other-doc",
@@ -481,6 +572,227 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         assign_group_to_test_user(other, "Doctor")
         items, total = list_doctor_work_queue(user=other)
         self.assertEqual(total, 0)
+
+
+class ListDoctorWorkQueuePerfTests(ServicesCoverageBase):
+    def test_query_count_budget_for_mixed_abc_page(self) -> None:
+        digital_entry = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=Patient.objects.create(
+                first_name="Digi",
+                last_name="AState",
+                date_of_birth=date(1990, 1, 2),
+                phone="48500000111",
+                email="digia@example.com",
+            ),
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=210,
+            created_by_user=self.doctor,
+            doctor_list_sort_at=timezone.now() - timedelta(minutes=3),
+        )
+        digital_session = PatientFormSession.objects.create(
+            queue_entry=digital_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        digital_intake = PatientIntakeForm.objects.create(
+            queue_entry=digital_entry,
+            session=digital_session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now() - timedelta(minutes=3),
+            signature_sha256="a" * 64,
+        )
+        digital_doc = MedicalDocument.objects.create(
+            queue_entry=digital_entry,
+            intake_form=digital_intake,
+            source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        self._make_published_version(digital_doc, version_no=1)
+
+        waiting_paper_entry = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=Patient.objects.create(
+                first_name="Paper",
+                last_name="BState",
+                date_of_birth=date(1992, 2, 3),
+                phone="48500000112",
+                email="paperb@example.com",
+            ),
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=211,
+            created_by_user=self.doctor,
+            doctor_list_sort_at=timezone.now() - timedelta(minutes=2),
+            appointment_time=timezone.now() - timedelta(hours=4),
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=waiting_paper_entry,
+            authorized_at=timezone.now() - timedelta(minutes=2),
+            authorized_by=self.doctor,
+            reason="Paper authorization for perf test path B",
+        )
+
+        completed_paper_entry = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=Patient.objects.create(
+                first_name="Paper",
+                last_name="CState",
+                date_of_birth=date(1993, 3, 4),
+                phone="48500000113",
+                email="paperc@example.com",
+            ),
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+            position_no=212,
+            created_by_user=self.doctor,
+            doctor_list_sort_at=timezone.now() - timedelta(minutes=1),
+        )
+        completed_doc = MedicalDocument.objects.create(
+            queue_entry=completed_paper_entry,
+            intake_form=None,
+            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        self._make_published_version(
+            completed_doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            publish_request_id=None,
+            published_at=None,
+            publish_locale=None,
+        )
+
+        with CaptureQueriesContext(connection) as ctx:
+            items, total = list_doctor_work_queue(
+                user=self.doctor, page=1, page_size=25
+            )
+
+        self.assertGreaterEqual(total, 4)
+        self.assertGreaterEqual(len(items), 4)
+        self.assertLessEqual(
+            len(ctx.captured_queries),
+            8,
+            msg=f"Expected <=8 SQL queries, got {len(ctx.captured_queries)}",
+        )
+
+    def test_benchmark_mixed_population_has_stable_query_count(self) -> None:
+        target_rows = 120
+        paper_waiting_rows = 6
+        paper_completed_rows = 6
+        now = timezone.now()
+        for i in range(target_rows):
+            patient = Patient.objects.create(
+                first_name=f"Perf{i}",
+                last_name=f"Queue{i}",
+                date_of_birth=date(1980, 1, 1),
+                phone=f"48999{i:05d}",
+                email=f"perf{i}@example.com",
+            )
+            if i < paper_waiting_rows:
+                entry = QueueEntry.objects.create(
+                    daily_queue=self.daily_queue,
+                    patient=patient,
+                    entry_status=QueueEntryStatus.WAITING,
+                    position_no=300 + i,
+                    created_by_user=self.doctor,
+                    appointment_time=now - timedelta(hours=4),
+                    doctor_list_sort_at=now - timedelta(minutes=i),
+                )
+                PaperIntakeAuthorization.objects.create(
+                    queue_entry=entry,
+                    authorized_at=now - timedelta(minutes=i),
+                    authorized_by=self.doctor,
+                    reason=f"Perf paper waiting row {i} reason",
+                )
+                continue
+
+            if i < paper_waiting_rows + paper_completed_rows:
+                entry = QueueEntry.objects.create(
+                    daily_queue=self.daily_queue,
+                    patient=patient,
+                    entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+                    position_no=300 + i,
+                    created_by_user=self.doctor,
+                    doctor_list_sort_at=now - timedelta(minutes=i),
+                )
+                doc = MedicalDocument.objects.create(
+                    queue_entry=entry,
+                    intake_form=None,
+                    source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+                    status=MedicalDocStatus.DRAFT,
+                    current_version_no=1,
+                    created_by_user=self.doctor,
+                )
+                self._make_published_version(
+                    doc,
+                    version_no=1,
+                    version_status=DocVersionStatus.DRAFT,
+                    publish_request_id=None,
+                    published_at=None,
+                    publish_locale=None,
+                )
+                continue
+
+            entry = QueueEntry.objects.create(
+                daily_queue=self.daily_queue,
+                patient=patient,
+                entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+                position_no=300 + i,
+                created_by_user=self.doctor,
+                doctor_list_sort_at=now - timedelta(minutes=i),
+            )
+            session = PatientFormSession.objects.create(
+                queue_entry=entry,
+                form_locale="de-DE",
+                expires_at=now + timedelta(hours=1),
+                created_by_user=self.doctor,
+            )
+            intake = PatientIntakeForm.objects.create(
+                queue_entry=entry,
+                session=session,
+                form_status=IntakeStatus.SUBMITTED,
+                submitted_at=now - timedelta(minutes=i),
+                signature_sha256="a" * 64,
+            )
+            doc = MedicalDocument.objects.create(
+                queue_entry=entry,
+                intake_form=intake,
+                source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+                status=MedicalDocStatus.DRAFT,
+                current_version_no=1,
+                created_by_user=self.doctor,
+            )
+            self._make_published_version(
+                doc,
+                version_no=1,
+                version_status=DocVersionStatus.DRAFT,
+                publish_request_id=None,
+                published_at=None,
+                publish_locale=None,
+            )
+
+        start = perf_counter()
+        with CaptureQueriesContext(connection) as ctx:
+            items, total = list_doctor_work_queue(
+                user=self.doctor, page=1, page_size=25
+            )
+        elapsed_ms = (perf_counter() - start) * 1000
+
+        self.assertEqual(total, target_rows + 1)
+        self.assertEqual(len(items), 25)
+        # Regression guard: query count should stay constant despite mixed A/B/C population.
+        self.assertLessEqual(
+            len(ctx.captured_queries),
+            8,
+            msg=(
+                f"Mixed A/B/C benchmark exceeded SQL budget with "
+                f"{len(ctx.captured_queries)} queries and {elapsed_ms:.1f} ms."
+            ),
+        )
 
 
 # ------------------------------------------------------------------

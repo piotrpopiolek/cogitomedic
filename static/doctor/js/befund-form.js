@@ -97,6 +97,12 @@
     msgRevisionDiscarded: uiText("msg_revision_discarded"),
     msgAmendIntentRequired: uiText("msg_amend_intent_required"),
     msgNoPendingRevision: uiText("msg_no_pending_revision"),
+    intakeSectionPaperTitle: uiText("detail_intake_section_paper_title"),
+    paperIntakeNotice: uiText("detail_paper_intake_notice"),
+    paperAuthHeading: uiText("detail_paper_auth_heading"),
+    paperAuthByLabel: uiText("detail_paper_auth_by_label"),
+    paperAuthAtLabel: uiText("detail_paper_auth_at_label"),
+    paperAuthReasonLabel: uiText("detail_paper_auth_reason_label"),
   });
 
   function el(id) {
@@ -111,6 +117,22 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+  function patientDobDisplay(value) {
+    if (value == null || value === "") return "—";
+    const t = String(value).trim();
+    if (!t || t === "None" || t === "null") return "—";
+    return escapeHtml(t);
+  }
+  function formatPaperAuthAtIso(iso) {
+    if (!iso || typeof iso !== "string") return "—";
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return escapeHtml(iso);
+      return escapeHtml(d.toLocaleString());
+    } catch (e) {
+      return escapeHtml(iso);
+    }
   }
   /** Read-only body map (same normalized coords as tablet: x,y in [0,1] on combined front|back image). */
   function renderReadonlyBodyMapHtml(points, imgUrl) {
@@ -448,6 +470,76 @@
   }
   window.addEventListener("pagehide", releaseEditLockOnLeave);
 
+  function renderPaperIntakeMeta() {
+    const metaEl = el("paper-intake-meta");
+    const titleEl = el("doctor-intake-section-title");
+    if (CTX.source_type !== "PAPER_INTAKE") {
+      if (metaEl) {
+        metaEl.innerHTML = "";
+        metaEl.classList.add("hidden");
+        metaEl.setAttribute("hidden", "hidden");
+      }
+      return;
+    }
+    if (titleEl && UI.intakeSectionPaperTitle) {
+      titleEl.textContent = UI.intakeSectionPaperTitle;
+    }
+    if (!metaEl) return;
+    const parts = [];
+    if (UI.paperIntakeNotice) {
+      parts.push(
+        '<div class="rounded-default border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-100">' +
+          escapeHtml(UI.paperIntakeNotice) +
+          "</div>"
+      );
+    }
+    const auth = CTX.paper_intake_authorization;
+    if (
+      auth &&
+      (auth.authorized_by_username || auth.authorized_at || auth.reason)
+    ) {
+      let rows = "";
+      if (auth.authorized_by_username) {
+        rows +=
+          '<div class="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,10rem)_1fr] sm:gap-x-3"><dt class="font-medium text-base-600 dark:text-base-400">' +
+          escapeHtml(UI.paperAuthByLabel) +
+          '</dt><dd class="text-base-900 dark:text-base-100">' +
+          escapeHtml(auth.authorized_by_username) +
+          "</dd></div>";
+      }
+      if (auth.authorized_at) {
+        rows +=
+          '<div class="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,10rem)_1fr] sm:gap-x-3"><dt class="font-medium text-base-600 dark:text-base-400">' +
+          escapeHtml(UI.paperAuthAtLabel) +
+          '</dt><dd class="text-base-900 dark:text-base-100">' +
+          formatPaperAuthAtIso(auth.authorized_at) +
+          "</dd></div>";
+      }
+      if (auth.reason) {
+        rows +=
+          '<div class="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,10rem)_1fr] sm:gap-x-3"><dt class="font-medium text-base-600 dark:text-base-400">' +
+          escapeHtml(UI.paperAuthReasonLabel) +
+          '</dt><dd class="text-base-900 dark:text-base-100 whitespace-pre-wrap">' +
+          escapeHtml(auth.reason) +
+          "</dd></div>";
+      }
+      parts.push(
+        '<div class="rounded-default border border-base-200 bg-white px-4 py-3 text-sm dark:border-base-700 dark:bg-base-900">' +
+          '<div class="mb-2 font-medium text-base-900 dark:text-base-100">' +
+          escapeHtml(UI.paperAuthHeading) +
+          "</div>" +
+          '<div class="space-y-2">' +
+          rows +
+          "</div></div>"
+      );
+    }
+    metaEl.innerHTML = parts.join("");
+    metaEl.classList.remove("hidden");
+    metaEl.removeAttribute("hidden");
+  }
+
+  renderPaperIntakeMeta();
+
   // Intake summary: patient + anamnesis – escape all values to prevent XSS
   if (CTX && CTX.intake_summary) {
     const p = CTX.intake_summary.patient;
@@ -462,7 +554,7 @@
         ", " +
         escapeHtml(p.first_name) +
         " · " +
-        escapeHtml(p.date_of_birth) +
+        patientDobDisplay(p.date_of_birth) +
         "</p>";
       const questions = CTX.intake_summary.anamnesis_questions || [];
       if (questions.length) {
@@ -494,7 +586,9 @@
       }
       const bodyMapPts = CTX.intake_summary.body_map_data;
       const bodyMapUrl = PANEL.bodyMapImageUrl || "";
-      html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      if (CTX.source_type !== "PAPER_INTAKE") {
+        html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      }
       const summaryEl = el("intake-summary");
       if (summaryEl) summaryEl.innerHTML = html;
     }

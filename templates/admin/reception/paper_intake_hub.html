@@ -1,0 +1,44 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n cogitomedica_i18n %}
+
+{% block breadcrumbs %}
+<div class="px-4 py-3 sm:px-8">
+    <nav aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
+            <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
+            <li><span class="mx-2">/</span></li>
+            <li class="text-gray-900" aria-current="page">{{ title }}</li>
+        </ol>
+    </nav>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-8 pb-8 max-w-2xl">
+    <h1 class="text-2xl font-bold mb-2">{{ title }}</h1>
+    <p class="text-gray-600 mb-6">{% admin_trans "administration.paper_intake_admin_hub_intro" "Choose a queue entry from the list (same as in Reception → Queue entries). The authorization form opens for that visit. All clinic sites are included; only Waiting entries from daily queues in the last 30 days are listed." %}</p>
+
+    {% if error_invalid %}
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{{ error_invalid }}</div>
+    {% endif %}
+
+    {% if hub_queue_entries_empty %}
+    <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+        {% admin_trans "administration.paper_intake_admin_hub_no_entries" "There are no queue entries in your scope for the selected period. Create or open a queue entry in Reception → Queue entries." %}
+    </div>
+    {% else %}
+    {{ form.media }}
+    <form method="get" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 space-y-4">
+        <div>
+            <label for="{{ form.queue_entry.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.paper_intake_admin_hub_queue_entry_id_label" "Queue entry" %}</label>
+            {{ form.queue_entry }}
+        </div>
+        <div>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% admin_trans "administration.paper_intake_admin_hub_submit" "Continue" %}
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
