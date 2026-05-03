@@ -405,6 +405,85 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIsNone(doc.intake_form_id)
         self.assertIn(f"/doctor/{doc.id}/?lang=en", resp.url)
 
+    def test_paper_intake_document_detail_panel_has_paper_context_and_ui_keys(
+        self,
+    ) -> None:
+        """Befund detail for PAPER_INTAKE: panel JSON exposes auth snapshot + new UI keys."""
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PD", name="Paper Detail Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="DetailPaper",
+            date_of_birth=date(1990, 1, 2),
+            phone="+48500111222",
+            email="detailpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake",
+        )
+        post_resp = self.client.post(
+            f"/doctor/open/{entry.id}/create-no-intake/?lang=en",
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        doc = MedicalDocument.objects.get(queue_entry=entry)
+
+        detail_resp = self.client.get(f"/doctor/{doc.id}/?lang=en")
+        self.assertEqual(detail_resp.status_code, 200)
+        html = detail_resp.content.decode()
+        self.assertIn('id="paper-intake-meta"', html)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(m)
+        panel = json.loads(m.group(1))
+        self.assertEqual(panel["context"]["source_type"], "PAPER_INTAKE")
+        auth = panel["context"]["paper_intake_authorization"]
+        self.assertIsNotNone(auth)
+        self.assertEqual(auth.get("reason"), "Patient delivered paper intake")
+        by_name = (auth.get("authorized_by_username") or "").lower()
+        self.assertTrue(
+            "mgr" in by_name or "manager" in by_name,
+            msg=f"Unexpected authorizer display: {auth.get('authorized_by_username')!r}",
+        )
+        ui = panel["ui"]
+        self.assertIn("detail_paper_intake_notice", ui)
+        self.assertIn("detail_paper_auth_heading", ui)
+        self.assertTrue(len(ui.get("detail_paper_intake_notice", "")) > 5)
+
     def test_open_by_queue_returns_404_when_published_document_not_accessible(
         self,
     ) -> None:
