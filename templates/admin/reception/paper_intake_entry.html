@@ -1,0 +1,94 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n cogitomedica_i18n %}
+
+{% block breadcrumbs %}
+<div class="px-4 py-3 sm:px-8">
+    <nav aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
+            <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
+            <li><span class="mx-2">/</span></li>
+            <li><a href="{% url 'admin_paper_intake_hub' %}" class="hover:text-gray-900">{% admin_trans "administration.paper_intake_admin_hub_title" "Paper intake authorization" %}</a></li>
+            <li><span class="mx-2">/</span></li>
+            <li class="text-gray-900 font-mono text-xs" aria-current="page">{{ entry.id }}</li>
+        </ol>
+    </nav>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-8 pb-8 max-w-3xl">
+    <h1 class="text-2xl font-bold mb-4">{{ title }}</h1>
+
+    {% if messages %}
+    <ul class="mb-4 space-y-2">
+        {% for message in messages %}
+        <li class="rounded-md px-4 py-3 text-sm {% if message.tags == 'success' %}bg-green-50 text-green-800 border border-green-200{% elif message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-gray-50 text-gray-800 border border-gray-200{% endif %}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6 space-y-2 text-sm">
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.field_patient" "Patient" %}:</span> {{ patient.last_name }}, {{ patient.first_name }}</p>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.paper_intake_admin_label_queue_date" "Queue date" %}:</span> {{ daily_queue.queue_date }}</p>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.paper_intake_admin_label_entry_status" "Entry status" %}:</span> {{ entry.get_entry_status_display }}</p>
+        {% if entry.appointment_time %}
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.paper_intake_admin_label_appointment" "Appointment" %}:</span> {{ entry.appointment_time|date:"Y-m-d H:i" }}</p>
+        {% endif %}
+        {% if earliest_authorize_at %}
+        <p class="text-gray-600">{% admin_trans "administration.paper_intake_admin_earliest_hint" "Earliest authorization time (appointment + 3h)" %}: {{ earliest_authorize_at|date:"Y-m-d H:i" }}</p>
+        {% endif %}
+        <p class="pt-2"><a href="{{ admin_queue_entry_url }}" class="text-primary-600 hover:text-primary-800 font-medium">{% admin_trans "administration.paper_intake_admin_link_queue_entry" "Open queue entry in Django admin" %} →</a></p>
+    </div>
+
+    {% if has_document %}
+    <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+        {% admin_trans "administration.paper_intake_admin_has_document" "A medical document already exists for this queue entry." %}
+    </div>
+
+    {% elif authorization %}
+    <div class="rounded-md bg-gray-50 border border-gray-200 p-4 mb-4 text-sm space-y-1">
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">{% admin_trans "administration.paper_intake_admin_entry_revoke_heading" "Active authorization" %}</h2>
+        <p><span class="font-medium">{% admin_trans "administration.label_paper_intake_authorized_by" "Authorized by" %}:</span> {{ authorization.authorized_by.get_full_name|default:authorization.authorized_by.username }}</p>
+        <p><span class="font-medium">{% admin_trans "administration.label_paper_intake_authorized_at" "Authorized at" %}:</span> {{ authorization.authorized_at|date:"Y-m-d H:i" }}</p>
+        <p class="whitespace-pre-wrap"><span class="font-medium">{% admin_trans "administration.label_paper_intake_authorization_reason" "Authorization reason" %}:</span> {{ authorization.reason }}</p>
+    </div>
+    <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="revoke" />
+        <div>
+            <label for="id_reason_revoke" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.paper_intake_admin_revoke_reason_label" "Reason for revoke (10–500 characters)" %}</label>
+            <textarea id="id_reason_revoke" name="reason" rows="4" required minlength="10" maxlength="500"
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"></textarea>
+        </div>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+            {% admin_trans "administration.paper_intake_admin_entry_submit_revoke" "Revoke authorization" %}
+        </button>
+    </form>
+
+    {% elif can_authorize %}
+    <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="authorize" />
+        <h2 class="text-lg font-semibold text-gray-900">{% admin_trans "administration.paper_intake_admin_entry_authorize_heading" "Authorize paper intake path" %}</h2>
+        <div>
+            <label for="id_reason_auth" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.paper_intake_admin_authorize_reason_label" "Reason (10–500 characters)" %}</label>
+            <textarea id="id_reason_auth" name="reason" rows="5" required minlength="10" maxlength="500"
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"></textarea>
+        </div>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            {% admin_trans "administration.paper_intake_admin_entry_submit_authorize" "Authorize" %}
+        </button>
+    </form>
+
+    {% else %}
+    <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 mb-4">
+        <p class="font-medium mb-2">{% admin_trans "administration.paper_intake_admin_cannot_authorize_title" "Authorization is not available yet" %}</p>
+        <ul class="list-disc list-inside space-y-1">
+            {% for line in blocking_messages %}
+            <li>{{ line }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

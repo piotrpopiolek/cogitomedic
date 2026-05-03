@@ -1,6 +1,7 @@
 """
-Constants for lesion group preset choices used in admin and API.
-Single source of truth: codes from medical_payload_schemas, labels from befund_text (EN).
+Medical app constants: admin/API choices, document locking, paper-intake policy knobs.
+
+Lesion preset choices: codes from ``medical_payload_schemas``, labels from ``befund_text`` (EN).
 """
 
 from __future__ import annotations
@@ -33,3 +34,10 @@ MALIGNANCY_RISK_CHOICES: list[tuple[str, str]] = [
     (code, MALIGNANCY_RISK_LABELS.get(code, (code, code))[1])
     for code in get_args(MalignancyRiskCode)
 ]
+
+DOCUMENT_LOCK_TIMEOUT_HOURS = 6
+
+PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT = 3
+PAPER_INTAKE_HUB_QUEUE_ENTRY_LOOKBACK_DAYS = 30
+PAPER_INTAKE_AUTH_REASON_MIN_LEN = 10
+PAPER_INTAKE_AUTH_REASON_MAX_LEN = 500

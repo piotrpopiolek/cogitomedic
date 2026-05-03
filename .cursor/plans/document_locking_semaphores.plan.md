@@ -57,7 +57,7 @@ sequenceDiagram
     DB-->>Web: lock DENIED (locked by user_A)
     Web-->>DrB: Strona bledu "Dokument wird bearbeitet von user_A"
 
-    Note over DrA,DB: Auto-release po 24h lub przy zamknieciu
+    Note over DrA,DB: Auto-release po timeout (patrz constants) lub przy zamknieciu
     DrA->>Web: PUT /api/v1/.../draft (heartbeat odswieza lock)
     Web->>DB: refresh lock timestamp
 ```
@@ -74,7 +74,7 @@ locked_by_user = models.ForeignKey(
 locked_at = models.DateTimeField(null=True, blank=True)
 ```
 
-Lock wygasa automatycznie po **24 godzinach** (konfigurowalne). Nie wymaga migracji danych -- nowe pola nullable.
+Lock wygasa automatycznie po czasie określonym przez **`DOCUMENT_LOCK_TIMEOUT_HOURS`** w [`apps/medical/constants.py`](../../apps/medical/constants.py) (obecnie **6 godzin**). Nie wymaga migracji danych — nowe pola nullable.
 
 ## Logika blokad
 
@@ -85,7 +85,7 @@ Nowe funkcje w [apps/medical/services.py](apps/medical/services.py):
 - **`refresh_document_lock(doc_id, user_id)`** -- odswierza `locked_at` (wywolywane przy kazdym save draft).
 - **`is_document_locked(doc_id, user_id=None)`** -- zwraca `(locked: bool, locked_by_username: str | None, locked_at: datetime | None)`.
 
-Timeout locka: `DOCUMENT_LOCK_TIMEOUT_HOURS = 24` (stala w services.py).
+Timeout locka: stała **`DOCUMENT_LOCK_TIMEOUT_HOURS`** w [`apps/medical/constants.py`](../../apps/medical/constants.py) (używana przez funkcje locków w `apps/medical/services.py`).
 
 ## Integracja z istniejacym kodem
 

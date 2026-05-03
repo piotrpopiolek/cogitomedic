@@ -24,12 +24,12 @@ from apps.intake.models import (
 from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import process_intake_outbox_events
 from apps.operations.prom_metrics import build_metrics_payload
+from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.intake.services import (
     InvalidSignatureError,
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
     IntakeSessionValidationError,
-    SIGNATURE_MAX_SIZE,
     _read_signature_data_url,
     _effective_consent_filter,
     _effective_question_filter,

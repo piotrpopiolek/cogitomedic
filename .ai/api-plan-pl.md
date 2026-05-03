@@ -12,8 +12,8 @@
 - Domyślny format payloadu to JSON (`application/json`), z wyjątkiem endpointów uploadu plików (`multipart/form-data`).
 - Uwierzytelnianie: sesja dla panelu personelu (cookie Django + CSRF). Tablet (poczekalnia) korzysta z tej samej sesji z rolą **TABLET**; **brak tokenów jednorazowych i linków pacjenta**.
 - Format czasu: ISO 8601 UTC.
-- **Paginacja offsetowa** (`page` / `page_size`): domyślne `page_size` **20**, maksimum **100** — stałe `DEFAULT_LIST_LIMIT` i `MAX_LIST_LIMIT` w `apps.core.api_utils` (m.in. pacjenci, staff-users, lista dokumentów medycznych, lista dokumentów intake, audyt globalny, audyt przy dokumencie).
-- **Limit listy** (`limit`): listy recepcji/słowników (placówki, gabinety, kolejki, wpisy, tablety, batche importów) używają parametru `limit` z **tym samym domyślnie 20 i maks. 100** (`parse_list_limit` w tym samym module).
+- **Paginacja offsetowa** (`page` / `page_size`): domyślne `page_size` **20**, maksimum **100** — stałe `DEFAULT_LIST_LIMIT` i `MAX_LIST_LIMIT` w **`apps/core/constants.py`** (importowalne także z `apps.core.api_utils`; m.in. pacjenci, staff-users, lista dokumentów medycznych, lista dokumentów intake, audyt globalny, audyt przy dokumencie).
+- **Limit listy** (`limit`): listy recepcji/słowników (placówki, gabinety, kolejki, wpisy, tablety, batche importów) używają parametru `limit` z **tym samym domyślnie 20 i maks. 100** (`parse_list_limit` w `apps.core.api_utils`).
 - **Lista outbox / intake-outbox** (`GET /outbox-events`, `GET /intake-outbox-events`): parametr `limit` przez **`parse_list_limit`** — ten sam domyślny rozmiar **20** i maks. **100** co pozostałe listy staff.
 - Inne wspólne parametry:
   - `page` (domyślnie `1`), gdzie występuje paginacja offsetowa
@@ -362,6 +362,40 @@
   - Response JSON: obiekt wpisu.
   - Kody sukcesu: `200 OK`.
   - Kody błędów: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 INVALID_STATE_TRANSITION`.
+
+### 2.5a Autoryzacja ścieżki papierowej (T1, REST)
+
+Dwuetapowy flow „papier” — **T1** wyłącznie przez personel **ADMIN** / **MANAGER**; serwisy `authorize_paper_intake` / `revoke_paper_intake_authorization` w `apps/medical/services.py`. Stałe czasowe i długość powodu: `apps/medical/constants.py` (m.in. `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`, `PAPER_INTAKE_AUTH_REASON_MIN_LEN` / `MAX`).
+
+- **POST** `/queue-entries/{queue_entry_id}/paper-intake-authorization` — tworzy rekord `PaperIntakeAuthorization` dla wpisu kolejki (nie zmienia `entry_status`; sortowanie listy lekarza przez `doctor_list_sort_at`).
+- **DELETE** `/queue-entries/{queue_entry_id}/paper-intake-authorization` — usuwa autoryzację, o ile nie powstał jeszcze dokument medyczny dla tego wpisu.
+
+**Role:** tylko **ADMIN** lub **MANAGER** (`require_user_role`); inne role → `403`.
+
+**Zakres placówki:** jeśli `get_scoped_clinic_site_ids(request.user)` zwraca listę identyfikatorów, `queue_entry.daily_queue.clinic_site_id` musi do niej należeć; w przeciwnym razie **`403`** (`other.api.queue_entry_not_in_scope`). Dla administratora bez ograniczenia zakresu (`None`) — wszystkie placówki.
+
+**Body (POST i DELETE):** JSON `{"reason": "<tekst>"}` — `reason` po `.strip()` **10–500** znaków (`PaperIntakeAuthorizationRequest`); błąd walidacji → `400` (Pydantic / payload).
+
+**Odpowiedź POST — `201 Created`:**
+```json
+{
+  "paper_intake_authorization_id": "uuid",
+  "queue_entry_id": "uuid",
+  "authorized_at": "2026-05-02T12:00:00Z"
+}
+```
+
+**Odpowiedź DELETE — `200 OK`:**
+```json
+{
+  "queue_entry_id": "uuid",
+  "revoked": true
+}
+```
+
+**Typowe błędy:** `404` (`other.api.queue_entry_not_found`), `405` dla metod innych niż POST/DELETE; niespełnienie reguł domenowych (status, czas wizyty + okno godzin, istniejący dokument, intake SUBMITTED, duplikat autoryzacji itd.) → **`400`** z `json_domain_error` (klucze `other.domain.*` / `other.api.*`).
+
+**Panel HTML (staff):** ten sam przepływ biznesowy jest dostępny pod **`/admin/paper-intake/`** (Unfold); tam lista hubu i widok wpisu **nie** stosują filtra `get_scoped_clinic_site_ids` na widoku wpisu (spójność z globalną listą wyboru). Klienty REST integracyjne powinny polegać na tym endpoincie, jeśli wymagają egzekwowania zakresu placówek.
 
 ### 2.6 Urządzenia tabletowe
 

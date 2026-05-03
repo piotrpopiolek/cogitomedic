@@ -37,7 +37,7 @@ Skrypt zamienia ścieżki obrazów z formy `/docs/manual/assets/...` na względn
 | [01-rejestracja.md](01-rejestracja.md) | Recepcja (`RECEPTION`) |
 | [02-tablet.md](02-tablet.md) | Tablet poczekalni (`TABLET`; także recepcja/admin na `/tablet/`) |
 | [03-doktor.md](03-doktor.md) | Lekarz w panelu medycznym (`DOCTOR`); `ADMIN` / `MANAGER` — pełen widok kolejki w HTML |
-| [04-administrator.md](04-administrator.md) | Administrator systemu (`ADMIN`); w sekcji 11 również konto kierownicze (`Manager`) |
+| [04-administrator.md](04-administrator.md) | Administrator systemu (`ADMIN`); w sekcji 11 również konto kierownicze (`Manager`); §3a — autoryzacja ścieżki papierowej (`/admin/paper-intake/`) |
 | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) | Pacjent — pobieranie dokumentacji po SMS |
 | [screenshot-checklist.md](screenshot-checklist.md) | Lista plików PNG i odpowiadających im ekranów |
 

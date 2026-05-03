@@ -980,6 +980,8 @@ Refactor §5 nie jest neutralny wydajnościowo. Przejście ze startu po `Patient
 
 Pierwotny plan zakładał jeden punkt wejścia (lekarz/admin/manager wybiera wpis WAITING i tworzy dokument). W modelu „manager autoryzuje, lekarz dokumentuje” punktów wejścia jest **trzy**, w trzech różnych miejscach UI, dla różnych ról i z różnymi prerekwizytami.
 
+> **Stan implementacji (2026-05):** T1 w panelu staff jest pod **`/admin/paper-intake/`** (szablony Unfold): **hub** z wyborem wpisu kolejki (`WAITING`, ostatnie **30 dni** `daily_queue.queue_date`, lista **bez** filtrowania placówki) oraz **strona wpisu** z autoryzacją / cofnięciem. Widok HTML wpisu **nie** stosuje `get_scoped_clinic_site_ids` (spójnie z hubem); **REST** `POST`/`DELETE` `/api/v1/queue-entries/<uuid>/paper-intake-authorization` nadal sprawdza scope placówki. Reguły read-only UI: `apps/medical/paper_intake_policy.py`; stałe `PAPER_INTAKE_*` obok innych stałych medycznych: `apps/medical/constants.py`; kontrola ról HTML: `apps/core/staff_custom_admin.py`. Poniższy §6.1 zawiera pierwotną wizję URL (`/admin-panel/...`); w kodzie użyto ścieżki pod `/admin/`.
+
 #### 6.1 T1 — Autoryzacja papieru (ADMIN/MANAGER)
 
 - **Źródło prawdy:** użytkownik z roli `ADMIN` lub `MANAGER` (NIE `DOCTOR`) wybiera konkretny `QueueEntry` w statusie `WAITING` w **dedykowanym widoku administracyjnym** (NIE w generycznym Django admin) i klika „Autoryzuj ścieżkę papierową”.
