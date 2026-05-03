@@ -721,7 +721,7 @@ class DoctorDetailHappyPathTests(TestCase):
             current_version_no=0,
             created_by_user=self.doctor,
         )
-        # Default HiDrive /incoming listing is empty in tests → real gate returns 422.
+        # Default HiDrive /incoming listing is empty in tests → real gate would return 424.
         gate_patcher = patch(
             "cogitomedica.doctor_views.check_external_pdf_gate",
             return_value=GateResult(
@@ -819,13 +819,13 @@ class DoctorDetailHappyPathTests(TestCase):
             skip_attachment_sync=False,
         ),
     )
-    def test_detail_returns_422_when_external_pdf_gate_blocks(
+    def test_detail_returns_424_when_external_pdf_gate_blocks(
         self,
         _mock_gate: MagicMock,
     ) -> None:
         self.client.force_login(self.doctor)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 424)
         self.assertIn("GATE_BLOCKED", resp.content.decode())
 
     @patch(

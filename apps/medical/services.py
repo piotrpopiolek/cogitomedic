@@ -41,6 +41,7 @@ from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry, QueueEntryStatus
+from apps.users.display import staff_user_display_name
 from apps.users.models import StaffUser
 
 PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
@@ -54,13 +55,6 @@ PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED: PaperIntakeAutorevokeTrigger =
 PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED: PaperIntakeAutorevokeTrigger = (
     "queue_entry_cancelled"
 )
-
-
-def _staff_user_display_name(user: StaffUser | None) -> str:
-    if user is None:
-        return ""
-    name = f"{user.first_name} {user.last_name}".strip()
-    return name or (user.username or "")
 
 
 def _paper_intake_authorization_context_for_document(
@@ -95,9 +89,7 @@ def _paper_intake_authorization_context_for_document(
             authorizer = StaffUser.objects.only(
                 "username", "first_name", "last_name"
             ).get(id=by_uuid)
-            display = _staff_user_display_name(authorizer) or (
-                authorizer.username or ""
-            )
+            display = staff_user_display_name(authorizer) or (authorizer.username or "")
         except StaffUser.DoesNotExist:
             display = str(by_uuid)
 
@@ -134,7 +126,7 @@ def get_document_lock_state(
     holder = getattr(doc, "locked_by_user", None)
     if holder is None and doc.locked_by_user_id:
         holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-    return True, _staff_user_display_name(holder), doc.locked_at
+    return True, staff_user_display_name(holder), doc.locked_at
 
 
 @transaction.atomic
@@ -170,7 +162,7 @@ def acquire_document_lock(
             doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
             return True, None
         holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-        return False, _staff_user_display_name(holder)
+        return False, staff_user_display_name(holder)
 
     doc.locked_by_user_id = user.id
     doc.locked_at = now
@@ -1647,7 +1639,7 @@ def list_doctor_work_queue(
             if ver.medical_document_id in published_by_display_by_doc_id:
                 continue
             published_by_display_by_doc_id[ver.medical_document_id] = (
-                _staff_user_display_name(ver.published_by_user)
+                staff_user_display_name(ver.published_by_user)
             )
     list_items = [
         _serialize_doctor_work_queue_row(

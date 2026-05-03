@@ -803,6 +803,21 @@ COGITO_PATHS = {
                     "description": "Context (intake, version, patient, revision flags, etc.)"
                 },
                 "404": {"description": "Not found"},
+                "422": {
+                    "description": (
+                        "Domain error — full context cannot be returned. Typical case: "
+                        "`source_type=PAPER_INTAKE` but the `MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE` "
+                        "audit snapshot used to rebuild `paper_intake_authorization` is missing "
+                        "(`other.domain.paper_intake_document_audit_snapshot_missing`). "
+                        "Response body: `ApiLocalizedErrorBody` (`error_key`, `error`, …) via "
+                        "`json_domain_error`."
+                    ),
+                    "content": {
+                        "application/json": {
+                            "schema": _API_LOCALIZED_ERROR_SCHEMA,
+                        }
+                    },
+                },
             },
         },
     },
