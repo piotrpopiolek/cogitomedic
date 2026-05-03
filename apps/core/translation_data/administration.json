@@ -284,6 +284,131 @@
     "en": "Revoked {ok} authorization(s); {failed} could not be revoked.",
     "pl": "Cofnięto {ok} autoryzację(-e); {failed} nie udało się cofnąć."
   },
+  "administration.paper_intake_admin_authorize_reason_label": {
+    "de": "Grund (10–500 Zeichen)",
+    "en": "Reason (10–500 characters)",
+    "pl": "Powód (10–500 znaków)"
+  },
+  "administration.paper_intake_admin_cannot_authorize_title": {
+    "de": "Autorisierung derzeit nicht möglich",
+    "en": "Authorization is not available yet",
+    "pl": "Autoryzacja na razie niedostępna"
+  },
+  "administration.paper_intake_admin_entry_authorize_heading": {
+    "de": "Papier-Intake-Pfad autorisieren",
+    "en": "Authorize paper intake path",
+    "pl": "Autoryzuj ścieżkę papierową"
+  },
+  "administration.paper_intake_admin_entry_revoke_heading": {
+    "de": "Aktive Autorisierung",
+    "en": "Active authorization",
+    "pl": "Aktywna autoryzacja"
+  },
+  "administration.paper_intake_admin_entry_submit_authorize": {
+    "de": "Autorisieren",
+    "en": "Authorize",
+    "pl": "Autoryzuj"
+  },
+  "administration.paper_intake_admin_entry_submit_revoke": {
+    "de": "Autorisierung widerrufen",
+    "en": "Revoke authorization",
+    "pl": "Cofnij autoryzację"
+  },
+  "administration.paper_intake_admin_entry_title": {
+    "de": "Papier-Intake-Autorisierung",
+    "en": "Paper intake authorization",
+    "pl": "Autoryzacja ścieżki papierowej"
+  },
+  "administration.paper_intake_admin_earliest_hint": {
+    "de": "Früheste Autorisierungszeit (Termin + 3 h)",
+    "en": "Earliest authorization time (appointment + 3h)",
+    "pl": "Najwcześniejszy moment autoryzacji (wizyta + 3 h)"
+  },
+  "administration.paper_intake_admin_has_document": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument.",
+    "en": "A medical document already exists for this queue entry.",
+    "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny."
+  },
+  "administration.paper_intake_admin_hub_intro": {
+    "de": "Wählen Sie einen Warteschlangeneintrag aus der Liste. Anschließend öffnet sich das Autorisierungsformular. Es werden alle Kliniken berücksichtigt; nur Einträge im Status „Wartend“ aus Tageswarteschlangen der letzten 30 Tage.",
+    "en": "Choose a queue entry from the list. The authorization form opens for that visit. All clinic sites are included; only entries in Waiting status from daily queues in the last 30 days are listed.",
+    "pl": "Wybierz wpis kolejki z listy. Otworzy się formularz autoryzacji dla tej wizyty. Lista obejmuje wszystkie placówki; widoczne są tylko wpisy w statusie oczekiwania z kolejek dziennych z ostatnich 30 dni."
+  },
+  "administration.paper_intake_admin_hub_invalid_queue_entry": {
+    "de": "Wählen Sie einen gültigen Warteschlangeneintrag aus der Liste.",
+    "en": "Select a valid queue entry from the list.",
+    "pl": "Wybierz prawidłowy wpis kolejki z listy."
+  },
+  "administration.paper_intake_admin_hub_no_entries": {
+    "de": "Für die letzten 30 Tage gibt es keine wartenden Warteschlangeneinträge.",
+    "en": "There are no Waiting queue entries in the last 30 days.",
+    "pl": "Brak wpisów kolejki w statusie oczekiwania z ostatnich 30 dni."
+  },
+  "administration.paper_intake_admin_hub_queue_entry_empty": {
+    "de": "Wert auswählen",
+    "en": "Select value",
+    "pl": "Wybierz wartość"
+  },
+  "administration.paper_intake_admin_hub_queue_entry_id_label": {
+    "de": "Warteschlangeneintrag",
+    "en": "Queue entry",
+    "pl": "Wpis kolejki"
+  },
+  "administration.paper_intake_admin_hub_submit": {
+    "de": "Weiter",
+    "en": "Continue",
+    "pl": "Dalej"
+  },
+  "administration.paper_intake_admin_hub_title": {
+    "de": "Papier-Intake-Autorisierung",
+    "en": "Paper intake authorization",
+    "pl": "Autoryzacja ścieżki papierowej"
+  },
+  "administration.paper_intake_admin_invalid_uuid": {
+    "de": "Bitte geben Sie eine gültige UUID des Warteschlangeneintrags ein.",
+    "en": "Enter a valid queue entry UUID.",
+    "pl": "Podaj prawidłowy UUID wpisu kolejki."
+  },
+  "administration.paper_intake_admin_label_appointment": {
+    "de": "Termin",
+    "en": "Appointment",
+    "pl": "Wizyta"
+  },
+  "administration.paper_intake_admin_label_entry_status": {
+    "de": "Eintragsstatus",
+    "en": "Entry status",
+    "pl": "Status wpisu"
+  },
+  "administration.paper_intake_admin_label_queue_date": {
+    "de": "Wartelistendatum",
+    "en": "Queue date",
+    "pl": "Data kolejki"
+  },
+  "administration.paper_intake_admin_link_queue_entry": {
+    "de": "Warteschlangeneintrag in Django-Admin öffnen",
+    "en": "Open queue entry in Django admin",
+    "pl": "Otwórz wpis kolejki w Django admin"
+  },
+  "administration.paper_intake_admin_revoke_reason_label": {
+    "de": "Grund für Widerruf (10–500 Zeichen)",
+    "en": "Reason for revoke (10–500 characters)",
+    "pl": "Powód cofnięcia (10–500 znaków)"
+  },
+  "administration.paper_intake_admin_success_authorized": {
+    "de": "Papier-Intake-Pfad wurde autorisiert.",
+    "en": "Paper intake path has been authorized.",
+    "pl": "Ścieżka papierowa została autoryzowana."
+  },
+  "administration.paper_intake_admin_success_revoked": {
+    "de": "Papier-Intake-Autorisierung wurde widerrufen.",
+    "en": "Paper intake authorization has been revoked.",
+    "pl": "Autoryzacja ścieżki papierowej została cofnięta."
+  },
+  "administration.side_paper_intake_hub": {
+    "de": "Papier-Intake autorisieren",
+    "en": "Authorize paper intake",
+    "pl": "Autoryzacja papieru"
+  },
   "administration.model_outboxevent": {
     "de": "Ausgangsereignis",
     "en": "Outbox event",
@@ -513,6 +638,16 @@
     "de": "Patientenformular-Sitzungen",
     "en": "Form sessions",
     "pl": "Sesje formularzy"
+  },
+  "administration.staff_custom_admin_admin_manager_only": {
+    "de": "Nur Administratoren oder Manager können diese Seite nutzen.",
+    "en": "Only administrators or managers can use this page.",
+    "pl": "Tylko administrator lub manager może korzystać z tej strony."
+  },
+  "administration.staff_custom_admin_invalid_action": {
+    "de": "Ungültige Aktion.",
+    "en": "Invalid action.",
+    "pl": "Nieprawidłowa akcja."
   },
   "administration.side_staff_users": {
     "de": "Mitarbeiter",

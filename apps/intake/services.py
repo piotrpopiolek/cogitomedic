@@ -15,6 +15,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
+from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import (
     AnamnesisOptionDefinition,
@@ -902,10 +903,6 @@ def save_intake_consents(
         )
 
     return intake_form
-
-
-# Max signature file size (bytes), e.g. 2MB
-SIGNATURE_MAX_SIZE = 2 * 1024 * 1024
 
 
 @transaction.atomic

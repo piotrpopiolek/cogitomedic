@@ -15,6 +15,7 @@ from freezegun import freeze_time
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -23,7 +24,6 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.services import (
-    DOCUMENT_LOCK_TIMEOUT_HOURS,
     acquire_document_lock,
     create_or_get_medical_document,
     get_document_lock_state,
