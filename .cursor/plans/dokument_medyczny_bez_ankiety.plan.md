@@ -1,6 +1,6 @@
 ---
 name: Dokument medyczny bez ankiety
-overview: "Nullable `MedicalDocument.intake_form`, `source_type=PAPER_INTAKE`, model `PaperIntakeAuthorization` i invariant „`PAPER_INTAKE_COMPLETED` dopiero przy utworzeniu dokumentu” są wdrożone (migracje, serwisy authorize/revoke/create bez ankiety, REST, `get_medical_document_context` z `paper_intake_authorization`, hub `/admin/paper-intake/` + REST bez scope placówki dla ADMIN/MANAGER). **Kolejka prac:** merge listy lekarza na `QueueEntry` (stany A/B/C + perf), T2 przycisk no-intake na liście + usunięcie fallbacku w `doctor_open_by_queue_view`, panel Befund (meta papieru + smoke przy pustym intake)."
+overview: "Nullable `MedicalDocument.intake_form`, `source_type=PAPER_INTAKE`, model `PaperIntakeAuthorization` i invariant „`PAPER_INTAKE_COMPLETED` dopiero przy utworzeniu dokumentu” są wdrożone (migracje, serwisy authorize/revoke/create bez ankiety, REST, `get_medical_document_context` z `paper_intake_authorization`, hub `/admin/paper-intake/` + REST bez scope placówki dla ADMIN/MANAGER). Lista lekarza na `QueueEntry` (A/B/C), T2 (przycisk + POST, brak GET-fallbacku w `doctor_open_by_queue_view`) oraz etap wydajności (`doctor_list_sort_at`, indeksy `0039`, budżet zapytań w testach) — **zrobione**. **Następny sprint:** panel Befund (`befund-detail-paper-meta` + `befund-js-smoke`)."
 todos:
   - id: schema-null-intake
     content: "Migracja: `MedicalDocument.intake_form` nullable + `source_type=PAPER_INTAKE` + `QueueEntryStatus.PAPER_INTAKE_COMPLETED` + ewentualne poprawki constraintów/indeksów"
@@ -25,16 +25,16 @@ todos:
     status: completed
   - id: work-queue-merge
     content: "`list_doctor_work_queue`: przebudować na queryset `QueueEntry` jako źródło prawdy; **trzy stany eligibility** — (A) cyfrowy SUBMITTED/REOPENED, (B) papier autoryzowany, dokument jeszcze nie utworzony (WAITING + `paper_intake_authorization` istnieje + brak `medical_document`), (C) papier wykonany (PAPER_INTAKE_COMPLETED + `medical_document.source_type=PAPER_INTAKE`); helper `_serialize_doctor_work_queue_row(entry, doc | None)` toleruje `doc=None` dla stanu B z flagą `paper_intake_action_required=True`; etykieta UI + tłumaczenia + migracja seed"
-    status: pending
+    status: completed
   - id: work-queue-perf
     content: "Wydajność listy lekarza: bench przed/po z datasetem zawierającym ~5% stanu B i ~5% stanu C, denormalizowany klucz sortowania (zamiast `Coalesce` cross-table), `doctor_list_sort_at` ustawiany w `submit_patient_intake_form`, **`authorize_paper_intake`** i `create_medical_document_without_intake`; plan indeksów (partial dla eligibility, kompozytowy do sortowania, trigram do `patient_search`, OneToOne na `paper_intake_authorization` jest auto-unique), `Exists(...)` zamiast joinów do `versions`, jeden batchowy prefetch dla strony, asercja `assertNumQueries` dla wszystkich 3 stanów, decyzja kursorowa vs offset z progu N wierszy, SLA p50/p95"
-    status: pending
+    status: completed
   - id: manager-authorize-ui
     content: Dedykowany widok admina/managera (NIE generyczny Django admin) z akcją „Autoryzuj ścieżkę papierową” — widoczny tylko po WAITING + `appointment_time + 3h` + brak intake SUBMITTED + brak dokumentu + brak aktywnej autoryzacji; pole `reason` z formularza (10–500 znaków); osobny przycisk „Cofnij autoryzację” gdy autoryzacja istnieje i dokument nie powstał; widok admina `PaperIntakeAuthorizationAdmin` jako readonly
     status: completed
   - id: staff-create-no-intake
     content: "Punkt wejścia lekarza (T2): przycisk „Utwórz dokument papierowy” w wierszu listy lekarza dla stanu B (papier autoryzowany), wywołujący `POST /api/v1/medical-documents/no-intake`; brak akcji w `doctor_open_by_queue_view` — ten widok NIE tworzy już papierowego dokumentu jako fallback (linie ~228-234 do usunięcia); render osobnego ekranu „brak ankiety cyfrowej” z pomocniczym komunikatem dla lekarza"
-    status: pending
+    status: completed
   - id: befund-detail-paper-meta
     content: "Panel Befund (`templates/doctor/detail.html` + `static/doctor/js/befund-form.js`): dla `source_type=PAPER_INTAKE` pokazać sekcję „Autoryzacja papierowa: <kto>, <kiedy>, <reason>” w nagłówku dokumentu; pusty `intake_summary` z jasną etykietą „Bez ankiety cyfrowej, ankieta papierowa” zamiast pustych sekcji"
     status: pending
