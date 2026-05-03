@@ -70,6 +70,16 @@ class DoctorViewsSmokeTests(TestCase):
     def _login_doctor(self):
         self.client.force_login(self.doctor)
 
+    def _assert_paper_intake_modal_markup(self, html: str) -> None:
+        """Regression: in-page modal for paper create; no native window.confirm."""
+        self.assertIn('id="paper-intake-confirm-modal"', html)
+        self.assertIn("js-paper-intake-create-form", html)
+        self.assertNotIn(
+            "window.confirm",
+            html,
+            msg="Paper intake create must not use browser native confirm().",
+        )
+
     # ==========================================================
     # Login
     # ==========================================================
@@ -369,6 +379,49 @@ class DoctorViewsSmokeTests(TestCase):
             msg="Expected paper-intake wording (EN or DE) in the no-intake action page.",
         )
         self.assertIn(b"create-no-intake", lowered)
+
+    def test_paper_intake_create_confirm_modal_on_list_and_no_intake_page(self) -> None:
+        """List + no-intake action page embed shared modal; forms use JS hook, not window.confirm."""
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PM", name="Paper Modal Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ModalPaper",
+            date_of_birth=date(1992, 2, 2),
+            phone="+48500333222",
+            email="modalpaper@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake for modal regression test",
+        )
+
+        list_resp = self.client.get("/doctor/")
+        self.assertEqual(list_resp.status_code, 200)
+        self._assert_paper_intake_modal_markup(list_resp.content.decode())
+
+        action_resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(action_resp.status_code, 200)
+        self._assert_paper_intake_modal_markup(action_resp.content.decode())
 
     def test_post_create_no_intake_creates_document_and_redirects_to_detail(
         self,
