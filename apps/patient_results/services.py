@@ -17,6 +17,11 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.integrations.sms.client import get_sms_adapter
+from apps.patient_results.constants import (
+    OTP_MAX_VERIFY_ATTEMPTS,
+    OTP_RATE_LIMIT_PER_HOUR,
+    OTP_VALID_MINUTES,
+)
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import Patient
 from apps.reception.phone_utils import normalize_phone
@@ -25,10 +30,6 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-
-OTP_VALID_MINUTES = 15
-OTP_MAX_VERIFY_ATTEMPTS = 5
-OTP_RATE_LIMIT_PER_HOUR = 3
 
 # Simple OTP SMS template (DE default) – no DB translation for Phase 2 to avoid migration dependency
 _DEFAULT_OTP_SMS = "CogitoMed: Ihr Code lautet {otp}"

@@ -539,6 +539,19 @@ if HAS_UNFOLD:
                     "items": [
                         {
                             "title": db_gettext_lazy(
+                                "administration.side_paper_intake_hub",
+                                "Authorize paper intake (form)",
+                            ),
+                            "icon": "edit_note",
+                            "link": lambda request: reverse_lazy(
+                                "admin_paper_intake_hub"
+                            ),
+                            "permission": lambda request: _is_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                        {
+                            "title": db_gettext_lazy(
                                 "administration.model_paperintakeauthorization_plural",
                                 "Paper intake authorizations",
                             ),

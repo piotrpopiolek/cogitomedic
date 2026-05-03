@@ -10,6 +10,11 @@ from django.http import JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
+from apps.core.constants import (
+    DEFAULT_LIST_LIMIT,
+    MAX_JSON_BODY_BYTES,
+    MAX_LIST_LIMIT,
+)
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.translation_service import (
@@ -18,11 +23,6 @@ from apps.core.translation_service import (
     resolve_other_message,
     translation_category_for_message_key,
 )
-
-# Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
-DEFAULT_LIST_LIMIT = 20
-MAX_LIST_LIMIT = 100
-MAX_JSON_BODY_BYTES = 1024 * 1024
 
 
 def assign_group_to_test_user(user, group_name: str) -> None:

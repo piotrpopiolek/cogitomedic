@@ -9,11 +9,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
-from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
-    safe_parse_positive_int,
-)
+from apps.core.api_utils import safe_parse_positive_int
+from apps.core.constants import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from apps.core.domain_messages import domain_message
 from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import (
@@ -25,6 +22,12 @@ from apps.medical.medical_payload_schemas import (
 )
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
+from apps.medical.constants import (
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
+    PAPER_INTAKE_AUTH_REASON_MAX_LEN,
+    PAPER_INTAKE_AUTH_REASON_MIN_LEN,
+    PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
+)
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -39,11 +42,6 @@ from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.models import StaffUser
-
-DOCUMENT_LOCK_TIMEOUT_HOURS = 6
-
-_PAPER_INTAKE_AUTH_REASON_MIN_LEN = 10
-_PAPER_INTAKE_AUTH_REASON_MAX_LEN = 500
 
 PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
     "intake_form_submitted",
@@ -383,12 +381,12 @@ def create_or_get_medical_document(
 
 def _validate_paper_intake_authorization_reason(reason: str) -> str:
     text = (reason or "").strip()
-    if len(text) < _PAPER_INTAKE_AUTH_REASON_MIN_LEN:
+    if len(text) < PAPER_INTAKE_AUTH_REASON_MIN_LEN:
         raise DomainError(
             domain_message("other.api.paper_intake_authorization_reason_required"),
             api_message_key="other.api.paper_intake_authorization_reason_required",
         )
-    if len(text) > _PAPER_INTAKE_AUTH_REASON_MAX_LEN:
+    if len(text) > PAPER_INTAKE_AUTH_REASON_MAX_LEN:
         raise DomainError(
             domain_message("other.api.paper_intake_authorization_reason_too_long"),
             api_message_key="other.api.paper_intake_authorization_reason_too_long",
@@ -447,7 +445,9 @@ def authorize_paper_intake(
                 domain_message("other.domain.paper_intake_requires_appointment_time"),
                 api_message_key="other.domain.paper_intake_requires_appointment_time",
             )
-        if timezone.now() < entry.appointment_time + timedelta(hours=3):
+        if timezone.now() < entry.appointment_time + timedelta(
+            hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+        ):
             raise DomainError(
                 domain_message("other.domain.paper_intake_authorization_too_early"),
                 api_message_key="other.domain.paper_intake_authorization_too_early",
@@ -562,7 +562,9 @@ def create_medical_document_without_intake(
                 domain_message("other.domain.paper_intake_requires_appointment_time"),
                 api_message_key="other.domain.paper_intake_requires_appointment_time",
             )
-        if timezone.now() < queue_entry.appointment_time + timedelta(hours=3):
+        if timezone.now() < queue_entry.appointment_time + timedelta(
+            hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+        ):
             raise DomainError(
                 domain_message("other.domain.paper_intake_earliest_after_appointment"),
                 api_message_key="other.domain.paper_intake_earliest_after_appointment",
