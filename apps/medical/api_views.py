@@ -15,6 +15,7 @@ from apps.core.api_utils import (
     MAX_LIST_LIMIT,
     json_domain_error,
     json_error,
+    json_pydantic_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
@@ -28,6 +29,8 @@ from apps.core.exceptions import (
 )
 from apps.medical.api_schemas import (
     CreateMedicalDocumentRequest,
+    CreateMedicalDocumentWithoutIntakeRequest,
+    PaperIntakeAuthorizationRequest,
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
@@ -57,8 +60,10 @@ from apps.reception.models import QueueEntry
 from apps.medical.services import (
     _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
+    authorize_paper_intake,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
+    create_medical_document_without_intake,
     create_or_get_medical_document,
     discard_pending_revision,
     get_document_lock_state,
@@ -72,6 +77,7 @@ from apps.medical.services import (
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
+    revoke_paper_intake_authorization,
     retry_latest_document_processing,
     save_draft_document_version,
 )
@@ -216,9 +222,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             entry = QueueEntry.objects.select_related("daily_queue").get(
@@ -246,6 +250,111 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
 
 
 @require_auth
+def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = CreateMedicalDocumentWithoutIntakeRequest.model_validate(
+            read_json_body(request)
+        )
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(
+            id=body.queue_entry_id
+        )
+        check_doctor_queue_entry_access(entry, request.user)
+        document = create_medical_document_without_intake(
+            queue_entry_id=body.queue_entry_id,
+            created_by_user_id=request.user.id,
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.queue_entry_not_found", status=404)
+    except DomainError as exc:
+        return json_domain_error(exc, status=400)
+
+    return JsonResponse(
+        {
+            "medical_document_id": str(document.id),
+            "queue_entry_id": str(document.queue_entry_id),
+            "status": document.status,
+            "source_type": document.source_type,
+        },
+        status=201,
+    )
+
+
+@require_auth
+def queue_entry_paper_intake_authorization_view(
+    request: HttpRequest, queue_entry_id: UUID
+) -> JsonResponse:
+    """ADMIN/MANAGER: POST to authorize, DELETE to revoke (body ``reason`` in both cases).
+
+    No clinic-site scope gate (same oversight model as ``/admin/paper-intake/`` HTML hub
+    and entry page): only role checks; business rules live in ``authorize_paper_intake`` /
+    ``revoke_paper_intake_authorization``. Other queue-entry HTTP handlers may still return
+    ``other.api.queue_entry_not_in_scope`` for scoped staff; this view intentionally does not.
+    """
+    role_error = require_user_role(request, allowed_roles={"ADMIN", "MANAGER"})
+    if role_error:
+        return role_error
+    if request.method not in ("POST", "DELETE"):
+        return json_error("other.api.method_not_allowed", status=405)
+    if not QueueEntry.objects.filter(id=queue_entry_id).exists():
+        return json_error("other.api.queue_entry_not_found", status=404)
+
+    try:
+        body = PaperIntakeAuthorizationRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    if request.method == "POST":
+        try:
+            authorization = authorize_paper_intake(
+                queue_entry_id=queue_entry_id,
+                authorized_by_user_id=request.user.id,
+                reason=body.reason,
+            )
+        except DomainError as exc:
+            return json_domain_error(exc, status=400)
+        return JsonResponse(
+            {
+                "paper_intake_authorization_id": str(authorization.id),
+                "queue_entry_id": str(authorization.queue_entry_id),
+                "authorized_at": authorization.authorized_at.isoformat(),
+            },
+            status=201,
+        )
+
+    try:
+        revoke_paper_intake_authorization(
+            queue_entry_id=queue_entry_id,
+            revoked_by_user_id=request.user.id,
+            reason=body.reason,
+        )
+    except DomainError as exc:
+        return json_domain_error(exc, status=400)
+    return JsonResponse(
+        {"queue_entry_id": str(queue_entry_id), "revoked": True},
+        status=200,
+    )
+
+
+@require_auth
 def medical_document_detail_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
@@ -264,6 +373,8 @@ def medical_document_detail_view(
             form_locale=form_locale,
             user=request.user,
         )
+    except DomainError as exc:
+        return json_domain_error(exc, status=422)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
@@ -478,9 +589,7 @@ def medical_document_draft_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     if body.medical_payload.schema_version != body.medical_payload_schema_version:
         return json_error("other.api.medical_payload_schema_mismatch", status=400)
@@ -672,9 +781,7 @@ def medical_document_publish_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         with transaction.atomic():
@@ -810,9 +917,7 @@ def medical_document_retry_processing_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
@@ -896,9 +1001,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
                 }
             )
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             templates = list_templates(
@@ -949,9 +1052,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
 
         try:
             template = create_template(
@@ -1036,9 +1137,7 @@ def doctor_text_template_detail_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         template = update_template(

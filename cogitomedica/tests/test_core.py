@@ -67,6 +67,7 @@ class OpenAPISchemaIntegrationTests(TestCase):
         self.assertIn("AnamnesisAnswerPayload", comp)
         self.assertIn("SaveDraftMedicalDocumentRequest", comp)
         self.assertIn("PublishMedicalDocumentRequest", comp)
+        self.assertIn("PaperIntakeAuthorizationRequest", comp)
 
     def test_auth_login_request_body_uses_ref(self) -> None:
         schema = build_cogito_openapi_schema()
@@ -89,6 +90,38 @@ class OpenAPISchemaIntegrationTests(TestCase):
         self.assertIsNone(
             get_request_body_schema_for("/api/v1/observability/health", "get")
         )
+
+    def test_paper_intake_authorization_request_body_uses_ref(self) -> None:
+        post_ref = get_request_body_schema_for(
+            "/api/v1/queue-entries/{queue_entry_id}/paper-intake-authorization",
+            "post",
+        )
+        del_ref = get_request_body_schema_for(
+            "/api/v1/queue-entries/{queue_entry_id}/paper-intake-authorization",
+            "delete",
+        )
+        expected = {"$ref": "#/components/schemas/PaperIntakeAuthorizationRequest"}
+        self.assertEqual(post_ref, expected)
+        self.assertEqual(del_ref, expected)
+
+    def test_paper_intake_authorization_delete_documents_required_json_body(
+        self,
+    ) -> None:
+        schema = build_cogito_openapi_schema()
+        delete_op = (
+            schema["paths"]
+            .get(
+                "/api/v1/queue-entries/{queue_entry_id}/paper-intake-authorization", {}
+            )
+            .get("delete", {})
+        )
+        rb = delete_op.get("requestBody", {})
+        self.assertTrue(rb.get("required"))
+        self.assertIn("PaperIntakeAuthorizationRequest", rb.get("description", ""))
+        self.assertIn("reason", rb.get("description", ""))
+        op_desc = (delete_op.get("description") or "").lower()
+        self.assertIn("not a typical", op_desc)
+        self.assertIn("body-less", op_desc)
 
     def test_metrics_endpoint_is_marked_as_authenticated_in_openapi(self) -> None:
         schema = build_cogito_openapi_schema()

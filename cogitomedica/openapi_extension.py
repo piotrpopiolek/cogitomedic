@@ -715,16 +715,78 @@ COGITO_PATHS = {
             },
         },
     },
+    f"{PREFIX}/medical-documents/no-intake": {
+        "post": {
+            "summary": "Create medical document without digital intake",
+            "description": (
+                "DOCTOR, ADMIN, or MANAGER. Creates a medical document in paper mode "
+                "(`source_type=PAPER_INTAKE`) after an ADMIN/MANAGER has created a "
+                "`PaperIntakeAuthorization` for the queue entry. Atomically moves queue status "
+                "to `PAPER_INTAKE_COMPLETED`. Requires `appointment_time` and enforces the "
+                "minimum delay after appointment (same `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT` "
+                "as paper-intake authorization)."
+            ),
+            "tags": ["Medical"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "queue_entry_id": {"type": "string", "format": "uuid"},
+                                "created_by_user_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                },
+                            },
+                            "required": ["queue_entry_id"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": {"description": "Created"},
+                "400": {
+                    "description": (
+                        "Domain rules failed (e.g. queue not WAITING, missing "
+                        "`appointment_time`, document already exists, minimum hours-after-"
+                        "appointment guard) — "
+                        "`error_key` + `error` via `json_domain_error`. Or request body "
+                        "schema validation — `error_key` `other.api.invalid_request_body` "
+                        "with `details` (Pydantic)."
+                    )
+                },
+                "401": {"description": "Authentication required"},
+                "403": {
+                    "description": (
+                        "Forbidden — caller is not DOCTOR, ADMIN, or MANAGER "
+                        "(`other.api.forbidden`)."
+                    )
+                },
+                "404": {"description": "Queue entry not found"},
+            },
+        },
+    },
     f"{PREFIX}/medical-documents/{{medical_document_id}}": {
         "get": {
             "summary": "Get medical document context",
             "description": (
                 "Full document context for the doctor panel (DOCTOR, ADMIN, MANAGER): intake "
                 "summary and current version payload. Top-level fields include `status`, "
-                "`current_version_no`, `published_version_no` (last published version number; "
+                "`source_type` (`DIGITAL_INTAKE` or `PAPER_INTAKE`), `current_version_no`, "
+                "`published_version_no` (last published version number; "
                 "null until first publish), `has_pending_revision` (true when a PUBLISHED "
                 "document has an in-progress DRAFT amendment), lock fields (`locked_by_user_id`, "
-                "`locked_by_username`, `locked_at` — effective lock only, max 6h)."
+                "`locked_by_username`, `locked_at` — effective lock only, max 6h). "
+                "`intake_form_id` is null for paper documents. For `source_type=PAPER_INTAKE`, "
+                "`paper_intake_authorization` holds the manager authorization snapshot "
+                "(`authorized_by_user_id`, `authorized_by_username`, `authorized_at` ISO string, "
+                "`reason`) from audit metadata; null for digital intake. "
+                "`intake_summary.patient` uses the same keys for digital intake and paper "
+                "fallback (`id`, `first_name`, `last_name`, `date_of_birth` ISO string or null, "
+                "`phone`, `email`); digital rows come from intake context, paper from "
+                "`queue_entry.patient`."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -741,6 +803,21 @@ COGITO_PATHS = {
                     "description": "Context (intake, version, patient, revision flags, etc.)"
                 },
                 "404": {"description": "Not found"},
+                "422": {
+                    "description": (
+                        "Domain error — full context cannot be returned. Typical case: "
+                        "`source_type=PAPER_INTAKE` but the `MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE` "
+                        "audit snapshot used to rebuild `paper_intake_authorization` is missing "
+                        "(`other.domain.paper_intake_document_audit_snapshot_missing`). "
+                        "Response body: `ApiLocalizedErrorBody` (`error_key`, `error`, …) via "
+                        "`json_domain_error`."
+                    ),
+                    "content": {
+                        "application/json": {
+                            "schema": _API_LOCALIZED_ERROR_SCHEMA,
+                        }
+                    },
+                },
             },
         },
     },
@@ -1597,6 +1674,91 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "OK"},
                 "404": {"description": "Not found"},
+            },
+        },
+    },
+    f"{PREFIX}/queue-entries/{{queue_entry_id}}/paper-intake-authorization": {
+        "post": {
+            "summary": "Authorize paper intake path",
+            "description": (
+                "ADMIN or MANAGER only. Creates `PaperIntakeAuthorization` for a WAITING queue "
+                "entry (does not change `entry_status`). Body: `reason` (10–500 chars). "
+                "Same business rules as internal `authorize_paper_intake` (appointment_time + "
+                "`PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`, no SUBMITTED digital intake, "
+                "no existing document, no duplicate auth). "
+                "No clinic-site scope gate for this operation (ADMIN/MANAGER oversight). "
+                "Other `/queue-entries/{queue_entry_id}/...` routes may still return HTTP 403 "
+                "with `other.api.queue_entry_not_in_scope` when the entry's clinic site is "
+                "outside the caller's assigned sites; this path does not."
+            ),
+            "tags": ["Reception – Queues", "Medical"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "description": (
+                    "JSON object with `reason` (10–500 chars). Schema: "
+                    "`PaperIntakeAuthorizationRequest` (see Components)."
+                ),
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {
+                    "description": (
+                        "Created. Body: `paper_intake_authorization_id`, `queue_entry_id`, "
+                        "`authorized_at` (ISO)."
+                    )
+                },
+                "400": {"description": "Domain or validation error"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden (wrong role)"},
+                "404": {"description": "Queue entry not found"},
+            },
+        },
+        "delete": {
+            "summary": "Revoke paper intake authorization",
+            "description": (
+                "ADMIN or MANAGER only. Removes active authorization when no medical document "
+                "exists yet for the queue entry. No clinic-site scope gate (same as POST on "
+                "this URL; other queue-entry routes may still use `queue_entry_not_in_scope`). "
+                "**Request body is "
+                "required (same as POST):** "
+                "send `application/json` with `reason` (10–500 chars) for audit — this is "
+                "not a typical body-less HTTP DELETE. Clients that omit the body will get "
+                "400 (invalid JSON / validation)."
+            ),
+            "tags": ["Reception – Queues", "Medical"],
+            "parameters": [
+                {
+                    "name": "queue_entry_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "description": (
+                    "**Required.** Same schema as POST: `PaperIntakeAuthorizationRequest` "
+                    "(`reason`, 10–500 characters). OpenAPI shows `$ref` to that component "
+                    "after schema merge."
+                ),
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": "Revoked. Body: `queue_entry_id`, `revoked`: true"
+                },
+                "400": {"description": "Domain or validation error"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Forbidden (wrong role)"},
+                "404": {"description": "Queue entry not found"},
             },
         },
     },

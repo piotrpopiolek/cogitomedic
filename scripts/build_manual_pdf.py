@@ -24,12 +24,15 @@ MANUAL = ROOT / "docs" / "manual"
 BUILD = MANUAL / "_build"
 
 # Kolejność rozdziałów (bez screenshot-checklist — lista techniczna).
+# Po §04-administrator wstawione: procedura papieru + diagram, potem pacjent.
 CHAPTERS: tuple[str, ...] = (
     "00-przeglad.md",
     "01-rejestracja.md",
     "02-tablet.md",
     "03-doktor.md",
     "04-administrator.md",
+    "04-administrator-paper-intake.md",
+    "paper_intake_flow.md",
     "05-pacjent-wyniki.md",
 )
 

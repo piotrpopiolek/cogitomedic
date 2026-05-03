@@ -14,8 +14,11 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
+from apps.medical.services import authorize_paper_intake
+from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
@@ -28,6 +31,10 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+_PAPER_AUTH_REASON = (
+    "Paper intake path authorized for this queue entry in test (long enough)."
+)
 
 
 class MedicalApiTests(TestCase):
@@ -222,6 +229,10 @@ class MedicalApiTests(TestCase):
         data = detail.json()
         self.assertEqual(data["id"], medical_document_id)
         self.assertEqual(data["queue_entry_id"], str(self.queue_entry.id))
+        self.assertEqual(
+            data.get("source_type"), MedicalDocumentSourceType.DIGITAL_INTAKE
+        )
+        self.assertIsNone(data.get("paper_intake_authorization"))
         self.assertIn("intake_summary", data)
         self.assertIn("patient", data["intake_summary"])
         self.assertIn("current_version", data)
@@ -229,6 +240,329 @@ class MedicalApiTests(TestCase):
 
         missing = self.client.get(f"/api/v1/medical-documents/{uuid4()}")
         self.assertEqual(missing.status_code, 404)
+
+    def test_create_medical_document_no_intake_happy_path(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=2,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        document = MedicalDocument.objects.get(id=body["medical_document_id"])
+        waiting_entry.refresh_from_db()
+        self.assertEqual(document.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertIsNone(document.intake_form_id)
+        self.assertEqual(
+            waiting_entry.entry_status,
+            QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+        )
+
+    def test_create_medical_document_no_intake_reception_forbidden(self) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(uuid4()),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_medical_document_no_intake_before_3h_returns_400(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=3,
+            appointment_time=timezone.now() - timedelta(hours=2, minutes=59),
+            created_by_user=self.reception_user,
+        )
+        response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json().get("error_key"),
+            "other.domain.paper_intake_earliest_after_appointment",
+        )
+
+    def _paper_auth_url(self, queue_entry_id) -> str:
+        return f"/api/v1/queue-entries/{queue_entry_id}/paper-intake-authorization"
+
+    def test_paper_intake_authorization_post_doctor_forbidden(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=40,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        self.client.force_login(self.doctor_user)
+        r = self.client.post(
+            self._paper_auth_url(waiting_entry.id),
+            data=json.dumps({"reason": _PAPER_AUTH_REASON}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_paper_intake_authorization_post_reception_forbidden(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=41,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        self.client.force_login(self.reception_user)
+        r = self.client.post(
+            self._paper_auth_url(waiting_entry.id),
+            data=json.dumps({"reason": _PAPER_AUTH_REASON}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_paper_intake_authorization_post_short_reason_returns_400(self) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=42,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        self.client.force_login(self.admin_user)
+        r = self.client.post(
+            self._paper_auth_url(waiting_entry.id),
+            data=json.dumps({"reason": "short"}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json().get("error_key"), "other.api.invalid_request_body")
+
+    def test_paper_intake_authorization_manager_out_of_assigned_clinic_succeeds(
+        self,
+    ) -> None:
+        other_site = ClinicSite.objects.create(code="API-OTHER", name="Other Site")
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_site, code="X1", name="X1"
+        )
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_site,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.reception_user,
+            assigned_doctor=self.doctor_user,
+        )
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        manager = StaffUser.objects.create_user(
+            username="api-mgr-paper-scope",
+            email="api.mgr.paper.scope@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        manager.clinic_sites.add(self.queue_entry.daily_queue.clinic_site)
+        self.client.force_login(manager)
+        r = self.client.post(
+            self._paper_auth_url(waiting_entry.id),
+            data=json.dumps({"reason": _PAPER_AUTH_REASON}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertIn("paper_intake_authorization_id", body)
+        self.assertEqual(body["queue_entry_id"], str(waiting_entry.id))
+
+    def test_paper_intake_authorization_post_admin_201_duplicate_400_delete_200(
+        self,
+    ) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=43,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        self.client.force_login(self.admin_user)
+        url = self._paper_auth_url(waiting_entry.id)
+        created = self.client.post(
+            url,
+            data=json.dumps({"reason": _PAPER_AUTH_REASON}),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201)
+        body = created.json()
+        self.assertIn("paper_intake_authorization_id", body)
+        self.assertEqual(body["queue_entry_id"], str(waiting_entry.id))
+
+        dup = self.client.post(
+            url,
+            data=json.dumps(
+                {
+                    "reason": (
+                        "Second authorization attempt must fail for this queue entry."
+                    )
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(dup.status_code, 400)
+        self.assertEqual(
+            dup.json().get("error_key"),
+            "other.domain.paper_intake_authorization_already_exists",
+        )
+
+        revoke_reason = (
+            "Manager or admin revoking paper path in API test (long enough text)."
+        )
+        deleted = self.client.delete(
+            url,
+            data=json.dumps({"reason": revoke_reason}),
+            content_type="application/json",
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json().get("revoked"))
+
+        again = self.client.delete(
+            url,
+            data=json.dumps({"reason": revoke_reason}),
+            content_type="application/json",
+        )
+        self.assertEqual(again.status_code, 400)
+        self.assertEqual(
+            again.json().get("error_key"),
+            "other.domain.paper_intake_authorization_not_found",
+        )
+
+    def test_medical_document_detail_get_for_no_intake_returns_null_intake(
+        self,
+    ) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=4,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        create_response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(waiting_entry.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        self.assertEqual(payload["source_type"], MedicalDocumentSourceType.PAPER_INTAKE)
+        self.assertIsNone(payload["intake_form_id"])
+        paper = payload["paper_intake_authorization"]
+        self.assertIsNotNone(paper)
+        self.assertEqual(paper["reason"], _PAPER_AUTH_REASON)
+        self.assertEqual(paper["authorized_by_user_id"], str(self.admin_user.id))
+        self.assertIsInstance(paper.get("authorized_at"), str)
+        self.assertTrue((paper.get("authorized_by_username") or "").strip())
+        self.assertEqual(payload["intake_summary"]["consents"], [])
+        self.assertEqual(payload["intake_summary"]["anamnesis_questions"], [])
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["id"],
+            str(self.queue_entry.patient_id),
+        )
+        patient = self.queue_entry.patient
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["first_name"], patient.first_name
+        )
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["last_name"], patient.last_name
+        )
+        self.assertEqual(
+            payload["intake_summary"]["patient"]["date_of_birth"],
+            patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+        )
+        self.assertEqual(payload["intake_summary"]["patient"]["phone"], patient.phone)
+        self.assertEqual(payload["intake_summary"]["patient"]["email"], patient.email)
+
+    def test_medical_document_detail_get_paper_without_audit_snapshot_returns_422(
+        self,
+    ) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=44,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        create_response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps({"queue_entry_id": str(waiting_entry.id)}),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        AuditEvent.objects.filter(
+            medical_document_id=medical_document_id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        ).delete()
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 422)
+        self.assertEqual(
+            detail.json().get("error_key"),
+            "other.domain.paper_intake_document_audit_snapshot_missing",
+        )
 
     def test_published_version_keeps_template_snapshot_after_template_change(
         self,
@@ -712,7 +1046,10 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(publish_response.status_code, 400)
-        self.assertEqual(publish_response.json().get("error"), "Validation error.")
+        self.assertEqual(
+            publish_response.json().get("error_key"),
+            "other.api.invalid_request_body",
+        )
 
     def test_publish_same_request_id_with_different_locale_returns_409(self) -> None:
         create_response = self.client.post(

@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
-from django.db.models import Max, Prefetch, Q
+from django.db import IntegrityError, transaction
+from django.db.models import Exists, Max, OuterRef, Prefetch, Q
 from django.utils import timezone
 
-from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
-    safe_parse_positive_int,
-)
+from apps.core.api_utils import safe_parse_positive_int
+from apps.core.constants import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from apps.core.domain_messages import domain_message
+from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import (
     DomainError,
     IdempotencyConflictError,
@@ -24,27 +22,86 @@ from apps.medical.medical_payload_schemas import (
 )
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
+from apps.medical.constants import (
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
+    PAPER_INTAKE_AUTH_REASON_MAX_LEN,
+    PAPER_INTAKE_AUTH_REASON_MIN_LEN,
+    PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
+)
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
     PdfStatus,
 )
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
-from apps.reception.models import QueueEntry
+from apps.reception.models import QueueEntry, QueueEntryStatus
+from apps.users.display import staff_user_display_name
 from apps.users.models import StaffUser
 
-DOCUMENT_LOCK_TIMEOUT_HOURS = 6
+PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
+    "intake_form_submitted",
+    "queue_entry_cancelled",
+]
+
+PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED: PaperIntakeAutorevokeTrigger = (
+    "intake_form_submitted"
+)
+PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED: PaperIntakeAutorevokeTrigger = (
+    "queue_entry_cancelled"
+)
 
 
-def _staff_user_display_name(user: StaffUser | None) -> str:
-    if user is None:
-        return ""
-    name = f"{user.first_name} {user.last_name}".strip()
-    return name or (user.username or "")
+def _paper_intake_authorization_context_for_document(
+    doc: MedicalDocument,
+) -> dict[str, Any] | None:
+    """Snapshot from ``MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE`` audit (authorization row is deleted at create)."""
+    if doc.source_type != MedicalDocumentSourceType.PAPER_INTAKE:
+        return None
+    from apps.operations.models import AuditEvent
+
+    ev = (
+        AuditEvent.objects.filter(
+            medical_document_id=doc.id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        )
+        .order_by("-event_time")
+        .first()
+    )
+    if ev is None or not isinstance(ev.metadata, dict):
+        return None
+    meta = ev.metadata
+    raw_by = meta.get("paper_intake_authorized_by_id")
+    by_uuid: uuid.UUID | None = None
+    if raw_by:
+        try:
+            by_uuid = uuid.UUID(str(raw_by))
+        except (ValueError, TypeError):
+            by_uuid = None
+    display = ""
+    if by_uuid is not None:
+        try:
+            authorizer = StaffUser.objects.only(
+                "username", "first_name", "last_name"
+            ).get(id=by_uuid)
+            display = staff_user_display_name(authorizer) or (authorizer.username or "")
+        except StaffUser.DoesNotExist:
+            display = str(by_uuid)
+
+    reason = meta.get("paper_intake_authorization_reason_snapshot")
+    authorized_at = meta.get("paper_intake_authorized_at")
+
+    return {
+        "authorized_by_user_id": str(by_uuid) if by_uuid else None,
+        "authorized_by_username": display or None,
+        "authorized_at": authorized_at if isinstance(authorized_at, str) else None,
+        "reason": reason if isinstance(reason, str) else None,
+    }
 
 
 def _is_admin_or_manager_medical_oversight(user: Any) -> bool:
@@ -69,7 +126,7 @@ def get_document_lock_state(
     holder = getattr(doc, "locked_by_user", None)
     if holder is None and doc.locked_by_user_id:
         holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-    return True, _staff_user_display_name(holder), doc.locked_at
+    return True, staff_user_display_name(holder), doc.locked_at
 
 
 @transaction.atomic
@@ -105,7 +162,7 @@ def acquire_document_lock(
             doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
             return True, None
         holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-        return False, _staff_user_display_name(holder)
+        return False, staff_user_display_name(holder)
 
     doc.locked_by_user_id = user.id
     doc.locked_at = now
@@ -312,6 +369,479 @@ def create_or_get_medical_document(
             metadata=meta,
         )
     return doc
+
+
+def _validate_paper_intake_authorization_reason(reason: str) -> str:
+    text = (reason or "").strip()
+    if len(text) < PAPER_INTAKE_AUTH_REASON_MIN_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_required"),
+            api_message_key="other.api.paper_intake_authorization_reason_required",
+        )
+    if len(text) > PAPER_INTAKE_AUTH_REASON_MAX_LEN:
+        raise DomainError(
+            domain_message("other.api.paper_intake_authorization_reason_too_long"),
+            api_message_key="other.api.paper_intake_authorization_reason_too_long",
+        )
+    return text
+
+
+@transaction.atomic
+def authorize_paper_intake(
+    *,
+    queue_entry_id: uuid.UUID,
+    authorized_by_user_id: uuid.UUID,
+    reason: str,
+) -> PaperIntakeAuthorization:
+    """ADMIN/MANAGER: authorize paper-intake path for a WAITING entry (does not flip entry_status)."""
+    try:
+        actor = StaffUser.objects.get(id=authorized_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_invalid_role"),
+            api_message_key="other.domain.paper_intake_authorization_invalid_role",
+        )
+    validated_reason = _validate_paper_intake_authorization_reason(reason)
+
+    with cogito_business_span(
+        "medical.authorize_paper_intake",
+        queue_entry_id=queue_entry_id,
+        audit_event_type="PAPER_INTAKE_AUTHORIZED",
+    ) as span:
+        try:
+            entry = (
+                QueueEntry.objects.select_for_update(of=("self",))
+                .select_related("daily_queue", "patient")
+                .get(id=queue_entry_id)
+            )
+        except QueueEntry.DoesNotExist as exc:
+            raise DomainError(
+                domain_message("other.api.queue_entry_not_found"),
+                api_message_key="other.api.queue_entry_not_found",
+            ) from exc
+
+        if entry.entry_status != QueueEntryStatus.WAITING:
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_authorization_invalid_status"
+                ),
+                api_message_key="other.domain.paper_intake_authorization_invalid_status",
+            )
+        if entry.appointment_time is None:
+            raise DomainError(
+                domain_message("other.domain.paper_intake_requires_appointment_time"),
+                api_message_key="other.domain.paper_intake_requires_appointment_time",
+            )
+        if timezone.now() < entry.appointment_time + timedelta(
+            hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+        ):
+            _min_h = PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_authorization_too_early",
+                    hours=_min_h,
+                ),
+                api_message_key="other.domain.paper_intake_authorization_too_early",
+                api_message_params={"hours": _min_h},
+            )
+        if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
+            raise DomainError(
+                domain_message(
+                    "other.domain.medical_document_already_exists_for_queue_entry"
+                ),
+                api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+            )
+        intake_row = (
+            PatientIntakeForm.objects.filter(queue_entry_id=entry.id)
+            .only("id", "form_status")
+            .first()
+        )
+        if intake_row is not None and intake_row.form_status == IntakeStatus.SUBMITTED:
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_authorization_intake_form_submitted"
+                ),
+                api_message_key="other.domain.paper_intake_authorization_intake_form_submitted",
+            )
+        if PaperIntakeAuthorization.objects.filter(queue_entry_id=entry.id).exists():
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_authorization_already_exists"
+                ),
+                api_message_key="other.domain.paper_intake_authorization_already_exists",
+            )
+
+        now = timezone.now()
+        authorization = PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=now,
+            authorized_by_id=authorized_by_user_id,
+            reason=validated_reason,
+        )
+        entry.doctor_list_sort_at = now
+        entry.save(update_fields=["doctor_list_sort_at", "updated_at"])
+
+        intake_status = intake_row.form_status if intake_row is not None else None
+        create_audit_event(
+            event_type="PAPER_INTAKE_AUTHORIZED",
+            actor_user_id=authorized_by_user_id,
+            patient_id=entry.patient_id,
+            context_clinic_site_id=entry.daily_queue.clinic_site_id,
+            metadata={
+                "queue_entry_id": str(entry.id),
+                "authorization_id": str(authorization.id),
+                "authorization_reason": validated_reason,
+                "appointment_time": entry.appointment_time.isoformat(),
+                "intake_form_id_at_authorization": (
+                    str(intake_row.id) if intake_row is not None else None
+                ),
+                "intake_form_status_at_authorization": intake_status,
+            },
+        )
+        if span.is_recording():
+            span.set_attribute(
+                "cogito.paper_intake_authorization_id", str(authorization.id)
+            )
+        return authorization
+
+
+@transaction.atomic
+def create_medical_document_without_intake(
+    *,
+    queue_entry_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
+) -> MedicalDocument:
+    """DOCTOR/ADMIN/MANAGER: create PAPER_INTAKE document after manager paper authorization (T2)."""
+    try:
+        creator = StaffUser.objects.get(id=created_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (creator.is_doctor or creator.is_admin_role or creator.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_create_document_invalid_role"),
+            api_message_key="other.domain.paper_intake_create_document_invalid_role",
+        )
+
+    with cogito_business_span(
+        "medical.create_medical_document_without_intake",
+        queue_entry_id=queue_entry_id,
+        audit_event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+    ) as span:
+        try:
+            queue_entry = (
+                QueueEntry.objects.select_for_update(of=("self",))
+                .select_related("daily_queue", "patient")
+                .get(id=queue_entry_id)
+            )
+        except QueueEntry.DoesNotExist as exc:
+            raise DomainError(
+                domain_message("other.api.queue_entry_not_found"),
+                api_message_key="other.api.queue_entry_not_found",
+            ) from exc
+
+        if queue_entry.entry_status != QueueEntryStatus.WAITING:
+            raise DomainError(
+                domain_message(
+                    "other.domain.queue_entry_must_be_waiting_for_paper_intake"
+                ),
+                api_message_key="other.domain.queue_entry_must_be_waiting_for_paper_intake",
+            )
+        if queue_entry.appointment_time is None:
+            raise DomainError(
+                domain_message("other.domain.paper_intake_requires_appointment_time"),
+                api_message_key="other.domain.paper_intake_requires_appointment_time",
+            )
+        if timezone.now() < queue_entry.appointment_time + timedelta(
+            hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+        ):
+            _min_h = PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_earliest_after_appointment",
+                    hours=_min_h,
+                ),
+                api_message_key="other.domain.paper_intake_earliest_after_appointment",
+                api_message_params={"hours": _min_h},
+            )
+
+        if MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).exists():
+            raise DomainError(
+                domain_message(
+                    "other.domain.medical_document_already_exists_for_queue_entry"
+                ),
+                api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+            )
+
+        intake_row = (
+            PatientIntakeForm.objects.filter(queue_entry_id=queue_entry.id)
+            .only("form_status")
+            .first()
+        )
+        if intake_row is not None and intake_row.form_status == IntakeStatus.SUBMITTED:
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_intake_form_appeared_after_authorization"
+                ),
+                api_message_key="other.domain.paper_intake_intake_form_appeared_after_authorization",
+            )
+
+        try:
+            auth = (
+                PaperIntakeAuthorization.objects.select_for_update()
+                .select_related("authorized_by")
+                .get(queue_entry_id=queue_entry.id)
+            )
+        except PaperIntakeAuthorization.DoesNotExist as exc:
+            raise DomainError(
+                domain_message("other.domain.paper_intake_not_authorized"),
+                api_message_key="other.domain.paper_intake_not_authorized",
+            ) from exc
+
+        snap_id = auth.id
+        snap_reason = auth.reason
+        snap_by_id = auth.authorized_by_id
+        snap_at = auth.authorized_at
+        snap_age_seconds = (timezone.now() - snap_at).total_seconds()
+
+        try:
+            medical_document = MedicalDocument.objects.create(
+                queue_entry_id=queue_entry.id,
+                intake_form_id=None,
+                source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+                created_by_user_id=created_by_user_id,
+                updated_by_user_id=created_by_user_id,
+            )
+        except IntegrityError as exc:
+            raise DomainError(
+                domain_message(
+                    "other.domain.medical_document_already_exists_for_queue_entry"
+                ),
+                api_message_key="other.domain.medical_document_already_exists_for_queue_entry",
+            ) from exc
+
+        status_before = queue_entry.entry_status
+        now = timezone.now()
+        queue_entry.entry_status = QueueEntryStatus.PAPER_INTAKE_COMPLETED
+        # UX: fresh paper document should sort like a new row (overrides authorize-time stamp).
+        queue_entry.doctor_list_sort_at = now
+        queue_entry.save(
+            update_fields=["entry_status", "doctor_list_sort_at", "updated_at"]
+        )
+
+        PaperIntakeAuthorization.objects.filter(id=snap_id).delete()
+
+        create_audit_event(
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+            actor_user_id=created_by_user_id,
+            patient_id=queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "queue_entry_id": str(queue_entry.id),
+                "intake_form_id": None,
+                "source_type": MedicalDocumentSourceType.PAPER_INTAKE,
+                "queue_entry_status_before": status_before,
+                "queue_entry_status_after": queue_entry.entry_status,
+                "paper_intake_authorization_id": str(snap_id),
+                "paper_intake_authorization_reason_snapshot": snap_reason,
+                "paper_intake_authorized_by_id": str(snap_by_id),
+                "paper_intake_authorized_at": snap_at.isoformat(),
+                "paper_intake_authorization_age_seconds": snap_age_seconds,
+                **assigned_doctor_audit_metadata(medical_document),
+            },
+        )
+        if span.is_recording():
+            span.set_attribute("cogito.medical_document_id", str(medical_document.id))
+        return medical_document
+
+
+@transaction.atomic
+def revoke_paper_intake_authorization(
+    *,
+    queue_entry_id: uuid.UUID,
+    revoked_by_user_id: uuid.UUID,
+    reason: str,
+) -> None:
+    """Remove an active paper intake authorization (ADMIN/MANAGER). Audits the snapshot."""
+    try:
+        actor = StaffUser.objects.get(id=revoked_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.paper_intake_authorization_invalid_role"),
+            api_message_key="other.domain.paper_intake_authorization_invalid_role",
+        )
+    validated_reason = _validate_paper_intake_authorization_reason(reason)
+
+    with cogito_business_span(
+        "medical.revoke_paper_intake_authorization",
+        queue_entry_id=queue_entry_id,
+        audit_event_type="PAPER_INTAKE_AUTHORIZATION_REVOKED",
+    ) as span:
+        try:
+            entry = (
+                QueueEntry.objects.select_for_update(of=("self",))
+                .select_related("daily_queue", "patient")
+                .get(id=queue_entry_id)
+            )
+        except QueueEntry.DoesNotExist as exc:
+            raise DomainError(
+                domain_message("other.api.queue_entry_not_found"),
+                api_message_key="other.api.queue_entry_not_found",
+            ) from exc
+
+        try:
+            auth = (
+                PaperIntakeAuthorization.objects.select_for_update()
+                .select_related("authorized_by")
+                .get(queue_entry_id=entry.id)
+            )
+        except PaperIntakeAuthorization.DoesNotExist as exc:
+            raise DomainError(
+                domain_message("other.domain.paper_intake_authorization_not_found"),
+                api_message_key="other.domain.paper_intake_authorization_not_found",
+            ) from exc
+
+        if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_revoke_after_document_created"
+                ),
+                api_message_key="other.domain.paper_intake_revoke_after_document_created",
+            )
+
+        snapshot_id = auth.id
+        snapshot_by_id = auth.authorized_by_id
+        snapshot_at = auth.authorized_at
+        snapshot_auth_reason = auth.reason
+
+        auth.delete()
+
+        entry.doctor_list_sort_at = None
+        entry.save(update_fields=["doctor_list_sort_at", "updated_at"])
+
+        create_audit_event(
+            event_type="PAPER_INTAKE_AUTHORIZATION_REVOKED",
+            actor_user_id=revoked_by_user_id,
+            patient_id=entry.patient_id,
+            context_clinic_site_id=entry.daily_queue.clinic_site_id,
+            metadata={
+                "queue_entry_id": str(entry.id),
+                "revoke_reason": validated_reason,
+                "previous_authorization_id": str(snapshot_id),
+                "previously_authorized_by_id": str(snapshot_by_id),
+                "previously_authorized_at": snapshot_at.isoformat(),
+                "previous_authorization_reason": snapshot_auth_reason,
+            },
+        )
+        if span.is_recording():
+            span.set_attribute("cogito.paper_intake_authorization_id", str(snapshot_id))
+
+
+def _autorevoke_paper_intake_authorization_if_present(
+    *,
+    queue_entry_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    trigger: PaperIntakeAutorevokeTrigger,
+    extra_audit_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Delete active paper auth for ``queue_entry_id`` if any; audit or no-op.
+
+    Caller must run inside ``transaction.atomic`` and already hold
+    ``select_for_update`` on the related ``QueueEntry`` (lock order: entry, then
+    this row) to avoid deadlocks with other paper-intake flows.
+    """
+    with cogito_business_span(
+        "medical.autorevoke_paper_intake_authorization",
+        queue_entry_id=queue_entry_id,
+        audit_event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+        extra_attributes={"cogito.paper_intake_autorevoke_trigger": trigger},
+    ) as span:
+        try:
+            paper_auth = (
+                PaperIntakeAuthorization.objects.select_for_update()
+                .select_related("queue_entry", "queue_entry__daily_queue")
+                .get(queue_entry_id=queue_entry_id)
+            )
+        except PaperIntakeAuthorization.DoesNotExist:
+            if span.is_recording():
+                span.set_attribute("cogito.paper_intake_authorization_removed", False)
+            return
+        entry = paper_auth.queue_entry
+        prev = {
+            "id": str(paper_auth.id),
+            "authorized_by_id": str(paper_auth.authorized_by_id),
+            "authorized_at": paper_auth.authorized_at.isoformat(),
+            "reason": paper_auth.reason,
+        }
+        paper_auth.delete()
+        metadata: dict[str, Any] = {
+            "queue_entry_id": str(entry.id),
+            "trigger": trigger,
+            "previous_authorization": prev,
+        }
+        if extra_audit_metadata:
+            metadata.update(extra_audit_metadata)
+        create_audit_event(
+            event_type="PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED",
+            actor_user_id=actor_user_id,
+            patient_id=entry.patient_id,
+            context_clinic_site_id=entry.daily_queue.clinic_site_id,
+            metadata=metadata,
+        )
+        if span.is_recording():
+            span.set_attribute("cogito.paper_intake_authorization_removed", True)
+
+
+def autorevoke_paper_intake_authorization_after_intake_submit(
+    *,
+    queue_entry_id: uuid.UUID,
+    intake_form_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """
+    Remove paper-intake authorization when the patient submits digital intake.
+
+    Must run inside the caller's ``transaction.atomic`` (e.g. ``submit_patient_intake_form``).
+    Intentionally **not** wrapped in ``@transaction.atomic`` here to avoid nested blocks.
+    """
+    _autorevoke_paper_intake_authorization_if_present(
+        queue_entry_id=queue_entry_id,
+        actor_user_id=actor_user_id,
+        trigger=PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED,
+        extra_audit_metadata={"intake_form_id": str(intake_form_id)},
+    )
+
+
+def autorevoke_paper_intake_authorization_after_queue_entry_cancelled(
+    *,
+    queue_entry_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """
+    Remove paper-intake authorization when a queue entry is cancelled.
+
+    Must run inside the caller's ``transaction.atomic`` (e.g. ``update_queue_entry``)
+    with the ``QueueEntry`` row already locked via ``select_for_update``.
+    Intentionally **not** wrapped in ``@transaction.atomic`` here.
+    """
+    _autorevoke_paper_intake_authorization_if_present(
+        queue_entry_id=queue_entry_id,
+        actor_user_id=actor_user_id,
+        trigger=PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED,
+    )
 
 
 SAVE_DRAFT_INTENT_EDIT = "edit"
@@ -838,7 +1368,8 @@ def revoke_document_version(
 def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
     """
     Parse GET parameters for medical documents list (work queue).
-    Returns dict with status, queue_date, patient_search, scope, page, page_size.
+    Returns dict with status, queue_date, patient_search, published_by_user_id,
+    scope, page, page_size.
     """
     status = get_params.get("status") or None
     queue_date = None
@@ -850,6 +1381,13 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         except (ValueError, TypeError):
             pass
     patient_search = get_params.get("patient_search") or None
+    published_by_user_id: uuid.UUID | None = None
+    raw_pub_id = (get_params.get("published_by_user_id") or "").strip()
+    if raw_pub_id:
+        try:
+            published_by_user_id = uuid.UUID(raw_pub_id)
+        except (ValueError, TypeError):
+            published_by_user_id = None
     scope = (get_params.get("scope") or "all").strip()
     if scope not in {"all", "mine", "published_by_me", "in_revision"}:
         scope = "all"
@@ -863,6 +1401,7 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         "status": status,
         "queue_date": queue_date,
         "patient_search": patient_search,
+        "published_by_user_id": published_by_user_id,
         "scope": scope,
         "page": page,
         "page_size": page_size,
@@ -874,6 +1413,7 @@ def list_medical_documents(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    published_by_user_id: uuid.UUID | None = None,
     scope: str = "all",
     user: Any = None,
     page: int = 1,
@@ -925,6 +1465,16 @@ def list_medical_documents(
             Q(queue_entry__patient__last_name__icontains=term)
             | Q(queue_entry__patient__first_name__icontains=term)
         )
+    if published_by_user_id is not None:
+        qs = qs.filter(
+            Exists(
+                MedicalDocumentVersion.objects.filter(
+                    medical_document_id=OuterRef("pk"),
+                    version_status=DocVersionStatus.PUBLISHED,
+                    published_by_user_id=published_by_user_id,
+                )
+            )
+        )
     if scope == "in_revision":
         qs = qs.filter(
             status=MedicalDocStatus.PUBLISHED,
@@ -942,77 +1492,123 @@ def list_doctor_work_queue(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    published_by_user_id: uuid.UUID | None = None,
     scope: str = "all",
     user: Any = None,
     page: int = 1,
     page_size: int = DEFAULT_LIST_LIMIT,
 ) -> tuple[list[dict[str, Any]], int]:
     """
-    List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
+    List doctor work queue using ``QueueEntry`` as source of truth.
+
+    Visibility states:
+    - A: digital intake submitted/reopened
+    - B: paper intake authorized, no medical document yet
+    - C: paper intake completed with medical document created from paper flow
     """
-    qs = PatientIntakeForm.objects.filter(
-        form_status__in=(IntakeStatus.SUBMITTED, IntakeStatus.REOPENED)
-    ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
-    if user is not None:
-        personal = (
-            Q(queue_entry__medical_document__created_by_user_id=user.id)
-            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
-            | Q(queue_entry__medical_document__versions__published_by_user_id=user.id)
+    submitted_or_reopened_intake_exists = PatientIntakeForm.objects.filter(
+        queue_entry_id=OuterRef("pk"),
+        form_status__in=(IntakeStatus.SUBMITTED, IntakeStatus.REOPENED),
+    )
+    paper_authorization_exists = PaperIntakeAuthorization.objects.filter(
+        queue_entry_id=OuterRef("pk")
+    )
+    qs = QueueEntry.objects.select_related(
+        "patient",
+        "daily_queue",
+        "intake_form",
+    ).annotate(
+        has_submitted_or_reopened_intake=Exists(submitted_or_reopened_intake_exists),
+        has_paper_intake_authorization=Exists(paper_authorization_exists),
+    )
+    qs = qs.filter(
+        Q(has_submitted_or_reopened_intake=True)
+        | Q(
+            entry_status=QueueEntryStatus.WAITING,
+            medical_document__isnull=True,
+            has_paper_intake_authorization=True,
         )
-        shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
-            queue_entry__medical_document__status=MedicalDocStatus.DRAFT
+        | Q(
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+            medical_document__source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+        )
+    )
+    if user is not None:
+        is_oversight = _is_admin_or_manager_medical_oversight(user)
+        need_published_by_annotation = (not is_oversight) or scope in {
+            "mine",
+            "published_by_me",
+        }
+        personal = Q(medical_document__created_by_user_id=user.id) | Q(
+            daily_queue__assigned_doctor_id=user.id
+        )
+        if need_published_by_annotation:
+            published_by_user_exists = Exists(
+                MedicalDocumentVersion.objects.filter(
+                    medical_document__queue_entry_id=OuterRef("pk"),
+                    version_status=DocVersionStatus.PUBLISHED,
+                    published_by_user_id=user.id,
+                )
+            )
+            qs = qs.annotate(has_published_by_user=published_by_user_exists)
+            personal = personal | Q(has_published_by_user=True)
+        shared_draft_or_pending = Q(medical_document__isnull=True) | Q(
+            medical_document__status=MedicalDocStatus.DRAFT
         )
         in_revision_q = Q(
-            queue_entry__medical_document__status=MedicalDocStatus.PUBLISHED,
-            queue_entry__medical_document__has_pending_revision=True,
+            medical_document__status=MedicalDocStatus.PUBLISHED,
+            medical_document__has_pending_revision=True,
         )
-        if _is_admin_or_manager_medical_oversight(user):
+        if is_oversight:
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
-                qs = qs.filter(
-                    queue_entry__medical_document__versions__published_by_user_id=user.id
-                )
+                qs = qs.filter(has_published_by_user=True)
             elif scope == "in_revision":
                 qs = qs.filter(in_revision_q)
         else:
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
-                qs = qs.filter(
-                    queue_entry__medical_document__versions__published_by_user_id=user.id
-                )
+                qs = qs.filter(has_published_by_user=True)
             elif scope == "in_revision":
                 qs = qs.filter(in_revision_q & personal)
             else:
                 qs = qs.filter(shared_draft_or_pending | personal)
     if status:
-        qs = qs.filter(
-            queue_entry_id__in=MedicalDocument.objects.filter(
-                status=status
-            ).values_list("queue_entry_id", flat=True)
-        )
+        qs = qs.filter(medical_document__status=status)
     if queue_date is not None:
-        qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
+        qs = qs.filter(daily_queue__queue_date=queue_date)
     if patient_search and patient_search.strip():
         term = patient_search.strip()
         qs = qs.filter(
-            Q(queue_entry__patient__last_name__icontains=term)
-            | Q(queue_entry__patient__first_name__icontains=term)
+            Q(patient__last_name__icontains=term)
+            | Q(patient__first_name__icontains=term)
         )
-    qs = qs.distinct().order_by(
-        "-queue_entry__daily_queue__queue_date", "-submitted_at"
+    if published_by_user_id is not None:
+        publisher_row_exists = Exists(
+            MedicalDocumentVersion.objects.filter(
+                medical_document__queue_entry_id=OuterRef("pk"),
+                version_status=DocVersionStatus.PUBLISHED,
+                published_by_user_id=published_by_user_id,
+            )
+        )
+        qs = qs.filter(publisher_row_exists)
+    qs = qs.order_by(
+        "-doctor_list_sort_at",
+        "-daily_queue__queue_date",
+        "-id",
     )
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
-    intake_forms = list(qs[start:end])
-    if not intake_forms:
+    entries = list(qs[start:end])
+    if not entries:
         return [], total
-    queue_entry_ids = [f.queue_entry_id for f in intake_forms]
+    queue_entry_ids = [entry.id for entry in entries]
     docs = (
         MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids)
-        .select_related("queue_entry", "locked_by_user")
+        .select_related("locked_by_user")
         .prefetch_related(
             Prefetch(
                 "versions",
@@ -1029,115 +1625,133 @@ def list_doctor_work_queue(
     )
     doc_by_entry: dict[uuid.UUID, MedicalDocument] = {d.queue_entry_id: d for d in docs}
     doc_ids = [d.id for d in docs]
-    published_versions = (
-        MedicalDocumentVersion.objects.filter(
-            medical_document_id__in=doc_ids,
-            version_status=DocVersionStatus.PUBLISHED,
-        )
-        .select_related("published_by_user")
-        .order_by("medical_document_id", "-version_no")
-    )
     published_by_display_by_doc_id: dict[uuid.UUID, str] = {}
-    for ver in published_versions:
-        if ver.medical_document_id in published_by_display_by_doc_id:
-            continue
-        published_by_display_by_doc_id[ver.medical_document_id] = (
-            _staff_user_display_name(ver.published_by_user)
-        )
-    list_items = []
-    for intake_form in intake_forms:
-        entry = intake_form.queue_entry
-        doc = doc_by_entry.get(entry.id)
-        patient = entry.patient
-        queue = entry.daily_queue
-        versions = list(doc.versions.all())[:1] if doc else []
-        latest = versions[0] if versions else None
-        events_by_type = {}
-        if latest:
-            events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
-        hidrive_status = (
-            outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
-                completed=bool(latest and latest.hidrive_sent),
+    if doc_ids:
+        published_versions = (
+            MedicalDocumentVersion.objects.filter(
+                medical_document_id__in=doc_ids,
+                version_status=DocVersionStatus.PUBLISHED,
             )
-            if latest
-            else None
+            .select_related("published_by_user")
+            .order_by("medical_document_id", "-version_no")
         )
-        sms_status = (
-            outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.SMS_SEND),
-                completed=bool(latest and latest.sms_sent),
+        for ver in published_versions:
+            if ver.medical_document_id in published_by_display_by_doc_id:
+                continue
+            published_by_display_by_doc_id[ver.medical_document_id] = (
+                staff_user_display_name(ver.published_by_user)
             )
-            if latest
-            else None
+    list_items = [
+        _serialize_doctor_work_queue_row(
+            entry=entry,
+            doc=doc_by_entry.get(entry.id),
+            intake_form=getattr(entry, "intake_form", None),
+            published_by_display_by_doc_id=published_by_display_by_doc_id,
+            user=user,
         )
-        retryable_event = latest_retryable_outbox_event(latest) if latest else None
-        locked_eff, locked_name, locked_at = (
-            get_document_lock_state(doc) if doc else (False, None, None)
-        )
-        is_published = bool(doc and doc.status == MedicalDocStatus.PUBLISHED)
-        is_locked_by_other = bool(
-            doc
-            and locked_eff
-            and doc.locked_by_user_id != user.id
-            and not _is_admin_or_manager_medical_oversight(user)
-        )
-        # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT
-        row_has_edit_semaphore = bool(
-            doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
-        )
-        # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS)
-        row_is_fully_delivered = bool(
-            doc
-            and doc.status == MedicalDocStatus.PUBLISHED
-            and latest
-            and latest.pdf_generation_status == PdfStatus.COMPLETED
-            and latest.hidrive_sent
-            and latest.sms_sent
-        )
-        has_pending_revision = bool(doc and doc.has_pending_revision)
-        published_version_no = doc.published_version_no if doc else None
-        list_items.append(
-            {
-                "document_id": str(doc.id) if doc else None,
-                "queue_entry_id": str(entry.id),
-                "intake_form_id": str(intake_form.id),
-                "patient": {
-                    "id": str(patient.id),
-                    "first_name": patient.first_name,
-                    "last_name": patient.last_name,
-                    "date_of_birth": patient.date_of_birth.isoformat(),
-                },
-                "queue_date": queue.queue_date.isoformat(),
-                "status": doc.status if doc else "—",
-                "published_by": (
-                    published_by_display_by_doc_id.get(doc.id, "") if doc else ""
-                ),
-                "has_pending_revision": has_pending_revision,
-                "published_version_no": published_version_no,
-                "locked_by_username": locked_name,
-                "locked_at": locked_at.isoformat() if locked_at else None,
-                "is_locked_by_other": is_locked_by_other,
-                "row_is_published": is_published,
-                "row_has_edit_semaphore": row_has_edit_semaphore,
-                "row_is_fully_delivered": row_is_fully_delivered,
-                "pdf_generation_status": (
-                    latest.pdf_generation_status if latest else None
-                ),
-                "hidrive_sent": latest.hidrive_sent if latest else False,
-                "sms_sent": latest.sms_sent if latest else False,
-                "hidrive_status": hidrive_status,
-                "sms_status": sms_status,
-                "processing_error_message": (
-                    latest_version_processing_error_message(latest) if latest else None
-                ),
-                "can_retry_processing": retryable_event is not None,
-                "retry_event_status": (
-                    retryable_event.status if retryable_event else None
-                ),
-            }
-        )
+        for entry in entries
+    ]
     return list_items, total
+
+
+def _serialize_doctor_work_queue_row(
+    *,
+    entry: QueueEntry,
+    doc: MedicalDocument | None,
+    intake_form: PatientIntakeForm | None,
+    published_by_display_by_doc_id: dict[uuid.UUID, str],
+    user: Any,
+) -> dict[str, Any]:
+    """Serialize one doctor queue row (doc may be ``None`` for paper action-required state B)."""
+    patient = entry.patient
+    queue = entry.daily_queue
+    versions = list(doc.versions.all())[:1] if doc else []
+    latest = versions[0] if versions else None
+    events_by_type = {}
+    if latest:
+        events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
+    hidrive_status = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            completed=bool(latest and latest.hidrive_sent),
+        )
+        if latest
+        else None
+    )
+    sms_status = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.SMS_SEND),
+            completed=bool(latest and latest.sms_sent),
+        )
+        if latest
+        else None
+    )
+    retryable_event = latest_retryable_outbox_event(latest) if latest else None
+    locked_eff, locked_name, locked_at = (
+        get_document_lock_state(doc) if doc else (False, None, None)
+    )
+    is_published = bool(doc and doc.status == MedicalDocStatus.PUBLISHED)
+    is_locked_by_other = bool(
+        doc
+        and locked_eff
+        and doc.locked_by_user_id != getattr(user, "id", None)
+        and not _is_admin_or_manager_medical_oversight(user)
+    )
+    # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT.
+    row_has_edit_semaphore = bool(
+        doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
+    )
+    # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS).
+    row_is_fully_delivered = bool(
+        doc
+        and doc.status == MedicalDocStatus.PUBLISHED
+        and latest
+        and latest.pdf_generation_status == PdfStatus.COMPLETED
+        and latest.hidrive_sent
+        and latest.sms_sent
+    )
+    has_pending_revision = bool(doc and doc.has_pending_revision)
+    published_version_no = doc.published_version_no if doc else None
+    paper_intake_action_required = bool(
+        doc is None and getattr(entry, "has_paper_intake_authorization", False)
+    )
+    return {
+        "document_id": str(doc.id) if doc else None,
+        "queue_entry_id": str(entry.id),
+        "intake_form_id": (
+            str(intake_form.id)
+            if intake_form is not None
+            else str(doc.intake_form_id) if doc and doc.intake_form_id else None
+        ),
+        "patient": {
+            "id": str(patient.id),
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "date_of_birth": patient.date_of_birth.isoformat(),
+        },
+        "queue_date": queue.queue_date.isoformat(),
+        "status": doc.status if doc else "—",
+        "published_by": published_by_display_by_doc_id.get(doc.id, "") if doc else "",
+        "has_pending_revision": has_pending_revision,
+        "published_version_no": published_version_no,
+        "locked_by_username": locked_name,
+        "locked_at": locked_at.isoformat() if locked_at else None,
+        "is_locked_by_other": is_locked_by_other,
+        "row_is_published": is_published,
+        "row_has_edit_semaphore": row_has_edit_semaphore,
+        "row_is_fully_delivered": row_is_fully_delivered,
+        "pdf_generation_status": latest.pdf_generation_status if latest else None,
+        "hidrive_sent": latest.hidrive_sent if latest else False,
+        "sms_sent": latest.sms_sent if latest else False,
+        "hidrive_status": hidrive_status,
+        "sms_status": sms_status,
+        "processing_error_message": (
+            latest_version_processing_error_message(latest) if latest else None
+        ),
+        "can_retry_processing": retryable_event is not None,
+        "retry_event_status": retryable_event.status if retryable_event else None,
+        "paper_intake_action_required": paper_intake_action_required,
+    }
 
 
 def get_medical_document_context(
@@ -1179,29 +1793,52 @@ def get_medical_document_context(
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 
-    intake_context = get_intake_form_context(
-        intake_form_id=doc.intake_form_id,
-        form_locale=form_locale,
-        tablet_restrict_to_today=False,
-    )
-    anamnesis_questions = intake_context.get("anamnesis_questions", [])
-    intake_summary = {
-        "consents": intake_context.get("consents", []),
-        "body_map_data": intake_context.get("body_map_data", []),
-        "anamnesis_questions": anamnesis_questions,
-        "anamnesis_answers": [
-            {
-                "question_code": q.get("question_code"),
-                "selected_option_codes": (q.get("answer") or {}).get(
-                    "selected_option_codes"
-                )
-                or [],
-                "free_text": (q.get("answer") or {}).get("free_text"),
-            }
-            for q in anamnesis_questions
-        ],
-        "patient": intake_context.get("patient"),
-    }
+    intake_summary: dict[str, Any]
+    if doc.intake_form_id is None:
+        patient = doc.queue_entry.patient
+        intake_summary = {
+            "consents": [],
+            "body_map_data": [],
+            "anamnesis_questions": [],
+            "anamnesis_answers": [],
+            "patient": {
+                "id": str(patient.id),
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "date_of_birth": (
+                    patient.date_of_birth.isoformat() if patient.date_of_birth else None
+                ),
+                "phone": patient.phone,
+                "email": patient.email,
+            },
+        }
+    else:
+        intake_context = get_intake_form_context(
+            intake_form_id=doc.intake_form_id,
+            form_locale=form_locale,
+            tablet_restrict_to_today=False,
+        )
+        anamnesis_questions_raw = intake_context.get("anamnesis_questions", [])
+        anamnesis_questions: list[dict[str, Any]] = (
+            anamnesis_questions_raw if isinstance(anamnesis_questions_raw, list) else []
+        )
+        intake_summary = {
+            "consents": intake_context.get("consents", []),
+            "body_map_data": intake_context.get("body_map_data", []),
+            "anamnesis_questions": anamnesis_questions,
+            "anamnesis_answers": [
+                {
+                    "question_code": q.get("question_code"),
+                    "selected_option_codes": (q.get("answer") or {}).get(
+                        "selected_option_codes"
+                    )
+                    or [],
+                    "free_text": (q.get("answer") or {}).get("free_text"),
+                }
+                for q in anamnesis_questions
+            ],
+            "patient": intake_context.get("patient"),
+        }
 
     current_version_payload: dict[str, Any] | None = None
     if current_version:
@@ -1279,10 +1916,22 @@ def get_medical_document_context(
             }
 
     lock_eff, lock_name, lock_at = get_document_lock_state(doc)
+    paper_payload = _paper_intake_authorization_context_for_document(doc)
+    if doc.source_type == MedicalDocumentSourceType.PAPER_INTAKE:
+        if paper_payload is None:
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_document_audit_snapshot_missing"
+                ),
+                api_message_key=(
+                    "other.domain.paper_intake_document_audit_snapshot_missing"
+                ),
+            )
     return {
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
-        "intake_form_id": str(doc.intake_form_id),
+        "intake_form_id": str(doc.intake_form_id) if doc.intake_form_id else None,
+        "source_type": doc.source_type,
         "status": doc.status,
         "current_version_no": doc.current_version_no,
         "published_version_no": doc.published_version_no,
@@ -1296,6 +1945,7 @@ def get_medical_document_context(
         "locked_by_username": lock_name if lock_eff else None,
         "locked_at": lock_at.isoformat() if lock_at and lock_eff else None,
         "intake_summary": intake_summary,
+        "paper_intake_authorization": paper_payload,
         "current_version": current_version_payload,
     }
 

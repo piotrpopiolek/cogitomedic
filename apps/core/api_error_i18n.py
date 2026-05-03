@@ -63,6 +63,9 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.invalid_json_payload": "Invalid JSON payload.",
     "other.api.invalid_or_expired_code": "Invalid or expired code.",
     "other.api.invalid_request_encoding": "Request body is not valid UTF-8.",
+    "other.api.invalid_request_body": (
+        "Request body does not match the expected schema."
+    ),
     "other.api.invalid_role_query": "Invalid role query parameter.",
     "other.api.invalid_save_draft_intent": (
         "Invalid intent for PUT …/draft. Allowed values: edit, amend."

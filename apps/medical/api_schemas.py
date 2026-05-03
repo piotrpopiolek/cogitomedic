@@ -34,6 +34,29 @@ class CreateMedicalDocumentRequest(BaseModel):
     created_by_user_id: UUID | None = None  # ignored; session user is used
 
 
+class CreateMedicalDocumentWithoutIntakeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    queue_entry_id: UUID
+    created_by_user_id: UUID | None = None  # ignored; session user is used
+
+
+class PaperIntakeAuthorizationRequest(BaseModel):
+    """Body for POST (authorize) and DELETE (revoke) paper-intake authorization on a queue entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(
+        min_length=10,
+        max_length=500,
+        description=(
+            "Justification for authorize (POST) or revoke (DELETE), 10–500 characters. "
+            "DELETE uses the same `application/json` body as POST (including this field); "
+            "it is not a body-less delete."
+        ),
+    )
+
+
 class SaveDraftMedicalDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

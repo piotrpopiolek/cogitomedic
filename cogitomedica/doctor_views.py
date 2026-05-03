@@ -9,12 +9,14 @@ UI strings and error messages use the ``doctor`` translation category (see
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from django.contrib import admin
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.templatetags.static import static
@@ -24,6 +26,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
     GateResult,
@@ -34,17 +37,22 @@ from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
+    create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
     parse_medical_documents_list_params,
 )
 from apps.reception.models import Patient, QueueEntry
+from apps.users.display import staff_user_display_name
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
     resolve_other_message,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _render_doctor(
@@ -152,6 +160,60 @@ def _apply_doctor_lang(request: HttpRequest) -> str:
     return lang
 
 
+def _doctor_list_page_querystring(request: HttpRequest, *, target_page: int) -> str:
+    """Rebuild GET query for doctor list with ``page`` set (omit ``page`` when ``target_page`` is 1)."""
+    q = request.GET.copy()
+    q.pop("lang", None)
+    if target_page <= 1:
+        q.pop("page", None)
+    else:
+        q["page"] = str(target_page)
+    return q.urlencode()
+
+
+def _doctor_filter_published_by_options() -> list[tuple[str, str]]:
+    """Active staff in the ``Doctor`` role: ``(user_id, label)`` for the list filter."""
+    qs = (
+        StaffUser.objects.filter(
+            groups__name=ROLE_GROUP_NAME_MAP["DOCTOR"],
+            is_active=True,
+        )
+        .distinct()
+        .order_by("last_name", "first_name", "username")
+    )
+    return [
+        (
+            str(u.id),
+            (staff_user_display_name(u) or u.username or str(u.id)).strip(),
+        )
+        for u in qs
+    ]
+
+
+def _doctor_list_page_link_items(
+    request: HttpRequest, *, num_pages: int, page: int
+) -> list[dict[str, object]]:
+    """Unfold-style elided page numbers (same algorithm as Django admin paginator)."""
+    if num_pages <= 1:
+        return []
+    paginator = Paginator(range(num_pages), 1)
+    items: list[dict[str, object]] = []
+    for el in paginator.get_elided_page_range(page, on_each_side=3, on_ends=2):
+        if isinstance(el, int):
+            n = el
+            items.append(
+                {
+                    "type": "page",
+                    "number": n,
+                    "query": _doctor_list_page_querystring(request, target_page=n),
+                    "current": n == page,
+                }
+            )
+        else:
+            items.append({"type": "ellipsis"})
+    return items
+
+
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_list_view(request: HttpRequest) -> HttpResponse:
@@ -163,6 +225,13 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         **list_params,
         user=request.user,
     )
+    page = list_params["page"]
+    page_size = list_params["page_size"]
+    num_pages = (total + page_size - 1) // page_size if total > 0 else 1
+    has_previous = page > 1 and num_pages > 1
+    has_next = page < num_pages
+    prev_query = _doctor_list_page_querystring(request, target_page=page - 1)
+    next_query = _doctor_list_page_querystring(request, target_page=page + 1)
     lang = _apply_doctor_lang(request)
     if request.GET.get("lang"):
         query = request.GET.copy()
@@ -176,19 +245,83 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             "items": list_items,
             "api_base": "/api/v1",
             "pagination": {
-                "page": list_params["page"],
-                "page_size": list_params["page_size"],
+                "page": page,
+                "page_size": page_size,
                 "total": total,
+                "num_pages": num_pages,
+                "has_previous": has_previous,
+                "has_next": has_next,
+                "prev_query": prev_query,
+                "next_query": next_query,
+                "page_link_items": _doctor_list_page_link_items(
+                    request, num_pages=num_pages, page=page
+                ),
             },
             "filters": {
                 "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
                 "patient_search": list_params["patient_search"] or "",
+                "published_by_user_id": (
+                    str(list_params["published_by_user_id"])
+                    if list_params["published_by_user_id"]
+                    else ""
+                ),
                 "scope": list_params["scope"],
             },
+            "published_by_doctor_options": _doctor_filter_published_by_options(),
+            "paper_intake_create_cta": resolve_other_message(
+                request,
+                "doctor.paper_intake_create_cta",
+                "Papierdokument erstellen",
+            ),
             "ui": get_doctor_ui(lang),
             "lang": lang,
         },
+    )
+
+
+def _render_no_intake_action_page(
+    request: HttpRequest,
+    *,
+    queue_entry_id: UUID,
+    lang: str,
+    ui: dict[str, str],
+    error_message: str | None = None,
+    status: int = 200,
+) -> HttpResponse:
+    return _render_doctor(
+        request,
+        "doctor/no_intake_action.html",
+        {
+            "queue_entry_id": str(queue_entry_id),
+            "ui": ui,
+            "lang": lang,
+            "title": resolve_other_message(
+                request,
+                "doctor.paper_intake_no_digital_title",
+                "Keine digitale Anamnese vorhanden",
+            ),
+            "message": resolve_other_message(
+                request,
+                "doctor.paper_intake_no_digital_message",
+                (
+                    "Für diesen Eintrag liegt keine digitale Anamnese vor. "
+                    "Sie können jetzt ein medizinisches Dokument im Papiermodus erstellen."
+                ),
+            ),
+            "submit_label": resolve_other_message(
+                request,
+                "doctor.paper_intake_create_cta",
+                "Papierdokument erstellen",
+            ),
+            "cancel_label": resolve_other_message(
+                request,
+                "doctor.paper_intake_cancel",
+                "Zurück zur Liste",
+            ),
+            "error_message": error_message,
+        },
+        status=status,
     )
 
 
@@ -197,15 +330,15 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
 def doctor_open_by_queue_view(
     request: HttpRequest, queue_entry_id: UUID
 ) -> HttpResponse:
-    """Create or get medical document for queue entry (with submitted intake) and redirect to detail."""
+    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document)."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     lang = _get_doctor_lang(request)
     ui = get_doctor_ui(lang)
     try:
-        entry = QueueEntry.objects.select_related("intake_form", "daily_queue").get(
-            id=queue_entry_id
-        )
+        entry = QueueEntry.objects.select_related(
+            "intake_form", "daily_queue", "medical_document"
+        ).get(id=queue_entry_id)
         check_doctor_queue_entry_access(entry, request.user)
     except ObjectDoesNotExist:
         return _render_doctor(
@@ -218,46 +351,118 @@ def doctor_open_by_queue_view(
             },
             status=404,
         )
-    if not getattr(entry, "intake_form", None):
+    existing_doc = getattr(entry, "medical_document", None)
+    if existing_doc is not None:
+        doc = existing_doc
+    else:
+        intake_form = getattr(entry, "intake_form", None)
+        if intake_form is None:
+            if QueueEntry.objects.filter(
+                id=entry.id,
+                paper_intake_authorization__isnull=False,
+            ).exists():
+                return _render_no_intake_action_page(
+                    request,
+                    queue_entry_id=entry.id,
+                    lang=lang,
+                    ui=ui,
+                )
+            return _render_doctor(
+                request,
+                "doctor/error.html",
+                {
+                    "message": ui["error_no_intake_for_entry"],
+                    "ui": ui,
+                    "lang": lang,
+                },
+                status=400,
+            )
+        else:
+            form_status = getattr(intake_form, "form_status", None)
+            if form_status == IntakeStatus.REOPENED:
+                return _render_doctor(
+                    request,
+                    "doctor/error.html",
+                    {
+                        "message": ui["error_intake_reopened_patient_editing"],
+                        "ui": ui,
+                        "lang": lang,
+                    },
+                    status=400,
+                )
+            if form_status != IntakeStatus.SUBMITTED:
+                return _render_doctor(
+                    request,
+                    "doctor/error.html",
+                    {
+                        "message": ui["error_intake_not_submitted"],
+                        "ui": ui,
+                        "lang": lang,
+                    },
+                    status=400,
+                )
+            doc = create_or_get_medical_document(
+                queue_entry_id=entry.id,
+                intake_form_id=intake_form.id,
+                created_by_user_id=request.user.id,
+            )
+    url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
+    return HttpResponseRedirect(url + "?lang=" + lang)
+
+
+@login_required(login_url="doctor-login")
+@require_http_methods(["POST"])
+@csrf_protect
+def doctor_create_no_intake_view(
+    request: HttpRequest, queue_entry_id: UUID
+) -> HttpResponse:
+    """Create paper medical document from doctor UI (explicit T2 action)."""
+    if not _doctor_role_ok(request):
+        return redirect("doctor-login")
+    lang = _get_doctor_lang(request)
+    ui = get_doctor_ui(lang)
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
+        check_doctor_queue_entry_access(entry, request.user)
+    except ObjectDoesNotExist:
         return _render_doctor(
             request,
             "doctor/error.html",
             {
-                "message": ui["error_no_intake_for_entry"],
+                "message": ui["error_queue_entry_not_found"],
                 "ui": ui,
                 "lang": lang,
             },
             status=404,
         )
-    intake_form = entry.intake_form
-    form_status = getattr(intake_form, "form_status", None)
-    if form_status == IntakeStatus.REOPENED:
-        return _render_doctor(
+    try:
+        doc = create_medical_document_without_intake(
+            queue_entry_id=entry.id,
+            created_by_user_id=request.user.id,
+        )
+    except DomainError as exc:
+        if (
+            exc.api_message_key
+            == "other.domain.medical_document_already_exists_for_queue_entry"
+        ):
+            existing_doc = MedicalDocument.objects.filter(
+                queue_entry_id=entry.id
+            ).first()
+            if existing_doc is not None:
+                url = reverse(
+                    "doctor-document-detail",
+                    kwargs={"medical_document_id": existing_doc.id},
+                )
+                return HttpResponseRedirect(url + "?lang=" + lang)
+        return _render_no_intake_action_page(
             request,
-            "doctor/error.html",
-            {
-                "message": ui["error_intake_reopened_patient_editing"],
-                "ui": ui,
-                "lang": lang,
-            },
+            queue_entry_id=entry.id,
+            lang=lang,
+            ui=ui,
+            error_message=str(exc),
             status=400,
         )
-    if form_status != IntakeStatus.SUBMITTED:
-        return _render_doctor(
-            request,
-            "doctor/error.html",
-            {
-                "message": ui["error_intake_not_submitted"],
-                "ui": ui,
-                "lang": lang,
-            },
-            status=400,
-        )
-    doc = create_or_get_medical_document(
-        queue_entry_id=entry.id,
-        intake_form_id=intake_form.id,
-        created_by_user_id=request.user.id,
-    )
+
     url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
     return HttpResponseRedirect(url + "?lang=" + lang)
 
@@ -301,6 +506,15 @@ def doctor_document_detail_view(
                 error_hidrive=ui["external_pdf_gate_hidrive_error"],
             )
         if not gate.passed:
+            # 424: zależność zewnętrzna (HiDrive / PDF w folderze). Odróżnia od 422 przy
+            # DomainError (np. brak snapshotu audytu papieru) — ten sam widok, inna przyczyna.
+            logger.warning(
+                "doctor_document_detail: external PDF gate blocked",
+                extra={
+                    "cogito_error_class": "external_pdf_gate",
+                    "medical_document_id": str(medical_document_id),
+                },
+            )
             return _render_doctor(
                 request,
                 "doctor/error.html",
@@ -309,11 +523,34 @@ def doctor_document_detail_view(
                     "ui": ui,
                     "lang": lang,
                 },
-                status=422,
+                status=424,
             )
 
         granted, lock_holder = acquire_document_lock(
             medical_document_id=medical_document_id, user=request.user
+        )
+    except DomainError as exc:
+        msg_key = exc.api_message_key or ""
+        message = (
+            resolve_other_message(request, msg_key, str(exc)) if msg_key else str(exc)
+        )
+        logger.warning(
+            "doctor_document_detail: domain error",
+            extra={
+                "cogito_error_class": "domain_error",
+                "api_message_key": msg_key or None,
+                "medical_document_id": str(medical_document_id),
+            },
+        )
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": message,
+                "ui": ui,
+                "lang": lang,
+            },
+            status=422,
         )
     except ObjectDoesNotExist:
         return _render_doctor(
@@ -354,7 +591,7 @@ def doctor_document_detail_view(
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
         "context": context,
-        "ui": get_doctor_ui(lang),
+        "ui": ui,
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
     }

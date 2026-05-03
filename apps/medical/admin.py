@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from pydantic import ValidationError as PydanticValidationError
 
 try:
@@ -21,12 +21,15 @@ from apps.medical.constants import (
     DERMATOSCOPIC_FEATURE_CHOICES,
     MALIGNANCY_RISK_CHOICES,
 )
-from apps.core.translation_service import format_administration_message
+from apps.core.exceptions import DomainError
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.models import (
     DoctorTextTemplate,
     MedicalDocument,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
 )
+from apps.medical.services import revoke_paper_intake_authorization
 from apps.medical.widgets import LesionGroupFavoritesWidget
 from apps.users.models import StaffUserPreferredLocale
 
@@ -239,6 +242,143 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
                 widget=UnfoldAdminSelectWidget,
             )
         return form
+
+
+@admin.register(PaperIntakeAuthorization)
+class PaperIntakeAuthorizationAdmin(UnfoldModelAdmin):
+    list_display = (
+        "queue_entry",
+        "_patient_repr",
+        "authorized_at",
+        "authorized_by",
+        "_short_reason",
+        "_has_document",
+    )
+    list_display_links = None
+    list_filter = (
+        ("authorized_at", admin.DateFieldListFilter),
+        "authorized_by",
+    )
+    search_fields = (
+        "queue_entry__patient__last_name",
+        "queue_entry__patient__first_name",
+        "reason",
+    )
+    ordering = ["-authorized_at"]
+    readonly_fields = (
+        "id",
+        "queue_entry",
+        "authorized_at",
+        "authorized_by",
+        "reason",
+        "created_at",
+    )
+    actions = ("admin_revoke_paper_intake_authorization",)
+
+    @admin.display(
+        description=db_gettext_lazy("administration.field_patient", "Patient")
+    )
+    def _patient_repr(self, obj: PaperIntakeAuthorization) -> str:
+        p = obj.queue_entry.patient
+        return f"{p.last_name}, {p.first_name}"
+
+    @admin.display(
+        description=db_gettext_lazy(
+            "administration.label_paper_intake_authorization_reason",
+            "Authorization reason",
+        )
+    )
+    def _short_reason(self, obj: PaperIntakeAuthorization) -> str:
+        t = (obj.reason or "").strip()
+        return t[:80] + ("…" if len(t) > 80 else "")
+
+    @admin.display(
+        boolean=True,
+        description=db_gettext_lazy(
+            "administration.label_paper_intake_has_medical_document",
+            "Has medical document",
+        ),
+    )
+    def _has_document(self, obj: PaperIntakeAuthorization) -> bool:
+        return bool(getattr(obj, "_has_doc_exists", False))
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        doc_exists = MedicalDocument.objects.filter(
+            queue_entry_id=OuterRef("queue_entry_id")
+        )
+        return qs.select_related(
+            "queue_entry",
+            "queue_entry__patient",
+            "queue_entry__daily_queue",
+            "authorized_by",
+        ).annotate(_has_doc_exists=Exists(doc_exists))
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+    @admin.action(
+        description=db_gettext_lazy(
+            "administration.action_revoke_paper_intake_authorization",
+            "Revoke authorization",
+        )
+    )
+    def admin_revoke_paper_intake_authorization(self, request, queryset):
+        if not (
+            request.user.is_superuser
+            or getattr(request.user, "is_admin_role", False)
+            or getattr(request.user, "is_manager", False)
+        ):
+            self.message_user(
+                request,
+                format_administration_message(
+                    "administration.admin_paper_intake_revoke_permission_denied",
+                    "Only administrators or managers can revoke paper intake authorization.",
+                    request=request,
+                ),
+                level=messages.ERROR,
+            )
+            return
+
+        authorizations = list(queryset.select_related("queue_entry"))
+        ids = ", ".join(str(a.id) for a in authorizations[:25])
+        revoke_reason = (
+            f"Revoked via Django admin by {request.user.get_username()}. "
+            f"Authorization IDs: {ids}"
+        )[:500]
+        if len(revoke_reason.strip()) < 10:
+            revoke_reason = revoke_reason.ljust(10, ".")
+
+        ok = 0
+        failed = 0
+        for auth in authorizations:
+            try:
+                revoke_paper_intake_authorization(
+                    queue_entry_id=auth.queue_entry_id,
+                    revoked_by_user_id=request.user.id,
+                    reason=revoke_reason,
+                )
+                ok += 1
+            except DomainError:
+                failed += 1
+
+        self.message_user(
+            request,
+            format_administration_message(
+                "administration.admin_paper_intake_revoke_result",
+                "Revoked {ok} authorization(s); {failed} could not be revoked.",
+                request=request,
+                ok=ok,
+                failed=failed,
+            ),
+            level=messages.WARNING if failed else messages.INFO,
+        )
 
 
 @admin.register(DoctorTextTemplate)

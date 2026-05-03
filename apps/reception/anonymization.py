@@ -25,7 +25,8 @@ from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
 
 _TERMINAL_QUEUE_STATUSES = frozenset(
     {
-        QueueEntryStatus.PUBLISHED,
+        # Queue terminality for anonymization is currently tied only to explicit visit cancellation.
+        # Retention/anonymization after published medical documents is tracked as separate follow-up.
         QueueEntryStatus.CANCELLED,
     }
 )
