@@ -113,7 +113,14 @@
             <a href="{% url 'doctor-document-detail' item.document_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
             {% endif %}
           {% else %}
-          <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
+            {% if item.paper_intake_action_required %}
+            <form method="post" action="{% url 'doctor-create-no-intake' item.queue_entry_id %}?lang={{ lang|default:'de' }}">
+              {% csrf_token %}
+              <button type="submit" class="inline-flex items-center rounded-default border border-amber-400 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-950/30">{{ paper_intake_create_cta }}</button>
+            </form>
+            {% else %}
+            <a href="{% url 'doctor-open-by-queue' item.queue_entry_id %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-base-50 dark:border-base-600 dark:text-primary-400 dark:hover:bg-base-800">{{ ui.open }}</a>
+            {% endif %}
           {% endif %}
           </div>
         </td>
@@ -131,8 +138,24 @@
 </div>
 
 {% if pagination.total > 0 %}
-<nav class="mt-4">
-  <p class="text-sm text-base-500 dark:text-base-400">{{ ui.pagination_page }} {{ pagination.page }}, {{ pagination.total }} {{ ui.pagination_total }}</p>
+<nav class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" aria-label="Pagination">
+  <p class="text-sm text-base-500 dark:text-base-400">
+    {{ ui.pagination_page }} {{ pagination.page }}{% if pagination.num_pages > 1 %} / {{ pagination.num_pages }}{% endif %}, {{ pagination.total }} {{ ui.pagination_total }}
+  </p>
+  {% if pagination.num_pages > 1 %}
+  <div class="inline-flex items-center gap-2">
+    {% if pagination.has_previous %}
+    <a href="{% url 'doctor-list' %}?{% if pagination.prev_query %}{{ pagination.prev_query }}&amp;{% endif %}lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ ui.pagination_prev }}</a>
+    {% else %}
+    <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500">{{ ui.pagination_prev }}</span>
+    {% endif %}
+    {% if pagination.has_next %}
+    <a href="{% url 'doctor-list' %}?{{ pagination.next_query }}&amp;lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ ui.pagination_next }}</a>
+    {% else %}
+    <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500">{{ ui.pagination_next }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
 </nav>
 {% endif %}
 {% endblock %}

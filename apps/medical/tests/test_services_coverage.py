@@ -20,7 +20,9 @@ from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
+    PaperIntakeAuthorization,
     PdfStatus,
 )
 from apps.medical.services import (
@@ -119,6 +121,17 @@ class ServicesCoverageBase(TestCase):
         )
         defaults.update(overrides)
         return MedicalDocument.objects.create(**defaults)
+
+    def _make_queue_entry(self, **overrides):
+        defaults = dict(
+            daily_queue=self.daily_queue,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=99,
+            created_by_user=self.doctor,
+        )
+        defaults.update(overrides)
+        return QueueEntry.objects.create(**defaults)
 
     def _make_published_version(self, doc, *, version_no=1, **kw):
         defaults = dict(
@@ -434,6 +447,57 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         item = items[0]
         self.assertIsNone(item["document_id"])
         self.assertEqual(item["status"], "—")
+        self.assertFalse(item["paper_intake_action_required"])
+
+    def test_paper_authorized_without_document_is_listed_with_action_flag(self):
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.submitted_at = None
+        self.intake.signature_sha256 = None
+        self.intake.save(
+            update_fields=[
+                "form_status",
+                "submitted_at",
+                "signature_sha256",
+            ]
+        )
+        paper_entry = self._make_queue_entry(position_no=2)
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=paper_entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.doctor,
+            reason="Papier od pacjenta",
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertEqual(total, 1)
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item["queue_entry_id"], str(paper_entry.id))
+        self.assertTrue(item["paper_intake_action_required"])
+        self.assertIsNone(item["document_id"])
+        self.assertIsNone(item["intake_form_id"])
+
+    def test_paper_intake_completed_with_document_is_listed(self):
+        paper_entry = self._make_queue_entry(
+            position_no=3,
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+        )
+        paper_doc = self._make_medical_doc(
+            queue_entry=paper_entry,
+            intake_form=None,
+            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+            status=MedicalDocStatus.DRAFT,
+        )
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+
+        self.assertGreaterEqual(total, 2)
+        found = [i for i in items if i["queue_entry_id"] == str(paper_entry.id)]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["document_id"], str(paper_doc.id))
+        self.assertFalse(found[0]["paper_intake_action_required"])
+        self.assertIsNone(found[0]["intake_form_id"])
 
     def test_queue_date_filter(self):
         items, total = list_doctor_work_queue(
