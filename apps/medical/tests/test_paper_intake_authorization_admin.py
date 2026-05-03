@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -101,7 +101,7 @@ class PaperIntakeAuthorizationAdminTests(TestCase):
     def test_list_display_helpers(self) -> None:
         long_reason = "x" * 120
         self.auth.reason = long_reason
-        self.auth.save(update_fields=["reason", "updated_at"])
+        self.auth.save(update_fields=["reason"])
         qs = self.model_admin.get_queryset(_request_with_messages(self.admin))
         obj = qs.get(pk=self.auth.pk)
         self.assertIn("AdminPatient", self.model_admin._patient_repr(obj))
@@ -153,7 +153,7 @@ class PaperIntakeAuthorizationAdminTests(TestCase):
         )
 
     @patch("apps.medical.admin.revoke_paper_intake_authorization")
-    def test_revoke_action_counts_domain_errors(self, mock_revoke: object) -> None:
+    def test_revoke_action_counts_domain_errors(self, mock_revoke: MagicMock) -> None:
         from apps.core.exceptions import DomainError
 
         def _raise(*_a, **_kw):
@@ -161,13 +161,20 @@ class PaperIntakeAuthorizationAdminTests(TestCase):
 
         mock_revoke.side_effect = _raise
         request = _request_with_messages(self.admin)
-        PaperIntakeAuthorization.objects.create(
-            queue_entry=self.entry,
-            authorized_at=timezone.now(),
-            authorized_by=self.admin,
-            reason=_REASON + " b",
+        # Second authorization on another queue entry (separate daily queue avoids any
+        # position/constraint overlap with setUp data in large test runs).
+        clinic2 = ClinicSite.objects.create(
+            code="PIB", name="Paper Intake Admin Clinic B"
         )
-        # Two rows for same queue_entry impossible — use second entry
+        room2 = ConsultingRoom.objects.create(clinic_site=clinic2, code="R2", name="R2")
+        queue2 = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic2,
+            consulting_room=room2,
+            status=QueueStatus.OPEN,
+            created_by_user=self.rec,
+            assigned_doctor=self.doctor,
+        )
         patient2 = Patient.objects.create(
             first_name="B",
             last_name="Second",
@@ -176,10 +183,10 @@ class PaperIntakeAuthorizationAdminTests(TestCase):
             email="second@example.com",
         )
         entry2 = QueueEntry.objects.create(
-            daily_queue=self.entry.daily_queue,
+            daily_queue=queue2,
             patient=patient2,
             entry_status=QueueEntryStatus.WAITING,
-            position_no=2,
+            position_no=1,
             appointment_time=timezone.now() - timedelta(hours=4),
             created_by_user=self.rec,
         )

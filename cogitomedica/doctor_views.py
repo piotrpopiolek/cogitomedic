@@ -15,6 +15,7 @@ from django.contrib import admin
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.templatetags.static import static
@@ -165,6 +166,30 @@ def _doctor_list_page_querystring(request: HttpRequest, *, target_page: int) -> 
     return q.urlencode()
 
 
+def _doctor_list_page_link_items(
+    request: HttpRequest, *, num_pages: int, page: int
+) -> list[dict[str, object]]:
+    """Unfold-style elided page numbers (same algorithm as Django admin paginator)."""
+    if num_pages <= 1:
+        return []
+    paginator = Paginator(range(num_pages), 1)
+    items: list[dict[str, object]] = []
+    for el in paginator.get_elided_page_range(page, on_each_side=3, on_ends=2):
+        if isinstance(el, int):
+            n = el
+            items.append(
+                {
+                    "type": "page",
+                    "number": n,
+                    "query": _doctor_list_page_querystring(request, target_page=n),
+                    "current": n == page,
+                }
+            )
+        else:
+            items.append({"type": "ellipsis"})
+    return items
+
+
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_list_view(request: HttpRequest) -> HttpResponse:
@@ -204,6 +229,9 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "has_next": has_next,
                 "prev_query": prev_query,
                 "next_query": next_query,
+                "page_link_items": _doctor_list_page_link_items(
+                    request, num_pages=num_pages, page=page
+                ),
             },
             "filters": {
                 "status": list_params["status"] or "",

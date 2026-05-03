@@ -7,9 +7,6 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.semconv.resource import ResourceAttributes
-from opentelemetry.instrumentation.django import DjangoInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +29,11 @@ def setup_telemetry():
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)
 
-        # Auto-instrumentacje
+        # Auto-instrumentacje (import here so tests can patch opentelemetry.*.Instrumentor).
+        from opentelemetry.instrumentation.django import DjangoInstrumentor
+        from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+        from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
         if not DjangoInstrumentor().is_instrumented_by_opentelemetry:
             DjangoInstrumentor().instrument()
         if not RequestsInstrumentor().is_instrumented_by_opentelemetry:
