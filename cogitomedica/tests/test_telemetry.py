@@ -8,6 +8,13 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 
+def _instrumentor_class_mock(*, instrumented: bool) -> MagicMock:
+    """Return a mock *class* whose ``()`` yields an instance with the given flag."""
+    inst = MagicMock()
+    inst.configure_mock(**{"is_instrumented_by_opentelemetry": instrumented})
+    return MagicMock(return_value=inst)
+
+
 class SetupTelemetryTests(SimpleTestCase):
     def test_setup_telemetry_is_noop_without_otel_endpoint(self) -> None:
         from cogitomedica import telemetry
@@ -26,14 +33,14 @@ class SetupTelemetryTests(SimpleTestCase):
     @patch("cogitomedica.telemetry.OTLPSpanExporter")
     @patch("cogitomedica.telemetry.TracerProvider")
     @patch("cogitomedica.telemetry.trace.set_tracer_provider")
-    @patch("opentelemetry.instrumentation.django.DjangoInstrumentor")
-    @patch("opentelemetry.instrumentation.requests.RequestsInstrumentor")
-    @patch("opentelemetry.instrumentation.psycopg.PsycopgInstrumentor")
+    @patch("cogitomedica.telemetry._psycopg_instrumentor_cls")
+    @patch("cogitomedica.telemetry._requests_instrumentor_cls")
+    @patch("cogitomedica.telemetry._django_instrumentor_cls")
     def test_setup_telemetry_configures_exporter_when_endpoint_set(
         self,
-        mock_psycopg_cls: MagicMock,
-        mock_requests_cls: MagicMock,
-        mock_django_cls: MagicMock,
+        mock_django_factory: MagicMock,
+        mock_requests_factory: MagicMock,
+        mock_psycopg_factory: MagicMock,
         mock_set_provider: MagicMock,
         mock_provider_cls: MagicMock,
         mock_exporter_cls: MagicMock,
@@ -41,25 +48,23 @@ class SetupTelemetryTests(SimpleTestCase):
     ) -> None:
         from cogitomedica import telemetry
 
-        mock_django = MagicMock()
-        mock_django.is_instrumented_by_opentelemetry = False
-        mock_django_cls.return_value = mock_django
-
-        mock_requests = MagicMock()
-        mock_requests.is_instrumented_by_opentelemetry = False
-        mock_requests_cls.return_value = mock_requests
-
-        mock_psycopg = MagicMock()
-        mock_psycopg_cls.return_value = mock_psycopg
+        mock_django_factory.return_value = _instrumentor_class_mock(instrumented=False)
+        mock_requests_factory.return_value = _instrumentor_class_mock(
+            instrumented=False
+        )
+        mock_psycopg_factory.return_value = _instrumentor_class_mock(instrumented=False)
 
         telemetry.setup_telemetry()
 
         mock_exporter_cls.assert_called_once()
         mock_processor_cls.assert_called_once()
         mock_set_provider.assert_called_once()
-        mock_django.instrument.assert_called_once()
-        mock_requests.instrument.assert_called_once()
-        mock_psycopg.instrument.assert_called_once()
+        dj_cls = mock_django_factory.return_value
+        rq_cls = mock_requests_factory.return_value
+        pg_cls = mock_psycopg_factory.return_value
+        dj_cls.return_value.instrument.assert_called_once()
+        rq_cls.return_value.instrument.assert_called_once()
+        pg_cls.return_value.instrument.assert_called_once()
 
     @patch.dict(
         os.environ,
@@ -69,14 +74,14 @@ class SetupTelemetryTests(SimpleTestCase):
     @patch("cogitomedica.telemetry.OTLPSpanExporter")
     @patch("cogitomedica.telemetry.TracerProvider")
     @patch("cogitomedica.telemetry.trace.set_tracer_provider")
-    @patch("opentelemetry.instrumentation.django.DjangoInstrumentor")
-    @patch("opentelemetry.instrumentation.requests.RequestsInstrumentor")
-    @patch("opentelemetry.instrumentation.psycopg.PsycopgInstrumentor")
+    @patch("cogitomedica.telemetry._psycopg_instrumentor_cls")
+    @patch("cogitomedica.telemetry._requests_instrumentor_cls")
+    @patch("cogitomedica.telemetry._django_instrumentor_cls")
     def test_setup_telemetry_skips_second_instrumentation_and_psycopg_failure_is_logged(
         self,
-        mock_psycopg_cls: MagicMock,
-        mock_requests_cls: MagicMock,
-        mock_django_cls: MagicMock,
+        mock_django_factory: MagicMock,
+        mock_requests_factory: MagicMock,
+        mock_psycopg_factory: MagicMock,
         _mock_set_provider: MagicMock,
         _mock_provider_cls: MagicMock,
         _mock_exporter_cls: MagicMock,
@@ -84,20 +89,15 @@ class SetupTelemetryTests(SimpleTestCase):
     ) -> None:
         from cogitomedica import telemetry
 
-        mock_django = MagicMock()
-        mock_django.is_instrumented_by_opentelemetry = True
-        mock_django_cls.return_value = mock_django
-
-        mock_requests = MagicMock()
-        mock_requests.is_instrumented_by_opentelemetry = True
-        mock_requests_cls.return_value = mock_requests
-
-        mock_psycopg = MagicMock()
-        mock_psycopg.instrument.side_effect = RuntimeError("psycopg already wired")
-        mock_psycopg_cls.return_value = mock_psycopg
+        mock_django_factory.return_value = _instrumentor_class_mock(instrumented=True)
+        mock_requests_factory.return_value = _instrumentor_class_mock(instrumented=True)
+        pg_inst = MagicMock()
+        pg_inst.configure_mock(**{"is_instrumented_by_opentelemetry": False})
+        pg_inst.instrument.side_effect = RuntimeError("psycopg already wired")
+        mock_psycopg_factory.return_value = MagicMock(return_value=pg_inst)
 
         telemetry.setup_telemetry()
 
-        mock_django.instrument.assert_not_called()
-        mock_requests.instrument.assert_not_called()
-        mock_psycopg.instrument.assert_called_once()
+        mock_django_factory.return_value.return_value.instrument.assert_not_called()
+        mock_requests_factory.return_value.return_value.instrument.assert_not_called()
+        pg_inst.instrument.assert_called_once()
