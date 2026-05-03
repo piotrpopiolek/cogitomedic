@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from uuid import uuid4
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -256,3 +257,59 @@ class PaperIntakeAdminViewsTests(TestCase):
         ids = set(qs.values_list("id", flat=True))
         self.assertIn(self.entry.id, ids)
         self.assertIn(entry_other.id, ids)
+
+    def test_hub_invalid_pick_shows_error(self) -> None:
+        self.client.force_login(self.admin)
+        r = self.client.get(
+            reverse("admin_paper_intake_hub"),
+            {"queue_entry": str(uuid4())},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "bg-red-50")
+
+    def test_hub_legacy_invalid_uuid_shows_error(self) -> None:
+        self.client.force_login(self.admin)
+        r = self.client.get(
+            reverse("admin_paper_intake_hub"),
+            {"queue_entry_id": "not-a-uuid"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "bg-red-50")
+
+    def test_entry_post_invalid_action_shows_error(self) -> None:
+        self.client.force_login(self.admin)
+        url = reverse(
+            "admin_paper_intake_entry", kwargs={"queue_entry_id": self.entry.id}
+        )
+        r = self.client.post(
+            url,
+            {"action": "nope", "reason": _AUTH_REASON},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(
+            PaperIntakeAuthorization.objects.filter(
+                queue_entry_id=self.entry.id
+            ).exists()
+        )
+
+    def test_entry_post_authorize_domain_error_surfaces_message(self) -> None:
+        self.client.force_login(self.admin)
+        url = reverse(
+            "admin_paper_intake_entry", kwargs={"queue_entry_id": self.entry.id}
+        )
+        r = self.client.post(
+            url,
+            {"action": "authorize", "reason": "short"},
+        )
+        self.assertEqual(r.status_code, 302)
+
+    def test_entry_post_forbidden_for_doctor(self) -> None:
+        self.client.force_login(self.doctor)
+        url = reverse(
+            "admin_paper_intake_entry", kwargs={"queue_entry_id": self.entry.id}
+        )
+        r = self.client.post(
+            url,
+            {"action": "authorize", "reason": _AUTH_REASON},
+        )
+        self.assertEqual(r.status_code, 403)

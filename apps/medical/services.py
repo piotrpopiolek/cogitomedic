@@ -6,7 +6,7 @@ from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
-from django.db.models import Max, Prefetch, Q
+from django.db.models import Exists, Max, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from apps.core.api_utils import safe_parse_positive_int
@@ -1486,71 +1486,102 @@ def list_doctor_work_queue(
     page_size: int = DEFAULT_LIST_LIMIT,
 ) -> tuple[list[dict[str, Any]], int]:
     """
-    List doctor work queue: queue entries with submitted intake (ankieta pacjenta).
+    List doctor work queue using ``QueueEntry`` as source of truth.
+
+    Visibility states:
+    - A: digital intake submitted/reopened
+    - B: paper intake authorized, no medical document yet
+    - C: paper intake completed with medical document created from paper flow
     """
-    qs = PatientIntakeForm.objects.filter(
-        form_status__in=(IntakeStatus.SUBMITTED, IntakeStatus.REOPENED)
-    ).select_related("queue_entry", "queue_entry__patient", "queue_entry__daily_queue")
-    if user is not None:
-        personal = (
-            Q(queue_entry__medical_document__created_by_user_id=user.id)
-            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
-            | Q(queue_entry__medical_document__versions__published_by_user_id=user.id)
+    submitted_or_reopened_intake_exists = PatientIntakeForm.objects.filter(
+        queue_entry_id=OuterRef("pk"),
+        form_status__in=(IntakeStatus.SUBMITTED, IntakeStatus.REOPENED),
+    )
+    paper_authorization_exists = PaperIntakeAuthorization.objects.filter(
+        queue_entry_id=OuterRef("pk")
+    )
+    qs = QueueEntry.objects.select_related(
+        "patient",
+        "daily_queue",
+        "intake_form",
+    ).annotate(
+        has_submitted_or_reopened_intake=Exists(submitted_or_reopened_intake_exists),
+        has_paper_intake_authorization=Exists(paper_authorization_exists),
+    )
+    qs = qs.filter(
+        Q(has_submitted_or_reopened_intake=True)
+        | Q(
+            entry_status=QueueEntryStatus.WAITING,
+            medical_document__isnull=True,
+            has_paper_intake_authorization=True,
         )
-        shared_draft_or_pending = Q(queue_entry__medical_document__isnull=True) | Q(
-            queue_entry__medical_document__status=MedicalDocStatus.DRAFT
+        | Q(
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+            medical_document__source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+        )
+    )
+    if user is not None:
+        published_by_user_exists = Exists(
+            MedicalDocumentVersion.objects.filter(
+                medical_document__queue_entry_id=OuterRef("pk"),
+                version_status=DocVersionStatus.PUBLISHED,
+                published_by_user_id=user.id,
+            )
+        )
+        qs = qs.annotate(has_published_by_user=published_by_user_exists)
+        personal = (
+            Q(medical_document__created_by_user_id=user.id)
+            | Q(daily_queue__assigned_doctor_id=user.id)
+            | Q(has_published_by_user=True)
+        )
+        shared_draft_or_pending = Q(medical_document__isnull=True) | Q(
+            medical_document__status=MedicalDocStatus.DRAFT
         )
         in_revision_q = Q(
-            queue_entry__medical_document__status=MedicalDocStatus.PUBLISHED,
-            queue_entry__medical_document__has_pending_revision=True,
+            medical_document__status=MedicalDocStatus.PUBLISHED,
+            medical_document__has_pending_revision=True,
         )
         if _is_admin_or_manager_medical_oversight(user):
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
-                qs = qs.filter(
-                    queue_entry__medical_document__versions__published_by_user_id=user.id
-                )
+                qs = qs.filter(has_published_by_user=True)
             elif scope == "in_revision":
                 qs = qs.filter(in_revision_q)
         else:
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
-                qs = qs.filter(
-                    queue_entry__medical_document__versions__published_by_user_id=user.id
-                )
+                qs = qs.filter(has_published_by_user=True)
             elif scope == "in_revision":
                 qs = qs.filter(in_revision_q & personal)
             else:
                 qs = qs.filter(shared_draft_or_pending | personal)
     if status:
-        qs = qs.filter(
-            queue_entry_id__in=MedicalDocument.objects.filter(
-                status=status
-            ).values_list("queue_entry_id", flat=True)
-        )
+        qs = qs.filter(medical_document__status=status)
     if queue_date is not None:
-        qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
+        qs = qs.filter(daily_queue__queue_date=queue_date)
     if patient_search and patient_search.strip():
         term = patient_search.strip()
         qs = qs.filter(
-            Q(queue_entry__patient__last_name__icontains=term)
-            | Q(queue_entry__patient__first_name__icontains=term)
+            Q(patient__last_name__icontains=term)
+            | Q(patient__first_name__icontains=term)
         )
-    qs = qs.distinct().order_by(
-        "-queue_entry__daily_queue__queue_date", "-submitted_at"
+    qs = qs.order_by(
+        "-doctor_list_sort_at",
+        "-daily_queue__queue_date",
+        "-id",
     )
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
-    intake_forms = list(qs[start:end])
-    if not intake_forms:
+    entries = list(qs[start:end])
+    if not entries:
         return [], total
-    queue_entry_ids = [f.queue_entry_id for f in intake_forms]
+    queue_entry_ids = [entry.id for entry in entries]
     docs = (
         MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids)
-        .select_related("queue_entry", "locked_by_user")
+        .select_related("locked_by_user")
         .prefetch_related(
             Prefetch(
                 "versions",
@@ -1582,100 +1613,117 @@ def list_doctor_work_queue(
         published_by_display_by_doc_id[ver.medical_document_id] = (
             _staff_user_display_name(ver.published_by_user)
         )
-    list_items = []
-    for intake_form in intake_forms:
-        entry = intake_form.queue_entry
-        doc = doc_by_entry.get(entry.id)
-        patient = entry.patient
-        queue = entry.daily_queue
-        versions = list(doc.versions.all())[:1] if doc else []
-        latest = versions[0] if versions else None
-        events_by_type = {}
-        if latest:
-            events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
-        hidrive_status = (
-            outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
-                completed=bool(latest and latest.hidrive_sent),
-            )
-            if latest
-            else None
+    list_items = [
+        _serialize_doctor_work_queue_row(
+            entry=entry,
+            doc=doc_by_entry.get(entry.id),
+            intake_form=getattr(entry, "intake_form", None),
+            published_by_display_by_doc_id=published_by_display_by_doc_id,
+            user=user,
         )
-        sms_status = (
-            outbox_event_stage_status(
-                events_by_type.get(OutboxEventType.SMS_SEND),
-                completed=bool(latest and latest.sms_sent),
-            )
-            if latest
-            else None
-        )
-        retryable_event = latest_retryable_outbox_event(latest) if latest else None
-        locked_eff, locked_name, locked_at = (
-            get_document_lock_state(doc) if doc else (False, None, None)
-        )
-        is_published = bool(doc and doc.status == MedicalDocStatus.PUBLISHED)
-        is_locked_by_other = bool(
-            doc
-            and locked_eff
-            and doc.locked_by_user_id != user.id
-            and not _is_admin_or_manager_medical_oversight(user)
-        )
-        # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT
-        row_has_edit_semaphore = bool(
-            doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
-        )
-        # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS)
-        row_is_fully_delivered = bool(
-            doc
-            and doc.status == MedicalDocStatus.PUBLISHED
-            and latest
-            and latest.pdf_generation_status == PdfStatus.COMPLETED
-            and latest.hidrive_sent
-            and latest.sms_sent
-        )
-        has_pending_revision = bool(doc and doc.has_pending_revision)
-        published_version_no = doc.published_version_no if doc else None
-        list_items.append(
-            {
-                "document_id": str(doc.id) if doc else None,
-                "queue_entry_id": str(entry.id),
-                "intake_form_id": str(intake_form.id),
-                "patient": {
-                    "id": str(patient.id),
-                    "first_name": patient.first_name,
-                    "last_name": patient.last_name,
-                    "date_of_birth": patient.date_of_birth.isoformat(),
-                },
-                "queue_date": queue.queue_date.isoformat(),
-                "status": doc.status if doc else "—",
-                "published_by": (
-                    published_by_display_by_doc_id.get(doc.id, "") if doc else ""
-                ),
-                "has_pending_revision": has_pending_revision,
-                "published_version_no": published_version_no,
-                "locked_by_username": locked_name,
-                "locked_at": locked_at.isoformat() if locked_at else None,
-                "is_locked_by_other": is_locked_by_other,
-                "row_is_published": is_published,
-                "row_has_edit_semaphore": row_has_edit_semaphore,
-                "row_is_fully_delivered": row_is_fully_delivered,
-                "pdf_generation_status": (
-                    latest.pdf_generation_status if latest else None
-                ),
-                "hidrive_sent": latest.hidrive_sent if latest else False,
-                "sms_sent": latest.sms_sent if latest else False,
-                "hidrive_status": hidrive_status,
-                "sms_status": sms_status,
-                "processing_error_message": (
-                    latest_version_processing_error_message(latest) if latest else None
-                ),
-                "can_retry_processing": retryable_event is not None,
-                "retry_event_status": (
-                    retryable_event.status if retryable_event else None
-                ),
-            }
-        )
+        for entry in entries
+    ]
     return list_items, total
+
+
+def _serialize_doctor_work_queue_row(
+    *,
+    entry: QueueEntry,
+    doc: MedicalDocument | None,
+    intake_form: PatientIntakeForm | None,
+    published_by_display_by_doc_id: dict[uuid.UUID, str],
+    user: Any,
+) -> dict[str, Any]:
+    """Serialize one doctor queue row (doc may be ``None`` for paper action-required state B)."""
+    patient = entry.patient
+    queue = entry.daily_queue
+    versions = list(doc.versions.all())[:1] if doc else []
+    latest = versions[0] if versions else None
+    events_by_type = {}
+    if latest:
+        events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
+    hidrive_status = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            completed=bool(latest and latest.hidrive_sent),
+        )
+        if latest
+        else None
+    )
+    sms_status = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.SMS_SEND),
+            completed=bool(latest and latest.sms_sent),
+        )
+        if latest
+        else None
+    )
+    retryable_event = latest_retryable_outbox_event(latest) if latest else None
+    locked_eff, locked_name, locked_at = (
+        get_document_lock_state(doc) if doc else (False, None, None)
+    )
+    is_published = bool(doc and doc.status == MedicalDocStatus.PUBLISHED)
+    is_locked_by_other = bool(
+        doc
+        and locked_eff
+        and doc.locked_by_user_id != getattr(user, "id", None)
+        and not _is_admin_or_manager_medical_oversight(user)
+    )
+    # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT.
+    row_has_edit_semaphore = bool(
+        doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
+    )
+    # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS).
+    row_is_fully_delivered = bool(
+        doc
+        and doc.status == MedicalDocStatus.PUBLISHED
+        and latest
+        and latest.pdf_generation_status == PdfStatus.COMPLETED
+        and latest.hidrive_sent
+        and latest.sms_sent
+    )
+    has_pending_revision = bool(doc and doc.has_pending_revision)
+    published_version_no = doc.published_version_no if doc else None
+    paper_intake_action_required = bool(
+        doc is None and getattr(entry, "has_paper_intake_authorization", False)
+    )
+    return {
+        "document_id": str(doc.id) if doc else None,
+        "queue_entry_id": str(entry.id),
+        "intake_form_id": (
+            str(intake_form.id)
+            if intake_form is not None
+            else str(doc.intake_form_id) if doc and doc.intake_form_id else None
+        ),
+        "patient": {
+            "id": str(patient.id),
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "date_of_birth": patient.date_of_birth.isoformat(),
+        },
+        "queue_date": queue.queue_date.isoformat(),
+        "status": doc.status if doc else "—",
+        "published_by": published_by_display_by_doc_id.get(doc.id, "") if doc else "",
+        "has_pending_revision": has_pending_revision,
+        "published_version_no": published_version_no,
+        "locked_by_username": locked_name,
+        "locked_at": locked_at.isoformat() if locked_at else None,
+        "is_locked_by_other": is_locked_by_other,
+        "row_is_published": is_published,
+        "row_has_edit_semaphore": row_has_edit_semaphore,
+        "row_is_fully_delivered": row_is_fully_delivered,
+        "pdf_generation_status": latest.pdf_generation_status if latest else None,
+        "hidrive_sent": latest.hidrive_sent if latest else False,
+        "sms_sent": latest.sms_sent if latest else False,
+        "hidrive_status": hidrive_status,
+        "sms_status": sms_status,
+        "processing_error_message": (
+            latest_version_processing_error_message(latest) if latest else None
+        ),
+        "can_retry_processing": retryable_event is not None,
+        "retry_event_status": retryable_event.status if retryable_event else None,
+        "paper_intake_action_required": paper_intake_action_required,
+    }
 
 
 def get_medical_document_context(
