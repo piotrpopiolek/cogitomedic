@@ -9,6 +9,7 @@ UI strings and error messages use the ``doctor`` translation category (see
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from django.contrib import admin
@@ -34,7 +35,6 @@ from apps.medical.external_pdf_service import (
 )
 from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
-    _staff_user_display_name,
     acquire_document_lock,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
@@ -44,12 +44,15 @@ from apps.medical.services import (
     parse_medical_documents_list_params,
 )
 from apps.reception.models import Patient, QueueEntry
+from apps.users.display import staff_user_display_name
 from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
     resolve_other_message,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _render_doctor(
@@ -181,7 +184,7 @@ def _doctor_filter_published_by_options() -> list[tuple[str, str]]:
     return [
         (
             str(u.id),
-            (_staff_user_display_name(u) or u.username or str(u.id)).strip(),
+            (staff_user_display_name(u) or u.username or str(u.id)).strip(),
         )
         for u in qs
     ]
@@ -503,6 +506,15 @@ def doctor_document_detail_view(
                 error_hidrive=ui["external_pdf_gate_hidrive_error"],
             )
         if not gate.passed:
+            # 424: zależność zewnętrzna (HiDrive / PDF w folderze). Odróżnia od 422 przy
+            # DomainError (np. brak snapshotu audytu papieru) — ten sam widok, inna przyczyna.
+            logger.warning(
+                "doctor_document_detail: external PDF gate blocked",
+                extra={
+                    "cogito_error_class": "external_pdf_gate",
+                    "medical_document_id": str(medical_document_id),
+                },
+            )
             return _render_doctor(
                 request,
                 "doctor/error.html",
@@ -511,7 +523,7 @@ def doctor_document_detail_view(
                     "ui": ui,
                     "lang": lang,
                 },
-                status=422,
+                status=424,
             )
 
         granted, lock_holder = acquire_document_lock(
@@ -521,6 +533,14 @@ def doctor_document_detail_view(
         msg_key = exc.api_message_key or ""
         message = (
             resolve_other_message(request, msg_key, str(exc)) if msg_key else str(exc)
+        )
+        logger.warning(
+            "doctor_document_detail: domain error",
+            extra={
+                "cogito_error_class": "domain_error",
+                "api_message_key": msg_key or None,
+                "medical_document_id": str(medical_document_id),
+            },
         )
         return _render_doctor(
             request,
