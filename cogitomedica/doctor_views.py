@@ -34,6 +34,7 @@ from apps.medical.external_pdf_service import (
 )
 from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
+    _staff_user_display_name,
     acquire_document_lock,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
@@ -43,6 +44,7 @@ from apps.medical.services import (
     parse_medical_documents_list_params,
 )
 from apps.reception.models import Patient, QueueEntry
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
@@ -166,6 +168,25 @@ def _doctor_list_page_querystring(request: HttpRequest, *, target_page: int) -> 
     return q.urlencode()
 
 
+def _doctor_filter_published_by_options() -> list[tuple[str, str]]:
+    """Active staff in the ``Doctor`` role: ``(user_id, label)`` for the list filter."""
+    qs = (
+        StaffUser.objects.filter(
+            groups__name=ROLE_GROUP_NAME_MAP["DOCTOR"],
+            is_active=True,
+        )
+        .distinct()
+        .order_by("last_name", "first_name", "username")
+    )
+    return [
+        (
+            str(u.id),
+            (_staff_user_display_name(u) or u.username or str(u.id)).strip(),
+        )
+        for u in qs
+    ]
+
+
 def _doctor_list_page_link_items(
     request: HttpRequest, *, num_pages: int, page: int
 ) -> list[dict[str, object]]:
@@ -237,8 +258,14 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
                 "patient_search": list_params["patient_search"] or "",
+                "published_by_user_id": (
+                    str(list_params["published_by_user_id"])
+                    if list_params["published_by_user_id"]
+                    else ""
+                ),
                 "scope": list_params["scope"],
             },
+            "published_by_doctor_options": _doctor_filter_published_by_options(),
             "paper_intake_create_cta": resolve_other_message(
                 request,
                 "doctor.paper_intake_create_cta",
@@ -490,6 +517,21 @@ def doctor_document_detail_view(
         granted, lock_holder = acquire_document_lock(
             medical_document_id=medical_document_id, user=request.user
         )
+    except DomainError as exc:
+        msg_key = exc.api_message_key or ""
+        message = (
+            resolve_other_message(request, msg_key, str(exc)) if msg_key else str(exc)
+        )
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": message,
+                "ui": ui,
+                "lang": lang,
+            },
+            status=422,
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
@@ -529,7 +571,7 @@ def doctor_document_detail_view(
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
         "context": context,
-        "ui": get_doctor_ui(lang),
+        "ui": ui,
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
     }

@@ -1,6 +1,6 @@
 ---
 name: Dokument medyczny bez ankiety
-overview: "Nullable `MedicalDocument.intake_form`, `source_type=PAPER_INTAKE`, model `PaperIntakeAuthorization` i invariant „`PAPER_INTAKE_COMPLETED` dopiero przy utworzeniu dokumentu” są wdrożone (migracje, serwisy authorize/revoke/create bez ankiety, REST, `get_medical_document_context` z `paper_intake_authorization`, hub `/admin/paper-intake/` + REST bez scope placówki dla ADMIN/MANAGER). Lista lekarza na `QueueEntry` (A/B/C), T2 (przycisk + POST, brak GET-fallbacku w `doctor_open_by_queue_view`) oraz etap wydajności (`doctor_list_sort_at`, indeksy `0039`, budżet zapytań w testach) — **zrobione**. **Następny sprint:** panel Befund (`befund-detail-paper-meta` + `befund-js-smoke`)."
+overview: "Nullable `MedicalDocument.intake_form`, `source_type=PAPER_INTAKE`, model `PaperIntakeAuthorization` i invariant „`PAPER_INTAKE_COMPLETED` dopiero przy utworzeniu dokumentu” są wdrożone (migracje, serwisy authorize/revoke/create bez ankiety, REST, `get_medical_document_context` z `paper_intake_authorization`, hub `/admin/paper-intake/` + REST bez scope placówki dla ADMIN/MANAGER). Lista lekarza na `QueueEntry` (A/B/C), T2 (przycisk + POST + **confirm** przed POST), brak GET-fallbacku w `doctor_open_by_queue_view`, wydajność listy, **panel Befund** (meta autoryzacji papierowej, bez mapy ciała dla papieru, twardy błąd przy braku snapshotu audytu) oraz smoke testy — **zrobione**. **Następny krok (poza tym planem):** §9.13 dokumentacja operacyjna / ewentualnie modal zamiast `confirm()`."
 todos:
   - id: schema-null-intake
     content: "Migracja: `MedicalDocument.intake_form` nullable + `source_type=PAPER_INTAKE` + `QueueEntryStatus.PAPER_INTAKE_COMPLETED` + ewentualne poprawki constraintów/indeksów"
@@ -37,10 +37,10 @@ todos:
     status: completed
   - id: befund-detail-paper-meta
     content: "Panel Befund (`templates/doctor/detail.html` + `static/doctor/js/befund-form.js`): dla `source_type=PAPER_INTAKE` pokazać sekcję „Autoryzacja papierowa: <kto>, <kiedy>, <reason>” w nagłówku dokumentu; pusty `intake_summary` z jasną etykietą „Bez ankiety cyfrowej, ankieta papierowa” zamiast pustych sekcji"
-    status: pending
+    status: completed
   - id: befund-js-smoke
     content: Weryfikacja panelu Befund przy pustym `intake_summary` (JS/szablony) + smoke dla metadanych autoryzacji
-    status: pending
+    status: completed
 isProject: false
 ---
 

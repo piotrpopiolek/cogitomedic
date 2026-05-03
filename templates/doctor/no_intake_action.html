@@ -12,11 +12,17 @@
   {% endif %}
 
   <div class="flex flex-wrap items-center gap-3">
-    <form method="post" action="{% url 'doctor-create-no-intake' queue_entry_id %}?lang={{ lang|default:'de' }}">
+    <form
+      class="js-paper-intake-create-form"
+      method="post"
+      action="{% url 'doctor-create-no-intake' queue_entry_id %}?lang={{ lang|default:'de' }}"
+      data-paper-intake-confirm="{{ ui.paper_intake_create_confirm_message }}"
+    >
       {% csrf_token %}
       <button type="submit" class="inline-flex items-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{{ submit_label }}</button>
     </form>
     <a href="{% url 'doctor-list' %}?lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-4 py-2 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ cancel_label }}</a>
   </div>
 </div>
+{% include "doctor/_paper_intake_confirm_modal.html" with confirm_btn_label=submit_label %}
 {% endblock %}

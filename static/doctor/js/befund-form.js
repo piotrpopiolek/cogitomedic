@@ -586,7 +586,9 @@
       }
       const bodyMapPts = CTX.intake_summary.body_map_data;
       const bodyMapUrl = PANEL.bodyMapImageUrl || "";
-      html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      if (CTX.source_type !== "PAPER_INTAKE") {
+        html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      }
       const summaryEl = el("intake-summary");
       if (summaryEl) summaryEl.innerHTML = html;
     }

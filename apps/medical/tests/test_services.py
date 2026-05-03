@@ -301,6 +301,48 @@ class MedicalServicesTests(TestCase):
         )
         self.assertIsNone(ctx["intake_summary"]["patient"]["date_of_birth"])
 
+    def test_get_medical_document_context_paper_intake_missing_audit_raises(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="No",
+            last_name="AuditSnap",
+            date_of_birth=date(1979, 7, 7),
+            phone="+48700666777",
+            email="no.audit.snap@example.com",
+        )
+        queue_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=52,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=queue_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        doc = create_medical_document_without_intake(
+            queue_entry_id=queue_entry.id,
+            created_by_user_id=self.doctor_user.id,
+        )
+        AuditEvent.objects.filter(
+            medical_document_id=doc.id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        ).delete()
+        with self.assertRaises(DomainError) as ctx:
+            get_medical_document_context(
+                medical_document_id=doc.id,
+                form_locale="de-DE",
+                user=self.doctor_user,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.paper_intake_document_audit_snapshot_missing",
+        )
+
     def test_revoke_paper_intake_authorization_unknown_staff_raises_domain_error(
         self,
     ) -> None:
