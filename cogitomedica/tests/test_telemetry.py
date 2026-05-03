@@ -26,9 +26,9 @@ class SetupTelemetryTests(SimpleTestCase):
     @patch("cogitomedica.telemetry.OTLPSpanExporter")
     @patch("cogitomedica.telemetry.TracerProvider")
     @patch("cogitomedica.telemetry.trace.set_tracer_provider")
-    @patch("cogitomedica.telemetry.DjangoInstrumentor")
-    @patch("cogitomedica.telemetry.RequestsInstrumentor")
-    @patch("cogitomedica.telemetry.PsycopgInstrumentor")
+    @patch("opentelemetry.instrumentation.django.DjangoInstrumentor")
+    @patch("opentelemetry.instrumentation.requests.RequestsInstrumentor")
+    @patch("opentelemetry.instrumentation.psycopg.PsycopgInstrumentor")
     def test_setup_telemetry_configures_exporter_when_endpoint_set(
         self,
         mock_psycopg_cls: MagicMock,
@@ -69,9 +69,9 @@ class SetupTelemetryTests(SimpleTestCase):
     @patch("cogitomedica.telemetry.OTLPSpanExporter")
     @patch("cogitomedica.telemetry.TracerProvider")
     @patch("cogitomedica.telemetry.trace.set_tracer_provider")
-    @patch("cogitomedica.telemetry.DjangoInstrumentor")
-    @patch("cogitomedica.telemetry.RequestsInstrumentor")
-    @patch("cogitomedica.telemetry.PsycopgInstrumentor")
+    @patch("opentelemetry.instrumentation.django.DjangoInstrumentor")
+    @patch("opentelemetry.instrumentation.requests.RequestsInstrumentor")
+    @patch("opentelemetry.instrumentation.psycopg.PsycopgInstrumentor")
     def test_setup_telemetry_skips_second_instrumentation_and_psycopg_failure_is_logged(
         self,
         mock_psycopg_cls: MagicMock,

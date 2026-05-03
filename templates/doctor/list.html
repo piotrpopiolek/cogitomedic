@@ -138,24 +138,72 @@
 </div>
 
 {% if pagination.total > 0 %}
-<nav class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" aria-label="Pagination">
-  <p class="text-sm text-base-500 dark:text-base-400">
-    {{ ui.pagination_page }} {{ pagination.page }}{% if pagination.num_pages > 1 %} / {{ pagination.num_pages }}{% endif %}, {{ pagination.total }} {{ ui.pagination_total }}
-  </p>
+<nav class="mt-4 pt-4 border-t border-base-200 dark:border-base-800 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between" aria-label="Pagination">
   {% if pagination.num_pages > 1 %}
-  <div class="inline-flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-1 text-sm">
     {% if pagination.has_previous %}
-    <a href="{% url 'doctor-list' %}?{% if pagination.prev_query %}{{ pagination.prev_query }}&amp;{% endif %}lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ ui.pagination_prev }}</a>
+    <a
+      href="{% url 'doctor-list' %}?{% if pagination.prev_query %}{{ pagination.prev_query }}&amp;{% endif %}lang={{ lang|default:'de' }}"
+      class="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-default border border-base-300 bg-white text-base-700 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-700 dark:border-base-600 dark:bg-base-900 dark:text-base-200 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-300"
+      aria-label="{{ ui.pagination_prev }}"
+      title="{{ ui.pagination_prev }}"
+    >
+      <span class="material-symbols-outlined text-[20px] leading-none" aria-hidden="true">chevron_left</span>
+    </a>
     {% else %}
-    <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500">{{ ui.pagination_prev }}</span>
+    <span
+      class="inline-flex h-9 min-w-9 shrink-0 cursor-not-allowed items-center justify-center rounded-default border border-base-200 bg-base-50 text-base-300 dark:border-base-700 dark:bg-base-900 dark:text-base-600"
+      aria-hidden="true"
+    >
+      <span class="material-symbols-outlined text-[20px] leading-none">chevron_left</span>
+    </span>
     {% endif %}
+
+    <div class="mx-1 flex flex-wrap items-center gap-x-0.5 gap-y-1 sm:mx-2">
+      {% for item in pagination.page_link_items %}
+        {% if item.type == "ellipsis" %}
+          <span class="inline-flex min-w-[1.5rem] select-none justify-center px-1 text-base-400 dark:text-base-500" aria-hidden="true">…</span>
+        {% elif item.current %}
+          <span class="inline-flex min-w-[2.25rem] justify-center rounded-default px-2 py-1.5 text-sm font-semibold text-primary-600 dark:text-primary-400" aria-current="page">{{ item.number }}</span>
+        {% else %}
+          <a
+            href="{% url 'doctor-list' %}?{% if item.query %}{{ item.query }}&amp;{% endif %}lang={{ lang|default:'de' }}"
+            class="inline-flex min-w-[2.25rem] justify-center rounded-default px-2 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 hover:text-primary-600 dark:text-base-300 dark:hover:bg-base-800/80 dark:hover:text-primary-400"
+          >{{ item.number }}</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+
     {% if pagination.has_next %}
-    <a href="{% url 'doctor-list' %}?{{ pagination.next_query }}&amp;lang={{ lang|default:'de' }}" class="inline-flex items-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-50 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800">{{ ui.pagination_next }}</a>
+    <a
+      href="{% url 'doctor-list' %}?{{ pagination.next_query }}&amp;lang={{ lang|default:'de' }}"
+      class="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-default border border-base-300 bg-white text-base-700 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-700 dark:border-base-600 dark:bg-base-900 dark:text-base-200 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-300"
+      aria-label="{{ ui.pagination_next }}"
+      title="{{ ui.pagination_next }}"
+    >
+      <span class="material-symbols-outlined text-[20px] leading-none" aria-hidden="true">chevron_right</span>
+    </a>
     {% else %}
-    <span class="inline-flex items-center rounded-default border border-base-200 bg-base-100 px-3 py-1.5 text-sm font-medium text-base-400 cursor-not-allowed dark:border-base-700 dark:bg-base-800 dark:text-base-500">{{ ui.pagination_next }}</span>
+    <span
+      class="inline-flex h-9 min-w-9 shrink-0 cursor-not-allowed items-center justify-center rounded-default border border-base-200 bg-base-50 text-base-300 dark:border-base-700 dark:bg-base-900 dark:text-base-600"
+      aria-hidden="true"
+    >
+      <span class="material-symbols-outlined text-[20px] leading-none">chevron_right</span>
+    </span>
     {% endif %}
   </div>
   {% endif %}
+
+  <div class="text-sm text-base-600 dark:text-base-400 {% if pagination.num_pages > 1 %}sm:border-l sm:border-base-200 sm:pl-4 dark:sm:border-base-700{% endif %}">
+    {% if pagination.num_pages > 1 %}
+    <span class="mr-2 text-base-400 dark:text-base-500" aria-hidden="true">—</span>
+    {% endif %}
+    <span class="font-medium text-base-800 dark:text-base-200">{{ pagination.total }}</span>
+    <span class="text-base-500 dark:text-base-400"> {{ ui.pagination_total }}</span>
+    {% if pagination.num_pages > 1 %}
+    <span class="text-base-400 dark:text-base-500"> · {{ ui.pagination_page }} {{ pagination.page }} / {{ pagination.num_pages }}</span>
+    {% endif %}
+  </div>
 </nav>
 {% endif %}
 {% endblock %}
