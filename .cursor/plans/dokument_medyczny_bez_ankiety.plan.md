@@ -1,6 +1,6 @@
 ---
 name: Dokument medyczny bez ankiety
-overview: "Dziś dokument medyczny jest sztywno powiązany z `PatientIntakeForm` (FK wymagany, `create_or_get_medical_document` wymaga SUBMITTED), a lista HTML lekarza jest budowana z ankiet. Plan: opcjonalny FK (nullable), jawny `source_type=PAPER_INTAKE`, **dwustopniowy flow „manager autoryzuje, lekarz dokumentuje”** oparty o nowy model `PaperIntakeAuthorization` (admin/manager pre-autoryzuje ścieżkę papierową dla `QueueEntry`, lekarz/admin/manager tworzy dokument tylko gdy autoryzacja istnieje). Nowy status kolejki dla papierowej ankiety jest ustawiany **dopiero przy utworzeniu dokumentu** (nie przy autoryzacji), żeby zachować invariant `entry_status == PAPER_INTAKE_COMPLETED ⇔ MedicalDocument(source_type=PAPER_INTAKE) istnieje`. Osobne punkty wejścia w panelu/API z audytem, kontrolą ról i blokadą `QueueEntry`. Status publikacji pozostaje statusem dokumentu medycznego, nie wpisu kolejki."
+overview: "Nullable `MedicalDocument.intake_form`, `source_type=PAPER_INTAKE`, model `PaperIntakeAuthorization` i invariant „`PAPER_INTAKE_COMPLETED` dopiero przy utworzeniu dokumentu” są wdrożone (migracje, serwisy authorize/revoke/create bez ankiety, REST, `get_medical_document_context` z `paper_intake_authorization`, hub `/admin/paper-intake/` + REST bez scope placówki dla ADMIN/MANAGER). **Kolejka prac:** merge listy lekarza na `QueueEntry` (stany A/B/C + perf), T2 przycisk no-intake na liście + usunięcie fallbacku w `doctor_open_by_queue_view`, panel Befund (meta papieru + smoke przy pustym intake)."
 todos:
   - id: schema-null-intake
     content: "Migracja: `MedicalDocument.intake_form` nullable + `source_type=PAPER_INTAKE` + `QueueEntryStatus.PAPER_INTAKE_COMPLETED` + ewentualne poprawki constraintów/indeksów"
@@ -10,19 +10,19 @@ todos:
     status: completed
   - id: schema-paper-authorization
     content: Nowy model `PaperIntakeAuthorization` (`apps/medical/models.py`) z `OneToOneField(QueueEntry, related_name='paper_intake_authorization', on_delete=CASCADE)` + `authorized_at`, `authorized_by` (`PROTECT` na `StaffUser`), `reason` (`TextField`) + readonly admin + indeksy + tłumaczenia kluczy etykiet/akcji/błędów
-    status: pending
+    status: completed
   - id: service-authorize-paper-intake
     content: "Serwisy autoryzacji w `apps/medical/services.py`: `authorize_paper_intake` (ADMIN/MANAGER, status WAITING, +3h, brak dokumentu, brak SUBMITTED intake, brak aktywnej autoryzacji, `select_for_update`, audyt `PAPER_INTAKE_AUTHORIZED`, ustawia `doctor_list_sort_at`, NIE zmienia entry_status) + `revoke_paper_intake_authorization` (ADMIN/MANAGER, tylko gdy nie ma dokumentu, audyt `PAPER_INTAKE_AUTHORIZATION_REVOKED`) + auto-revoke w `submit_patient_intake_form` i `update_queue_entry`(CANCELLED) + audyt `PAPER_INTAKE_AUTHORIZATION_AUTOREVOKED`"
-    status: pending
+    status: completed
   - id: service-create-no-intake
     content: "`create_medical_document_without_intake` (DOCTOR/ADMIN/MANAGER): `select_for_update` na `QueueEntry`, **wymóg aktywnej `PaperIntakeAuthorization`**, `source_type=PAPER_INTAKE`, atomowe przejście WAITING → PAPER_INTAKE_COMPLETED + aktualizacja `doctor_list_sort_at` + audyt `MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE` ze snapshot-em pól autoryzacji; **bez parametru `reason`** (powód pochodzi z autoryzacji); duplikat warunku +3h dla obrony in-depth; `create_or_get_medical_document` bez zmiany zachowania tabletowego"
-    status: pending
+    status: completed
   - id: api-contract
     content: "API: nowy `POST /api/v1/queue-entries/<id>/paper-intake-authorization` (ADMIN/MANAGER, body `{reason}`) + `DELETE` (revoke, body `{reason}`) + nowy `POST /api/v1/medical-documents/no-intake` (DOCTOR/ADMIN/MANAGER, body `{queue_entry_id}` bez `reason`) + istniejący `POST /api/v1/medical-documents` z wymaganym `intake_form_id` bez zmian + OpenAPI + testy ról i walidacji"
-    status: pending
+    status: completed
   - id: context-null-intake
     content: "`get_medical_document_context`: gałąź bez intake, `intake_form_id: null` w odpowiedzi, dla `source_type=PAPER_INTAKE` zwraca też metadane autoryzacji (`authorized_by_username`, `authorized_at`, `reason`) jako osobne pole `paper_intake_authorization` w payloadzie kontekstu"
-    status: pending
+    status: completed
   - id: work-queue-merge
     content: "`list_doctor_work_queue`: przebudować na queryset `QueueEntry` jako źródło prawdy; **trzy stany eligibility** — (A) cyfrowy SUBMITTED/REOPENED, (B) papier autoryzowany, dokument jeszcze nie utworzony (WAITING + `paper_intake_authorization` istnieje + brak `medical_document`), (C) papier wykonany (PAPER_INTAKE_COMPLETED + `medical_document.source_type=PAPER_INTAKE`); helper `_serialize_doctor_work_queue_row(entry, doc | None)` toleruje `doc=None` dla stanu B z flagą `paper_intake_action_required=True`; etykieta UI + tłumaczenia + migracja seed"
     status: pending
@@ -31,7 +31,7 @@ todos:
     status: pending
   - id: manager-authorize-ui
     content: Dedykowany widok admina/managera (NIE generyczny Django admin) z akcją „Autoryzuj ścieżkę papierową” — widoczny tylko po WAITING + `appointment_time + 3h` + brak intake SUBMITTED + brak dokumentu + brak aktywnej autoryzacji; pole `reason` z formularza (10–500 znaków); osobny przycisk „Cofnij autoryzację” gdy autoryzacja istnieje i dokument nie powstał; widok admina `PaperIntakeAuthorizationAdmin` jako readonly
-    status: pending
+    status: completed
   - id: staff-create-no-intake
     content: "Punkt wejścia lekarza (T2): przycisk „Utwórz dokument papierowy” w wierszu listy lekarza dla stanu B (papier autoryzowany), wywołujący `POST /api/v1/medical-documents/no-intake`; brak akcji w `doctor_open_by_queue_view` — ten widok NIE tworzy już papierowego dokumentu jako fallback (linie ~228-234 do usunięcia); render osobnego ekranu „brak ankiety cyfrowej” z pomocniczym komunikatem dla lekarza"
     status: pending

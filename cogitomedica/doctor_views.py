@@ -24,6 +24,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
     GateResult,
@@ -34,6 +35,7 @@ from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
+    create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
@@ -152,6 +154,17 @@ def _apply_doctor_lang(request: HttpRequest) -> str:
     return lang
 
 
+def _doctor_list_page_querystring(request: HttpRequest, *, target_page: int) -> str:
+    """Rebuild GET query for doctor list with ``page`` set (omit ``page`` when ``target_page`` is 1)."""
+    q = request.GET.copy()
+    q.pop("lang", None)
+    if target_page <= 1:
+        q.pop("page", None)
+    else:
+        q["page"] = str(target_page)
+    return q.urlencode()
+
+
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_list_view(request: HttpRequest) -> HttpResponse:
@@ -163,6 +176,13 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         **list_params,
         user=request.user,
     )
+    page = list_params["page"]
+    page_size = list_params["page_size"]
+    num_pages = (total + page_size - 1) // page_size if total > 0 else 1
+    has_previous = page > 1 and num_pages > 1
+    has_next = page < num_pages
+    prev_query = _doctor_list_page_querystring(request, target_page=page - 1)
+    next_query = _doctor_list_page_querystring(request, target_page=page + 1)
     lang = _apply_doctor_lang(request)
     if request.GET.get("lang"):
         query = request.GET.copy()
@@ -176,9 +196,14 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             "items": list_items,
             "api_base": "/api/v1",
             "pagination": {
-                "page": list_params["page"],
-                "page_size": list_params["page_size"],
+                "page": page,
+                "page_size": page_size,
                 "total": total,
+                "num_pages": num_pages,
+                "has_previous": has_previous,
+                "has_next": has_next,
+                "prev_query": prev_query,
+                "next_query": next_query,
             },
             "filters": {
                 "status": list_params["status"] or "",
@@ -186,9 +211,59 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "patient_search": list_params["patient_search"] or "",
                 "scope": list_params["scope"],
             },
+            "paper_intake_create_cta": resolve_other_message(
+                request,
+                "doctor.paper_intake_create_cta",
+                "Papierdokument erstellen",
+            ),
             "ui": get_doctor_ui(lang),
             "lang": lang,
         },
+    )
+
+
+def _render_no_intake_action_page(
+    request: HttpRequest,
+    *,
+    queue_entry_id: UUID,
+    lang: str,
+    ui: dict[str, str],
+    error_message: str | None = None,
+    status: int = 200,
+) -> HttpResponse:
+    return _render_doctor(
+        request,
+        "doctor/no_intake_action.html",
+        {
+            "queue_entry_id": str(queue_entry_id),
+            "ui": ui,
+            "lang": lang,
+            "title": resolve_other_message(
+                request,
+                "doctor.paper_intake_no_digital_title",
+                "Keine digitale Anamnese vorhanden",
+            ),
+            "message": resolve_other_message(
+                request,
+                "doctor.paper_intake_no_digital_message",
+                (
+                    "Für diesen Eintrag liegt keine digitale Anamnese vor. "
+                    "Sie können jetzt ein medizinisches Dokument im Papiermodus erstellen."
+                ),
+            ),
+            "submit_label": resolve_other_message(
+                request,
+                "doctor.paper_intake_create_cta",
+                "Papierdokument erstellen",
+            ),
+            "cancel_label": resolve_other_message(
+                request,
+                "doctor.paper_intake_cancel",
+                "Zurück zur Liste",
+            ),
+            "error_message": error_message,
+        },
+        status=status,
     )
 
 
@@ -224,6 +299,16 @@ def doctor_open_by_queue_view(
     else:
         intake_form = getattr(entry, "intake_form", None)
         if intake_form is None:
+            if QueueEntry.objects.filter(
+                id=entry.id,
+                paper_intake_authorization__isnull=False,
+            ).exists():
+                return _render_no_intake_action_page(
+                    request,
+                    queue_entry_id=entry.id,
+                    lang=lang,
+                    ui=ui,
+                )
             return _render_doctor(
                 request,
                 "doctor/error.html",
@@ -263,6 +348,63 @@ def doctor_open_by_queue_view(
                 intake_form_id=intake_form.id,
                 created_by_user_id=request.user.id,
             )
+    url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
+    return HttpResponseRedirect(url + "?lang=" + lang)
+
+
+@login_required(login_url="doctor-login")
+@require_http_methods(["POST"])
+@csrf_protect
+def doctor_create_no_intake_view(
+    request: HttpRequest, queue_entry_id: UUID
+) -> HttpResponse:
+    """Create paper medical document from doctor UI (explicit T2 action)."""
+    if not _doctor_role_ok(request):
+        return redirect("doctor-login")
+    lang = _get_doctor_lang(request)
+    ui = get_doctor_ui(lang)
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
+        check_doctor_queue_entry_access(entry, request.user)
+    except ObjectDoesNotExist:
+        return _render_doctor(
+            request,
+            "doctor/error.html",
+            {
+                "message": ui["error_queue_entry_not_found"],
+                "ui": ui,
+                "lang": lang,
+            },
+            status=404,
+        )
+    try:
+        doc = create_medical_document_without_intake(
+            queue_entry_id=entry.id,
+            created_by_user_id=request.user.id,
+        )
+    except DomainError as exc:
+        if (
+            exc.api_message_key
+            == "other.domain.medical_document_already_exists_for_queue_entry"
+        ):
+            existing_doc = MedicalDocument.objects.filter(
+                queue_entry_id=entry.id
+            ).first()
+            if existing_doc is not None:
+                url = reverse(
+                    "doctor-document-detail",
+                    kwargs={"medical_document_id": existing_doc.id},
+                )
+                return HttpResponseRedirect(url + "?lang=" + lang)
+        return _render_no_intake_action_page(
+            request,
+            queue_entry_id=entry.id,
+            lang=lang,
+            ui=ui,
+            error_message=str(exc),
+            status=400,
+        )
+
     url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
     return HttpResponseRedirect(url + "?lang=" + lang)
 
