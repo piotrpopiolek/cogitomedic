@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -228,6 +229,16 @@ class Patient(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name", "date_of_birth"]),
             models.Index(fields=["phone"]),
+            GinIndex(
+                fields=["last_name"],
+                name="patient_last_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["first_name"],
+                name="patient_first_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
             models.Index(
                 fields=["incoming_pdf_name_key_fl"],
                 name="patient_incpdf_key_fl_idx",
@@ -583,6 +594,18 @@ class QueueEntry(models.Model):
                 fields=["-doctor_list_sort_at"],
                 name="qentry_doctor_sort_idx",
                 condition=Q(doctor_list_sort_at__isnull=False),
+            ),
+            models.Index(
+                fields=["entry_status", "-doctor_list_sort_at", "-id"],
+                name="qentry_doc_queue_perf_idx",
+                condition=Q(
+                    doctor_list_sort_at__isnull=False,
+                    entry_status__in=[
+                        QueueEntryStatus.WAITING,
+                        QueueEntryStatus.PATIENT_COMPLETED,
+                        QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+                    ],
+                ),
             ),
         ]
         constraints = [
