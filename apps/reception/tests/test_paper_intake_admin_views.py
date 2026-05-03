@@ -81,6 +81,12 @@ class PaperIntakeAdminViewsTests(TestCase):
         r = self.client.get(reverse("admin_paper_intake_hub"))
         self.assertEqual(r.status_code, 403)
 
+    def test_hub_forbidden_for_reception(self) -> None:
+        """Paper intake hub is ADMIN/MANAGER only (same gate as ``ensure_admin_manager_staff``)."""
+        self.client.force_login(self.reception)
+        r = self.client.get(reverse("admin_paper_intake_hub"))
+        self.assertEqual(r.status_code, 403)
+
     def test_hub_ok_for_admin(self) -> None:
         self.client.force_login(self.admin)
         r = self.client.get(reverse("admin_paper_intake_hub"))
@@ -137,7 +143,7 @@ class PaperIntakeAdminViewsTests(TestCase):
     def test_entry_get_ok_for_manager_when_queue_entry_outside_assigned_clinics(
         self,
     ) -> None:
-        """HTML entry view is not clinic-scope-gated; matches global hub (see view docstring)."""
+        """Paper intake entry is not clinic-scoped for MANAGER (oversight / hub parity)."""
         manager = StaffUser.objects.create_user(
             username="mgr-paper-scope",
             email="mgr.paper.scope@example.com",
@@ -181,3 +187,72 @@ class PaperIntakeAdminViewsTests(TestCase):
         )
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
+
+    def test_entry_get_ok_for_manager_when_queue_entry_inside_assigned_clinic(
+        self,
+    ) -> None:
+        manager = StaffUser.objects.create_user(
+            username="mgr-paper-ok",
+            email="mgr.paper.ok@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        manager.clinic_sites.add(self.queue.clinic_site)
+
+        self.client.force_login(manager)
+        url = reverse(
+            "admin_paper_intake_entry", kwargs={"queue_entry_id": self.entry.id}
+        )
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+
+    def test_hub_queryset_for_manager_includes_other_clinic_waiting_entries(
+        self,
+    ) -> None:
+        """Hub list is not clinic-scoped; MANAGER with partial site assignment still sees all sites."""
+        manager = StaffUser.objects.create_user(
+            username="mgr-paper-hub",
+            email="mgr.paper.hub@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        manager.clinic_sites.add(self.queue.clinic_site)
+        self.client.force_login(manager)
+        self.assertEqual(
+            self.client.get(reverse("admin_paper_intake_hub")).status_code, 200
+        )
+
+        other_clinic = ClinicSite.objects.create(code="PUH", name="Paper Hub Other")
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="H1", name="H1"
+        )
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.reception,
+            assigned_doctor=self.doctor,
+        )
+        other_patient = Patient.objects.create(
+            first_name="Hub",
+            last_name="OtherSite",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48333444555",
+            email="hub.other@example.com",
+        )
+        entry_other = QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception,
+        )
+
+        qs = paper_intake_views._paper_intake_hub_queue_entries_queryset()
+        ids = set(qs.values_list("id", flat=True))
+        self.assertIn(self.entry.id, ids)
+        self.assertIn(entry_other.id, ids)

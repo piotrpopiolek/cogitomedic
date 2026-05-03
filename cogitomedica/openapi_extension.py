@@ -723,7 +723,8 @@ COGITO_PATHS = {
                 "(`source_type=PAPER_INTAKE`) after an ADMIN/MANAGER has created a "
                 "`PaperIntakeAuthorization` for the queue entry. Atomically moves queue status "
                 "to `PAPER_INTAKE_COMPLETED`. Requires `appointment_time` and enforces the "
-                "3-hour guard after appointment time (same rule as authorization)."
+                "minimum delay after appointment (same `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT` "
+                "as paper-intake authorization)."
             ),
             "tags": ["Medical"],
             "requestBody": {
@@ -749,7 +750,8 @@ COGITO_PATHS = {
                 "400": {
                     "description": (
                         "Domain rules failed (e.g. queue not WAITING, missing "
-                        "`appointment_time`, document already exists, 3-hour guard) — "
+                        "`appointment_time`, document already exists, minimum hours-after-"
+                        "appointment guard) — "
                         "`error_key` + `error` via `json_domain_error`. Or request body "
                         "schema validation — `error_key` `other.api.invalid_request_body` "
                         "with `details` (Pydantic)."
@@ -1667,8 +1669,12 @@ COGITO_PATHS = {
                 "ADMIN or MANAGER only. Creates `PaperIntakeAuthorization` for a WAITING queue "
                 "entry (does not change `entry_status`). Body: `reason` (10–500 chars). "
                 "Same business rules as internal `authorize_paper_intake` (appointment_time + "
-                "3h, no SUBMITTED digital intake, no existing document, no duplicate auth). "
-                "Clinic scope applies like other queue-entry mutations."
+                "`PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`, no SUBMITTED digital intake, "
+                "no existing document, no duplicate auth). "
+                "No clinic-site scope gate for this operation (ADMIN/MANAGER oversight). "
+                "Other `/queue-entries/{queue_entry_id}/...` routes may still return HTTP 403 "
+                "with `other.api.queue_entry_not_in_scope` when the entry's clinic site is "
+                "outside the caller's assigned sites; this path does not."
             ),
             "tags": ["Reception – Queues", "Medical"],
             "parameters": [
@@ -1696,7 +1702,7 @@ COGITO_PATHS = {
                 },
                 "400": {"description": "Domain or validation error"},
                 "401": {"description": "Authentication required"},
-                "403": {"description": "Forbidden (role or clinic scope)"},
+                "403": {"description": "Forbidden (wrong role)"},
                 "404": {"description": "Queue entry not found"},
             },
         },
@@ -1704,7 +1710,10 @@ COGITO_PATHS = {
             "summary": "Revoke paper intake authorization",
             "description": (
                 "ADMIN or MANAGER only. Removes active authorization when no medical document "
-                "exists yet for the queue entry. **Request body is required (same as POST):** "
+                "exists yet for the queue entry. No clinic-site scope gate (same as POST on "
+                "this URL; other queue-entry routes may still use `queue_entry_not_in_scope`). "
+                "**Request body is "
+                "required (same as POST):** "
                 "send `application/json` with `reason` (10–500 chars) for audit — this is "
                 "not a typical body-less HTTP DELETE. Clients that omit the body will get "
                 "400 (invalid JSON / validation)."
@@ -1733,7 +1742,7 @@ COGITO_PATHS = {
                 },
                 "400": {"description": "Domain or validation error"},
                 "401": {"description": "Authentication required"},
-                "403": {"description": "Forbidden (role or clinic scope)"},
+                "403": {"description": "Forbidden (wrong role)"},
                 "404": {"description": "Queue entry not found"},
             },
         },

@@ -39,6 +39,8 @@ def paper_intake_authorize_eligibility(
 
     Ordering and conditions follow ``authorize_paper_intake`` where applicable, plus
     early exits for existing document / active authorization used by the HTML template.
+    Time window uses ``PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`` (keep in sync with the
+    service when that rule changes).
     """
     has_document = MedicalDocument.objects.filter(queue_entry_id=entry.id).exists()
     active_authorization = (
@@ -101,9 +103,12 @@ def paper_intake_authorize_eligibility(
                 PaperIntakeAuthorizeBlock(
                     message_key="other.domain.paper_intake_authorization_too_early",
                     default_message=(
-                        "Paper intake authorization is only allowed at least 3 hours "
-                        "after appointment time."
+                        "Authorization is possible only at least {hours} hours after "
+                        "the appointment time."
                     ),
+                    format_params={
+                        "hours": PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
+                    },
                 )
             )
 

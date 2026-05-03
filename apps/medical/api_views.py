@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
-    get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
     json_pydantic_validation_error,
@@ -299,20 +298,20 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
 def queue_entry_paper_intake_authorization_view(
     request: HttpRequest, queue_entry_id: UUID
 ) -> JsonResponse:
-    """ADMIN/MANAGER: POST to authorize, DELETE to revoke (body ``reason`` in both cases)."""
+    """ADMIN/MANAGER: POST to authorize, DELETE to revoke (body ``reason`` in both cases).
+
+    No clinic-site scope gate (same oversight model as ``/admin/paper-intake/`` HTML hub
+    and entry page): only role checks; business rules live in ``authorize_paper_intake`` /
+    ``revoke_paper_intake_authorization``. Other queue-entry HTTP handlers may still return
+    ``other.api.queue_entry_not_in_scope`` for scoped staff; this view intentionally does not.
+    """
     role_error = require_user_role(request, allowed_roles={"ADMIN", "MANAGER"})
     if role_error:
         return role_error
     if request.method not in ("POST", "DELETE"):
         return json_error("other.api.method_not_allowed", status=405)
-    try:
-        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
-    except ObjectDoesNotExist:
+    if not QueueEntry.objects.filter(id=queue_entry_id).exists():
         return json_error("other.api.queue_entry_not_found", status=404)
-
-    scope_ids = get_scoped_clinic_site_ids(request.user)
-    if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
-        return json_error("other.api.queue_entry_not_in_scope", status=403)
 
     try:
         body = PaperIntakeAuthorizationRequest.model_validate(read_json_body(request))
