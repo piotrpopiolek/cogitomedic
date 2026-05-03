@@ -196,6 +196,7 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertEqual(
             self.queue_entry.entry_status, QueueEntryStatus.PATIENT_COMPLETED
         )
+        self.assertIsNotNone(self.queue_entry.doctor_list_sort_at)
         self.assertTrue(
             AuditEvent.objects.filter(
                 event_type="INTAKE_SUBMITTED",

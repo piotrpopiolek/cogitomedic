@@ -244,6 +244,7 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(
             queue_entry.entry_status, QueueEntryStatus.PAPER_INTAKE_COMPLETED
         )
+        self.assertIsNotNone(queue_entry.doctor_list_sort_at)
         ctx = get_medical_document_context(
             medical_document_id=doc.id,
             form_locale="de-DE",

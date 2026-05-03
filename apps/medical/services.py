@@ -1521,19 +1521,24 @@ def list_doctor_work_queue(
         )
     )
     if user is not None:
-        published_by_user_exists = Exists(
-            MedicalDocumentVersion.objects.filter(
-                medical_document__queue_entry_id=OuterRef("pk"),
-                version_status=DocVersionStatus.PUBLISHED,
-                published_by_user_id=user.id,
+        is_oversight = _is_admin_or_manager_medical_oversight(user)
+        need_published_by_annotation = (not is_oversight) or scope in {
+            "mine",
+            "published_by_me",
+        }
+        personal = Q(medical_document__created_by_user_id=user.id) | Q(
+            daily_queue__assigned_doctor_id=user.id
+        )
+        if need_published_by_annotation:
+            published_by_user_exists = Exists(
+                MedicalDocumentVersion.objects.filter(
+                    medical_document__queue_entry_id=OuterRef("pk"),
+                    version_status=DocVersionStatus.PUBLISHED,
+                    published_by_user_id=user.id,
+                )
             )
-        )
-        qs = qs.annotate(has_published_by_user=published_by_user_exists)
-        personal = (
-            Q(medical_document__created_by_user_id=user.id)
-            | Q(daily_queue__assigned_doctor_id=user.id)
-            | Q(has_published_by_user=True)
-        )
+            qs = qs.annotate(has_published_by_user=published_by_user_exists)
+            personal = personal | Q(has_published_by_user=True)
         shared_draft_or_pending = Q(medical_document__isnull=True) | Q(
             medical_document__status=MedicalDocStatus.DRAFT
         )
@@ -1541,7 +1546,7 @@ def list_doctor_work_queue(
             medical_document__status=MedicalDocStatus.PUBLISHED,
             medical_document__has_pending_revision=True,
         )
-        if _is_admin_or_manager_medical_oversight(user):
+        if is_oversight:
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
@@ -1598,21 +1603,22 @@ def list_doctor_work_queue(
     )
     doc_by_entry: dict[uuid.UUID, MedicalDocument] = {d.queue_entry_id: d for d in docs}
     doc_ids = [d.id for d in docs]
-    published_versions = (
-        MedicalDocumentVersion.objects.filter(
-            medical_document_id__in=doc_ids,
-            version_status=DocVersionStatus.PUBLISHED,
-        )
-        .select_related("published_by_user")
-        .order_by("medical_document_id", "-version_no")
-    )
     published_by_display_by_doc_id: dict[uuid.UUID, str] = {}
-    for ver in published_versions:
-        if ver.medical_document_id in published_by_display_by_doc_id:
-            continue
-        published_by_display_by_doc_id[ver.medical_document_id] = (
-            _staff_user_display_name(ver.published_by_user)
+    if doc_ids:
+        published_versions = (
+            MedicalDocumentVersion.objects.filter(
+                medical_document_id__in=doc_ids,
+                version_status=DocVersionStatus.PUBLISHED,
+            )
+            .select_related("published_by_user")
+            .order_by("medical_document_id", "-version_no")
         )
+        for ver in published_versions:
+            if ver.medical_document_id in published_by_display_by_doc_id:
+                continue
+            published_by_display_by_doc_id[ver.medical_document_id] = (
+                _staff_user_display_name(ver.published_by_user)
+            )
     list_items = [
         _serialize_doctor_work_queue_row(
             entry=entry,
