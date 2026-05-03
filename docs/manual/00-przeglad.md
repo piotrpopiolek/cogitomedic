@@ -76,4 +76,6 @@ Po publikacji dokumentu medycznego kolejka zadań realizuje m.in.: generowanie P
 - [Tablet — poczekalnia i formularz pacjenta](02-tablet.md)
 - [Lekarz — panel Befund](03-doktor.md)
 - [Administrator — konfiguracja i utrzymanie](04-administrator.md)
+- [Administrator / Manager — autoryzacja ścieżki papierowej (T1, T1′)](04-administrator-paper-intake.md)
+- [Ścieżka papierowa — diagram procesu (T1 / T2)](paper_intake_flow.md)
 - [Pacjent — portal wyników](05-pacjent-wyniki.md)
