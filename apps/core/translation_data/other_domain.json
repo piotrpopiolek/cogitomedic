@@ -114,6 +114,11 @@
     "en": "Only a doctor, administrator, or manager can create a paper document without digital intake.",
     "pl": "Tylko lekarz, administrator lub manager może utworzyć dokument papierowy bez cyfrowej ankiety."
   },
+  "other.domain.paper_intake_document_audit_snapshot_missing": {
+    "de": "Papierdokument ohne gespeicherte Autorisierungsdaten. Bitte IT/Support informieren — Anzeige nicht möglich.",
+    "en": "Paper document is missing the stored authorization audit snapshot. Contact IT/support — this page cannot be shown.",
+    "pl": "Dokument papierowy bez zapisu autoryzacji w audycie. Skontaktuj się z IT/wsparciem — strona nie może być wyświetlona."
+  },
   "other.domain.paper_intake_not_authorized": {
     "de": "Papierdokument kann nicht erstellt werden: zuvor erforderliche Autorisierung durch Administrator oder Manager.",
     "en": "Cannot create paper document: prior authorization by an administrator or manager is required.",

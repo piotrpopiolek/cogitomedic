@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.operations.models import AuditEvent
 from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import (
     DocVersionStatus,
@@ -114,6 +115,14 @@ class DoctorViewsSmokeTests(TestCase):
         self._login_doctor()
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
+
+    def test_list_includes_published_by_doctor_select(self) -> None:
+        self._login_doctor()
+        resp = self.client.get("/doctor/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('name="published_by_user_id"', html)
+        self.assertIn('id="id_published_by_user_id"', html)
 
     def test_list_manager_returns_200(self):
         self.client.force_login(self.manager_user)
@@ -468,21 +477,80 @@ class DoctorViewsSmokeTests(TestCase):
             html,
             re.DOTALL,
         )
-        self.assertIsNotNone(m)
+        assert m is not None, "expected doctor-panel-data script in HTML"
         panel = json.loads(m.group(1))
         self.assertEqual(panel["context"]["source_type"], "PAPER_INTAKE")
         auth = panel["context"]["paper_intake_authorization"]
         self.assertIsNotNone(auth)
         self.assertEqual(auth.get("reason"), "Patient delivered paper intake")
-        by_name = (auth.get("authorized_by_username") or "").lower()
-        self.assertTrue(
-            "mgr" in by_name or "manager" in by_name,
-            msg=f"Unexpected authorizer display: {auth.get('authorized_by_username')!r}",
+        self.assertEqual(
+            auth.get("authorized_by_username"),
+            self.manager_user.username,
         )
         ui = panel["ui"]
         self.assertIn("detail_paper_intake_notice", ui)
         self.assertIn("detail_paper_auth_heading", ui)
         self.assertTrue(len(ui.get("detail_paper_intake_notice", "")) > 5)
+
+    def test_paper_intake_document_detail_returns_422_when_audit_snapshot_missing(
+        self,
+    ) -> None:
+        gate_patcher = patch(
+            "cogitomedica.doctor_views.check_external_pdf_gate",
+            return_value=GateResult(
+                True,
+                (),
+                None,
+                skip_attachment_sync=False,
+            ),
+        )
+        gate_patcher.start()
+        self.addCleanup(gate_patcher.stop)
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="PX", name="Paper Missing Audit Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="NoAuditSnap",
+            date_of_birth=date(1988, 8, 8),
+            phone="+48500222333",
+            email="noauditsnap@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        PaperIntakeAuthorization.objects.create(
+            queue_entry=entry,
+            authorized_at=timezone.now(),
+            authorized_by=self.manager_user,
+            reason="Patient delivered paper intake for missing-audit test",
+        )
+        post_resp = self.client.post(
+            f"/doctor/open/{entry.id}/create-no-intake/?lang=en",
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        doc = MedicalDocument.objects.get(queue_entry=entry)
+        AuditEvent.objects.filter(
+            medical_document_id=doc.id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        ).delete()
+        detail_resp = self.client.get(f"/doctor/{doc.id}/?lang=en")
+        self.assertEqual(detail_resp.status_code, 422)
+        self.assertIn(b"audit", detail_resp.content.lower())
 
     def test_open_by_queue_returns_404_when_published_document_not_accessible(
         self,
@@ -699,7 +767,7 @@ class DoctorDetailHappyPathTests(TestCase):
             html,
             re.DOTALL,
         )
-        self.assertIsNotNone(m)
+        assert m is not None, "expected doctor-panel-data script in HTML"
         panel = json.loads(m.group(1))
         self.assertIn("bodyMapImageUrl", panel)
         self.assertIn("tablet/body.jpg", panel["bodyMapImageUrl"])

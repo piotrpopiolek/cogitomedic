@@ -18,6 +18,7 @@ from apps.medical.models import (
     MedicalDocumentVersion,
 )
 from apps.medical.services import authorize_paper_intake
+from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
@@ -528,6 +529,40 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(payload["intake_summary"]["patient"]["phone"], patient.phone)
         self.assertEqual(payload["intake_summary"]["patient"]["email"], patient.email)
+
+    def test_medical_document_detail_get_paper_without_audit_snapshot_returns_422(
+        self,
+    ) -> None:
+        waiting_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=self.queue_entry.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=44,
+            appointment_time=timezone.now() - timedelta(hours=4),
+            created_by_user=self.reception_user,
+        )
+        authorize_paper_intake(
+            queue_entry_id=waiting_entry.id,
+            authorized_by_user_id=self.admin_user.id,
+            reason=_PAPER_AUTH_REASON,
+        )
+        create_response = self.client.post(
+            "/api/v1/medical-documents/no-intake",
+            data=json.dumps({"queue_entry_id": str(waiting_entry.id)}),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        medical_document_id = create_response.json()["medical_document_id"]
+        AuditEvent.objects.filter(
+            medical_document_id=medical_document_id,
+            event_type="MEDICAL_DOCUMENT_CREATED_WITHOUT_INTAKE",
+        ).delete()
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 422)
+        self.assertEqual(
+            detail.json().get("error_key"),
+            "other.domain.paper_intake_document_audit_snapshot_missing",
+        )
 
     def test_published_version_keeps_template_snapshot_after_template_change(
         self,
