@@ -373,6 +373,8 @@ def medical_document_detail_view(
             form_locale=form_locale,
             user=request.user,
         )
+    except DomainError as exc:
+        return json_domain_error(exc, status=422)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(

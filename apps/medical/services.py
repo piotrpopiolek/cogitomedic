@@ -1376,7 +1376,8 @@ def revoke_document_version(
 def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
     """
     Parse GET parameters for medical documents list (work queue).
-    Returns dict with status, queue_date, patient_search, scope, page, page_size.
+    Returns dict with status, queue_date, patient_search, published_by_user_id,
+    scope, page, page_size.
     """
     status = get_params.get("status") or None
     queue_date = None
@@ -1388,6 +1389,13 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         except (ValueError, TypeError):
             pass
     patient_search = get_params.get("patient_search") or None
+    published_by_user_id: uuid.UUID | None = None
+    raw_pub_id = (get_params.get("published_by_user_id") or "").strip()
+    if raw_pub_id:
+        try:
+            published_by_user_id = uuid.UUID(raw_pub_id)
+        except (ValueError, TypeError):
+            published_by_user_id = None
     scope = (get_params.get("scope") or "all").strip()
     if scope not in {"all", "mine", "published_by_me", "in_revision"}:
         scope = "all"
@@ -1401,6 +1409,7 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         "status": status,
         "queue_date": queue_date,
         "patient_search": patient_search,
+        "published_by_user_id": published_by_user_id,
         "scope": scope,
         "page": page,
         "page_size": page_size,
@@ -1412,6 +1421,7 @@ def list_medical_documents(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    published_by_user_id: uuid.UUID | None = None,
     scope: str = "all",
     user: Any = None,
     page: int = 1,
@@ -1463,6 +1473,16 @@ def list_medical_documents(
             Q(queue_entry__patient__last_name__icontains=term)
             | Q(queue_entry__patient__first_name__icontains=term)
         )
+    if published_by_user_id is not None:
+        qs = qs.filter(
+            Exists(
+                MedicalDocumentVersion.objects.filter(
+                    medical_document_id=OuterRef("pk"),
+                    version_status=DocVersionStatus.PUBLISHED,
+                    published_by_user_id=published_by_user_id,
+                )
+            )
+        )
     if scope == "in_revision":
         qs = qs.filter(
             status=MedicalDocStatus.PUBLISHED,
@@ -1480,6 +1500,7 @@ def list_doctor_work_queue(
     status: str | None = None,
     queue_date: date | None = None,
     patient_search: str | None = None,
+    published_by_user_id: uuid.UUID | None = None,
     scope: str = "all",
     user: Any = None,
     page: int = 1,
@@ -1572,6 +1593,15 @@ def list_doctor_work_queue(
             Q(patient__last_name__icontains=term)
             | Q(patient__first_name__icontains=term)
         )
+    if published_by_user_id is not None:
+        publisher_row_exists = Exists(
+            MedicalDocumentVersion.objects.filter(
+                medical_document__queue_entry_id=OuterRef("pk"),
+                version_status=DocVersionStatus.PUBLISHED,
+                published_by_user_id=published_by_user_id,
+            )
+        )
+        qs = qs.filter(publisher_row_exists)
     qs = qs.order_by(
         "-doctor_list_sort_at",
         "-daily_queue__queue_date",
@@ -1894,6 +1924,17 @@ def get_medical_document_context(
             }
 
     lock_eff, lock_name, lock_at = get_document_lock_state(doc)
+    paper_payload = _paper_intake_authorization_context_for_document(doc)
+    if doc.source_type == MedicalDocumentSourceType.PAPER_INTAKE:
+        if paper_payload is None:
+            raise DomainError(
+                domain_message(
+                    "other.domain.paper_intake_document_audit_snapshot_missing"
+                ),
+                api_message_key=(
+                    "other.domain.paper_intake_document_audit_snapshot_missing"
+                ),
+            )
     return {
         "id": str(doc.id),
         "queue_entry_id": str(doc.queue_entry_id),
@@ -1912,9 +1953,7 @@ def get_medical_document_context(
         "locked_by_username": lock_name if lock_eff else None,
         "locked_at": lock_at.isoformat() if lock_at and lock_eff else None,
         "intake_summary": intake_summary,
-        "paper_intake_authorization": _paper_intake_authorization_context_for_document(
-            doc
-        ),
+        "paper_intake_authorization": paper_payload,
         "current_version": current_version_payload,
     }
 

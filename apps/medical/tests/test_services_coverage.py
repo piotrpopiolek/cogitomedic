@@ -526,6 +526,30 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         )
         self.assertEqual(total, 0)
 
+    def test_published_by_user_id_filter(self) -> None:
+        publisher = StaffUser.objects.create_user(
+            username="cov-publisher-z",
+            email="cov.publisher.z@example.com",
+            password="x",
+            is_staff=True,
+            first_name="Zed",
+            last_name="UniquePubLastName",
+        )
+        assign_group_to_test_user(publisher, "Doctor")
+        doc = self._make_medical_doc()
+        self._make_published_version(doc, published_by_user=publisher)
+
+        items, total = list_doctor_work_queue(
+            user=self.doctor, published_by_user_id=publisher.id
+        )
+        self.assertEqual(total, 1)
+        self.assertEqual(items[0]["document_id"], str(doc.id))
+
+        items, total = list_doctor_work_queue(
+            user=self.doctor, published_by_user_id=self.doctor.id
+        )
+        self.assertEqual(total, 0)
+
     def test_non_assigned_doctor_sees_pending_intake_without_document(self):
         other = StaffUser.objects.create_user(
             username="other-doc",

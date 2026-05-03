@@ -8,7 +8,7 @@
 <h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-6">{{ ui.list_title }}</h1>
 
 <form method="get" class="mb-6 p-4 bg-white dark:bg-base-900 rounded-default border border-base-200 dark:border-base-700 shadow-xs">
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
     <div>
       <label for="id_status" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_status }}</label>
       <select name="status" id="id_status" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100">
@@ -35,6 +35,16 @@
       <input type="text" name="patient_search" id="id_patient_search" placeholder="{{ ui.filter_search_placeholder }}" value="{{ filters.patient_search }}" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100" />
     </div>
     <div>
+      <label for="id_published_by_user_id" class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1">{{ ui.filter_published_by }}</label>
+      <select name="published_by_user_id" id="id_published_by_user_id" class="w-full border border-base-200 bg-white rounded-default px-3 py-2 text-sm text-base-900 shadow-xs dark:bg-base-900 dark:border-base-700 dark:text-base-100">
+        <option value="">{{ ui.filter_all }}</option>
+        {% for opt_id, opt_label in published_by_doctor_options %}
+        <option value="{{ opt_id }}" {% if filters.published_by_user_id == opt_id %}selected{% endif %}>{{ opt_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <span class="block text-sm font-medium text-base-700 dark:text-base-300 mb-1 invisible select-none" aria-hidden="true">&nbsp;</span>
       <button type="submit" class="inline-flex w-full sm:w-auto justify-center items-center rounded-default bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">{{ ui.filter_submit }}</button>
     </div>
   </div>
@@ -114,7 +124,12 @@
             {% endif %}
           {% else %}
             {% if item.paper_intake_action_required %}
-            <form method="post" action="{% url 'doctor-create-no-intake' item.queue_entry_id %}?lang={{ lang|default:'de' }}">
+            <form
+              class="js-paper-intake-create-form"
+              method="post"
+              action="{% url 'doctor-create-no-intake' item.queue_entry_id %}?lang={{ lang|default:'de' }}"
+              data-paper-intake-confirm="{{ ui.paper_intake_create_confirm_message }}"
+            >
               {% csrf_token %}
               <button type="submit" class="inline-flex items-center rounded-default border border-amber-400 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-950/30">{{ paper_intake_create_cta }}</button>
             </form>
@@ -206,4 +221,5 @@
   </div>
 </nav>
 {% endif %}
+{% include "doctor/_paper_intake_confirm_modal.html" with confirm_btn_label=paper_intake_create_cta %}
 {% endblock %}
