@@ -104,6 +104,36 @@
     "en": "Report – Patient:",
     "pl": "Befund – pacjent:"
   },
+  "doctor.detail_intake_section_paper_title": {
+    "de": "Papier-Anamnese",
+    "en": "Paper anamnesis",
+    "pl": "Wywiad papierowy"
+  },
+  "doctor.detail_paper_auth_at_label": {
+    "de": "Zeit der Freigabe",
+    "en": "Approval time",
+    "pl": "Czas zatwierdzenia"
+  },
+  "doctor.detail_paper_auth_by_label": {
+    "de": "Freigegeben von",
+    "en": "Approved by",
+    "pl": "Zatwierdził/a"
+  },
+  "doctor.detail_paper_auth_heading": {
+    "de": "Papier-Intake – Freigabe",
+    "en": "Paper intake – approval",
+    "pl": "Intake papierowy – zatwierdzenie"
+  },
+  "doctor.detail_paper_auth_reason_label": {
+    "de": "Begründung",
+    "en": "Justification",
+    "pl": "Uzasadnienie"
+  },
+  "doctor.detail_paper_intake_notice": {
+    "de": "Ohne digitalen Fragebogen, Papier-Anamnese.",
+    "en": "No digital questionnaire, paper anamnesis.",
+    "pl": "Bez cyfrowej ankiety, wywiad papierowy."
+  },
   "doctor.error_document_not_found": {
     "de": "Dokument nicht gefunden.",
     "en": "Document not found.",
