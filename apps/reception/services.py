@@ -9,6 +9,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
+from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import PatientIntakeForm
 from apps.reception.models import (
@@ -445,8 +446,13 @@ def update_queue_entry(
     *,
     entry_status: str | None = None,
     notes: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> QueueEntry:
-    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED."""
+    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED.
+
+    ``actor_user_id`` (optional): who initiated the change; used for audit when
+    paper intake authorization is auto-revoked on ``CANCELLED``.
+    """
     if entry_status is not None and entry_status not in [
         c[0] for c in QueueEntryStatus.choices
     ]:
@@ -457,11 +463,30 @@ def update_queue_entry(
             api_message_key="other.domain.invalid_queue_entry_status",
             api_message_params={"value": entry_status},
         )
-    entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
+    entry = QueueEntry.objects.select_for_update(of=("self",)).get(id=queue_entry_id)
     update_fields: list[str] = ["updated_at"]
     if entry_status is not None:
         entry.entry_status = entry_status
         update_fields.append("entry_status")
+        if entry_status == QueueEntryStatus.CANCELLED:
+            with cogito_business_span(
+                "reception.update_queue_entry_cancelled",
+                queue_entry_id=entry.id,
+                extra_attributes={
+                    "cogito.queue_entry_status": entry_status,
+                },
+            ):
+                # Lazy import: keep reception free of ``medical.models`` / paper-intake details.
+                from apps.medical.services import (
+                    autorevoke_paper_intake_authorization_after_queue_entry_cancelled,
+                )
+
+                autorevoke_paper_intake_authorization_after_queue_entry_cancelled(
+                    queue_entry_id=entry.id,
+                    actor_user_id=actor_user_id,
+                )
+            entry.doctor_list_sort_at = None
+            update_fields.append("doctor_list_sort_at")
     if notes is not None:
         entry.notes = notes
         update_fields.append("notes")
@@ -488,7 +513,7 @@ def create_queue_entry(
         )
 
     next_position = (
-        QueueEntry.objects.select_for_update()
+        QueueEntry.objects.select_for_update(of=("self",))
         .filter(daily_queue_id=daily_queue_id)
         .aggregate(max_position=Max("position_no"))
         .get("max_position")
@@ -533,7 +558,9 @@ def issue_tablet_session_latest_wins(
             api_message_params={"locale": form_locale},
         )
 
-    queue_entry = QueueEntry.objects.select_for_update().get(id=queue_entry_id)
+    queue_entry = QueueEntry.objects.select_for_update(of=("self",)).get(
+        id=queue_entry_id
+    )
 
     tablet_device: TabletDevice | None = None
     if tablet_device_id:

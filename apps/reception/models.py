@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -60,8 +61,9 @@ class QueueEntryStatus(models.TextChoices):
         "administration.choice_queue_entry_status_doctor_in_progress",
         "Doctor in progress",
     )
-    PUBLISHED = "PUBLISHED", db_gettext_lazy(
-        "administration.choice_queue_entry_status_published", "Published"
+    PAPER_INTAKE_COMPLETED = "PAPER_INTAKE_COMPLETED", db_gettext_lazy(
+        "administration.choice_queue_entry_status_paper_intake_completed",
+        "Paper intake completed",
     )
     CANCELLED = "CANCELLED", db_gettext_lazy(
         "administration.choice_queue_entry_status_cancelled", "Cancelled"
@@ -227,6 +229,16 @@ class Patient(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name", "date_of_birth"]),
             models.Index(fields=["phone"]),
+            GinIndex(
+                fields=["last_name"],
+                name="patient_last_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["first_name"],
+                name="patient_first_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
             models.Index(
                 fields=["incoming_pdf_name_key_fl"],
                 name="patient_incpdf_key_fl_idx",
@@ -549,6 +561,14 @@ class QueueEntry(models.Model):
         auto_now=True,
         verbose_name=db_gettext_lazy("administration.field_updated_at", "Updated at"),
     )
+    doctor_list_sort_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_queue_entry_doctor_list_sort_at",
+            "Doctor list sort time",
+        ),
+    )
 
     class Meta:
         db_table = "queue_entry"
@@ -568,6 +588,23 @@ class QueueEntry(models.Model):
                         QueueEntryStatus.WAITING,
                         QueueEntryStatus.IN_PROGRESS,
                     ]
+                ),
+            ),
+            models.Index(
+                fields=["-doctor_list_sort_at"],
+                name="qentry_doctor_sort_idx",
+                condition=Q(doctor_list_sort_at__isnull=False),
+            ),
+            models.Index(
+                fields=["entry_status", "-doctor_list_sort_at", "-id"],
+                name="qentry_doc_queue_perf_idx",
+                condition=Q(
+                    doctor_list_sort_at__isnull=False,
+                    entry_status__in=[
+                        QueueEntryStatus.WAITING,
+                        QueueEntryStatus.PATIENT_COMPLETED,
+                        QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+                    ],
                 ),
             ),
         ]

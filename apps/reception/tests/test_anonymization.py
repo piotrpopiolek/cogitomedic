@@ -33,6 +33,7 @@ from apps.medical.models import (
 )
 from apps.operations.models import AuditEvent
 from apps.reception.anonymization import (
+    _TERMINAL_QUEUE_STATUSES,
     _extract_consent_summary,
     anonymize_patient,
 )
@@ -80,7 +81,7 @@ class AnonymizationIntegrationTests(TestCase):
         )
 
     def _terminal_entry(
-        self, patient: Patient, *, status: str = "PUBLISHED"
+        self, patient: Patient, *, status: str = "CANCELLED"
     ) -> QueueEntry:
         return QueueEntry.objects.create(
             daily_queue=self.daily_queue,
@@ -104,6 +105,12 @@ class AnonymizationIntegrationTests(TestCase):
         patient.refresh_from_db()
         self.assertIsNone(patient.anonymization_started_at)
         self.assertIsNone(patient.anonymized_at)
+
+    def test_terminal_statuses_contains_only_cancelled(self) -> None:
+        self.assertEqual(
+            _TERMINAL_QUEUE_STATUSES,
+            frozenset({QueueEntryStatus.CANCELLED}),
+        )
 
     @freeze_time("2026-03-10T12:00:00Z")
     def test_anonymize_happy_path_clears_pii_and_writes_audit(self) -> None:
@@ -325,7 +332,7 @@ class AnonymizationMedicalDocumentTests(TestCase):
         self.queue_entry = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
             patient=self.patient,
-            entry_status=QueueEntryStatus.PUBLISHED,
+            entry_status=QueueEntryStatus.CANCELLED,
             position_no=1,
             created_by_user=self.actor,
         )

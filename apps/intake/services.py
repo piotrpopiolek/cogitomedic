@@ -15,6 +15,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
+from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.core.exceptions import DomainError, StateTransitionError
 from apps.intake.models import (
     AnamnesisOptionDefinition,
@@ -904,10 +905,6 @@ def save_intake_consents(
     return intake_form
 
 
-# Max signature file size (bytes), e.g. 2MB
-SIGNATURE_MAX_SIZE = 2 * 1024 * 1024
-
-
 @transaction.atomic
 def save_intake_signature(
     *,
@@ -1099,7 +1096,7 @@ def submit_patient_intake_form(
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
     session = intake_form.session
-    queue_entry = QueueEntry.objects.select_for_update().get(
+    queue_entry = QueueEntry.objects.select_for_update(of=("self",)).get(
         id=intake_form.queue_entry_id
     )
     now = submitted_at or timezone.now()
@@ -1221,7 +1218,22 @@ def submit_patient_intake_form(
     session.save(update_fields=["consumed_at"])
 
     queue_entry.entry_status = QueueEntryStatus.PATIENT_COMPLETED
-    queue_entry.save(update_fields=["entry_status", "updated_at"])
+    queue_entry.doctor_list_sort_at = now
+    queue_entry.save(
+        update_fields=["entry_status", "doctor_list_sort_at", "updated_at"]
+    )
+
+    # Lazy import: ``medical.services`` already imports this module at load time;
+    # importing medical here at module level would risk a circular import.
+    from apps.medical.services import (
+        autorevoke_paper_intake_authorization_after_intake_submit,
+    )
+
+    autorevoke_paper_intake_authorization_after_intake_submit(
+        queue_entry_id=queue_entry.id,
+        intake_form_id=intake_form.id,
+        actor_user_id=submitted_by_user_id,
+    )
 
     create_audit_event(
         event_type="INTAKE_SUBMITTED",

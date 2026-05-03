@@ -7,8 +7,14 @@ from uuid import UUID
 from django.contrib.auth.models import Group
 from django.http import HttpRequest
 from django.http import JsonResponse
+from pydantic import ValidationError
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
+from apps.core.constants import (
+    DEFAULT_LIST_LIMIT,
+    MAX_JSON_BODY_BYTES,
+    MAX_LIST_LIMIT,
+)
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.translation_service import (
@@ -17,11 +23,6 @@ from apps.core.translation_service import (
     resolve_other_message,
     translation_category_for_message_key,
 )
-
-# Default/max for offset pagination (`page` / `page_size`) and for reception list `limit` (`parse_list_limit`).
-DEFAULT_LIST_LIMIT = 20
-MAX_LIST_LIMIT = 100
-MAX_JSON_BODY_BYTES = 1024 * 1024
 
 
 def assign_group_to_test_user(user, group_name: str) -> None:
@@ -66,6 +67,29 @@ def json_domain_error(exc: BaseException, *, status: int | None = None) -> JsonR
     return JsonResponse(
         {"error": message, "error_key": key},
         status=effective_status,
+    )
+
+
+def json_pydantic_validation_error(
+    exc: ValidationError,
+    *,
+    error_key: str = "other.api.invalid_request_body",
+) -> JsonResponse:
+    """HTTP 400 for Pydantic request-body validation; same shape family as ``json_domain_error``."""
+    default = OTHER_I18N_KEY_DEFAULT_EN.get(error_key, "Invalid request body.")
+    request = get_current_request()
+    if request is not None:
+        message = resolve_other_message(request, error_key, default)
+    else:
+        # No HTTP request (e.g. tasks); avoid DB lookup via ``get_translation_map``.
+        message = default
+    return JsonResponse(
+        {
+            "error": message,
+            "error_key": error_key,
+            "details": exc.errors(include_url=False),
+        },
+        status=400,
     )
 
 
