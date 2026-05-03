@@ -448,9 +448,14 @@ def authorize_paper_intake(
         if timezone.now() < entry.appointment_time + timedelta(
             hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
         ):
+            _min_h = PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
             raise DomainError(
-                domain_message("other.domain.paper_intake_authorization_too_early"),
+                domain_message(
+                    "other.domain.paper_intake_authorization_too_early",
+                    hours=_min_h,
+                ),
                 api_message_key="other.domain.paper_intake_authorization_too_early",
+                api_message_params={"hours": _min_h},
             )
         if MedicalDocument.objects.filter(queue_entry_id=entry.id).exists():
             raise DomainError(
@@ -565,9 +570,14 @@ def create_medical_document_without_intake(
         if timezone.now() < queue_entry.appointment_time + timedelta(
             hours=PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
         ):
+            _min_h = PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
             raise DomainError(
-                domain_message("other.domain.paper_intake_earliest_after_appointment"),
+                domain_message(
+                    "other.domain.paper_intake_earliest_after_appointment",
+                    hours=_min_h,
+                ),
                 api_message_key="other.domain.paper_intake_earliest_after_appointment",
+                api_message_params={"hours": _min_h},
             )
 
         if MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).exists():

@@ -19,7 +19,10 @@ from django.views.decorators.http import require_http_methods
 from apps.core.exceptions import DomainError
 from apps.core.staff_custom_admin import ensure_admin_manager_staff
 from apps.core.translation_service import resolve_other_message
-from apps.medical.constants import PAPER_INTAKE_HUB_QUEUE_ENTRY_LOOKBACK_DAYS
+from apps.medical.constants import (
+    PAPER_INTAKE_HUB_QUEUE_ENTRY_LOOKBACK_DAYS,
+    PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
+)
 from apps.medical.paper_intake_policy import paper_intake_authorize_eligibility
 from apps.medical.services import (
     authorize_paper_intake,
@@ -34,7 +37,12 @@ except ImportError:
 
 
 def _paper_intake_hub_queue_entries_queryset() -> QuerySet[QueueEntry]:
-    """Hub pick list: all clinics; last *N* days; only WAITING (same gate as ``authorize_paper_intake``).
+    """Hub pick list: all clinic sites; last *N* days; only WAITING (same gate as ``authorize_paper_intake``).
+
+    No clinic-site filter on the hub for ADMIN or MANAGER (oversight / shared pick list).
+    The entry page and ``queue_entry_paper_intake_authorization_view`` likewise do not gate
+    on assigned clinic sites for ADMIN/MANAGER. Other reception queue APIs may still return
+    ``queue_entry_not_in_scope`` for users with a finite clinic scope.
 
     Revoke does not require WAITING; entries with active paper auth but non-WAITING status
     are omitted here and are reachable only by direct URL or Django admin queue entry.
@@ -94,6 +102,9 @@ def _paper_intake_ui_state(*, request, entry: QueueEntry) -> dict[str, Any]:
         "can_revoke": elig.can_revoke,
         "blocking_messages": blocking_messages,
         "earliest_authorize_at": elig.earliest_authorize_at,
+        "paper_intake_min_hours_after_appointment": (
+            PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+        ),
     }
 
 
@@ -181,8 +192,9 @@ def paper_intake_admin_hub_view(request):
 @require_http_methods(["GET", "HEAD", "POST"])
 def paper_intake_admin_entry_view(request, queue_entry_id: uuid.UUID):
     """
-    ADMIN/MANAGER only; no clinic-site gate (hub lists all sites—stay consistent).
-    REST ``queue_entry_paper_intake_authorization_view`` still uses scope.
+    ADMIN/MANAGER only. No clinic-site gate (same global oversight model as the hub and
+    ``queue_entry_paper_intake_authorization_view``). Other queue HTTP APIs may still use
+    ``queue_entry_not_in_scope`` for scoped roles.
     """
     if (denied := ensure_admin_manager_staff(request)) is not None:
         return denied

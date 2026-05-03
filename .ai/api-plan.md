@@ -372,7 +372,7 @@ Two-step paper path — **T1** for **ADMIN** / **MANAGER** staff only; backed by
 
 **Roles:** **ADMIN** or **MANAGER** only (`require_user_role`); otherwise **`403`**.
 
-**Clinic scope:** when `get_scoped_clinic_site_ids(request.user)` returns a list of site ids, `queue_entry.daily_queue.clinic_site_id` must be in that set; otherwise **`403`** (`other.api.queue_entry_not_in_scope`). Unscoped admin (`None`) may operate on all sites.
+**Clinic scope:** this resource does **not** apply `get_scoped_clinic_site_ids` — ADMIN/MANAGER oversight matches `/admin/paper-intake/`. Other `/queue-entries/{queue_entry_id}/...` endpoints may still return **`403`** (`other.api.queue_entry_not_in_scope`) when the entry's clinic site is outside the caller's assigned sites.
 
 **Body (POST and DELETE):** JSON `{"reason": "<text>"}` — `reason` after `.strip()` must be **10–500** characters (`PaperIntakeAuthorizationRequest`); validation failures → **`400`**.
 

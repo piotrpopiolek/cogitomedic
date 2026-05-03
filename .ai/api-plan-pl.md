@@ -372,7 +372,7 @@ Dwuetapowy flow „papier” — **T1** wyłącznie przez personel **ADMIN** / *
 
 **Role:** tylko **ADMIN** lub **MANAGER** (`require_user_role`); inne role → `403`.
 
-**Zakres placówki:** jeśli `get_scoped_clinic_site_ids(request.user)` zwraca listę identyfikatorów, `queue_entry.daily_queue.clinic_site_id` musi do niej należeć; w przeciwnym razie **`403`** (`other.api.queue_entry_not_in_scope`). Dla administratora bez ograniczenia zakresu (`None`) — wszystkie placówki.
+**Zakres placówki:** ten zasób **nie** stosuje `get_scoped_clinic_site_ids` — model nadzoru ADMIN/MANAGER jak `/admin/paper-intake/`. Inne endpointy `/queue-entries/{queue_entry_id}/...` mogą nadal zwracać **`403`** (`other.api.queue_entry_not_in_scope`), gdy placówka wpisu jest poza przypisanymi placówkami wywołującego.
 
 **Body (POST i DELETE):** JSON `{"reason": "<tekst>"}` — `reason` po `.strip()` **10–500** znaków (`PaperIntakeAuthorizationRequest`); błąd walidacji → `400` (Pydantic / payload).
 

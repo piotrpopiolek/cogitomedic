@@ -50,8 +50,8 @@ Na liście użytkowników można dodać parametr URL **`?role=RECEPTION`** (lub 
 **Adres:** **`/admin/paper-intake/`** (menu Unfold / link z panelu admina).
 
 - **Hub:** wybór wpisu kolejki w statusie **oczekiwania** z kolejek dziennych z ostatnich 30 dni (lista obejmuje wszystkie placówki — spójnie z wejściem na stronę wpisu).
-- **Strona wpisu:** autoryzacja lub cofnięcie autoryzacji z polem powodu (10–500 znaków), zgodnie z regułami domeny (czas wizyty + 3 h, brak dokumentu, brak cyfrowej ankiety w statusie wysłanym itd.).
-- **API (integracje / klient HTTP):** `POST` / `DELETE` na `/api/v1/queue-entries/<uuid>/paper-intake-authorization` — tam nadal obowiązuje **zakres placówek** (`get_scoped_clinic_site_ids`), inaczej niż w HTML pod `/admin/paper-intake/`.
+- **Strona wpisu:** autoryzacja lub cofnięcie autoryzacji z polem powodu (10–500 znaków), zgodnie z regułami domeny (m.in. minimalny odstęp od `appointment_time` — stała `PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT` w kodzie; brak dokumentu; brak cyfrowej ankiety w statusie wysłanym itd.). **Bez** osobnej bramki zakresu placówki dla Admin/Manager (ten sam model co hub).
+- **API (integracje / klient HTTP):** `POST` / `DELETE` na `/api/v1/queue-entries/<uuid>/paper-intake-authorization` — **bez** bramki zakresu placówki dla Admin/Manager (jak HTML). Inne endpointy API dotyczące wpisu kolejki mogą nadal zwracać **`403`** z kluczem `other.api.queue_entry_not_in_scope`, jeśli wpis jest poza przypisanymi placówkami (`get_scoped_clinic_site_ids`).
 
 Szczegóły modelu i przepływu: plan [`.cursor/plans/dokument_medyczny_bez_ankiety.plan.md`](../../.cursor/plans/dokument_medyczny_bez_ankiety.plan.md) (sekcja o T1/T2).
 
