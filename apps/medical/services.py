@@ -6,7 +6,17 @@ from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, Max, OuterRef, Prefetch, Q
+from django.db.models import (
+    Case,
+    Exists,
+    IntegerField,
+    Max,
+    OuterRef,
+    Prefetch,
+    Q,
+    Value,
+    When,
+)
 from django.utils import timezone
 
 from apps.core.api_utils import safe_parse_positive_int
@@ -1517,6 +1527,7 @@ def list_doctor_work_queue(
         "patient",
         "daily_queue",
         "intake_form",
+        "medical_document",
     ).annotate(
         has_submitted_or_reopened_intake=Exists(submitted_or_reopened_intake_exists),
         has_paper_intake_authorization=Exists(paper_authorization_exists),
@@ -1594,7 +1605,19 @@ def list_doctor_work_queue(
             )
         )
         qs = qs.filter(publisher_row_exists)
-    qs = qs.order_by(
+    # Unpublished work first: no document yet, or document still DRAFT; then recency.
+    qs = qs.annotate(
+        _doctor_queue_pub_group=Case(
+            When(
+                Q(medical_document__isnull=True)
+                | Q(medical_document__status=MedicalDocStatus.DRAFT),
+                then=Value(0),
+            ),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    ).order_by(
+        "_doctor_queue_pub_group",
         "-doctor_list_sort_at",
         "-daily_queue__queue_date",
         "-id",
