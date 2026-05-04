@@ -251,6 +251,52 @@ def outbox_event_stage_status(event: OutboxEvent | None, completed: bool) -> str
     return "FAILED"
 
 
+def pdf_generation_stage_complete(
+    version: MedicalDocumentVersion | None,
+    events_by_type: dict[str, OutboxEvent],
+) -> bool:
+    """True when PDF stage matches list UI: ``PdfStatus.COMPLETED`` or outbox GENERATE_PDF PROCESSED."""
+    if not version:
+        return False
+    if version.pdf_generation_status == PdfStatus.COMPLETED:
+        return True
+    ev = events_by_type.get(OutboxEventType.GENERATE_PDF)
+    return bool(ev and ev.status == OutboxStatus.PROCESSED)
+
+
+def work_queue_row_outbound_complete(
+    *,
+    version: MedicalDocumentVersion | None,
+    events_by_type: dict[str, OutboxEvent],
+) -> bool:
+    """
+    Whether outbound pipeline is fully complete for the doctor list row tint.
+
+    Uses the same completion rules as column badges (``outbox_event_stage_status`` for
+    HiDrive/SMS so PROCESSED events count even if denormalized flags lag). PDF treats
+    ``PdfStatus.COMPLETED`` or GENERATE_PDF PROCESSED as complete.
+    """
+    if not version:
+        return False
+    if not pdf_generation_stage_complete(version, events_by_type):
+        return False
+    hidrive_ok = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            completed=bool(version.hidrive_sent),
+        )
+        == "COMPLETED"
+    )
+    sms_ok = (
+        outbox_event_stage_status(
+            events_by_type.get(OutboxEventType.SMS_SEND),
+            completed=bool(version.sms_sent),
+        )
+        == "COMPLETED"
+    )
+    return hidrive_ok and sms_ok
+
+
 def latest_retryable_outbox_event(
     version: MedicalDocumentVersion,
 ) -> OutboxEvent | None:
@@ -1724,14 +1770,14 @@ def _serialize_doctor_work_queue_row(
     row_has_edit_semaphore = bool(
         doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
     )
-    # Green row = published and outbound pipeline finished (PDF + HiDrive + SMS).
+    # Green row = published and outbound pipeline finished (same rules as list columns).
     row_is_fully_delivered = bool(
         doc
         and doc.status == MedicalDocStatus.PUBLISHED
-        and latest
-        and latest.pdf_generation_status == PdfStatus.COMPLETED
-        and latest.hidrive_sent
-        and latest.sms_sent
+        and work_queue_row_outbound_complete(
+            version=latest,
+            events_by_type=events_by_type,
+        )
     )
     has_pending_revision = bool(doc and doc.has_pending_revision)
     published_version_no = doc.published_version_no if doc else None

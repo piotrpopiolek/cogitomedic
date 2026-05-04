@@ -38,10 +38,12 @@ from apps.medical.services import (
     list_doctor_work_queue,
     list_medical_documents,
     outbox_event_stage_status,
+    pdf_generation_stage_complete,
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
     save_draft_document_version,
+    work_queue_row_outbound_complete,
 )
 from apps.outbox.models import (
     OutboxEvent,
@@ -1427,3 +1429,68 @@ class DocumentLockTests(ServicesCoverageBase):
         self.daily_queue.save(update_fields=["assigned_doctor"])
         items, total = list_medical_documents(user=other)
         self.assertEqual(total, 0)
+
+
+# ------------------------------------------------------------------
+# work_queue_row_outbound_complete (doctor list green row)
+# ------------------------------------------------------------------
+class WorkQueueRowOutboundCompleteTests(TestCase):
+    def test_true_when_hidrive_sms_flags_lag_but_outbox_processed(self):
+        """Matches list badges: PROCESSED outbox counts COMPLETED without denormalized flags."""
+        version = SimpleNamespace(
+            pdf_generation_status=PdfStatus.COMPLETED,
+            hidrive_sent=False,
+            sms_sent=False,
+        )
+        events = {
+            OutboxEventType.GENERATE_PDF: SimpleNamespace(
+                status=OutboxStatus.PROCESSED
+            ),
+            OutboxEventType.HIDRIVE_UPLOAD: SimpleNamespace(
+                status=OutboxStatus.PROCESSED
+            ),
+            OutboxEventType.SMS_SEND: SimpleNamespace(status=OutboxStatus.PROCESSED),
+        }
+        self.assertTrue(
+            work_queue_row_outbound_complete(version=version, events_by_type=events)
+        )
+
+    def test_true_when_pdf_flags_lag_but_generate_pdf_processed(self):
+        version = SimpleNamespace(
+            pdf_generation_status=PdfStatus.PENDING,
+            hidrive_sent=True,
+            sms_sent=True,
+        )
+        events = {
+            OutboxEventType.GENERATE_PDF: SimpleNamespace(
+                status=OutboxStatus.PROCESSED
+            ),
+            OutboxEventType.HIDRIVE_UPLOAD: SimpleNamespace(
+                status=OutboxStatus.PROCESSED
+            ),
+            OutboxEventType.SMS_SEND: SimpleNamespace(status=OutboxStatus.PROCESSED),
+        }
+        self.assertTrue(
+            work_queue_row_outbound_complete(version=version, events_by_type=events)
+        )
+
+    def test_false_when_pdf_pending_and_no_processed_generate_pdf_event(self):
+        version = SimpleNamespace(
+            pdf_generation_status=PdfStatus.PENDING,
+            hidrive_sent=True,
+            sms_sent=True,
+        )
+        events = {
+            OutboxEventType.HIDRIVE_UPLOAD: SimpleNamespace(
+                status=OutboxStatus.PROCESSED
+            ),
+            OutboxEventType.SMS_SEND: SimpleNamespace(status=OutboxStatus.PROCESSED),
+        }
+        self.assertFalse(
+            work_queue_row_outbound_complete(version=version, events_by_type=events)
+        )
+
+    def test_pdf_generation_stage_complete_helper(self):
+        v = SimpleNamespace(pdf_generation_status=PdfStatus.COMPLETED)
+        self.assertTrue(pdf_generation_stage_complete(v, {}))
+        self.assertFalse(pdf_generation_stage_complete(None, {}))
