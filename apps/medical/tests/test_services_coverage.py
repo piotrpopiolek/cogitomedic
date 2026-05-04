@@ -418,6 +418,74 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertEqual(item["patient"]["last_name"], "Kowalska")
         self.assertEqual(item["document_id"], str(doc.id))
 
+    def test_draft_sorts_before_published_even_when_published_is_newer(self):
+        """DRAFT/unpublished rows must precede PUBLISHED regardless of doctor_list_sort_at."""
+        admin = StaffUser.objects.create_user(
+            username="admin-sort-test",
+            email="admin-sort-test@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(admin, "Admin")
+
+        now = timezone.now()
+        patient_pub = Patient.objects.create(
+            first_name="X",
+            last_name="Y",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500111223",
+            email="xy@example.com",
+        )
+        q_pub = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=patient_pub,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=50,
+            created_by_user=self.doctor,
+            doctor_list_sort_at=now,
+        )
+        sess_pub = PatientFormSession.objects.create(
+            queue_entry=q_pub,
+            form_locale="de-DE",
+            expires_at=now + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        intake_pub = PatientIntakeForm.objects.create(
+            queue_entry=q_pub,
+            session=sess_pub,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=now,
+            signature_sha256="b" * 64,
+        )
+        doc_pub = MedicalDocument.objects.create(
+            queue_entry=q_pub,
+            intake_form=intake_pub,
+            source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        self._make_published_version(doc_pub, version_no=1)
+
+        self.queue_entry.doctor_list_sort_at = now - timedelta(hours=1)
+        self.queue_entry.save(update_fields=["doctor_list_sort_at"])
+        doc_draft = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        self._make_published_version(
+            doc_draft,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            publish_request_id=None,
+            published_at=None,
+            publish_locale=None,
+        )
+
+        items, total = list_doctor_work_queue(user=admin, page=1, page_size=20)
+        self.assertEqual(total, 2)
+        self.assertEqual(items[0]["status"], "DRAFT")
+        self.assertEqual(items[0]["patient"]["last_name"], "Kowalska")
+        self.assertEqual(items[1]["status"], "PUBLISHED")
+        self.assertEqual(items[1]["patient"]["last_name"], "Y")
+
     def test_empty_when_no_submitted_intake(self):
         self.intake.form_status = IntakeStatus.IN_PROGRESS
         self.intake.submitted_at = None
