@@ -6,7 +6,7 @@ Interfejs pod adresem **`/tablet/`** służy do wyboru **dzisiejszej kolejki**, 
 
 - Konto z odpowiednią grupą i dostępem do danych wybranej placówki.
 - Tablet skonfigurowany jako przeglądarka pełnoekranowa (opcjonalnie kiosk).
-- **Tablet device** w Django Admin: urządzenie powinno mieć przypisaną **placówkę (Clinic site)**. Bez przypisania lista kolejek na stronie głównej `/tablet/` może być **pusta**, a komunikat wskaże kontakt z administratorem (zgodnie z README projektu).
+- W panelu administracyjnym tablet powinien mieć przypisaną **placówkę**. Bez przypisania lista kolejek na stronie `/tablet/` może być pusta.
 
 ![Komunikat o nieprzypisanym tablecie — przykład](/docs/manual/assets/screenshots/tablet-00-unassigned-warning.png)
 
@@ -16,19 +16,19 @@ Interfejs pod adresem **`/tablet/`** służy do wyboru **dzisiejszej kolejki**, 
 
 1. Otwórz **`/tablet/login/`**.
 2. Pola: **Login**, **Hasło** — te same co dla konta Tablet (lub wyjątkowo Reception/Admin).
-3. Formularz wysyła ukryte pole **`android_id`**: przeglądarka generuje identyfikator w `localStorage` (pierwsze logowanie tworzy nowy UUID). Służy to powiązaniu sesji z urządzeniem w systemie.
-4. Kliknij przycisk logowania (etykieta zależy od języka interfejsu personelu, np. „Zaloguj”).
+3. System automatycznie rozpoznaje urządzenie po pierwszym logowaniu i przypisuje je do sesji.
+4. Kliknij przycisk logowania (np. „Zaloguj”).
 
 ![Ekran logowania tabletu](/docs/manual/assets/screenshots/tablet-01-login.png)
 
 **Typowe problemy**
 
 - „Brak dostępu” — konto nie ma grupy Tablet/Reception/Admin albo jest nieaktywne.  
-- Pusta lista kolejek po zalogowaniu — sprawdź przypisanie **Tablet device** do placówki (administrator).
+- Pusta lista kolejek po zalogowaniu — sprawdź z administratorem przypisanie tabletu do placówki.
 
 ---
 
-## 2. Strona główna — wybór kolejki (`/tablet/`)
+## 2. Strona główna — wybór kolejki
 
 Po zalogowaniu widzisz **dzisiejszą datę** oraz listę **kolejek** na dziś dla wybranej placówki (gdy urządzenie jest przypisane do kliniki, lista jest filtrowana).
 
@@ -52,24 +52,24 @@ Na stronie kolejki widzisz pacjentów przypisanych do tej kolejki (kolejność w
 ## 4. Start sesji formularza (`/tablet/entry/<queue_entry_id>/`)
 
 1. Zobaczysz dane pacjenta (nazwisko, imię), pozycję w kolejce, status wpisu.
-2. Przyciskiem **otwórz formularz** (tekst z szablonu `staff_ui`) tworzysz lub odnawiasz **sesję** formularza intake dla tego wpisu.
-3. Model **„latest-wins”:** jeśli dla tego samego wpisu ponownie wybierzesz innego pacjenta lub ponownie uruchomisz sesję, aktywna sesja może zostać zaktualizowana zgodnie z regułami backendu — personel powinien unikać chaosu (jeden pacjent, jedna sesja naraz na stanowisku).
+2. Przyciskiem **otwórz formularz** tworzysz lub odnawiasz sesję formularza dla tego wpisu.
+3. Jeśli uruchomisz formularz ponownie dla tej samej osoby, system bierze pod uwagę ostatnią aktywną sesję. Dla porządku pracuj zasadą: jeden pacjent, jedna sesja naraz.
 
-Po sukcesie zobaczysz ekran pośredni z identyfikatorem formularza (`intake_form_id`) i linkiem dalej do formularza.
+Po uruchomieniu zobaczysz ekran pośredni z linkiem do formularza.
 
 ![Potwierdzenie startu sesji / przejście do formularza](/docs/manual/assets/screenshots/tablet-04-entry-started.png)
 
 ---
 
-## 5. Formularz pacjenta (`/tablet/form/<intake_form_id>/`)
+## 5. Formularz pacjenta
 
 ### 5.1 Język formularza
 
-Pacjent może potrzebować interfejsu w języku **DE / EN / PL**. Zmiana jest realizowana parametrem **`?locale=`** (`de`, `en`, `pl`) — po pierwszym ustawieniu locale może być zapisane w sesji formularza. Personel przed przekazaniem tableta powinien ustawić język zgodnie z preferencją pacjenta (np. link z odpowiednim `locale`).
+Pacjent może potrzebować interfejsu w języku **DE / EN / PL**. Przed przekazaniem tabletu ustaw odpowiedni język.
 
 ![Formularz — nagłówek i wybór języka (jeśli widoczny)](/docs/manual/assets/screenshots/tablet-05-form-locale.png)
 
-### 5.2 Sekcje formularza (zgodnie z PRD)
+### 5.2 Sekcje formularza
 
 Kolejność i etykiety pochodzą z konfiguracji systemu; typowo obejmuje:
 
@@ -87,7 +87,7 @@ Kolejność i etykiety pochodzą z konfiguracji systemu; typowo obejmuje:
 
 ### 5.3 Wysłanie (submit)
 
-Po zatwierdzeniu formularz przechodzi w stan **SUBMITTED**. Pacjent **nie powinien** już edytować treści — interfejs może pokazać ekran „formularz wysłany”.
+Po zatwierdzeniu formularz jest wysłany. Pacjent **nie powinien** już edytować treści — zwykle widzi ekran „formularz wysłany”.
 
 ![Ekran po wysłaniu formularza](/docs/manual/assets/screenshots/tablet-09-form-submitted.png)
 
@@ -101,8 +101,8 @@ Otwórz **`/tablet/logout/`** (link w interfejsie, jeśli jest) lub wyloguj się
 
 ## 7. Bezpieczeństwo
 
-- Nie loguj konta **Recepcja** ani **Admin** na tablecie bez potrzeby — wyższe uprawnienia w Django Admin.
-- Tablety pozostają w poczekalni; **nie wysyłaj** pacjentowi linku z tokenem do formularza — sesja opiera się na zalogowanym koncie i wyborze w UI (zgodnie z PRD).
+- Nie loguj konta **Recepcja** ani **Admin** na tablecie bez potrzeby.
+- Tablety pozostają w poczekalni; **nie wysyłaj** pacjentowi bezpośredniego linku do formularza.
 - Po sesji z pacjentem upewnij się, że wróciłeś do listy kolejek lub wylogowałeś urządzenie.
 
 ---
@@ -110,6 +110,6 @@ Otwórz **`/tablet/logout/`** (link w interfejsie, jeśli jest) lub wyloguj się
 ## 8. Współpraca z recepcją i lekarzem
 
 - Recepcja musi mieć **utworzoną kolejkę i wpis** dla pacjenta — inaczej nie pojawi się on na tablecie.
-- Po **SUBMITTED** lekarz może otworzyć dokument w panelu `/doctor/` (gdy intake jest zakończone).
+- Po wysłaniu formularza lekarz może otworzyć dokument w panelu `/doctor/`.
 
 Dalsze informacje: [Przegląd](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md).

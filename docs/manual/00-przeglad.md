@@ -2,9 +2,9 @@
 
 Ten dokument zbiera pojęcia wspólne dla wszystkich ról. Szczegółowe procedury są w pozostałych plikach w tym katalogu.
 
-![Przegląd procesu (diagram tekstowy generowany przy zrzutach — `scripts/capture_manual_screenshots.py`)](/docs/manual/assets/screenshots/overview-01-process-diagram.png)
+![Przegląd procesu](/docs/manual/assets/screenshots/overview-01-process-diagram.png)
 
-*Powyżej: uproszczony schemat kolejności kroków (recepcja → tablet → lekarz → backend → pacjent). Możesz go zastąpić własnym diagramem w narzędziu graficznym, zachowując ten sam plik `overview-01-process-diagram.png`.*
+*Powyżej: uproszczony schemat kolejności kroków (recepcja → tablet → lekarz → system → pacjent).*
 
 ## Cel systemu
 
@@ -14,23 +14,23 @@ Interfejs personelu i pacjenta obsługuje języki: **niemiecki, angielski, polsk
 
 ## Role w systemie
 
-Uprawnienia personelu wynikają z **grup Django** przypisanych do konta: `Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`. Jedno konto może mieć jedną logiczną rolę operacyjną (typowo jedna grupa).
+Uprawnienia personelu wynikają z roli przypisanej do konta: `Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`.
 
 | Grupa / rola | Główny dostęp |
 |--------------|----------------|
-| **Reception** | Panel administracyjny Django (`/admin/`) — kolejki dzienne, pacjenci, wpisy kolejki, importy, podgląd PDF intake, dashboard recepcji |
+| **Reception** | Panel administracyjny (`/admin/`) — kolejki dzienne, pacjenci, wpisy kolejki, importy, podgląd PDF, dashboard recepcji |
 | **Tablet** | Interfejs `/tablet/` — wybór kolejki i pacjenta, uruchomienie formularza dla pacjenta |
 | **Doctor** | Panel `/doctor/` — kolejka pracy medycznej, formularz Befund, szkic / publikacja |
-| **Manager** | Django Admin i dashboard recepcji w **zakresie uprawnień** grupy (kolejki, pacjenci, urządzenia, import, dokumenty w podglądzie) + panel `/doctor/` z pełną listą (nadzór operacyjny) — w menu Unfold sekcja **Panele** z skrótami m.in. do rejestracji i panelu lekarza |
-| **Admin** | Pełny Django Admin + te same panele co lekarz i (według potrzeb) recepcja/tablet |
+| **Manager** | Panel administracyjny i dashboard recepcji (kolejki, pacjenci, urządzenia, import, dokumenty) + panel `/doctor/` do nadzoru operacyjnego |
+| **Admin** | Pełny panel administracyjny + te same panele co lekarz i (w razie potrzeby) recepcja/tablet |
 
 Uwaga: konto **Admin** lub **Reception** może zalogować się na `/tablet/` (np. awaria dedykowanego konta TABLET). Zalecane jest jednak **osobne konto Tablet** na urządzeniu w poczekalni.
 
-## Adresy URL (względem hosta placówki)
+## Najważniejsze adresy
 
 | Ścieżka | Zawartość |
 |---------|-----------|
-| `/admin/` | Django Admin (Unfold) — logowanie personelu z `is_staff` |
+| `/admin/` | Panel administracyjny — logowanie personelu |
 | `/admin/reception-dashboard/` | Dashboard operacyjny recepcji (importy, błędy outbox) |
 | `/admin/intake-documents/` | Lista i podgląd wersji PDF dokumentów intake |
 | `/tablet/` | Poczekalnia — kolejki i formularz pacjenta |
@@ -43,12 +43,12 @@ Dokładne ścieżki mogą być poprzedzone domeną produkcyjną (np. portal wyni
 
 ## Przebieg dnia pracy (uproszczony)
 
-1. **Recepcja** tworzy lub importuje **kolejkę dzienną** (`DailyQueue`) i wpisy pacjentów (`QueueEntry`) dla wybranej placówki, gabinetu i zmiany.
+1. **Recepcja** tworzy lub importuje **kolejkę dzienną** i wpisy pacjentów dla wybranej placówki, gabinetu i zmiany.
 2. **Tablet** (lub personel na tablecie): wybór **dzisiejszej** kolejki → pacjenta → uruchomienie **sesji formularza** (ankieta, zgody, schemat ciała, podpis). Po wysłaniu formularz ma status zakończenia po stronie pacjenta; wpis kolejki przechodzi w stan wskazujący na ukończenie przez pacjenta.
 3. **Lekarz** otwiera dokument medyczny powiązany z wizytą, uzupełnia **Befund**, zapisuje **szkic** lub **publikuje**. Publikacja uruchamia w tle generowanie PDF, upload do archiwum i SMS logistyczny do pacjenta.
 4. **Pacjent** (poza sesją placówki) otrzymuje SMS bez treści medycznej, loguje się na portal wyników, podaje OTP i pobiera PDF.
 
-## Stany wpisu kolejki (`QueueEntry`)
+## Stany wpisu kolejki
 
 Stany w systemie obejmują m.in. (kolejność procesu):
 
@@ -59,20 +59,21 @@ Stany w systemie obejmują m.in. (kolejność procesu):
 - `PUBLISHED` — dokument opublikowany.
 - `CANCELLED` — anulowany.
 
-Widoczne etykiety na listach mogą być po angielsku w interfejsie administracyjnym — powyższe nazwy techniczne odpowiadają polom w bazie.
+W zależności od wersji językowej interfejsu nazwy statusów mogą być po polsku lub po angielsku.
 
-## Proces backendowy po publikacji (informacja)
+## Co dzieje się po publikacji
 
-Po publikacji dokumentu medycznego kolejka zadań realizuje m.in.: generowanie PDF → zapis do HiDrive (lub mock) → SMS. Statusy **PDF / HiDrive / SMS** są widoczne w panelu lekarza w liście dokumentów. Błędy w tym łańcuchu powinny być monitorowane przez administrację (outbox, dashboard recepcji).
+Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PDF, zapis do HiDrive i wysłanie SMS. Statusy tych kroków są widoczne w panelu lekarza.
 
 ## Gdzie szukać dalszych informacji
 
 - Wymagania produktu: [`.ai/prd.md`](../../.ai/prd.md)
-- API (dla administratorów IT): [`.ai/api-plan-pl.md`](../../.ai/api-plan-pl.md), Swagger pod `/api/docs/swagger/` (po zalogowaniu do admina)
+- Dokumentacja dla działu IT: [`.ai/api-plan-pl.md`](../../.ai/api-plan-pl.md)
 
 ## Indeks instrukcji
 
 - [Recepcja — zarządzanie kolejką i import](01-rejestracja.md)
+- [Zmiana danych osobowych pacjenta (krok po kroku)](06-zmiana-danych-pacjenta.md)
 - [Tablet — poczekalnia i formularz pacjenta](02-tablet.md)
 - [Lekarz — panel Befund](03-doktor.md)
 - [Administrator — konfiguracja i utrzymanie](04-administrator.md)

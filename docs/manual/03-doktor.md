@@ -1,14 +1,14 @@
-# Instrukcja: Lekarz (rola Doctor), Manager i administrator w panelu medycznym
+# Instrukcja: Lekarz, Manager i Administrator w panelu medycznym
 
 Panel pod **`/doctor/`** służy do przeglądania **kolejki dokumentów medycznych**, uzupełniania **Befund** (opis badania), zapisywania **szkicu**, **publikacji** oraz — w razie potrzeby — **ponownej publikacji** z nową wersją PDF.
 
-Dostęp: grupy **Doctor**, **Admin** lub **Manager** (te konta korzystają z tego samego interfejsu HTML; **Manager** — nadzór operacyjny, patrz [Przegląd](00-przeglad.md)).
+Dostęp: konta **Lekarz**, **Administrator** lub **Manager** (**Manager** — nadzór operacyjny, patrz [Przegląd](00-przeglad.md)).
 
 ## Wymagania wstępne
 
-- Konto z grupą **Doctor**, **Admin** lub **Manager** (dla Managera: zakres zgodny z polityką placówki i uprawnieniami grupy).
-- Lekarz ma przypisane **placówki (`clinic_sites`)** tam, gdzie moduły rejestracji/tabletu tego wymagają. **Kolejka dokumentów Befund** w panelu `/doctor/` nie opiera się na przypisaniu lekarza do zmiany: szkice (**DRAFT**) i wpisy z ukończoną ankietą bez jeszcze utworzonego dokumentu są **wspólne dla wszystkich lekarzy**; dokument **opublikowany** (**PUBLISHED**) widzi zwykle **twórca dokumentu** (lekarz, który pierwszy utworzył rekord z wpisu kolejki), a dodatkowo lekarz **przypisany do zmiany** w kolejce — jeśli pole przypisania jest używane w danej placówce.
-- Przeglądarka z obsługą JavaScript (panel szczegółów dokumentu komunikuje się z API `/api/v1/`).
+- Konto z rolą **Lekarz**, **Administrator** lub **Manager** (dla Managera: zakres zgodny z polityką placówki).
+- Lekarz ma przypisane właściwe placówki, jeśli wymaga tego organizacja pracy.
+- Używaj aktualnej przeglądarki internetowej.
 
 ---
 
@@ -16,7 +16,7 @@ Dostęp: grupy **Doctor**, **Admin** lub **Manager** (te konta korzystają z teg
 
 1. Otwórz **`/doctor/login/`**.
 2. Wprowadź **nazwę użytkownika** i **hasło**.
-3. **Język interfejsu panelu lekarza:** linki `?lang=de`, `?lang=en`, `?lang=pl` (lub wybór na stronie logowania) — ustawienie zapisywane jest w sesji (`doctor_lang`).
+3. W razie potrzeby ustaw język panelu na stronie logowania.
 4. Po zalogowaniu następuje przekierowanie na **`/doctor/`** (lista dokumentów).
 
 ![Logowanie lekarza](/docs/manual/assets/screenshots/doctor-01-login.png)
@@ -25,38 +25,40 @@ Dostęp: grupy **Doctor**, **Admin** lub **Manager** (te konta korzystają z teg
 
 ---
 
-## 2. Lista dokumentów (Work queue) — `/doctor/`
+## 2. Lista dokumentów — `/doctor/`
 
-Na liście pojawiają się m.in.: wpisy z **ukończoną ankietą cyfrową** (`SUBMITTED` / `REOPENED`) oraz powiązany dokument medyczny (lub możliwość jego utworzenia); wpisy w **ścieżce papierowej** po autoryzacji nadzorczej (T1) — **bez** cyfrowej ankiety, ale z możliwością utworzenia dokumentu z listy (sekcja **„Ścieżka papierowa”** poniżej). **Szkice (DRAFT)** oraz wpisy **oczekujące na pierwsze utworzenie dokumentu** są widoczne dla **każdego** użytkownika z dostępem do panelu w roli **Doctor** (oraz **Admin** / **Manager** w tym samym widoku) — można przejąć opisanie od kolegi po blokadzie edycji (patrz niżej); **Admin** i **Manager** mogą w razie potrzeby zapisać szkic lub opublikować mimo aktywnej blokady innego użytkownika (nadzór). **Dokument opublikowany** w tej samej tabeli zobaczysz, jeśli **Ty go utworzyłeś** (jesteś twórcą rekordu) lub jesteś **lekarzem przypisanym do danej zmiany** w kolejce (gdy to pole jest wypełnione).
+Na liście pojawiają się wpisy z ukończoną ankietą cyfrową oraz wpisy obsługiwane ścieżką papierową.  
+Szkice i wpisy oczekujące na pierwsze utworzenie dokumentu są widoczne dla osób z dostępem do panelu lekarza.
 
 Tabela pokazuje m.in.:
 
 - **Pacjent** (nazwisko, imię),
 - **Data** kolejki,
-- **Status dokumentu** — np. **DRAFT** (szkic), **PUBLISHED** (opublikowany),
-- **PDF** — status generowania pliku PDF (np. COMPLETED, PENDING, FAILED),
+- **Status dokumentu** — np. szkic lub opublikowany,
+- **PDF** — status przygotowania pliku PDF,
 - **HiDrive** — status zapisu do archiwum,
 - **SMS** — status wysyłki powiadomienia logistycznego,
-- Kolumna akcji: **Otwórz** (`Öffnen` / odpowiednik w wybranym języku).
+- Kolumna akcji: **Otwórz**.
 
-**Blokada edycji (szkic / semafor):** Gdy na dokumencie w stanie **DRAFT** obowiązuje **aktywna blokada edycji** (ktoś ma otwarty szczegół w trybie edycji), wiersz jest **podświetlony na żółto (amber)**; przy nazwisku — jeśli to **inny** lekarz — pojawia się ikona kłódki i podpis (**kto edytuje**). Przycisk **Otwórz** jest **nieaktywny**, gdy edytuje **inny** użytkownik (nie wejdziesz w edycję, dopóki blokada jest ważna — maks. 6 godzin lub do zwolnienia / publikacji). **Zielone** podświetlenie wiersza oznacza dokument **opublikowany** z **ukończonym łańcuchem**: PDF wygenerowany, zapis do HiDrive oraz **SMS logistyczny wysłany**.
+**Blokada edycji:** jeśli dokument jest aktualnie edytowany przez inną osobę, zobaczysz oznaczenie blokady i nie otworzysz edycji do czasu jej zwolnienia.  
+Zielone podświetlenie oznacza dokument opublikowany i zakończone przetwarzanie.
 
 ### Filtry (formularz nad tabelą)
 
 - **Status** — szkic / opublikowany / wszystkie (zależnie od opcji).
-- **Data kolejki** (`queue_date`).
+- **Data kolejki**.
 - **Wyszukiwanie pacjenta** (pole tekstowe).
-- **Opublikowano przez** — opcjonalny filtr listy kont (personel w roli lekarza), gdy placówka z tego korzysta.
+- **Opublikowano przez** — opcjonalny filtr, jeśli placówka z niego korzysta.
 
 ![Lista dokumentów z filtrami](/docs/manual/assets/screenshots/doctor-02-list-filters.png)
 
 ### Otwieranie dokumentu
 
-- Jeśli dokument już istnieje: link prowadzi do **`/doctor/<medical_document_id>/`** (dostęp do szkicu: wspólna kolejka dla **Doctor**; **Admin** i **Manager** — jak wyżej; do opublikowanego — wg zasad listy).
-- Jeśli dokument **nie** istnieje i obowiązuje **ścieżka cyfrowa** (ukończony intake): link **`/doctor/open/<queue_entry_id>/`** tworzy lub pobiera dokument medyczny powiązany z ankietą. Gdy ankieta cyfrowa nie jest gotowa, zobaczysz **komunikat** (np. brak ukończonej ankiety) — **bez** automatycznego zakładania dokumentu „papierowego” z tego linku.
-- Jeśli dokument **nie** istnieje, ale **manager/administrator autoryzował ścieżkę papierową** (T1), na liście zobaczysz **osobną akcję** (np. przycisk do utworzenia dokumentu papierowego) — to jest **jedyne** zamierzone miejsce utworzenia dokumentu w tym modelu; może je wykonać **Doctor**, **Admin** lub **Manager** zgodnie z uprawnieniami.
+- Jeśli dokument już istnieje, kliknięcie otwiera jego szczegóły.
+- Jeśli dokument jeszcze nie istnieje i ankieta cyfrowa jest gotowa, system utworzy dokument na podstawie tej ankiety.
+- Jeśli wpis ma autoryzowaną ścieżkę papierową, na liście zobaczysz osobną akcję utworzenia dokumentu papierowego.
 
-**Audyt:** odczyty i zapis przez API `/api/v1/` są rejestrowane w dzienniku zdarzeń (np. podgląd dokumentu); przy współdzieleniu szkiców kolejne wejścia różnych lekarzy dają **osobne wpisy** z identyfikatorem użytkownika.
+System zapisuje historię działań użytkowników przy dokumentach.
 
 ![Komunikat błędu — brak ukończonej ankiety](/docs/manual/assets/screenshots/doctor-03-error-no-intake.png)
 
@@ -65,26 +67,27 @@ Tabela pokazuje m.in.:
 Gdy z przyczyn operacyjnych pacjent **nie** wypełnia ankiety na tablecie, a praca lekarza ma być mimo to możliwa **na podstawie dokumentacji papierowej** poza systemem:
 
 1. **Najpierw** personel **Admin** lub **Manager** wykonuje **T1** (autoryzacja) w hubie **`/admin/paper-intake/`** — opis krok po kroku: [04-administrator-paper-intake.md](04-administrator-paper-intake.md). Bez tego kroku **nie** pojawi się na liście `/doctor/` możliwość utworzenia dokumentu papierowego.
-2. **Na liście** `/doctor/` w wierszu takiego wpisu pojawia się akcja utworzenia dokumentu (zwykle **wyróżniona kolorem**). Kliknięcie uruchamia **potwierdzenie w oknie dialogowym w stylu panelu** (nie natywne `window.confirm` przeglądarki): musisz potwierdzić, że rozumiesz, iż **po utworzeniu dokumentu cofnięcie autoryzacji papierowej nie jest możliwe** w tym przepływie.
-3. Po zatwierdzeniu powstaje dokument ze źródłem **papierowe**; status wpisu kolejki przechodzi na **„paper intake completed”** (etykieta zależy od języka admina). Od tego momentu pracujesz w **tym samym** panelu Befund co przy dokumentach z ankiety cyfrowej.
-4. W nagłówku / metadanych dokumentu system pokazuje **kto i kiedy autoryzował ścieżkę papierową** oraz **tekst powodu** z autoryzacji — ułatwia to audyt kliniczny. **Mapy ciała** i podsumowanie pól z tableta **nie** pochodzą z cyfrowego intake (inny układ sekcji niż przy pełnej ankiecie).
+2. **Na liście** `/doctor/` w wierszu takiego wpisu pojawia się akcja utworzenia dokumentu (zwykle **wyróżniona kolorem**). Kliknięcie uruchamia okno potwierdzenia: po utworzeniu dokumentu nie można już cofnąć autoryzacji papierowej w tym procesie.
+3. Po zatwierdzeniu powstaje dokument papierowy, a wpis kolejki przechodzi do odpowiedniego statusu. Od tego momentu pracujesz w tym samym panelu co przy dokumentach z ankiety cyfrowej.
+4. W nagłówku dokumentu system pokazuje **kto i kiedy autoryzował ścieżkę papierową** oraz **powód autoryzacji**. **Mapy ciała** i podsumowanie pól z tableta nie są dostępne, bo nie było cyfrowej ankiety.
 5. **Procedura poza CogitoMedica:** fizyczne przechowywanie i weryfikacja papierowej zgody / anamnezy są po stronie **regulaminu placówki** — system zapisuje decyzję i metadane, nie zastępuje archiwum papierowego. Skrót procesu: [paper_intake_flow.md](paper_intake_flow.md).
 
-**Uwaga:** ekran z komunikatem „brak cyfrowej ankiety” po wejściu w **`/doctor/open/<id>/`** służy **wyjaśnieniu sytuacji** — jeśli T1 **nie** został jeszcze wykonany, **nie** utworzysz stąd dokumentu; po autoryzacji możesz użyć przycisku na **liście** lub — gdy UI na to pozwala — akcji na stronie pomocniczej powiązanej z tym samym wpisem.
+**Uwaga:** jeśli zobaczysz komunikat „brak cyfrowej ankiety”, najpierw upewnij się, że autoryzacja ścieżki papierowej została wykonana przez uprawnioną osobę.
 
 ---
 
-## 3. Szczegóły dokumentu i formularz Befund — `/doctor/<medical_document_id>/`
+## 3. Szczegóły dokumentu i formularz Befund
 
-Przy wejściu na stronę szkicu system **próbuje nadać blokadę edycji**. Jeśli dokument jest już edytowany przez innego użytkownika, zobaczysz **komunikat błędu** zamiast formularza (HTTP 423). Po **opuszczeniu strony** przeglądarka wysyła żądanie **zwolnienia blokady** (best-effort). **Publikacja** również zwalnia blokadę.
+Przy wejściu do szkicu system zakłada blokadę edycji. Jeśli dokument edytuje inna osoba, zobaczysz komunikat i nie wejdziesz do edycji.
 
 ### 3.1 Co zawiera ekran
 
-- Podsumowanie danych z intake (zgodnie z implementacją): zgody, schemat ciała, anamneza — **wyłącznie dla dokumentów z cyfrową ankietą**. Przy **`source_type` papierowym** zobaczysz zamiast tego m.in. **metadane autoryzacji papierowej** (kto, kiedy, powód z T1) oraz jasną informację, że **brak** uzupełnionej ankiety cyfrowej.
+- Podsumowanie danych z ankiety cyfrowej (jeśli taka ankieta była wypełniona).  
+  Przy ścieżce papierowej zobaczysz informacje o autoryzacji i informację o braku ankiety cyfrowej.
 - Część medyczna **Befund** — m.in.:
   - zakres badania, typ skóry Fitzpatrick, ocena globalna,
-  - **grupy zmian** (lesions): numery zmian z wideodermatoskopu (`lesion_numbers`), cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości,
-  - tekst **generowany** przez system z wybranych opcji oraz **edytowalny** przez lekarza (`edited_text` / `generated_text`) — zasada „baza, nie klatka”: lekarz może i powinien móc dopisać własny styl przed publikacją,
+  - **grupy zmian**: numery zmian z wideodermatoskopu, cechy dermatoskopowe, ocena kliniczna, ryzyko złośliwości,
+  - tekst przygotowany przez system i edytowalny przez lekarza,
   - podsumowanie zbiorcze (również edytowalne).
 
 ![Fragment panelu Befund](/docs/manual/assets/screenshots/doctor-04-befund-section.png)
@@ -95,7 +98,7 @@ Lekarz może korzystać z **własnych szablonów** (języki DE/EN/PL według kon
 
 Szczegóły uprawnień: [`.ai/instrukcja_szablony.md`](../../.ai/instrukcja_szablony.md).
 
-### 3.3 Język publikacji PDF (`publish_locale` / `form_locale`)
+### 3.3 Język publikacji PDF
 
 Przy publikacji wybierasz język wersji dokumentu używany do generacji PDF — jest on **trwale** związany z wersją. Upewnij się, że odpowiada językowi ustalonemu z pacjentem, jeśli ma to znaczenie praktyczne.
 
@@ -106,20 +109,20 @@ Przy publikacji wybierasz język wersji dokumentu używany do generacji PDF — 
 | Akcja | Skutek |
 |--------|--------|
 | **Zapisz jako szkic** | Możesz wrócić i edytować; **nie** uruchamia pełnego łańcucha wysyłki jak przy publikacji. |
-| **Zatwierdź i wyślij (publikacja)** | Dokument przechodzi w tryb opublikowany; w tle kolejkowane są zadania: generowanie PDF, upload, SMS (logistyczny). |
+| **Zatwierdź i wyślij (publikacja)** | Dokument przechodzi w tryb opublikowany; system w tle przygotowuje PDF, zapisuje go i wysyła SMS. |
 
 UI **nie blokuje** przeglądarki na czas generowania — statusy PDF / HiDrive / SMS odświeżają się w liście lub w widoku szczegółów (zależnie od wersji frontu).
 
-**Idempotentność:** wielokrotne kliknięcie „publikuj” dla tego samego stanu dokumentu nie powinno duplikować niepotrzebnie łańcucha zadań — serwer może zwrócić sukces bez tworzenia kolejnej publikacji w toku.
+Jeśli klikniesz publikację kilka razy, system zwykle nie tworzy kilku takich samych publikacji.
 
 ---
 
 ## 5. Błędy przetwarzania
 
-Gdy któryś z etapów (PDF, HiDrive, SMS) się nie powiedzie, w liście mogą pojawić się statusy **FAILED** / **PENDING** oraz opcjonalnie **komunikat błędu** w wierszu (`processing_error_message`). W takiej sytuacji:
+Gdy któryś z etapów (PDF, HiDrive, SMS) się nie powiedzie, w liście pojawi się odpowiedni status i czasem komunikat błędu. W takiej sytuacji:
 
-1. Sprawdź ponownie po kilku minutach (retry w tle).  
-2. Jeśli błąd się utrzymuje — zgłoś **administratorowi** (outbox, logi).  
+1. Sprawdź ponownie po kilku minutach.  
+2. Jeśli błąd się utrzymuje — zgłoś **administratorowi**.  
 3. Nie publikuj wielokrotnie „w panice” — potwierdź najpierw stan w panelu lub u admina.
 
 ---
@@ -132,7 +135,7 @@ Po opublikowaniu możesz **wprowadzić korekty** i ponownie opublikować — pow
 
 ## 7. Wylogowanie
 
-**`/doctor/logout/`** (POST) — wylogowuje z sesji Django; następne wejście na `/doctor/` wymaga logowania.
+Użyj opcji wylogowania w panelu lekarza. Kolejne wejście do panelu będzie wymagało ponownego logowania.
 
 ---
 
