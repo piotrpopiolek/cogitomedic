@@ -177,3 +177,17 @@ tr.doctor-queue-row--semaphore:hover > td {
 .dark tr.doctor-queue-row--semaphore:hover > td {
   background-color: rgba(120, 53, 15, 0.32) !important;
 }
+
+/* Unpublished SLA: --sla-urgency in [0,1] on <tr>; rolling 24h from list visibility. */
+tr.doctor-queue-row--unpublished-sla > td {
+  background-color: rgba(254, 202, 202, calc(0.14 + var(--sla-urgency, 0) * 0.48)) !important;
+}
+.dark tr.doctor-queue-row--unpublished-sla > td {
+  background-color: rgba(127, 29, 29, calc(0.18 + var(--sla-urgency, 0) * 0.48)) !important;
+}
+tr.doctor-queue-row--unpublished-sla:hover > td {
+  background-color: rgba(252, 165, 165, calc(0.18 + var(--sla-urgency, 0) * 0.5)) !important;
+}
+.dark tr.doctor-queue-row--unpublished-sla:hover > td {
+  background-color: rgba(153, 27, 27, calc(0.22 + var(--sla-urgency, 0) * 0.52)) !important;
+}
