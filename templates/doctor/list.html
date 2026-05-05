@@ -1,5 +1,6 @@
 {% extends "doctor/base.html" %}
 {% load static %}
+{% load l10n %}
 {% block doctor_extrahead %}
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
 {% endblock %}
@@ -66,7 +67,7 @@
     </thead>
     <tbody class="divide-y divide-base-200 dark:divide-base-700 bg-white dark:bg-base-900">
       {% for item in items %}
-      <tr class="doctor-queue-row {% if item.row_is_fully_delivered %}doctor-queue-row--delivered{% elif item.row_has_edit_semaphore %}doctor-queue-row--semaphore{% else %}hover:bg-base-50 dark:hover:bg-base-800/50{% endif %}">
+      <tr class="doctor-queue-row {% if item.row_is_fully_delivered %}doctor-queue-row--delivered{% elif item.row_has_edit_semaphore %}doctor-queue-row--semaphore{% elif item.row_unpublished_sla_active %}doctor-queue-row--unpublished-sla{% else %}hover:bg-base-50 dark:hover:bg-base-800/50{% endif %}"{% if item.row_unpublished_sla_active %} style="--sla-urgency: {% localize off %}{{ item.row_unpublished_urgency }}{% endlocalize %};"{% endif %}>
         <td class="px-4 py-3 text-base-900 dark:text-base-100">
           <span class="inline-flex flex-wrap items-center gap-2">
             <span>{{ item.patient.last_name }}, {{ item.patient.first_name }}</span>
