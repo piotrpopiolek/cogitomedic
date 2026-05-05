@@ -261,7 +261,7 @@ def pdf_generation_stage_complete(
         return False
     if version.pdf_generation_status == PdfStatus.COMPLETED:
         return True
-    ev = events_by_type.get(OutboxEventType.GENERATE_PDF)
+    ev = events_by_type.get("GENERATE_PDF")
     return bool(ev and ev.status == OutboxStatus.PROCESSED)
 
 
@@ -283,14 +283,14 @@ def work_queue_row_outbound_complete(
         return False
     hidrive_ok = (
         outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            events_by_type.get("HIDRIVE_UPLOAD"),
             completed=bool(version.hidrive_sent),
         )
         == "COMPLETED"
     )
     sms_ok = (
         outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.SMS_SEND),
+            events_by_type.get("SMS_SEND"),
             completed=bool(version.sms_sent),
         )
         == "COMPLETED"
@@ -308,11 +308,11 @@ def latest_retryable_outbox_event(
         for e in events_by_type.values()
     ):
         return None
-    for event_type in [
-        OutboxEventType.SMS_SEND,
-        OutboxEventType.HIDRIVE_UPLOAD,
-        OutboxEventType.GENERATE_PDF,
-    ]:
+    for event_type in (
+        "SMS_SEND",
+        "HIDRIVE_UPLOAD",
+        "GENERATE_PDF",
+    ):
         event = events_by_type.get(event_type)
         if event and event.status in [OutboxStatus.FAILED, OutboxStatus.DEAD_LETTER]:
             return event
@@ -1790,7 +1790,7 @@ def _serialize_doctor_work_queue_row(
         events_by_type = {e.event_type: e for e in latest.outbox_events.all()}
     hidrive_status = (
         outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+            events_by_type.get("HIDRIVE_UPLOAD"),
             completed=bool(latest and latest.hidrive_sent),
         )
         if latest
@@ -1798,7 +1798,7 @@ def _serialize_doctor_work_queue_row(
     )
     sms_status = (
         outbox_event_stage_status(
-            events_by_type.get(OutboxEventType.SMS_SEND),
+            events_by_type.get("SMS_SEND"),
             completed=bool(latest and latest.sms_sent),
         )
         if latest
@@ -1988,11 +1988,11 @@ def get_medical_document_context(
                 "hidrive_sent": current_version.hidrive_sent,
                 "sms_sent": current_version.sms_sent,
                 "hidrive_status": outbox_event_stage_status(
-                    events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                    events_by_type.get("HIDRIVE_UPLOAD"),
                     completed=current_version.hidrive_sent,
                 ),
                 "sms_status": outbox_event_stage_status(
-                    events_by_type.get(OutboxEventType.SMS_SEND),
+                    events_by_type.get("SMS_SEND"),
                     completed=current_version.sms_sent,
                 ),
                 "processing_error_message": latest_version_processing_error_message(
@@ -2023,11 +2023,11 @@ def get_medical_document_context(
                 "hidrive_sent": current_version.hidrive_sent,
                 "sms_sent": current_version.sms_sent,
                 "hidrive_status": outbox_event_stage_status(
-                    events_by_type.get(OutboxEventType.HIDRIVE_UPLOAD),
+                    events_by_type.get("HIDRIVE_UPLOAD"),
                     completed=current_version.hidrive_sent,
                 ),
                 "sms_status": outbox_event_stage_status(
-                    events_by_type.get(OutboxEventType.SMS_SEND),
+                    events_by_type.get("SMS_SEND"),
                     completed=current_version.sms_sent,
                 ),
                 "processing_error_message": latest_version_processing_error_message(
