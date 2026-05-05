@@ -103,14 +103,34 @@ def seed_manual_demo(ctx: dict) -> None:
     MedicalDocument.objects.filter(queue_entry__daily_queue=queue).delete()
     QueueEntry.objects.filter(daily_queue=queue, position_no__in=(1, 2, 3)).delete()
 
-    p_done, _ = Patient.objects.get_or_create(
-        phone="1111111111111",
-        defaults={
-            "first_name": "Anna",
-            "last_name": "Demo",
-            "date_of_birth": date(1985, 5, 15),
-            "email": "anna.demo@example.invalid",
-        },
+    # Pacjent pod zrzuty manual/06: stabilny reset po adresie e-mail (zrzuty zmieniają m.in. telefon).
+    p_done = Patient.objects.filter(email="anna.demo@example.invalid").first()
+    if p_done is None:
+        p_done, _ = Patient.objects.get_or_create(
+            phone="1111111111111",
+            defaults={
+                "first_name": "Anna",
+                "last_name": "Demo",
+                "date_of_birth": date(1985, 5, 15),
+                "email": "anna.demo@example.invalid",
+            },
+        )
+    p_done.first_name = "Anna"
+    p_done.last_name = "Demo"
+    p_done.date_of_birth = date(1985, 5, 15)
+    p_done.phone = "1111111111111"
+    p_done.email = "anna.demo@example.invalid"
+    p_done.street = ""
+    p_done.save(
+        update_fields=[
+            "first_name",
+            "last_name",
+            "date_of_birth",
+            "phone",
+            "email",
+            "street",
+            "updated_at",
+        ]
     )
     p_done.clinic_sites.add(clinic)
 

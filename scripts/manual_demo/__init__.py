@@ -7,6 +7,7 @@ from scripts.manual_demo.playwright_auth import (
     cookie_domain,
     login_admin,
     login_doctor,
+    login_reception,
     login_tablet,
 )
 from scripts.manual_demo.seed import seed_manual_demo
@@ -17,5 +18,6 @@ __all__ = [
     "cookie_domain",
     "login_admin",
     "login_doctor",
+    "login_reception",
     "login_tablet",
 ]

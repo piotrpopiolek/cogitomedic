@@ -17,6 +17,20 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 | 8   | `reception-08-intake-document-detail.png` | Szczegóły intake + PDF        |
 
 
+## Zmiana danych pacjenta (`06-zmiana-danych-pacjenta`)
+
+
+| #   | Plik | Ekran |
+| --- | ---- | ----- |
+| 1   | `reception-patient-01-changelist.png` | `/admin/reception/patient/` — lista |
+| 2   | `reception-patient-02-search-results.png` | Lista po wyszukiwaniu (demo: jednoznaczny e-mail) |
+| 3   | `reception-patient-03-identity-before-edit.png` | Edycja — imię, nazwisko, DOB, telefon **przed** zmianą |
+| 4   | `reception-patient-04-identity-after-edit.png` | Te same pola **po** wpisaniu nowych wartości, przed **Save** |
+| 5   | `reception-patient-05-save-confirmation.png` | Komunikat sukcesu po zapisie korekty tożsamości/kontaktu |
+
+*Logowanie do admina: wspólny zrzut `reception-01-admin-login.png` (rozdział recepcja).*
+
+
 ## Tablet (`02-tablet`)
 
 
