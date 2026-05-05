@@ -1724,39 +1724,52 @@ def list_doctor_work_queue(
     return list_items, total
 
 
-def _doctor_list_unpublished_sla_urgency(
+def _doctor_list_unpublished_sla_effective_start(
+    entry: QueueEntry,
+    intake_form: PatientIntakeForm | None,
+) -> datetime | None:
+    """Start of the unpublished SLA window: list sort key, then intake submit, then entry create."""
+    t = entry.doctor_list_sort_at
+    if t is None and intake_form is not None and intake_form.submitted_at:
+        t = intake_form.submitted_at
+    if t is None:
+        t = entry.created_at
+    return t
+
+
+def _doctor_list_unpublished_sla_urgency_and_deadline(
     *,
     entry: QueueEntry,
     doc: MedicalDocument | None,
     intake_form: PatientIntakeForm | None,
     paper_intake_action_required: bool,
     now: datetime,
-) -> float:
+) -> tuple[float, str | None]:
     """
-    0..1 urgency for doctor list unpublished SLA row tint.
-    Paper intake state B (authorized, no document): immediate maximum (1.0).
-    Otherwise linear rolling window from ``doctor_list_sort_at`` / fallbacks.
+    ``(urgency, sla_deadline_iso)`` for doctor list unpublished SLA row tint.
+
+    Urgency is 0..1. Deadline ISO is set only when urgency > 0 and not paper state B
+    (same rules as prior separate deadline field).
     """
     if doc is not None and doc.status == MedicalDocStatus.PUBLISHED:
-        return 0.0
+        return 0.0, None
     unpublished = doc is None or doc.status == MedicalDocStatus.DRAFT
     if not unpublished:
-        return 0.0
+        return 0.0, None
     if paper_intake_action_required:
-        return 1.0
-    t_effective: datetime | None = entry.doctor_list_sort_at
-    if t_effective is None and intake_form is not None and intake_form.submitted_at:
-        t_effective = intake_form.submitted_at
-    if t_effective is None:
-        t_effective = entry.created_at
-    if t_effective is None:
-        return 0.0
-    elapsed = now - t_effective
+        return 1.0, None
+    t_eff = _doctor_list_unpublished_sla_effective_start(entry, intake_form)
+    if t_eff is None:
+        return 0.0, None
+    elapsed = now - t_eff
     if elapsed < timedelta(0):
         elapsed = timedelta(0)
     window = timedelta(hours=DOCTOR_LIST_UNPUBLISHED_SLA_HOURS)
-    ratio = elapsed.total_seconds() / window.total_seconds()
-    return min(1.0, float(ratio))
+    ratio = min(1.0, float(elapsed.total_seconds() / window.total_seconds()))
+    deadline_at: str | None = None
+    if ratio > 0:
+        deadline_at = (t_eff + window).isoformat()
+    return ratio, deadline_at
 
 
 def _serialize_doctor_work_queue_row(
@@ -1821,29 +1834,16 @@ def _serialize_doctor_work_queue_row(
         doc is None and getattr(entry, "has_paper_intake_authorization", False)
     )
     now = timezone.now()
-    row_unpublished_urgency = _doctor_list_unpublished_sla_urgency(
-        entry=entry,
-        doc=doc,
-        intake_form=intake_form,
-        paper_intake_action_required=paper_intake_action_required,
-        now=now,
+    row_unpublished_urgency, row_unpublished_sla_deadline_at = (
+        _doctor_list_unpublished_sla_urgency_and_deadline(
+            entry=entry,
+            doc=doc,
+            intake_form=intake_form,
+            paper_intake_action_required=paper_intake_action_required,
+            now=now,
+        )
     )
     row_unpublished_sla_active = row_unpublished_urgency > 1e-9
-    row_unpublished_sla_deadline_at: str | None = None
-    if (
-        row_unpublished_urgency > 0
-        and not paper_intake_action_required
-        and (doc is None or doc.status == MedicalDocStatus.DRAFT)
-    ):
-        t_eff: datetime | None = entry.doctor_list_sort_at
-        if t_eff is None and intake_form is not None and intake_form.submitted_at:
-            t_eff = intake_form.submitted_at
-        if t_eff is None:
-            t_eff = entry.created_at
-        if t_eff is not None:
-            row_unpublished_sla_deadline_at = (
-                t_eff + timedelta(hours=DOCTOR_LIST_UNPUBLISHED_SLA_HOURS)
-            ).isoformat()
     return {
         "document_id": str(doc.id) if doc else None,
         "queue_entry_id": str(entry.id),
