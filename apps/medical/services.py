@@ -33,6 +33,7 @@ from apps.medical.medical_payload_schemas import (
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.constants import (
+    DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
     PAPER_INTAKE_AUTH_REASON_MAX_LEN,
     PAPER_INTAKE_AUTH_REASON_MIN_LEN,
@@ -1723,6 +1724,41 @@ def list_doctor_work_queue(
     return list_items, total
 
 
+def _doctor_list_unpublished_sla_urgency(
+    *,
+    entry: QueueEntry,
+    doc: MedicalDocument | None,
+    intake_form: PatientIntakeForm | None,
+    paper_intake_action_required: bool,
+    now: datetime,
+) -> float:
+    """
+    0..1 urgency for doctor list unpublished SLA row tint.
+    Paper intake state B (authorized, no document): immediate maximum (1.0).
+    Otherwise linear rolling window from ``doctor_list_sort_at`` / fallbacks.
+    """
+    if doc is not None and doc.status == MedicalDocStatus.PUBLISHED:
+        return 0.0
+    unpublished = doc is None or doc.status == MedicalDocStatus.DRAFT
+    if not unpublished:
+        return 0.0
+    if paper_intake_action_required:
+        return 1.0
+    t_effective: datetime | None = entry.doctor_list_sort_at
+    if t_effective is None and intake_form is not None and intake_form.submitted_at:
+        t_effective = intake_form.submitted_at
+    if t_effective is None:
+        t_effective = entry.created_at
+    if t_effective is None:
+        return 0.0
+    elapsed = now - t_effective
+    if elapsed < timedelta(0):
+        elapsed = timedelta(0)
+    window = timedelta(hours=DOCTOR_LIST_UNPUBLISHED_SLA_HOURS)
+    ratio = elapsed.total_seconds() / window.total_seconds()
+    return min(1.0, float(ratio))
+
+
 def _serialize_doctor_work_queue_row(
     *,
     entry: QueueEntry,
@@ -1784,6 +1820,30 @@ def _serialize_doctor_work_queue_row(
     paper_intake_action_required = bool(
         doc is None and getattr(entry, "has_paper_intake_authorization", False)
     )
+    now = timezone.now()
+    row_unpublished_urgency = _doctor_list_unpublished_sla_urgency(
+        entry=entry,
+        doc=doc,
+        intake_form=intake_form,
+        paper_intake_action_required=paper_intake_action_required,
+        now=now,
+    )
+    row_unpublished_sla_active = row_unpublished_urgency > 1e-9
+    row_unpublished_sla_deadline_at: str | None = None
+    if (
+        row_unpublished_urgency > 0
+        and not paper_intake_action_required
+        and (doc is None or doc.status == MedicalDocStatus.DRAFT)
+    ):
+        t_eff: datetime | None = entry.doctor_list_sort_at
+        if t_eff is None and intake_form is not None and intake_form.submitted_at:
+            t_eff = intake_form.submitted_at
+        if t_eff is None:
+            t_eff = entry.created_at
+        if t_eff is not None:
+            row_unpublished_sla_deadline_at = (
+                t_eff + timedelta(hours=DOCTOR_LIST_UNPUBLISHED_SLA_HOURS)
+            ).isoformat()
     return {
         "document_id": str(doc.id) if doc else None,
         "queue_entry_id": str(entry.id),
@@ -1820,6 +1880,9 @@ def _serialize_doctor_work_queue_row(
         "can_retry_processing": retryable_event is not None,
         "retry_event_status": retryable_event.status if retryable_event else None,
         "paper_intake_action_required": paper_intake_action_required,
+        "row_unpublished_urgency": row_unpublished_urgency,
+        "row_unpublished_sla_active": row_unpublished_sla_active,
+        "row_unpublished_sla_deadline_at": row_unpublished_sla_deadline_at,
     }
 
 

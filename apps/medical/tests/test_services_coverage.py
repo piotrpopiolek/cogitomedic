@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -550,6 +550,63 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertTrue(item["paper_intake_action_required"])
         self.assertIsNone(item["document_id"])
         self.assertIsNone(item["intake_form_id"])
+        self.assertEqual(item["row_unpublished_urgency"], 1.0)
+        self.assertIsNone(item["row_unpublished_sla_deadline_at"])
+
+    @freeze_time("2026-03-10T14:00:00Z")
+    def test_unpublished_sla_urgency_half_after_12h_rolling(self):
+        t0 = datetime(2026, 3, 10, 2, 0, 0, tzinfo=dt_timezone.utc)
+        self.queue_entry.doctor_list_sort_at = t0
+        self.queue_entry.save(update_fields=["doctor_list_sort_at"])
+        doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        self._make_published_version(
+            doc_d,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            publish_request_id=None,
+            published_at=None,
+            publish_locale=None,
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        row = next(i for i in items if i["queue_entry_id"] == str(self.queue_entry.id))
+        self.assertAlmostEqual(row["row_unpublished_urgency"], 0.5, places=4)
+        self.assertIsNotNone(row["row_unpublished_sla_deadline_at"])
+
+    @freeze_time("2026-03-10T12:00:00Z")
+    def test_unpublished_sla_urgency_zero_immediately_at_t0(self):
+        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=dt_timezone.utc)
+        self.queue_entry.doctor_list_sort_at = t0
+        self.queue_entry.save(update_fields=["doctor_list_sort_at"])
+        doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        self._make_published_version(
+            doc_d,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            publish_request_id=None,
+            published_at=None,
+            publish_locale=None,
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        row = next(i for i in items if i["queue_entry_id"] == str(self.queue_entry.id))
+        self.assertEqual(row["row_unpublished_urgency"], 0.0)
+
+    @freeze_time("2026-03-11T13:00:00Z")
+    def test_unpublished_sla_urgency_one_after_25h(self):
+        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=dt_timezone.utc)
+        self.queue_entry.doctor_list_sort_at = t0
+        self.queue_entry.save(update_fields=["doctor_list_sort_at"])
+        doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        self._make_published_version(
+            doc_d,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            publish_request_id=None,
+            published_at=None,
+            publish_locale=None,
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        row = next(i for i in items if i["queue_entry_id"] == str(self.queue_entry.id))
+        self.assertEqual(row["row_unpublished_urgency"], 1.0)
 
     def test_paper_intake_completed_with_document_is_listed(self):
         paper_entry = self._make_queue_entry(
@@ -1414,6 +1471,7 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertEqual(found[0]["hidrive_status"], "PENDING")
         self.assertEqual(found[0]["sms_status"], "PENDING")
         self.assertFalse(found[0]["row_is_fully_delivered"])
+        self.assertEqual(found[0]["row_unpublished_urgency"], 0.0)
 
     # -- list_medical_documents draft visibility for non-assigned doctor --
     def test_list_medical_documents_draft_visible_to_non_assigned(self):
