@@ -779,6 +779,12 @@ else:
 
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
+# Duże multipart (np. PDF ~250 MB): mały bufor w RAM, reszta strumieniowana na dysk (patrz Nginx client_max_body_size).
+_UPLOAD_MEM_MB = int(os.environ.get("UPLOAD_MEMORY_BUFFER_MB", "5"))
+_UPLOAD_MEM_BYTES = _UPLOAD_MEM_MB * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = _UPLOAD_MEM_BYTES
+FILE_UPLOAD_MAX_MEMORY_SIZE = _UPLOAD_MEM_BYTES
+
 # Za reverse proxy (np. Nginx z TLS): USE_TRUSTED_REVERSE_PROXY=1 + nagłówki X-Forwarded-* w proxy.
 if os.environ.get("USE_TRUSTED_REVERSE_PROXY", "").strip().lower() in (
     "1",
