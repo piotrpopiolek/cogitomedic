@@ -37,4 +37,4 @@ RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-
 EXPOSE 8000
 
 ENTRYPOINT ["/docker-entrypoint-prod.sh"]
-CMD ["gunicorn", "cogitomedica.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["gunicorn", "cogitomedica.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "600", "--access-logfile", "-", "--error-logfile", "-"]
