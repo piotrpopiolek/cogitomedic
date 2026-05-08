@@ -30,6 +30,7 @@ from apps.medical.models import (
 )
 from apps.medical.services import (
     acquire_document_lock,
+    create_external_upload_medical_document,
     create_or_get_medical_document,
     get_document_lock_state,
     get_medical_document_context,
@@ -249,6 +250,113 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             )
         self.assertIn(
             "intake_form_must_be_submitted",
+            ctx.exception.api_message_key,
+        )
+
+
+class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
+    def test_submitted_creates_document_and_draft_v1(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.doctor.id,
+        )
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+        self.assertEqual(doc.status, MedicalDocStatus.DRAFT)
+        self.assertEqual(doc.current_version_no, 1)
+        v = MedicalDocumentVersion.objects.get(medical_document=doc, version_no=1)
+        self.assertEqual(v.version_status, DocVersionStatus.DRAFT)
+        self.assertEqual(v.medical_payload, {})
+        self.assertEqual(v.pdf_generation_status, PdfStatus.PENDING)
+
+    def test_second_call_is_idempotent(self) -> None:
+        a = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.doctor.id,
+        )
+        b = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.doctor.id,
+        )
+        self.assertEqual(a.id, b.id)
+        self.assertEqual(
+            MedicalDocumentVersion.objects.filter(medical_document_id=a.id).count(),
+            1,
+        )
+
+    def test_reopened_intake_allowed(self) -> None:
+        qe = self._make_queue_entry(position_no=50)
+        session = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+        )
+        doc = create_external_upload_medical_document(
+            queue_entry_id=qe.id,
+            created_by_user_id=self.doctor.id,
+        )
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+    def test_in_progress_raises(self) -> None:
+        qe = self._make_queue_entry(position_no=51)
+        session = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=qe.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_intake_not_ready",
+            ctx.exception.api_message_key,
+        )
+
+    def test_no_intake_form_raises(self) -> None:
+        qe = self._make_queue_entry(position_no=52)
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=qe.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "queue_entry_or_intake_not_found",
+            ctx.exception.api_message_key,
+        )
+
+    def test_unknown_queue_entry_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=uuid.uuid4(),
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn("queue_entry_not_found", ctx.exception.api_message_key)
+
+    def test_mismatch_when_digital_document_exists(self) -> None:
+        self._make_medical_doc(
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=0,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "medical_document_source_type_mismatch",
             ctx.exception.api_message_key,
         )
 
