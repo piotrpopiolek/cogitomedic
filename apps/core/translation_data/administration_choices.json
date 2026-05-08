@@ -219,6 +219,11 @@
     "en": "Paper intake",
     "pl": "Intake papierowy"
   },
+  "administration.choice_medical_document_source_type_external_upload": {
+    "de": "Externer Upload",
+    "en": "External upload",
+    "pl": "Wgranie zewnętrzne"
+  },
   "administration.choice_doc_version_status_draft": {
     "de": "Entwurf",
     "en": "Draft",

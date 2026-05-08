@@ -501,6 +501,13 @@ Minimalny zestaw (np. `apps/outbox/tests/test_external_upload_outbox_contract.py
   - dwa równoległe `upload` dla tego samego dokumentu (operatorzy w dwóch oknach): drugi nadpisuje plik w HiDrive (deterministyczna ścieżka po sanitizacji), `update_or_create` daje jeden attachment — test, że nie powstają dwa rekordy.
 - `**retry_latest_document_processing`**: gate lekarza vs recepcja dla EXTERNAL — jeśli mechanizm istnieje dla Befund, dodać test parzystości dla EXTERNAL_UPLOAD.
 
+- **Test braku OOM (najgorszy plik, gate przed produkcją)**:
+  - dodać scenariusz testowy/stagingowy „worst-case memory” dla pliku granicznego blisko `EXTERNAL_UPLOAD_MAX_BYTES` (np. 200–250 MB, realny PDF wielostronicowy) i wymusić pełny łańcuch: `upload -> preview -> publish -> GENERATE_PDF -> HIDRIVE_UPLOAD`,
+  - podczas testu mierzyć RSS procesu HTTP i workera outboxu (sampling co 1-5 s) oraz logować piki pamięci na etapach `preview` i `generate_external_upload_pdf`,
+  - kryterium zaliczenia: brak restartu procesu, brak OOMKill, brak timeoutu wynikającego z presji pamięci, `OutboxEvent` kończy się `COMPLETED`, dokument dostępny w portalu po zakończeniu pipeline,
+  - kryterium odrzucenia: jakikolwiek OOM/restart procesu, retry-loop `GENERATE_PDF` spowodowany pamięcią, albo degradacja powodująca niedostarczenie `HIDRIVE_UPLOAD/SMS_SEND`,
+  - test uruchamiać w środowisku możliwie zbliżonym do prod (te same limity pamięci/kontener), wynik i peak RSS dołączyć do checklisty Go/No-Go.
+
 #### 8. Observability i RODO
 
 - Span/log dla `upload_external_pdf_to_incoming`, `select_external_upload_attachment_for_draft`, `publish_external_upload_version`, `generate_external_upload_pdf`, oraz istniejących kroków outbox (atrybut `medical.source_type=EXTERNAL_UPLOAD`).
