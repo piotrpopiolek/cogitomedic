@@ -428,6 +428,32 @@ def create_or_get_medical_document(
     return doc
 
 
+def _bootstrap_external_upload_draft_v1(
+    medical_document: MedicalDocument,
+    *,
+    created_by_user_id: uuid.UUID,
+) -> None:
+    """Create DRAFT version 1 (empty payload) and align document status / version counter."""
+    draft = MedicalDocumentVersion.objects.create(
+        medical_document_id=medical_document.id,
+        version_no=1,
+        version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=1,
+        medical_payload={},
+    )
+    medical_document.current_version_no = draft.version_no
+    medical_document.status = MedicalDocStatus.DRAFT
+    medical_document.updated_by_user_id = created_by_user_id
+    medical_document.save(
+        update_fields=[
+            "current_version_no",
+            "status",
+            "updated_by_user",
+            "updated_at",
+        ]
+    )
+
+
 @transaction.atomic
 def create_external_upload_medical_document(
     *,
@@ -445,9 +471,33 @@ def create_external_upload_medical_document(
     On first successful create, inserts version ``1`` as ``DRAFT`` with empty
     ``medical_payload`` and default ``pdf_generation_status=PENDING`` (no local PDF
     until publish pipeline materializes it).
+
+    ``created_by_user_id`` must refer to an existing :class:`~apps.users.models.StaffUser`
+    with role **Reception**, **Admin**, or **Manager** (defense in depth; the HTTP
+    entrypoint should already enforce ``require_auth`` for the intended role).
+
+    After resolving the document row, the implementation takes a
+    ``SELECT … FOR UPDATE`` on ``MedicalDocument`` for the remainder of the
+    transaction. The locked row is not “used” for business reads beyond holding
+    the lock: it serializes concurrent callers (duplicate HTTP requests,
+    background workers) so bootstrap of draft v1 and in-place document fields
+    cannot interleave on the same document.
     """
     try:
-        QueueEntry.objects.select_for_update().get(pk=queue_entry_id)
+        actor = StaffUser.objects.get(id=created_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.external_upload_create_document_invalid_role"),
+            api_message_key="other.domain.external_upload_create_document_invalid_role",
+        )
+
+    try:
+        QueueEntry.objects.get(pk=queue_entry_id)
     except QueueEntry.DoesNotExist as exc:
         raise DomainError(
             domain_message("other.api.queue_entry_not_found"),
@@ -494,24 +544,15 @@ def create_external_upload_medical_document(
             api_message_key="other.domain.medical_document_source_type_mismatch",
         )
 
+    # Row lock on the document (not the queue entry): same rationale as in the
+    # docstring — serialize bootstrap / updates for this medical_document id.
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        pk=medical_document.id
+    )
+
     if created:
-        draft = MedicalDocumentVersion.objects.create(
-            medical_document_id=medical_document.id,
-            version_no=1,
-            version_status=DocVersionStatus.DRAFT,
-            medical_payload_schema_version=1,
-            medical_payload={},
-        )
-        medical_document.current_version_no = draft.version_no
-        medical_document.status = MedicalDocStatus.DRAFT
-        medical_document.updated_by_user_id = created_by_user_id
-        medical_document.save(
-            update_fields=[
-                "current_version_no",
-                "status",
-                "updated_by_user",
-                "updated_at",
-            ]
+        _bootstrap_external_upload_draft_v1(
+            medical_document, created_by_user_id=created_by_user_id
         )
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document.id
@@ -525,7 +566,7 @@ def create_external_upload_medical_document(
             metadata={
                 "queue_entry_id": str(queue_entry_id),
                 "intake_form_id": str(intake_form.id),
-                "source_type": MedicalDocumentSourceType.EXTERNAL_UPLOAD.value,
+                "source_type": doc.source_type,
                 **assigned_doctor_audit_metadata(doc),
             },
         )
@@ -534,23 +575,8 @@ def create_external_upload_medical_document(
     if not MedicalDocumentVersion.objects.filter(
         medical_document_id=medical_document.id
     ).exists():
-        draft = MedicalDocumentVersion.objects.create(
-            medical_document_id=medical_document.id,
-            version_no=1,
-            version_status=DocVersionStatus.DRAFT,
-            medical_payload_schema_version=1,
-            medical_payload={},
-        )
-        medical_document.current_version_no = draft.version_no
-        medical_document.status = MedicalDocStatus.DRAFT
-        medical_document.updated_by_user_id = created_by_user_id
-        medical_document.save(
-            update_fields=[
-                "current_version_no",
-                "status",
-                "updated_by_user",
-                "updated_at",
-            ]
+        _bootstrap_external_upload_draft_v1(
+            medical_document, created_by_user_id=created_by_user_id
         )
 
     return MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
