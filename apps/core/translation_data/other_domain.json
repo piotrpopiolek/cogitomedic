@@ -333,5 +333,35 @@
     "de": "Die Anamnese ist bereits zur Korrektur wieder geöffnet.",
     "en": "This intake form is already reopened for corrections.",
     "pl": "Ta ankieta jest już ponownie otwarta do poprawek."
+  },
+  "other.domain.external_upload_file_too_large": {
+    "de": "Die PDF-Datei überschreitet die maximale Größe ({max_bytes} Bytes).",
+    "en": "The PDF file exceeds the maximum allowed size ({max_bytes} bytes).",
+    "pl": "Plik PDF przekracza maksymalny dozwolony rozmiar ({max_bytes} bajtów)."
+  },
+  "other.domain.external_upload_invalid_content_type": {
+    "de": "Nur PDF-Dateien sind erlaubt.",
+    "en": "Only PDF files are allowed.",
+    "pl": "Dozwolone są wyłącznie pliki PDF."
+  },
+  "other.domain.external_upload_not_pdf": {
+    "de": "Die Datei ist kein PDF.",
+    "en": "The file is not a PDF.",
+    "pl": "Plik nie jest PDF-em."
+  },
+  "other.domain.external_upload_invalid_or_empty_pdf": {
+    "de": "Die PDF-Datei ist ungültig oder enthält keine Seiten.",
+    "en": "The PDF file is invalid or has no pages.",
+    "pl": "Plik PDF jest nieprawidłowy lub nie zawiera stron."
+  },
+  "other.domain.external_upload_intake_not_ready": {
+    "de": "Externer Upload ist erst möglich, wenn die Anamnese eingereicht oder zur Korrektur wieder geöffnet ist.",
+    "en": "External upload is only available after the intake form is submitted or reopened for corrections.",
+    "pl": "Wgranie zewnętrzne jest możliwe dopiero po złożeniu ankiety lub jej ponownym otwarciu do poprawek."
+  },
+  "other.domain.medical_document_source_type_mismatch": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument mit anderem Quelltyp.",
+    "en": "A medical document for this queue entry already exists with a different source type.",
+    "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny o innym typie źródła."
   }
 }

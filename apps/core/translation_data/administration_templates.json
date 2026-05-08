@@ -49,6 +49,11 @@
     "en": "PDF preview",
     "pl": "Podgląd PDF"
   },
+  "administration.btn_external_upload_publish_and_send_sms": {
+    "de": "Veröffentlichen und SMS senden",
+    "en": "Publish and send SMS",
+    "pl": "Opublikuj i wyślij SMS"
+  },
   "administration.link_details": {
     "de": "Details",
     "en": "Details",
