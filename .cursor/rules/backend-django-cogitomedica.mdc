@@ -49,8 +49,9 @@ alwaysApply: false
 - Monitoruj minimum: metryki outbox, skuteczność HiDrive/SMS, metryki importu oraz opóźnienia publikacji.
 
 ## 8) Jakość kodu i testy
-- **Źródło prawdy dla testów w tym repozytorium:** `make pytest` (Docker: `docker compose run web` + `requirements-dev.txt` + pełny `pytest` wg `pytest.ini`). Alternatywnie lokalnie: aktywuj `venv` i `python -m pytest` po `pip install -r requirements-dev.txt`.
-- Pracuj w aktywnym środowisku wirtualnym (`venv\Scripts\activate`) przy pracy poza Dockerem.
+- **Migracje i testy — wyłącznie w kontenerze Docker** (środowisko jak w CI/prod: WeasyPrint, biblioteki natywne, ta sama baza). Nie uruchamiaj `manage.py migrate` ani `pytest` / `make pytest` na gołym interpreterze hosta, o ile użytkownik nie wymusi inaczej.
+- **Uruchomienie stacku:** z katalogu repo `docker compose up -d db web` (lub pełny `docker compose up -d`). Jednorazowe polecenia: `docker compose run --rm web python manage.py migrate` oraz testy przez `make pytest` albo `docker compose run --rm web pytest` (wg `Makefile` / `pytest.ini`).
+- Przy edycji kodu poza kontenerem nadal możesz używać lokalnego lintera; runtime Django dla migracji/testów ma być w kontenerze `web`.
 - Zachowuj PEP 8 i formatowanie `black`.
 - Dla nowego kodu wymagane są adnotacje typów.
 - Każde przejście stanu domenowego testuj scenariuszem pozytywnym i negatywnym (`pytest` lub `pytest-django`).

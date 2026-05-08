@@ -428,6 +428,136 @@ def create_or_get_medical_document(
     return doc
 
 
+@transaction.atomic
+def create_external_upload_medical_document(
+    *,
+    queue_entry_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
+) -> MedicalDocument:
+    """Create or return the EXTERNAL_UPLOAD medical document for a queue entry.
+
+    Idempotent on ``queue_entry_id``. If a document already exists with another
+    ``source_type``, raises ``DomainError``.
+
+    Requires a ``PatientIntakeForm`` linked to the entry with ``form_status`` in
+    ``{SUBMITTED, REOPENED}`` (reopened = reception corrections before re-submit).
+
+    On first successful create, inserts version ``1`` as ``DRAFT`` with empty
+    ``medical_payload`` and default ``pdf_generation_status=PENDING`` (no local PDF
+    until publish pipeline materializes it).
+    """
+    try:
+        QueueEntry.objects.select_for_update().get(pk=queue_entry_id)
+    except QueueEntry.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_not_found"),
+            api_message_key="other.api.queue_entry_not_found",
+        ) from exc
+
+    try:
+        intake_form = PatientIntakeForm.objects.get(queue_entry_id=queue_entry_id)
+    except PatientIntakeForm.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_or_intake_not_found"),
+            api_message_key="other.api.queue_entry_or_intake_not_found",
+        ) from exc
+
+    if intake_form.form_status not in (
+        IntakeStatus.SUBMITTED,
+        IntakeStatus.REOPENED,
+    ):
+        raise DomainError(
+            domain_message("other.domain.external_upload_intake_not_ready"),
+            api_message_key="other.domain.external_upload_intake_not_ready",
+        )
+
+    try:
+        medical_document, created = MedicalDocument.objects.get_or_create(
+            queue_entry_id=queue_entry_id,
+            defaults={
+                "intake_form_id": intake_form.id,
+                "source_type": MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+                "created_by_user_id": created_by_user_id,
+                "updated_by_user_id": created_by_user_id,
+            },
+        )
+    except IntegrityError:
+        medical_document = MedicalDocument.objects.get(queue_entry_id=queue_entry_id)
+        created = False
+
+    if (
+        not created
+        and medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD
+    ):
+        raise DomainError(
+            domain_message("other.domain.medical_document_source_type_mismatch"),
+            api_message_key="other.domain.medical_document_source_type_mismatch",
+        )
+
+    if created:
+        draft = MedicalDocumentVersion.objects.create(
+            medical_document_id=medical_document.id,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={},
+        )
+        medical_document.current_version_no = draft.version_no
+        medical_document.status = MedicalDocStatus.DRAFT
+        medical_document.updated_by_user_id = created_by_user_id
+        medical_document.save(
+            update_fields=[
+                "current_version_no",
+                "status",
+                "updated_by_user",
+                "updated_at",
+            ]
+        )
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document.id
+        )
+        create_audit_event(
+            event_type="MEDICAL_DOCUMENT_CREATED",
+            actor_user_id=created_by_user_id,
+            patient_id=doc.queue_entry.patient_id,
+            medical_document_id=doc.id,
+            context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "queue_entry_id": str(queue_entry_id),
+                "intake_form_id": str(intake_form.id),
+                "source_type": MedicalDocumentSourceType.EXTERNAL_UPLOAD.value,
+                **assigned_doctor_audit_metadata(doc),
+            },
+        )
+        return doc
+
+    if not MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document.id
+    ).exists():
+        draft = MedicalDocumentVersion.objects.create(
+            medical_document_id=medical_document.id,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={},
+        )
+        medical_document.current_version_no = draft.version_no
+        medical_document.status = MedicalDocStatus.DRAFT
+        medical_document.updated_by_user_id = created_by_user_id
+        medical_document.save(
+            update_fields=[
+                "current_version_no",
+                "status",
+                "updated_by_user",
+                "updated_at",
+            ]
+        )
+
+    return MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+        id=medical_document.id
+    )
+
+
 def _validate_paper_intake_authorization_reason(reason: str) -> str:
     text = (reason or "").strip()
     if len(text) < PAPER_INTAKE_AUTH_REASON_MIN_LEN:
