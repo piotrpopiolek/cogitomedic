@@ -255,10 +255,21 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
 
 
 class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.reception = StaffUser.objects.create_user(
+            username="cov-reception-eu",
+            email="cov-reception-eu@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(cls.reception, "Reception")
+
     def test_submitted_creates_document_and_draft_v1(self) -> None:
         doc = create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
-            created_by_user_id=self.doctor.id,
+            created_by_user_id=self.reception.id,
         )
         self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
         self.assertEqual(doc.status, MedicalDocStatus.DRAFT)
@@ -271,11 +282,11 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
     def test_second_call_is_idempotent(self) -> None:
         a = create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
-            created_by_user_id=self.doctor.id,
+            created_by_user_id=self.reception.id,
         )
         b = create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
-            created_by_user_id=self.doctor.id,
+            created_by_user_id=self.reception.id,
         )
         self.assertEqual(a.id, b.id)
         self.assertEqual(
@@ -298,7 +309,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
         )
         doc = create_external_upload_medical_document(
             queue_entry_id=qe.id,
-            created_by_user_id=self.doctor.id,
+            created_by_user_id=self.reception.id,
         )
         self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
 
@@ -318,7 +329,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
         with self.assertRaises(DomainError) as ctx:
             create_external_upload_medical_document(
                 queue_entry_id=qe.id,
-                created_by_user_id=self.doctor.id,
+                created_by_user_id=self.reception.id,
             )
         self.assertIn(
             "external_upload_intake_not_ready",
@@ -330,7 +341,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
         with self.assertRaises(DomainError) as ctx:
             create_external_upload_medical_document(
                 queue_entry_id=qe.id,
-                created_by_user_id=self.doctor.id,
+                created_by_user_id=self.reception.id,
             )
         self.assertIn(
             "queue_entry_or_intake_not_found",
@@ -341,7 +352,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
         with self.assertRaises(DomainError) as ctx:
             create_external_upload_medical_document(
                 queue_entry_id=uuid.uuid4(),
-                created_by_user_id=self.doctor.id,
+                created_by_user_id=self.reception.id,
             )
         self.assertIn("queue_entry_not_found", ctx.exception.api_message_key)
 
@@ -353,12 +364,31 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
         with self.assertRaises(DomainError) as ctx:
             create_external_upload_medical_document(
                 queue_entry_id=self.queue_entry.id,
-                created_by_user_id=self.doctor.id,
+                created_by_user_id=self.reception.id,
             )
         self.assertIn(
             "medical_document_source_type_mismatch",
             ctx.exception.api_message_key,
         )
+
+    def test_doctor_role_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_create_document_invalid_role",
+            ctx.exception.api_message_key,
+        )
+
+    def test_unknown_actor_user_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=uuid.uuid4(),
+            )
+        self.assertIn("staff_user_not_found", ctx.exception.api_message_key)
 
 
 # ------------------------------------------------------------------
