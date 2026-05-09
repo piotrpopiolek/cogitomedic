@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 from json import JSONDecodeError
+from pathlib import Path
 from uuid import UUID
 
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -21,6 +23,7 @@ from apps.core.api_utils import (
     require_user_role,
     safe_parse_positive_int,
 )
+from apps.core.domain_messages import domain_message
 from apps.core.http_utils import get_client_ip
 from apps.core.exceptions import (
     DomainError,
@@ -35,6 +38,8 @@ from apps.medical.api_schemas import (
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
     PublishMedicalDocumentRequest,
+    ExternalUploadRevisionStartRequest,
+    ExternalUploadSelectAttachmentRequest,
     RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
 )
@@ -54,6 +59,7 @@ from apps.medical.models import (
     ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
 from apps.reception.models import QueueEntry
@@ -75,6 +81,7 @@ from apps.medical.services import (
     outbox_event_stage_status,
     parse_medical_documents_list_params,
     publish_document_version,
+    publish_external_upload_version,
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
@@ -82,6 +89,7 @@ from apps.medical.services import (
     retry_latest_document_processing,
     save_draft_document_version,
     select_external_upload_attachment_for_draft,
+    start_external_upload_revision,
     upload_external_pdf_to_incoming,
 )
 from apps.medical.template_services import (
@@ -327,9 +335,16 @@ def _external_upload_error_status(exc: DomainError) -> int:
         "other.domain.external_upload_attachment_invalid_status",
         "other.domain.external_upload_attachment_path_invalid",
         "other.domain.external_upload_no_active_draft",
+        "other.domain.external_upload_publish_no_attachment_selected",
+        "other.domain.external_upload_revision_requires_published",
+        "other.domain.external_upload_preview_no_attachment",
         "other.domain.medical_document_source_type_mismatch",
     }:
         return 422
+    if key in {
+        "other.domain.external_upload_revision_already_pending",
+    }:
+        return 409
     return 400
 
 
@@ -378,6 +393,280 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
             "hidrive_remote_path": attachment.hidrive_remote_path,
             "size_bytes": int(uploaded_file.size or 0),
             "original_filename": attachment.original_filename,
+        },
+        status=201,
+    )
+
+
+def _external_upload_pdf_bytes_for_preview(
+    *,
+    doc: MedicalDocument,
+    version: MedicalDocumentVersion,
+) -> bytes | None:
+    """Return PDF bytes for external-upload preview, or ``None`` if not available."""
+    if version.version_status == DocVersionStatus.DRAFT:
+        if version.external_selected_attachment_id is None:
+            return None
+        att = ExternalPdfAttachment.objects.get(
+            pk=version.external_selected_attachment_id
+        )
+        return download_external_pdf(att)
+
+    if version.pdf_local_path:
+        full = Path(settings.MEDIA_ROOT) / version.pdf_local_path
+        if full.is_file():
+            return full.read_bytes()
+    if version.external_selected_attachment_id is not None:
+        att = ExternalPdfAttachment.objects.get(
+            pk=version.external_selected_attachment_id
+        )
+        return download_external_pdf(att)
+    return None
+
+
+@require_auth
+def medical_external_upload_select_attachment_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = ExternalUploadSelectAttachmentRequest.model_validate(
+            read_json_body(request)
+        )
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    try:
+        draft_version = select_external_upload_attachment_for_draft(
+            medical_document_id=medical_document_id,
+            attachment_id=body.attachment_id,
+            actor_user_id=request.user.id,
+        )
+    except DomainError as exc:
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    return JsonResponse(
+        {
+            "draft_version_id": str(draft_version.id),
+            "attachment_id": str(body.attachment_id),
+            "version_no": draft_version.version_no,
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_external_upload_preview_pdf_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> HttpResponse | JsonResponse:
+    """GET PDF preview for EXTERNAL_UPLOAD (draft attachment or published local/HIDrive file)."""
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "GET":
+        return json_error("other.api.method_not_allowed", status=405)
+
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    if doc.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        exc = DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    source = (request.GET.get("source") or "").strip().lower()
+    if source and source not in ("published", "draft"):
+        return json_error("other.api.preview_source_invalid", status=400)
+
+    base_qs = MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document_id
+    ).select_related("medical_document", "medical_document__queue_entry__daily_queue")
+
+    if not source:
+        if doc.status == MedicalDocStatus.PUBLISHED and not doc.has_pending_revision:
+            source = "published"
+        elif doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision:
+            source = "draft"
+        else:
+            source = "draft"
+
+    if source == "published":
+        version = (
+            base_qs.filter(version_status=DocVersionStatus.PUBLISHED)
+            .order_by("-version_no")
+            .first()
+        )
+    else:
+        version = (
+            base_qs.filter(version_status=DocVersionStatus.DRAFT)
+            .order_by("-version_no")
+            .first()
+        )
+        if version is None and doc.status == MedicalDocStatus.DRAFT:
+            version = base_qs.order_by("-version_no").first()
+
+    if not version:
+        return json_error("other.api.no_version_to_preview", status=404)
+
+    try:
+        pdf_bytes = _external_upload_pdf_bytes_for_preview(doc=doc, version=version)
+    except ObjectDoesNotExist:
+        return json_error("other.api.no_version_to_preview", status=404)
+    except ExternalPdfCorruptError:
+        corrupt_exc = DomainError(
+            domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+            api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+        )
+        return json_domain_error(
+            corrupt_exc, status=_external_upload_error_status(corrupt_exc)
+        )
+    except Exception:
+        logger.exception(
+            "external upload preview failed: medical_document_id=%s version_id=%s",
+            medical_document_id,
+            version.id,
+        )
+        return json_error("other.api.server_error", status=502)
+
+    if pdf_bytes is None:
+        exc = DomainError(
+            domain_message("other.domain.external_upload_preview_no_attachment"),
+            api_message_key="other.domain.external_upload_preview_no_attachment",
+        )
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "client_ip": get_client_ip(request),
+            "version_no": version.version_no,
+            "source": source,
+            "document_status": doc.status,
+            "has_pending_revision": doc.has_pending_revision,
+            "external_upload": True,
+            **assigned_doctor_audit_metadata(doc),
+        },
+    )
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="external-upload-preview.pdf"'
+    response["Cache-Control"] = "no-store, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+    response["X-External-Upload-Preview-Source"] = source
+    response["X-External-Upload-Preview-Version-No"] = str(version.version_no)
+    return response
+
+
+@require_auth
+def medical_external_upload_publish_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    try:
+        with transaction.atomic():
+            MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+            version = publish_external_upload_version(
+                medical_document_id=medical_document_id,
+                publish_request_id=body.publish_request_id,
+                published_by_user_id=request.user.id,
+                publish_locale=body.publish_locale,
+                resend_sms=body.resend_sms,
+            )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    except IdempotencyConflictError as exc:
+        return json_domain_error(exc, status=409)
+    except DomainError as exc:
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    return JsonResponse(
+        {
+            "medical_document_version_id": str(version.id),
+            "version_no": version.version_no,
+            "version_status": version.version_status,
+            "publish_request_id": (
+                str(version.publish_request_id) if version.publish_request_id else None
+            ),
+            "publish_locale": version.publish_locale,
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_external_upload_revision_start_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        ExternalUploadRevisionStartRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    try:
+        with transaction.atomic():
+            MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+            created = start_external_upload_revision(
+                medical_document_id=medical_document_id,
+                actor_user_id=request.user.id,
+            )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    except DomainError as exc:
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    return JsonResponse(
+        {
+            "medical_document_version_id": str(created.id),
+            "version_no": created.version_no,
+            "version_status": created.version_status,
+            "has_pending_revision": True,
         },
         status=201,
     )

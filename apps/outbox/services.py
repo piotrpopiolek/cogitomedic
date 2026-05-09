@@ -18,7 +18,11 @@ from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
-from apps.medical.pdf_builder import AllExternalPdfDownloadsFailed, generate_befund_pdf
+from apps.medical.pdf_builder import (
+    AllExternalPdfDownloadsFailed,
+    generate_befund_pdf,
+    generate_external_upload_pdf,
+)
 from apps.medical.external_pdf_service import (
     hidrive_incoming_dir,
     logical_path_to_processed,
@@ -27,6 +31,7 @@ from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
     ExternalPdfStatus,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -108,7 +113,13 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.pdf_generation_status = PdfStatus.PROCESSING
         version.save(update_fields=["pdf_generation_status"])
 
-        pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
+        if (
+            version.medical_document.source_type
+            == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        ):
+            pdf_local_path, pdf_checksum_sha256 = generate_external_upload_pdf(version)
+        else:
+            pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
         version.pdf_generation_status = PdfStatus.COMPLETED
         version.pdf_local_path = pdf_local_path
         version.pdf_checksum_sha256 = pdf_checksum_sha256

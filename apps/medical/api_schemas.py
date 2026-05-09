@@ -91,6 +91,18 @@ class PublishMedicalDocumentRequest(BaseModel):
     )
 
 
+class ExternalUploadSelectAttachmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attachment_id: UUID
+
+
+class ExternalUploadRevisionStartRequest(BaseModel):
+    """POST body for ``/external-upload/revision/start`` (empty JSON object)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class DoctorTemplateListQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

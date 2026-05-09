@@ -403,5 +403,25 @@
     "de": "Der HiDrive-Pfad des Anhangs liegt nicht unter dem erwarteten Präfix für externe Uploads.",
     "en": "The attachment HiDrive path is not under the expected external-upload prefix.",
     "pl": "Ścieżka HiDrive załącznika nie znajduje się pod oczekiwanym prefiksem wgrania zewnętrznego."
+  },
+  "other.domain.external_upload_publish_no_attachment_selected": {
+    "de": "Zum Veröffentlichen muss im Entwurf ein externer PDF-Anhang ausgewählt sein.",
+    "en": "The draft must have an external PDF attachment selected before publishing.",
+    "pl": "Przed publikacją wersja robocza musi mieć wybrany zewnętrzny załącznik PDF."
+  },
+  "other.domain.external_upload_revision_requires_published": {
+    "de": "Eine neue Revision ist nur für bereits veröffentlichte externe Upload-Dokumente möglich.",
+    "en": "Starting a revision is only allowed when the external-upload document is already published.",
+    "pl": "Rozpoczęcie rewizji jest możliwe tylko dla już opublikowanego dokumentu ze ścieżki wgrania zewnętrznego."
+  },
+  "other.domain.external_upload_revision_already_pending": {
+    "de": "Für dieses Dokument gibt es bereits eine ausstehende Revision.",
+    "en": "This document already has a pending revision.",
+    "pl": "Ten dokument ma już oczekującą rewizję."
+  },
+  "other.domain.external_upload_preview_no_attachment": {
+    "de": "Für diese Vorschau ist kein externer PDF-Anhang verfügbar.",
+    "en": "No external PDF attachment is available for this preview.",
+    "pl": "Brak zewnętrznego załącznika PDF do wyświetlenia w podglądzie."
   }
 }
