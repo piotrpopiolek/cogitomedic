@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import re
+import tempfile
+import unicodedata
 import uuid
+from os import close as os_close
 from datetime import date, datetime, timedelta
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.uploadedfile import UploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import (
     Case,
@@ -36,6 +41,7 @@ from apps.intake.services import get_intake_form_context
 from apps.medical.constants import (
     DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
+    EXTERNAL_UPLOAD_MAX_BYTES,
     PAPER_INTAKE_AUTH_REASON_MAX_LEN,
     PAPER_INTAKE_AUTH_REASON_MIN_LEN,
     PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
@@ -44,6 +50,8 @@ from apps.medical.external_pdf_service import (
     hidrive_incoming_dir,
     hidrive_processed_dir,
 )
+from apps.integrations.hidrive.auth import HiDriveAuthError
+from apps.integrations.hidrive.client import HiDriveApiError, get_hidrive_adapter
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -61,6 +69,7 @@ from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.display import staff_user_display_name
 from apps.users.models import StaffUser
+from pypdf import PdfReader
 
 PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
     "intake_form_submitted",
@@ -459,6 +468,146 @@ def _bootstrap_external_upload_draft_v1(
             "updated_at",
         ]
     )
+
+
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _sanitize_external_upload_filename(original_name: str) -> str:
+    """Return safe ASCII filename for HiDrive path under /external-upload."""
+    raw_name = (original_name or "").strip().replace("\\", "/").split("/")[-1]
+    raw_name = raw_name.replace("\x00", "")
+    normalized = (
+        unicodedata.normalize("NFKD", raw_name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    collapsed = _SAFE_FILENAME_RE.sub("_", normalized).strip("._-")
+    if not collapsed:
+        collapsed = f"external_{uuid.uuid4().hex[:12]}.pdf"
+    if "." not in collapsed:
+        collapsed = f"{collapsed}.pdf"
+    return collapsed[:200]
+
+
+def _persist_uploaded_file_to_temp(uploaded_file: UploadedFile) -> Path:
+    fd, tmp_path_str = tempfile.mkstemp(prefix="external-upload-", suffix=".pdf")
+    os_close(fd)
+    tmp_path = Path(tmp_path_str)
+    with Path(tmp_path).open("wb") as handle:
+        for chunk in uploaded_file.chunks():
+            handle.write(chunk)
+    return tmp_path
+
+
+@transaction.atomic
+def upload_external_pdf_to_incoming(
+    *,
+    medical_document_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> ExternalPdfAttachment:
+    """Validate and upload one PDF to HiDrive /incoming/external-upload/..."""
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_select_attachment_invalid_role"
+            ),
+            api_message_key="other.domain.external_upload_select_attachment_invalid_role",
+        )
+
+    if int(uploaded_file.size or 0) > EXTERNAL_UPLOAD_MAX_BYTES:
+        raise DomainError(
+            domain_message("other.domain.external_upload_file_too_large").format(
+                max_bytes=EXTERNAL_UPLOAD_MAX_BYTES
+            ),
+            api_message_key="other.domain.external_upload_file_too_large",
+        )
+
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    if (uploaded_file.content_type or "").lower() not in {
+        "application/pdf",
+        "application/x-pdf",
+    }:
+        raise DomainError(
+            domain_message("other.domain.external_upload_invalid_content_type"),
+            api_message_key="other.domain.external_upload_invalid_content_type",
+        )
+
+    magic = uploaded_file.read(4)
+    uploaded_file.seek(0)
+    if magic != b"%PDF":
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_pdf"),
+            api_message_key="other.domain.external_upload_not_pdf",
+        )
+
+    try:
+        reader = PdfReader(uploaded_file)
+        if len(reader.pages) < 1:
+            raise DomainError(
+                domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+                api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+            )
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+            api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+        ) from exc
+    finally:
+        uploaded_file.seek(0)
+
+    safe_filename = _sanitize_external_upload_filename(uploaded_file.name)
+    queue_entry_id = medical_document.queue_entry_id
+    remote_path = (
+        f"{hidrive_incoming_dir()}/external-upload/{queue_entry_id}/{safe_filename}"
+    )
+
+    local_tmp: Path | None = None
+    cleanup_tmp = False
+    try:
+        temp_path_callable = getattr(uploaded_file, "temporary_file_path", None)
+        if callable(temp_path_callable):
+            local_tmp = Path(temp_path_callable())
+        else:
+            local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
+            cleanup_tmp = True
+        get_hidrive_adapter().upload(remote_path=remote_path, local_path=local_tmp)
+    except (HiDriveApiError, HiDriveAuthError) as exc:
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        ) from exc
+    finally:
+        if cleanup_tmp and local_tmp is not None:
+            local_tmp.unlink(missing_ok=True)
+
+    attachment, _ = ExternalPdfAttachment.objects.update_or_create(
+        medical_document_id=medical_document_id,
+        hidrive_remote_path=remote_path,
+        defaults={
+            "status": ExternalPdfStatus.MATCHED,
+            "original_filename": safe_filename,
+        },
+    )
+    return attachment
 
 
 @transaction.atomic
