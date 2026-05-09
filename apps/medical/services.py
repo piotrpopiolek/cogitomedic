@@ -39,8 +39,14 @@ from apps.medical.constants import (
     PAPER_INTAKE_AUTH_REASON_MIN_LEN,
     PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
 )
+from apps.medical.external_pdf_service import (
+    hidrive_incoming_dir,
+    hidrive_processed_dir,
+)
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -582,6 +588,118 @@ def create_external_upload_medical_document(
     return MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
         id=medical_document.id
     )
+
+
+def _hidrive_path_is_external_upload_prefix(path: str) -> bool:
+    """True if *path* is under reception external-upload (incoming or processed)."""
+    p = (path or "").replace("\\", "/").strip()
+    if not p.startswith("/"):
+        p = "/" + p
+    inc = hidrive_incoming_dir()
+    proc = hidrive_processed_dir()
+    return p.startswith(f"{inc}/external-upload/") or p.startswith(
+        f"{proc}/external-upload/"
+    )
+
+
+@transaction.atomic
+def select_external_upload_attachment_for_draft(
+    *,
+    medical_document_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """Bind the current DRAFT to an ``ExternalPdfAttachment`` (MATCHED or ACCEPTED).
+
+    Updates audit fields on the draft and clears any prior local PDF path/checksum
+    when the operator changes selection. Does not download from HiDrive, does not
+    change attachment status, and does not enqueue outbox work.
+    """
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_select_attachment_invalid_role"
+            ),
+            api_message_key="other.domain.external_upload_select_attachment_invalid_role",
+        )
+
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    draft_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    if draft_version is None:
+        raise DomainError(
+            domain_message("other.domain.external_upload_no_active_draft"),
+            api_message_key="other.domain.external_upload_no_active_draft",
+        )
+
+    try:
+        attachment = ExternalPdfAttachment.objects.select_for_update().get(
+            id=attachment_id,
+            medical_document_id=medical_document_id,
+        )
+    except ExternalPdfAttachment.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_not_found"),
+            api_message_key="other.domain.external_upload_attachment_not_found",
+        ) from exc
+
+    if attachment.status not in (
+        ExternalPdfStatus.MATCHED,
+        ExternalPdfStatus.ACCEPTED,
+    ):
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_invalid_status"),
+            api_message_key="other.domain.external_upload_attachment_invalid_status",
+        )
+
+    if not _hidrive_path_is_external_upload_prefix(attachment.hidrive_remote_path):
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_path_invalid"),
+            api_message_key="other.domain.external_upload_attachment_path_invalid",
+        )
+
+    now = timezone.now()
+    draft_version.external_selected_attachment_id = attachment.id
+    draft_version.external_original_filename = attachment.original_filename
+    draft_version.external_uploaded_by_user_id = actor_user_id
+    draft_version.external_uploaded_at = now
+    draft_version.pdf_local_path = None
+    draft_version.pdf_checksum_sha256 = None
+    draft_version.pdf_generation_status = PdfStatus.PENDING
+    draft_version.save(
+        update_fields=[
+            "external_selected_attachment",
+            "external_original_filename",
+            "external_uploaded_by_user",
+            "external_uploaded_at",
+            "pdf_local_path",
+            "pdf_checksum_sha256",
+            "pdf_generation_status",
+        ]
+    )
+    return draft_version
 
 
 def _validate_paper_intake_authorization_reason(reason: str) -> str:
