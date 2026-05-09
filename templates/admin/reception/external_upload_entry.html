@@ -116,6 +116,7 @@
     <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 space-y-4">
         {% csrf_token %}
         <input type="hidden" name="action" value="publish" />
+        <input type="hidden" name="publish_request_id" value="{{ publish_request_id }}" />
         <h2 class="text-lg font-semibold text-gray-900">{% admin_trans "administration.external_upload_entry_publish_heading" "Publish (second confirmation)" %}</h2>
         <p class="text-sm text-gray-600">{% admin_trans "administration.external_upload_entry_publish_intro" "Publishing sends the document to background processing (PDF, HiDrive, SMS). Ensure the on-screen patient matches the PDF." %}</p>
         <div>
