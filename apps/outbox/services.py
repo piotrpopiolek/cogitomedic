@@ -44,7 +44,10 @@ logger = logging.getLogger(__name__)
 
 # GENERATE_PDF failures that will not self-heal on retry (bad row state).
 _NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS = frozenset(
-    {"other.domain.external_upload_generate_pdf_no_attachment"}
+    {
+        "other.domain.external_upload_generate_pdf_no_attachment",
+        "other.domain.external_upload_generate_pdf_corrupt",
+    }
 )
 
 

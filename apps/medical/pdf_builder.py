@@ -745,8 +745,13 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
     ``ACCEPTED``.
 
     Raises :class:`~apps.core.exceptions.DomainError` when the version has no
-    selected attachment (data invariant broken); outbox maps this to a terminal
-    failure instead of an uncaught ``RuntimeError``.
+    selected attachment (data invariant broken), or when the PDF bytes are corrupt
+    (``MATCHED`` rows are demoted to ``MERGE_FAILED`` like Befund; terminal in outbox).
+
+    On **infrastructure** download errors, demotes ``MATCHED`` → ``MERGE_FAILED``,
+    emits ``EXTERNAL_PDF_DOWNLOAD_FAILED``, and raises
+    :class:`AllExternalPdfDownloadsFailed` so the outbox handler records the same
+    audits and **retries** as the Befund merge path.
     """
     version = MedicalDocumentVersion.objects.select_related(
         "external_selected_attachment",
@@ -758,7 +763,70 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
             api_message_key="other.domain.external_upload_generate_pdf_no_attachment",
         )
     att = version.external_selected_attachment
-    pdf_bytes = download_external_pdf(att)
+    doc = version.medical_document
+    patient_id = doc.queue_entry.patient_id
+    status_before_download = att.status
+    try:
+        pdf_bytes = download_external_pdf(att)
+    except ExternalPdfCorruptError:
+        ExternalPdfAttachment.objects.filter(
+            pk=att.pk,
+            status=ExternalPdfStatus.MATCHED,
+        ).update(status=ExternalPdfStatus.MERGE_FAILED)
+        att.refresh_from_db()
+        create_audit_event(
+            event_type="EXTERNAL_PDF_CORRUPT",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "previous_status": status_before_download,
+            },
+        )
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_corrupt"),
+            api_message_key="other.domain.external_upload_generate_pdf_corrupt",
+        ) from None
+    except Exception as exc:
+        logger.warning(
+            "download_external_pdf failed for external-upload GENERATE_PDF: "
+            "attachment_id=%s path=%s",
+            att.id,
+            att.hidrive_remote_path,
+            exc_info=True,
+        )
+        ExternalPdfAttachment.objects.filter(
+            pk=att.pk,
+            status=ExternalPdfStatus.MATCHED,
+        ).update(status=ExternalPdfStatus.MERGE_FAILED)
+        att.refresh_from_db()
+        create_audit_event(
+            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "error_type": type(exc).__name__,
+                "attachment_status": att.status,
+            },
+        )
+        raise AllExternalPdfDownloadsFailed(
+            "External upload PDF download failed (HiDrive unavailable?); "
+            "outbox will retry once the file is reachable.",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            failed_download_metadata=[
+                {
+                    "hidrive_remote_path": att.hidrive_remote_path,
+                    "external_pdf_attachment_id": str(att.id),
+                    "error_type": type(exc).__name__,
+                    "attachment_status": att.status,
+                }
+            ],
+        ) from exc
+
     promoted = ExternalPdfAttachment.objects.filter(
         pk=att.pk,
         status=ExternalPdfStatus.MATCHED,

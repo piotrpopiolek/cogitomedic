@@ -871,6 +871,270 @@ COGITO_PATHS = {
             },
         },
     },
+    f"{PREFIX}/medical-documents/external-upload/upload": {
+        "post": {
+            "summary": "External upload: create document and upload reception PDF",
+            "description": (
+                "**RECEPTION**, **ADMIN**, or **MANAGER**. `multipart/form-data` with fields "
+                "`queue_entry_id` (UUID string) and `file` (PDF). Creates or reuses an "
+                "`EXTERNAL_UPLOAD` medical document for the queue entry (intake must be "
+                "**SUBMITTED** or **REOPENED**), validates PDF (size limit, MIME, magic bytes, "
+                "pypdf), uploads to HiDrive under `/incoming/.../external-upload/...`, "
+                "registers `ExternalPdfAttachment` as **MATCHED**, and binds it to the active "
+                "DRAFT. **Clinic scope:** for RECEPTION and MANAGER with assigned `clinic_sites`, "
+                "the queue entry's daily queue must belong to one of those sites; otherwise "
+                "**403** with `other.api.queue_entry_not_in_scope` (same as reception queue APIs). "
+                "ADMIN has no site filter. HiDrive I/O runs after DB phases so a rollback does not "
+                "leave orphan cloud objects."
+            ),
+            "tags": ["Medical"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["queue_entry_id", "file"],
+                            "properties": {
+                                "queue_entry_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "description": "Queue entry the document is tied to.",
+                                },
+                                "file": {
+                                    "type": "string",
+                                    "format": "binary",
+                                    "description": "PDF file (see server max body / nginx limits).",
+                                },
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": {
+                    "description": (
+                        "Created. JSON: `document_id`, `draft_version_id`, `attachment_id`, "
+                        "`hidrive_remote_path`, `size_bytes`, `original_filename`."
+                    )
+                },
+                "400": {
+                    "description": "Invalid multipart fields or UUID (`other.api.invalid_request_body`)."
+                },
+                "401": {"description": "Authentication required"},
+                "403": {
+                    "description": (
+                        "Forbidden (wrong role) or queue entry outside assigned clinic sites "
+                        "(`other.api.queue_entry_not_in_scope`)."
+                    )
+                },
+                "404": {
+                    "description": "Queue entry not found, staff user not found, or domain 404 keys."
+                },
+                "413": {
+                    "description": "PDF exceeds configured max size (`external_upload_file_too_large`)."
+                },
+                "415": {
+                    "description": "Unsupported Content-Type for the file part (`external_upload_invalid_content_type`)."
+                },
+                "422": {
+                    "description": (
+                        "Domain / validation errors on PDF or workflow (e.g. intake not ready, "
+                        "wrong `source_type`, corrupt PDF) — `error_key` often under `other.domain.*`."
+                    ),
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+                "502": {
+                    "description": "HiDrive upload failure after DB intent (`other.api.server_error`)."
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-upload/select-attachment": {
+        "post": {
+            "summary": "External upload: bind attachment to draft",
+            "description": (
+                "**RECEPTION**, **ADMIN**, or **MANAGER**. JSON body: `attachment_id` (UUID) "
+                "must belong to this `medical_document_id` and be **MATCHED** or **ACCEPTED**; "
+                "HiDrive path must be under the external-upload prefix. Updates the active DRAFT "
+                "selection and clears any prior local `pdf_local_path` / checksum on the version. "
+                "**Clinic scope:** same **403** `queue_entry_not_in_scope` rule as upload when the "
+                "document's queue is outside the caller's assigned sites (RECEPTION/MANAGER)."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": "JSON: `draft_version_id`, `attachment_id`, `version_no`."
+                },
+                "400": {"description": "Invalid JSON or Pydantic validation"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Wrong role or `queue_entry_not_in_scope`"},
+                "404": {"description": "Medical document not found"},
+                "422": {
+                    "description": "Domain errors (wrong source type, attachment not found, invalid status/path, no draft).",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-upload/preview-pdf": {
+        "get": {
+            "summary": "External upload: preview PDF",
+            "description": (
+                "**RECEPTION**, **ADMIN**, or **MANAGER**. Returns **application/pdf** for "
+                "`source_type=EXTERNAL_UPLOAD` only. Optional query `source`: `published` "
+                "(latest published version) or `draft` (active draft / pending revision); "
+                "when omitted, behaviour follows document status (published-only → published; "
+                "pending revision → draft; else draft). Reads from HiDrive for draft attachment "
+                "or from local materialized file when available. Response headers "
+                "`X-External-Upload-Preview-Source` and `X-External-Upload-Preview-Version-No`. "
+                "**Clinic scope:** same **403** `queue_entry_not_in_scope` as other external-upload "
+                "routes for scoped RECEPTION/MANAGER."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                },
+                {
+                    "name": "source",
+                    "in": "query",
+                    "schema": {"type": "string", "enum": ["published", "draft"]},
+                    "description": "Invalid value → **400** `other.api.preview_source_invalid`.",
+                },
+            ],
+            "responses": {
+                "200": {"description": "application/pdf (inline)"},
+                "400": {"description": "Invalid `source` query value"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Wrong role or `queue_entry_not_in_scope`"},
+                "404": {
+                    "description": "Document not found, no version to preview, or missing attachment row"
+                },
+                "422": {
+                    "description": "Not an EXTERNAL_UPLOAD document, corrupt PDF, or no attachment for preview.",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+                "502": {
+                    "description": "Unexpected preview failure (`other.api.server_error`)."
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-upload/publish": {
+        "post": {
+            "summary": "External upload: publish draft",
+            "description": (
+                "**RECEPTION**, **ADMIN**, or **MANAGER**. Publishes the latest **DRAFT** for an "
+                "`EXTERNAL_UPLOAD` document: requires `external_selected_attachment` on the draft; "
+                "skips Befund payload validation; enqueues **GENERATE_PDF** then the usual "
+                "**HIDRIVE_UPLOAD** / **SMS_SEND** pipeline. Same idempotency contract as doctor "
+                "publish: `publish_request_id` + `publish_locale` + optional `resend_sms`. "
+                "**409** when `publish_request_id` was already used with conflicting payload/locale. "
+                "**Clinic scope:** **403** `queue_entry_not_in_scope` when the document's clinic "
+                "is outside assigned sites (RECEPTION/MANAGER)."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": (
+                        "Published. JSON: `medical_document_version_id`, `version_no`, "
+                        "`version_status`, `publish_request_id`, `publish_locale`."
+                    )
+                },
+                "400": {"description": "Invalid JSON / validation"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Wrong role or `queue_entry_not_in_scope`"},
+                "404": {"description": "Medical document not found"},
+                "409": {
+                    "description": "Idempotency conflict (`publish_request_id` / locale)."
+                },
+                "422": {
+                    "description": "Domain rules (no draft, no attachment selected, wrong source type, etc.).",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/external-upload/revision/start": {
+        "post": {
+            "summary": "External upload: start amendment revision",
+            "description": (
+                "**RECEPTION**, **ADMIN**, or **MANAGER**. Opens a new **DRAFT** on an already "
+                "**PUBLISHED** `EXTERNAL_UPLOAD` document (`has_pending_revision` becomes true). "
+                "Request body: empty JSON object `{}` (schema `ExternalUploadRevisionStartRequest`). "
+                "**409** when a pending revision already exists. **Clinic scope:** **403** "
+                "`queue_entry_not_in_scope` for scoped RECEPTION/MANAGER."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "201": {
+                    "description": (
+                        "Revision draft created. JSON: `medical_document_version_id`, `version_no`, "
+                        "`version_status`, `has_pending_revision: true`."
+                    )
+                },
+                "400": {"description": "Invalid JSON / validation"},
+                "401": {"description": "Authentication required"},
+                "403": {"description": "Wrong role or `queue_entry_not_in_scope`"},
+                "404": {"description": "Medical document not found"},
+                "409": {"description": "Revision already pending"},
+                "422": {
+                    "description": "Not EXTERNAL_UPLOAD, document not published, etc.",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+            },
+        },
+    },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/external-pdfs": {
         "get": {
             "summary": "List external HiDrive PDF attachments",
