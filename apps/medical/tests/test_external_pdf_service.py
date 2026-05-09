@@ -228,6 +228,72 @@ class ExternalPdfGateTests(TestCase):
         self.assertFalse(gate.passed)
         self.assertEqual(gate.error_message, "NO_FILE")
 
+    def test_gate_skips_reception_external_upload_subtree(self) -> None:
+        """PDFs under ``/incoming/external-upload/`` are reception app uploads — not lab gate."""
+        patient = Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500100255",
+            email="gate.external.upload@example.com",
+        )
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/external-upload/00000000-0000-4000-8000-000000000001/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+            ],
+        )
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertTrue(gate.passed)
+        self.assertEqual(len(gate.matched_files), 1)
+        self.assertEqual(gate.matched_files[0].path, "/incoming/Med_Test.pdf")
+
+    def test_gate_ignores_only_external_upload_pdfs_for_lab_gate(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500100256",
+            email="gate.only.external@example.com",
+        )
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/external-upload/00000000-0000-4000-8000-000000000002/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+            ],
+        )
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertFalse(gate.passed)
+        self.assertEqual(gate.error_message, "NO_PDFS")
+
     def test_ambiguous_stem_prefilter_narrows_to_colliding_patients(self) -> None:
         """Regression: DB prefilter must ignore unrelated patients (indexed keys)."""
         for i in range(35):
