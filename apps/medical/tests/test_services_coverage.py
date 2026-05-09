@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from freezegun import freeze_time
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
@@ -51,6 +54,7 @@ from apps.medical.services import (
     release_document_lock,
     revoke_document_version,
     save_draft_document_version,
+    upload_external_pdf_to_incoming,
     work_queue_row_outbound_complete,
 )
 from apps.outbox.models import (
@@ -69,6 +73,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class ServicesCoverageBase(TestCase):
@@ -684,6 +696,157 @@ class SelectExternalUploadAttachmentForDraftTests(
                 actor_user_id=self.reception.id,
             )
         self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+
+
+class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests):
+    def _make_external_doc(self) -> MedicalDocument:
+        return create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+
+    def _pdf_upload(self, *, name: str = "lab.pdf", content: bytes | None = None):
+        data = content if content is not None else _minimal_pdf_bytes()
+        return SimpleUploadedFile(name, data, content_type="application/pdf")
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_upload_happy_path_creates_matched_attachment(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter = Mock()
+        adapter_factory.return_value = adapter
+        upload = self._pdf_upload(name="Lab Result.pdf")
+
+        att = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=upload,
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(att.medical_document_id, doc.id)
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        self.assertIn("/external-upload/", att.hidrive_remote_path)
+        self.assertTrue(att.hidrive_remote_path.endswith("Lab_Result.pdf"))
+        adapter.upload.assert_called_once()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_upload_is_idempotent_on_same_remote_path(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter_factory.return_value = Mock()
+        first = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=self._pdf_upload(name="same.pdf"),
+            actor_user_id=self.reception.id,
+        )
+        second = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=self._pdf_upload(name="same.pdf"),
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            ExternalPdfAttachment.objects.filter(medical_document_id=doc.id).count(),
+            1,
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_boundary_size_allowed(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter_factory.return_value = Mock()
+        upload = self._pdf_upload(name="edge.pdf")
+        upload.size = 250 * 1024 * 1024
+        att = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=upload,
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+
+    def test_size_over_limit_raises(self):
+        doc = self._make_external_doc()
+        upload = self._pdf_upload(name="too-big.pdf")
+        upload.size = 250 * 1024 * 1024 + 1
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+
+    def test_invalid_content_type_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "bad.txt", b"%PDF-1.4\nx", content_type="text/plain"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_invalid_content_type",
+            ctx.exception.api_message_key,
+        )
+
+    def test_invalid_magic_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "bad.pdf", b"NOPE-not-pdf", content_type="application/pdf"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_not_pdf", ctx.exception.api_message_key)
+
+    def test_corrupt_pdf_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "corrupt.pdf", b"%PDF-1.4\nnot-valid-xref", content_type="application/pdf"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_invalid_or_empty_pdf",
+            ctx.exception.api_message_key,
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_non_external_document_raises(self, adapter_factory: Mock):
+        digital_doc = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        upload = self._pdf_upload()
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=digital_doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_not_external_source",
+            ctx.exception.api_message_key,
+        )
+        adapter_factory.assert_not_called()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_doctor_role_raises(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=self._pdf_upload(),
+                actor_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_select_attachment_invalid_role",
+            ctx.exception.api_message_key,
+        )
+        adapter_factory.assert_not_called()
 
 
 # ------------------------------------------------------------------
