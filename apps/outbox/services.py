@@ -42,6 +42,11 @@ from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 logger = logging.getLogger(__name__)
 
+# GENERATE_PDF failures that will not self-heal on retry (bad row state).
+_NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS = frozenset(
+    {"other.domain.external_upload_generate_pdf_no_attachment"}
+)
+
 
 @dataclass(frozen=True)
 class OutboxProcessingResult:
@@ -321,6 +326,12 @@ def process_outbox_events(
                     id=ev.medical_document_version_id
                 ).update(pdf_generation_status=PdfStatus.FAILED)
             ev.retry_count += 1
+            if (
+                isinstance(exc, DomainError)
+                and exc.api_message_key in _NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS
+                and ev.event_type == OutboxEventType.GENERATE_PDF
+            ):
+                ev.retry_count = max(ev.retry_count, ev.max_retries)
             ev.locked_at = None
             ev.error_message = str(exc)
             if ev.retry_count >= ev.max_retries:

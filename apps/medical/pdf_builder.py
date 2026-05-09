@@ -12,6 +12,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from weasyprint import HTML
 
+from apps.core.domain_messages import domain_message
+from apps.core.exceptions import DomainError
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
@@ -737,22 +739,32 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
     Copy the reception-selected external PDF to local storage for ``HIDRIVE_UPLOAD``.
 
     No Befund HTML merge — the patient-facing file is the uploaded PDF. After a
-    successful download, a ``MATCHED`` attachment is promoted to ``ACCEPTED`` so
-    the HiDrive outbox step can move it under ``/processed`` like lab PDFs.
+    successful download, ``MATCHED`` rows are promoted to ``ACCEPTED`` with a
+    conditional ``UPDATE … WHERE status=MATCHED`` so a repeated successful run
+    (e.g. outbox retry after transient errors) does not touch attachments already
+    ``ACCEPTED``.
+
+    Raises :class:`~apps.core.exceptions.DomainError` when the version has no
+    selected attachment (data invariant broken); outbox maps this to a terminal
+    failure instead of an uncaught ``RuntimeError``.
     """
     version = MedicalDocumentVersion.objects.select_related(
         "external_selected_attachment",
         "medical_document",
     ).get(pk=version.pk)
     if version.external_selected_attachment_id is None:
-        raise RuntimeError(
-            "generate_external_upload_pdf requires external_selected_attachment"
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_no_attachment"),
+            api_message_key="other.domain.external_upload_generate_pdf_no_attachment",
         )
     att = version.external_selected_attachment
     pdf_bytes = download_external_pdf(att)
-    if att.status == ExternalPdfStatus.MATCHED:
+    promoted = ExternalPdfAttachment.objects.filter(
+        pk=att.pk,
+        status=ExternalPdfStatus.MATCHED,
+    ).update(status=ExternalPdfStatus.ACCEPTED)
+    if promoted:
         att.status = ExternalPdfStatus.ACCEPTED
-        att.save(update_fields=["status"])
 
     now = version.created_at
     relative_dir = (
