@@ -16,6 +16,7 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.medical.models import (
+    DocVersionStatus,
     ExternalPdfAttachment,
     ExternalPdfStatus,
     MedicalDocStatus,
@@ -2369,3 +2370,161 @@ class ExternalUploadApiTests(MedicalApiTests):
             },
         )
         self.assertEqual(response.status_code, 404)
+
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_select_preview_publish_revision_flow(
+        self, adapter_factory, mock_download: object
+    ) -> None:
+        mock_download.return_value = _minimal_pdf_bytes()
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        self.assertEqual(sel.json()["attachment_id"], att_id)
+
+        prev = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(prev.status_code, 200)
+        self.assertEqual(prev["Content-Type"], "application/pdf")
+
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                    "resend_sms": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 200, pub.content)
+        v = MedicalDocumentVersion.objects.get(
+            id=pub.json()["medical_document_version_id"]
+        )
+        self.assertEqual(v.version_status, DocVersionStatus.PUBLISHED)
+        self.assertTrue(
+            OutboxEvent.objects.filter(
+                medical_document_version_id=v.id,
+                event_type=OutboxEventType.GENERATE_PDF,
+            ).exists()
+        )
+
+        rev = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(rev.status_code, 201, rev.content)
+        self.assertEqual(rev.json()["version_status"], DocVersionStatus.DRAFT)
+        doc = MedicalDocument.objects.get(id=doc_id)
+        self.assertTrue(doc.has_pending_revision)
+
+        rev2 = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(rev2.status_code, 409)
+
+    def test_external_upload_publish_without_attachment_returns_422(
+        self,
+    ) -> None:
+        with patch("apps.medical.services.get_hidrive_adapter") as adapter_factory:
+            adapter_factory.return_value.upload.return_value = None
+            self.client.force_login(self.reception_user)
+            up = self.client.post(
+                "/api/v1/medical-documents/external-upload/upload",
+                data={
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "file": self._external_upload_file(),
+                },
+            )
+        self.assertEqual(up.status_code, 201)
+        doc_id = up.json()["document_id"]
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=doc_id, version_status=DocVersionStatus.DRAFT
+        ).update(
+            external_selected_attachment_id=None,
+            external_original_filename=None,
+            external_uploaded_by_user_id=None,
+            external_uploaded_at=None,
+        )
+        self.client.force_login(self.reception_user)
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 422)
+
+    def test_external_upload_endpoints_forbidden_for_doctor(self) -> None:
+        with patch("apps.medical.services.get_hidrive_adapter") as adapter_factory:
+            adapter_factory.return_value.upload.return_value = None
+            self.client.force_login(self.reception_user)
+            up = self.client.post(
+                "/api/v1/medical-documents/external-upload/upload",
+                data={
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "file": self._external_upload_file(),
+                },
+            )
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        self.client.force_login(self.doctor_user)
+        for method, path, body in (
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+                {"attachment_id": att_id},
+            ),
+            (
+                "get",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf",
+                None,
+            ),
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                },
+            ),
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+                {},
+            ),
+        ):
+            if method == "get":
+                r = self.client.get(path)
+            else:
+                r = self.client.post(
+                    path,
+                    data=json.dumps(body),
+                    content_type="application/json",
+                )
+            self.assertEqual(r.status_code, 403, (path, r.content))

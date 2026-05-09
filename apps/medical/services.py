@@ -1869,6 +1869,308 @@ def publish_document_version(
 
 
 @transaction.atomic
+def publish_external_upload_version(
+    *,
+    medical_document_id: uuid.UUID,
+    publish_request_id: uuid.UUID,
+    published_by_user_id: uuid.UUID,
+    publish_locale: str,
+    resend_sms: bool = False,
+    now: datetime | None = None,
+) -> MedicalDocumentVersion:
+    """Publish latest EXTERNAL_UPLOAD draft; enqueue ``GENERATE_PDF`` like :func:`publish_document_version`.
+
+    Skips Befund medical_payload validation; requires the draft to reference
+    ``external_selected_attachment``. Sets ``external_verified_*`` to the publisher.
+    """
+    try:
+        actor = StaffUser.objects.get(id=published_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    if not publish_request_id:
+        raise IdempotencyConflictError(
+            domain_message("other.api.publish_request_id_required"),
+            api_message_key="other.api.publish_request_id_required",
+        )
+    if not publish_locale:
+        raise DomainError(
+            domain_message("other.domain.publish_locale_required"),
+            api_message_key="other.domain.publish_locale_required",
+        )
+
+    requested_at = now or timezone.now()
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    same_request_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            publish_request_id=publish_request_id,
+        )
+        .first()
+    )
+    if same_request_version:
+        if (
+            same_request_version.publish_locale
+            and same_request_version.publish_locale != publish_locale
+        ):
+            raise IdempotencyConflictError(
+                domain_message("other.api.publish_request_id_locale_conflict"),
+                api_message_key="other.api.publish_request_id_locale_conflict",
+            )
+        return same_request_version
+
+    in_progress_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            outbox_events__event_type=OutboxEventType.GENERATE_PDF,
+            outbox_events__status__in=[
+                OutboxStatus.PENDING,
+                OutboxStatus.PROCESSING,
+                OutboxStatus.FAILED,
+            ],
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    latest_draft_version_no = MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document_id,
+        version_status=DocVersionStatus.DRAFT,
+    ).aggregate(max_no=Max("version_no"))["max_no"]
+    if in_progress_version and (
+        latest_draft_version_no is None
+        or in_progress_version.version_no >= latest_draft_version_no
+    ):
+        return in_progress_version
+
+    draft_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    if not draft_version:
+        raise DomainError(
+            domain_message("other.api.no_draft_before_publish"),
+            api_message_key="other.api.no_draft_before_publish",
+        )
+    if draft_version.external_selected_attachment_id is None:
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_publish_no_attachment_selected"
+            ),
+            api_message_key="other.domain.external_upload_publish_no_attachment_selected",
+        )
+
+    draft_version.version_status = DocVersionStatus.PUBLISHED
+    draft_version.publish_request_id = publish_request_id
+    draft_version.publish_requested_by_user_id = published_by_user_id
+    draft_version.publish_locale = publish_locale
+    draft_version.published_by_user_id = published_by_user_id
+    draft_version.published_at = requested_at
+    draft_version.pdf_generation_status = PdfStatus.PENDING
+    draft_version.external_verified_by_user_id = published_by_user_id
+    draft_version.external_verified_at = requested_at
+    draft_version.save(
+        update_fields=[
+            "version_status",
+            "publish_request_id",
+            "publish_requested_by_user",
+            "publish_locale",
+            "published_by_user",
+            "published_at",
+            "pdf_generation_status",
+            "external_verified_by_user",
+            "external_verified_at",
+        ]
+    )
+
+    is_republish = (
+        medical_document.published_version_no is not None
+        and medical_document.published_version_no < draft_version.version_no
+    )
+    previous_published_version_no = medical_document.published_version_no
+
+    medical_document.status = MedicalDocStatus.PUBLISHED
+    medical_document.current_version_no = draft_version.version_no
+    medical_document.published_version_no = draft_version.version_no
+    medical_document.has_pending_revision = False
+    medical_document.last_published_at = requested_at
+    medical_document.updated_by_user_id = published_by_user_id
+    medical_document.locked_by_user_id = None
+    medical_document.locked_at = None
+    medical_document.save(
+        update_fields=[
+            "status",
+            "current_version_no",
+            "published_version_no",
+            "has_pending_revision",
+            "last_published_at",
+            "updated_by_user",
+            "updated_at",
+            "locked_by_user",
+            "locked_at",
+        ]
+    )
+
+    OutboxEvent.objects.get_or_create(
+        medical_document_version=draft_version,
+        event_type=OutboxEventType.GENERATE_PDF,
+        defaults={
+            "aggregate_id": draft_version.id,
+            "payload_schema_version": 1,
+            "payload": {
+                "medical_document_id": str(medical_document.id),
+                "medical_document_version_id": str(draft_version.id),
+                "publish_request_id": str(publish_request_id),
+                "publish_locale": publish_locale,
+                "resend_sms": resend_sms,
+            },
+            "status": OutboxStatus.PENDING,
+        },
+    )
+    create_audit_event(
+        event_type="DOCUMENT_PUBLISHED",
+        actor_user_id=published_by_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(draft_version.id),
+            "version_no": draft_version.version_no,
+            "publish_request_id": str(publish_request_id),
+            "publish_locale": publish_locale,
+            "is_republish": is_republish,
+            "previous_published_version_no": previous_published_version_no,
+            "source_type": medical_document.source_type,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    if is_republish:
+        create_audit_event(
+            event_type="DOCUMENT_REPUBLISHED",
+            actor_user_id=published_by_user_id,
+            patient_id=medical_document.queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "medical_document_version_id": str(draft_version.id),
+                "new_published_version_no": draft_version.version_no,
+                "previous_published_version_no": previous_published_version_no,
+                "publish_request_id": str(publish_request_id),
+                **assigned_doctor_audit_metadata(medical_document),
+            },
+        )
+    return draft_version
+
+
+@transaction.atomic
+def start_external_upload_revision(
+    *,
+    medical_document_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """Reception path: open a new DRAFT on a PUBLISHED EXTERNAL_UPLOAD document (amend / republish)."""
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+    if medical_document.status != MedicalDocStatus.PUBLISHED:
+        raise DomainError(
+            domain_message("other.domain.external_upload_revision_requires_published"),
+            api_message_key="other.domain.external_upload_revision_requires_published",
+        )
+    if medical_document.has_pending_revision:
+        raise DomainError(
+            domain_message("other.domain.external_upload_revision_already_pending"),
+            api_message_key="other.domain.external_upload_revision_already_pending",
+        )
+
+    pub_no = medical_document.published_version_no
+    if pub_no is not None:
+        pub_ver = (
+            MedicalDocumentVersion.objects.select_for_update()
+            .filter(
+                medical_document_id=medical_document_id,
+                version_no=pub_no,
+                version_status=DocVersionStatus.PUBLISHED,
+            )
+            .first()
+        )
+        if pub_ver is not None and pub_ver.local_pdf_deleted_at is not None:
+            raise DomainError(
+                domain_message("other.domain.republish_after_retention_not_allowed"),
+                api_message_key="other.domain.republish_after_retention_not_allowed",
+            )
+
+    next_version_no = (
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=medical_document_id
+        ).aggregate(max_no=Max("version_no"))["max_no"]
+        or 0
+    ) + 1
+
+    created_version = MedicalDocumentVersion.objects.create(
+        medical_document_id=medical_document_id,
+        version_no=next_version_no,
+        version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=1,
+        medical_payload={},
+    )
+
+    medical_document.has_pending_revision = True
+    medical_document.updated_by_user_id = actor_user_id
+    medical_document.save(
+        update_fields=["has_pending_revision", "updated_by_user", "updated_at"]
+    )
+    create_audit_event(
+        event_type="DOCUMENT_REVISION_STARTED",
+        actor_user_id=actor_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(created_version.id),
+            "version_no": created_version.version_no,
+            "previous_published_version_no": medical_document.published_version_no,
+            "source_type": medical_document.source_type,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    return created_version
+
+
+@transaction.atomic
 def revoke_document_version(
     *,
     medical_document_id: uuid.UUID,
