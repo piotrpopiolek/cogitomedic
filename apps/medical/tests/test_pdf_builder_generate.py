@@ -14,6 +14,7 @@ from freezegun import freeze_time
 from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.external_pdf_service import ExternalPdfCorruptError
@@ -23,6 +24,7 @@ from apps.medical.models import (
     ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -31,6 +33,7 @@ from apps.medical.pdf_builder import (
     _build_render_context,
     build_merged_preview_pdf_bytes,
     generate_befund_pdf,
+    generate_external_upload_pdf,
 )
 from apps.reception.models import (
     ClinicSite,
@@ -386,3 +389,52 @@ class GenerateBefundPdfExternalTests(TestCase):
         self.assertIsNotNone(lines)
         self.assertEqual(lines[1], "Dr. med. Piotr Popiołek")
         self.assertEqual(lines[2], "Facharzt für Dermatologie")
+
+
+class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
+    def setUp(self) -> None:
+        super().setUp()
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        )
+        self.medical_doc.refresh_from_db()
+
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_raises_domain_error_without_attachment(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_no_attachment",
+        )
+        dl_mock.assert_not_called()
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_conditional_promote_idempotent_on_retry(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-up.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-up.pdf",
+            original_filename="ext-up.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            generate_external_upload_pdf(self.version)
+            generate_external_upload_pdf(self.version)
+
+        self.assertEqual(dl_mock.call_count, 2)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)

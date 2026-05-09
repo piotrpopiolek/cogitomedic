@@ -79,6 +79,7 @@ class MedicalApiTests(TestCase):
         )
         assign_group_to_test_user(self.admin_user, "Admin")
         clinic = ClinicSite.objects.create(code="API2", name="API Clinic 2")
+        self.reception_user.clinic_sites.add(clinic)
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="B1", name="B1")
         queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
@@ -2253,6 +2254,91 @@ class DoctorTemplatesApiTests(TestCase):
 
 
 class ExternalUploadApiTests(MedicalApiTests):
+    def _queue_entry_on_other_clinic(self) -> QueueEntry:
+        """Queue entry whose daily queue belongs to a clinic not assigned to ``reception_user``."""
+        other_clinic = ClinicSite.objects.create(
+            code="EXT-SCOPE-OTH", name="External upload scope other"
+        )
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="Z9", name="Z9"
+        )
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin_user,
+            assigned_doctor=self.doctor_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Scope",
+            last_name="OtherSite",
+            date_of_birth=date(1991, 1, 2),
+            phone="+48999888777",
+            email="scope.other@example.com",
+            doctolib_patient_id="DOC-SCOPE-OTH-1",
+        )
+        return QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.admin_user,
+        )
+
+    def test_external_upload_upload_out_of_scope_queue_entry_returns_403(self) -> None:
+        other_entry = self._queue_entry_on_other_clinic()
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(other_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_preview_out_of_scope_returns_403(
+        self, adapter_factory
+    ) -> None:
+        other_entry = self._queue_entry_on_other_clinic()
+        session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.admin_user,
+        )
+        other_entry.active_session = session
+        other_entry.save(update_fields=["active_session", "updated_at"])
+        PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_file_path="/tmp/signature-other.png",
+            signature_sha256="d" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"schema_version": 1, "answers": []},
+        )
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.admin_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(other_entry.id),
+                "file": self._external_upload_file(name="other-site.pdf"),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+
+        self.client.force_login(self.reception_user)
+        prev = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(prev.status_code, 403)
+
     @patch("apps.medical.services.get_hidrive_adapter")
     def test_external_upload_happy_path(self, adapter_factory) -> None:
         self.client.force_login(self.reception_user)

@@ -423,5 +423,10 @@
     "de": "Für diese Vorschau ist kein externer PDF-Anhang verfügbar.",
     "en": "No external PDF attachment is available for this preview.",
     "pl": "Brak zewnętrznego załącznika PDF do wyświetlenia w podglądzie."
+  },
+  "other.domain.external_upload_generate_pdf_no_attachment": {
+    "de": "Die veröffentlichte Version hat keinen ausgewählten externen PDF-Anhang; PDF-Generierung abgebrochen.",
+    "en": "Published version has no external PDF attachment selected; PDF generation cannot proceed.",
+    "pl": "Opublikowana wersja nie ma wybranego zewnętrznego załącznika PDF — generowanie PDF nie może być kontynuowane."
   }
 }

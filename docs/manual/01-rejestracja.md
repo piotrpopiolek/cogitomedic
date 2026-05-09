@@ -152,7 +152,17 @@ Dostęp mają tylko **Reception** i **Admin** (nie lekarz w tym widoku).
 
 ---
 
-## 7. Dobre praktyki (bezpieczeństwo i RODO)
+## 7. API — wgranie zewnętrznego PDF (wynik badania z zewnątrz)
+
+Część instalacji korzysta z endpointów HTTP (np. integracja recepcji), aby wgrać plik PDF i opublikować go jako dokument medyczny typu **external upload** (powiązanie z wpisem kolejki i ukończonym intake).
+
+- Dla kont **recepcji** i **menedżera** (z przypisanymi placówkami na koncie) obowiązuje **ta sama granica placówek**, co w API kolejek i powiązanych modułach recepcji: działanie wyłącznie na wpisach i dokumentach z **swoich** placówek; identyfikator z innej placówki → odmowa (HTTP **403**, spójny komunikat jak przy innych operacjach na kolejce poza zakresem placówki).
+- **Administrator** (rola globalna) nie ma filtra placówek i może wykonać te operacje w całym systemie.
+- **Inny, świadomy model** (nie dotyczy external upload): autoryzacja ścieżki **paper intake** w API oraz wybór wpisu w hubie HTML — dla menedżera i administratora **bez** tej samej bramki placówki (nadzór organizacyjny); pozostałe operacje na kolejce nadal mogą zwracać błąd „poza zakresem placówki”.
+
+---
+
+## 8. Dobre praktyki (bezpieczeństwo i RODO)
 
 - **Wyloguj się** z panelu administracyjnego po skończonej pracy na współdzielonym stanowisku (`/admin/logout/` lub menu użytkownika).
 - Nie udostępniaj hasła. Sesja może wygasnąć po bezczynności — zaloguj się ponownie.
@@ -160,7 +170,7 @@ Dostęp mają tylko **Reception** i **Admin** (nie lekarz w tym widoku).
 
 ---
 
-## 8. Szybki kontakt z administratorem
+## 9. Szybki kontakt z administratorem
 
 Zgłaszaj:
 
