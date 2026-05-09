@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import re
+import uuid
 from datetime import date, timedelta
+from io import BytesIO
+from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.reception import external_upload_admin_views as ext_hub_views
+from apps.medical.models import MedicalDocument, MedicalDocumentVersion
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -20,6 +27,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class ExternalUploadAdminHubViewsTests(TestCase):
@@ -170,3 +185,97 @@ class ExternalUploadAdminHubViewsTests(TestCase):
             )
         )
         self.assertEqual(r.status_code, 404)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_publish_form_includes_publish_request_id(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        pdf = SimpleUploadedFile(
+            "lab.pdf",
+            _minimal_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "upload", "file": pdf},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertRegex(
+            r.content.decode(),
+            r'name="publish_request_id"\s+value="[0-9a-f-]{36}"',
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_double_publish_same_request_id_is_idempotent(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        doc = MedicalDocument.objects.get(queue_entry_id=self.entry.id)
+        g = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        )
+        self.assertEqual(g.status_code, 200)
+        html = g.content.decode()
+        m = re.search(
+            r'name="publish_request_id"\s+value="([0-9a-f-]{36})"',
+            html,
+        )
+        self.assertIsNotNone(m)
+        publish_request_id = m.group(1)
+        rid = uuid.UUID(publish_request_id)
+        pub = {
+            "action": "publish",
+            "publish_request_id": publish_request_id,
+            "publish_locale": "de-DE",
+            "verification_ack": "1",
+        }
+        r1 = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            pub,
+            follow=True,
+        )
+        self.assertEqual(r1.status_code, 200)
+        r2 = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            pub,
+            follow=True,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(
+            MedicalDocumentVersion.objects.filter(
+                medical_document_id=doc.id,
+                publish_request_id=rid,
+            ).count(),
+            1,
+        )

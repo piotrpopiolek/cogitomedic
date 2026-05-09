@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -2460,7 +2460,7 @@ class ExternalUploadApiTests(MedicalApiTests):
     @patch("apps.medical.api_views.download_external_pdf")
     @patch("apps.medical.services.get_hidrive_adapter")
     def test_external_upload_select_preview_publish_revision_flow(
-        self, adapter_factory, mock_download: object
+        self, adapter_factory: MagicMock, mock_download: MagicMock
     ) -> None:
         mock_download.return_value = _minimal_pdf_bytes()
         adapter_factory.return_value.upload.return_value = None
