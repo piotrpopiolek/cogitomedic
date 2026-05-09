@@ -531,9 +531,15 @@ def upload_external_pdf_to_incoming(
             api_message_key="other.domain.external_upload_file_too_large",
         )
 
-    medical_document = MedicalDocument.objects.select_for_update().get(
-        id=medical_document_id
-    )
+    try:
+        medical_document = MedicalDocument.objects.select_for_update().get(
+            id=medical_document_id
+        )
+    except MedicalDocument.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.medical_document_not_found"),
+            api_message_key="other.api.medical_document_not_found",
+        ) from exc
     if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
         raise DomainError(
             domain_message("other.domain.external_upload_not_external_source"),
