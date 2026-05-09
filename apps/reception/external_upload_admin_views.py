@@ -360,23 +360,36 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                             ),
                         )
                     else:
-                        resend = request.POST.get("resend_sms") == "1"
-                        doc = MedicalDocument.objects.get(queue_entry_id=entry.id)
-                        publish_external_upload_version(
-                            medical_document_id=doc.id,
-                            publish_request_id=uuid.uuid4(),
-                            published_by_user_id=request.user.id,
-                            publish_locale=locale,
-                            resend_sms=resend,
-                        )
-                        messages.success(
-                            request,
-                            resolve_other_message(
+                        raw_pr = (request.POST.get("publish_request_id") or "").strip()
+                        try:
+                            publish_request_id = uuid.UUID(raw_pr)
+                        except ValueError:
+                            messages.error(
                                 request,
-                                "administration.external_upload_entry_publish_success",
-                                "Publication started. PDF generation and SMS follow in the background.",
-                            ),
-                        )
+                                resolve_other_message(
+                                    request,
+                                    "administration.external_upload_entry_publish_request_id_invalid",
+                                    "Refresh the page and publish again (invalid publish request id).",
+                                ),
+                            )
+                        else:
+                            resend = request.POST.get("resend_sms") == "1"
+                            doc = MedicalDocument.objects.get(queue_entry_id=entry.id)
+                            publish_external_upload_version(
+                                medical_document_id=doc.id,
+                                publish_request_id=publish_request_id,
+                                published_by_user_id=request.user.id,
+                                publish_locale=locale,
+                                resend_sms=resend,
+                            )
+                            messages.success(
+                                request,
+                                resolve_other_message(
+                                    request,
+                                    "administration.external_upload_entry_publish_success",
+                                    "Publication started. PDF generation and SMS follow in the background.",
+                                ),
+                            )
             else:
                 messages.error(
                     request,
@@ -443,6 +456,7 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
             "administration.external_upload_entry_title",
             "External examination upload",
         ),
+        "publish_request_id": str(uuid.uuid4()),
         "entry": entry,
         "patient": entry.patient,
         "daily_queue": entry.daily_queue,
