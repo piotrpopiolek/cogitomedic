@@ -34,6 +34,7 @@ CHAPTERS: tuple[str, ...] = (
     "04-administrator.md",
     "04-administrator-paper-intake.md",
     "paper_intake_flow.md",
+    "07-wgranie-zewnetrznego-badania.md",
     "05-pacjent-wyniki.md",
 )
 

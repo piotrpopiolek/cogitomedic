@@ -1,5 +1,11 @@
 # HiDrive: PDF z laboratorium w `/incoming/` (recepcja)
 
+## Oddzielnie: wgranie zewnętrznego badania przez aplikację
+
+Recepcja może wgrywać PDF przez **aplikację** — wtedy plik trafia pod  
+**`/incoming/external-upload/{queue_entry_id}/...`** (nie mieszać z ręcznym wrzutem labu do katalogu głównego `/incoming/`).  
+Przy **bramce dopasowania plików labu do pacjenta** (panel lekarza) ścieżki z prefiksem `external-upload/` są **ignorowane**, żeby wynik z recepcji nie wszedł do listy „PDF z laboratorium” dla Befundu. Szczegóły procesu: [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md).
+
 ## Gdzie wrzucać pliki
 
 - Katalog na HiDrive: **`/incoming/`** (domyślnie) — bez podfolderów, bezpośrednio pliki PDF.
