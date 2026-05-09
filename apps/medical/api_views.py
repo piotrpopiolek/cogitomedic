@@ -354,8 +354,10 @@ def _external_upload_queue_entry_scope_forbidden(
 ) -> JsonResponse | None:
     """403 with ``queue_entry_not_in_scope`` when the caller has a finite clinic scope that excludes ``clinic_site_id``.
 
-    ADMIN has no site filter (``get_scoped_clinic_site_ids`` returns ``None``). RECEPTION, MANAGER,
-    DOCTOR, TABLET use the same scope model as other reception HTTP handlers.
+    Uses ``get_scoped_clinic_site_ids`` (same helper as reception queue APIs): **ADMIN** has no
+    site filter (``None``). **RECEPTION** and **MANAGER** with assigned ``clinic_sites`` get a
+    finite ID list (empty list means no access). External-upload HTTP handlers only allow
+    ``{RECEPTION, ADMIN, MANAGER}``; this gate applies to the first two when they carry a scope.
     """
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and clinic_site_id not in scope_ids:
