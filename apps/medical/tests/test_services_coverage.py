@@ -620,6 +620,30 @@ class SelectExternalUploadAttachmentForDraftTests(
             ctx.exception.api_message_key,
         )
 
+    def test_hidrive_path_traversal_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=(
+                f"{hidrive_incoming_dir()}/external-upload/../lab-result.pdf"
+            ),
+            original_filename="lab-result.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_attachment_path_invalid",
+            ctx.exception.api_message_key,
+        )
+
     def test_doctor_role_raises(self) -> None:
         doc = create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
@@ -641,6 +665,25 @@ class SelectExternalUploadAttachmentForDraftTests(
             "external_upload_select_attachment_invalid_role",
             ctx.exception.api_message_key,
         )
+
+    def test_medical_document_not_found_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=uuid.uuid4(),
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
 
 
 # ------------------------------------------------------------------
