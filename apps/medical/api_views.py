@@ -63,6 +63,7 @@ from apps.medical.services import (
     authorize_paper_intake,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
+    create_external_upload_medical_document,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     discard_pending_revision,
@@ -80,6 +81,8 @@ from apps.medical.services import (
     revoke_paper_intake_authorization,
     retry_latest_document_processing,
     save_draft_document_version,
+    select_external_upload_attachment_for_draft,
+    upload_external_pdf_to_incoming,
 )
 from apps.medical.template_services import (
     TemplateListFilters,
@@ -289,6 +292,89 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
             "queue_entry_id": str(document.queue_entry_id),
             "status": document.status,
             "source_type": document.source_type,
+        },
+        status=201,
+    )
+
+
+def _external_upload_error_status(exc: DomainError) -> int:
+    key = exc.api_message_key or ""
+    if key == "other.domain.external_upload_file_too_large":
+        return 413
+    if key == "other.domain.external_upload_invalid_content_type":
+        return 415
+    if key in {
+        "other.api.queue_entry_not_found",
+        "other.api.queue_entry_or_intake_not_found",
+    }:
+        return 404
+    if key == "other.api.server_error":
+        return 502
+    if key in {
+        "other.domain.external_upload_select_attachment_invalid_role",
+    }:
+        return 403
+    if key in {
+        "other.domain.external_upload_not_pdf",
+        "other.domain.external_upload_invalid_or_empty_pdf",
+        "other.domain.external_upload_intake_not_ready",
+        "other.domain.external_upload_not_external_source",
+        "other.domain.external_upload_attachment_not_found",
+        "other.domain.external_upload_attachment_invalid_status",
+        "other.domain.external_upload_attachment_path_invalid",
+        "other.domain.external_upload_no_active_draft",
+        "other.domain.medical_document_source_type_mismatch",
+    }:
+        return 422
+    return 400
+
+
+@require_auth
+def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
+    )
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+
+    raw_queue_entry_id = (request.POST.get("queue_entry_id") or "").strip()
+    uploaded_file = request.FILES.get("file")
+    if not raw_queue_entry_id or uploaded_file is None:
+        return json_error("other.api.invalid_request_body", status=400)
+    try:
+        queue_entry_id = UUID(raw_queue_entry_id)
+    except ValueError:
+        return json_error("other.api.invalid_request_body", status=400)
+
+    try:
+        with transaction.atomic():
+            document = create_external_upload_medical_document(
+                queue_entry_id=queue_entry_id,
+                created_by_user_id=request.user.id,
+            )
+            attachment = upload_external_pdf_to_incoming(
+                medical_document_id=document.id,
+                uploaded_file=uploaded_file,
+                actor_user_id=request.user.id,
+            )
+            draft_version = select_external_upload_attachment_for_draft(
+                medical_document_id=document.id,
+                attachment_id=attachment.id,
+                actor_user_id=request.user.id,
+            )
+    except DomainError as exc:
+        return json_domain_error(exc, status=_external_upload_error_status(exc))
+
+    return JsonResponse(
+        {
+            "document_id": str(document.id),
+            "draft_version_id": str(draft_version.id),
+            "attachment_id": str(attachment.id),
+            "hidrive_remote_path": attachment.hidrive_remote_path,
+            "size_bytes": int(uploaded_file.size or 0),
+            "original_filename": attachment.original_filename,
         },
         status=201,
     )

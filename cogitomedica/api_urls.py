@@ -33,6 +33,7 @@ from apps.medical.api_views import (
     medical_document_unlock_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
+    medical_external_upload_upload_view,
     medical_document_audit_trail_view,
     medical_documents_view,
     medical_documents_no_intake_view,
@@ -184,6 +185,11 @@ urlpatterns = [
         "medical-documents/no-intake",
         medical_documents_no_intake_view,
         name="medical-documents-no-intake",
+    ),
+    path(
+        "medical-documents/external-upload/upload",
+        medical_external_upload_upload_view,
+        name="medical-documents-external-upload-upload",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>",
