@@ -848,6 +848,17 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
         )
         adapter_factory.assert_not_called()
 
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_medical_document_not_found_raises(self, adapter_factory: Mock):
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=uuid.uuid4(),
+                uploaded_file=self._pdf_upload(),
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+        adapter_factory.assert_not_called()
+
 
 # ------------------------------------------------------------------
 # 2. save_draft_document_version — republish after retention
