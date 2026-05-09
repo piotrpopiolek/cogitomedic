@@ -397,7 +397,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
                 created_by_user_id=self.doctor.id,
             )
         self.assertIn(
-            "external_upload_create_document_invalid_role",
+            "external_upload_staff_role_required",
             ctx.exception.api_message_key,
         )
 
@@ -674,7 +674,7 @@ class SelectExternalUploadAttachmentForDraftTests(
                 actor_user_id=self.doctor.id,
             )
         self.assertIn(
-            "external_upload_select_attachment_invalid_role",
+            "external_upload_staff_role_required",
             ctx.exception.api_message_key,
         )
 
@@ -843,7 +843,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
                 actor_user_id=self.doctor.id,
             )
         self.assertIn(
-            "external_upload_select_attachment_invalid_role",
+            "external_upload_staff_role_required",
             ctx.exception.api_message_key,
         )
         adapter_factory.assert_not_called()

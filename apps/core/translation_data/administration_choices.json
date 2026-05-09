@@ -254,6 +254,36 @@
     "en": "Failed",
     "pl": "Niepowodzenie"
   },
+  "administration.choice_external_pdf_status_pending_upload": {
+    "de": "Hochladen ausstehend",
+    "en": "Pending upload",
+    "pl": "Oczekuje na wgranie"
+  },
+  "administration.choice_external_pdf_status_matched": {
+    "de": "Zugeordnet",
+    "en": "Matched",
+    "pl": "Dopasowany"
+  },
+  "administration.choice_external_pdf_status_accepted": {
+    "de": "Verarbeitet",
+    "en": "Processed",
+    "pl": "Przetworzony"
+  },
+  "administration.choice_external_pdf_status_rejected": {
+    "de": "Abgelehnt",
+    "en": "Rejected",
+    "pl": "Odrzucony"
+  },
+  "administration.choice_external_pdf_status_merge_failed": {
+    "de": "Zusammenführung fehlgeschlagen",
+    "en": "Merge failed",
+    "pl": "Scalanie nieudane"
+  },
+  "administration.choice_external_pdf_status_upload_failed": {
+    "de": "Upload fehlgeschlagen",
+    "en": "Upload failed",
+    "pl": "Nieudane wgranie"
+  },
   "administration.choice_outbox_event_generate_pdf": {
     "de": "PDF erzeugen",
     "en": "Generate PDF",

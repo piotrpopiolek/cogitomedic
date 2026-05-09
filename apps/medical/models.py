@@ -715,10 +715,30 @@ class DoctorTextTemplate(models.Model):
 
 
 class ExternalPdfStatus(models.TextChoices):
-    MATCHED = "MATCHED", "Matched"
-    ACCEPTED = "ACCEPTED", "Accepted"
-    REJECTED = "REJECTED", "Rejected"
-    MERGE_FAILED = "MERGE_FAILED", "Merge failed"
+    PENDING_UPLOAD = "PENDING_UPLOAD", db_gettext_lazy(
+        "administration.choice_external_pdf_status_pending_upload",
+        "Pending upload",
+    )
+    MATCHED = "MATCHED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_matched",
+        "Matched",
+    )
+    ACCEPTED = "ACCEPTED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_accepted",
+        "Processed",
+    )
+    REJECTED = "REJECTED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_rejected",
+        "Rejected",
+    )
+    MERGE_FAILED = "MERGE_FAILED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_merge_failed",
+        "Merge failed",
+    )
+    UPLOAD_FAILED = "UPLOAD_FAILED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_upload_failed",
+        "Upload failed",
+    )
 
 
 class ExternalPdfAttachment(models.Model):

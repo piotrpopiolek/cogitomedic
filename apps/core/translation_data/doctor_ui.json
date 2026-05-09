@@ -964,6 +964,16 @@
     "en": "Processed",
     "pl": "Przetworzony"
   },
+  "doctor.external_pdf_status_pending_upload": {
+    "de": "Hochladen ausstehend",
+    "en": "Pending upload",
+    "pl": "Oczekuje na wgranie"
+  },
+  "doctor.external_pdf_status_upload_failed": {
+    "de": "Upload fehlgeschlagen",
+    "en": "Upload failed",
+    "pl": "Nieudane wgranie"
+  },
   "doctor.external_pdf_reject_btn": {
     "de": "Datei ablehnen",
     "en": "Reject file",
