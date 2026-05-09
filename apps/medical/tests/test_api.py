@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from pypdf import PdfWriter
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.medical.models import (
     ExternalPdfAttachment,
     ExternalPdfStatus,
@@ -44,13 +46,9 @@ _PAPER_AUTH_REASON = (
 def _minimal_pdf_bytes() -> bytes:
     writer = PdfWriter()
     writer.add_blank_page(width=200, height=200)
-    out = bytes()
-    from io import BytesIO
-
     buf = BytesIO()
     writer.write(buf)
-    out = buf.getvalue()
-    return out
+    return buf.getvalue()
 
 
 class MedicalApiTests(TestCase):
@@ -2311,3 +2309,63 @@ class ExternalUploadApiTests(MedicalApiTests):
         )
         self.assertEqual(response.status_code, 415)
         adapter_factory.assert_not_called()
+
+    @patch(
+        "apps.medical.api_views.upload_external_pdf_to_incoming",
+        side_effect=DomainError(
+            "not found",
+            api_message_key="other.api.medical_document_not_found",
+        ),
+    )
+    def test_external_upload_medical_document_not_found_returns_404(
+        self, _mock_upload: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @patch(
+        "apps.medical.api_views.create_external_upload_medical_document",
+        side_effect=DomainError(
+            "forbidden",
+            api_message_key="other.domain.external_upload_staff_role_required",
+        ),
+    )
+    def test_external_upload_staff_role_required_returns_403(
+        self, _mock_create: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch(
+        "apps.medical.api_views.create_external_upload_medical_document",
+        side_effect=DomainError(
+            "no staff",
+            api_message_key="other.api.staff_user_not_found",
+        ),
+    )
+    def test_external_upload_staff_user_not_found_returns_404(
+        self, _mock_create: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 404)

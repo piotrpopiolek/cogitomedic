@@ -71,6 +71,8 @@
     externalPdfStatusRejected: uiText("external_pdf_status_rejected"),
     externalPdfStatusMergeFailed: uiText("external_pdf_status_merge_failed"),
     externalPdfStatusAccepted: uiText("external_pdf_status_accepted"),
+    externalPdfStatusPendingUpload: uiText("external_pdf_status_pending_upload"),
+    externalPdfStatusUploadFailed: uiText("external_pdf_status_upload_failed"),
     externalPdfPreviewHint: uiText("external_pdf_preview_hint"),
     externalPdfPreviewMergeWarning: uiText("external_pdf_preview_merge_warning"),
     msgPublishPreviewRequired: uiText("msg_publish_preview_required"),
@@ -353,6 +355,15 @@
       });
   }
 
+  function externalPdfStatusLabel(status) {
+    if (status === "REJECTED") return UI.externalPdfStatusRejected;
+    if (status === "MERGE_FAILED") return UI.externalPdfStatusMergeFailed;
+    if (status === "ACCEPTED") return UI.externalPdfStatusAccepted;
+    if (status === "PENDING_UPLOAD") return UI.externalPdfStatusPendingUpload;
+    if (status === "UPLOAD_FAILED") return UI.externalPdfStatusUploadFailed;
+    return UI.externalPdfStatusMatched;
+  }
+
   /** First previewable attachment: prefer MATCHED, then MERGE_FAILED / ACCEPTED; skip REJECTED-only lists. */
   function pickDefaultExternalPdfItem(items) {
     if (!items || !items.length) return null;
@@ -397,15 +408,7 @@
         });
         var st = document.createElement("span");
         st.className = "text-xs text-base-500 dark:text-base-400";
-        var stLabel =
-          item.status === "REJECTED"
-            ? UI.externalPdfStatusRejected
-            : item.status === "MERGE_FAILED"
-              ? UI.externalPdfStatusMergeFailed
-              : item.status === "ACCEPTED"
-                ? UI.externalPdfStatusAccepted
-                : UI.externalPdfStatusMatched;
-        st.textContent = stLabel;
+        st.textContent = externalPdfStatusLabel(item.status);
         left.appendChild(nameBtn);
         left.appendChild(st);
         li.appendChild(left);

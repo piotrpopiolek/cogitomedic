@@ -306,12 +306,16 @@ def _external_upload_error_status(exc: DomainError) -> int:
     if key in {
         "other.api.queue_entry_not_found",
         "other.api.queue_entry_or_intake_not_found",
+        "other.api.medical_document_not_found",
+        "other.api.staff_user_not_found",
     }:
         return 404
     if key == "other.api.server_error":
         return 502
     if key in {
+        "other.domain.external_upload_staff_role_required",
         "other.domain.external_upload_select_attachment_invalid_role",
+        "other.domain.external_upload_create_document_invalid_role",
     }:
         return 403
     if key in {
@@ -349,21 +353,20 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
         return json_error("other.api.invalid_request_body", status=400)
 
     try:
-        with transaction.atomic():
-            document = create_external_upload_medical_document(
-                queue_entry_id=queue_entry_id,
-                created_by_user_id=request.user.id,
-            )
-            attachment = upload_external_pdf_to_incoming(
-                medical_document_id=document.id,
-                uploaded_file=uploaded_file,
-                actor_user_id=request.user.id,
-            )
-            draft_version = select_external_upload_attachment_for_draft(
-                medical_document_id=document.id,
-                attachment_id=attachment.id,
-                actor_user_id=request.user.id,
-            )
+        document = create_external_upload_medical_document(
+            queue_entry_id=queue_entry_id,
+            created_by_user_id=request.user.id,
+        )
+        attachment = upload_external_pdf_to_incoming(
+            medical_document_id=document.id,
+            uploaded_file=uploaded_file,
+            actor_user_id=request.user.id,
+        )
+        draft_version = select_external_upload_attachment_for_draft(
+            medical_document_id=document.id,
+            attachment_id=attachment.id,
+            actor_user_id=request.user.id,
+        )
     except DomainError as exc:
         return json_domain_error(exc, status=_external_upload_error_status(exc))
 

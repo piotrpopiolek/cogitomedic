@@ -359,6 +359,11 @@
     "en": "External upload is only available after the intake form is submitted or reopened for corrections.",
     "pl": "Wgranie zewnętrzne jest możliwe dopiero po złożeniu ankiety lub jej ponownym otwarciu do poprawek."
   },
+  "other.domain.external_upload_staff_role_required": {
+    "de": "Nur Empfang, Administrator oder Manager können externe Uploads für medizinische Dokumente ausführen (Anlegen, Hochladen, Auswahl).",
+    "en": "Only reception, an administrator, or a manager can perform external-upload actions for medical documents (create, upload, or bind to draft).",
+    "pl": "Tylko recepcja, administrator lub manager może wykonywać operacje wgrania zewnętrznego dokumentu medycznego (utworzenie, upload, przypisanie do wersji roboczej)."
+  },
   "other.domain.external_upload_create_document_invalid_role": {
     "de": "Nur Empfang, Administrator oder Manager können ein externes Upload-Dokument anlegen.",
     "en": "Only reception, an administrator, or a manager can create an external-upload medical document.",

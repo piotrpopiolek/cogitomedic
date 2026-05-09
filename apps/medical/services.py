@@ -490,6 +490,15 @@ def _sanitize_external_upload_filename(original_name: str) -> str:
     return collapsed[:200]
 
 
+def _assert_staff_user_may_act_on_external_upload(*, actor: StaffUser) -> None:
+    """Reception, Admin, or Manager only — shared by external-upload document / upload / draft bind."""
+    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.external_upload_staff_role_required"),
+            api_message_key="other.domain.external_upload_staff_role_required",
+        )
+
+
 def _persist_uploaded_file_to_temp(uploaded_file: UploadedFile) -> Path:
     fd, tmp_path_str = tempfile.mkstemp(prefix="external-upload-", suffix=".pdf")
     os_close(fd)
@@ -501,13 +510,17 @@ def _persist_uploaded_file_to_temp(uploaded_file: UploadedFile) -> Path:
 
 
 @transaction.atomic
-def upload_external_pdf_to_incoming(
+def _register_external_upload_pdf_pending(
     *,
     medical_document_id: uuid.UUID,
     uploaded_file: UploadedFile,
     actor_user_id: uuid.UUID,
 ) -> ExternalPdfAttachment:
-    """Validate and upload one PDF to HiDrive /incoming/external-upload/..."""
+    """Phase A: validate PDF and persist ``ExternalPdfAttachment`` as ``PENDING_UPLOAD``.
+
+    HiDrive upload must run **after** this transaction commits so a rollback cannot
+    leave orphan cloud objects.
+    """
     try:
         actor = StaffUser.objects.get(id=actor_user_id)
     except StaffUser.DoesNotExist as exc:
@@ -515,13 +528,7 @@ def upload_external_pdf_to_incoming(
             domain_message("other.api.staff_user_not_found"),
             api_message_key="other.api.staff_user_not_found",
         ) from exc
-    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
-        raise DomainError(
-            domain_message(
-                "other.domain.external_upload_select_attachment_invalid_role"
-            ),
-            api_message_key="other.domain.external_upload_select_attachment_invalid_role",
-        )
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
 
     if int(uploaded_file.size or 0) > EXTERNAL_UPLOAD_MAX_BYTES:
         raise DomainError(
@@ -586,6 +593,40 @@ def upload_external_pdf_to_incoming(
         f"{hidrive_incoming_dir()}/external-upload/{queue_entry_id}/{safe_filename}"
     )
 
+    attachment, _ = ExternalPdfAttachment.objects.update_or_create(
+        medical_document_id=medical_document_id,
+        hidrive_remote_path=remote_path,
+        defaults={
+            "status": ExternalPdfStatus.PENDING_UPLOAD,
+            "original_filename": safe_filename,
+        },
+    )
+    return attachment
+
+
+def _upload_external_pdf_attachment_to_hidrive(
+    *,
+    attachment_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+) -> None:
+    """Phase B: upload bytes to HiDrive (outside any enclosing DB transaction)."""
+    try:
+        attachment = ExternalPdfAttachment.objects.get(id=attachment_id)
+    except ExternalPdfAttachment.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_not_found"),
+            api_message_key="other.domain.external_upload_attachment_not_found",
+        ) from exc
+
+    if attachment.status == ExternalPdfStatus.MATCHED:
+        return
+    if attachment.status != ExternalPdfStatus.PENDING_UPLOAD:
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        )
+
+    remote_path = attachment.hidrive_remote_path
     local_tmp: Path | None = None
     cleanup_tmp = False
     try:
@@ -597,6 +638,11 @@ def upload_external_pdf_to_incoming(
             cleanup_tmp = True
         get_hidrive_adapter().upload(remote_path=remote_path, local_path=local_tmp)
     except (HiDriveApiError, HiDriveAuthError) as exc:
+        with transaction.atomic():
+            ExternalPdfAttachment.objects.filter(
+                id=attachment_id,
+                status=ExternalPdfStatus.PENDING_UPLOAD,
+            ).update(status=ExternalPdfStatus.UPLOAD_FAILED)
         raise DomainError(
             domain_message("other.api.server_error"),
             api_message_key="other.api.server_error",
@@ -605,14 +651,46 @@ def upload_external_pdf_to_incoming(
         if cleanup_tmp and local_tmp is not None:
             local_tmp.unlink(missing_ok=True)
 
-    attachment, _ = ExternalPdfAttachment.objects.update_or_create(
+
+@transaction.atomic
+def _mark_external_pdf_attachment_matched_after_hidrive(
+    *, attachment_id: uuid.UUID
+) -> None:
+    """Phase C (part 1): flip ``PENDING_UPLOAD`` → ``MATCHED`` after HiDrive succeeded."""
+    attachment = ExternalPdfAttachment.objects.select_for_update().get(id=attachment_id)
+    if attachment.status == ExternalPdfStatus.PENDING_UPLOAD:
+        attachment.status = ExternalPdfStatus.MATCHED
+        attachment.save(update_fields=["status"])
+    elif attachment.status != ExternalPdfStatus.MATCHED:
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        )
+
+
+def upload_external_pdf_to_incoming(
+    *,
+    medical_document_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> ExternalPdfAttachment:
+    """Validate PDF, commit DB intent, upload to HiDrive, then mark ``MATCHED``.
+
+    Split into phases so HiDrive I/O is not inside the same DB transaction as draft
+    selection (see ``medical_external_upload_upload_view``). Callers that also bind the
+    draft should invoke ``select_external_upload_attachment_for_draft`` afterward.
+    """
+    attachment = _register_external_upload_pdf_pending(
         medical_document_id=medical_document_id,
-        hidrive_remote_path=remote_path,
-        defaults={
-            "status": ExternalPdfStatus.MATCHED,
-            "original_filename": safe_filename,
-        },
+        uploaded_file=uploaded_file,
+        actor_user_id=actor_user_id,
     )
+    _upload_external_pdf_attachment_to_hidrive(
+        attachment_id=attachment.id,
+        uploaded_file=uploaded_file,
+    )
+    _mark_external_pdf_attachment_matched_after_hidrive(attachment_id=attachment.id)
+    attachment.refresh_from_db()
     return attachment
 
 
@@ -652,11 +730,7 @@ def create_external_upload_medical_document(
             domain_message("other.api.staff_user_not_found"),
             api_message_key="other.api.staff_user_not_found",
         ) from exc
-    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
-        raise DomainError(
-            domain_message("other.domain.external_upload_create_document_invalid_role"),
-            api_message_key="other.domain.external_upload_create_document_invalid_role",
-        )
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
 
     try:
         QueueEntry.objects.get(pk=queue_entry_id)
@@ -797,13 +871,7 @@ def select_external_upload_attachment_for_draft(
             domain_message("other.api.staff_user_not_found"),
             api_message_key="other.api.staff_user_not_found",
         ) from exc
-    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
-        raise DomainError(
-            domain_message(
-                "other.domain.external_upload_select_attachment_invalid_role"
-            ),
-            api_message_key="other.domain.external_upload_select_attachment_invalid_role",
-        )
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
 
     try:
         medical_document = MedicalDocument.objects.select_for_update().get(
