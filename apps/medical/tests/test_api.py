@@ -6,12 +6,16 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import (
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -35,6 +39,18 @@ from apps.users.models import StaffUser
 _PAPER_AUTH_REASON = (
     "Paper intake path authorized for this queue entry in test (long enough)."
 )
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    out = bytes()
+    from io import BytesIO
+
+    buf = BytesIO()
+    writer.write(buf)
+    out = buf.getvalue()
+    return out
 
 
 class MedicalApiTests(TestCase):
@@ -107,6 +123,12 @@ class MedicalApiTests(TestCase):
             anamnesis_payload={"schema_version": 1, "answers": []},
         )
         self.client.force_login(self.doctor_user)
+
+    def _external_upload_file(
+        self, *, name: str = "lab.pdf", content: bytes | None = None
+    ):
+        data = content if content is not None else _minimal_pdf_bytes()
+        return SimpleUploadedFile(name, data, content_type="application/pdf")
 
     def test_medical_document_create_draft_publish_flow(self) -> None:
         create_response = self.client.post(
@@ -2229,3 +2251,63 @@ class DoctorTemplatesApiTests(TestCase):
         )
         self.assertEqual(patch_owner.status_code, 200)
         self.assertFalse(patch_owner.json()["is_active"])
+
+
+class ExternalUploadApiTests(MedicalApiTests):
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_happy_path(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        adapter_factory.return_value.upload.return_value = None
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(name="Lab Result.pdf"),
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertIn("document_id", body)
+        self.assertIn("draft_version_id", body)
+        self.assertIn("attachment_id", body)
+        self.assertIn("/external-upload/", body["hidrive_remote_path"])
+        self.assertEqual(body["original_filename"], "Lab_Result.pdf")
+
+        doc = MedicalDocument.objects.get(id=body["document_id"])
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+        att = ExternalPdfAttachment.objects.get(id=body["attachment_id"])
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+
+    def test_external_upload_requires_reception_admin_manager(self) -> None:
+        self.client.force_login(self.doctor_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch("apps.medical.services.EXTERNAL_UPLOAD_MAX_BYTES", 10)
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_too_large_returns_413(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        upload = self._external_upload_file()
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={"queue_entry_id": str(self.queue_entry.id), "file": upload},
+        )
+        self.assertEqual(response.status_code, 413)
+        adapter_factory.assert_not_called()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_invalid_mime_returns_415(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        bad = SimpleUploadedFile("x.txt", b"%PDF-1.4\nx", content_type="text/plain")
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={"queue_entry_id": str(self.queue_entry.id), "file": bad},
+        )
+        self.assertEqual(response.status_code, 415)
+        adapter_factory.assert_not_called()
