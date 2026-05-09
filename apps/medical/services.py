@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -592,13 +593,32 @@ def create_external_upload_medical_document(
 
 def _hidrive_path_is_external_upload_prefix(path: str) -> bool:
     """True if *path* is under reception external-upload (incoming or processed)."""
-    p = (path or "").replace("\\", "/").strip()
-    if not p.startswith("/"):
-        p = "/" + p
+    raw = (path or "").replace("\\", "/").strip()
+    if not raw:
+        return False
+    if not raw.startswith("/"):
+        raw = "/" + raw
+    parts: list[str] = []
+    for part in PurePosixPath(raw).parts:
+        if part in ("/", "", "."):
+            continue
+        if part == "..":
+            # Reject paths that try to escape the expected subtree.
+            if not parts:
+                return False
+            parts.pop()
+            continue
+        parts.append(part)
+    p = "/" + "/".join(parts)
     inc = hidrive_incoming_dir()
     proc = hidrive_processed_dir()
-    return p.startswith(f"{inc}/external-upload/") or p.startswith(
-        f"{proc}/external-upload/"
+    inc_prefix = f"{inc}/external-upload"
+    proc_prefix = f"{proc}/external-upload"
+    return (
+        p == inc_prefix
+        or p.startswith(f"{inc_prefix}/")
+        or p == proc_prefix
+        or p.startswith(f"{proc_prefix}/")
     )
 
 
@@ -630,9 +650,15 @@ def select_external_upload_attachment_for_draft(
             api_message_key="other.domain.external_upload_select_attachment_invalid_role",
         )
 
-    medical_document = MedicalDocument.objects.select_for_update().get(
-        id=medical_document_id
-    )
+    try:
+        medical_document = MedicalDocument.objects.select_for_update().get(
+            id=medical_document_id
+        )
+    except MedicalDocument.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.medical_document_not_found"),
+            api_message_key="other.api.medical_document_not_found",
+        ) from exc
     if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
         raise DomainError(
             domain_message("other.domain.external_upload_not_external_source"),
