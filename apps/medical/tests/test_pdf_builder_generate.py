@@ -35,6 +35,7 @@ from apps.medical.pdf_builder import (
     generate_befund_pdf,
     generate_external_upload_pdf,
 )
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -438,3 +439,70 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
         self.assertEqual(dl_mock.call_count, 2)
         att.refresh_from_db()
         self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_corrupt_demotes_matched_and_raises_domain_error(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-corrupt.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-corrupt.pdf",
+            original_filename="ext-corrupt.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = ExternalPdfCorruptError("bad")
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_corrupt",
+        )
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_CORRUPT",
+                medical_document_id=self.medical_doc.id,
+            ).exists()
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_infra_error_raises_all_downloads_failed_pattern(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-down.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-down.pdf",
+            original_filename="ext-down.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = OSError("hidrive unavailable")
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(AllExternalPdfDownloadsFailed) as ctx:
+                generate_external_upload_pdf(self.version)
+
+        self.assertEqual(ctx.exception.medical_document_id, self.medical_doc.id)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                medical_document_id=self.medical_doc.id,
+            ).exists()
+        )

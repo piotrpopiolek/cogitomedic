@@ -68,6 +68,49 @@ class OpenAPISchemaIntegrationTests(TestCase):
         self.assertIn("SaveDraftMedicalDocumentRequest", comp)
         self.assertIn("PublishMedicalDocumentRequest", comp)
         self.assertIn("PaperIntakeAuthorizationRequest", comp)
+        self.assertIn("ExternalUploadSelectAttachmentRequest", comp)
+        self.assertIn("ExternalUploadRevisionStartRequest", comp)
+        self.assertIn("ExternalUploadUploadResponse", comp)
+
+    def test_external_upload_openapi_paths_request_and_response_refs(self) -> None:
+        schema = build_cogito_openapi_schema()
+        paths = schema["paths"]
+        upload_op = paths["/api/v1/medical-documents/external-upload/upload"]["post"]
+        self.assertIn("multipart/form-data", upload_op["requestBody"]["content"])
+        self.assertNotIn("application/json", upload_op["requestBody"]["content"])
+        rb201 = upload_op["responses"]["201"]["content"]["application/json"]["schema"]
+        self.assertEqual(
+            rb201, {"$ref": "#/components/schemas/ExternalUploadUploadResponse"}
+        )
+        sel_ref = get_request_body_schema_for(
+            "/api/v1/medical-documents/{medical_document_id}/external-upload/select-attachment",
+            "post",
+        )
+        self.assertEqual(
+            sel_ref,
+            {"$ref": "#/components/schemas/ExternalUploadSelectAttachmentRequest"},
+        )
+        pub_ref = get_request_body_schema_for(
+            "/api/v1/medical-documents/{medical_document_id}/external-upload/publish",
+            "post",
+        )
+        self.assertEqual(
+            pub_ref, {"$ref": "#/components/schemas/PublishMedicalDocumentRequest"}
+        )
+        rev_ref = get_request_body_schema_for(
+            "/api/v1/medical-documents/{medical_document_id}/external-upload/revision/start",
+            "post",
+        )
+        self.assertEqual(
+            rev_ref, {"$ref": "#/components/schemas/ExternalUploadRevisionStartRequest"}
+        )
+        pub_op = paths[
+            "/api/v1/medical-documents/{medical_document_id}/external-upload/publish"
+        ]["post"]
+        pub_200 = pub_op["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(
+            pub_200, {"$ref": "#/components/schemas/PublishDocumentVersionResponse"}
+        )
 
     def test_auth_login_request_body_uses_ref(self) -> None:
         schema = build_cogito_openapi_schema()
