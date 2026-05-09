@@ -17,6 +17,19 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 | 8   | `reception-08-intake-document-detail.png` | Szczegóły intake + PDF        |
 
 
+## Wgranie zewnętrznego badania (`07-wgranie-zewnetrznego-badania`)
+
+Zrzuty **po wdrożeniu UI** huba / ekranów recepcji dla external upload (obecnie dokumentacja opisuje głównie API i zasady HiDrive). Uzupełnij tabelę i pliki PNG w `assets/screenshots/` zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); potem dopisz wpis w [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py) jeśli automatyzujesz nagrywanie.
+
+| #   | Plik | Ekran / uwagi |
+| --- | ---- | ------------- |
+| 1   | `reception-external-upload-01-hub.png` | Lista wpisów kwalifikujących się do external upload (TBD) |
+| 2   | `reception-external-upload-02-identity.png` | Ekran tożsamości pacjenta przed uploadem (TBD) |
+| 3   | `reception-external-upload-03-after-upload.png` | Po udanym uploadzie / wybór załącznika (TBD) |
+| 4   | `reception-external-upload-04-preview.png` | Podgląd PDF (TBD) |
+| 5   | `reception-external-upload-05-publish-confirm.png` | Drugie potwierdzenie przed publikacją (TBD) |
+
+
 ## Zmiana danych pacjenta (`06-zmiana-danych-pacjenta`)
 
 

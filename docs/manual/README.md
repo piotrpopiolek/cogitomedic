@@ -15,7 +15,7 @@ Zrzuty są w katalogu `docs/manual/assets/screenshots/` i w Markdown są podlink
 
 ### Eksport do PDF (rozdziały 00–06 + ścieżka papierowa)
 
-Tak — można zbudować **jeden plik PDF** z plików `00-przeglad.md` … `06-zmiana-danych-pacjenta.md` … `05-pacjent-wyniki.md` oraz `04-administrator-paper-intake.md` i `paper_intake_flow.md` (bez checklisty zrzutów; kolejność jak w `scripts/build_manual_pdf.py`).
+Tak — można zbudować **jeden plik PDF** z plików `00-przeglad.md` … `06-zmiana-danych-pacjenta.md` … `05-pacjent-wyniki.md` oraz `04-administrator-paper-intake.md`, `paper_intake_flow.md` i `07-wgranie-zewnetrznego-badania.md` (bez checklisty zrzutów; kolejność jak w `scripts/build_manual_pdf.py`).
 
 1. Zainstaluj **[Pandoc](https://pandoc.org/installing.html)** oraz dystrybucję LaTeX z **`xelatex`** (np. [TeX Live](https://tug.org/texlive/) lub [MiKTeX](https://miktex.org/) — potrzebne do polskich znaków i osadzania obrazów).  
    **Windows (winget):** `winget install -e JohnMacFarlane.Pandoc` oraz `winget install -e MiKTeX.MiKTeX`. Po instalacji **otwórz nowy terminal** (lub zrestartuj Cursor), żeby zaktualizować `PATH` — inaczej `pandoc` / `xelatex` mogą być „niewidoczne”.
@@ -41,6 +41,7 @@ Skrypt składa rozdziały **00, 01, 06, 02–05** oraz **uzupełnienia o ścież
 | [04-administrator.md](04-administrator.md) | Administrator systemu |
 | [04-administrator-paper-intake.md](04-administrator-paper-intake.md) | Administrator / Manager — procedura ścieżki papierowej |
 | [paper_intake_flow.md](paper_intake_flow.md) | Wszyscy — diagram ścieżki papierowej i cyfrowej |
+| [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md) | Recepcja / Admin / Manager — PDF wyniku spoza panelu Befund (external upload) |
 | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) | Pacjent — pobieranie dokumentacji po SMS |
 | [screenshot-checklist.md](screenshot-checklist.md) | Lista plików PNG i odpowiadających im ekranów |
 
@@ -48,4 +49,4 @@ Zrzuty ekranu: katalog [assets/screenshots/](/docs/manual/assets/screenshots/REA
 
 **Filmy WebM (instruktaż ekranu):** katalog [assets/videos/](/docs/manual/assets/videos/README.md) — skrypt [`scripts/record_manual_videos.py`](../../scripts/record_manual_videos.py); Docker: `docker compose --profile manual-videos run --rm manual-videos`. Pliki `.webm` nie są wersjonowane w git (`.gitignore`).
 
-**Wersja treści:** 2026-05-05 (dopasuj datę przy aktualizacji UI).
+**Wersja treści:** 2026-05-09 (dopasuj datę przy aktualizacji UI).
