@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from apps.core.api_utils import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
+    get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
     json_pydantic_validation_error,
@@ -348,8 +349,38 @@ def _external_upload_error_status(exc: DomainError) -> int:
     return 400
 
 
+def _external_upload_queue_entry_scope_forbidden(
+    request: HttpRequest, *, clinic_site_id: UUID
+) -> JsonResponse | None:
+    """403 with ``queue_entry_not_in_scope`` when the caller has a finite clinic scope that excludes ``clinic_site_id``.
+
+    ADMIN has no site filter (``get_scoped_clinic_site_ids`` returns ``None``). RECEPTION, MANAGER,
+    DOCTOR, TABLET use the same scope model as other reception HTTP handlers.
+    """
+    scope_ids = get_scoped_clinic_site_ids(request.user)
+    if scope_ids is not None and clinic_site_id not in scope_ids:
+        return json_error("other.api.queue_entry_not_in_scope", status=403)
+    return None
+
+
+def _external_upload_medical_document_scope_forbidden(
+    request: HttpRequest, doc: MedicalDocument
+) -> JsonResponse | None:
+    """Same scope gate as upload: document's queue entry must be in the caller's assigned clinic sites."""
+    return _external_upload_queue_entry_scope_forbidden(
+        request,
+        clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+    )
+
+
 @require_auth
 def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
+    """POST multipart: create EXTERNAL_UPLOAD document and register the uploaded PDF.
+
+    RECEPTION and MANAGER are limited to queue entries whose daily queue belongs to one of their
+    assigned clinic sites (same rule as ``queue_entry_not_in_scope`` on reception queue APIs).
+    ADMIN is not site-scoped.
+    """
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
     )
@@ -366,6 +397,15 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
         queue_entry_id = UUID(raw_queue_entry_id)
     except ValueError:
         return json_error("other.api.invalid_request_body", status=400)
+
+    try:
+        entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
+    except ObjectDoesNotExist:
+        return json_error("other.api.queue_entry_not_found", status=404)
+    if err := _external_upload_queue_entry_scope_forbidden(
+        request, clinic_site_id=entry.daily_queue.clinic_site_id
+    ):
+        return err
 
     try:
         document = create_external_upload_medical_document(
@@ -428,6 +468,7 @@ def _external_upload_pdf_bytes_for_preview(
 def medical_external_upload_select_attachment_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
+    """POST: bind a MATCHED|ACCEPTED attachment to the active DRAFT. Scoped staff: clinic-site gate."""
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
     )
@@ -445,6 +486,15 @@ def medical_external_upload_select_attachment_view(
         return json_domain_error(exc)
     except ValidationError as exc:
         return json_pydantic_validation_error(exc)
+
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+    if err := _external_upload_medical_document_scope_forbidden(request, doc):
+        return err
 
     try:
         draft_version = select_external_upload_attachment_for_draft(
@@ -469,7 +519,11 @@ def medical_external_upload_select_attachment_view(
 def medical_external_upload_preview_pdf_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> HttpResponse | JsonResponse:
-    """GET PDF preview for EXTERNAL_UPLOAD (draft attachment or published local/HIDrive file)."""
+    """GET PDF preview for EXTERNAL_UPLOAD (draft attachment or published local/HIDrive file).
+
+    Scoped RECEPTION/MANAGER: same clinic-site boundary as other reception queue APIs
+    (``queue_entry_not_in_scope`` when the document's queue is outside assigned sites).
+    """
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
     )
@@ -484,6 +538,8 @@ def medical_external_upload_preview_pdf_view(
         )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
+    if err := _external_upload_medical_document_scope_forbidden(request, doc):
+        return err
     if doc.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
         exc = DomainError(
             domain_message("other.domain.external_upload_not_external_source"),
@@ -582,6 +638,7 @@ def medical_external_upload_preview_pdf_view(
 def medical_external_upload_publish_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
+    """POST: publish external-upload flow. Scoped staff: clinic-site gate before publish."""
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
     )
@@ -599,15 +656,18 @@ def medical_external_upload_publish_view(
         return json_pydantic_validation_error(exc)
 
     try:
-        with transaction.atomic():
-            MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-            version = publish_external_upload_version(
-                medical_document_id=medical_document_id,
-                publish_request_id=body.publish_request_id,
-                published_by_user_id=request.user.id,
-                publish_locale=body.publish_locale,
-                resend_sms=body.resend_sms,
-            )
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        if err := _external_upload_medical_document_scope_forbidden(request, doc):
+            return err
+        version = publish_external_upload_version(
+            medical_document_id=medical_document_id,
+            publish_request_id=body.publish_request_id,
+            published_by_user_id=request.user.id,
+            publish_locale=body.publish_locale,
+            resend_sms=body.resend_sms,
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except IdempotencyConflictError as exc:
@@ -633,6 +693,7 @@ def medical_external_upload_publish_view(
 def medical_external_upload_revision_start_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
+    """POST: start pending revision. Scoped staff: clinic-site gate."""
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
     )
@@ -650,12 +711,15 @@ def medical_external_upload_revision_start_view(
         return json_pydantic_validation_error(exc)
 
     try:
-        with transaction.atomic():
-            MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-            created = start_external_upload_revision(
-                medical_document_id=medical_document_id,
-                actor_user_id=request.user.id,
-            )
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        if err := _external_upload_medical_document_scope_forbidden(request, doc):
+            return err
+        created = start_external_upload_revision(
+            medical_document_id=medical_document_id,
+            actor_user_id=request.user.id,
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
