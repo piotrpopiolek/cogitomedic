@@ -368,5 +368,35 @@
     "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument mit anderem Quelltyp.",
     "en": "A medical document for this queue entry already exists with a different source type.",
     "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny o innym typie źródła."
+  },
+  "other.domain.external_upload_select_attachment_invalid_role": {
+    "de": "Nur Empfang, Administrator oder Manager können einen externen PDF-Anhang auswählen.",
+    "en": "Only reception, an administrator, or a manager can select an external PDF attachment.",
+    "pl": "Tylko recepcja, administrator lub manager może wybrać zewnętrzny załącznik PDF."
+  },
+  "other.domain.external_upload_not_external_source": {
+    "de": "Diese Aktion gilt nur für Dokumente mit Quelltyp „Externer Upload“.",
+    "en": "This action applies only to medical documents with source type external upload.",
+    "pl": "Ta operacja dotyczy wyłącznie dokumentów ze źródłem „wgranie zewnętrzne”."
+  },
+  "other.domain.external_upload_no_active_draft": {
+    "de": "Es gibt keine aktive Entwurfsversion für dieses Dokument.",
+    "en": "There is no active draft version for this document.",
+    "pl": "Brak aktywnej wersji roboczej (DRAFT) dla tego dokumentu."
+  },
+  "other.domain.external_upload_attachment_not_found": {
+    "de": "Der externe PDF-Anhang wurde nicht gefunden oder gehört nicht zu diesem Dokument.",
+    "en": "The external PDF attachment was not found or does not belong to this document.",
+    "pl": "Nie znaleziono zewnętrznego załącznika PDF lub nie należy on do tego dokumentu."
+  },
+  "other.domain.external_upload_attachment_invalid_status": {
+    "de": "Für die Auswahl sind nur Anhänge mit Status „MATCHED“ oder „ACCEPTED“ zulässig.",
+    "en": "Only attachments in MATCHED or ACCEPTED status can be selected.",
+    "pl": "Do wyboru dopuszczalne są tylko załączniki w statusie MATCHED lub ACCEPTED."
+  },
+  "other.domain.external_upload_attachment_path_invalid": {
+    "de": "Der HiDrive-Pfad des Anhangs liegt nicht unter dem erwarteten Präfix für externe Uploads.",
+    "en": "The attachment HiDrive path is not under the expected external-upload prefix.",
+    "pl": "Ścieżka HiDrive załącznika nie znajduje się pod oczekiwanym prefiksem wgrania zewnętrznego."
   }
 }
