@@ -567,6 +567,30 @@ if HAS_UNFOLD:
                 },
                 {
                     "title": db_gettext_lazy(
+                        "administration.side_external_upload",
+                        "External examination",
+                    ),
+                    "permission": lambda request: _is_reception_manager_or_admin_role(
+                        request
+                    ),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_external_upload_hub",
+                                "External examination PDF hub",
+                            ),
+                            "icon": "cloud_upload",
+                            "link": lambda request: reverse_lazy(
+                                "admin_external_upload_hub"
+                            ),
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy(
                         "administration.side_outbox_ops", "Outbox i operacje"
                     ),
                     "permission": lambda request: _is_doctor_or_admin_role(request),

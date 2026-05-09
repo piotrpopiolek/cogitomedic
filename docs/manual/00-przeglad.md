@@ -73,6 +73,7 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 ## Indeks instrukcji
 
 - [Recepcja — zarządzanie kolejką i import](01-rejestracja.md)
+- [Recepcja — wgranie zewnętrznego badania (PDF spoza Befundu)](07-wgranie-zewnetrznego-badania.md)
 - [Zmiana danych osobowych pacjenta (krok po kroku)](06-zmiana-danych-pacjenta.md)
 - [Tablet — poczekalnia i formularz pacjenta](02-tablet.md)
 - [Lekarz — panel Befund](03-doktor.md)

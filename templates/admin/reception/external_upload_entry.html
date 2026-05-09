@@ -1,0 +1,145 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n cogitomedica_i18n %}
+
+{% block breadcrumbs %}
+<div class="px-4 py-3 sm:px-8">
+    <nav aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
+            <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
+            <li><span class="mx-2">/</span></li>
+            <li><a href="{% url 'admin_external_upload_hub' %}" class="hover:text-gray-900">{% admin_trans "administration.external_upload_hub_title" "External examination upload" %}</a></li>
+            <li><span class="mx-2">/</span></li>
+            <li class="text-gray-900 font-mono text-xs" aria-current="page">{{ entry.id }}</li>
+        </ol>
+    </nav>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-8 pb-8 max-w-3xl">
+    <h1 class="text-2xl font-bold mb-4">{% admin_trans "administration.external_upload_entry_heading" "External upload" %}</h1>
+
+    {% if messages %}
+    <ul class="mb-4 space-y-2">
+        {% for message in messages %}
+        <li class="rounded-md px-4 py-3 text-sm {% if message.tags == 'success' %}bg-green-50 text-green-800 border border-green-200{% elif message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-gray-50 text-gray-800 border border-gray-200{% endif %}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6 space-y-2 text-sm">
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">{% admin_trans "administration.external_upload_entry_identity_heading" "Patient and visit" %}</h2>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.field_patient" "Patient" %}:</span> {{ patient.last_name }}, {{ patient.first_name }}</p>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.external_upload_entry_dob" "Date of birth" %}:</span> {{ patient.date_of_birth }}</p>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.external_upload_entry_phone" "Phone" %}:</span> {{ patient.phone }}</p>
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.paper_intake_admin_label_queue_date" "Queue date" %}:</span> {{ daily_queue.queue_date }}</p>
+        {% if intake %}
+        <p><span class="font-medium text-gray-700">{% admin_trans "administration.external_upload_entry_intake_status" "Intake form status" %}:</span> {{ intake.get_form_status_display }}</p>
+        {% endif %}
+        <p class="pt-2"><a href="{{ admin_queue_entry_url }}" class="text-primary-600 hover:text-primary-800 font-medium">{% admin_trans "administration.paper_intake_admin_link_queue_entry" "Open queue entry in Django admin" %} →</a></p>
+    </div>
+
+    {% if wrong_source %}
+    <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 mb-6">
+        {% admin_trans "administration.external_upload_entry_blocking_wrong_source" "This visit already has a medical document from another source (digital or paper Befund). External upload does not apply." %}
+    </div>
+    {% else %}
+
+    {% if medical_document and medical_document.status == "PUBLISHED" and not medical_document.has_pending_revision %}
+    <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="start_revision" />
+        <p class="text-sm text-gray-600 mb-3">{% admin_trans "administration.external_upload_entry_revision_hint" "To upload a correction or resend SMS, start a new draft revision first." %}</p>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
+            {% admin_trans "administration.external_upload_entry_revision_submit" "Start revision" %}
+        </button>
+    </form>
+    {% endif %}
+
+    <div class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-3">{% admin_trans "administration.external_upload_entry_attachments_heading" "PDF attachments (matched or archived)" %}</h2>
+        {% if attachments %}
+        <ul class="divide-y divide-gray-200 text-sm">
+            {% for a in attachments %}
+            <li class="py-2 flex justify-between gap-4">
+                <span class="font-mono text-xs break-all">{{ a.original_filename|default:"—" }}</span>
+                <span class="shrink-0 text-gray-600">{{ a.status }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-500">{% admin_trans "administration.external_upload_entry_no_attachments" "No attachments yet. Upload a PDF below." %}</p>
+        {% endif %}
+    </div>
+
+    <form method="post" enctype="multipart/form-data" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="upload" />
+        <h2 class="text-lg font-semibold text-gray-900">{% admin_trans "administration.external_upload_entry_upload_heading" "Upload PDF" %}</h2>
+        <div>
+            <label for="id_pdf_file" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.external_upload_entry_upload_file_label" "PDF file (max 250 MB)" %}</label>
+            <input id="id_pdf_file" type="file" name="file" accept="application/pdf,.pdf" required class="block w-full text-sm text-gray-700" />
+        </div>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+            {% admin_trans "administration.external_upload_entry_upload_submit" "Upload and bind to draft" %}
+        </button>
+    </form>
+
+    {% if attachments and medical_document %}
+    <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 mb-6 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="select" />
+        <h2 class="text-lg font-semibold text-gray-900">{% admin_trans "administration.external_upload_entry_select_heading" "Select attachment for current draft" %}</h2>
+        <div class="space-y-2">
+            {% for a in attachments %}
+            <label class="flex items-center gap-2 text-sm">
+                <input type="radio" name="attachment_id" value="{{ a.id }}" required class="border-gray-300 text-primary-600" />
+                <span>{{ a.original_filename }} — {{ a.status }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+            {% admin_trans "administration.external_upload_entry_select_submit" "Use selected attachment" %}
+        </button>
+    </form>
+    {% endif %}
+
+    {% if preview_pdf_url %}
+    <div class="mb-6">
+        <a href="{{ preview_pdf_url }}" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+            {% admin_trans "administration.external_upload_entry_preview_link" "Open PDF preview in new tab" %} →
+        </a>
+    </div>
+    {% endif %}
+
+    {% if medical_document and draft and draft.external_selected_attachment_id %}
+    <form method="post" action="" class="bg-white rounded-md shadow border border-gray-200 p-6 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="publish" />
+        <h2 class="text-lg font-semibold text-gray-900">{% admin_trans "administration.external_upload_entry_publish_heading" "Publish (second confirmation)" %}</h2>
+        <p class="text-sm text-gray-600">{% admin_trans "administration.external_upload_entry_publish_intro" "Publishing sends the document to background processing (PDF, HiDrive, SMS). Ensure the on-screen patient matches the PDF." %}</p>
+        <div>
+            <label for="id_publish_locale" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.external_upload_entry_publish_locale" "Publish locale" %}</label>
+            <select id="id_publish_locale" name="publish_locale" required class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                {% for val, label in locale_choices %}
+                <option value="{{ val }}" {% if val == "de-DE" %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="resend_sms" value="1" class="rounded border-gray-300 text-primary-600" />
+            {% admin_trans "administration.external_upload_entry_publish_resend_sms" "Resend SMS to patient (e.g. after republish)" %}
+        </label>
+        <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="verification_ack" value="1" required class="mt-1 rounded border-gray-300 text-primary-600" />
+            <span>{% admin_trans "administration.external_upload_entry_publish_ack" "I confirm that the patient shown above matches the PDF and that publication to the patient is intended." %}</span>
+        </label>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-700 hover:bg-green-800">
+            {% admin_trans "administration.external_upload_entry_publish_submit" "Publish" %}
+        </button>
+    </form>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}
