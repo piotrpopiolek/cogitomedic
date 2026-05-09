@@ -17,6 +17,15 @@
 <div class="px-4 sm:px-8 pb-8">
     <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
 
+    <div class="mb-8 flex flex-wrap gap-4 text-sm">
+        <a href="{% url 'admin_paper_intake_hub' %}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+            {% admin_trans "administration.dashboard_link_paper_intake" "Paper intake authorization" %}
+        </a>
+        <a href="{% url 'admin_external_upload_hub' %}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+            {% admin_trans "administration.dashboard_link_external_upload" "External examination PDF upload" %}
+        </a>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Failed outbox -->
         <div class="bg-white rounded-md shadow p-6 border border-gray-200">

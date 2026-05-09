@@ -404,6 +404,236 @@
     "en": "Paper intake authorization has been revoked.",
     "pl": "Autoryzacja ścieżki papierowej została cofnięta."
   },
+  "administration.dashboard_link_external_upload": {
+    "de": "Externe Untersuchung (PDF-Upload)",
+    "en": "External examination PDF upload",
+    "pl": "Zewnętrzne badanie (wgrywanie PDF)"
+  },
+  "administration.dashboard_link_paper_intake": {
+    "de": "Papier-Anamnese autorisieren",
+    "en": "Paper intake authorization",
+    "pl": "Autoryzacja ścieżki papierowej"
+  },
+  "administration.external_upload_entry_attachments_heading": {
+    "de": "PDF-Anhänge",
+    "en": "PDF attachments",
+    "pl": "Załączniki PDF"
+  },
+  "administration.external_upload_entry_blocking_wrong_source": {
+    "de": "Für diesen Besuch existiert bereits ein medizinisches Dokument aus einer anderen Quelle. Externer Upload gilt nicht.",
+    "en": "This visit already has a medical document from another source. External upload does not apply.",
+    "pl": "Dla tej wizyty istnieje już dokument z innego źródła. Zewnętrzny upload nie dotyczy."
+  },
+  "administration.external_upload_entry_dob": {
+    "de": "Geburtsdatum",
+    "en": "Date of birth",
+    "pl": "Data urodzenia"
+  },
+  "administration.external_upload_entry_heading": {
+    "de": "Externer Upload",
+    "en": "External upload",
+    "pl": "Upload zewnętrzny"
+  },
+  "administration.external_upload_entry_identity_heading": {
+    "de": "Patient und Besuch",
+    "en": "Patient and visit",
+    "pl": "Pacjent i wizyta"
+  },
+  "administration.external_upload_entry_intake_status": {
+    "de": "Status des Ankieten-Formulars",
+    "en": "Intake form status",
+    "pl": "Status formularza ankiety pacjenta"
+  },
+  "administration.external_upload_entry_invalid_attachment": {
+    "de": "Ungültige Anhangsauswahl.",
+    "en": "Invalid attachment selection.",
+    "pl": "Nieprawidłowy wybór załącznika."
+  },
+  "administration.external_upload_entry_no_attachments": {
+    "de": "Noch keine Anhänge. Laden Sie unten eine PDF-Datei hoch.",
+    "en": "No attachments yet. Upload a PDF below.",
+    "pl": "Brak załączników. Wgraj plik PDF poniżej."
+  },
+  "administration.external_upload_entry_no_document": {
+    "de": "Erstellen Sie das Dokument, indem Sie zuerst eine PDF-Datei hochladen.",
+    "en": "Create the document by uploading a PDF first.",
+    "pl": "Utwórz dokument, wgrywając najpierw plik PDF."
+  },
+  "administration.external_upload_entry_phone": {
+    "de": "Telefon",
+    "en": "Phone",
+    "pl": "Telefon"
+  },
+  "administration.external_upload_entry_preview_link": {
+    "de": "PDF-Vorschau in neuem Tab öffnen",
+    "en": "Open PDF preview in new tab",
+    "pl": "Otwórz podgląd PDF w nowej karcie"
+  },
+  "administration.external_upload_entry_publish_ack": {
+    "de": "Ich bestätige, dass der oben gezeigte Patient mit dem PDF übereinstimmt und die Veröffentlichung für den Patienten beabsichtigt ist.",
+    "en": "I confirm that the patient shown above matches the PDF and that publication to the patient is intended.",
+    "pl": "Potwierdzam zgodność pacjenta powyżej z treścią PDF oraz zamierzoną publikację dla pacjenta."
+  },
+  "administration.external_upload_entry_publish_ack_required": {
+    "de": "Bestätigen Sie vor der Veröffentlichung die Übereinstimmung der Patientenidentität mit dem PDF.",
+    "en": "Confirm that patient identity matches the PDF before publishing.",
+    "pl": "Potwierdź zgodność tożsamości pacjenta z PDF przed publikacją."
+  },
+  "administration.external_upload_entry_publish_heading": {
+    "de": "Veröffentlichen",
+    "en": "Publish",
+    "pl": "Publikacja"
+  },
+  "administration.external_upload_entry_publish_intro": {
+    "de": "Die Veröffentlichung startet die Hintergrundverarbeitung. Prüfen Sie, ob der angezeigte Patient mit dem PDF übereinstimmt.",
+    "en": "Publishing sends the document to background processing. Ensure the on-screen patient matches the PDF.",
+    "pl": "Publikacja uruchamia przetwarzanie w tle. Upewnij się, że pacjent na ekranie zgadza się z PDF."
+  },
+  "administration.external_upload_entry_publish_locale": {
+    "de": "Veröffentlichungslocale",
+    "en": "Publish locale",
+    "pl": "Locale publikacji"
+  },
+  "administration.external_upload_entry_publish_locale_invalid": {
+    "de": "Wählen Sie ein gültiges Veröffentlichungslocale.",
+    "en": "Choose a valid publish locale.",
+    "pl": "Wybierz prawidłowe locale publikacji."
+  },
+  "administration.external_upload_entry_publish_resend_sms": {
+    "de": "SMS erneut an den Patienten senden",
+    "en": "Resend SMS to patient",
+    "pl": "Wyślij ponownie SMS do pacjenta"
+  },
+  "administration.external_upload_entry_publish_submit": {
+    "de": "Veröffentlichen",
+    "en": "Publish",
+    "pl": "Opublikuj"
+  },
+  "administration.external_upload_entry_publish_success": {
+    "de": "Veröffentlichung gestartet. PDF-Erzeugung und SMS folgen im Hintergrund.",
+    "en": "Publication started. PDF generation and SMS follow in the background.",
+    "pl": "Publikacja uruchomiona. Generowanie PDF i SMS w tle."
+  },
+  "administration.external_upload_entry_revision_hint": {
+    "de": "Um eine Korrektur hochzuladen oder die SMS erneut zu senden, starten Sie zuerst einen neuen Entwurf.",
+    "en": "To upload a correction or resend SMS, start a new draft revision first.",
+    "pl": "Aby wgrać korektę lub ponownie wysłać SMS, najpierw uruchom nowy szkic rewizji."
+  },
+  "administration.external_upload_entry_revision_started": {
+    "de": "Neue Entwurfsrevision gestartet. PDF hochladen oder auswählen, dann veröffentlichen.",
+    "en": "A new draft revision was started. Upload or select a PDF, then publish.",
+    "pl": "Uruchomiono nowy szkic rewizji. Wgraj lub wybierz PDF, potem opublikuj."
+  },
+  "administration.external_upload_entry_revision_submit": {
+    "de": "Revision starten",
+    "en": "Start revision",
+    "pl": "Rozpocznij rewizję"
+  },
+  "administration.external_upload_entry_select_heading": {
+    "de": "Anhang für aktuellen Entwurf auswählen",
+    "en": "Select attachment for current draft",
+    "pl": "Wybór załącznika dla bieżącego szkicu"
+  },
+  "administration.external_upload_entry_select_submit": {
+    "de": "Ausgewählten Anhang verwenden",
+    "en": "Use selected attachment",
+    "pl": "Użyj wybranego załącznika"
+  },
+  "administration.external_upload_entry_select_success": {
+    "de": "Anhang für den Entwurf ausgewählt.",
+    "en": "Attachment selected for the draft.",
+    "pl": "Załącznik przypisany do szkicu."
+  },
+  "administration.external_upload_entry_title": {
+    "de": "Externe Untersuchung",
+    "en": "External examination",
+    "pl": "Zewnętrzne badanie"
+  },
+  "administration.external_upload_entry_upload_file_label": {
+    "de": "PDF-Datei (max. 250 MB)",
+    "en": "PDF file (max 250 MB)",
+    "pl": "Plik PDF (max. 250 MB)"
+  },
+  "administration.external_upload_entry_upload_heading": {
+    "de": "PDF hochladen",
+    "en": "Upload PDF",
+    "pl": "Wgraj PDF"
+  },
+  "administration.external_upload_entry_upload_missing_file": {
+    "de": "Wählen Sie vor dem Hochladen eine PDF-Datei.",
+    "en": "Choose a PDF file before uploading.",
+    "pl": "Wybierz plik PDF przed wgraniem."
+  },
+  "administration.external_upload_entry_upload_submit": {
+    "de": "Hochladen und mit Entwurf verknüpfen",
+    "en": "Upload and bind to draft",
+    "pl": "Wgraj i powiąż ze szkicem"
+  },
+  "administration.external_upload_entry_upload_success": {
+    "de": "Datei hochgeladen und mit dem Entwurf verknüpft.",
+    "en": "File uploaded and linked to the draft.",
+    "pl": "Plik wgrany i powiązany ze szkicem."
+  },
+  "administration.external_upload_hub_filter_all": {
+    "de": "Eingereicht oder wiedereröffnet",
+    "en": "Submitted or reopened",
+    "pl": "Złożony lub ponownie otwarty"
+  },
+  "administration.external_upload_hub_filter_label": {
+    "de": "Status des Aufnahmeformulars",
+    "en": "Intake form status",
+    "pl": "Status formularza intake"
+  },
+  "administration.external_upload_hub_filter_reopened": {
+    "de": "Nur wiedereröffnet",
+    "en": "Reopened only",
+    "pl": "Tylko ponownie otwarte"
+  },
+  "administration.external_upload_hub_filter_submitted": {
+    "de": "Nur eingereicht",
+    "en": "Submitted only",
+    "pl": "Tylko złożone"
+  },
+  "administration.external_upload_hub_intro": {
+    "de": "Wählen Sie einen Besuch mit eingereichtem oder wiedereröffnetem Ankieten-Formular des Patienten. Laden Sie ein PDF hoch, prüfen Sie die Identität, dann veröffentlichen.",
+    "en": "Select a visit with a submitted or reopened patient intake. Upload a PDF, confirm identity, then publish.",
+    "pl": "Wybierz wizytę ze złożonym lub ponownie otwartym ankietą pacjenta. Wgraj PDF, potwierdź tożsamość, opublikuj."
+  },
+  "administration.external_upload_hub_invalid_queue_entry": {
+    "de": "Wählen Sie einen gültigen Warteschlangeneintrag aus der Liste.",
+    "en": "Select a valid queue entry from the list.",
+    "pl": "Wybierz prawidłowy wpis kolejki z listy."
+  },
+  "administration.external_upload_hub_no_entries": {
+    "de": "Keine geeigneten Warteschlangeneinträge für den gewählten Filter und Zeitraum.",
+    "en": "No eligible queue entries for the selected filter and period.",
+    "pl": "Brak kwalifikujących się wpisów dla wybranego filtru i okresu."
+  },
+  "administration.external_upload_hub_queue_entry_empty": {
+    "de": "Wert auswählen",
+    "en": "Select value",
+    "pl": "Wybierz wartość"
+  },
+  "administration.external_upload_hub_queue_entry_id_label": {
+    "de": "Warteschlangeneintrag",
+    "en": "Queue entry",
+    "pl": "Wpis kolejki"
+  },
+  "administration.external_upload_hub_staff_only": {
+    "de": "Nur Anmeldung, Administratoren oder Manager können diese Seite nutzen.",
+    "en": "Only reception, administrators, or managers can use this page.",
+    "pl": "Tylko recepcja, administrator lub manager może korzystać z tej strony."
+  },
+  "administration.external_upload_hub_submit": {
+    "de": "Weiter",
+    "en": "Continue",
+    "pl": "Dalej"
+  },
+  "administration.external_upload_hub_title": {
+    "de": "Externe Untersuchung",
+    "en": "External examination",
+    "pl": "Zewnętrzne badanie"
+  },
   "administration.side_paper_intake_hub": {
     "de": "Papier-Intake autorisieren",
     "en": "Authorize paper intake",
@@ -593,6 +823,16 @@
     "de": "Outbox und Vorgänge",
     "en": "Outbox and operations",
     "pl": "Outbox i operacje"
+  },
+  "administration.side_external_upload": {
+    "de": "Externe Untersuchung",
+    "en": "External examination",
+    "pl": "Zewnętrzne badanie"
+  },
+  "administration.side_external_upload_hub": {
+    "de": "PDF-Upload und Veröffentlichung",
+    "en": "PDF upload and publish",
+    "pl": "Wgranie i publikacja PDF"
   },
   "administration.side_paper_intake": {
     "de": "Papier-Anamnese",

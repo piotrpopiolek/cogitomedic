@@ -57,6 +57,32 @@ def ensure_admin_manager_staff(request: Any) -> HttpResponseForbidden | None:
     return None
 
 
+def is_reception_admin_or_manager_staff(user: Any) -> bool:
+    """True for staff who may use the external-upload hub (same roles as the REST API)."""
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            getattr(user, "is_reception", False)
+            or getattr(user, "is_admin_role", False)
+            or getattr(user, "is_manager", False)
+        )
+    )
+
+
+def ensure_reception_admin_manager_staff(request: Any) -> HttpResponseForbidden | None:
+    """Return 403 if the user is not Reception, Admin, or Manager."""
+    if not is_reception_admin_or_manager_staff(request.user):
+        return HttpResponseForbidden(
+            resolve_other_message(
+                request,
+                "administration.external_upload_hub_staff_only",
+                "Only reception, administrators, or managers can use this page.",
+            )
+        )
+    return None
+
+
 def ensure_clinic_site_visible_to_staff_user(
     request: Any, clinic_site_id: uuid.UUID
 ) -> HttpResponseForbidden | None:
