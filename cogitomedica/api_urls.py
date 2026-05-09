@@ -33,6 +33,10 @@ from apps.medical.api_views import (
     medical_document_unlock_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
+    medical_external_upload_preview_pdf_view,
+    medical_external_upload_publish_view,
+    medical_external_upload_revision_start_view,
+    medical_external_upload_select_attachment_view,
     medical_external_upload_upload_view,
     medical_document_audit_trail_view,
     medical_documents_view,
@@ -190,6 +194,26 @@ urlpatterns = [
         "medical-documents/external-upload/upload",
         medical_external_upload_upload_view,
         name="medical-documents-external-upload-upload",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-upload/select-attachment",
+        medical_external_upload_select_attachment_view,
+        name="medical-documents-external-upload-select-attachment",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-upload/preview-pdf",
+        medical_external_upload_preview_pdf_view,
+        name="medical-documents-external-upload-preview-pdf",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-upload/publish",
+        medical_external_upload_publish_view,
+        name="medical-documents-external-upload-publish",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/external-upload/revision/start",
+        medical_external_upload_revision_start_view,
+        name="medical-documents-external-upload-revision-start",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>",

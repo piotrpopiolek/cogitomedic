@@ -732,6 +732,45 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     return relative_str, checksum
 
 
+def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
+    """
+    Copy the reception-selected external PDF to local storage for ``HIDRIVE_UPLOAD``.
+
+    No Befund HTML merge — the patient-facing file is the uploaded PDF. After a
+    successful download, a ``MATCHED`` attachment is promoted to ``ACCEPTED`` so
+    the HiDrive outbox step can move it under ``/processed`` like lab PDFs.
+    """
+    version = MedicalDocumentVersion.objects.select_related(
+        "external_selected_attachment",
+        "medical_document",
+    ).get(pk=version.pk)
+    if version.external_selected_attachment_id is None:
+        raise RuntimeError(
+            "generate_external_upload_pdf requires external_selected_attachment"
+        )
+    att = version.external_selected_attachment
+    pdf_bytes = download_external_pdf(att)
+    if att.status == ExternalPdfStatus.MATCHED:
+        att.status = ExternalPdfStatus.ACCEPTED
+        att.save(update_fields=["status"])
+
+    now = version.created_at
+    relative_dir = (
+        Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs"))
+        / "external-upload"
+        / f"{now.year:04d}"
+        / f"{now.month:02d}"
+    )
+    relative_path = relative_dir / f"{version.id}.pdf"
+    full_path = Path(settings.MEDIA_ROOT) / relative_path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_bytes(pdf_bytes)
+
+    checksum = hashlib.sha256(pdf_bytes).hexdigest()
+    relative_str = str(relative_path).replace("\\", "/")
+    return relative_str, checksum
+
+
 def build_merged_preview_pdf_bytes(
     version: MedicalDocumentVersion,
     authoring_locale_override: str | None = None,
