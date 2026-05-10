@@ -2,6 +2,16 @@
 
 Ten rozdział opisuje ścieżkę **External upload**: recepcja (lub administrator / manager wg uprawnień) wgrywa gotowy plik PDF wyniku z zewnętrznego źródła (np. laboratorium, inna placówka), powiązany z wizytą i ankietą pacjenta. To **nie** jest panel Befundu — lekarz nie edytuje treści klinicznej w formularzu skórnym; dokument w portalu pacjenta to opublikowany PDF po przetworzeniu w tle.
 
+## Interfejs HTML (hub w Django Admin)
+
+Recepcja / admin / manager mogą przejść całą ścieżkę **bez wywoływania API ręcznie**:
+
+1. **Sidebar Unfold** — sekcja „Zewnętrzne badanie” z linkiem do huba (ta sama rola co API).
+2. **Dashboard recepcji** (`/admin/reception-dashboard/`) — skróty do huba papierowego i external upload.
+3. **Hub** — `GET /admin/external-upload/`: filtr statusu ankiety (`SUBMITTED` / `REOPENED` / oba), wybór wpisu kolejki, przejście do ekranu wpisu.
+4. **Edycja wpisu kolejki w adminie** (`/admin/reception/queueentry/<uuid>/change/`) — jeśli wpis spełnia **te same warunki** co lista w hubie (zakres placówek, ankieta, telefon, DOB, brak blokującego dokumentu innego źródła itd.), nad formularzem pojawia się link do ekranu external upload (bez szukania UUID w liście rozwijanej huba).
+5. **Ekran wpisu** — `GET /admin/external-upload/<queue_entry_id>/`: tożsamość, lista załączników (`MATCHED` / `ACCEPTED`), upload PDF, wybór załącznika, podgląd, publikacja z drugim potwierdzeniem i opcjonalnym `resend_sms`, start rewizji po publikacji.
+
 ## Kiedy można wgrać plik
 
 - Dla wpisu kolejki musi istnieć **ankieta** (`PatientIntakeForm`) w stanie **wysłana** lub **ponownie otwarta do korekt** (`SUBMITTED` albo `REOPENED`).
@@ -22,19 +32,25 @@ Ten rozdział opisuje ścieżkę **External upload**: recepcja (lub administrato
 - Pliki laboratorium wrzucane „ręcznie” do **`/incoming/`** (bez podfolderu `external-upload/`) nadal obsługuje **osobna** logika dopasowania nazw do pacjenta w panelu lekarza — patrz [hidrive_incoming_reception.md](hidrive_incoming_reception.md).
 - **Izolacja:** przy sprawdzaniu bramki PDF z `/incoming` dla Befundu system **pomija** całą gałąź `external-upload/`, żeby wynik wgrany przez recepcję nie był mylony z plikiem labu o podobnej nazwie.
 
-## Przebieg operacyjny (wysoki poziom)
+## HTML hub a API
 
-1. **Wybór wpisu kolejki** pacjenta z gotową ankietą (w produkcji: dedykowany hub / lista — po wdrożeniu UI).
+| Akcja w UI (POST `action=` lub GET) | Odpowiednik w REST / usłudze |
+| --- | --- |
+| Upload formularza (`action=upload`, plik `file`) | Ten sam łańcuch co `POST /api/v1/medical-documents/external-upload/upload` (multipart): utworzenie dokumentu `EXTERNAL_UPLOAD`, zapis na HiDrive, powiązanie z szkicem — w kodzie `create_external_upload_pdf_and_bind_draft`. |
+| Wybór załącznika (`action=select`, `attachment_id`) | `POST /api/v1/medical-documents/{id}/external-upload/select-attachment` z JSON `{"attachment_id": "..."}`. |
+| Start rewizji (`action=start_revision`) | `POST /api/v1/medical-documents/{id}/external-upload/revision/start`. |
+| Publikacja (`action=publish`, `publish_request_id`, `publish_locale`, `verification_ack`, opcjonalnie `resend_sms`) | `POST /api/v1/medical-documents/{id}/external-upload/publish` z tym samym zestawem pól w JSON. |
+| Podgląd PDF (link w nowej karcie) | `GET /api/v1/medical-documents/{id}/external-upload/preview-pdf` (sesja cookie przeglądarki; opcjonalnie osobna baza URL z `EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL`). |
+
+## Przebieg operacyjny (wysoki poziom, także przez API)
+
+1. **Wybór wpisu kolejki** — hub HTML, link z edycji `Queue entry` lub bezpośredni URL (uprawnienia i filtr jak wyżej).
 2. **Potwierdzenie tożsamości** na ekranie (imię, nazwisko, data urodzenia, telefon, data kolejki).
-3. **Upload** pliku PDF (multipart, endpoint API `POST /api/v1/medical-documents/external-upload/upload` z polami `queue_entry_id` i `file`).
-4. **Wybór załącznika** do wersji roboczej, jeśli jest kilka lub zmieniasz wybór:  
-   `POST /api/v1/medical-documents/{id}/external-upload/select-attachment` z JSON `{"attachment_id": "..."}`.
-5. **Podgląd** (opcjonalnie):  
-   `GET /api/v1/medical-documents/{id}/external-upload/preview-pdf` — pełny odczyt z HiDrive do przeglądarki (duży plik = duży transfer i pamięć).
-6. **Drugie potwierdzenie** w UI (checkbox / modal): pacjent na ekranie zgadza się z plikiem i decyzją o publikacji.
-7. **Publikacja:**  
-   `POST /api/v1/medical-documents/{id}/external-upload/publish`  
-   z ciałem JSON m.in. `publish_request_id` (unikalny UUID na żądanie), `publish_locale` (`de-DE`, `en-GB`, `pl-PL` itd. wg kontraktu), `resend_sms` (przy pierwszej publikacji zwykle `false`; przy korekcie / ponownym wysłaniu SMS — zwykle `true` po uzgodnieniu procedury).
+3. **Upload** pliku PDF (multipart).
+4. **Wybór załącznika** do wersji roboczej, jeśli jest kilka lub zmieniasz wybór.
+5. **Podgląd** (opcjonalnie) — pełny odczyt z HiDrive do przeglądarki (duży plik = duży transfer i pamięć).
+6. **Drugie potwierdzenie** w UI (checkbox): pacjent na ekranie zgadza się z plikiem i decyzją o publikacji.
+7. **Publikacja** z `publish_request_id` (UUID na żądanie), `publish_locale` (`de-DE`, `en-GB`, `pl-PL`), `resend_sms` (przy pierwszej publikacji zwykle wyłączone; przy korekcie / ponownym SMS — według procedury).
 
 Po publikacji uruchamia się ten sam **łańcuch outbox** co dla Befundu: generowanie materialnego PDF (w tym wypadku z wybranego pliku z HiDrive), upload na ścieżkę pacjenta, SMS.
 

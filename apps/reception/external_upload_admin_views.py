@@ -1,4 +1,8 @@
-"""Admin HTML hub: external-upload workflow for reception / admin / manager."""
+"""Admin HTML hub: external-upload workflow for reception / admin / manager.
+
+Operator mapping of HTML actions to REST endpoints lives in
+``docs/manual/07-wgranie-zewnetrznego-badania.md`` (section *HTML hub a API*).
+"""
 
 from __future__ import annotations
 
@@ -112,6 +116,33 @@ def _external_upload_hub_queryset(
     if scope_ids is not None:
         qs = qs.filter(daily_queue__clinic_site_id__in=scope_ids)
     return qs.order_by("-daily_queue__queue_date", "daily_queue_id", "position_no")
+
+
+def queue_entry_external_upload_entry_url(
+    request: HttpRequest, queue_entry: QueueEntry
+) -> str | None:
+    """
+    If *queue_entry* appears in the external-upload hub pick list for *request.user*,
+    return the staff HTML entry URL; otherwise ``None``.
+
+    Used from :class:`~apps.reception.admin.QueueEntryAdmin` (same eligibility rules
+    as :func:`_external_upload_hub_queryset` with ``form_status="all"``). Staff who
+    are not reception/admin/manager never get a link.
+    """
+    from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
+
+    if not is_reception_admin_or_manager_staff(request.user):
+        return None
+    if (
+        not _external_upload_hub_queryset(request, form_status="all")
+        .filter(pk=queue_entry.pk)
+        .exists()
+    ):
+        return None
+    return reverse(
+        "admin_external_upload_entry",
+        kwargs={"queue_entry_id": queue_entry.pk},
+    )
 
 
 def _external_upload_entry_queryset(request: Any) -> QuerySet[QueueEntry]:

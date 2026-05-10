@@ -216,6 +216,78 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
 
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_get_contains_publish_locale_after_upload(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        r = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('id="id_publish_locale"', r.content.decode())
+
+    def test_queue_entry_external_upload_url_none_for_doctor(self) -> None:
+        request = self.factory.get("/")
+        request.user = self.doctor
+        self.assertIsNone(
+            ext_hub_views.queue_entry_external_upload_entry_url(request, self.entry)
+        )
+
+    def test_queue_entry_external_upload_url_for_reception_when_eligible(
+        self,
+    ) -> None:
+        request = self.factory.get("/")
+        request.user = self.reception
+        url = ext_hub_views.queue_entry_external_upload_entry_url(request, self.entry)
+        self.assertIsNotNone(url)
+        assert url is not None
+        self.assertIn(str(self.entry.id), url)
+
+    def test_queue_entry_change_includes_external_upload_link(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin:reception_queueentry_change", args=[self.entry.pk])
+        )
+        self.assertEqual(r.status_code, 200)
+        expected = reverse(
+            "admin_external_upload_entry",
+            kwargs={"queue_entry_id": self.entry.id},
+        )
+        self.assertIn(expected, r.content.decode())
+
+    def test_queue_entry_change_hides_external_upload_link_for_doctor(self) -> None:
+        self.client.force_login(self.doctor)
+        r = self.client.get(
+            reverse("admin:reception_queueentry_change", args=[self.entry.pk])
+        )
+        if r.status_code != 200:
+            self.skipTest("Doctor has no QueueEntry change permission in this project.")
+        expected = reverse(
+            "admin_external_upload_entry",
+            kwargs={"queue_entry_id": self.entry.id},
+        )
+        self.assertNotIn(expected, r.content.decode())
+
     def test_entry_403_when_queue_entry_out_of_scope(self) -> None:
         other_clinic = ClinicSite.objects.create(code="EUX", name="Other Clinic")
         room2 = ConsultingRoom.objects.create(
