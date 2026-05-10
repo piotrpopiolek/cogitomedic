@@ -395,6 +395,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
 
 @admin.register(QueueEntry)
 class QueueEntryAdmin(UnfoldModelAdmin):
+    change_form_template = "admin/reception/queueentry/change_form.html"
     list_display = (
         "position_no",
         "daily_queue",
@@ -430,6 +431,22 @@ class QueueEntryAdmin(UnfoldModelAdmin):
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
         super().save_model(request, obj, form, change)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        if object_id is not None:
+            obj = self.get_object(request, object_id)
+            if obj is not None:
+                from apps.reception.external_upload_admin_views import (
+                    queue_entry_external_upload_entry_url,
+                )
+
+                extra_context["external_upload_entry_url"] = (
+                    queue_entry_external_upload_entry_url(request, obj)
+                )
+        return super().changeform_view(
+            request, object_id, form_url, extra_context=extra_context
+        )
 
 
 @admin.register(TabletDevice)

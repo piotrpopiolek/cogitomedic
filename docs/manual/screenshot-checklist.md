@@ -19,15 +19,17 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 
 ## Wgranie zewnętrznego badania (`07-wgranie-zewnetrznego-badania`)
 
-Zrzuty **po wdrożeniu UI** huba / ekranów recepcji dla external upload (obecnie dokumentacja opisuje głównie API i zasady HiDrive). Uzupełnij tabelę i pliki PNG w `assets/screenshots/` zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); potem dopisz wpis w [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py) jeśli automatyzujesz nagrywanie.
+Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard recepcji (skróty), `/admin/external-upload/`, `/admin/external-upload/<uuid>/`, opcjonalnie `/admin/reception/queueentry/<uuid>/change/` z linkiem nad formularzem. Pliki PNG w `assets/screenshots/` — zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); automatyzacja: [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py).
 
 | #   | Plik | Ekran / uwagi |
 | --- | ---- | ------------- |
-| 1   | `reception-external-upload-01-hub.png` | Lista wpisów kwalifikujących się do external upload (TBD) |
-| 2   | `reception-external-upload-02-identity.png` | Ekran tożsamości pacjenta przed uploadem (TBD) |
-| 3   | `reception-external-upload-03-after-upload.png` | Po udanym uploadzie / wybór załącznika (TBD) |
-| 4   | `reception-external-upload-04-preview.png` | Podgląd PDF (TBD) |
-| 5   | `reception-external-upload-05-publish-confirm.png` | Drugie potwierdzenie przed publikacją (TBD) |
+| 0   | `reception-external-upload-00-sidebar.png` | Fragment sidebara z sekcją „Zewnętrzne badanie” (link do huba) |
+| 1   | `reception-external-upload-01-hub.png` | `/admin/external-upload/` — filtr statusu intake + pole wyboru wpisu w jednej karcie |
+| 2   | `reception-external-upload-02-entry-identity.png` | `/admin/external-upload/<uuid>/` — blok tożsamości pacjenta / wizyty |
+| 3   | `reception-external-upload-03-entry-upload-select.png` | Ten sam URL: upload PDF + lista załączników / radio wybór (wg stanu danych) |
+| 4   | `reception-external-upload-04-preview.png` | Link „Open PDF preview” (opcjonalnie karta z podglądem w przeglądarce) |
+| 5   | `reception-external-upload-05-publish-confirm.png` | Formularz publikacji: locale, checkbox SMS, drugie potwierdzenie, Publish |
+| 6   | `reception-external-upload-06-queue-entry-shortcut.png` | `/admin/reception/queueentry/<uuid>/change/` — pasek z linkiem do external upload (wpis kwalifikujący się do huba) |
 
 
 ## Zmiana danych pacjenta (`06-zmiana-danych-pacjenta`)
