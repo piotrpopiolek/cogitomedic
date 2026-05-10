@@ -4,10 +4,10 @@
 {% block breadcrumbs %}
 <div class="px-4 py-3 sm:px-8">
     <nav aria-label="Breadcrumb">
-        <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
-            <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
+        <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500 dark:text-base-400">
+            <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900 dark:hover:text-base-100">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
             <li><span class="mx-2">/</span></li>
-            <li class="text-gray-900" aria-current="page">{{ title }}</li>
+            <li class="text-gray-900 dark:text-base-100" aria-current="page">{{ title }}</li>
         </ol>
     </nav>
 </div>
@@ -15,15 +15,15 @@
 
 {% block content %}
 <div class="px-4 sm:px-8 pb-8 max-w-2xl">
-    <h1 class="text-2xl font-bold mb-2">{{ title }}</h1>
-    <p class="text-gray-600 mb-6">{{ intro }}</p>
+    <h1 class="text-2xl font-bold mb-2 text-gray-900 dark:text-base-100">{{ title }}</h1>
+    <p class="text-gray-600 dark:text-base-300 mb-6">{{ intro }}</p>
 
     {% if error_invalid %}
-    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{{ error_invalid }}</div>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200 dark:border-red-800">{{ error_invalid }}</div>
     {% endif %}
 
     {{ form.media }}
-    <form method="get" action="" class="bg-white rounded-md shadow border border-gray-200 dark:border-base-700 p-6 space-y-4">
+    <form method="get" action="" class="bg-white dark:bg-base-900 rounded-md shadow border border-gray-200 dark:border-base-700 p-6 space-y-4">
         <div>
             <label for="id_form_status" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.external_upload_hub_filter_label" "Intake form status" %}</label>
             <select
@@ -48,7 +48,7 @@
             {{ form.queue_entry }}
         </div>
         <div>
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-base-900">
                 {% admin_trans "administration.external_upload_hub_submit" "Continue" %}
             </button>
         </div>
