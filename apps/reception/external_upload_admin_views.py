@@ -7,11 +7,12 @@ from datetime import timedelta
 from typing import Any
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin as django_admin
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Exists, OuterRef, QuerySet
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -36,11 +37,11 @@ from apps.medical.models import (
     MedicalDocumentVersion,
 )
 from apps.medical.services import (
-    create_external_upload_medical_document,
+    create_external_upload_pdf_and_bind_draft,
+    get_single_medical_document_for_queue_entry,
     publish_external_upload_version,
     select_external_upload_attachment_for_draft,
     start_external_upload_revision,
-    upload_external_pdf_to_incoming,
 )
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.models import StaffUserPreferredLocale
@@ -49,6 +50,27 @@ try:
     from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
     UnfoldAdminSelectWidget = forms.Select
+
+
+def _external_upload_preview_pdf_url(
+    request: HttpRequest, *, medical_document_id: uuid.UUID
+) -> str:
+    """Absolute URL for external-upload preview PDF (session cookie with API).
+
+    Uses :setting:`EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL` when set (split API/admin
+    domains); otherwise ``request.build_absolute_uri`` so reverse-proxy headers
+    (``X-Forwarded-Proto`` / ``Host``) apply.
+    """
+    path = reverse(
+        "medical-documents-external-upload-preview-pdf",
+        kwargs={"medical_document_id": medical_document_id},
+    )
+    base = (getattr(settings, "EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL", "") or "").strip()
+    if base:
+        root = base.rstrip("/")
+        sub = path if path.startswith("/") else f"/{path}"
+        return f"{root}{sub}"
+    return request.build_absolute_uri(path)
 
 
 def _external_upload_hub_queryset(
@@ -174,6 +196,18 @@ def external_upload_admin_hub_view(request):
                 "Enter a valid queue entry UUID.",
             )
         else:
+            try:
+                legacy_entry = QueueEntry.objects.select_related("daily_queue").get(
+                    pk=qid
+                )
+            except QueueEntry.DoesNotExist:
+                raise Http404()
+            if (
+                denied_legacy := ensure_clinic_site_visible_to_staff_user(
+                    request, legacy_entry.daily_queue.clinic_site_id
+                )
+            ) is not None:
+                return denied_legacy
             return HttpResponseRedirect(
                 reverse("admin_external_upload_entry", kwargs={"queue_entry_id": qid})
             )
@@ -242,19 +276,49 @@ def _external_upload_entry_context(*, entry: QueueEntry) -> dict[str, Any]:
 @staff_member_required
 @require_http_methods(["GET", "HEAD", "POST"])
 def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
+    """Staff HTML flow for one queue entry: upload, select attachment, revision, publish.
+
+    **Scope:** if a :class:`~apps.reception.models.QueueEntry` exists but the user's
+    clinic-site scope excludes it, returns **403** (same spirit as external-upload API),
+    not **404**, so UUID probing cannot distinguish out-of-scope from missing rows.
+
+    **Upload path (``action=upload``)** calls ``create_external_upload_pdf_and_bind_draft``
+    (same steps as the multipart API: document → HiDrive upload → draft bind). There is
+    **no** single enclosing ``transaction.atomic``: upload is split into DB phases with
+    HiDrive I/O **between** commits so a DB rollback cannot leave orphan objects in
+    HiDrive (see ``apps.medical.services`` docstrings for ``_register_external_upload_pdf_pending``
+    and ``upload_external_pdf_to_incoming``). Each step still uses its own short atomic
+    blocks where appropriate.
+
+    A failure **after** HiDrive marked the row ``MATCHED`` but **before** draft binding
+    completes leaves a recoverable partial state (attachment listed; operator can
+    ``action=select``), same as the API if those calls were separate.
+
+    **Messages:** user-visible ``messages`` text must always come from
+    ``resolve_other_message`` (including ``DomainError`` / ``IdempotencyConflictError``),
+    never raw ``str(exc)`` without a key—so the template's default HTML escaping stays a
+    safe backstop.
+    """
     if (denied := ensure_reception_admin_manager_staff(request)) is not None:
         return denied
+
+    try:
+        scope_probe = QueueEntry.objects.select_related("daily_queue").get(
+            pk=queue_entry_id
+        )
+    except QueueEntry.DoesNotExist:
+        raise Http404()
+    if (
+        denied_scope := ensure_clinic_site_visible_to_staff_user(
+            request, scope_probe.daily_queue.clinic_site_id
+        )
+    ) is not None:
+        return denied_scope
 
     entry = get_object_or_404(
         _external_upload_entry_queryset(request),
         pk=queue_entry_id,
     )
-    if (
-        denied_scope := ensure_clinic_site_visible_to_staff_user(
-            request, entry.daily_queue.clinic_site_id
-        )
-    ) is not None:
-        return denied_scope
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -271,18 +335,9 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                         ),
                     )
                 else:
-                    doc = create_external_upload_medical_document(
+                    create_external_upload_pdf_and_bind_draft(
                         queue_entry_id=entry.id,
-                        created_by_user_id=request.user.id,
-                    )
-                    att = upload_external_pdf_to_incoming(
-                        medical_document_id=doc.id,
                         uploaded_file=uploaded,
-                        actor_user_id=request.user.id,
-                    )
-                    select_external_upload_attachment_for_draft(
-                        medical_document_id=doc.id,
-                        attachment_id=att.id,
                         actor_user_id=request.user.id,
                     )
                     messages.success(
@@ -307,7 +362,9 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                         ),
                     )
                 else:
-                    doc = MedicalDocument.objects.get(queue_entry_id=entry.id)
+                    doc = get_single_medical_document_for_queue_entry(
+                        queue_entry_id=entry.id
+                    )
                     select_external_upload_attachment_for_draft(
                         medical_document_id=doc.id,
                         attachment_id=att_id,
@@ -322,7 +379,9 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                         ),
                     )
             elif action == "start_revision":
-                doc = MedicalDocument.objects.get(queue_entry_id=entry.id)
+                doc = get_single_medical_document_for_queue_entry(
+                    queue_entry_id=entry.id
+                )
                 start_external_upload_revision(
                     medical_document_id=doc.id,
                     actor_user_id=request.user.id,
@@ -374,7 +433,9 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                             )
                         else:
                             resend = request.POST.get("resend_sms") == "1"
-                            doc = MedicalDocument.objects.get(queue_entry_id=entry.id)
+                            doc = get_single_medical_document_for_queue_entry(
+                                queue_entry_id=entry.id
+                            )
                             publish_external_upload_version(
                                 medical_document_id=doc.id,
                                 publish_request_id=publish_request_id,
@@ -447,7 +508,9 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
         and not wrong_source
         and md.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
     ):
-        preview_url = f"/api/v1/medical-documents/{md.id}/external-upload/preview-pdf"
+        preview_url = _external_upload_preview_pdf_url(
+            request, medical_document_id=md.id
+        )
 
     context = {
         **django_admin.site.each_context(request),

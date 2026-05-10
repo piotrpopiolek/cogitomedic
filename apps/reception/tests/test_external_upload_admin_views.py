@@ -7,7 +7,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from pypdf import PdfWriter
@@ -134,6 +134,78 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         self.assertEqual(r.status_code, 302)
         self.assertIn(str(self.entry.id), r["Location"])
 
+    def test_hub_legacy_queue_entry_id_redirects(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(self.entry.id)},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertIn(str(self.entry.id), r["Location"])
+
+    def test_hub_legacy_unknown_queue_entry_returns_404(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(uuid.uuid4())},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_hub_legacy_out_of_scope_returns_403(self) -> None:
+        other_clinic = ClinicSite.objects.create(code="EUX2", name="Other Clinic 2")
+        room2 = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="X2", name="X2"
+        )
+        dq2 = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=room2,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin,
+            assigned_doctor=self.doctor,
+        )
+        entry2 = QueueEntry.objects.create(
+            daily_queue=dq2,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.admin,
+        )
+        s2 = PatientFormSession.create_session(
+            entry2,
+            created_by_user_id=self.admin.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry2,
+            session=s2,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(entry2.id)},
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_preview_pdf_url_uses_setting_when_set(self) -> None:
+        req = self.factory.get("/admin/external-upload/")
+        mid = uuid.uuid4()
+        with override_settings(
+            EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL="https://api.example.test"
+        ):
+            url = ext_hub_views._external_upload_preview_pdf_url(
+                req, medical_document_id=mid
+            )
+        self.assertTrue(
+            url.startswith("https://api.example.test/api/v1/medical-documents/")
+        )
+        self.assertIn(str(mid), url)
+        self.assertIn("external-upload/preview-pdf", url)
+
     def test_entry_ok_for_reception(self) -> None:
         self.client.force_login(self.reception)
         r = self.client.get(
@@ -144,7 +216,7 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
 
-    def test_entry_404_when_queue_entry_out_of_scope(self) -> None:
+    def test_entry_403_when_queue_entry_out_of_scope(self) -> None:
         other_clinic = ClinicSite.objects.create(code="EUX", name="Other Clinic")
         room2 = ConsultingRoom.objects.create(
             clinic_site=other_clinic, code="X1", name="X1"
@@ -184,7 +256,7 @@ class ExternalUploadAdminHubViewsTests(TestCase):
                 kwargs={"queue_entry_id": entry2.id},
             )
         )
-        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.status_code, 403)
 
     @patch("apps.medical.services.get_hidrive_adapter")
     def test_entry_publish_form_includes_publish_request_id(

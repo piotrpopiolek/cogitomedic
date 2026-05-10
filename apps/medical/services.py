@@ -678,7 +678,8 @@ def upload_external_pdf_to_incoming(
 
     Split into phases so HiDrive I/O is not inside the same DB transaction as draft
     selection (see ``medical_external_upload_upload_view``). Callers that also bind the
-    draft should invoke ``select_external_upload_attachment_for_draft`` afterward.
+    draft should invoke ``select_external_upload_attachment_for_draft`` afterward, or
+    ``create_external_upload_pdf_and_bind_draft`` for the full create→upload→bind chain.
     """
     attachment = _register_external_upload_pdf_pending(
         medical_document_id=medical_document_id,
@@ -692,6 +693,34 @@ def upload_external_pdf_to_incoming(
     _mark_external_pdf_attachment_matched_after_hidrive(attachment_id=attachment.id)
     attachment.refresh_from_db()
     return attachment
+
+
+def get_single_medical_document_for_queue_entry(
+    *, queue_entry_id: uuid.UUID
+) -> MedicalDocument:
+    """Return the medical document for ``queue_entry_id`` if exactly one exists.
+
+    Raises ``MedicalDocument.DoesNotExist`` when there is none. Raises
+    :class:`~apps.core.exceptions.DomainError` when more than one row exists
+    (one-to-one invariant broken) so callers never hit ``MultipleObjectsReturned``.
+    """
+    rows = list(
+        MedicalDocument.objects.filter(queue_entry_id=queue_entry_id).order_by(
+            "created_at"
+        )[:2]
+    )
+    if not rows:
+        raise MedicalDocument.DoesNotExist(
+            "MedicalDocument matching query does not exist."
+        )
+    if len(rows) > 1:
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_multiple_medical_documents_for_queue_entry"
+            ),
+            api_message_key="other.domain.external_upload_multiple_medical_documents_for_queue_entry",
+        )
+    return rows[0]
 
 
 @transaction.atomic
@@ -767,8 +796,16 @@ def create_external_upload_medical_document(
                 "updated_by_user_id": created_by_user_id,
             },
         )
-    except IntegrityError:
-        medical_document = MedicalDocument.objects.get(queue_entry_id=queue_entry_id)
+    except IntegrityError as exc:
+        try:
+            medical_document = get_single_medical_document_for_queue_entry(
+                queue_entry_id=queue_entry_id
+            )
+        except MedicalDocument.DoesNotExist:
+            raise DomainError(
+                domain_message("other.api.server_error"),
+                api_message_key="other.api.server_error",
+            ) from exc
         created = False
 
     if (
@@ -949,6 +986,37 @@ def select_external_upload_attachment_for_draft(
         ]
     )
     return draft_version
+
+
+def create_external_upload_pdf_and_bind_draft(
+    *,
+    queue_entry_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> tuple[MedicalDocument, ExternalPdfAttachment, MedicalDocumentVersion]:
+    """Create or resolve EXTERNAL_UPLOAD document, upload PDF, bind active DRAFT.
+
+    Thin wrapper around ``create_external_upload_medical_document`` →
+    ``upload_external_pdf_to_incoming`` → ``select_external_upload_attachment_for_draft``.
+    There is still **no** single enclosing ``transaction.atomic``: HiDrive I/O sits
+    between DB commits (see those functions' docstrings). Shared by HTML hub and
+    multipart API upload endpoint.
+    """
+    document = create_external_upload_medical_document(
+        queue_entry_id=queue_entry_id,
+        created_by_user_id=actor_user_id,
+    )
+    attachment = upload_external_pdf_to_incoming(
+        medical_document_id=document.id,
+        uploaded_file=uploaded_file,
+        actor_user_id=actor_user_id,
+    )
+    draft_version = select_external_upload_attachment_for_draft(
+        medical_document_id=document.id,
+        attachment_id=attachment.id,
+        actor_user_id=actor_user_id,
+    )
+    return document, attachment, draft_version
 
 
 def _validate_paper_intake_authorization_reason(reason: str) -> str:

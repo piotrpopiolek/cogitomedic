@@ -359,6 +359,11 @@
     "en": "External upload is only available after the intake form is submitted or reopened for corrections.",
     "pl": "Wgranie zewnętrzne jest możliwe dopiero po złożeniu ankiety lub jej ponownym otwarciu do poprawek."
   },
+  "other.domain.external_upload_multiple_medical_documents_for_queue_entry": {
+    "de": "Für diesen Warteschlangeneintrag existieren mehrere medizinische Dokumente. Bitte Datenbereinigung durchführen.",
+    "en": "Multiple medical documents exist for this queue entry. Data cleanup is required.",
+    "pl": "Dla tego wpisu kolejki istnieje więcej niż jeden dokument medyczny. Wymagane jest uporządkowanie danych."
+  },
   "other.domain.external_upload_staff_role_required": {
     "de": "Nur Empfang, Administrator oder Manager können externe Uploads für medizinische Dokumente ausführen (Anlegen, Hochladen, Auswahl).",
     "en": "Only reception, an administrator, or a manager can perform external-upload actions for medical documents (create, upload, or bind to draft).",
