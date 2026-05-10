@@ -19,6 +19,7 @@
 <div class="px-4 sm:px-8 pb-8 max-w-3xl">
     <h1 class="text-2xl font-bold mb-4">{% admin_trans "administration.external_upload_entry_heading" "External upload" %}</h1>
 
+    {# User-facing copy only: views must pass strings from resolve_other_message / translation keys (e.g. DomainError paths). Do not feed raw exception text or mark_safe HTML. Django auto-escapes {{ message }} by default. #}
     {% if messages %}
     <ul class="mb-4 space-y-2">
         {% for message in messages %}

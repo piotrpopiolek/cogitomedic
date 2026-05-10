@@ -899,6 +899,12 @@ if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", 
         )
 
 PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "")
+# Optional origin (scheme + host, no path) for staff external-upload hub "preview PDF"
+# links when the REST API is exposed on another host than the admin HTML. If empty,
+# links use request.build_absolute_uri (same host as the browser request).
+EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL = os.environ.get(
+    "EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL", ""
+).strip()
 PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
 if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
     raise ImproperlyConfigured(
