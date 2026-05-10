@@ -2398,14 +2398,14 @@ class ExternalUploadApiTests(MedicalApiTests):
         adapter_factory.assert_not_called()
 
     @patch(
-        "apps.medical.api_views.upload_external_pdf_to_incoming",
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "not found",
             api_message_key="other.api.medical_document_not_found",
         ),
     )
     def test_external_upload_medical_document_not_found_returns_404(
-        self, _mock_upload: object
+        self, _mock_bind: object
     ) -> None:
         self.client.force_login(self.reception_user)
         response = self.client.post(
@@ -2418,14 +2418,14 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(response.status_code, 404)
 
     @patch(
-        "apps.medical.api_views.create_external_upload_medical_document",
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "forbidden",
             api_message_key="other.domain.external_upload_staff_role_required",
         ),
     )
     def test_external_upload_staff_role_required_returns_403(
-        self, _mock_create: object
+        self, _mock_bind: object
     ) -> None:
         self.client.force_login(self.reception_user)
         response = self.client.post(
@@ -2438,14 +2438,14 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(response.status_code, 403)
 
     @patch(
-        "apps.medical.api_views.create_external_upload_medical_document",
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "no staff",
             api_message_key="other.api.staff_user_not_found",
         ),
     )
     def test_external_upload_staff_user_not_found_returns_404(
-        self, _mock_create: object
+        self, _mock_bind: object
     ) -> None:
         self.client.force_login(self.reception_user)
         response = self.client.post(

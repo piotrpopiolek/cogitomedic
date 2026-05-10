@@ -70,7 +70,7 @@ from apps.medical.services import (
     authorize_paper_intake,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
-    create_external_upload_medical_document,
+    create_external_upload_pdf_and_bind_draft,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     discard_pending_revision,
@@ -91,7 +91,6 @@ from apps.medical.services import (
     save_draft_document_version,
     select_external_upload_attachment_for_draft,
     start_external_upload_revision,
-    upload_external_pdf_to_incoming,
 )
 from apps.medical.template_services import (
     TemplateListFilters,
@@ -410,18 +409,9 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
         return err
 
     try:
-        document = create_external_upload_medical_document(
+        document, attachment, draft_version = create_external_upload_pdf_and_bind_draft(
             queue_entry_id=queue_entry_id,
-            created_by_user_id=request.user.id,
-        )
-        attachment = upload_external_pdf_to_incoming(
-            medical_document_id=document.id,
             uploaded_file=uploaded_file,
-            actor_user_id=request.user.id,
-        )
-        draft_version = select_external_upload_attachment_for_draft(
-            medical_document_id=document.id,
-            attachment_id=attachment.id,
             actor_user_id=request.user.id,
         )
     except DomainError as exc:

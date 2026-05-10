@@ -87,10 +87,16 @@ def ensure_clinic_site_visible_to_staff_user(
     request: Any, clinic_site_id: uuid.UUID
 ) -> HttpResponseForbidden | None:
     """
-    Enforce the same clinic-site scope as API views using ``get_scoped_clinic_site_ids``.
+    Enforce clinic-site scope using ``get_scoped_clinic_site_ids`` (same rule as scoped APIs).
 
-    Admins (``scope_ids is None``) see all sites. Managers/reception/doctor tablet
-    scopes are limited to assigned clinic_site ids.
+    Admins (``scope_ids is None``) pass. Other roles that carry site assignments—manager,
+    reception, doctor, tablet—are limited to their assigned ``clinic_site`` ids; an
+    empty scope never matches.
+
+    Which roles may open a given custom admin page is enforced separately (e.g. the
+    external-upload hub allows reception / admin / manager only). This helper does
+    not imply doctor or tablet access to those pages; it only checks whether
+    *clinic_site_id* lies in the user's scoped sites when scope applies.
     """
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and clinic_site_id not in scope_ids:
