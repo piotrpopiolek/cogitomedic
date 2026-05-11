@@ -6,7 +6,10 @@ from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import Q
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -278,12 +281,32 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         self.assertIn(expected, r.content.decode())
 
     def test_queue_entry_change_hides_external_upload_link_for_doctor(self) -> None:
+        """Doctor must not see external-upload shortcut even if they can open this change form.
+
+        The Doctor role group does not include ``change_queueentry`` or raw-id targets; grant
+        only those extras here so we always assert on HTML (no skip).
+        """
+        ct_qe = ContentType.objects.get_for_model(QueueEntry)
+        ct_staff = ContentType.objects.get_for_model(StaffUser)
+        ct_pfs = ContentType.objects.get_for_model(PatientFormSession)
+        extra = Permission.objects.filter(
+            Q(content_type=ct_qe, codename="change_queueentry")
+            | Q(content_type=ct_staff, codename="view_staffuser")
+            | Q(content_type=ct_pfs, codename="view_patientformsession")
+        )
+        self.doctor.user_permissions.add(*list(extra))
         self.client.force_login(self.doctor)
         r = self.client.get(
             reverse("admin:reception_queueentry_change", args=[self.entry.pk])
         )
-        if r.status_code != 200:
-            self.skipTest("Doctor has no QueueEntry change permission in this project.")
+        self.assertEqual(
+            r.status_code,
+            200,
+            msg=(
+                "Doctor should reach QueueEntry change with extra perms; "
+                f"got {r.status_code}. Extend this test's permission list if admin requires more."
+            ),
+        )
         expected = reverse(
             "admin_external_upload_entry",
             kwargs={"queue_entry_id": self.entry.id},
