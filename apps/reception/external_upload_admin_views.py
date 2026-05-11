@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 from django.conf import settings
@@ -84,12 +84,16 @@ def _external_upload_hub_queryset(
     cutoff = timezone.now().date() - timedelta(
         days=EXTERNAL_UPLOAD_HUB_QUEUE_ENTRY_LOOKBACK_DAYS
     )
+    intake_statuses: tuple[str, ...]
     if form_status == "submitted":
-        intake_statuses = (IntakeStatus.SUBMITTED,)
+        intake_statuses = (cast(str, IntakeStatus.SUBMITTED),)
     elif form_status == "reopened":
-        intake_statuses = (IntakeStatus.REOPENED,)
+        intake_statuses = (cast(str, IntakeStatus.REOPENED),)
     else:
-        intake_statuses = (IntakeStatus.SUBMITTED, IntakeStatus.REOPENED)
+        intake_statuses = (
+            cast(str, IntakeStatus.SUBMITTED),
+            cast(str, IntakeStatus.REOPENED),
+        )
 
     intake_ok = PatientIntakeForm.objects.filter(
         queue_entry_id=OuterRef("pk"),
