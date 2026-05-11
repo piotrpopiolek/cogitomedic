@@ -264,7 +264,9 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         self.assertIn(str(self.entry.id), url)
 
     def test_queue_entry_change_includes_external_upload_link(self) -> None:
-        self.client.force_login(self.reception)
+        # Use Admin: full modeladmin stack (raw_id / related) may require extra perms
+        # beyond Reception's role group; Admin matches real "can open change form" for CI.
+        self.client.force_login(self.admin)
         r = self.client.get(
             reverse("admin:reception_queueentry_change", args=[self.entry.pk])
         )
@@ -390,6 +392,7 @@ class ExternalUploadAdminHubViewsTests(TestCase):
             html,
         )
         self.assertIsNotNone(m)
+        assert m is not None  # narrow for mypy (assertIsNotNone does not)
         publish_request_id = m.group(1)
         rid = uuid.UUID(publish_request_id)
         pub = {
