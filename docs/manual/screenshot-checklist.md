@@ -19,7 +19,7 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 
 ## Wgranie zewnętrznego badania (`07-wgranie-zewnetrznego-badania`)
 
-Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard recepcji (skróty), `/admin/external-upload/`, `/admin/external-upload/<uuid>/`, opcjonalnie `/admin/reception/queueentry/<uuid>/change/` z linkiem nad formularzem. Pliki PNG w `assets/screenshots/` — zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); automatyzacja: [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py).
+Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard recepcji (skróty), `/admin/external-upload/`, `/admin/external-upload/<uuid>/`. Pliki PNG w `assets/screenshots/` — zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); automatyzacja: [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py).
 
 | #   | Plik | Ekran / uwagi |
 | --- | ---- | ------------- |
@@ -29,7 +29,6 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 | 3   | `reception-external-upload-03-entry-upload-select.png` | Ten sam URL: upload PDF + lista załączników / radio wybór (wg stanu danych) |
 | 4   | `reception-external-upload-04-preview.png` | Link „Open PDF preview” (opcjonalnie karta z podglądem w przeglądarce) |
 | 5   | `reception-external-upload-05-publish-confirm.png` | Formularz publikacji: locale, checkbox SMS, drugie potwierdzenie, Publish |
-| 6   | `reception-external-upload-06-queue-entry-shortcut.png` | `/admin/reception/queueentry/<uuid>/change/` — pasek z linkiem do external upload (wpis kwalifikujący się do huba) |
 
 
 ## Zmiana danych pacjenta (`06-zmiana-danych-pacjenta`)
