@@ -9,8 +9,7 @@ Recepcja / admin / manager mogą przejść całą ścieżkę **bez wywoływania 
 1. **Sidebar Unfold** — sekcja „Zewnętrzne badanie” z linkiem do huba (ta sama rola co API).
 2. **Dashboard recepcji** (`/admin/reception-dashboard/`) — skróty do huba papierowego i external upload.
 3. **Hub** — `GET /admin/external-upload/`: filtr statusu ankiety (`SUBMITTED` / `REOPENED` / oba), wybór wpisu kolejki, przejście do ekranu wpisu.
-4. **Edycja wpisu kolejki w adminie** (`/admin/reception/queueentry/<uuid>/change/`) — jeśli wpis spełnia **te same warunki** co lista w hubie (zakres placówek, ankieta, telefon, DOB, brak blokującego dokumentu innego źródła itd.), nad formularzem pojawia się link do ekranu external upload (bez szukania UUID w liście rozwijanej huba).
-5. **Ekran wpisu** — `GET /admin/external-upload/<queue_entry_id>/`: tożsamość, lista załączników (`MATCHED` / `ACCEPTED`), upload PDF, wybór załącznika, podgląd, publikacja z drugim potwierdzeniem i opcjonalnym `resend_sms`, start rewizji po publikacji.
+4. **Ekran wpisu** — `GET /admin/external-upload/<queue_entry_id>/`: tożsamość, lista załączników (`MATCHED` / `ACCEPTED`), upload PDF, wybór załącznika, podgląd, publikacja z drugim potwierdzeniem i opcjonalnym `resend_sms`, start rewizji po publikacji.
 
 ## Kiedy można wgrać plik
 
@@ -44,7 +43,7 @@ Recepcja / admin / manager mogą przejść całą ścieżkę **bez wywoływania 
 
 ## Przebieg operacyjny (wysoki poziom, także przez API)
 
-1. **Wybór wpisu kolejki** — hub HTML, link z edycji `Queue entry` lub bezpośredni URL (uprawnienia i filtr jak wyżej).
+1. **Wybór wpisu kolejki** — hub HTML lub bezpośredni URL `/admin/external-upload/<uuid>/` (uprawnienia i filtr jak wyżej).
 2. **Potwierdzenie tożsamości** na ekranie (imię, nazwisko, data urodzenia, telefon, data kolejki).
 3. **Upload** pliku PDF (multipart).
 4. **Wybór załącznika** do wersji roboczej, jeśli jest kilka lub zmieniasz wybór.

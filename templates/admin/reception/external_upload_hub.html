@@ -1,5 +1,5 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n cogitomedica_i18n %}
+{% load i18n unfold cogitomedica_i18n %}
 
 {% block breadcrumbs %}
 <div class="px-4 py-3 sm:px-8">
@@ -15,17 +15,17 @@
 
 {% block content %}
 <div class="px-4 sm:px-8 pb-8 max-w-2xl">
-    <h1 class="text-2xl font-bold mb-2 text-gray-900 dark:text-base-100">{{ title }}</h1>
+    <h1 class="text-2xl font-semibold mb-2 text-gray-900 dark:text-base-100">{{ title }}</h1>
     <p class="text-gray-600 dark:text-base-300 mb-6">{{ intro }}</p>
 
     {% if error_invalid %}
-    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200 dark:border-red-800">{{ error_invalid }}</div>
+    <div class="mb-4 rounded-default bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200 dark:border-red-800">{{ error_invalid }}</div>
     {% endif %}
 
     {{ form.media }}
-    <form method="get" action="" class="bg-white dark:bg-base-900 rounded-md shadow border border-gray-200 dark:border-base-700 p-6 space-y-4">
+    <form method="get" action="" class="bg-white dark:bg-base-900 rounded-default border border-base-200 dark:border-base-800 p-6 space-y-6">
         <div>
-            <label for="id_form_status" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.external_upload_hub_filter_label" "Intake form status" %}</label>
+            <label for="id_form_status" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-2">{% admin_trans "administration.external_upload_hub_filter_label" "Intake form status" %}</label>
             <select
                 id="id_form_status"
                 name="form_status"
@@ -39,18 +39,18 @@
         </div>
 
         {% if hub_queue_entries_empty %}
-        <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200">
+        <div class="rounded-default bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200">
             {% admin_trans "administration.external_upload_hub_no_entries" "No eligible queue entries for the selected filter and period." %}
         </div>
         {% else %}
-        <div>
-            <label for="{{ form.queue_entry.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.external_upload_hub_queue_entry_id_label" "Queue entry" %}</label>
+        <div class="max-w-lg pt-4">
+            <label for="{{ form.queue_entry.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-2">{% admin_trans "administration.external_upload_hub_queue_entry_id_label" "Queue entry" %}</label>
             {{ form.queue_entry }}
         </div>
-        <div>
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-base-900">
+        <div class="flex flex-wrap gap-3 pt-4">
+            {% component "unfold/components/button.html" with submit=1 variant="primary" %}
                 {% admin_trans "administration.external_upload_hub_submit" "Continue" %}
-            </button>
+            {% endcomponent %}
         </div>
         {% endif %}
     </form>
