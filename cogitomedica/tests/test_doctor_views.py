@@ -218,6 +218,64 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"reopened", resp.content.lower())
 
+    def test_open_by_queue_external_upload_redirects_skips_create_or_get(
+        self,
+    ) -> None:
+        """Reception external-upload doc on REOPENED intake: doctor opens detail, no Befund create."""
+        from apps.medical.services import create_external_upload_medical_document
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EU", name="Ext Upload Open Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="E1", name="E1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtUploadOpen",
+            date_of_birth=date(1991, 6, 6),
+            phone="+48500111222",
+            email="extuploadopen@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        self.assertEqual(ext_doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+        with patch("cogitomedica.doctor_views.create_or_get_medical_document") as m_cog:
+            resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+            m_cog.assert_not_called()
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(f"/doctor/{ext_doc.id}/", resp.url)
+        self.assertIn("lang=en", resp.url)
+
     def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
         """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
         self._login_doctor()

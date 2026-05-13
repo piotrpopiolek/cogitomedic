@@ -13,7 +13,7 @@ alwaysApply: false
 - Projektuj moduły i klasy zgodnie z SOLID, szczególnie SRP i DIP.
 
 ## 2) Django/DRF + walidacja danych
-- Dla API używaj spójnych kontraktów wejścia/wyjścia (DRF serializers lub Pydantic, zależnie od kontekstu modułu).
+- Dla API używaj spójnych kontraktów wejścia/wyjścia Pydantic.
 - Używaj poprawnych metod HTTP i jednoznacznych kodów odpowiedzi.
 - Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do Django 6 Tasks.
 
