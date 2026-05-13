@@ -33,7 +33,11 @@ from apps.medical.external_pdf_service import (
     check_external_pdf_gate,
     create_attachment_records,
 )
-from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
+)
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
@@ -330,7 +334,12 @@ def _render_no_intake_action_page(
 def doctor_open_by_queue_view(
     request: HttpRequest, queue_entry_id: UUID
 ) -> HttpResponse:
-    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document)."""
+    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document).
+
+    If a medical document with ``source_type=EXTERNAL_UPLOAD`` already exists for this
+    queue entry, redirect straight to document detail — do not run Befund intake gates
+    or :func:`~apps.medical.services.create_or_get_medical_document`.
+    """
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     lang = _get_doctor_lang(request)
@@ -351,6 +360,21 @@ def doctor_open_by_queue_view(
             },
             status=404,
         )
+    ext_doc = (
+        MedicalDocument.objects.filter(
+            queue_entry_id=entry.id,
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+        )
+        .only("id")
+        .first()
+    )
+    if ext_doc is not None:
+        url = reverse(
+            "doctor-document-detail",
+            kwargs={"medical_document_id": ext_doc.id},
+        )
+        return HttpResponseRedirect(url + "?lang=" + lang)
+
     existing_doc = getattr(entry, "medical_document", None)
     if existing_doc is not None:
         doc = existing_doc
