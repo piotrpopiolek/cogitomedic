@@ -14,7 +14,7 @@
             {{ form.next }}
 
             <div class="mb-4">
-                <label for="{{ form.file.id_for_label }}" class="block text-sm font-medium mb-2">
+                <label for="{{ form.file.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-2">
                     {{ form.file.label }}
                 </label>
                 {{ form.file }}
@@ -26,7 +26,7 @@
                     >
                         {% admin_trans "administration.btn_select_file" "Wybierz plik" %}
                     </button>
-                    <span id="selected-file-name" class="text-sm text-gray-500">{% admin_trans "administration.import_xlsx_no_file" "Nie wybrano pliku." %}</span>
+                    <span id="selected-file-name" class="text-sm text-gray-500 dark:text-base-400">{% admin_trans "administration.import_xlsx_no_file" "Nie wybrano pliku." %}</span>
                 </div>
                 {% if form.file.errors %}
                     <div class="mt-2 text-sm text-red-600">
@@ -35,11 +35,11 @@
                 {% endif %}
             </div>
 
-            <div class="text-sm text-gray-500 mb-6">
+            <div class="text-sm text-gray-500 dark:text-base-400 mb-0">
                 {% admin_trans "administration.import_xlsx_hint" "Import odczyta z pliku datę kolejki i nazwę placówki (Standort)." %}
             </div>
 
-            <div class="flex gap-3">
+            <div class="flex flex-wrap gap-3 pt-4">
                 {% component "unfold/components/button.html" with submit=1 variant="primary" %}
                     {% admin_trans "administration.btn_run_import" "Uruchom import" %}
                 {% endcomponent %}

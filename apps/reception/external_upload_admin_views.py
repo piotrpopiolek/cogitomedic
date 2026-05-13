@@ -122,33 +122,6 @@ def _external_upload_hub_queryset(
     return qs.order_by("-daily_queue__queue_date", "daily_queue_id", "position_no")
 
 
-def queue_entry_external_upload_entry_url(
-    request: HttpRequest, queue_entry: QueueEntry
-) -> str | None:
-    """
-    If *queue_entry* appears in the external-upload hub pick list for *request.user*,
-    return the staff HTML entry URL; otherwise ``None``.
-
-    Used from :class:`~apps.reception.admin.QueueEntryAdmin` (same eligibility rules
-    as :func:`_external_upload_hub_queryset` with ``form_status="all"``). Staff who
-    are not reception/admin/manager never get a link.
-    """
-    from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
-
-    if not is_reception_admin_or_manager_staff(request.user):
-        return None
-    if (
-        not _external_upload_hub_queryset(request, form_status="all")
-        .filter(pk=queue_entry.pk)
-        .exists()
-    ):
-        return None
-    return reverse(
-        "admin_external_upload_entry",
-        kwargs={"queue_entry_id": queue_entry.pk},
-    )
-
-
 def _external_upload_entry_queryset(request: Any) -> QuerySet[QueueEntry]:
     """Detail lookup: any SUBMITTED or REOPENED intake (ignores hub list filter)."""
     return _external_upload_hub_queryset(request, form_status="all")
@@ -559,9 +532,6 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
         "patient": entry.patient,
         "daily_queue": entry.daily_queue,
         "wrong_source": wrong_source,
-        "admin_queue_entry_url": reverse(
-            "admin:reception_queueentry_change", args=[entry.id]
-        ),
         "preview_pdf_url": preview_url,
         "locale_choices": StaffUserPreferredLocale.choices,
         **ctx,

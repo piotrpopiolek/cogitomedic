@@ -6,10 +6,7 @@ from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
-from django.contrib.auth.models import Permission
-from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import Q
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -248,70 +245,6 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
         self.assertIn('id="id_publish_locale"', r.content.decode())
-
-    def test_queue_entry_external_upload_url_none_for_doctor(self) -> None:
-        request = self.factory.get("/")
-        request.user = self.doctor
-        self.assertIsNone(
-            ext_hub_views.queue_entry_external_upload_entry_url(request, self.entry)
-        )
-
-    def test_queue_entry_external_upload_url_for_reception_when_eligible(
-        self,
-    ) -> None:
-        request = self.factory.get("/")
-        request.user = self.reception
-        url = ext_hub_views.queue_entry_external_upload_entry_url(request, self.entry)
-        self.assertIsNotNone(url)
-        assert url is not None
-        self.assertIn(str(self.entry.id), url)
-
-    def test_queue_entry_change_includes_external_upload_link(self) -> None:
-        # Use Admin: full modeladmin stack (raw_id / related) may require extra perms
-        # beyond Reception's role group; Admin matches real "can open change form" for CI.
-        self.client.force_login(self.admin)
-        r = self.client.get(
-            reverse("admin:reception_queueentry_change", args=[self.entry.pk])
-        )
-        self.assertEqual(r.status_code, 200)
-        expected = reverse(
-            "admin_external_upload_entry",
-            kwargs={"queue_entry_id": self.entry.id},
-        )
-        self.assertIn(expected, r.content.decode())
-
-    def test_queue_entry_change_hides_external_upload_link_for_doctor(self) -> None:
-        """Doctor must not see external-upload shortcut even if they can open this change form.
-
-        The Doctor role group does not include ``change_queueentry`` or raw-id targets; grant
-        only those extras here so we always assert on HTML (no skip).
-        """
-        ct_qe = ContentType.objects.get_for_model(QueueEntry)
-        ct_staff = ContentType.objects.get_for_model(StaffUser)
-        ct_pfs = ContentType.objects.get_for_model(PatientFormSession)
-        extra = Permission.objects.filter(
-            Q(content_type=ct_qe, codename="change_queueentry")
-            | Q(content_type=ct_staff, codename="view_staffuser")
-            | Q(content_type=ct_pfs, codename="view_patientformsession")
-        )
-        self.doctor.user_permissions.add(*list(extra))
-        self.client.force_login(self.doctor)
-        r = self.client.get(
-            reverse("admin:reception_queueentry_change", args=[self.entry.pk])
-        )
-        self.assertEqual(
-            r.status_code,
-            200,
-            msg=(
-                "Doctor should reach QueueEntry change with extra perms; "
-                f"got {r.status_code}. Extend this test's permission list if admin requires more."
-            ),
-        )
-        expected = reverse(
-            "admin_external_upload_entry",
-            kwargs={"queue_entry_id": self.entry.id},
-        )
-        self.assertNotIn(expected, r.content.decode())
 
     def test_entry_403_when_queue_entry_out_of_scope(self) -> None:
         other_clinic = ClinicSite.objects.create(code="EUX", name="Other Clinic")
