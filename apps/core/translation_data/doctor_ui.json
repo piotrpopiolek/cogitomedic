@@ -289,6 +289,36 @@
     "en": "In revision",
     "pl": "W rewizji"
   },
+  "doctor.filter_list_order": {
+    "de": "Sortierung",
+    "en": "Sort",
+    "pl": "Sortowanie"
+  },
+  "doctor.filter_list_order_default": {
+    "de": "Standard",
+    "en": "Default",
+    "pl": "Domyślny"
+  },
+  "doctor.filter_list_order_patient_asc": {
+    "de": "Patient aufsteigend",
+    "en": "Patient ascending",
+    "pl": "Pacjent rosnąco"
+  },
+  "doctor.filter_list_order_patient_desc": {
+    "de": "Patient absteigend",
+    "en": "Patient descending",
+    "pl": "Pacjent malejąco"
+  },
+  "doctor.filter_list_order_date_asc": {
+    "de": "Besuchsdatum aufsteigend",
+    "en": "Visit date ascending",
+    "pl": "Data wizyty rosnąco"
+  },
+  "doctor.filter_list_order_date_desc": {
+    "de": "Besuchsdatum absteigend",
+    "en": "Visit date descending",
+    "pl": "Data wizyty malejąco"
+  },
   "doctor.list_status_in_revision": {
     "de": "Revision",
     "en": "In revision",
