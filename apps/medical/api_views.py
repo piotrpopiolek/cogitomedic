@@ -513,8 +513,11 @@ def medical_external_upload_preview_pdf_view(
 ) -> HttpResponse | JsonResponse:
     """GET PDF preview for EXTERNAL_UPLOAD (draft attachment or published local/HIDrive file).
 
-    Scoped RECEPTION/MANAGER: same clinic-site boundary as other reception queue APIs
+    Scoped RECEPTION/MANAGER/ADMIN: same clinic-site boundary as other reception queue APIs
     (``queue_entry_not_in_scope`` when the document's queue is outside assigned sites).
+
+    Staff in role **DOCTOR** must not use this handler; they use
+    ``GET …/medical-documents/{id}/preview-pdf`` instead (raw lab bytes, no Befund cover page).
     """
     role_error = require_user_role(
         request, allowed_roles={"RECEPTION", "ADMIN", "MANAGER"}
@@ -843,6 +846,10 @@ def medical_document_preview_pdf_view(
       - PUBLISHED + pending revision → draft version
       - DRAFT → latest version (legacy behaviour)
 
+    For ``source_type == EXTERNAL_UPLOAD``, returns the **raw** reception/lab PDF for the
+    resolved version (same bytes as ``…/external-upload/preview-pdf``), not the merged
+    Befund+cover layout used for standard digital documents.
+
     Statuses are never mutated here – previewing must be a pure read.
     """
     role_error = require_user_role(
@@ -907,27 +914,62 @@ def medical_document_preview_pdf_view(
     if not version:
         return json_error("other.api.no_version_to_preview", status=404)
 
-    form_locale = (
-        request.GET.get("form_locale") or request.GET.get("authoring_locale") or ""
-    ).strip()[:10]
-    authoring_locale_override = form_locale if form_locale else None
-    pdf_bytes, preview_warn = build_merged_preview_pdf_bytes(
-        version, authoring_locale_override=authoring_locale_override
-    )
+    preview_warn: str | None
+    if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        try:
+            pdf_bytes = _external_upload_pdf_bytes_for_preview(doc=doc, version=version)
+        except ObjectDoesNotExist:
+            return json_error("other.api.no_version_to_preview", status=404)
+        except ExternalPdfCorruptError:
+            corrupt_exc = DomainError(
+                domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+                api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+            )
+            return json_domain_error(
+                corrupt_exc, status=_external_upload_error_status(corrupt_exc)
+            )
+        except Exception:
+            logger.exception(
+                "medical document preview (external upload) failed: "
+                "medical_document_id=%s version_id=%s",
+                medical_document_id,
+                version.id,
+            )
+            return json_error("other.api.server_error", status=502)
+        if pdf_bytes is None:
+            exc = DomainError(
+                domain_message("other.domain.external_upload_preview_no_attachment"),
+                api_message_key="other.domain.external_upload_preview_no_attachment",
+            )
+            return json_domain_error(exc, status=_external_upload_error_status(exc))
+        preview_warn = None
+    else:
+        form_locale = (
+            request.GET.get("form_locale") or request.GET.get("authoring_locale") or ""
+        ).strip()[:10]
+        authoring_locale_override = form_locale if form_locale else None
+        pdf_bytes, preview_warn = build_merged_preview_pdf_bytes(
+            version, authoring_locale_override=authoring_locale_override
+        )
+
+    audit_metadata = {
+        "client_ip": get_client_ip(request),
+        "version_no": version.version_no,
+        "source": source,
+        "document_status": doc.status,
+        "has_pending_revision": doc.has_pending_revision,
+        **assigned_doctor_audit_metadata(doc),
+    }
+    if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        audit_metadata["external_upload_raw_lab_preview"] = True
+
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
         actor_user_id=request.user.id,
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
-        metadata={
-            "client_ip": get_client_ip(request),
-            "version_no": version.version_no,
-            "source": source,
-            "document_status": doc.status,
-            "has_pending_revision": doc.has_pending_revision,
-            **assigned_doctor_audit_metadata(doc),
-        },
+        metadata=audit_metadata,
     )
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="befund-preview.pdf"'
