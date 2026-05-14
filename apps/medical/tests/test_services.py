@@ -8,7 +8,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, IdempotencyConflictError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     DocVersionStatus,
@@ -852,6 +852,55 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(
             OutboxEvent.objects.filter(
                 medical_document_version=first, event_type=OutboxEventType.GENERATE_PDF
+            ).count(),
+            1,
+        )
+
+    def test_publish_document_version_same_request_id_conflicting_locale_raises(
+        self,
+    ) -> None:
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        request_id = uuid4()
+        published = publish_document_version(
+            medical_document_id=self.medical_document.id,
+            publish_request_id=request_id,
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+        self.assertEqual(
+            OutboxEvent.objects.filter(
+                medical_document_version=published,
+                event_type=OutboxEventType.GENERATE_PDF,
+            ).count(),
+            1,
+        )
+        with self.assertRaises(IdempotencyConflictError) as ctx:
+            publish_document_version(
+                medical_document_id=self.medical_document.id,
+                publish_request_id=request_id,
+                published_by_user_id=self.doctor_user.id,
+                publish_locale="en-GB",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.api.publish_request_id_locale_conflict",
+        )
+        self.assertEqual(
+            OutboxEvent.objects.filter(
+                medical_document_version=published,
+                event_type=OutboxEventType.GENERATE_PDF,
             ).count(),
             1,
         )
