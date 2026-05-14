@@ -2614,3 +2614,40 @@ class ExternalUploadApiTests(MedicalApiTests):
                     content_type="application/json",
                 )
             self.assertEqual(r.status_code, 403, (path, r.content))
+
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_doctor_raw_pdf_via_medical_document_preview_pdf(
+        self, adapter_factory: MagicMock, mock_download: MagicMock
+    ) -> None:
+        """Doctors must not call external-upload/preview-pdf; ``preview-pdf`` returns raw lab bytes."""
+        mock_download.return_value = _minimal_pdf_bytes()
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+
+        self.client.force_login(self.doctor_user)
+        ext_only = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(ext_only.status_code, 403)
+
+        merged_url = f"/api/v1/medical-documents/{doc_id}/preview-pdf"
+        preview = self.client.get(merged_url)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview["Content-Type"], "application/pdf")
