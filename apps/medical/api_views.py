@@ -107,6 +107,9 @@ from apps.operations.services import create_audit_event
 
 logger = logging.getLogger(__name__)
 
+_PREVIEW_FILENAME_BEFUND_MERGED = "Befund preview.pdf"
+_PREVIEW_FILENAME_LABORATORY_REPORT = "External preview.pdf"
+
 
 class _MedicalDocumentEditLocked(Exception):
     """Raised inside ``transaction.atomic`` to roll back and return HTTP 423."""
@@ -578,8 +581,8 @@ def medical_external_upload_preview_pdf_view(
 
     try:
         pdf_bytes = _external_upload_pdf_bytes_for_preview(doc=doc, version=version)
-    except ObjectDoesNotExist:
-        return json_error("other.api.no_version_to_preview", status=404)
+    except ExternalPdfAttachment.DoesNotExist:
+        return json_error("other.api.external_upload_attachment_missing", status=404)
     except ExternalPdfCorruptError:
         corrupt_exc = DomainError(
             domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
@@ -594,6 +597,8 @@ def medical_external_upload_preview_pdf_view(
             medical_document_id,
             version.id,
         )
+        if settings.DEBUG:
+            raise
         return json_error("other.api.server_error", status=502)
 
     if pdf_bytes is None:
@@ -620,7 +625,9 @@ def medical_external_upload_preview_pdf_view(
         },
     )
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
-    response["Content-Disposition"] = 'inline; filename="external-upload-preview.pdf"'
+    response["Content-Disposition"] = (
+        f'inline; filename="{_PREVIEW_FILENAME_LABORATORY_REPORT}"'
+    )
     response["Cache-Control"] = "no-store, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
@@ -918,8 +925,10 @@ def medical_document_preview_pdf_view(
     if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
         try:
             pdf_bytes = _external_upload_pdf_bytes_for_preview(doc=doc, version=version)
-        except ObjectDoesNotExist:
-            return json_error("other.api.no_version_to_preview", status=404)
+        except ExternalPdfAttachment.DoesNotExist:
+            return json_error(
+                "other.api.external_upload_attachment_missing", status=404
+            )
         except ExternalPdfCorruptError:
             corrupt_exc = DomainError(
                 domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
@@ -935,6 +944,8 @@ def medical_document_preview_pdf_view(
                 medical_document_id,
                 version.id,
             )
+            if settings.DEBUG:
+                raise
             return json_error("other.api.server_error", status=502)
         if pdf_bytes is None:
             exc = DomainError(
@@ -972,7 +983,12 @@ def medical_document_preview_pdf_view(
         metadata=audit_metadata,
     )
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
-    response["Content-Disposition"] = 'inline; filename="befund-preview.pdf"'
+    preview_filename = (
+        _PREVIEW_FILENAME_LABORATORY_REPORT
+        if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        else _PREVIEW_FILENAME_BEFUND_MERGED
+    )
+    response["Content-Disposition"] = f'inline; filename="{preview_filename}"'
     response["Cache-Control"] = "no-store, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
@@ -1776,6 +1792,8 @@ def medical_document_external_pdf_content_view(
             att.id,
             att.hidrive_remote_path,
         )
+        if settings.DEBUG:
+            raise
         return JsonResponse(
             {
                 "error": resolve_other_message(
@@ -1826,6 +1844,8 @@ def medical_document_external_pdf_reject_view(
             att.id,
             att.hidrive_remote_path,
         )
+        if settings.DEBUG:
+            raise
         return json_error("other.api.external_pdf_reject_failed", status=502)
     create_audit_event(
         event_type="EXTERNAL_PDF_REJECTED",
