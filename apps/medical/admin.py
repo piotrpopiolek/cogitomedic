@@ -155,6 +155,7 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
     list_display = (
         "queue_entry",
         "intake_form",
+        "source_type",
         "status",
         "current_version_no",
         "last_published_at",
@@ -162,7 +163,7 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
         "created_at",
     )
     list_display_links = ("queue_entry",)
-    list_filter = ("status",)
+    list_filter = ("status", "source_type")
     ordering = ["-created_at"]
     readonly_fields = (
         "id",
@@ -208,6 +209,8 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
         "version_status",
         "publish_locale",
         "pdf_generation_status",
+        "external_original_filename",
+        "external_selected_attachment_link",
         "diagnosis_code",
         "procedure_code",
         "created_at",
@@ -215,8 +218,30 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
     list_display_links = ("medical_document",)
     list_filter = ("version_status", "publish_locale", "pdf_generation_status")
     ordering = ["-created_at"]
-    readonly_fields = ("id", "created_at")
+    readonly_fields = (
+        "id",
+        "created_at",
+        "external_selected_attachment",
+        "external_original_filename",
+        "external_uploaded_by_user",
+        "external_uploaded_at",
+        "external_verified_by_user",
+        "external_verified_at",
+    )
     date_hierarchy = "created_at"
+
+    @admin.display(
+        description=db_gettext_lazy(
+            "administration.field_external_selected_attachment",
+            "External attachment",
+        )
+    )
+    def external_selected_attachment_link(self, obj: MedicalDocumentVersion) -> str:
+        att = getattr(obj, "external_selected_attachment", None)
+        if att is None:
+            return "—"
+        path = (att.hidrive_remote_path or "").strip() or "—"
+        return f"{att.id} — {path[:120]}{'…' if len(path) > 120 else ''}"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -227,6 +252,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
             "medical_document__intake_form",
             "publish_requested_by_user",
             "published_by_user",
+            "external_selected_attachment",
         )
 
     def get_form(self, request, obj=None, change=None, **kwargs):

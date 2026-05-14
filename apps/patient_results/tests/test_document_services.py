@@ -14,6 +14,7 @@ from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -149,6 +150,17 @@ class ListPatientDocumentsTests(DocumentServicesBaseTestCase):
     def test_empty_for_unknown_patient(self):
         result = list_patient_documents(uuid.uuid4())
         self.assertEqual(result, [])
+
+
+class ExternalUploadPatientResultsTests(DocumentServicesBaseTestCase):
+    def test_list_includes_external_upload_when_published_complete(self) -> None:
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        )
+        self._published_version()
+        rows = list_patient_documents(self.patient.id)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["document_id"], str(self.medical_doc.id))
 
 
 class ResolvePatientBefundDownloadTests(DocumentServicesBaseTestCase):

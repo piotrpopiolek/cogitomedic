@@ -37,6 +37,7 @@ from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
+    MedicalDocumentVersion,
 )
 from apps.medical.services import (
     acquire_document_lock,
@@ -514,7 +515,13 @@ def doctor_document_detail_view(
         patient = Patient.objects.get(pk=patient_pk) if patient_pk else None
         if patient is None:
             raise ObjectDoesNotExist()
-        if doc.status == MedicalDocStatus.PUBLISHED:
+        external_readonly = doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        latest_version = (
+            MedicalDocumentVersion.objects.filter(medical_document_id=doc.id)
+            .order_by("-version_no")
+            .first()
+        )
+        if doc.status == MedicalDocStatus.PUBLISHED or external_readonly:
             gate = GateResult(
                 passed=True,
                 matched_files=(),
@@ -550,9 +557,12 @@ def doctor_document_detail_view(
                 status=424,
             )
 
-        granted, lock_holder = acquire_document_lock(
-            medical_document_id=medical_document_id, user=request.user
-        )
+        if external_readonly:
+            granted, lock_holder = True, None
+        else:
+            granted, lock_holder = acquire_document_lock(
+                medical_document_id=medical_document_id, user=request.user
+            )
     except DomainError as exc:
         msg_key = exc.api_message_key or ""
         message = (
@@ -611,6 +621,22 @@ def doctor_document_detail_view(
     if "authoring_locale" not in context:
         context["authoring_locale"] = authoring_locale
     body_map_rel = static("tablet/body.jpg")
+    doctor_external_upload_pdf_href = None
+    if external_readonly:
+        if doc.status == MedicalDocStatus.PUBLISHED:
+            doctor_external_upload_pdf_href = request.build_absolute_uri(
+                reverse(
+                    "medical-document-preview-pdf",
+                    kwargs={"medical_document_id": doc.id},
+                )
+            )
+        elif latest_version and latest_version.external_selected_attachment_id:
+            doctor_external_upload_pdf_href = request.build_absolute_uri(
+                reverse(
+                    "medical-documents-external-upload-preview-pdf",
+                    kwargs={"medical_document_id": doc.id},
+                )
+            )
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
@@ -618,6 +644,7 @@ def doctor_document_detail_view(
         "ui": ui,
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
+        "externalUploadReadOnly": external_readonly,
     }
     return _render_doctor(
         request,
@@ -631,6 +658,11 @@ def doctor_document_detail_view(
             "lang": lang,
             "external_pdf_hidrive_warning": (
                 gate.error_message if gate.passed and gate.error_message else None
+            ),
+            "doctor_external_upload_readonly": external_readonly,
+            "doctor_external_upload_pdf_href": doctor_external_upload_pdf_href,
+            "doctor_external_upload_has_pending_revision": bool(
+                external_readonly and doc.has_pending_revision
             ),
         },
     )
