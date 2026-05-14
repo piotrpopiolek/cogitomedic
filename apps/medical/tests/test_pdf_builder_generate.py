@@ -6,6 +6,7 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
@@ -543,7 +544,10 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
         self.assertTrue(checksum)
         out_path = self.media_root / rel_path
         reader = PdfReader(str(out_path))
-        meta = reader.metadata or {}
+        raw_meta = reader.metadata
+        meta: dict[str, Any] = (
+            cast(dict[str, Any], raw_meta) if raw_meta is not None else {}
+        )
         self.assertEqual(
             meta.get("/cogitomedicaldocumentid"),
             str(self.medical_doc.id),
@@ -559,7 +563,9 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
         stamped = pb._external_upload_pdf_bytes_with_document_metadata(raw, doc_id)
         self.assertNotEqual(stamped, raw)
         r2 = PdfReader(BytesIO(stamped))
+        raw2 = r2.metadata
+        meta2: dict[str, Any] = cast(dict[str, Any], raw2) if raw2 is not None else {}
         self.assertEqual(
-            (r2.metadata or {}).get("/cogitomedicaldocumentid"),
+            meta2.get("/cogitomedicaldocumentid"),
             str(doc_id),
         )

@@ -347,6 +347,7 @@ class DoctorViewsSmokeTests(TestCase):
             re.S,
         )
         self.assertIsNotNone(m)
+        assert m is not None  # narrow for mypy
         panel = json.loads(m.group(1))
         self.assertTrue(panel.get("externalUploadReadOnly"))
         self.assertNotIn('id="befund-form"', resp.content.decode("utf-8"))
