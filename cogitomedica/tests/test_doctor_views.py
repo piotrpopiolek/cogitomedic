@@ -1087,7 +1087,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         patient_last_name: str,
         published_by: StaffUser,
         queue_assigned_doctor: StaffUser | None = None,
-        source_type: MedicalDocumentSourceType = MedicalDocumentSourceType.DIGITAL_INTAKE,
+        source_type: str = "DIGITAL_INTAKE",
     ) -> MedicalDocument:
         patient = Patient.objects.create(
             first_name="Jan",
@@ -1175,7 +1175,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
             patient_last_name="ExternalListPreview",
             published_by=self.doctor,
             queue_assigned_doctor=self.other_doctor,
-            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+            source_type="EXTERNAL_UPLOAD",
         )
         self.client.force_login(self.other_doctor)
         response = self.client.get("/doctor/")
