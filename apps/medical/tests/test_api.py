@@ -2621,7 +2621,8 @@ class ExternalUploadApiTests(MedicalApiTests):
         self, adapter_factory: MagicMock, mock_download: MagicMock
     ) -> None:
         """Doctors must not call external-upload/preview-pdf; ``preview-pdf`` returns raw lab bytes."""
-        mock_download.return_value = _minimal_pdf_bytes()
+        raw_lab_pdf = _minimal_pdf_bytes()
+        mock_download.return_value = raw_lab_pdf
         adapter_factory.return_value.upload.return_value = None
         self.client.force_login(self.reception_user)
         up = self.client.post(
@@ -2648,6 +2649,15 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(ext_only.status_code, 403)
 
         merged_url = f"/api/v1/medical-documents/{doc_id}/preview-pdf"
-        preview = self.client.get(merged_url)
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes"
+        ) as merge_mock:
+            merge_mock.side_effect = AssertionError(
+                "EXTERNAL_UPLOAD document preview must stream raw lab PDF, "
+                "not build_merged_preview_pdf_bytes"
+            )
+            preview = self.client.get(merged_url)
         self.assertEqual(preview.status_code, 200, preview.content)
         self.assertEqual(preview["Content-Type"], "application/pdf")
+        self.assertEqual(bytes(preview.content), raw_lab_pdf)
+        merge_mock.assert_not_called()
