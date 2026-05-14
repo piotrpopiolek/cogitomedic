@@ -1087,6 +1087,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         patient_last_name: str,
         published_by: StaffUser,
         queue_assigned_doctor: StaffUser | None = None,
+        source_type: MedicalDocumentSourceType = MedicalDocumentSourceType.DIGITAL_INTAKE,
     ) -> MedicalDocument:
         patient = Patient.objects.create(
             first_name="Jan",
@@ -1128,6 +1129,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         doc = MedicalDocument.objects.create(
             queue_entry=entry,
             intake_form=intake,
+            source_type=source_type,
             status=MedicalDocStatus.PUBLISHED,
             current_version_no=1,
             created_by_user=self.reception,
@@ -1163,6 +1165,29 @@ class DoctorListScopeAndPreviewTests(TestCase):
         self.assertIn("HistoryVisible", html)
         self.assertIn(
             f"/api/v1/medical-documents/{published_doc.id}/preview-pdf",
+            html,
+        )
+
+    def test_list_preview_uses_medical_document_preview_for_external_source(
+        self,
+    ) -> None:
+        ext_doc = self._create_published_document(
+            patient_last_name="ExternalListPreview",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.other_doctor,
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+        )
+        self.client.force_login(self.other_doctor)
+        response = self.client.get("/doctor/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("ExternalListPreview", html)
+        self.assertIn(
+            f"/api/v1/medical-documents/{ext_doc.id}/preview-pdf",
+            html,
+        )
+        self.assertNotIn(
+            f"/api/v1/medical-documents/{ext_doc.id}/external-upload/preview-pdf",
             html,
         )
 

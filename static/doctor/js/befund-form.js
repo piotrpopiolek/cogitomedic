@@ -412,7 +412,7 @@
         left.appendChild(nameBtn);
         left.appendChild(st);
         li.appendChild(left);
-        if (item.status === "MATCHED") {
+        if (item.status === "MATCHED" && !PANEL.externalUploadReadOnly) {
           var rej = document.createElement("button");
           rej.type = "button";
           rej.className =
@@ -598,6 +598,7 @@
   }
 
   if (PANEL.externalUploadReadOnly) {
+    loadExternalPdfs();
     return;
   }
 

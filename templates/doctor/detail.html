@@ -81,6 +81,23 @@
 </div>
 {% endif %}
 
+<div
+  id="revision-state-banner"
+  class="mb-4 hidden rounded-default border px-4 py-3 text-sm"
+  hidden
+  role="status"
+  aria-live="polite"
+></div>
+
+<div id="paper-intake-meta" class="mb-4 hidden space-y-3" hidden aria-live="polite"></div>
+
+<section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
+  <div id="doctor-intake-section-title" class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.intake_header }}</div>
+  <div class="p-4 text-sm text-base-900 dark:text-base-100">
+    <div id="intake-summary"></div>
+  </div>
+</section>
+
 {% if doctor_external_upload_readonly|default:False %}
 <div
   class="mb-4 rounded-default border border-base-200 bg-base-50 px-4 py-3 text-sm text-base-800 dark:border-base-700 dark:bg-base-900 dark:text-base-200"
@@ -101,24 +118,23 @@
   <p class="mt-3 mb-0 text-base-600 dark:text-base-400">{{ ui.external_upload_revision_notice }}</p>
   {% endif %}
 </div>
-{% endif %}
-
-<div
-  id="revision-state-banner"
-  class="mb-4 hidden rounded-default border px-4 py-3 text-sm"
-  hidden
-  role="status"
-  aria-live="polite"
-></div>
-
-<div id="paper-intake-meta" class="mb-4 hidden space-y-3" hidden aria-live="polite"></div>
-
-<section class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs">
-  <div id="doctor-intake-section-title" class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.intake_header }}</div>
-  <div class="p-4 text-sm text-base-900 dark:text-base-100">
-    <div id="intake-summary"></div>
+<section id="external-pdfs-panel" class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs hidden" aria-live="polite">
+  <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.external_pdf_section_title }}</div>
+  <div class="p-4 text-sm text-base-900 dark:text-base-100 space-y-3">
+    <p id="external-pdfs-empty" class="text-base-500 dark:text-base-400 mb-0 hidden"></p>
+    <ul id="external-pdfs-list" class="list-none space-y-2 p-0 m-0"></ul>
+    <div class="border border-base-200 dark:border-base-700 rounded-default overflow-hidden bg-base-50 dark:bg-base-950" style="min-height: 70vh;">
+      <iframe
+        id="external-pdf-iframe"
+        title="{{ ui.external_pdf_iframe_title }}"
+        class="w-full border-0"
+        style="display: block; width: 100%; min-height: 680px; height: 80vh; max-height: 1200px;"
+        src="about:blank"
+      ></iframe>
+    </div>
   </div>
 </section>
+{% endif %}
 
 {% if not doctor_external_upload_readonly|default:False %}
 <form id="befund-form" class="mb-4">{% csrf_token %}
