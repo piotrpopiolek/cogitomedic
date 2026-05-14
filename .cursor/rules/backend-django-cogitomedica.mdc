@@ -12,7 +12,7 @@ alwaysApply: false
 - Wymuszaj DRY: duplikacja kodu jest traktowana jako błąd krytyczny do refaktoryzacji.
 - Projektuj moduły i klasy zgodnie z SOLID, szczególnie SRP i DIP.
 
-## 2) Django/DRF + walidacja danych
+## 2) Walidacja danych
 - Dla API używaj spójnych kontraktów wejścia/wyjścia Pydantic.
 - Używaj poprawnych metod HTTP i jednoznacznych kodów odpowiedzi.
 - Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do Django 6 Tasks.
@@ -25,7 +25,6 @@ alwaysApply: false
 
 ## 4) Reguły domenowe specyficzne dla projektu
 - Obsługuj role `RECEPTION`, `DOCTOR`, `ADMIN`, `MANAGER` (oraz `TABLET` tam, gdzie dotyczy) zgodnie z PRD i implementacją grup Django.
-- Dla manualnie dodanych pacjentów bez `Doctolib Patient ID` utrzymuj status tymczasowy i alert administracyjny.
 - Dla sesji tabletu stosuj model `latest-wins`: nowy token unieważnia poprzedni aktywny.
 - Wymuszaj walidację wymaganych zgód i pytań anamnestycznych przed `SUBMITTED`.
 - Wspieraj wersjonowanie dokumentu medycznego i ponowną publikację bez utraty historii.
