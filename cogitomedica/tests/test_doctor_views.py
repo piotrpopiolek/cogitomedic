@@ -276,6 +276,81 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIn(f"/doctor/{ext_doc.id}/", resp.url)
         self.assertIn("lang=en", resp.url)
 
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_document_detail_skips_gate_and_lock(
+        self,
+        gate_mock: MagicMock,
+        lock_mock: MagicMock,
+    ) -> None:
+        from apps.medical.services import create_external_upload_medical_document
+
+        gate_mock.side_effect = AssertionError(
+            "check_external_pdf_gate must not run for EXTERNAL_UPLOAD draft detail"
+        )
+        lock_mock.side_effect = AssertionError(
+            "acquire_document_lock must not run for EXTERNAL_UPLOAD draft detail"
+        )
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="ED", name="Ext Detail Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="D1", name="D1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtDetail",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48500111333",
+            email="extdetail@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        self.assertEqual(ext_doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+        resp = self.client.get(f"/doctor/{ext_doc.id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        gate_mock.assert_not_called()
+        lock_mock.assert_not_called()
+        html = resp.content.decode("utf-8")
+        m = re.search(
+            r'<script id="doctor-panel-data" type="application/json">(.+?)</script>',
+            html,
+            re.S,
+        )
+        self.assertIsNotNone(m)
+        panel = json.loads(m.group(1))
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertNotIn('id="befund-form"', resp.content.decode("utf-8"))
+
     def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
         """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
         self._login_doctor()

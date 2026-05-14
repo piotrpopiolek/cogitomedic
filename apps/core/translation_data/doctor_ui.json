@@ -1015,9 +1015,24 @@
     "pl": "Kliknij nazwę pliku, aby podejrzeć."
   },
   "doctor.external_pdf_preview_merge_warning": {
-    "de": "Hinweis: Die PDF-Zusammenführung ist fehlgeschlagen oder eine Anlage war beschädigt — Vorschau zeigt nur den Befund.",
-    "en": "Note: PDF merge failed or an attachment was invalid — preview shows Befund only.",
-    "pl": "Uwaga: scalenie PDF nie powiodło się lub załącznik był uszkodzony — podgląd pokazuje tylko Befund."
+    "de": "Hinweis: Die PDF-Zusammenführung ist fehlgeschlagen oder eine Anlage war beschädigt.",
+    "en": "Note: PDF merge failed or an attachment was invalid.",
+    "pl": "Uwaga: scalenie PDF nie powiodło się lub załącznik był uszkodzony."
+  },
+  "doctor.external_upload_readonly_notice": {
+    "de": "Dieses Dokument enthält ein externes Untersuchungsergebnis.",
+    "en": "This document holds an external examination result.",
+    "pl": "Ten dokument zawiera zewnętrzny wynik badania."
+  },
+  "doctor.external_upload_pdf_link": {
+    "de": "PDF anzeigen",
+    "en": "View PDF",
+    "pl": "Zobacz PDF"
+  },
+  "doctor.external_upload_revision_notice": {
+    "de": "Es liegt eine ausstehende Korrektur vor — bitte warten Sie auf die Veröffentlichung durch die Rezeption.",
+    "en": "A correction is pending — please wait for reception to publish it.",
+    "pl": "Oczekuje korekta — poczekaj na publikację przez recepcję."
   },
   "doctor.msg_publish_preview_required": {
     "de": "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen.",
