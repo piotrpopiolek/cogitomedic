@@ -4,8 +4,12 @@ import hashlib
 import logging
 import uuid
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -34,6 +38,29 @@ from apps.operations.services import create_audit_event
 from apps.users.models import StaffUser, StaffUserGender
 
 logger = logging.getLogger(__name__)
+
+
+def _external_upload_pdf_bytes_with_document_metadata(
+    pdf_bytes: bytes, medical_document_id: uuid.UUID
+) -> bytes:
+    """Re-pack PDF bytes with ``/Info`` ``/cogitomedicaldocumentid`` (patient-facing anchor)."""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+    except PdfReadError:
+        raise
+    writer = PdfWriter()
+    writer.append(reader)
+    merged_meta: dict[str, str] = {}
+    if reader.metadata:
+        for key, value in reader.metadata.items():
+            if value is None:
+                continue
+            merged_meta[str(key)] = str(value)
+    merged_meta["/cogitomedicaldocumentid"] = str(medical_document_id)
+    writer.add_metadata(merged_meta)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 class AllExternalPdfDownloadsFailed(RuntimeError):
@@ -827,6 +854,32 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
             ],
         ) from exc
 
+    try:
+        materialized_bytes = _external_upload_pdf_bytes_with_document_metadata(
+            pdf_bytes, doc.id
+        )
+    except PdfReadError as exc:
+        ExternalPdfAttachment.objects.filter(
+            pk=att.pk,
+            status=ExternalPdfStatus.MATCHED,
+        ).update(status=ExternalPdfStatus.MERGE_FAILED)
+        att.refresh_from_db()
+        create_audit_event(
+            event_type="EXTERNAL_PDF_CORRUPT",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "previous_status": status_before_download,
+                "stage": "external_upload_metadata_rewrite",
+            },
+        )
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_corrupt"),
+            api_message_key="other.domain.external_upload_generate_pdf_corrupt",
+        ) from exc
+
     promoted = ExternalPdfAttachment.objects.filter(
         pk=att.pk,
         status=ExternalPdfStatus.MATCHED,
@@ -844,9 +897,9 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
     relative_path = relative_dir / f"{version.id}.pdf"
     full_path = Path(settings.MEDIA_ROOT) / relative_path
     full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_bytes(pdf_bytes)
+    full_path.write_bytes(materialized_bytes)
 
-    checksum = hashlib.sha256(pdf_bytes).hexdigest()
+    checksum = hashlib.sha256(materialized_bytes).hexdigest()
     relative_str = str(relative_path).replace("\\", "/")
     return relative_str, checksum
 

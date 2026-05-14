@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from freezegun import freeze_time
-from pypdf import PdfWriter
+
+from pypdf import PdfReader, PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
@@ -52,6 +52,15 @@ from apps.users.models import StaffUser, StaffUserGender
 def _minimal_pdf_bytes() -> bytes:
     w = PdfWriter()
     w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def _minimal_pdf_bytes_with_title() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    w.add_metadata({"/Title": "Lab fixture title"})
     buf = BytesIO()
     w.write(buf)
     return buf.getvalue()
@@ -276,8 +285,11 @@ class GenerateBefundPdfExternalTests(TestCase):
         expected = timezone.localtime(lp).strftime("%d.%m.%Y")
         self.assertEqual(ctx["publication_date_display"], expected)
 
-    @freeze_time("2026-04-13T10:00:00Z")
-    def test_publication_date_display_for_draft_uses_render_day_not_dash(self) -> None:
+    @patch("django.utils.timezone.now")
+    def test_publication_date_display_for_draft_uses_render_day_not_dash(
+        self, now_mock: MagicMock
+    ) -> None:
+        now_mock.return_value = datetime(2026, 4, 13, 10, 0, 0, tzinfo=dt_timezone.utc)
         MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
             last_published_at=None
         )
@@ -505,4 +517,49 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 medical_document_id=self.medical_doc.id,
             ).exists()
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_pdf_injects_document_id_metadata(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes_with_title()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-meta.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-meta.pdf",
+            original_filename="ext-meta.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            rel_path, checksum = generate_external_upload_pdf(self.version)
+
+        self.assertTrue(checksum)
+        out_path = self.media_root / rel_path
+        reader = PdfReader(str(out_path))
+        meta = reader.metadata or {}
+        self.assertEqual(
+            meta.get("/cogitomedicaldocumentid"),
+            str(self.medical_doc.id),
+        )
+        self.assertEqual(meta.get("/Title"), "Lab fixture title")
+
+    def test_external_upload_metadata_helper_contract(self) -> None:
+        """Regression: rewriter must change bytes and set /cogitomedicaldocumentid."""
+        from apps.medical import pdf_builder as pb
+
+        doc_id = self.medical_doc.id
+        raw = _minimal_pdf_bytes_with_title()
+        stamped = pb._external_upload_pdf_bytes_with_document_metadata(raw, doc_id)
+        self.assertNotEqual(stamped, raw)
+        r2 = PdfReader(BytesIO(stamped))
+        self.assertEqual(
+            (r2.metadata or {}).get("/cogitomedicaldocumentid"),
+            str(doc_id),
         )

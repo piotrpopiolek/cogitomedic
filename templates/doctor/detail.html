@@ -81,6 +81,28 @@
 </div>
 {% endif %}
 
+{% if doctor_external_upload_readonly|default:False %}
+<div
+  class="mb-4 rounded-default border border-base-200 bg-base-50 px-4 py-3 text-sm text-base-800 dark:border-base-700 dark:bg-base-900 dark:text-base-200"
+  role="status"
+>
+  <p class="mb-2 font-medium text-base-900 dark:text-base-100">{{ ui.external_upload_readonly_notice }}</p>
+  {% if doctor_external_upload_pdf_href %}
+  <p class="mb-0">
+    <a
+      href="{{ doctor_external_upload_pdf_href }}"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center rounded-default border border-primary-600/40 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-600/10 dark:border-primary-500/50 dark:text-primary-400"
+    >{{ ui.external_upload_pdf_link }}</a>
+  </p>
+  {% endif %}
+  {% if doctor_external_upload_has_pending_revision|default:False %}
+  <p class="mt-3 mb-0 text-base-600 dark:text-base-400">{{ ui.external_upload_revision_notice }}</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div
   id="revision-state-banner"
   class="mb-4 hidden rounded-default border px-4 py-3 text-sm"
@@ -98,6 +120,7 @@
   </div>
 </section>
 
+{% if not doctor_external_upload_readonly|default:False %}
 <form id="befund-form" class="mb-4">{% csrf_token %}
   <input type="hidden" name="schema_version" value="1" />
   <input type="hidden" name="authoring_locale" value="de-DE" />
@@ -269,6 +292,7 @@
     <label class="inline-flex items-center gap-2 text-sm text-base-700 dark:text-base-300"><input type="checkbox" id="resend_sms" class="rounded border-base-300 text-primary-600 dark:border-base-600 dark:bg-base-900" /> {{ ui.resend_sms }}</label>
   </div>
 </form>
+{% endif %}
 
 <div
   id="revision-modal"

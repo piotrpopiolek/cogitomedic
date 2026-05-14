@@ -597,6 +597,10 @@
     }
   }
 
+  if (PANEL.externalUploadReadOnly) {
+    return;
+  }
+
   const container = el("lesion-groups-container");
   const tpl = document.getElementById("lesion-group-tpl");
   const hasLesionUi = !!(container && tpl);
