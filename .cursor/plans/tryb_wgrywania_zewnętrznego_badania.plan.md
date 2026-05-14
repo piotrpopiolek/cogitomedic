@@ -4,53 +4,86 @@ overview: External upload — recepcja wgrywa PDF zwykłym multipart przez Djang
 todos:
   - id: model-migration
     content: Dodać MedicalDocumentSourceType.EXTERNAL_UPLOAD, rozszerzyć constraint intake_consistency, pola audytu external_* na MedicalDocumentVersion, migracja + seed tłumaczeń DB
-    status: pending
+    status: completed
   - id: service-create
     content: create_external_upload_medical_document w apps/medical/services.py (idempotentne, walidacja kolizji source_type, walidacja IntakeStatus.SUBMITTED|REOPENED)
-    status: pending
+    status: completed
   - id: service-select
     content: "select_external_upload_attachment_for_draft: powiązanie DRAFT z ExternalPdfAttachment dopuszcza status MATCHED i ACCEPTED (analogicznie do pdf_builder.py:607-612 dla Befundu — historyczne pliki w /processed nadają się do republishu); pola audytu external_*; bez pdf_local_path / COMPLETED przed publikacją"
-    status: pending
+    status: completed
   - id: external-upload-endpoint
     content: "API external-upload/upload: zwykły Django multipart, limit EXTERNAL_UPLOAD_MAX_BYTES (250 MB, spójnie z infrastrukturą prod: nginx client_max_body_size 250m + Gunicorn --timeout 600), TemporaryFileUploadHandler streamuje na /tmp (FILE_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MEMORY_BUFFER_MB=5 MB), walidacja MIME/magic + pypdf, sanitizacja nazwy, upload do HiDrive /incoming/external-upload/{queue_entry_id}/{safe_filename}, utworzenie ExternalPdfAttachment MATCHED, idempotentne dowiązanie do DRAFT"
-    status: pending
+    status: completed
   - id: service-publish
     content: "publish_external_upload_version: jak publish Befund — PUBLISHED + pdf_generation_status=PENDING + outbox GENERATE_PDF (payload resend_sms); idempotencja po publish_request_id; republikacja podbija wersje; HIDRIVE_UPLOAD dopiero po materializacji PDF w workerze"
-    status: pending
+    status: completed
   - id: service-revision-republish
     content: "Korekta po publikacji: opcjonalnie revoke → start_external_upload_revision → select-attachment (MATCHED z nowego uploadu LUB ACCEPTED z /processed bez re-uploadu) → publish (GENERATE_PDF→HIDRIVE→SMS) z resend_sms"
-    status: pending
+    status: completed
   - id: api-endpoints
     content: "API external upload: upload (multipart Django), select-attachment (MATCHED|ACCEPTED), preview (download z HiDrive do response), publish (+resend_sms), revision/start; revoke przez istniejący endpoint"
-    status: pending
+    status: completed
   - id: external-upload-hub-ui
     content: "Hub recepcji: lista wpisów z filtrem PatientIntakeForm.form_status; ekran tożsamości; upload pliku (multipart); lista wgranych załączników (MATCHED + historycznie ACCEPTED); podgląd na żądanie; drugie potwierdzenie; publish"
-    status: pending
+    status: completed
   - id: doctor-readonly-view
     content: "doctor_views.py: read-only widok dla source_type=EXTERNAL_UPLOAD (link do PDF, bez panelu Befundu)"
-    status: pending
+    status: in_progress
   - id: admin
     content: "MedicalDocumentAdmin: list_filter source_type; MedicalDocumentVersionAdmin: external_original_filename + external_selected_attachment (read-only)"
     status: pending
   - id: tests-services
     content: "Testy serwisów: pierwsza publikacja + republish (MATCHED i ACCEPTED) + revoke + resend_sms/idempotencja + constraint DB + walidacja IntakeStatus; metadane PDF wg §7"
-    status: pending
+    status: in_progress
   - id: tests-api
     content: "Testy API: role allow/deny, walidacja uploadu (rozmiar, MIME, magic), sanitizacja nazwy, integracja z TemporaryFileUploadHandler (mock HiDrive), happy path + revision/start + publish z resend_sms; konflikty idempotencji"
-    status: pending
+    status: completed
   - id: tests-outbox-portal
     content: "Testy outbox: EXTERNAL_UPLOAD — GENERATE_PDF (materializacja z HiDrive) → HIDRIVE_UPLOAD → SMS_SEND; resend_sms; portal po zakończeniu łańcucha"
     status: pending
   - id: tests-outbox-external-contract
     content: "Kontrakt: EXTERNAL_UPLOAD używa GENERATE_PDF z inną implementacją niż Befund; DIGITAL/PAPER bez regresji; macierz ExternalPdfAttachment + incoming→processed"
-    status: pending
+    status: in_progress
   - id: tests-external-pdf-metadata
     content: "Test parzystości metadanych: po generate_external_upload_pdf w /Info zapisanego PDF jest pole `cogitomedicaldocumentid` równe MedicalDocument.id (pypdf PdfReader); regresja braku wstrzyknięcia"
     status: pending
   - id: docs
     content: "docs/manual/: nowy rozdział dla recepcji + aktualizacja screenshot-checklist.md"
-    status: pending
+    status: completed
 isProject: false
+---
+
+## Stan wdrożenia (skan kodu + dokumentacji, 2026-05-13)
+
+### Zaimplementowane (zgodnie z planem)
+
+- **Model i migracje:** `MedicalDocumentSourceType.EXTERNAL_UPLOAD`, constraint 3-stanowy (`intake_form` NOT NULL dla EXTERNAL), pola `external_*` / `external_selected_attachment` na `MedicalDocumentVersion` — `apps/medical/models.py` + migracje w `apps/medical/migrations/`.
+- **Serwisy:** `create_external_upload_medical_document`, `upload_external_pdf_to_incoming`, `create_external_upload_pdf_and_bind_draft` (upload + bind w jednym atomic jak endpoint), `select_external_upload_attachment_for_draft`, `publish_external_upload_version`, `start_external_upload_revision` — `apps/medical/services.py`.
+- **PDF / outbox:** `generate_external_upload_pdf` w `apps/medical/pdf_builder.py` (w tym metadane `/cogitomedicaldocumentid`); gałąź `GENERATE_PDF` dla EXTERNAL w `apps/outbox/services.py`; promocja załącznika MATCHED→ACCEPTED zgodnie z planem.
+- **Izolacja Befund vs recepcja:** `check_external_pdf_gate` / `external_pdf_service` pomijają ścieżki `/incoming/.../external-upload/` — testy w `apps/medical/tests/test_external_pdf_service.py`.
+- **API:** ścieżki pod `cogitomedica/api_urls.py` (`external-upload/upload`, `select-attachment`, `preview-pdf`, `publish`, `revision/start`); widoki w `apps/medical/api_views.py`; schematy OpenAPI w `cogitomedica/openapi_schemas.py` / `openapi_extension.py`.
+- **Hub HTML recepcji:** `apps/reception/external_upload_admin_views.py` + szablony `templates/admin/reception/external_upload_hub.html`, `external_upload_entry.html`; URL-e w `cogitomedica/urls.py`; testy `apps/reception/tests/test_external_upload_admin_views.py`.
+- **Lekarz — częściowo:** `doctor_open_by_queue_view` przekierowuje na szczegół dokumentu, gdy istnieje już dokument `EXTERNAL_UPLOAD` (bez `create_or_get_medical_document`) — `cogitomedica/doctor_views.py` + test w `cogitomedica/tests/test_doctor_views.py`.
+- **Dokumentacja:** `docs/manual/07-wgranie-zewnetrznego-badania.md`, wpisy w `docs/manual/screenshot-checklist.md`, `00-przeglad.md`, `hidrive_incoming_reception.md`.
+- **Testy API / serwisów (szerokie pokrycie):** `ExternalUploadApiTests` i klasy w `apps/medical/tests/test_services_coverage.py` (upload, select, publish, idempotencja, role, ścieżki HiDrive); `GenerateExternalUploadPdfTests` w `apps/medical/tests/test_pdf_builder_generate.py` (materializacja, błędy, promocja).
+
+### Częściowo lub z inną realizacją niż litera planu
+
+- **Hub UI:** klasyczny formularz HTML (POST z `action=upload|select|publish`), nie osobny klient XHR z paskiem `progress` i `crypto.randomUUID()` po stronie JS — funkcjonalnie zgodne z API; brak ostrzeżenia „workers=1 / blokada HTTP” wprost w UI (jest w manualu).
+- **Lekarz — szczegół dokumentu:** brak dedykowanego szablonu „tylko read-only + PDF”; `doctor_document_detail_view` nadal opiera się na `get_medical_document_context` + `doctor/detail.html` / `befund-form.js` (w JS nie ma jeszcze wyraźnej gałęzi „wyłącz panel Befund dla `EXTERNAL_UPLOAD`” jak w §5 planu).
+- **Testy outbox E2E:** brak dedykowanego modułu `apps/outbox/tests/test_external_upload_outbox_contract.py` z macierzą z §7.1 (szczególnie sekwencyjność `GENERATE_PDF` przy `OUTBOX_BATCH_SIZE>1`, pełny łańcuch do SMS w jednym teście).
+- **Portal pacjenta:** semantyka `list_patient_documents` bez zmian (plan); **brak** dedykowanego testu pod EXTERNAL_UPLOAD w `apps/patient_results/tests/`.
+
+### Pozostało do wdrożenia (backlog względem planu)
+
+1. **Admin Django** (`apps/medical/admin.py`): `list_filter` + kolumna `source_type` na `MedicalDocumentAdmin`; na `MedicalDocumentVersionAdmin` — read-only / list_display dla `external_original_filename`, `external_selected_attachment` (lub id + ścieżka HiDrive).
+2. **Widok lekarza read-only:** jawna obsługa `source_type=EXTERNAL_UPLOAD` w `doctor_document_detail_view` (np. pominąć `check_external_pdf_gate` dla DRAFT external) + szablon lub gałąź w `befund-form.js`: komunikat „wynik z zewnątrz”, link podglądu PDF, ukryty/edytowalny wyłączony panel Befund.
+3. **Test metadanych PDF:** asercja `pypdf.PdfReader(...).metadata["/cogitomedicaldocumentid"] == str(medical_document_id)` po `generate_external_upload_pdf` (happy path + regresja braku wstrzyknięcia) — §7 / `tests-external-pdf-metadata`.
+4. **Testy outbox + portal:** plik kontraktowy jak w §7.1 (kolejność `GENERATE_PDF` → brak `HIDRIVE_UPLOAD` przed materializacją → `SMS_SEND`); opcjonalnie smoke `patient_results` po pełnym łańcuchu.
+5. **Observability (§8):** spany OTel o nazwach `medical.external_upload.*`, metryki liczników (413, konflikt idempotencji, retry HIDRIVE/SMS) — jeśli maja być must-have z planu.
+6. **Produkt / RBAC:** decyzja z planu §3 — czy `revoke` dla EXTERNAL ma być dostępny dla `RECEPTION` (dziś endpoint revoke wg kodu globalnego — do weryfikacji przy wdrożeniu).
+7. **Poza MVP (plan już oznaczał):** test „worst-case” RAM 200–250 MB; alert `df /tmp`; portal po retencji `pdf_local_path`; ClamAV; streaming preview bez pełnego `bytes`.
+
 ---
 
 ## Tryb wgrywania zewnętrznego badania (External upload)
