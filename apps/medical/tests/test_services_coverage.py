@@ -2159,3 +2159,42 @@ class WorkQueueRowOutboundCompleteTests(TestCase):
         v = SimpleNamespace(pdf_generation_status=PdfStatus.COMPLETED)
         self.assertTrue(pdf_generation_stage_complete(v, {}))
         self.assertFalse(pdf_generation_stage_complete(None, {}))
+
+
+# ------------------------------------------------------------------
+# get_medical_document_context — doctor panel / refreshRevisionUi inputs
+# ------------------------------------------------------------------
+class GetMedicalDocumentContextRevokeUiTests(ServicesCoverageBase):
+    """Contract for ``current_version`` flags consumed by doctor ``befund-form.js``."""
+
+    def test_current_version_exposes_hidrive_and_sms_sent(self) -> None:
+        doc = self._make_medical_doc()
+        now = timezone.now()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=False,
+            sms_sent_at=None,
+        )
+        ctx = get_medical_document_context(medical_document_id=doc.id, user=self.doctor)
+        cv = ctx["current_version"]
+        self.assertTrue(cv["hidrive_sent"])
+        self.assertFalse(cv["sms_sent"])
+        self.assertIsNone(cv.get("revoked_at"))
+
+    def test_current_version_exposes_revoked_at_when_set(self) -> None:
+        doc = self._make_medical_doc()
+        revoked_at = timezone.now()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+            revoked_at=revoked_at,
+        )
+        ctx = get_medical_document_context(medical_document_id=doc.id, user=self.doctor)
+        cv = ctx["current_version"]
+        self.assertIsNotNone(cv.get("revoked_at"))
+        self.assertEqual(cv["revoked_at"], revoked_at.isoformat())
