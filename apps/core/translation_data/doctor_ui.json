@@ -365,9 +365,9 @@
     "pl": "Cofnąć publikację?"
   },
   "doctor.modal_revoke_publication_body": {
-    "de": "Die Patientin / der Patient verliert den Zugriff auf das PDF und die SMS bleibt ohne gültigen Link. Dies kann nicht rückgängig gemacht werden.",
-    "en": "The patient loses access to the PDF; the SMS link will no longer work. This cannot be undone.",
-    "pl": "Pacjent utraci dostęp do PDF; link z SMS przestanie działać. Operacji nie cofnie się automatycznie."
+    "de": "Die Patientin / der Patient verliert den Zugriff auf das PDF. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "en": "The patient will lose access to the PDF. This action cannot be undone.",
+    "pl": "Pacjent utraci dostęp do pliku PDF. Tej operacji nie można cofnąć."
   },
   "doctor.modal_revoke_publication_confirm": {
     "de": "Zurücknehmen",

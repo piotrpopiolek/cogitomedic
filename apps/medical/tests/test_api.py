@@ -2571,6 +2571,7 @@ class ExternalUploadApiTests(MedicalApiTests):
     def test_external_upload_preview_returns_404_when_attachment_row_deleted(
         self, adapter_factory: MagicMock, mock_download: MagicMock
     ) -> None:
+        """Preview maps missing attachment row to 404; FK is PROTECT so we stub .get()."""
         mock_download.return_value = _minimal_pdf_bytes()
         adapter_factory.return_value.upload.return_value = None
         self.client.force_login(self.reception_user)
@@ -2590,10 +2591,14 @@ class ExternalUploadApiTests(MedicalApiTests):
             content_type="application/json",
         )
         self.assertEqual(sel.status_code, 200, sel.content)
-        ExternalPdfAttachment.objects.filter(id=att_id).delete()
-        prev = self.client.get(
-            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
-        )
+        with patch.object(
+            ExternalPdfAttachment.objects,
+            "get",
+            side_effect=ExternalPdfAttachment.DoesNotExist,
+        ):
+            prev = self.client.get(
+                f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+            )
         self.assertEqual(prev.status_code, 404)
 
     def test_external_upload_endpoints_forbidden_for_doctor(self) -> None:

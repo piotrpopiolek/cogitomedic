@@ -619,6 +619,9 @@
     }
   }
 
+  const authoringLocale =
+    CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
+
   var skipBefundFormUi = !!PANEL.externalUploadReadOnly;
   if (PANEL.externalUploadReadOnly) {
     loadExternalPdfs();
@@ -867,8 +870,6 @@
       });
   }
 
-  const authoringLocale =
-    CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
   function buildPayload() {
     const payload = {
       schema_version: 1,
@@ -1652,8 +1653,9 @@
     });
   }
 
-  function buildPreviewUrl(source) {
+  function buildPreviewUrl(source, previewBaseOverride) {
     const previewBase =
+      previewBaseOverride ||
       (el("btn-preview-pdf") &&
         el("btn-preview-pdf").getAttribute("data-preview-url")) ||
       docUrl("/preview-pdf");
@@ -1669,6 +1671,15 @@
       url += "&source=" + encodeURIComponent(source);
     }
     return url;
+  }
+
+  /**
+   * Open PDF preview via full navigation (cookies sent). Prefer over fetch+blob when no
+   * prior async work is required — some browsers leave a ``window.open('')`` tab on
+   * ``about:blank`` after async fetch because navigation is no longer user-gesture gated.
+   */
+  function openPdfPreviewByFullNavigation(url) {
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function openPreviewBlobInTab(previewTab, btn, previewUrl, opts) {
@@ -1717,19 +1728,23 @@
     previewPdfBtn.addEventListener("click", function (event) {
       if (event && event.preventDefault) event.preventDefault();
       const btn = this;
+      if (PANEL.externalUploadReadOnly) {
+        var extPreviewSource = null;
+        if (isPublishedReadOnly()) {
+          extPreviewSource = "published";
+        } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
+          extPreviewSource = "draft";
+        }
+        openPdfPreviewByFullNavigation(
+          buildPreviewUrl(
+            extPreviewSource,
+            btn.getAttribute("data-preview-url") || null
+          )
+        );
+        return;
+      }
       if (isPublishedReadOnly()) {
-        const previewTab = window.open("", "_blank");
-        btn.disabled = true;
-        openPreviewBlobInTab(
-          previewTab,
-          btn,
-          buildPreviewUrl("published"),
-          { markPreviewSeen: false }
-        ).catch(function () {
-          btn.disabled = false;
-          if (previewTab) previewTab.close();
-          alertMsg("danger", UI.msgNetwork);
-        });
+        openPdfPreviewByFullNavigation(buildPreviewUrl("published"));
         return;
       }
       const built = buildDraftPayloadBody();
@@ -1790,6 +1805,21 @@
           if (previewTab) previewTab.close();
           alertMsg("danger", UI.msgNetwork);
         });
+    });
+  }
+
+  const previewPublishedExternalBtn = el("btn-preview-published-external");
+  if (previewPublishedExternalBtn) {
+    previewPublishedExternalBtn.addEventListener("click", function (event) {
+      if (event && event.preventDefault) event.preventDefault();
+      var baseOverride =
+        this.getAttribute("data-preview-url") ||
+        (el("btn-preview-pdf") &&
+          el("btn-preview-pdf").getAttribute("data-preview-url")) ||
+        null;
+      openPdfPreviewByFullNavigation(
+        buildPreviewUrl("published", baseOverride)
+      );
     });
   }
 

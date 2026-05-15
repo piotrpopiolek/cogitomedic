@@ -1133,6 +1133,101 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertEqual(len(pts), 2)
         self.assertEqual(pts[0]["side"], "front")
 
+    @patch(
+        "cogitomedica.doctor_views.acquire_document_lock",
+        return_value=(True, None),
+    )
+    def test_detail_panel_current_version_includes_hidrive_sms_flags(
+        self,
+        _mock_lock: MagicMock,
+    ) -> None:
+        """Panel JSON must expose delivery flags used by ``refreshRevisionUi`` / revoke."""
+        now = timezone.now()
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/doctor-panel-revoke.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=False,
+            sms_sent_at=None,
+        )
+        MedicalDocument.objects.filter(pk=self.doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/?lang=pl")
+        self.assertEqual(resp.status_code, 200)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            resp.content.decode(),
+            re.DOTALL,
+        )
+        assert m is not None
+        panel = json.loads(m.group(1))
+        cv = panel["context"]["current_version"]
+        self.assertTrue(cv["hidrive_sent"])
+        self.assertFalse(cv["sms_sent"])
+        self.assertIsNone(cv.get("revoked_at"))
+
+    @patch(
+        "cogitomedica.doctor_views.acquire_document_lock",
+        return_value=(True, None),
+    )
+    def test_detail_panel_current_version_includes_revoked_at_when_revoked(
+        self,
+        _mock_lock: MagicMock,
+    ) -> None:
+        """Revoked publication: ``revoked_at`` in panel drives revoked banner in JS."""
+        now = timezone.now()
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/doctor-panel-revoked.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=True,
+            sms_sent_at=now,
+            revoked_at=now,
+        )
+        MedicalDocument.objects.filter(pk=self.doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/?lang=pl")
+        self.assertEqual(resp.status_code, 200)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            resp.content.decode(),
+            re.DOTALL,
+        )
+        assert m is not None
+        panel = json.loads(m.group(1))
+        cv = panel["context"]["current_version"]
+        self.assertIsNotNone(cv.get("revoked_at"))
+
     def test_detail_returns_423_when_locked_by_another_doctor(self):
         other = StaffUser.objects.create_user(
             username="hp-doc-2",
