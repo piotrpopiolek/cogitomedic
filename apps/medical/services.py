@@ -2903,6 +2903,11 @@ def get_medical_document_context(
                     if current_version.published_at
                     else None
                 ),
+                "revoked_at": (
+                    current_version.revoked_at.isoformat()
+                    if current_version.revoked_at
+                    else None
+                ),
             }
         else:
             current_version_payload = {
@@ -2936,6 +2941,11 @@ def get_medical_document_context(
                 "published_at": (
                     current_version.published_at.isoformat()
                     if current_version.published_at
+                    else None
+                ),
+                "revoked_at": (
+                    current_version.revoked_at.isoformat()
+                    if current_version.revoked_at
                     else None
                 ),
             }
