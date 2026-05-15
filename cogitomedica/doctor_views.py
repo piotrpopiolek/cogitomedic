@@ -622,6 +622,7 @@ def doctor_document_detail_view(
         context["authoring_locale"] = authoring_locale
     body_map_rel = static("tablet/body.jpg")
     doctor_external_upload_pdf_href = None
+    doctor_external_upload_preview_uses_external_endpoint = False
     if external_readonly:
         if doc.status == MedicalDocStatus.PUBLISHED:
             doctor_external_upload_pdf_href = request.build_absolute_uri(
@@ -631,9 +632,17 @@ def doctor_document_detail_view(
                 )
             )
         elif latest_version and latest_version.external_selected_attachment_id:
+            doctor_external_upload_preview_uses_external_endpoint = True
             doctor_external_upload_pdf_href = request.build_absolute_uri(
                 reverse(
                     "medical-documents-external-upload-preview-pdf",
+                    kwargs={"medical_document_id": doc.id},
+                )
+            )
+        elif doc.published_version_no is not None:
+            doctor_external_upload_pdf_href = request.build_absolute_uri(
+                reverse(
+                    "medical-document-preview-pdf",
                     kwargs={"medical_document_id": doc.id},
                 )
             )
@@ -663,6 +672,10 @@ def doctor_document_detail_view(
             "doctor_external_upload_pdf_href": doctor_external_upload_pdf_href,
             "doctor_external_upload_has_pending_revision": bool(
                 external_readonly and doc.has_pending_revision
+            ),
+            "doctor_external_upload_preview_uses_external_endpoint": bool(
+                external_readonly
+                and doctor_external_upload_preview_uses_external_endpoint
             ),
         },
     )
