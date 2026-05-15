@@ -125,6 +125,60 @@ class ExternalUploadAdminHubViewsTests(TestCase):
         qs = ext_hub_views._external_upload_hub_queryset(request, form_status="all")
         self.assertIn(self.entry.id, set(qs.values_list("id", flat=True)))
 
+    def test_hub_queryset_submitted_branch_matches_submitted_status_only(self) -> None:
+        request = self.factory.get("/admin/external-upload/")
+        request.user = self.admin
+        qs_sub = ext_hub_views._external_upload_hub_queryset(
+            request, form_status="submitted"
+        )
+        self.assertIn(self.entry.id, set(qs_sub.values_list("id", flat=True)))
+
+    def test_hub_queryset_reopened_branch(self) -> None:
+        clinic = ClinicSite.objects.create(code="EUR", name="Ext Reopen Clinic")
+        self.reception.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R2", name="R2")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.reception,
+            assigned_doctor=self.doctor,
+        )
+        patient = Patient.objects.create(
+            first_name="Reo",
+            last_name="PenPatient",
+            date_of_birth=date(1991, 1, 11),
+            phone="+48111222339",
+            email="reopen.pen@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.reception,
+        )
+        session = PatientFormSession.create_session(
+            entry,
+            created_by_user_id=self.reception.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+            submitted_at=timezone.now(),
+            signature_sha256="d" * 64,
+        )
+        request = self.factory.get("/admin/external-upload/")
+        request.user = self.admin
+        qs_re = ext_hub_views._external_upload_hub_queryset(
+            request, form_status="reopened"
+        )
+        self.assertIn(entry.id, set(qs_re.values_list("id", flat=True)))
+
     def test_hub_pick_redirects(self) -> None:
         self.client.force_login(self.reception)
         r = self.client.get(

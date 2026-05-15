@@ -2566,6 +2566,36 @@ class ExternalUploadApiTests(MedicalApiTests):
         )
         self.assertEqual(pub.status_code, 422)
 
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_preview_returns_404_when_attachment_row_deleted(
+        self, adapter_factory: MagicMock, mock_download: MagicMock
+    ) -> None:
+        mock_download.return_value = _minimal_pdf_bytes()
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        ExternalPdfAttachment.objects.filter(id=att_id).delete()
+        prev = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(prev.status_code, 404)
+
     def test_external_upload_endpoints_forbidden_for_doctor(self) -> None:
         with patch("apps.medical.services.get_hidrive_adapter") as adapter_factory:
             adapter_factory.return_value.upload.return_value = None
