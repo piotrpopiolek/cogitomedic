@@ -18,6 +18,9 @@ from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
     MatchedIncomingFile,
     _ambiguous_undated_stem,
+    _full_incoming_pdf_path,
+    _is_reception_external_upload_incoming_path,
+    _normalize_incoming_logical_path,
     check_external_pdf_gate,
     create_attachment_records,
     download_external_pdf,
@@ -616,3 +619,47 @@ class ExternalPdfServiceDbTests(TestCase):
         reject_external_pdf(att)
         att.refresh_from_db()
         self.assertEqual(att.status, ExternalPdfStatus.REJECTED)
+
+
+class IncomingPathHelperTests(SimpleTestCase):
+    def test_normalize_incoming_logical_path(self) -> None:
+        self.assertEqual(_normalize_incoming_logical_path(""), "")
+        self.assertEqual(_normalize_incoming_logical_path("  "), "")
+        self.assertEqual(
+            _normalize_incoming_logical_path("incoming/x.pdf"),
+            "/incoming/x.pdf",
+        )
+        self.assertEqual(
+            _normalize_incoming_logical_path("/incoming/x.pdf"),
+            "/incoming/x.pdf",
+        )
+
+    def test_full_incoming_pdf_path_prefers_entry_path(self) -> None:
+        self.assertEqual(
+            _full_incoming_pdf_path(
+                {"path": "/incoming/a.pdf", "name": "x"},
+                inc="/incoming",
+                pdf_name="ignored.pdf",
+            ),
+            "/incoming/a.pdf",
+        )
+
+    def test_full_incoming_pdf_path_falls_back_to_inc_and_name(self) -> None:
+        self.assertEqual(
+            _full_incoming_pdf_path(
+                {"path": "", "name": "b.pdf"}, inc="/incoming", pdf_name="b.pdf"
+            ),
+            "/incoming/b.pdf",
+        )
+
+    def test_is_reception_external_upload_incoming_path(self) -> None:
+        self.assertFalse(_is_reception_external_upload_incoming_path("", "/incoming"))
+        self.assertFalse(
+            _is_reception_external_upload_incoming_path("/incoming/x.pdf", "/incoming")
+        )
+        self.assertTrue(
+            _is_reception_external_upload_incoming_path(
+                "/incoming/external-upload/queue-1/file.pdf",
+                "/incoming",
+            )
+        )
