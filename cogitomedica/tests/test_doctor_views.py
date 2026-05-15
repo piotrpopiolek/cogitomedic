@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import re
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -17,6 +20,8 @@ from apps.operations.models import AuditEvent
 from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -35,6 +40,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_pdf_bytes() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
 
 
 class DoctorViewsSmokeTests(TestCase):
@@ -351,6 +364,164 @@ class DoctorViewsSmokeTests(TestCase):
         panel = json.loads(m.group(1))
         self.assertTrue(panel.get("externalUploadReadOnly"))
         self.assertNotIn('id="befund-form"', resp.content.decode("utf-8"))
+
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_readonly_draft_detail_links_external_preview_when_attachment_selected(
+        self,
+        _gate: MagicMock,
+        _lock: MagicMock,
+    ) -> None:
+        """``doctor_external_upload_pdf_href`` uses reception preview URL while still DRAFT."""
+        from apps.medical.services import create_external_upload_medical_document
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EDL", name="Ext Draft Link Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="D1", name="D1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtDraftLink",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48500111334",
+            email="extdraftlink@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        ver = MedicalDocumentVersion.objects.get(
+            medical_document_id=ext_doc.id, version_no=1
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=ext_doc,
+            hidrive_remote_path="/incoming/draft-href.pdf",
+            original_filename="draft-href.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        ver.external_selected_attachment = att
+        ver.save(update_fields=["external_selected_attachment_id"])
+
+        resp = self.client.get(f"/doctor/{ext_doc.id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn("external-upload/preview-pdf", html)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_readonly_published_detail_links_standard_preview(
+        self,
+        adapter_factory: MagicMock,
+        _lock: MagicMock,
+        _gate: MagicMock,
+    ) -> None:
+        """Published EXTERNAL_UPLOAD: PDF link targets ``…/preview-pdf`` (doctor-accessible)."""
+        adapter_factory.return_value.upload.return_value = None
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EPL", name="Ext Pub Link Clinic")
+        self.reception_user.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="P1", name="P1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtPubLink",
+            date_of_birth=date(1994, 4, 4),
+            phone="+48500111335",
+            email="extpublink@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(entry.id),
+                "file": SimpleUploadedFile(
+                    "lab.pdf", _minimal_pdf_bytes(), content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                    "resend_sms": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 200, pub.content)
+
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
+        self.assertNotIn("external-upload/preview-pdf", html)
 
     def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
         """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
