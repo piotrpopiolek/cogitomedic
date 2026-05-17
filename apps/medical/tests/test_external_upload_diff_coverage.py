@@ -37,6 +37,7 @@ from apps.medical.services import (
     start_external_upload_revision,
     upload_external_pdf_to_incoming,
 )
+from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.reception.models import QueueEntry
 from apps.users.models import StaffUser
 
@@ -295,6 +296,14 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
             },
         )
         doc_id = up.json()["document_id"]
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=doc_id, version_status=DocVersionStatus.DRAFT
+        ).update(
+            external_selected_attachment_id=None,
+            external_original_filename=None,
+            external_uploaded_by_user_id=None,
+            external_uploaded_at=None,
+        )
         r = self.client.get(
             f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
         )
@@ -426,7 +435,7 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
             data=json.dumps({"attachment_id": att_id}),
             content_type="application/json",
         )
-        self.client.post(
+        pub = self.client.post(
             f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
             data=json.dumps(
                 {
@@ -436,6 +445,10 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
             ),
             content_type="application/json",
         )
+        self.assertEqual(pub.status_code, 200, pub.content)
+        OutboxEvent.objects.filter(
+            medical_document_version_id=pub.json()["medical_document_version_id"]
+        ).update(status=OutboxStatus.PROCESSED)
         self.client.post(
             f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
             data=json.dumps({}),
@@ -599,21 +612,20 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
         self.assertFalse(_hidrive_path_is_external_upload_prefix("/../etc/passwd"))
 
     def test_get_single_medical_document_raises_when_multiple_rows(self) -> None:
+        """DB enforces one document per queue entry; guard is tested via mocked queryset."""
         doc = create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
             created_by_user_id=self.reception.id,
         )
-        MedicalDocument.objects.create(
-            queue_entry_id=self.queue_entry.id,
-            intake_form_id=doc.intake_form_id,
-            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
-            created_by_user_id=self.reception.id,
-            updated_by_user_id=self.reception.id,
-        )
-        with self.assertRaises(DomainError) as ctx:
-            get_single_medical_document_for_queue_entry(
-                queue_entry_id=self.queue_entry.id
-            )
+        duplicate = MedicalDocument(id=uuid4())
+        mock_qs = MagicMock()
+        mock_qs.order_by.return_value = mock_qs
+        mock_qs.__getitem__ = lambda _self, _sl: [doc, duplicate]
+        with patch.object(MedicalDocument.objects, "filter", return_value=mock_qs):
+            with self.assertRaises(DomainError) as ctx:
+                get_single_medical_document_for_queue_entry(
+                    queue_entry_id=self.queue_entry.id
+                )
         self.assertIn(
             "external_upload_multiple_medical_documents_for_queue_entry",
             ctx.exception.api_message_key,
@@ -737,6 +749,14 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
             publish_request_id=rid,
             published_by_user_id=self.reception.id,
             publish_locale="de-DE",
+        )
+        v1 = MedicalDocumentVersion.objects.get(
+            medical_document_id=doc.id,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+        )
+        OutboxEvent.objects.filter(medical_document_version=v1).update(
+            status=OutboxStatus.PROCESSED
         )
         start_external_upload_revision(
             medical_document_id=doc.id,

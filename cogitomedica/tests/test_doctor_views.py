@@ -42,6 +42,17 @@ from apps.reception.models import (
 from apps.users.models import StaffUser
 
 
+def _doctor_panel_data_from_detail_html(html: str) -> dict:
+    """Parse ``panel_data`` embedded via ``json_script`` on doctor detail."""
+    match = re.search(
+        r'<script[^>]+id="doctor-panel-data"[^>]*>(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match is not None, "doctor-panel-data script not found"
+    return json.loads(match.group(1))
+
+
 def _minimal_pdf_bytes() -> bytes:
     w = PdfWriter()
     w.add_blank_page(width=200, height=200)
@@ -367,12 +378,12 @@ class DoctorViewsSmokeTests(TestCase):
 
     @patch("cogitomedica.doctor_views.acquire_document_lock")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
-    def test_external_upload_readonly_draft_detail_links_external_preview_when_attachment_selected(
+    def test_external_upload_readonly_draft_detail_hides_preview_until_published(
         self,
         _gate: MagicMock,
         _lock: MagicMock,
     ) -> None:
-        """``doctor_external_upload_pdf_href`` uses reception preview URL while still DRAFT."""
+        """DRAFT external upload: no doctor PDF preview (reception-only until publish)."""
         from apps.medical.services import create_external_upload_medical_document
 
         self._login_doctor()
@@ -429,10 +440,19 @@ class DoctorViewsSmokeTests(TestCase):
         ver.external_selected_attachment = att
         ver.save(update_fields=["external_selected_attachment_id"])
 
+        ext_doc.refresh_from_db()
+        self.assertEqual(ext_doc.status, MedicalDocStatus.DRAFT)
+
         resp = self.client.get(f"/doctor/{ext_doc.id}/?lang=de")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode("utf-8")
-        self.assertIn("external-upload/preview-pdf", html)
+        panel = _doctor_panel_data_from_detail_html(html)
+
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertFalse(panel.get("externalUploadLoadAttachmentPanel"))
+        self.assertNotIn('id="btn-preview-pdf"', html)
+        self.assertNotIn("external-upload/preview-pdf", html)
+        self.assertNotIn('id="btn-preview-published-external"', html)
 
     @patch("apps.medical.services.get_hidrive_adapter")
     @patch("cogitomedica.doctor_views.acquire_document_lock")
@@ -520,8 +540,12 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode("utf-8")
+        panel = _doctor_panel_data_from_detail_html(html)
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertTrue(panel.get("externalUploadLoadAttachmentPanel"))
         self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
         self.assertNotIn("external-upload/preview-pdf", html)
+        self.assertIn('id="btn-preview-pdf"', html)
 
     @patch("apps.medical.services.get_hidrive_adapter")
     @patch("cogitomedica.doctor_views.acquire_document_lock")
