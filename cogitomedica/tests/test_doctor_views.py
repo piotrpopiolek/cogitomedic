@@ -523,6 +523,95 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
         self.assertNotIn("external-upload/preview-pdf", html)
 
+    @patch("apps.medical.services.get_hidrive_adapter")
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_pending_revision_without_attachment_links_published_preview(
+        self,
+        adapter_factory: MagicMock,
+        _gate: MagicMock,
+        _lock: MagicMock,
+    ) -> None:
+        """Pending revision draft without selection falls back to published preview URL."""
+        adapter_factory.return_value.upload.return_value = None
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EPR", name="Ext Pending Rev Clinic")
+        self.reception_user.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="P2", name="P2")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtPendingRev",
+            date_of_birth=date(1995, 5, 5),
+            phone="+48500111336",
+            email="extpendingrev@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="f" * 64,
+        )
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(entry.id),
+                "file": SimpleUploadedFile(
+                    "lab.pdf", _minimal_pdf_bytes(), content_type="application/pdf"
+                ),
+            },
+        )
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
+        self.assertNotIn("external-upload/preview-pdf", html)
+
     def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
         """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
         self._login_doctor()
