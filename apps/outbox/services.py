@@ -35,6 +35,7 @@ from apps.medical.models import (
     MedicalDocumentVersion,
     PdfStatus,
 )
+from apps.operations.models import AuditEvent
 from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
@@ -167,10 +168,22 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         incoming_q = Q(hidrive_remote_path__startswith=f"{inc}/") | Q(
             hidrive_remote_path=inc
         )
-        for att in ExternalPdfAttachment.objects.filter(
+        attachment_qs = ExternalPdfAttachment.objects.filter(
             medical_document_id=version.medical_document_id,
             status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
-        ).filter(incoming_q):
+        ).filter(incoming_q)
+        if (
+            version.medical_document.source_type
+            == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        ):
+            if version.external_selected_attachment_id is None:
+                raise RuntimeError(
+                    "EXTERNAL_UPLOAD HIDRIVE_UPLOAD requires external_selected_attachment."
+                )
+            attachment_qs = attachment_qs.filter(
+                pk=version.external_selected_attachment_id
+            )
+        for att in attachment_qs:
             dest_path = logical_path_to_processed(att.hidrive_remote_path)
             adapter.move_file(
                 source_path=att.hidrive_remote_path,
@@ -317,10 +330,22 @@ def process_outbox_events(
             transaction.savepoint_rollback(sid)
             if isinstance(exc, AllExternalPdfDownloadsFailed):
                 for meta in exc.failed_download_metadata:
+                    att_id = meta.get("external_pdf_attachment_id")
+                    if (
+                        att_id
+                        and AuditEvent.objects.filter(
+                            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                            outbox_event_id=event_id,
+                            medical_document_id=exc.medical_document_id,
+                            metadata__external_pdf_attachment_id=att_id,
+                        ).exists()
+                    ):
+                        continue
                     create_audit_event(
                         event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                         patient_id=exc.patient_id,
                         medical_document_id=exc.medical_document_id,
+                        outbox_event_id=event_id,
                         metadata=meta,
                     )
             ev = OutboxEvent.objects.get(pk=event_id)

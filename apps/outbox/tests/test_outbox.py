@@ -401,11 +401,19 @@ class OutboxProcessingTests(TestCase):
         )
         self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
         self.assertEqual(att.hidrive_remote_path, "/incoming/not_seeded.pdf")
-        self.assertTrue(
+        failed_audits = AuditEvent.objects.filter(
+            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+            medical_document_id=self.medical_document.id,
+        )
+        self.assertEqual(failed_audits.count(), 1)
+
+        process_outbox_events()
+        self.assertEqual(
             AuditEvent.objects.filter(
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 medical_document_id=self.medical_document.id,
-            ).exists()
+            ).count(),
+            1,
         )
 
         pdf_bytes = _minimal_valid_pdf_bytes()

@@ -499,14 +499,57 @@ def _assert_staff_user_may_act_on_external_upload(*, actor: StaffUser) -> None:
         )
 
 
+def _raise_external_upload_file_too_large() -> None:
+    raise DomainError(
+        domain_message("other.domain.external_upload_file_too_large").format(
+            max_bytes=EXTERNAL_UPLOAD_MAX_BYTES
+        ),
+        api_message_key="other.domain.external_upload_file_too_large",
+    )
+
+
+def _assert_uploaded_file_within_byte_limit(uploaded_file: UploadedFile) -> None:
+    """Reject uploads whose streamed body exceeds ``EXTERNAL_UPLOAD_MAX_BYTES``."""
+    if int(uploaded_file.size or 0) > EXTERNAL_UPLOAD_MAX_BYTES:
+        _raise_external_upload_file_too_large()
+
+
 def _persist_uploaded_file_to_temp(uploaded_file: UploadedFile) -> Path:
+    """Stream upload to disk, enforcing the byte limit on actual chunk sizes."""
     fd, tmp_path_str = tempfile.mkstemp(prefix="external-upload-", suffix=".pdf")
     os_close(fd)
     tmp_path = Path(tmp_path_str)
-    with Path(tmp_path).open("wb") as handle:
-        for chunk in uploaded_file.chunks():
-            handle.write(chunk)
+    total = 0
+    try:
+        with tmp_path.open("wb") as handle:
+            for chunk in uploaded_file.chunks():
+                total += len(chunk)
+                if total > EXTERNAL_UPLOAD_MAX_BYTES:
+                    _raise_external_upload_file_too_large()
+                handle.write(chunk)
+    except DomainError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        uploaded_file.seek(0)
     return tmp_path
+
+
+def _validate_external_upload_pdf_file(path: Path) -> None:
+    try:
+        reader = PdfReader(str(path))
+        if len(reader.pages) < 1:
+            raise DomainError(
+                domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+                api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+            )
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+            api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+        ) from exc
 
 
 @transaction.atomic
@@ -530,13 +573,7 @@ def _register_external_upload_pdf_pending(
         ) from exc
     _assert_staff_user_may_act_on_external_upload(actor=actor)
 
-    if int(uploaded_file.size or 0) > EXTERNAL_UPLOAD_MAX_BYTES:
-        raise DomainError(
-            domain_message("other.domain.external_upload_file_too_large").format(
-                max_bytes=EXTERNAL_UPLOAD_MAX_BYTES
-            ),
-            api_message_key="other.domain.external_upload_file_too_large",
-        )
+    _assert_uploaded_file_within_byte_limit(uploaded_file)
 
     try:
         medical_document = MedicalDocument.objects.select_for_update().get(
@@ -562,30 +599,19 @@ def _register_external_upload_pdf_pending(
             api_message_key="other.domain.external_upload_invalid_content_type",
         )
 
-    magic = uploaded_file.read(4)
-    uploaded_file.seek(0)
-    if magic != b"%PDF":
-        raise DomainError(
-            domain_message("other.domain.external_upload_not_pdf"),
-            api_message_key="other.domain.external_upload_not_pdf",
-        )
-
+    local_tmp: Path | None = None
     try:
-        reader = PdfReader(uploaded_file)
-        if len(reader.pages) < 1:
-            raise DomainError(
-                domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
-                api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
-            )
-    except DomainError:
-        raise
-    except Exception as exc:
-        raise DomainError(
-            domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
-            api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
-        ) from exc
+        local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
+        with local_tmp.open("rb") as handle:
+            if handle.read(4) != b"%PDF":
+                raise DomainError(
+                    domain_message("other.domain.external_upload_not_pdf"),
+                    api_message_key="other.domain.external_upload_not_pdf",
+                )
+        _validate_external_upload_pdf_file(local_tmp)
     finally:
-        uploaded_file.seek(0)
+        if local_tmp is not None:
+            local_tmp.unlink(missing_ok=True)
 
     safe_filename = _sanitize_external_upload_filename(uploaded_file.name)
     queue_entry_id = medical_document.queue_entry_id
@@ -633,6 +659,8 @@ def _upload_external_pdf_attachment_to_hidrive(
         temp_path_callable = getattr(uploaded_file, "temporary_file_path", None)
         if callable(temp_path_callable):
             local_tmp = Path(temp_path_callable())
+            if local_tmp.stat().st_size > EXTERNAL_UPLOAD_MAX_BYTES:
+                _raise_external_upload_file_too_large()
         else:
             local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
             cleanup_tmp = True
@@ -1742,6 +1770,66 @@ def discard_pending_revision(
     return medical_document
 
 
+_PUBLICATION_PIPELINE_OUTBOX_TYPES = (
+    OutboxEventType.GENERATE_PDF,
+    OutboxEventType.HIDRIVE_UPLOAD,
+    OutboxEventType.SMS_SEND,
+)
+_PUBLICATION_PIPELINE_OUTBOX_STATUSES = (
+    OutboxStatus.PENDING,
+    OutboxStatus.PROCESSING,
+    OutboxStatus.FAILED,
+)
+
+
+def _published_version_with_pipeline_in_progress(
+    *,
+    medical_document_id: uuid.UUID,
+) -> MedicalDocumentVersion | None:
+    return (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            outbox_events__event_type__in=_PUBLICATION_PIPELINE_OUTBOX_TYPES,
+            outbox_events__status__in=_PUBLICATION_PIPELINE_OUTBOX_STATUSES,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+
+
+def _resolve_publish_against_pipeline_in_progress(
+    *,
+    medical_document_id: uuid.UUID,
+    draft_version: MedicalDocumentVersion | None,
+    latest_draft_version_no: int | None,
+) -> MedicalDocumentVersion | None:
+    """
+    When a published version still has outbox pipeline work:
+    - return that version for same-version idempotent publish retries;
+    - block publishing a newer draft revision while the prior version's pipeline runs.
+    """
+    in_progress_version = _published_version_with_pipeline_in_progress(
+        medical_document_id=medical_document_id
+    )
+    if not in_progress_version:
+        return None
+    if (
+        draft_version is not None
+        and draft_version.version_no > in_progress_version.version_no
+    ):
+        raise DomainError(
+            domain_message("other.domain.publication_pipeline_in_progress"),
+            api_message_key="other.domain.publication_pipeline_in_progress",
+        )
+    if latest_draft_version_no is None or (
+        in_progress_version.version_no >= latest_draft_version_no
+    ):
+        return in_progress_version
+    return None
+
+
 @transaction.atomic
 def publish_document_version(
     *,
@@ -1795,30 +1883,10 @@ def publish_document_version(
             )
         return same_request_version
 
-    in_progress_version = (
-        MedicalDocumentVersion.objects.select_for_update()
-        .filter(
-            medical_document_id=medical_document_id,
-            version_status=DocVersionStatus.PUBLISHED,
-            outbox_events__event_type=OutboxEventType.GENERATE_PDF,
-            outbox_events__status__in=[
-                OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING,
-                OutboxStatus.FAILED,
-            ],
-        )
-        .order_by("-version_no")
-        .first()
-    )
     latest_draft_version_no = MedicalDocumentVersion.objects.filter(
         medical_document_id=medical_document_id,
         version_status=DocVersionStatus.DRAFT,
     ).aggregate(max_no=Max("version_no"))["max_no"]
-    if in_progress_version and (
-        latest_draft_version_no is None
-        or in_progress_version.version_no >= latest_draft_version_no
-    ):
-        return in_progress_version
 
     draft_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -1829,6 +1897,14 @@ def publish_document_version(
         .order_by("-version_no")
         .first()
     )
+    in_progress_version = _resolve_publish_against_pipeline_in_progress(
+        medical_document_id=medical_document_id,
+        draft_version=draft_version,
+        latest_draft_version_no=latest_draft_version_no,
+    )
+    if in_progress_version is not None:
+        return in_progress_version
+
     if not draft_version:
         raise DomainError(
             domain_message("other.api.no_draft_before_publish"),
@@ -2000,30 +2076,10 @@ def publish_external_upload_version(
             )
         return same_request_version
 
-    in_progress_version = (
-        MedicalDocumentVersion.objects.select_for_update()
-        .filter(
-            medical_document_id=medical_document_id,
-            version_status=DocVersionStatus.PUBLISHED,
-            outbox_events__event_type=OutboxEventType.GENERATE_PDF,
-            outbox_events__status__in=[
-                OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING,
-                OutboxStatus.FAILED,
-            ],
-        )
-        .order_by("-version_no")
-        .first()
-    )
     latest_draft_version_no = MedicalDocumentVersion.objects.filter(
         medical_document_id=medical_document_id,
         version_status=DocVersionStatus.DRAFT,
     ).aggregate(max_no=Max("version_no"))["max_no"]
-    if in_progress_version and (
-        latest_draft_version_no is None
-        or in_progress_version.version_no >= latest_draft_version_no
-    ):
-        return in_progress_version
 
     draft_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -2034,6 +2090,14 @@ def publish_external_upload_version(
         .order_by("-version_no")
         .first()
     )
+    in_progress_version = _resolve_publish_against_pipeline_in_progress(
+        medical_document_id=medical_document_id,
+        draft_version=draft_version,
+        latest_draft_version_no=latest_draft_version_no,
+    )
+    if in_progress_version is not None:
+        return in_progress_version
+
     if not draft_version:
         raise DomainError(
             domain_message("other.api.no_draft_before_publish"),
@@ -2182,6 +2246,13 @@ def start_external_upload_revision(
         raise DomainError(
             domain_message("other.domain.external_upload_revision_already_pending"),
             api_message_key="other.domain.external_upload_revision_already_pending",
+        )
+    if _published_version_with_pipeline_in_progress(
+        medical_document_id=medical_document_id
+    ):
+        raise DomainError(
+            domain_message("other.domain.publication_pipeline_in_progress"),
+            api_message_key="other.domain.publication_pipeline_in_progress",
         )
 
     pub_no = medical_document.published_version_no

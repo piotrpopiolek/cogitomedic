@@ -772,6 +772,22 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
             )
         self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
 
+    @patch("apps.medical.services.EXTERNAL_UPLOAD_MAX_BYTES", 64)
+    def test_upload_streaming_byte_limit_rejects_body_larger_than_declared_size(
+        self,
+    ) -> None:
+        doc = self._make_external_doc()
+        body = _minimal_pdf_bytes() + (b"0" * 128)
+        upload = SimpleUploadedFile("spoofed.pdf", body, content_type="application/pdf")
+        upload.size = 10
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+
     def test_invalid_content_type_raises(self):
         doc = self._make_external_doc()
         upload = SimpleUploadedFile(

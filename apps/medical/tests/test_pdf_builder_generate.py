@@ -513,13 +513,40 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
 
         self.assertEqual(ctx.exception.medical_document_id, self.medical_doc.id)
         att.refresh_from_db()
-        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
-        self.assertTrue(
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        self.assertFalse(
             AuditEvent.objects.filter(
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 medical_document_id=self.medical_doc.id,
             ).exists()
         )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_infra_error_retry_promotes_after_hidrive_recovers(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-retry.pdf",
+            original_filename="ext-retry.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = [OSError("hidrive unavailable"), pdf]
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(AllExternalPdfDownloadsFailed):
+                generate_external_upload_pdf(self.version)
+            rel_path, checksum = generate_external_upload_pdf(self.version)
+
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertTrue(rel_path)
+        self.assertTrue(checksum)
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     @patch("apps.medical.pdf_builder.download_external_pdf")
