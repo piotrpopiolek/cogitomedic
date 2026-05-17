@@ -466,6 +466,12 @@
     });
   }
 
+  function responseErrorMessage(res, fallback) {
+    if (isAuthExpiredResponse(res)) return "";
+    if (!res || !res.json) return fallback;
+    return res.json.error || res.json.detail || res.json.raw_response || fallback;
+  }
+
   if (!DOC_ID) {
     console.warn("Doctor panel init aborted: missing medical document id.");
     return;
@@ -630,6 +636,9 @@
     loadExternalPdfs();
   }
 
+  /** Shared with ``buildPayload`` (IIFE scope); set when Befund form UI is active. */
+  let selectedTemplate = null;
+
   if (!skipBefundFormUi) {
   const container = el("lesion-groups-container");
   const tpl = document.getElementById("lesion-group-tpl");
@@ -638,7 +647,6 @@
   const summaryFavoriteSelectEl = el("summary-favorite-select");
   const applySummaryFavoriteBtn = el("btn-apply-summary-favorite");
   let doctorTemplates = [];
-  let selectedTemplate = null;
 
   function setSelectOptions(selectEl, options, placeholder) {
     if (!selectEl) return;
@@ -861,100 +869,6 @@
     addLesionGroup(null);
   }
 
-  function parseLesionNumbers(str) {
-    if (!str || typeof str !== "string") return [];
-    return str
-      .split(/[\s,]+/)
-      .map(function (s) {
-        return parseInt(s.trim(), 10);
-      })
-      .filter(function (n) {
-        return !isNaN(n) && n >= 1;
-      });
-  }
-
-  function buildPayload() {
-    const payload = {
-      schema_version: 1,
-      authoring_locale: authoringLocale,
-      examination_scope: [],
-      lesions: [],
-      recommendations: [],
-      final_assessment: "NO_HIGH_GRADE_SUSPICION",
-    };
-    document
-      .querySelectorAll('input[name="examination_scope"]:checked')
-      .forEach(function (c) {
-        payload.examination_scope.push(c.value);
-      });
-    const fp = document.querySelector('input[name="fitzpatrick_type"]:checked');
-    if (fp) payload.fitzpatrick_type = fp.value;
-    const oa = document.querySelector(
-      'input[name="overall_image_assessment"]:checked'
-    );
-    payload.overall_image_assessment = oa
-      ? oa.value
-      : "NO_CONTROL_NEEDED";
-    document
-      .querySelectorAll('input[name="final_assessment"]:checked')
-      .forEach(function (c) {
-        payload.final_assessment = c.value;
-      });
-    document
-      .querySelectorAll('input[name="recommendations"]:checked')
-      .forEach(function (c) {
-        payload.recommendations.push(c.value);
-      });
-    if (container) {
-      container.querySelectorAll(".lesion-group").forEach(function (section) {
-        const numsStr = section.querySelector(".lesion-numbers-input").value;
-        const lesion_numbers = parseLesionNumbers(numsStr);
-        if (lesion_numbers.length === 0) return;
-        const features = [];
-        section
-          .querySelectorAll(".lesion-feature:checked")
-          .forEach(function (c) {
-            features.push(c.value);
-          });
-        const clinical = section.querySelector(".lesion-clinical:checked");
-        const malignancy = section.querySelector(".lesion-malignancy:checked");
-        const textEl = section.querySelector(".lesion-text");
-        const lesion = {
-          lesion_numbers: lesion_numbers,
-          dermatoscopic_features: features,
-          clinical_assessment: clinical ? clinical.value : "UNREMARKABLE",
-          malignancy_risk: malignancy ? malignancy.value : "NO_SUSPICION",
-        };
-        if (textEl && textEl.value) lesion.edited_text = textEl.value;
-        payload.lesions.push(lesion);
-      });
-    }
-    const summaryEl = el("summary_text");
-    payload.summary_edited_text = summaryEl ? summaryEl.value || null : null;
-    if (selectedTemplate) {
-      payload.template_context = {
-        template_id: selectedTemplate.id,
-        template_name: selectedTemplate.name || null,
-        template_locale: selectedTemplate.template_locale || authoringLocale,
-      };
-    }
-    return payload;
-  }
-  function validatePayloadForSubmit(payload) {
-    if (
-      payload.overall_image_assessment === "CONTROL_NEEDED" &&
-      (!payload.lesions || payload.lesions.length === 0)
-    ) {
-      return UI.msgLesionRequired;
-    }
-    return null;
-  }
-  function responseErrorMessage(res, fallback) {
-    if (isAuthExpiredResponse(res)) return "";
-    if (!res || !res.json) return fallback;
-    return res.json.error || res.json.detail || res.json.raw_response || fallback;
-  }
-
   function setSelectedTemplateById(templateId) {
     selectedTemplate = findTemplateById(templateId);
     refreshFavoriteSelects();
@@ -1037,6 +951,98 @@
   loadDoctorTemplates();
   loadExternalPdfs();
 
+  }
+
+  function parseLesionNumbers(str) {
+    if (!str || typeof str !== "string") return [];
+    return str
+      .split(/[\s,]+/)
+      .map(function (s) {
+        return parseInt(s.trim(), 10);
+      })
+      .filter(function (n) {
+        return !isNaN(n) && n >= 1;
+      });
+  }
+
+  function buildPayload() {
+    const payload = {
+      schema_version: 1,
+      authoring_locale: authoringLocale,
+      examination_scope: [],
+      lesions: [],
+      recommendations: [],
+      final_assessment: "NO_HIGH_GRADE_SUSPICION",
+    };
+    document
+      .querySelectorAll('input[name="examination_scope"]:checked')
+      .forEach(function (c) {
+        payload.examination_scope.push(c.value);
+      });
+    const fp = document.querySelector('input[name="fitzpatrick_type"]:checked');
+    if (fp) payload.fitzpatrick_type = fp.value;
+    const oa = document.querySelector(
+      'input[name="overall_image_assessment"]:checked'
+    );
+    payload.overall_image_assessment = oa
+      ? oa.value
+      : "NO_CONTROL_NEEDED";
+    document
+      .querySelectorAll('input[name="final_assessment"]:checked')
+      .forEach(function (c) {
+        payload.final_assessment = c.value;
+      });
+    document
+      .querySelectorAll('input[name="recommendations"]:checked')
+      .forEach(function (c) {
+        payload.recommendations.push(c.value);
+      });
+    const lesionContainer = el("lesion-groups-container");
+    if (lesionContainer) {
+      lesionContainer.querySelectorAll(".lesion-group").forEach(function (section) {
+        const numsInput = section.querySelector(".lesion-numbers-input");
+        const numsStr = numsInput ? numsInput.value : "";
+        const lesion_numbers = parseLesionNumbers(numsStr);
+        if (lesion_numbers.length === 0) return;
+        const features = [];
+        section
+          .querySelectorAll(".lesion-feature:checked")
+          .forEach(function (c) {
+            features.push(c.value);
+          });
+        const clinical = section.querySelector(".lesion-clinical:checked");
+        const malignancy = section.querySelector(".lesion-malignancy:checked");
+        const textEl = section.querySelector(".lesion-text");
+        const lesion = {
+          lesion_numbers: lesion_numbers,
+          dermatoscopic_features: features,
+          clinical_assessment: clinical ? clinical.value : "UNREMARKABLE",
+          malignancy_risk: malignancy ? malignancy.value : "NO_SUSPICION",
+        };
+        if (textEl && textEl.value) lesion.edited_text = textEl.value;
+        payload.lesions.push(lesion);
+      });
+    }
+    const summaryEl = el("summary_text");
+    payload.summary_edited_text = summaryEl ? summaryEl.value || null : null;
+    if (selectedTemplate) {
+      payload.template_context = {
+        template_id: selectedTemplate.id,
+        template_name: selectedTemplate.name || null,
+        template_locale: selectedTemplate.template_locale || authoringLocale,
+      };
+    }
+    return payload;
+  }
+
+  function validatePayloadForSubmit(payload) {
+    if (
+      payload.overall_image_assessment === "CONTROL_NEEDED" &&
+      (!payload.lesions || payload.lesions.length === 0)
+    ) {
+      return UI.msgLesionRequired;
+    }
+    return null;
   }
 
   function setBtnText(id, text) {
