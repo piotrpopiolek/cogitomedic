@@ -12,6 +12,7 @@ from django.utils import timezone
 from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
@@ -25,6 +26,7 @@ from apps.medical.services import (
     create_external_upload_medical_document,
     publish_external_upload_version,
     select_external_upload_attachment_for_draft,
+    start_external_upload_revision,
 )
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
@@ -214,4 +216,130 @@ class ExternalUploadOutboxContractTests(TestCase):
         self.assertEqual(
             [e.status for e in events],
             [OutboxStatus.PROCESSED, OutboxStatus.PROCESSED, OutboxStatus.PROCESSED],
+        )
+
+    def test_hidrive_moves_only_selected_external_attachment(self) -> None:
+        ext_doc = self._fresh_external_upload_document()
+        pdf = _minimal_valid_pdf_bytes()
+        path_selected = "/incoming/external-upload/selected.pdf"
+        path_other = "/incoming/external-upload/other.pdf"
+        hidrive_client._MockHiDriveAdapter.seed_file(path_selected, pdf)
+        hidrive_client._MockHiDriveAdapter.seed_file(path_other, pdf)
+        att_selected = ExternalPdfAttachment.objects.create(
+            medical_document=ext_doc,
+            hidrive_remote_path=path_selected,
+            original_filename="selected.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        ExternalPdfAttachment.objects.create(
+            medical_document=ext_doc,
+            hidrive_remote_path=path_other,
+            original_filename="other.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        select_external_upload_attachment_for_draft(
+            medical_document_id=ext_doc.id,
+            attachment_id=att_selected.id,
+            actor_user_id=self.reception_user.id,
+        )
+        publish_external_upload_version(
+            medical_document_id=ext_doc.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.reception_user.id,
+            publish_locale="de-DE",
+        )
+        with self.settings(MEDIA_ROOT=self.media_root):
+            process_outbox_events()
+            process_outbox_events()
+
+        att_selected.refresh_from_db()
+        other = ExternalPdfAttachment.objects.get(
+            medical_document=ext_doc,
+            original_filename="other.pdf",
+        )
+        self.assertEqual(att_selected.status, ExternalPdfStatus.ACCEPTED)
+        self.assertEqual(
+            att_selected.hidrive_remote_path, "/processed/external-upload/selected.pdf"
+        )
+        self.assertEqual(other.status, ExternalPdfStatus.MATCHED)
+        self.assertEqual(other.hidrive_remote_path, path_other)
+
+    def test_revision_and_republish_blocked_while_pipeline_in_progress(self) -> None:
+        ext_doc = self._fresh_external_upload_document()
+        pdf = _minimal_valid_pdf_bytes()
+        path = "/incoming/external-upload/pipeline-guard.pdf"
+        hidrive_client._MockHiDriveAdapter.seed_file(path, pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=ext_doc,
+            hidrive_remote_path=path,
+            original_filename="pipeline-guard.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        select_external_upload_attachment_for_draft(
+            medical_document_id=ext_doc.id,
+            attachment_id=att.id,
+            actor_user_id=self.reception_user.id,
+        )
+        publish_external_upload_version(
+            medical_document_id=ext_doc.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.reception_user.id,
+            publish_locale="de-DE",
+        )
+        v1 = MedicalDocumentVersion.objects.get(
+            medical_document=ext_doc,
+            version_status=DocVersionStatus.PUBLISHED,
+        )
+        with self.settings(MEDIA_ROOT=self.media_root):
+            process_outbox_events()
+
+        self.assertTrue(
+            OutboxEvent.objects.filter(
+                medical_document_version=v1,
+                event_type=OutboxEventType.HIDRIVE_UPLOAD,
+                status=OutboxStatus.PENDING,
+            ).exists()
+        )
+
+        with self.assertRaises(DomainError) as ctx:
+            start_external_upload_revision(
+                medical_document_id=ext_doc.id,
+                actor_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.publication_pipeline_in_progress",
+        )
+
+        OutboxEvent.objects.filter(medical_document_version=v1).update(
+            status=OutboxStatus.PROCESSED
+        )
+        start_external_upload_revision(
+            medical_document_id=ext_doc.id,
+            actor_user_id=self.reception_user.id,
+        )
+        draft2 = MedicalDocumentVersion.objects.get(
+            medical_document=ext_doc,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        draft2.external_selected_attachment = att
+        draft2.save(update_fields=["external_selected_attachment"])
+        OutboxEvent.objects.create(
+            medical_document_version=v1,
+            event_type=OutboxEventType.SMS_SEND,
+            aggregate_id=v1.id,
+            payload_schema_version=1,
+            payload={"medical_document_version_id": str(v1.id)},
+            status=OutboxStatus.PENDING,
+        )
+        with self.assertRaises(DomainError) as ctx2:
+            publish_external_upload_version(
+                medical_document_id=ext_doc.id,
+                publish_request_id=uuid4(),
+                published_by_user_id=self.reception_user.id,
+                publish_locale="de-DE",
+            )
+        self.assertEqual(
+            ctx2.exception.api_message_key,
+            "other.domain.publication_pipeline_in_progress",
         )

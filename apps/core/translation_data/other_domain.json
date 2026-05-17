@@ -414,6 +414,11 @@
     "en": "The draft must have an external PDF attachment selected before publishing.",
     "pl": "Przed publikacją wersja robocza musi mieć wybrany zewnętrzny załącznik PDF."
   },
+  "other.domain.publication_pipeline_in_progress": {
+    "de": "Die Veröffentlichung einer früheren Version läuft noch (PDF, HiDrive oder SMS). Bitte warten Sie, bevor Sie eine Revision starten oder erneut veröffentlichen.",
+    "en": "A previous version is still being published (PDF, HiDrive, or SMS). Wait before starting a revision or publishing again.",
+    "pl": "Trwa jeszcze publikacja wcześniejszej wersji (PDF, HiDrive lub SMS). Poczekaj przed rozpoczęciem rewizji lub ponowną publikacją."
+  },
   "other.domain.external_upload_revision_requires_published": {
     "de": "Eine neue Revision ist nur für bereits veröffentlichte externe Upload-Dokumente möglich.",
     "en": "Starting a revision is only allowed when the external-upload document is already published.",

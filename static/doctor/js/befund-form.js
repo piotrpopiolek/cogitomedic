@@ -623,7 +623,10 @@
     CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
 
   var skipBefundFormUi = !!PANEL.externalUploadReadOnly;
-  if (PANEL.externalUploadReadOnly) {
+  if (
+    PANEL.externalUploadReadOnly &&
+    PANEL.externalUploadLoadAttachmentPanel !== false
+  ) {
     loadExternalPdfs();
   }
 

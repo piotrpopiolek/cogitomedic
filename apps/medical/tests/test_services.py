@@ -34,7 +34,7 @@ from apps.medical.services import (
 )
 from apps.operations.models import AuditEvent
 from apps.operations.services import REF_KEY
-from apps.outbox.models import OutboxEvent, OutboxEventType
+from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from django.core.exceptions import ObjectDoesNotExist
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -1138,6 +1138,9 @@ class DocumentRevisionStateTests(MedicalServicesTests):
             publish_request_id=uuid4(),
             published_by_user_id=self.doctor_user.id,
             publish_locale="de-DE",
+        )
+        OutboxEvent.objects.filter(medical_document_version=published).update(
+            status=OutboxStatus.PROCESSED
         )
         self.medical_document.refresh_from_db()
         return published

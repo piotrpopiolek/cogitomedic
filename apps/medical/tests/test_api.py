@@ -2512,6 +2512,9 @@ class ExternalUploadApiTests(MedicalApiTests):
                 event_type=OutboxEventType.GENERATE_PDF,
             ).exists()
         )
+        OutboxEvent.objects.filter(medical_document_version_id=v.id).update(
+            status=OutboxStatus.PROCESSED
+        )
 
         rev = self.client.post(
             f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",

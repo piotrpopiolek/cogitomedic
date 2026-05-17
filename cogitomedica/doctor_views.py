@@ -37,7 +37,6 @@ from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
-    MedicalDocumentVersion,
 )
 from apps.medical.services import (
     acquire_document_lock,
@@ -516,11 +515,6 @@ def doctor_document_detail_view(
         if patient is None:
             raise ObjectDoesNotExist()
         external_readonly = doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
-        latest_version = (
-            MedicalDocumentVersion.objects.filter(medical_document_id=doc.id)
-            .order_by("-version_no")
-            .first()
-        )
         if doc.status == MedicalDocStatus.PUBLISHED or external_readonly:
             gate = GateResult(
                 passed=True,
@@ -622,20 +616,14 @@ def doctor_document_detail_view(
         context["authoring_locale"] = authoring_locale
     body_map_rel = static("tablet/body.jpg")
     doctor_external_upload_pdf_href = None
-    doctor_external_upload_preview_uses_external_endpoint = False
+    external_upload_load_attachment_panel = False
     if external_readonly:
+        # Doctors do not preview reception DRAFT uploads (processed off-platform).
+        # Preview is offered only after publish, or the last published PDF during revision.
         if doc.status == MedicalDocStatus.PUBLISHED:
             doctor_external_upload_pdf_href = request.build_absolute_uri(
                 reverse(
                     "medical-document-preview-pdf",
-                    kwargs={"medical_document_id": doc.id},
-                )
-            )
-        elif latest_version and latest_version.external_selected_attachment_id:
-            doctor_external_upload_preview_uses_external_endpoint = True
-            doctor_external_upload_pdf_href = request.build_absolute_uri(
-                reverse(
-                    "medical-documents-external-upload-preview-pdf",
                     kwargs={"medical_document_id": doc.id},
                 )
             )
@@ -646,6 +634,11 @@ def doctor_document_detail_view(
                     kwargs={"medical_document_id": doc.id},
                 )
             )
+        # Attachment list/iframe uses doctor-accessible APIs; block for doctors pre-publish.
+        if getattr(request.user, "is_doctor", False):
+            external_upload_load_attachment_panel = doc.status != MedicalDocStatus.DRAFT
+        else:
+            external_upload_load_attachment_panel = True
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
@@ -654,6 +647,7 @@ def doctor_document_detail_view(
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
         "externalUploadReadOnly": external_readonly,
+        "externalUploadLoadAttachmentPanel": external_upload_load_attachment_panel,
     }
     return _render_doctor(
         request,
@@ -672,10 +666,6 @@ def doctor_document_detail_view(
             "doctor_external_upload_pdf_href": doctor_external_upload_pdf_href,
             "doctor_external_upload_has_pending_revision": bool(
                 external_readonly and doc.has_pending_revision
-            ),
-            "doctor_external_upload_preview_uses_external_endpoint": bool(
-                external_readonly
-                and doctor_external_upload_preview_uses_external_endpoint
             ),
         },
     )

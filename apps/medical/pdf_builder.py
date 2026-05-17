@@ -693,6 +693,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
             failed_download_metadata=meta_list,
         )
 
+    # Partial infra failures only: all-fail path raises above; outbox writes audits then.
     for att, download_error in infra_errors:
         # Only newly MATCHED attachments should flip to MERGE_FAILED on
         # transient download failure. Historical ACCEPTED stay as-is so a
@@ -773,12 +774,13 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
 
     Raises :class:`~apps.core.exceptions.DomainError` when the version has no
     selected attachment (data invariant broken), or when the PDF bytes are corrupt
-    (``MATCHED`` rows are demoted to ``MERGE_FAILED`` like Befund; terminal in outbox).
+    (``MATCHED`` rows are demoted to ``MERGE_FAILED``; terminal in outbox).
 
-    On **infrastructure** download errors, demotes ``MATCHED`` → ``MERGE_FAILED``,
-    emits ``EXTERNAL_PDF_DOWNLOAD_FAILED``, and raises
-    :class:`AllExternalPdfDownloadsFailed` so the outbox handler records the same
-    audits and **retries** as the Befund merge path.
+    On **infrastructure** download errors, raises
+    :class:`AllExternalPdfDownloadsFailed` without changing attachment status
+    (``MATCHED`` is kept, same as Befund when all lab downloads fail) so outbox retry
+    can promote to ``ACCEPTED`` after HiDrive recovers. ``EXTERNAL_PDF_DOWNLOAD_FAILED``
+    audits are written by the outbox handler after the per-event savepoint rolls back.
     """
     version = MedicalDocumentVersion.objects.select_related(
         "external_selected_attachment",
@@ -823,22 +825,6 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
             att.hidrive_remote_path,
             exc_info=True,
         )
-        ExternalPdfAttachment.objects.filter(
-            pk=att.pk,
-            status=ExternalPdfStatus.MATCHED,
-        ).update(status=ExternalPdfStatus.MERGE_FAILED)
-        att.refresh_from_db()
-        create_audit_event(
-            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-            patient_id=patient_id,
-            medical_document_id=doc.id,
-            metadata={
-                "hidrive_remote_path": att.hidrive_remote_path,
-                "external_pdf_attachment_id": str(att.id),
-                "error_type": type(exc).__name__,
-                "attachment_status": att.status,
-            },
-        )
         raise AllExternalPdfDownloadsFailed(
             "External upload PDF download failed (HiDrive unavailable?); "
             "outbox will retry once the file is reachable.",
@@ -849,7 +835,7 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
                     "hidrive_remote_path": att.hidrive_remote_path,
                     "external_pdf_attachment_id": str(att.id),
                     "error_type": type(exc).__name__,
-                    "attachment_status": att.status,
+                    "attachment_status": status_before_download,
                 }
             ],
         ) from exc
