@@ -289,6 +289,36 @@
     "en": "In revision",
     "pl": "W rewizji"
   },
+  "doctor.filter_list_order": {
+    "de": "Sortierung",
+    "en": "Sort",
+    "pl": "Sortowanie"
+  },
+  "doctor.filter_list_order_default": {
+    "de": "Standard",
+    "en": "Default",
+    "pl": "Domyślny"
+  },
+  "doctor.filter_list_order_patient_asc": {
+    "de": "Patient aufsteigend",
+    "en": "Patient ascending",
+    "pl": "Pacjent rosnąco"
+  },
+  "doctor.filter_list_order_patient_desc": {
+    "de": "Patient absteigend",
+    "en": "Patient descending",
+    "pl": "Pacjent malejąco"
+  },
+  "doctor.filter_list_order_date_asc": {
+    "de": "Besuchsdatum aufsteigend",
+    "en": "Visit date ascending",
+    "pl": "Data wizyty rosnąco"
+  },
+  "doctor.filter_list_order_date_desc": {
+    "de": "Besuchsdatum absteigend",
+    "en": "Visit date descending",
+    "pl": "Data wizyty malejąco"
+  },
   "doctor.list_status_in_revision": {
     "de": "Revision",
     "en": "In revision",
@@ -313,6 +343,46 @@
     "de": "Sie bearbeiten eine Revision der veröffentlichten Version {published_version_no}. Beim erneuten Veröffentlichen erhält die Patientin / der Patient eine neue SMS und ein aktualisiertes PDF.",
     "en": "You are editing a revision of the published version {published_version_no}. Republishing sends the patient a new SMS and an updated PDF.",
     "pl": "Edytujesz rewizję opublikowanej wersji {published_version_no}. Po ponownej publikacji pacjent otrzyma nowy SMS i zaktualizowany PDF."
+  },
+  "doctor.banner_revoked_title": {
+    "de": "Veröffentlichung zurückgenommen",
+    "en": "Publication revoked",
+    "pl": "Publikacja cofnięta"
+  },
+  "doctor.banner_revoked_body": {
+    "de": "Die Patientin / der Patient hat keinen Zugriff mehr auf dieses Dokument im Patientenportal. Bei Bedarf können Sie eine neue Revision starten.",
+    "en": "The patient no longer has access to this document in the patient portal. You can start a new revision if needed.",
+    "pl": "Pacjent nie ma już dostępu do tego dokumentu w portalu. W razie potrzeby możesz rozpocząć nową rewizję."
+  },
+  "doctor.btn_revoke_publication": {
+    "de": "Veröffentlichung zurücknehmen…",
+    "en": "Revoke publication…",
+    "pl": "Cofnij publikację…"
+  },
+  "doctor.modal_revoke_publication_title": {
+    "de": "Veröffentlichung zurücknehmen?",
+    "en": "Revoke publication?",
+    "pl": "Cofnąć publikację?"
+  },
+  "doctor.modal_revoke_publication_body": {
+    "de": "Die Patientin / der Patient verliert den Zugriff auf das PDF. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "en": "The patient will lose access to the PDF. This action cannot be undone.",
+    "pl": "Pacjent utraci dostęp do pliku PDF. Tej operacji nie można cofnąć."
+  },
+  "doctor.modal_revoke_publication_confirm": {
+    "de": "Zurücknehmen",
+    "en": "Revoke",
+    "pl": "Cofnij publikację"
+  },
+  "doctor.modal_revoke_publication_cancel": {
+    "de": "Abbrechen",
+    "en": "Cancel",
+    "pl": "Anuluj"
+  },
+  "doctor.msg_revoke_publication_success": {
+    "de": "Veröffentlichung wurde zurückgenommen.",
+    "en": "Publication has been revoked.",
+    "pl": "Publikacja została cofnięta."
   },
   "doctor.btn_start_revision": {
     "de": "Änderungen vornehmen…",
@@ -964,6 +1034,16 @@
     "en": "Processed",
     "pl": "Przetworzony"
   },
+  "doctor.external_pdf_status_pending_upload": {
+    "de": "Hochladen ausstehend",
+    "en": "Pending upload",
+    "pl": "Oczekuje na wgranie"
+  },
+  "doctor.external_pdf_status_upload_failed": {
+    "de": "Upload fehlgeschlagen",
+    "en": "Upload failed",
+    "pl": "Nieudane wgranie"
+  },
   "doctor.external_pdf_reject_btn": {
     "de": "Datei ablehnen",
     "en": "Reject file",
@@ -975,9 +1055,24 @@
     "pl": "Kliknij nazwę pliku, aby podejrzeć."
   },
   "doctor.external_pdf_preview_merge_warning": {
-    "de": "Hinweis: Die PDF-Zusammenführung ist fehlgeschlagen oder eine Anlage war beschädigt — Vorschau zeigt nur den Befund.",
-    "en": "Note: PDF merge failed or an attachment was invalid — preview shows Befund only.",
-    "pl": "Uwaga: scalenie PDF nie powiodło się lub załącznik był uszkodzony — podgląd pokazuje tylko Befund."
+    "de": "Hinweis: Die PDF-Zusammenführung ist fehlgeschlagen oder eine Anlage war beschädigt.",
+    "en": "Note: PDF merge failed or an attachment was invalid.",
+    "pl": "Uwaga: scalenie PDF nie powiodło się lub załącznik był uszkodzony."
+  },
+  "doctor.external_upload_readonly_notice": {
+    "de": "Dieses Dokument enthält ein externes Untersuchungsergebnis.",
+    "en": "This document holds an external examination result.",
+    "pl": "Ten dokument zawiera zewnętrzny wynik badania."
+  },
+  "doctor.external_upload_pdf_link": {
+    "de": "PDF anzeigen",
+    "en": "View PDF",
+    "pl": "Zobacz PDF"
+  },
+  "doctor.external_upload_revision_notice": {
+    "de": "Es liegt eine ausstehende Korrektur vor — bitte warten Sie auf die Veröffentlichung durch die Rezeption.",
+    "en": "A correction is pending — please wait for reception to publish it.",
+    "pl": "Oczekuje korekta — poczekaj na publikację przez recepcję."
   },
   "doctor.msg_publish_preview_required": {
     "de": "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen.",

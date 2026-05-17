@@ -28,11 +28,13 @@ BUILD = MANUAL / "_build"
 CHAPTERS: tuple[str, ...] = (
     "00-przeglad.md",
     "01-rejestracja.md",
+    "06-zmiana-danych-pacjenta.md",
     "02-tablet.md",
     "03-doktor.md",
     "04-administrator.md",
     "04-administrator-paper-intake.md",
     "paper_intake_flow.md",
+    "07-wgranie-zewnetrznego-badania.md",
     "05-pacjent-wyniki.md",
 )
 

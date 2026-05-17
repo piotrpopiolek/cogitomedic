@@ -71,11 +71,15 @@
     externalPdfStatusRejected: uiText("external_pdf_status_rejected"),
     externalPdfStatusMergeFailed: uiText("external_pdf_status_merge_failed"),
     externalPdfStatusAccepted: uiText("external_pdf_status_accepted"),
+    externalPdfStatusPendingUpload: uiText("external_pdf_status_pending_upload"),
+    externalPdfStatusUploadFailed: uiText("external_pdf_status_upload_failed"),
     externalPdfPreviewHint: uiText("external_pdf_preview_hint"),
     externalPdfPreviewMergeWarning: uiText("external_pdf_preview_merge_warning"),
     msgPublishPreviewRequired: uiText("msg_publish_preview_required"),
     bannerPublishedTitle: uiText("banner_published_title"),
     bannerPublishedBody: uiText("banner_published_body"),
+    bannerRevokedTitle: uiText("banner_revoked_title"),
+    bannerRevokedBody: uiText("banner_revoked_body"),
     bannerRevisionTitle: uiText("banner_revision_title"),
     bannerRevisionBody: uiText("banner_revision_body"),
     btnSaveDraft: uiText("btn_save_draft"),
@@ -93,6 +97,11 @@
     modalDiscardRevisionTitle: uiText("modal_discard_revision_title"),
     modalDiscardRevisionBody: uiText("modal_discard_revision_body"),
     modalDiscardRevisionConfirm: uiText("modal_discard_revision_confirm"),
+    modalRevokePublicationTitle: uiText("modal_revoke_publication_title"),
+    modalRevokePublicationBody: uiText("modal_revoke_publication_body"),
+    modalRevokePublicationConfirm: uiText("modal_revoke_publication_confirm"),
+    modalRevokePublicationCancel: uiText("modal_revoke_publication_cancel"),
+    msgRevokePublicationSuccess: uiText("msg_revoke_publication_success"),
     msgRevisionStarted: uiText("msg_revision_started"),
     msgRevisionDiscarded: uiText("msg_revision_discarded"),
     msgAmendIntentRequired: uiText("msg_amend_intent_required"),
@@ -294,8 +303,23 @@
     return docStatus === "DRAFT" || hasPendingRevision;
   }
 
+  function isPublicationRevoked() {
+    var cv = CTX && CTX.current_version;
+    return !!(cv && cv.revoked_at);
+  }
+
+  function revokeDeliveryComplete() {
+    var cv = CTX && CTX.current_version;
+    if (!cv) return false;
+    return !!(cv.hidrive_sent && cv.sms_sent);
+  }
+
   function isPublishedReadOnly() {
-    return docStatus === "PUBLISHED" && !hasPendingRevision;
+    return (
+      docStatus === "PUBLISHED" &&
+      !hasPendingRevision &&
+      !isPublicationRevoked()
+    );
   }
 
   function setPublishEnabledFromPreviewFlag() {
@@ -353,6 +377,15 @@
       });
   }
 
+  function externalPdfStatusLabel(status) {
+    if (status === "REJECTED") return UI.externalPdfStatusRejected;
+    if (status === "MERGE_FAILED") return UI.externalPdfStatusMergeFailed;
+    if (status === "ACCEPTED") return UI.externalPdfStatusAccepted;
+    if (status === "PENDING_UPLOAD") return UI.externalPdfStatusPendingUpload;
+    if (status === "UPLOAD_FAILED") return UI.externalPdfStatusUploadFailed;
+    return UI.externalPdfStatusMatched;
+  }
+
   /** First previewable attachment: prefer MATCHED, then MERGE_FAILED / ACCEPTED; skip REJECTED-only lists. */
   function pickDefaultExternalPdfItem(items) {
     if (!items || !items.length) return null;
@@ -397,19 +430,11 @@
         });
         var st = document.createElement("span");
         st.className = "text-xs text-base-500 dark:text-base-400";
-        var stLabel =
-          item.status === "REJECTED"
-            ? UI.externalPdfStatusRejected
-            : item.status === "MERGE_FAILED"
-              ? UI.externalPdfStatusMergeFailed
-              : item.status === "ACCEPTED"
-                ? UI.externalPdfStatusAccepted
-                : UI.externalPdfStatusMatched;
-        st.textContent = stLabel;
+        st.textContent = externalPdfStatusLabel(item.status);
         left.appendChild(nameBtn);
         left.appendChild(st);
         li.appendChild(left);
-        if (item.status === "MATCHED") {
+        if (item.status === "MATCHED" && !PANEL.externalUploadReadOnly) {
           var rej = document.createElement("button");
           rej.type = "button";
           rej.className =
@@ -439,6 +464,12 @@
       var autoItem = pickDefaultExternalPdfItem(items);
       if (autoItem) openExternalPdfAttachmentInIframe(autoItem);
     });
+  }
+
+  function responseErrorMessage(res, fallback) {
+    if (isAuthExpiredResponse(res)) return "";
+    if (!res || !res.json) return fallback;
+    return res.json.error || res.json.detail || res.json.raw_response || fallback;
   }
 
   if (!DOC_ID) {
@@ -594,6 +625,21 @@
     }
   }
 
+  const authoringLocale =
+    CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
+
+  var skipBefundFormUi = !!PANEL.externalUploadReadOnly;
+  if (
+    PANEL.externalUploadReadOnly &&
+    PANEL.externalUploadLoadAttachmentPanel !== false
+  ) {
+    loadExternalPdfs();
+  }
+
+  /** Shared with ``buildPayload`` (IIFE scope); set when Befund form UI is active. */
+  let selectedTemplate = null;
+
+  if (!skipBefundFormUi) {
   const container = el("lesion-groups-container");
   const tpl = document.getElementById("lesion-group-tpl");
   const hasLesionUi = !!(container && tpl);
@@ -601,7 +647,6 @@
   const summaryFavoriteSelectEl = el("summary-favorite-select");
   const applySummaryFavoriteBtn = el("btn-apply-summary-favorite");
   let doctorTemplates = [];
-  let selectedTemplate = null;
 
   function setSelectOptions(selectEl, options, placeholder) {
     if (!selectEl) return;
@@ -824,102 +869,6 @@
     addLesionGroup(null);
   }
 
-  function parseLesionNumbers(str) {
-    if (!str || typeof str !== "string") return [];
-    return str
-      .split(/[\s,]+/)
-      .map(function (s) {
-        return parseInt(s.trim(), 10);
-      })
-      .filter(function (n) {
-        return !isNaN(n) && n >= 1;
-      });
-  }
-
-  const authoringLocale =
-    CTX && CTX.authoring_locale ? CTX.authoring_locale : "de-DE";
-  function buildPayload() {
-    const payload = {
-      schema_version: 1,
-      authoring_locale: authoringLocale,
-      examination_scope: [],
-      lesions: [],
-      recommendations: [],
-      final_assessment: "NO_HIGH_GRADE_SUSPICION",
-    };
-    document
-      .querySelectorAll('input[name="examination_scope"]:checked')
-      .forEach(function (c) {
-        payload.examination_scope.push(c.value);
-      });
-    const fp = document.querySelector('input[name="fitzpatrick_type"]:checked');
-    if (fp) payload.fitzpatrick_type = fp.value;
-    const oa = document.querySelector(
-      'input[name="overall_image_assessment"]:checked'
-    );
-    payload.overall_image_assessment = oa
-      ? oa.value
-      : "NO_CONTROL_NEEDED";
-    document
-      .querySelectorAll('input[name="final_assessment"]:checked')
-      .forEach(function (c) {
-        payload.final_assessment = c.value;
-      });
-    document
-      .querySelectorAll('input[name="recommendations"]:checked')
-      .forEach(function (c) {
-        payload.recommendations.push(c.value);
-      });
-    if (container) {
-      container.querySelectorAll(".lesion-group").forEach(function (section) {
-        const numsStr = section.querySelector(".lesion-numbers-input").value;
-        const lesion_numbers = parseLesionNumbers(numsStr);
-        if (lesion_numbers.length === 0) return;
-        const features = [];
-        section
-          .querySelectorAll(".lesion-feature:checked")
-          .forEach(function (c) {
-            features.push(c.value);
-          });
-        const clinical = section.querySelector(".lesion-clinical:checked");
-        const malignancy = section.querySelector(".lesion-malignancy:checked");
-        const textEl = section.querySelector(".lesion-text");
-        const lesion = {
-          lesion_numbers: lesion_numbers,
-          dermatoscopic_features: features,
-          clinical_assessment: clinical ? clinical.value : "UNREMARKABLE",
-          malignancy_risk: malignancy ? malignancy.value : "NO_SUSPICION",
-        };
-        if (textEl && textEl.value) lesion.edited_text = textEl.value;
-        payload.lesions.push(lesion);
-      });
-    }
-    const summaryEl = el("summary_text");
-    payload.summary_edited_text = summaryEl ? summaryEl.value || null : null;
-    if (selectedTemplate) {
-      payload.template_context = {
-        template_id: selectedTemplate.id,
-        template_name: selectedTemplate.name || null,
-        template_locale: selectedTemplate.template_locale || authoringLocale,
-      };
-    }
-    return payload;
-  }
-  function validatePayloadForSubmit(payload) {
-    if (
-      payload.overall_image_assessment === "CONTROL_NEEDED" &&
-      (!payload.lesions || payload.lesions.length === 0)
-    ) {
-      return UI.msgLesionRequired;
-    }
-    return null;
-  }
-  function responseErrorMessage(res, fallback) {
-    if (isAuthExpiredResponse(res)) return "";
-    if (!res || !res.json) return fallback;
-    return res.json.error || res.json.detail || res.json.raw_response || fallback;
-  }
-
   function setSelectedTemplateById(templateId) {
     selectedTemplate = findTemplateById(templateId);
     refreshFavoriteSelects();
@@ -1002,6 +951,100 @@
   loadDoctorTemplates();
   loadExternalPdfs();
 
+  }
+
+  function parseLesionNumbers(str) {
+    if (!str || typeof str !== "string") return [];
+    return str
+      .split(/[\s,]+/)
+      .map(function (s) {
+        return parseInt(s.trim(), 10);
+      })
+      .filter(function (n) {
+        return !isNaN(n) && n >= 1;
+      });
+  }
+
+  function buildPayload() {
+    const payload = {
+      schema_version: 1,
+      authoring_locale: authoringLocale,
+      examination_scope: [],
+      lesions: [],
+      recommendations: [],
+      final_assessment: "NO_HIGH_GRADE_SUSPICION",
+    };
+    document
+      .querySelectorAll('input[name="examination_scope"]:checked')
+      .forEach(function (c) {
+        payload.examination_scope.push(c.value);
+      });
+    const fp = document.querySelector('input[name="fitzpatrick_type"]:checked');
+    if (fp) payload.fitzpatrick_type = fp.value;
+    const oa = document.querySelector(
+      'input[name="overall_image_assessment"]:checked'
+    );
+    payload.overall_image_assessment = oa
+      ? oa.value
+      : "NO_CONTROL_NEEDED";
+    document
+      .querySelectorAll('input[name="final_assessment"]:checked')
+      .forEach(function (c) {
+        payload.final_assessment = c.value;
+      });
+    document
+      .querySelectorAll('input[name="recommendations"]:checked')
+      .forEach(function (c) {
+        payload.recommendations.push(c.value);
+      });
+    const lesionContainer = el("lesion-groups-container");
+    if (lesionContainer) {
+      lesionContainer.querySelectorAll(".lesion-group").forEach(function (section) {
+        const numsInput = section.querySelector(".lesion-numbers-input");
+        const numsStr = numsInput ? numsInput.value : "";
+        const lesion_numbers = parseLesionNumbers(numsStr);
+        if (lesion_numbers.length === 0) return;
+        const features = [];
+        section
+          .querySelectorAll(".lesion-feature:checked")
+          .forEach(function (c) {
+            features.push(c.value);
+          });
+        const clinical = section.querySelector(".lesion-clinical:checked");
+        const malignancy = section.querySelector(".lesion-malignancy:checked");
+        const textEl = section.querySelector(".lesion-text");
+        const lesion = {
+          lesion_numbers: lesion_numbers,
+          dermatoscopic_features: features,
+          clinical_assessment: clinical ? clinical.value : "UNREMARKABLE",
+          malignancy_risk: malignancy ? malignancy.value : "NO_SUSPICION",
+        };
+        if (textEl && textEl.value) lesion.edited_text = textEl.value;
+        payload.lesions.push(lesion);
+      });
+    }
+    const summaryEl = el("summary_text");
+    payload.summary_edited_text = summaryEl ? summaryEl.value || null : null;
+    if (selectedTemplate) {
+      payload.template_context = {
+        template_id: selectedTemplate.id,
+        template_name: selectedTemplate.name || null,
+        template_locale: selectedTemplate.template_locale || authoringLocale,
+      };
+    }
+    return payload;
+  }
+
+  function validatePayloadForSubmit(payload) {
+    if (
+      payload.overall_image_assessment === "CONTROL_NEEDED" &&
+      (!payload.lesions || payload.lesions.length === 0)
+    ) {
+      return UI.msgLesionRequired;
+    }
+    return null;
+  }
+
   function setBtnText(id, text) {
     var node = el(id);
     if (!node) return;
@@ -1033,7 +1076,8 @@
     var banner = el("revision-state-banner");
     var actionNotice = el("revision-action-notice");
     var publishedDocument = hasPublishedHistory();
-    var publishedReadOnly = publishedDocument && !hasPendingRevision;
+    var publishedReadOnly =
+      publishedDocument && !hasPendingRevision && !isPublicationRevoked();
     if (banner) {
       banner.classList.remove(
         "border-blue-200",
@@ -1047,10 +1091,34 @@
         "text-amber-900",
         "dark:border-amber-800",
         "dark:bg-amber-950/40",
-        "dark:text-amber-100"
+        "dark:text-amber-100",
+        "border-red-200",
+        "bg-red-50",
+        "text-red-900",
+        "dark:border-red-800",
+        "dark:bg-red-950/40",
+        "dark:text-red-100"
       );
       banner.innerHTML = "";
-      if (publishedReadOnly) {
+      if (isPublicationRevoked()) {
+        setHiddenState(banner, false);
+        banner.classList.add(
+          "border-red-200",
+          "bg-red-50",
+          "text-red-900",
+          "dark:border-red-800",
+          "dark:bg-red-950/40",
+          "dark:text-red-100"
+        );
+        var titleRv = document.createElement("p");
+        titleRv.className = "font-semibold mb-1";
+        titleRv.textContent = UI.bannerRevokedTitle;
+        var bodyRv = document.createElement("p");
+        bodyRv.className = "mb-0";
+        bodyRv.textContent = UI.bannerRevokedBody;
+        banner.appendChild(titleRv);
+        banner.appendChild(bodyRv);
+      } else if (publishedReadOnly) {
         setHiddenState(banner, false);
         banner.classList.add(
           "border-blue-200",
@@ -1105,10 +1173,33 @@
         "text-amber-900",
         "dark:border-amber-800",
         "dark:bg-amber-950/40",
-        "dark:text-amber-100"
+        "dark:text-amber-100",
+        "border-red-200",
+        "bg-red-50",
+        "text-red-900",
+        "dark:border-red-800",
+        "dark:bg-red-950/40",
+        "dark:text-red-100"
       );
       actionNotice.innerHTML = "";
-      if (publishedReadOnly) {
+      if (isPublicationRevoked()) {
+        setHiddenState(actionNotice, false);
+        actionNotice.classList.add(
+          "border-red-200",
+          "bg-red-50",
+          "text-red-900",
+          "dark:border-red-800",
+          "dark:bg-red-950/40",
+          "dark:text-red-100"
+        );
+        actionNotice.innerHTML =
+          '<p class="mb-1 font-semibold">' +
+          escapeHtml(UI.bannerRevokedTitle) +
+          "</p>" +
+          '<p class="mb-0">' +
+          escapeHtml(UI.bannerRevokedBody) +
+          "</p>";
+      } else if (publishedReadOnly) {
         setHiddenState(actionNotice, false);
         actionNotice.classList.add(
           "border-blue-200",
@@ -1154,7 +1245,10 @@
     var previewBtn = el("btn-preview-pdf");
 
     if (startBtn) {
-      if (publishedDocument) {
+      if (isPublicationRevoked()) {
+        setHiddenState(startBtn, true);
+        startBtn.disabled = true;
+      } else if (publishedDocument) {
         setHiddenState(startBtn, false);
         startBtn.disabled = hasPendingRevision;
       } else {
@@ -1163,7 +1257,10 @@
       }
     }
     if (discardBtn) {
-      if (publishedDocument) {
+      if (isPublicationRevoked()) {
+        setHiddenState(discardBtn, true);
+        discardBtn.disabled = true;
+      } else if (publishedDocument) {
         setHiddenState(discardBtn, false);
         discardBtn.disabled = !hasPendingRevision;
       } else {
@@ -1183,7 +1280,9 @@
         : UI.btnPublish;
     }
     if (previewBtn) {
-      if (publishedReadOnly) {
+      if (isPublicationRevoked()) {
+        previewBtn.textContent = UI.btnPreviewPdf;
+      } else if (publishedReadOnly) {
         previewBtn.textContent = UI.btnPreviewPublished;
       } else if (publishedDocument && hasPendingRevision) {
         previewBtn.textContent = UI.btnPreviewRevision;
@@ -1191,6 +1290,16 @@
         previewBtn.textContent = UI.btnPreviewPdf;
       }
     }
+
+    document.querySelectorAll(".js-btn-revoke-publication").forEach(function (revBtn) {
+      var showRevoke =
+        docStatus === "PUBLISHED" &&
+        !hasPendingRevision &&
+        !isPublicationRevoked() &&
+        revokeDeliveryComplete();
+      setHiddenState(revBtn, !showRevoke);
+      revBtn.disabled = false;
+    });
 
     setPublishEnabledFromPreviewFlag();
   }
@@ -1553,8 +1662,9 @@
     });
   }
 
-  function buildPreviewUrl(source) {
+  function buildPreviewUrl(source, previewBaseOverride) {
     const previewBase =
+      previewBaseOverride ||
       (el("btn-preview-pdf") &&
         el("btn-preview-pdf").getAttribute("data-preview-url")) ||
       docUrl("/preview-pdf");
@@ -1570,6 +1680,15 @@
       url += "&source=" + encodeURIComponent(source);
     }
     return url;
+  }
+
+  /**
+   * Open PDF preview via full navigation (cookies sent). Prefer over fetch+blob when no
+   * prior async work is required — some browsers leave a ``window.open('')`` tab on
+   * ``about:blank`` after async fetch because navigation is no longer user-gesture gated.
+   */
+  function openPdfPreviewByFullNavigation(url) {
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function openPreviewBlobInTab(previewTab, btn, previewUrl, opts) {
@@ -1618,19 +1737,23 @@
     previewPdfBtn.addEventListener("click", function (event) {
       if (event && event.preventDefault) event.preventDefault();
       const btn = this;
+      if (PANEL.externalUploadReadOnly) {
+        var extPreviewSource = null;
+        if (isPublishedReadOnly()) {
+          extPreviewSource = "published";
+        } else if (docStatus === "PUBLISHED" && hasPendingRevision) {
+          extPreviewSource = "draft";
+        }
+        openPdfPreviewByFullNavigation(
+          buildPreviewUrl(
+            extPreviewSource,
+            btn.getAttribute("data-preview-url") || null
+          )
+        );
+        return;
+      }
       if (isPublishedReadOnly()) {
-        const previewTab = window.open("", "_blank");
-        btn.disabled = true;
-        openPreviewBlobInTab(
-          previewTab,
-          btn,
-          buildPreviewUrl("published"),
-          { markPreviewSeen: false }
-        ).catch(function () {
-          btn.disabled = false;
-          if (previewTab) previewTab.close();
-          alertMsg("danger", UI.msgNetwork);
-        });
+        openPdfPreviewByFullNavigation(buildPreviewUrl("published"));
         return;
       }
       const built = buildDraftPayloadBody();
@@ -1691,6 +1814,21 @@
           if (previewTab) previewTab.close();
           alertMsg("danger", UI.msgNetwork);
         });
+    });
+  }
+
+  const previewPublishedExternalBtn = el("btn-preview-published-external");
+  if (previewPublishedExternalBtn) {
+    previewPublishedExternalBtn.addEventListener("click", function (event) {
+      if (event && event.preventDefault) event.preventDefault();
+      var baseOverride =
+        this.getAttribute("data-preview-url") ||
+        (el("btn-preview-pdf") &&
+          el("btn-preview-pdf").getAttribute("data-preview-url")) ||
+        null;
+      openPdfPreviewByFullNavigation(
+        buildPreviewUrl("published", baseOverride)
+      );
     });
   }
 
@@ -1797,4 +1935,43 @@
         });
     });
   }
+
+  document.body.addEventListener("click", function (ev) {
+    var btn =
+      ev.target &&
+      ev.target.closest &&
+      ev.target.closest(".js-btn-revoke-publication");
+    if (!btn || btn.disabled || btn.hidden) return;
+    ev.preventDefault();
+    showRevisionModal({
+      title: UI.modalRevokePublicationTitle,
+      body: UI.modalRevokePublicationBody,
+      confirm: UI.modalRevokePublicationConfirm,
+      cancel: UI.modalRevokePublicationCancel,
+    }).then(function (ok) {
+      if (!ok) return;
+      btn.disabled = true;
+      apiFetch(docUrl("/revoke"), {
+        method: "POST",
+        body: JSON.stringify({}),
+      })
+        .then(function (res) {
+          btn.disabled = false;
+          if (isAuthExpiredResponse(res)) return;
+          if (!res.ok) {
+            alertMsg(
+              "danger",
+              responseErrorMessage(res, UI.msgError + " " + res.status)
+            );
+            return;
+          }
+          alertMsg("success", UI.msgRevokePublicationSuccess);
+          window.location.reload();
+        })
+        .catch(function () {
+          btn.disabled = false;
+          alertMsg("danger", UI.msgNetwork);
+        });
+    });
+  });
 })();

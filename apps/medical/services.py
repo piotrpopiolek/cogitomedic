@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import re
+import tempfile
+import unicodedata
 import uuid
+from os import close as os_close
 from datetime import date, datetime, timedelta
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.uploadedfile import UploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import (
     Case,
@@ -35,12 +41,21 @@ from apps.intake.services import get_intake_form_context
 from apps.medical.constants import (
     DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
+    EXTERNAL_UPLOAD_MAX_BYTES,
     PAPER_INTAKE_AUTH_REASON_MAX_LEN,
     PAPER_INTAKE_AUTH_REASON_MIN_LEN,
     PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
 )
+from apps.medical.external_pdf_service import (
+    hidrive_incoming_dir,
+    hidrive_processed_dir,
+)
+from apps.integrations.hidrive.auth import HiDriveAuthError
+from apps.integrations.hidrive.client import HiDriveApiError, get_hidrive_adapter
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -54,6 +69,7 @@ from apps.outbox.services import retry_outbox_event, _try_delete_file
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.display import staff_user_display_name
 from apps.users.models import StaffUser
+from pypdf import PdfReader
 
 PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
     "intake_form_submitted",
@@ -426,6 +442,609 @@ def create_or_get_medical_document(
             metadata=meta,
         )
     return doc
+
+
+def _bootstrap_external_upload_draft_v1(
+    medical_document: MedicalDocument,
+    *,
+    created_by_user_id: uuid.UUID,
+) -> None:
+    """Create DRAFT version 1 (empty payload) and align document status / version counter."""
+    draft = MedicalDocumentVersion.objects.create(
+        medical_document_id=medical_document.id,
+        version_no=1,
+        version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=1,
+        medical_payload={},
+    )
+    medical_document.current_version_no = draft.version_no
+    medical_document.status = MedicalDocStatus.DRAFT
+    medical_document.updated_by_user_id = created_by_user_id
+    medical_document.save(
+        update_fields=[
+            "current_version_no",
+            "status",
+            "updated_by_user",
+            "updated_at",
+        ]
+    )
+
+
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _sanitize_external_upload_filename(original_name: str) -> str:
+    """Return safe ASCII filename for HiDrive path under /external-upload."""
+    raw_name = (original_name or "").strip().replace("\\", "/").split("/")[-1]
+    raw_name = raw_name.replace("\x00", "")
+    normalized = (
+        unicodedata.normalize("NFKD", raw_name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    collapsed = _SAFE_FILENAME_RE.sub("_", normalized).strip("._-")
+    if not collapsed:
+        collapsed = f"external_{uuid.uuid4().hex[:12]}.pdf"
+    if "." not in collapsed:
+        collapsed = f"{collapsed}.pdf"
+    return collapsed[:200]
+
+
+def _assert_staff_user_may_act_on_external_upload(*, actor: StaffUser) -> None:
+    """Reception, Admin, or Manager only — shared by external-upload document / upload / draft bind."""
+    if not (actor.is_reception or actor.is_admin_role or actor.is_manager):
+        raise DomainError(
+            domain_message("other.domain.external_upload_staff_role_required"),
+            api_message_key="other.domain.external_upload_staff_role_required",
+        )
+
+
+def _raise_external_upload_file_too_large() -> None:
+    raise DomainError(
+        domain_message("other.domain.external_upload_file_too_large").format(
+            max_bytes=EXTERNAL_UPLOAD_MAX_BYTES
+        ),
+        api_message_key="other.domain.external_upload_file_too_large",
+    )
+
+
+def _assert_uploaded_file_within_byte_limit(uploaded_file: UploadedFile) -> None:
+    """Reject uploads whose streamed body exceeds ``EXTERNAL_UPLOAD_MAX_BYTES``."""
+    if int(uploaded_file.size or 0) > EXTERNAL_UPLOAD_MAX_BYTES:
+        _raise_external_upload_file_too_large()
+
+
+def _persist_uploaded_file_to_temp(uploaded_file: UploadedFile) -> Path:
+    """Stream upload to disk, enforcing the byte limit on actual chunk sizes."""
+    fd, tmp_path_str = tempfile.mkstemp(prefix="external-upload-", suffix=".pdf")
+    os_close(fd)
+    tmp_path = Path(tmp_path_str)
+    total = 0
+    try:
+        with tmp_path.open("wb") as handle:
+            for chunk in uploaded_file.chunks():
+                total += len(chunk)
+                if total > EXTERNAL_UPLOAD_MAX_BYTES:
+                    _raise_external_upload_file_too_large()
+                handle.write(chunk)
+    except DomainError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        uploaded_file.seek(0)
+    return tmp_path
+
+
+def _validate_external_upload_pdf_file(path: Path) -> None:
+    try:
+        reader = PdfReader(str(path))
+        if len(reader.pages) < 1:
+            raise DomainError(
+                domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+                api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+            )
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_invalid_or_empty_pdf"),
+            api_message_key="other.domain.external_upload_invalid_or_empty_pdf",
+        ) from exc
+
+
+@transaction.atomic
+def _register_external_upload_pdf_pending(
+    *,
+    medical_document_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> ExternalPdfAttachment:
+    """Phase A: validate PDF and persist ``ExternalPdfAttachment`` as ``PENDING_UPLOAD``.
+
+    HiDrive upload must run **after** this transaction commits so a rollback cannot
+    leave orphan cloud objects.
+    """
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    _assert_uploaded_file_within_byte_limit(uploaded_file)
+
+    try:
+        medical_document = MedicalDocument.objects.select_for_update().get(
+            id=medical_document_id
+        )
+    except MedicalDocument.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.medical_document_not_found"),
+            api_message_key="other.api.medical_document_not_found",
+        ) from exc
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    if (uploaded_file.content_type or "").lower() not in {
+        "application/pdf",
+        "application/x-pdf",
+    }:
+        raise DomainError(
+            domain_message("other.domain.external_upload_invalid_content_type"),
+            api_message_key="other.domain.external_upload_invalid_content_type",
+        )
+
+    local_tmp: Path | None = None
+    try:
+        local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
+        with local_tmp.open("rb") as handle:
+            if handle.read(4) != b"%PDF":
+                raise DomainError(
+                    domain_message("other.domain.external_upload_not_pdf"),
+                    api_message_key="other.domain.external_upload_not_pdf",
+                )
+        _validate_external_upload_pdf_file(local_tmp)
+    finally:
+        if local_tmp is not None:
+            local_tmp.unlink(missing_ok=True)
+
+    safe_filename = _sanitize_external_upload_filename(uploaded_file.name)
+    queue_entry_id = medical_document.queue_entry_id
+    remote_path = (
+        f"{hidrive_incoming_dir()}/external-upload/{queue_entry_id}/{safe_filename}"
+    )
+
+    attachment, _ = ExternalPdfAttachment.objects.update_or_create(
+        medical_document_id=medical_document_id,
+        hidrive_remote_path=remote_path,
+        defaults={
+            "status": ExternalPdfStatus.PENDING_UPLOAD,
+            "original_filename": safe_filename,
+        },
+    )
+    return attachment
+
+
+def _upload_external_pdf_attachment_to_hidrive(
+    *,
+    attachment_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+) -> None:
+    """Phase B: upload bytes to HiDrive (outside any enclosing DB transaction)."""
+    try:
+        attachment = ExternalPdfAttachment.objects.get(id=attachment_id)
+    except ExternalPdfAttachment.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_not_found"),
+            api_message_key="other.domain.external_upload_attachment_not_found",
+        ) from exc
+
+    if attachment.status == ExternalPdfStatus.MATCHED:
+        return
+    if attachment.status != ExternalPdfStatus.PENDING_UPLOAD:
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        )
+
+    remote_path = attachment.hidrive_remote_path
+    local_tmp: Path | None = None
+    cleanup_tmp = False
+    try:
+        temp_path_callable = getattr(uploaded_file, "temporary_file_path", None)
+        if callable(temp_path_callable):
+            local_tmp = Path(temp_path_callable())
+            if local_tmp.stat().st_size > EXTERNAL_UPLOAD_MAX_BYTES:
+                _raise_external_upload_file_too_large()
+        else:
+            local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
+            cleanup_tmp = True
+        get_hidrive_adapter().upload(remote_path=remote_path, local_path=local_tmp)
+    except (HiDriveApiError, HiDriveAuthError) as exc:
+        with transaction.atomic():
+            ExternalPdfAttachment.objects.filter(
+                id=attachment_id,
+                status=ExternalPdfStatus.PENDING_UPLOAD,
+            ).update(status=ExternalPdfStatus.UPLOAD_FAILED)
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        ) from exc
+    finally:
+        if cleanup_tmp and local_tmp is not None:
+            local_tmp.unlink(missing_ok=True)
+
+
+@transaction.atomic
+def _mark_external_pdf_attachment_matched_after_hidrive(
+    *, attachment_id: uuid.UUID
+) -> None:
+    """Phase C (part 1): flip ``PENDING_UPLOAD`` → ``MATCHED`` after HiDrive succeeded."""
+    attachment = ExternalPdfAttachment.objects.select_for_update().get(id=attachment_id)
+    if attachment.status == ExternalPdfStatus.PENDING_UPLOAD:
+        attachment.status = ExternalPdfStatus.MATCHED
+        attachment.save(update_fields=["status"])
+    elif attachment.status != ExternalPdfStatus.MATCHED:
+        raise DomainError(
+            domain_message("other.api.server_error"),
+            api_message_key="other.api.server_error",
+        )
+
+
+def upload_external_pdf_to_incoming(
+    *,
+    medical_document_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> ExternalPdfAttachment:
+    """Validate PDF, commit DB intent, upload to HiDrive, then mark ``MATCHED``.
+
+    Split into phases so HiDrive I/O is not inside the same DB transaction as draft
+    selection (see ``medical_external_upload_upload_view``). Callers that also bind the
+    draft should invoke ``select_external_upload_attachment_for_draft`` afterward, or
+    ``create_external_upload_pdf_and_bind_draft`` for the full create→upload→bind chain.
+    """
+    attachment = _register_external_upload_pdf_pending(
+        medical_document_id=medical_document_id,
+        uploaded_file=uploaded_file,
+        actor_user_id=actor_user_id,
+    )
+    _upload_external_pdf_attachment_to_hidrive(
+        attachment_id=attachment.id,
+        uploaded_file=uploaded_file,
+    )
+    _mark_external_pdf_attachment_matched_after_hidrive(attachment_id=attachment.id)
+    attachment.refresh_from_db()
+    return attachment
+
+
+def get_single_medical_document_for_queue_entry(
+    *, queue_entry_id: uuid.UUID
+) -> MedicalDocument:
+    """Return the medical document for ``queue_entry_id`` if exactly one exists.
+
+    Raises ``MedicalDocument.DoesNotExist`` when there is none. Raises
+    :class:`~apps.core.exceptions.DomainError` when more than one row exists
+    (one-to-one invariant broken) so callers never hit ``MultipleObjectsReturned``.
+    """
+    rows = list(
+        MedicalDocument.objects.filter(queue_entry_id=queue_entry_id).order_by(
+            "created_at"
+        )[:2]
+    )
+    if not rows:
+        raise MedicalDocument.DoesNotExist(
+            "MedicalDocument matching query does not exist."
+        )
+    if len(rows) > 1:
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_multiple_medical_documents_for_queue_entry"
+            ),
+            api_message_key="other.domain.external_upload_multiple_medical_documents_for_queue_entry",
+        )
+    return rows[0]
+
+
+@transaction.atomic
+def create_external_upload_medical_document(
+    *,
+    queue_entry_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
+) -> MedicalDocument:
+    """Create or return the EXTERNAL_UPLOAD medical document for a queue entry.
+
+    Idempotent on ``queue_entry_id``. If a document already exists with another
+    ``source_type``, raises ``DomainError``.
+
+    Requires a ``PatientIntakeForm`` linked to the entry with ``form_status`` in
+    ``{SUBMITTED, REOPENED}`` (reopened = reception corrections before re-submit).
+
+    On first successful create, inserts version ``1`` as ``DRAFT`` with empty
+    ``medical_payload`` and default ``pdf_generation_status=PENDING`` (no local PDF
+    until publish pipeline materializes it).
+
+    ``created_by_user_id`` must refer to an existing :class:`~apps.users.models.StaffUser`
+    with role **Reception**, **Admin**, or **Manager** (defense in depth; the HTTP
+    entrypoint should already enforce ``require_auth`` for the intended role).
+
+    After resolving the document row, the implementation takes a
+    ``SELECT … FOR UPDATE`` on ``MedicalDocument`` for the remainder of the
+    transaction. The locked row is not “used” for business reads beyond holding
+    the lock: it serializes concurrent callers (duplicate HTTP requests,
+    background workers) so bootstrap of draft v1 and in-place document fields
+    cannot interleave on the same document.
+    """
+    try:
+        actor = StaffUser.objects.get(id=created_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    try:
+        QueueEntry.objects.get(pk=queue_entry_id)
+    except QueueEntry.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_not_found"),
+            api_message_key="other.api.queue_entry_not_found",
+        ) from exc
+
+    try:
+        intake_form = PatientIntakeForm.objects.get(queue_entry_id=queue_entry_id)
+    except PatientIntakeForm.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.queue_entry_or_intake_not_found"),
+            api_message_key="other.api.queue_entry_or_intake_not_found",
+        ) from exc
+
+    if intake_form.form_status not in (
+        IntakeStatus.SUBMITTED,
+        IntakeStatus.REOPENED,
+    ):
+        raise DomainError(
+            domain_message("other.domain.external_upload_intake_not_ready"),
+            api_message_key="other.domain.external_upload_intake_not_ready",
+        )
+
+    try:
+        medical_document, created = MedicalDocument.objects.get_or_create(
+            queue_entry_id=queue_entry_id,
+            defaults={
+                "intake_form_id": intake_form.id,
+                "source_type": MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+                "created_by_user_id": created_by_user_id,
+                "updated_by_user_id": created_by_user_id,
+            },
+        )
+    except IntegrityError as exc:
+        try:
+            medical_document = get_single_medical_document_for_queue_entry(
+                queue_entry_id=queue_entry_id
+            )
+        except MedicalDocument.DoesNotExist:
+            raise DomainError(
+                domain_message("other.api.server_error"),
+                api_message_key="other.api.server_error",
+            ) from exc
+        created = False
+
+    if (
+        not created
+        and medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD
+    ):
+        raise DomainError(
+            domain_message("other.domain.medical_document_source_type_mismatch"),
+            api_message_key="other.domain.medical_document_source_type_mismatch",
+        )
+
+    # Row lock on the document (not the queue entry): same rationale as in the
+    # docstring — serialize bootstrap / updates for this medical_document id.
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        pk=medical_document.id
+    )
+
+    if created:
+        _bootstrap_external_upload_draft_v1(
+            medical_document, created_by_user_id=created_by_user_id
+        )
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document.id
+        )
+        create_audit_event(
+            event_type="MEDICAL_DOCUMENT_CREATED",
+            actor_user_id=created_by_user_id,
+            patient_id=doc.queue_entry.patient_id,
+            medical_document_id=doc.id,
+            context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "queue_entry_id": str(queue_entry_id),
+                "intake_form_id": str(intake_form.id),
+                "source_type": doc.source_type,
+                **assigned_doctor_audit_metadata(doc),
+            },
+        )
+        return doc
+
+    if not MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document.id
+    ).exists():
+        _bootstrap_external_upload_draft_v1(
+            medical_document, created_by_user_id=created_by_user_id
+        )
+
+    return MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+        id=medical_document.id
+    )
+
+
+def _hidrive_path_is_external_upload_prefix(path: str) -> bool:
+    """True if *path* is under reception external-upload (incoming or processed)."""
+    raw = (path or "").replace("\\", "/").strip()
+    if not raw:
+        return False
+    if not raw.startswith("/"):
+        raw = "/" + raw
+    parts: list[str] = []
+    for part in PurePosixPath(raw).parts:
+        if part in ("/", "", "."):
+            continue
+        if part == "..":
+            # Reject paths that try to escape the expected subtree.
+            if not parts:
+                return False
+            parts.pop()
+            continue
+        parts.append(part)
+    p = "/" + "/".join(parts)
+    inc = hidrive_incoming_dir()
+    proc = hidrive_processed_dir()
+    inc_prefix = f"{inc}/external-upload"
+    proc_prefix = f"{proc}/external-upload"
+    return (
+        p == inc_prefix
+        or p.startswith(f"{inc_prefix}/")
+        or p == proc_prefix
+        or p.startswith(f"{proc_prefix}/")
+    )
+
+
+@transaction.atomic
+def select_external_upload_attachment_for_draft(
+    *,
+    medical_document_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """Bind the current DRAFT to an ``ExternalPdfAttachment`` (MATCHED or ACCEPTED).
+
+    Updates audit fields on the draft and clears any prior local PDF path/checksum
+    when the operator changes selection. Does not download from HiDrive, does not
+    change attachment status, and does not enqueue outbox work.
+    """
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    try:
+        medical_document = MedicalDocument.objects.select_for_update().get(
+            id=medical_document_id
+        )
+    except MedicalDocument.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.medical_document_not_found"),
+            api_message_key="other.api.medical_document_not_found",
+        ) from exc
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    draft_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    if draft_version is None:
+        raise DomainError(
+            domain_message("other.domain.external_upload_no_active_draft"),
+            api_message_key="other.domain.external_upload_no_active_draft",
+        )
+
+    try:
+        attachment = ExternalPdfAttachment.objects.select_for_update().get(
+            id=attachment_id,
+            medical_document_id=medical_document_id,
+        )
+    except ExternalPdfAttachment.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_not_found"),
+            api_message_key="other.domain.external_upload_attachment_not_found",
+        ) from exc
+
+    if attachment.status not in (
+        ExternalPdfStatus.MATCHED,
+        ExternalPdfStatus.ACCEPTED,
+    ):
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_invalid_status"),
+            api_message_key="other.domain.external_upload_attachment_invalid_status",
+        )
+
+    if not _hidrive_path_is_external_upload_prefix(attachment.hidrive_remote_path):
+        raise DomainError(
+            domain_message("other.domain.external_upload_attachment_path_invalid"),
+            api_message_key="other.domain.external_upload_attachment_path_invalid",
+        )
+
+    now = timezone.now()
+    draft_version.external_selected_attachment_id = attachment.id
+    draft_version.external_original_filename = attachment.original_filename
+    draft_version.external_uploaded_by_user_id = actor_user_id
+    draft_version.external_uploaded_at = now
+    draft_version.pdf_local_path = None
+    draft_version.pdf_checksum_sha256 = None
+    draft_version.pdf_generation_status = PdfStatus.PENDING
+    draft_version.save(
+        update_fields=[
+            "external_selected_attachment",
+            "external_original_filename",
+            "external_uploaded_by_user",
+            "external_uploaded_at",
+            "pdf_local_path",
+            "pdf_checksum_sha256",
+            "pdf_generation_status",
+        ]
+    )
+    return draft_version
+
+
+def create_external_upload_pdf_and_bind_draft(
+    *,
+    queue_entry_id: uuid.UUID,
+    uploaded_file: UploadedFile,
+    actor_user_id: uuid.UUID,
+) -> tuple[MedicalDocument, ExternalPdfAttachment, MedicalDocumentVersion]:
+    """Create or resolve EXTERNAL_UPLOAD document, upload PDF, bind active DRAFT.
+
+    Thin wrapper around ``create_external_upload_medical_document`` →
+    ``upload_external_pdf_to_incoming`` → ``select_external_upload_attachment_for_draft``.
+    There is still **no** single enclosing ``transaction.atomic``: HiDrive I/O sits
+    between DB commits (see those functions' docstrings). Shared by HTML hub and
+    multipart API upload endpoint.
+    """
+    document = create_external_upload_medical_document(
+        queue_entry_id=queue_entry_id,
+        created_by_user_id=actor_user_id,
+    )
+    attachment = upload_external_pdf_to_incoming(
+        medical_document_id=document.id,
+        uploaded_file=uploaded_file,
+        actor_user_id=actor_user_id,
+    )
+    draft_version = select_external_upload_attachment_for_draft(
+        medical_document_id=document.id,
+        attachment_id=attachment.id,
+        actor_user_id=actor_user_id,
+    )
+    return document, attachment, draft_version
 
 
 def _validate_paper_intake_authorization_reason(reason: str) -> str:
@@ -1151,6 +1770,66 @@ def discard_pending_revision(
     return medical_document
 
 
+_PUBLICATION_PIPELINE_OUTBOX_TYPES = (
+    OutboxEventType.GENERATE_PDF,
+    OutboxEventType.HIDRIVE_UPLOAD,
+    OutboxEventType.SMS_SEND,
+)
+_PUBLICATION_PIPELINE_OUTBOX_STATUSES = (
+    OutboxStatus.PENDING,
+    OutboxStatus.PROCESSING,
+    OutboxStatus.FAILED,
+)
+
+
+def _published_version_with_pipeline_in_progress(
+    *,
+    medical_document_id: uuid.UUID,
+) -> MedicalDocumentVersion | None:
+    return (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.PUBLISHED,
+            outbox_events__event_type__in=_PUBLICATION_PIPELINE_OUTBOX_TYPES,
+            outbox_events__status__in=_PUBLICATION_PIPELINE_OUTBOX_STATUSES,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+
+
+def _resolve_publish_against_pipeline_in_progress(
+    *,
+    medical_document_id: uuid.UUID,
+    draft_version: MedicalDocumentVersion | None,
+    latest_draft_version_no: int | None,
+) -> MedicalDocumentVersion | None:
+    """
+    When a published version still has outbox pipeline work:
+    - return that version for same-version idempotent publish retries;
+    - block publishing a newer draft revision while the prior version's pipeline runs.
+    """
+    in_progress_version = _published_version_with_pipeline_in_progress(
+        medical_document_id=medical_document_id
+    )
+    if not in_progress_version:
+        return None
+    if (
+        draft_version is not None
+        and draft_version.version_no > in_progress_version.version_no
+    ):
+        raise DomainError(
+            domain_message("other.domain.publication_pipeline_in_progress"),
+            api_message_key="other.domain.publication_pipeline_in_progress",
+        )
+    if latest_draft_version_no is None or (
+        in_progress_version.version_no >= latest_draft_version_no
+    ):
+        return in_progress_version
+    return None
+
+
 @transaction.atomic
 def publish_document_version(
     *,
@@ -1204,30 +1883,10 @@ def publish_document_version(
             )
         return same_request_version
 
-    in_progress_version = (
-        MedicalDocumentVersion.objects.select_for_update()
-        .filter(
-            medical_document_id=medical_document_id,
-            version_status=DocVersionStatus.PUBLISHED,
-            outbox_events__event_type=OutboxEventType.GENERATE_PDF,
-            outbox_events__status__in=[
-                OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING,
-                OutboxStatus.FAILED,
-            ],
-        )
-        .order_by("-version_no")
-        .first()
-    )
     latest_draft_version_no = MedicalDocumentVersion.objects.filter(
         medical_document_id=medical_document_id,
         version_status=DocVersionStatus.DRAFT,
     ).aggregate(max_no=Max("version_no"))["max_no"]
-    if in_progress_version and (
-        latest_draft_version_no is None
-        or in_progress_version.version_no >= latest_draft_version_no
-    ):
-        return in_progress_version
 
     draft_version = (
         MedicalDocumentVersion.objects.select_for_update()
@@ -1238,6 +1897,14 @@ def publish_document_version(
         .order_by("-version_no")
         .first()
     )
+    in_progress_version = _resolve_publish_against_pipeline_in_progress(
+        medical_document_id=medical_document_id,
+        draft_version=draft_version,
+        latest_draft_version_no=latest_draft_version_no,
+    )
+    if in_progress_version is not None:
+        return in_progress_version
+
     if not draft_version:
         raise DomainError(
             domain_message("other.api.no_draft_before_publish"),
@@ -1343,6 +2010,303 @@ def publish_document_version(
             },
         )
     return draft_version
+
+
+@transaction.atomic
+def publish_external_upload_version(
+    *,
+    medical_document_id: uuid.UUID,
+    publish_request_id: uuid.UUID,
+    published_by_user_id: uuid.UUID,
+    publish_locale: str,
+    resend_sms: bool = False,
+    now: datetime | None = None,
+) -> MedicalDocumentVersion:
+    """Publish latest EXTERNAL_UPLOAD draft; enqueue ``GENERATE_PDF`` like :func:`publish_document_version`.
+
+    Skips Befund medical_payload validation; requires the draft to reference
+    ``external_selected_attachment``. Sets ``external_verified_*`` to the publisher.
+    """
+    try:
+        actor = StaffUser.objects.get(id=published_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    if not publish_request_id:
+        raise IdempotencyConflictError(
+            domain_message("other.api.publish_request_id_required"),
+            api_message_key="other.api.publish_request_id_required",
+        )
+    if not publish_locale:
+        raise DomainError(
+            domain_message("other.domain.publish_locale_required"),
+            api_message_key="other.domain.publish_locale_required",
+        )
+
+    requested_at = now or timezone.now()
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+
+    same_request_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            publish_request_id=publish_request_id,
+        )
+        .first()
+    )
+    if same_request_version:
+        if (
+            same_request_version.publish_locale
+            and same_request_version.publish_locale != publish_locale
+        ):
+            raise IdempotencyConflictError(
+                domain_message("other.api.publish_request_id_locale_conflict"),
+                api_message_key="other.api.publish_request_id_locale_conflict",
+            )
+        return same_request_version
+
+    latest_draft_version_no = MedicalDocumentVersion.objects.filter(
+        medical_document_id=medical_document_id,
+        version_status=DocVersionStatus.DRAFT,
+    ).aggregate(max_no=Max("version_no"))["max_no"]
+
+    draft_version = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=medical_document_id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    in_progress_version = _resolve_publish_against_pipeline_in_progress(
+        medical_document_id=medical_document_id,
+        draft_version=draft_version,
+        latest_draft_version_no=latest_draft_version_no,
+    )
+    if in_progress_version is not None:
+        return in_progress_version
+
+    if not draft_version:
+        raise DomainError(
+            domain_message("other.api.no_draft_before_publish"),
+            api_message_key="other.api.no_draft_before_publish",
+        )
+    if draft_version.external_selected_attachment_id is None:
+        raise DomainError(
+            domain_message(
+                "other.domain.external_upload_publish_no_attachment_selected"
+            ),
+            api_message_key="other.domain.external_upload_publish_no_attachment_selected",
+        )
+
+    draft_version.version_status = DocVersionStatus.PUBLISHED
+    draft_version.publish_request_id = publish_request_id
+    draft_version.publish_requested_by_user_id = published_by_user_id
+    draft_version.publish_locale = publish_locale
+    draft_version.published_by_user_id = published_by_user_id
+    draft_version.published_at = requested_at
+    draft_version.pdf_generation_status = PdfStatus.PENDING
+    draft_version.external_verified_by_user_id = published_by_user_id
+    draft_version.external_verified_at = requested_at
+    draft_version.save(
+        update_fields=[
+            "version_status",
+            "publish_request_id",
+            "publish_requested_by_user",
+            "publish_locale",
+            "published_by_user",
+            "published_at",
+            "pdf_generation_status",
+            "external_verified_by_user",
+            "external_verified_at",
+        ]
+    )
+
+    is_republish = (
+        medical_document.published_version_no is not None
+        and medical_document.published_version_no < draft_version.version_no
+    )
+    previous_published_version_no = medical_document.published_version_no
+
+    medical_document.status = MedicalDocStatus.PUBLISHED
+    medical_document.current_version_no = draft_version.version_no
+    medical_document.published_version_no = draft_version.version_no
+    medical_document.has_pending_revision = False
+    medical_document.last_published_at = requested_at
+    medical_document.updated_by_user_id = published_by_user_id
+    medical_document.locked_by_user_id = None
+    medical_document.locked_at = None
+    medical_document.save(
+        update_fields=[
+            "status",
+            "current_version_no",
+            "published_version_no",
+            "has_pending_revision",
+            "last_published_at",
+            "updated_by_user",
+            "updated_at",
+            "locked_by_user",
+            "locked_at",
+        ]
+    )
+
+    OutboxEvent.objects.get_or_create(
+        medical_document_version=draft_version,
+        event_type=OutboxEventType.GENERATE_PDF,
+        defaults={
+            "aggregate_id": draft_version.id,
+            "payload_schema_version": 1,
+            "payload": {
+                "medical_document_id": str(medical_document.id),
+                "medical_document_version_id": str(draft_version.id),
+                "publish_request_id": str(publish_request_id),
+                "publish_locale": publish_locale,
+                "resend_sms": resend_sms,
+            },
+            "status": OutboxStatus.PENDING,
+        },
+    )
+    create_audit_event(
+        event_type="DOCUMENT_PUBLISHED",
+        actor_user_id=published_by_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(draft_version.id),
+            "version_no": draft_version.version_no,
+            "publish_request_id": str(publish_request_id),
+            "publish_locale": publish_locale,
+            "is_republish": is_republish,
+            "previous_published_version_no": previous_published_version_no,
+            "source_type": medical_document.source_type,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    if is_republish:
+        create_audit_event(
+            event_type="DOCUMENT_REPUBLISHED",
+            actor_user_id=published_by_user_id,
+            patient_id=medical_document.queue_entry.patient_id,
+            medical_document_id=medical_document.id,
+            context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+            metadata={
+                "medical_document_version_id": str(draft_version.id),
+                "new_published_version_no": draft_version.version_no,
+                "previous_published_version_no": previous_published_version_no,
+                "publish_request_id": str(publish_request_id),
+                **assigned_doctor_audit_metadata(medical_document),
+            },
+        )
+    return draft_version
+
+
+@transaction.atomic
+def start_external_upload_revision(
+    *,
+    medical_document_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """Reception path: open a new DRAFT on a PUBLISHED EXTERNAL_UPLOAD document (amend / republish)."""
+    try:
+        actor = StaffUser.objects.get(id=actor_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_act_on_external_upload(actor=actor)
+
+    medical_document = MedicalDocument.objects.select_for_update().get(
+        id=medical_document_id
+    )
+    if medical_document.source_type != MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        raise DomainError(
+            domain_message("other.domain.external_upload_not_external_source"),
+            api_message_key="other.domain.external_upload_not_external_source",
+        )
+    if medical_document.status != MedicalDocStatus.PUBLISHED:
+        raise DomainError(
+            domain_message("other.domain.external_upload_revision_requires_published"),
+            api_message_key="other.domain.external_upload_revision_requires_published",
+        )
+    if medical_document.has_pending_revision:
+        raise DomainError(
+            domain_message("other.domain.external_upload_revision_already_pending"),
+            api_message_key="other.domain.external_upload_revision_already_pending",
+        )
+    if _published_version_with_pipeline_in_progress(
+        medical_document_id=medical_document_id
+    ):
+        raise DomainError(
+            domain_message("other.domain.publication_pipeline_in_progress"),
+            api_message_key="other.domain.publication_pipeline_in_progress",
+        )
+
+    pub_no = medical_document.published_version_no
+    if pub_no is not None:
+        pub_ver = (
+            MedicalDocumentVersion.objects.select_for_update()
+            .filter(
+                medical_document_id=medical_document_id,
+                version_no=pub_no,
+                version_status=DocVersionStatus.PUBLISHED,
+            )
+            .first()
+        )
+        if pub_ver is not None and pub_ver.local_pdf_deleted_at is not None:
+            raise DomainError(
+                domain_message("other.domain.republish_after_retention_not_allowed"),
+                api_message_key="other.domain.republish_after_retention_not_allowed",
+            )
+
+    next_version_no = (
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=medical_document_id
+        ).aggregate(max_no=Max("version_no"))["max_no"]
+        or 0
+    ) + 1
+
+    created_version = MedicalDocumentVersion.objects.create(
+        medical_document_id=medical_document_id,
+        version_no=next_version_no,
+        version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=1,
+        medical_payload={},
+    )
+
+    medical_document.has_pending_revision = True
+    medical_document.updated_by_user_id = actor_user_id
+    medical_document.save(
+        update_fields=["has_pending_revision", "updated_by_user", "updated_at"]
+    )
+    create_audit_event(
+        event_type="DOCUMENT_REVISION_STARTED",
+        actor_user_id=actor_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(created_version.id),
+            "version_no": created_version.version_no,
+            "previous_published_version_no": medical_document.published_version_no,
+            "source_type": medical_document.source_type,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    return created_version
 
 
 @transaction.atomic
@@ -2010,6 +2974,11 @@ def get_medical_document_context(
                     if current_version.published_at
                     else None
                 ),
+                "revoked_at": (
+                    current_version.revoked_at.isoformat()
+                    if current_version.revoked_at
+                    else None
+                ),
             }
         else:
             current_version_payload = {
@@ -2043,6 +3012,11 @@ def get_medical_document_context(
                 "published_at": (
                     current_version.published_at.isoformat()
                     if current_version.published_at
+                    else None
+                ),
+                "revoked_at": (
+                    current_version.revoked_at.isoformat()
+                    if current_version.revoked_at
                     else None
                 ),
             }

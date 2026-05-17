@@ -93,6 +93,9 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
         "No draft version available. Save a draft (PUT .../draft) with validated payload before publishing."
     ),
     "other.api.no_version_to_preview": "No version to preview. Save a draft first.",
+    "other.api.external_upload_attachment_missing": (
+        "The referenced external PDF attachment no longer exists for this document version."
+    ),
     "other.api.only_admin_create_clinic_site": "Only Admin can create clinic sites.",
     "other.api.only_admin_create_consulting_room": "Only Admin can create consulting rooms.",
     "other.api.only_admin_update_clinic_site": "Only Admin can update or deactivate clinic sites.",

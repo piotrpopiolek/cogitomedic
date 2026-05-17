@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from unittest.mock import patch
+from io import BytesIO
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.medical.models import (
+    DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -35,6 +42,14 @@ from apps.users.models import StaffUser
 _PAPER_AUTH_REASON = (
     "Paper intake path authorized for this queue entry in test (long enough)."
 )
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class MedicalApiTests(TestCase):
@@ -64,6 +79,7 @@ class MedicalApiTests(TestCase):
         )
         assign_group_to_test_user(self.admin_user, "Admin")
         clinic = ClinicSite.objects.create(code="API2", name="API Clinic 2")
+        self.reception_user.clinic_sites.add(clinic)
         room = ConsultingRoom.objects.create(clinic_site=clinic, code="B1", name="B1")
         queue = DailyQueue.objects.create(
             queue_date=timezone.now().date(),
@@ -107,6 +123,12 @@ class MedicalApiTests(TestCase):
             anamnesis_payload={"schema_version": 1, "answers": []},
         )
         self.client.force_login(self.doctor_user)
+
+    def _external_upload_file(
+        self, *, name: str = "lab.pdf", content: bytes | None = None
+    ):
+        data = content if content is not None else _minimal_pdf_bytes()
+        return SimpleUploadedFile(name, data, content_type="application/pdf")
 
     def test_medical_document_create_draft_publish_flow(self) -> None:
         create_response = self.client.post(
@@ -2229,3 +2251,451 @@ class DoctorTemplatesApiTests(TestCase):
         )
         self.assertEqual(patch_owner.status_code, 200)
         self.assertFalse(patch_owner.json()["is_active"])
+
+
+class ExternalUploadApiTests(MedicalApiTests):
+    def _queue_entry_on_other_clinic(self) -> QueueEntry:
+        """Queue entry whose daily queue belongs to a clinic not assigned to ``reception_user``."""
+        other_clinic = ClinicSite.objects.create(
+            code="EXT-SCOPE-OTH", name="External upload scope other"
+        )
+        other_room = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="Z9", name="Z9"
+        )
+        other_queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=other_room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin_user,
+            assigned_doctor=self.doctor_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Scope",
+            last_name="OtherSite",
+            date_of_birth=date(1991, 1, 2),
+            phone="+48999888777",
+            email="scope.other@example.com",
+            doctolib_patient_id="DOC-SCOPE-OTH-1",
+        )
+        return QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.admin_user,
+        )
+
+    def test_external_upload_upload_out_of_scope_queue_entry_returns_403(self) -> None:
+        other_entry = self._queue_entry_on_other_clinic()
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(other_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_preview_out_of_scope_returns_403(
+        self, adapter_factory
+    ) -> None:
+        other_entry = self._queue_entry_on_other_clinic()
+        session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            consumed_at=timezone.now(),
+            created_by_user=self.admin_user,
+        )
+        other_entry.active_session = session
+        other_entry.save(update_fields=["active_session", "updated_at"])
+        PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_file_path="/tmp/signature-other.png",
+            signature_sha256="d" * 64,
+            submitted_at=timezone.now(),
+            anamnesis_payload={"schema_version": 1, "answers": []},
+        )
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.admin_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(other_entry.id),
+                "file": self._external_upload_file(name="other-site.pdf"),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+
+        self.client.force_login(self.reception_user)
+        prev = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(prev.status_code, 403)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_happy_path(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        adapter_factory.return_value.upload.return_value = None
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(name="Lab Result.pdf"),
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertIn("document_id", body)
+        self.assertIn("draft_version_id", body)
+        self.assertIn("attachment_id", body)
+        self.assertIn("/external-upload/", body["hidrive_remote_path"])
+        self.assertEqual(body["original_filename"], "Lab_Result.pdf")
+
+        doc = MedicalDocument.objects.get(id=body["document_id"])
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+        att = ExternalPdfAttachment.objects.get(id=body["attachment_id"])
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+
+    def test_external_upload_requires_reception_admin_manager(self) -> None:
+        self.client.force_login(self.doctor_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch("apps.medical.services.EXTERNAL_UPLOAD_MAX_BYTES", 10)
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_too_large_returns_413(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        upload = self._external_upload_file()
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={"queue_entry_id": str(self.queue_entry.id), "file": upload},
+        )
+        self.assertEqual(response.status_code, 413)
+        adapter_factory.assert_not_called()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_invalid_mime_returns_415(self, adapter_factory) -> None:
+        self.client.force_login(self.reception_user)
+        bad = SimpleUploadedFile("x.txt", b"%PDF-1.4\nx", content_type="text/plain")
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={"queue_entry_id": str(self.queue_entry.id), "file": bad},
+        )
+        self.assertEqual(response.status_code, 415)
+        adapter_factory.assert_not_called()
+
+    @patch(
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        side_effect=DomainError(
+            "not found",
+            api_message_key="other.api.medical_document_not_found",
+        ),
+    )
+    def test_external_upload_medical_document_not_found_returns_404(
+        self, _mock_bind: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @patch(
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        side_effect=DomainError(
+            "forbidden",
+            api_message_key="other.domain.external_upload_staff_role_required",
+        ),
+    )
+    def test_external_upload_staff_role_required_returns_403(
+        self, _mock_bind: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @patch(
+        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        side_effect=DomainError(
+            "no staff",
+            api_message_key="other.api.staff_user_not_found",
+        ),
+    )
+    def test_external_upload_staff_user_not_found_returns_404(
+        self, _mock_bind: object
+    ) -> None:
+        self.client.force_login(self.reception_user)
+        response = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_select_preview_publish_revision_flow(
+        self, adapter_factory: MagicMock, mock_download: MagicMock
+    ) -> None:
+        mock_download.return_value = _minimal_pdf_bytes()
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        self.assertEqual(sel.json()["attachment_id"], att_id)
+
+        prev = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(prev.status_code, 200)
+        self.assertEqual(prev["Content-Type"], "application/pdf")
+
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                    "resend_sms": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 200, pub.content)
+        v = MedicalDocumentVersion.objects.get(
+            id=pub.json()["medical_document_version_id"]
+        )
+        self.assertEqual(v.version_status, DocVersionStatus.PUBLISHED)
+        self.assertTrue(
+            OutboxEvent.objects.filter(
+                medical_document_version_id=v.id,
+                event_type=OutboxEventType.GENERATE_PDF,
+            ).exists()
+        )
+        OutboxEvent.objects.filter(medical_document_version_id=v.id).update(
+            status=OutboxStatus.PROCESSED
+        )
+
+        rev = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(rev.status_code, 201, rev.content)
+        self.assertEqual(rev.json()["version_status"], DocVersionStatus.DRAFT)
+        doc = MedicalDocument.objects.get(id=doc_id)
+        self.assertTrue(doc.has_pending_revision)
+
+        rev2 = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(rev2.status_code, 409)
+
+    def test_external_upload_publish_without_attachment_returns_422(
+        self,
+    ) -> None:
+        with patch("apps.medical.services.get_hidrive_adapter") as adapter_factory:
+            adapter_factory.return_value.upload.return_value = None
+            self.client.force_login(self.reception_user)
+            up = self.client.post(
+                "/api/v1/medical-documents/external-upload/upload",
+                data={
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "file": self._external_upload_file(),
+                },
+            )
+        self.assertEqual(up.status_code, 201)
+        doc_id = up.json()["document_id"]
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=doc_id, version_status=DocVersionStatus.DRAFT
+        ).update(
+            external_selected_attachment_id=None,
+            external_original_filename=None,
+            external_uploaded_by_user_id=None,
+            external_uploaded_at=None,
+        )
+        self.client.force_login(self.reception_user)
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 422)
+
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_preview_returns_404_when_attachment_row_deleted(
+        self, adapter_factory: MagicMock, mock_download: MagicMock
+    ) -> None:
+        """Preview maps missing attachment row to 404; FK is PROTECT so we stub .get()."""
+        mock_download.return_value = _minimal_pdf_bytes()
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        with patch.object(
+            ExternalPdfAttachment.objects,
+            "get",
+            side_effect=ExternalPdfAttachment.DoesNotExist,
+        ):
+            prev = self.client.get(
+                f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+            )
+        self.assertEqual(prev.status_code, 404)
+
+    def test_external_upload_endpoints_forbidden_for_doctor(self) -> None:
+        with patch("apps.medical.services.get_hidrive_adapter") as adapter_factory:
+            adapter_factory.return_value.upload.return_value = None
+            self.client.force_login(self.reception_user)
+            up = self.client.post(
+                "/api/v1/medical-documents/external-upload/upload",
+                data={
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "file": self._external_upload_file(),
+                },
+            )
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        self.client.force_login(self.doctor_user)
+        for method, path, body in (
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+                {"attachment_id": att_id},
+            ),
+            (
+                "get",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf",
+                None,
+            ),
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                },
+            ),
+            (
+                "post",
+                f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+                {},
+            ),
+        ):
+            if method == "get":
+                r = self.client.get(path)
+            else:
+                r = self.client.post(
+                    path,
+                    data=json.dumps(body),
+                    content_type="application/json",
+                )
+            self.assertEqual(r.status_code, 403, (path, r.content))
+
+    @patch("apps.medical.api_views.download_external_pdf")
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_external_upload_doctor_raw_pdf_via_medical_document_preview_pdf(
+        self, adapter_factory: MagicMock, mock_download: MagicMock
+    ) -> None:
+        """Doctors must not call external-upload/preview-pdf; ``preview-pdf`` returns raw lab bytes."""
+        raw_lab_pdf = _minimal_pdf_bytes()
+        mock_download.return_value = raw_lab_pdf
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(self.queue_entry.id),
+                "file": self._external_upload_file(),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+
+        self.client.force_login(self.doctor_user)
+        ext_only = self.client.get(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/preview-pdf"
+        )
+        self.assertEqual(ext_only.status_code, 403)
+
+        merged_url = f"/api/v1/medical-documents/{doc_id}/preview-pdf"
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes"
+        ) as merge_mock:
+            merge_mock.side_effect = AssertionError(
+                "EXTERNAL_UPLOAD document preview must stream raw lab PDF, "
+                "not build_merged_preview_pdf_bytes"
+            )
+            preview = self.client.get(merged_url)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview["Content-Type"], "application/pdf")
+        self.assertEqual(bytes(preview.content), raw_lab_pdf)
+        merge_mock.assert_not_called()

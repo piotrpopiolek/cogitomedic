@@ -829,6 +829,36 @@
     "en": "Published by",
     "pl": "Opublikował"
   },
+  "administration.field_external_selected_attachment": {
+    "de": "Ausgewählter externer PDF-Anhang",
+    "en": "External selected PDF attachment",
+    "pl": "Wybrany zewnętrzny załącznik PDF"
+  },
+  "administration.field_external_original_filename": {
+    "de": "Ursprünglicher Dateiname",
+    "en": "External original filename",
+    "pl": "Oryginalna nazwa pliku"
+  },
+  "administration.field_external_uploaded_by_user": {
+    "de": "Externe Datei verknüpft von",
+    "en": "External file linked by",
+    "pl": "Plik powiązał"
+  },
+  "administration.field_external_uploaded_at": {
+    "de": "Externe Datei verknüpft am",
+    "en": "External file linked at",
+    "pl": "Powiązanie pliku"
+  },
+  "administration.field_external_verified_by_user": {
+    "de": "Veröffentlichung bestätigt von",
+    "en": "External publish verified by",
+    "pl": "Publikację potwierdził"
+  },
+  "administration.field_external_verified_at": {
+    "de": "Veröffentlichung bestätigt am",
+    "en": "External publish verified at",
+    "pl": "Potwierdzenie publikacji"
+  },
   "administration.field_actor_user": {
     "de": "Akteur",
     "en": "Actor user",

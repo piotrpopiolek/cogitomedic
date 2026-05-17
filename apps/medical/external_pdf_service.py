@@ -87,6 +87,32 @@ def _pdf_basename_from_listing_entry(entry: dict[str, Any]) -> str | None:
     return None
 
 
+def _normalize_incoming_logical_path(path: str) -> str:
+    p = (path or "").strip().replace("\\", "/")
+    if not p:
+        return ""
+    return p if p.startswith("/") else f"/{p}"
+
+
+def _full_incoming_pdf_path(entry: dict[str, Any], inc: str, pdf_name: str) -> str:
+    """Absolute HiDrive path for a PDF listing row under ``inc`` (prefers ``entry['path']``)."""
+    path = str(entry.get("path") or "").strip().replace("\\", "/")
+    if path:
+        return _normalize_incoming_logical_path(path)
+    inc_root = _normalize_incoming_logical_path(inc).rstrip("/") or "/incoming"
+    return _normalize_incoming_logical_path(f"{inc_root}/{pdf_name}")
+
+
+def _is_reception_external_upload_incoming_path(full_path: str, inc: str) -> bool:
+    """True if *full_path* is under ``{inc}/external-upload/`` (reception app uploads, not lab /incoming)."""
+    p = _normalize_incoming_logical_path(full_path)
+    inc_n = _normalize_incoming_logical_path(inc).rstrip("/")
+    if not p or not inc_n:
+        return False
+    prefix = f"{inc_n}/external-upload"
+    return p == prefix or p.startswith(f"{prefix}/")
+
+
 def _ambiguous_undated_stem(stem: str) -> bool:
     """More than one patient matches this stem without using a DOB-specific filename."""
     norm = normalize_name(_stem_without_pdf(stem))
@@ -139,6 +165,13 @@ def check_external_pdf_gate(
         pdf_name = _pdf_basename_from_listing_entry(entry)
         if not pdf_name:
             continue
+        full_path = _full_incoming_pdf_path(entry, inc, pdf_name)
+        if _is_reception_external_upload_incoming_path(full_path, inc):
+            logger.info(
+                "external_pdf_gate: skip reception external-upload path=%s",
+                full_path,
+            )
+            continue
         pdf_rows.append((entry, pdf_name))
 
     if not pdf_rows:
@@ -161,7 +194,7 @@ def check_external_pdf_gate(
             if _ambiguous_undated_stem(stem):
                 skipped_ambiguous = True
                 continue
-        logical_path = f"{inc}/{pdf_name}".replace("//", "/")
+        logical_path = _full_incoming_pdf_path(_entry, inc, pdf_name)
         matched.append(MatchedIncomingFile(name=pdf_name, path=logical_path))
 
     if not matched:

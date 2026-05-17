@@ -13,6 +13,9 @@ Optional .env for patient portal flow during seed:
 
 Usage (from repo root):
   python scripts/capture_manual_screenshots.py --base-url http://127.0.0.1:8000
+  # Tylko zrzuty docs/manual/06 (bez pełnego importu Django na hoście — najpierw seed w docelowej bazie):
+  SCREENSHOT_SKIP_DJANGO=1 python scripts/capture_manual_screenshots.py \\
+    --only=reception-patient-personal-data --base-url http://127.0.0.1:8000
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from scripts.manual_demo import (
     cookie_domain,
     login_admin,
     login_doctor,
+    login_reception,
     login_tablet,
     seed_manual_demo,
     setup_django,
@@ -70,19 +74,83 @@ def _shot(page, name: str) -> None:
     page.screenshot(path=str(path), full_page=True)
 
 
+def capture_reception_patient_personal_data_screenshots(
+    page, base: str, pwd: str, shot_fn
+) -> None:
+    """Zrzuty dla docs/manual/06-zmiana-danych-pacjenta.md (rola Reception).
+
+    Scenariusz: zmiana **imienia, nazwiska, daty urodzenia i telefonu** (stan wyjściowy
+    pacjenta demo po seedzie — Anna Demo / 1985-05-15 / 1111111111111).
+    Po zrzutach dane przywracane są w formularzu; pełny `seed_manual_demo` utrwala baseline w bazie.
+    """
+    patient_changelist = f"{base}/admin/reception/patient/"
+    baseline = ("Anna", "Demo", "1985-05-15", "1111111111111")
+    edited = ("Marianna", "Kowalska", "1992-08-14", "1222222222222")
+
+    page.context.clear_cookies()
+    login_reception(page, base, pwd)
+    page.goto(patient_changelist, wait_until="networkidle")
+    shot_fn(page, "reception-patient-01-changelist.png")
+    # E-mail demo jest jednoznaczny na liście (uniknie wybrania „innego” Kowalskiego/Demo).
+    page.locator('input[name="q"]').fill("anna.demo@example.invalid")
+    page.locator("#changelist-search button[type='submit']").click()
+    page.wait_for_load_state("networkidle")
+    shot_fn(page, "reception-patient-02-search-results.png")
+    page.locator("table#result_list tbody tr").first.locator("th a").click()
+    page.wait_for_load_state("networkidle")
+    shot_fn(page, "reception-patient-03-identity-before-edit.png")
+    page.locator('input[name="first_name"]').fill(edited[0])
+    page.locator('input[name="last_name"]').fill(edited[1])
+    page.locator('input[name="date_of_birth"]').fill(edited[2])
+    page.locator('input[name="phone"]').fill(edited[3])
+    page.locator('input[name="first_name"]').scroll_into_view_if_needed()
+    page.wait_for_timeout(200)
+    shot_fn(page, "reception-patient-04-identity-after-edit.png")
+    page.locator('[name="_save"]').first.click()
+    page.wait_for_load_state("networkidle")
+    shot_fn(page, "reception-patient-05-save-confirmation.png")
+    # Przywróć baseline w DB (bez zrzutu). Po zapisie widok może nie być klasycznym formularzem — znów otwórz rekord z listy.
+    page.goto(patient_changelist, wait_until="networkidle")
+    page.locator('input[name="q"]').fill("anna.demo@example.invalid")
+    page.locator("#changelist-search button[type='submit']").click()
+    page.wait_for_load_state("networkidle")
+    page.locator("table#result_list tbody tr").first.locator("th a").click()
+    page.wait_for_load_state("networkidle")
+    page.locator('input[name="first_name"]').fill(baseline[0])
+    page.locator('input[name="last_name"]').fill(baseline[1])
+    page.locator('input[name="date_of_birth"]').fill(baseline[2])
+    page.locator('input[name="phone"]').fill(baseline[3])
+    page.locator('[name="_save"]').first.click()
+    page.wait_for_load_state("networkidle")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--base-url",
         default=os.environ.get("SCREENSHOT_BASE_URL", "http://127.0.0.1:8000"),
     )
+    parser.add_argument(
+        "--only",
+        choices=("all", "reception-patient-personal-data"),
+        default="all",
+        help="Domyślnie pełny zestaw z checklisty; wąski tryb tylko dla rozdz. 06.",
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
-    setup_django()
-    ctx: dict = {}
-    seed_manual_demo(ctx)
-    pwd = ctx["password"]
+    skip_django = (
+        os.environ.get("SCREENSHOT_SKIP_DJANGO", "").strip().lower()
+        in ("1", "true", "yes")
+        and args.only == "reception-patient-personal-data"
+    )
+    if skip_django:
+        pwd = os.environ.get("SCREENSHOT_DEMO_PASSWORD", "ScreenshotDemo2026!")
+    else:
+        setup_django()
+        ctx: dict = {}
+        seed_manual_demo(ctx)
+        pwd = ctx["password"]
 
     try:
         from playwright.sync_api import sync_playwright
@@ -94,13 +162,20 @@ def main() -> int:
         return 1
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    _draw_overview_png(OUTPUT_DIR / "overview-01-process-diagram.png")
+    if args.only == "all":
+        _draw_overview_png(OUTPUT_DIR / "overview-01-process-diagram.png")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
         # --- Public / login pages ---
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        if args.only == "reception-patient-personal-data":
+            capture_reception_patient_personal_data_screenshots(page, base, pwd, _shot)
+            browser.close()
+            print(f"Done (reception-patient-personal-data). PNG in {OUTPUT_DIR}")
+            return 0
+
         page.goto(f"{base}/admin/login/", wait_until="networkidle")
         _shot(page, "reception-01-admin-login.png")
 
@@ -159,6 +234,9 @@ def main() -> int:
             wait_until="networkidle",
         )
         _shot(page, "admin-02-staff-user.png")
+
+        # --- Reception: zmiana danych pacjenta (docs/manual/06-zmiana-danych-pacjenta.md) ---
+        capture_reception_patient_personal_data_screenshots(page, base, pwd, _shot)
 
         # --- Doctor ---
         page.context.clear_cookies()

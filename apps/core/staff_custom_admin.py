@@ -57,14 +57,46 @@ def ensure_admin_manager_staff(request: Any) -> HttpResponseForbidden | None:
     return None
 
 
+def is_reception_admin_or_manager_staff(user: Any) -> bool:
+    """True for staff who may use the external-upload hub (same roles as the REST API)."""
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            getattr(user, "is_reception", False)
+            or getattr(user, "is_admin_role", False)
+            or getattr(user, "is_manager", False)
+        )
+    )
+
+
+def ensure_reception_admin_manager_staff(request: Any) -> HttpResponseForbidden | None:
+    """Return 403 if the user is not Reception, Admin, or Manager."""
+    if not is_reception_admin_or_manager_staff(request.user):
+        return HttpResponseForbidden(
+            resolve_other_message(
+                request,
+                "administration.external_upload_hub_staff_only",
+                "Only reception, administrators, or managers can use this page.",
+            )
+        )
+    return None
+
+
 def ensure_clinic_site_visible_to_staff_user(
     request: Any, clinic_site_id: uuid.UUID
 ) -> HttpResponseForbidden | None:
     """
-    Enforce the same clinic-site scope as API views using ``get_scoped_clinic_site_ids``.
+    Enforce clinic-site scope using ``get_scoped_clinic_site_ids`` (same rule as scoped APIs).
 
-    Admins (``scope_ids is None``) see all sites. Managers/reception/doctor tablet
-    scopes are limited to assigned clinic_site ids.
+    Admins (``scope_ids is None``) pass. Other roles that carry site assignments—manager,
+    reception, doctor, tablet—are limited to their assigned ``clinic_site`` ids; an
+    empty scope never matches.
+
+    Which roles may open a given custom admin page is enforced separately (e.g. the
+    external-upload hub allows reception / admin / manager only). This helper does
+    not imply doctor or tablet access to those pages; it only checks whether
+    *clinic_site_id* lies in the user's scoped sites when scope applies.
     """
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and clinic_site_id not in scope_ids:

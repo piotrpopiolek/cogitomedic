@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import inspect
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, IdempotencyConflictError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
+    MedicalDocumentVersion,
     PaperIntakeAuthorization,
 )
 from apps.medical.services import (
@@ -26,12 +28,13 @@ from apps.medical.services import (
     create_or_get_medical_document,
     get_medical_document_context,
     publish_document_version,
+    revoke_document_version,
     revoke_paper_intake_authorization,
     save_draft_document_version,
 )
 from apps.operations.models import AuditEvent
 from apps.operations.services import REF_KEY
-from apps.outbox.models import OutboxEvent, OutboxEventType
+from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from django.core.exceptions import ObjectDoesNotExist
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -856,6 +859,55 @@ class MedicalServicesTests(TestCase):
             1,
         )
 
+    def test_publish_document_version_same_request_id_conflicting_locale_raises(
+        self,
+    ) -> None:
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        request_id = uuid4()
+        published = publish_document_version(
+            medical_document_id=self.medical_document.id,
+            publish_request_id=request_id,
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+        self.assertEqual(
+            OutboxEvent.objects.filter(
+                medical_document_version=published,
+                event_type=OutboxEventType.GENERATE_PDF,
+            ).count(),
+            1,
+        )
+        with self.assertRaises(IdempotencyConflictError) as ctx:
+            publish_document_version(
+                medical_document_id=self.medical_document.id,
+                publish_request_id=request_id,
+                published_by_user_id=self.doctor_user.id,
+                publish_locale="en-GB",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.api.publish_request_id_locale_conflict",
+        )
+        self.assertEqual(
+            OutboxEvent.objects.filter(
+                medical_document_version=published,
+                event_type=OutboxEventType.GENERATE_PDF,
+            ).count(),
+            1,
+        )
+
     def test_publish_document_version_returns_in_progress_publication(self) -> None:
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
@@ -1087,6 +1139,9 @@ class DocumentRevisionStateTests(MedicalServicesTests):
             published_by_user_id=self.doctor_user.id,
             publish_locale="de-DE",
         )
+        OutboxEvent.objects.filter(medical_document_version=published).update(
+            status=OutboxStatus.PROCESSED
+        )
         self.medical_document.refresh_from_db()
         return published
 
@@ -1260,4 +1315,58 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertEqual(republished_audit.metadata.get("new_published_version_no"), 2)
         self.assertEqual(
             republished_audit.metadata.get("previous_published_version_no"), 1
+        )
+
+    @patch("apps.medical.services._try_delete_file")
+    def test_revoke_document_version_after_full_delivery(
+        self, mock_delete_file: MagicMock
+    ) -> None:
+        published = self._publish_initial_version()
+        now = timezone.now()
+        MedicalDocumentVersion.objects.filter(id=published.id).update(
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=True,
+            sms_sent_at=now,
+            pdf_local_path="/media/befund/test.pdf",
+        )
+        published.refresh_from_db()
+
+        revoked = revoke_document_version(
+            medical_document_id=self.medical_document.id,
+            revoked_by_user_id=self.doctor_user.id,
+        )
+
+        self.medical_document.refresh_from_db()
+        revoked.refresh_from_db()
+        self.assertIsNotNone(revoked.revoked_at)
+        self.assertIsNone(revoked.pdf_local_path)
+        self.assertIsNotNone(revoked.local_pdf_deleted_at)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertEqual(self.medical_document.current_version_no, 1)
+        self.assertEqual(self.medical_document.published_version_no, 1)
+        self.assertFalse(self.medical_document.has_pending_revision)
+        mock_delete_file.assert_called_once_with("/media/befund/test.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(event_type="DOCUMENT_REVOKED").exists()
+        )
+
+    def test_revoke_document_version_without_hidrive_raises_domain_error(
+        self,
+    ) -> None:
+        published = self._publish_initial_version()
+        MedicalDocumentVersion.objects.filter(id=published.id).update(
+            hidrive_sent=False,
+            hidrive_sent_at=None,
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+        )
+        with self.assertRaises(DomainError) as ctx:
+            revoke_document_version(
+                medical_document_id=self.medical_document.id,
+                revoked_by_user_id=self.doctor_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.revoke_requires_full_delivery",
         )
