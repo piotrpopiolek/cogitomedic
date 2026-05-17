@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.db import IntegrityError, transaction
@@ -15,6 +16,7 @@ from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
+    MedicalDocumentVersion,
     PaperIntakeAuthorization,
 )
 from apps.medical.services import (
@@ -26,6 +28,7 @@ from apps.medical.services import (
     create_or_get_medical_document,
     get_medical_document_context,
     publish_document_version,
+    revoke_document_version,
     revoke_paper_intake_authorization,
     save_draft_document_version,
 )
@@ -1309,4 +1312,58 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertEqual(republished_audit.metadata.get("new_published_version_no"), 2)
         self.assertEqual(
             republished_audit.metadata.get("previous_published_version_no"), 1
+        )
+
+    @patch("apps.medical.services._try_delete_file")
+    def test_revoke_document_version_after_full_delivery(
+        self, mock_delete_file: MagicMock
+    ) -> None:
+        published = self._publish_initial_version()
+        now = timezone.now()
+        MedicalDocumentVersion.objects.filter(id=published.id).update(
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=True,
+            sms_sent_at=now,
+            pdf_local_path="/media/befund/test.pdf",
+        )
+        published.refresh_from_db()
+
+        revoked = revoke_document_version(
+            medical_document_id=self.medical_document.id,
+            revoked_by_user_id=self.doctor_user.id,
+        )
+
+        self.medical_document.refresh_from_db()
+        revoked.refresh_from_db()
+        self.assertIsNotNone(revoked.revoked_at)
+        self.assertIsNone(revoked.pdf_local_path)
+        self.assertIsNotNone(revoked.local_pdf_deleted_at)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertEqual(self.medical_document.current_version_no, 1)
+        self.assertEqual(self.medical_document.published_version_no, 1)
+        self.assertFalse(self.medical_document.has_pending_revision)
+        mock_delete_file.assert_called_once_with("/media/befund/test.pdf")
+        self.assertTrue(
+            AuditEvent.objects.filter(event_type="DOCUMENT_REVOKED").exists()
+        )
+
+    def test_revoke_document_version_without_hidrive_raises_domain_error(
+        self,
+    ) -> None:
+        published = self._publish_initial_version()
+        MedicalDocumentVersion.objects.filter(id=published.id).update(
+            hidrive_sent=False,
+            hidrive_sent_at=None,
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+        )
+        with self.assertRaises(DomainError) as ctx:
+            revoke_document_version(
+                medical_document_id=self.medical_document.id,
+                revoked_by_user_id=self.doctor_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.revoke_requires_full_delivery",
         )

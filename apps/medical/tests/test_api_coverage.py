@@ -566,6 +566,25 @@ class Tests(TestCase):
         r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
         self.assertEqual(r.status_code, 410)
 
+    @override_settings(DEBUG=False, HIDRIVE_USE_MOCK="1")
+    @patch(
+        "apps.medical.api_views.download_external_pdf",
+        side_effect=RuntimeError("hidrive down"),
+    )
+    def test_external_pdf_content_infra_error_returns_502(
+        self, _mock_dl: object
+    ) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("error", r.json())
+
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_external_pdf_content_corrupt_returns_422(self) -> None:
         from apps.integrations.hidrive import client as hidrive_client
