@@ -17,6 +17,34 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 | 8   | `reception-08-intake-document-detail.png` | Szczegóły intake + PDF        |
 
 
+## Wgranie zewnętrznego badania (`07-wgranie-zewnetrznego-badania`)
+
+Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard recepcji (skróty), `/admin/external-upload/`, `/admin/external-upload/<uuid>/`. Pliki PNG w `assets/screenshots/` — zgodnie z [assets/screenshots/README.md](/docs/manual/assets/screenshots/README.md); automatyzacja: [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py).
+
+| #   | Plik | Ekran / uwagi |
+| --- | ---- | ------------- |
+| 0   | `reception-external-upload-00-sidebar.png` | Fragment sidebara z sekcją „Zewnętrzne badanie” (link do huba) |
+| 1   | `reception-external-upload-01-hub.png` | `/admin/external-upload/` — filtr statusu intake + pole wyboru wpisu w jednej karcie |
+| 2   | `reception-external-upload-02-entry-identity.png` | `/admin/external-upload/<uuid>/` — blok tożsamości pacjenta / wizyty |
+| 3   | `reception-external-upload-03-entry-upload-select.png` | Ten sam URL: upload PDF + lista załączników / radio wybór (wg stanu danych) |
+| 4   | `reception-external-upload-04-preview.png` | Link „Open PDF preview” (opcjonalnie karta z podglądem w przeglądarce) |
+| 5   | `reception-external-upload-05-publish-confirm.png` | Formularz publikacji: locale, checkbox SMS, drugie potwierdzenie, Publish |
+
+
+## Zmiana danych pacjenta (`06-zmiana-danych-pacjenta`)
+
+
+| #   | Plik | Ekran |
+| --- | ---- | ----- |
+| 1   | `reception-patient-01-changelist.png` | `/admin/reception/patient/` — lista |
+| 2   | `reception-patient-02-search-results.png` | Lista po wyszukiwaniu (demo: jednoznaczny e-mail) |
+| 3   | `reception-patient-03-identity-before-edit.png` | Edycja — imię, nazwisko, DOB, telefon **przed** zmianą |
+| 4   | `reception-patient-04-identity-after-edit.png` | Te same pola **po** wpisaniu nowych wartości, przed **Save** |
+| 5   | `reception-patient-05-save-confirmation.png` | Komunikat sukcesu po zapisie korekty tożsamości/kontaktu |
+
+*Logowanie do admina: wspólny zrzut `reception-01-admin-login.png` (rozdział recepcja).*
+
+
 ## Tablet (`02-tablet`)
 
 

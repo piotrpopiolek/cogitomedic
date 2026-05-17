@@ -1,6 +1,6 @@
 # Zrzuty ekranu do instrukcji
 
-Komplet plików z [screenshot-checklist.md](../../screenshot-checklist.md) (29 PNG + diagram przeglądu) powinien być w tym katalogu; odświeżenie: `docker compose --profile screenshots run --rm screenshots`. W rozdziałach instrukcji obrazy wstawiane są ścieżką od korzenia repozytorium, np. `/docs/manual/assets/screenshots/reception-01-admin-login.png` — dzięki temu podgląd Markdown w edytorze (Cursor/VS Code) poprawnie ładuje pliki PNG.
+Komplet plików z [screenshot-checklist.md](../../screenshot-checklist.md) (34 PNG + diagram przeglądu) powinien być w tym katalogu; odświeżenie: `docker compose --profile screenshots run --rm screenshots` (lub wyłącznie zrzuty rozdz. 06: `SCREENSHOT_SKIP_DJANGO=1 python scripts/capture_manual_screenshots.py --only=reception-patient-personal-data --base-url …` po `seed_manual_demo` w docelowej bazie — zob. [06-zmiana-danych-pacjenta.md](../../06-zmiana-danych-pacjenta.md)). W rozdziałach instrukcji obrazy wstawiane są ścieżką od korzenia repozytorium, np. `/docs/manual/assets/screenshots/reception-01-admin-login.png` — dzięki temu podgląd Markdown w edytorze (Cursor/VS Code) poprawnie ładuje pliki PNG.
 
 Ręczne zrzuty: umieść plik pod tą samą nazwą co w checklistie, z **danymi zanonimizowanymi**.
 

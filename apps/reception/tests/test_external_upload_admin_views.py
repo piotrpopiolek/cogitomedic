@@ -1,0 +1,633 @@
+from __future__ import annotations
+
+import re
+import uuid
+from datetime import date, timedelta
+from io import BytesIO
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, RequestFactory, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+from pypdf import PdfWriter
+
+from apps.core.api_utils import assign_group_to_test_user
+from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.reception import external_upload_admin_views as ext_hub_views
+from apps.medical.models import (
+    ExternalPdfAttachment,
+    MedicalDocument,
+    MedicalDocumentVersion,
+)
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    PatientFormSession,
+    QueueEntry,
+    QueueEntryStatus,
+    QueueStatus,
+)
+from apps.users.models import StaffUser
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+class ExternalUploadAdminHubViewsTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.factory = RequestFactory()
+        self.reception = StaffUser.objects.create_user(
+            username="rec-ext-ui",
+            email="rec.ext.ui@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.reception, "Reception")
+        self.admin = StaffUser.objects.create_user(
+            username="adm-ext-ui",
+            email="adm.ext.ui@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.admin, "Admin")
+        self.doctor = StaffUser.objects.create_user(
+            username="doc-ext-ui",
+            email="doc.ext.ui@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor, "Doctor")
+
+        self.clinic = ClinicSite.objects.create(code="EUI", name="External UI Clinic")
+        self.reception.clinic_sites.add(self.clinic)
+        room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="E1", name="E1"
+        )
+        self.queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=self.clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.reception,
+            assigned_doctor=self.doctor,
+        )
+        self.patient = Patient.objects.create(
+            first_name="Ext",
+            last_name="UiPatient",
+            date_of_birth=date(1992, 2, 2),
+            phone="+48111222334",
+            email="ext.ui@example.com",
+        )
+        self.entry = QueueEntry.objects.create(
+            daily_queue=self.queue,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=2),
+            created_by_user=self.reception,
+        )
+        session = PatientFormSession.create_session(
+            self.entry,
+            created_by_user_id=self.reception.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=self.entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+
+    def test_hub_forbidden_for_doctor(self) -> None:
+        self.client.force_login(self.doctor)
+        r = self.client.get(reverse("admin_external_upload_hub"))
+        self.assertEqual(r.status_code, 403)
+
+    def test_hub_ok_for_reception(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(reverse("admin_external_upload_hub"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_hub_ok_for_admin(self) -> None:
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("admin_external_upload_hub"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_hub_queryset_includes_submitted_intake_entry(self) -> None:
+        request = self.factory.get("/admin/external-upload/")
+        request.user = self.admin
+        qs = ext_hub_views._external_upload_hub_queryset(request, form_status="all")
+        self.assertIn(self.entry.id, set(qs.values_list("id", flat=True)))
+
+    def test_hub_queryset_submitted_branch_matches_submitted_status_only(self) -> None:
+        request = self.factory.get("/admin/external-upload/")
+        request.user = self.admin
+        qs_sub = ext_hub_views._external_upload_hub_queryset(
+            request, form_status="submitted"
+        )
+        self.assertIn(self.entry.id, set(qs_sub.values_list("id", flat=True)))
+
+    def test_hub_queryset_reopened_branch(self) -> None:
+        clinic = ClinicSite.objects.create(code="EUR", name="Ext Reopen Clinic")
+        self.reception.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R2", name="R2")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.reception,
+            assigned_doctor=self.doctor,
+        )
+        patient = Patient.objects.create(
+            first_name="Reo",
+            last_name="PenPatient",
+            date_of_birth=date(1991, 1, 11),
+            phone="+48111222339",
+            email="reopen.pen@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.reception,
+        )
+        session = PatientFormSession.create_session(
+            entry,
+            created_by_user_id=self.reception.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+            submitted_at=timezone.now(),
+            signature_sha256="d" * 64,
+        )
+        request = self.factory.get("/admin/external-upload/")
+        request.user = self.admin
+        qs_re = ext_hub_views._external_upload_hub_queryset(
+            request, form_status="reopened"
+        )
+        self.assertIn(entry.id, set(qs_re.values_list("id", flat=True)))
+
+    def test_hub_pick_redirects(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry": str(self.entry.id)},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertIn(str(self.entry.id), r["Location"])
+
+    def test_hub_legacy_queue_entry_id_redirects(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(self.entry.id)},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertIn(str(self.entry.id), r["Location"])
+
+    def test_hub_legacy_unknown_queue_entry_returns_404(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(uuid.uuid4())},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_hub_legacy_out_of_scope_returns_403(self) -> None:
+        other_clinic = ClinicSite.objects.create(code="EUX2", name="Other Clinic 2")
+        room2 = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="X2", name="X2"
+        )
+        dq2 = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=room2,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin,
+            assigned_doctor=self.doctor,
+        )
+        entry2 = QueueEntry.objects.create(
+            daily_queue=dq2,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.admin,
+        )
+        s2 = PatientFormSession.create_session(
+            entry2,
+            created_by_user_id=self.admin.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry2,
+            session=s2,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": str(entry2.id)},
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_preview_pdf_url_uses_setting_when_set(self) -> None:
+        req = self.factory.get("/admin/external-upload/")
+        mid = uuid.uuid4()
+        with override_settings(
+            EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL="https://api.example.test"
+        ):
+            url = ext_hub_views._external_upload_preview_pdf_url(
+                req, medical_document_id=mid
+            )
+        self.assertTrue(
+            url.startswith("https://api.example.test/api/v1/medical-documents/")
+        )
+        self.assertIn(str(mid), url)
+        self.assertIn("external-upload/preview-pdf", url)
+
+    def test_entry_ok_for_reception(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        )
+        self.assertEqual(r.status_code, 200)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_get_contains_publish_locale_after_upload(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        r = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('id="id_publish_locale"', r.content.decode())
+
+    def test_entry_403_when_queue_entry_out_of_scope(self) -> None:
+        other_clinic = ClinicSite.objects.create(code="EUX", name="Other Clinic")
+        room2 = ConsultingRoom.objects.create(
+            clinic_site=other_clinic, code="X1", name="X1"
+        )
+        dq2 = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=other_clinic,
+            consulting_room=room2,
+            status=QueueStatus.OPEN,
+            created_by_user=self.admin,
+            assigned_doctor=self.doctor,
+        )
+        entry2 = QueueEntry.objects.create(
+            daily_queue=dq2,
+            patient=self.patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            appointment_time=timezone.now() - timedelta(hours=1),
+            created_by_user=self.admin,
+        )
+        s2 = PatientFormSession.create_session(
+            entry2,
+            created_by_user_id=self.admin.id,
+            minutes=120,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry2,
+            session=s2,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": entry2.id},
+            )
+        )
+        self.assertEqual(r.status_code, 403)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_publish_form_includes_publish_request_id(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        pdf = SimpleUploadedFile(
+            "lab.pdf",
+            _minimal_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "upload", "file": pdf},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertRegex(
+            r.content.decode(),
+            r'name="publish_request_id"\s+value="[0-9a-f-]{36}"',
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_double_publish_same_request_id_is_idempotent(
+        self, adapter_factory
+    ) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        doc = MedicalDocument.objects.get(queue_entry_id=self.entry.id)
+        g = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        )
+        self.assertEqual(g.status_code, 200)
+        html = g.content.decode()
+        m = re.search(
+            r'name="publish_request_id"\s+value="([0-9a-f-]{36})"',
+            html,
+        )
+        self.assertIsNotNone(m)
+        assert m is not None  # narrow for mypy (assertIsNotNone does not)
+        publish_request_id = m.group(1)
+        rid = uuid.UUID(publish_request_id)
+        pub = {
+            "action": "publish",
+            "publish_request_id": publish_request_id,
+            "publish_locale": "de-DE",
+            "verification_ack": "1",
+        }
+        r1 = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            pub,
+            follow=True,
+        )
+        self.assertEqual(r1.status_code, 200)
+        r2 = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            pub,
+            follow=True,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(
+            MedicalDocumentVersion.objects.filter(
+                medical_document_id=doc.id,
+                publish_request_id=rid,
+            ).count(),
+            1,
+        )
+
+    def test_hub_invalid_form_status_defaults_to_all(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"form_status": "not-a-status"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context["form_status"], "all")
+
+    def test_hub_invalid_queue_entry_pick_shows_error(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry": str(uuid.uuid4())},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNotNone(r.context["error_invalid"])
+
+    def test_hub_legacy_invalid_uuid_shows_error(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.get(
+            reverse("admin_external_upload_hub"),
+            {"queue_entry_id": "not-a-uuid"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNotNone(r.context["error_invalid"])
+
+    def test_entry_upload_without_file_shows_error(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "upload"},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+        msgs = [str(m) for m in r.context["messages"]]
+        self.assertTrue(any(msgs))
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_select_invalid_attachment_uuid(self, adapter_factory) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "select", "attachment_id": "not-a-uuid"},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_entry_start_revision_action(self, adapter_factory) -> None:
+        adapter_factory.return_value.upload.return_value = None
+        self.client.force_login(self.reception)
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "lab.pdf",
+                    _minimal_pdf_bytes(),
+                    content_type="application/pdf",
+                ),
+            },
+            follow=True,
+        )
+        doc = MedicalDocument.objects.get(queue_entry_id=self.entry.id)
+        att = ExternalPdfAttachment.objects.filter(medical_document_id=doc.id).first()
+        assert att is not None
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "select", "attachment_id": str(att.id)},
+            follow=True,
+        )
+        html = self.client.get(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            )
+        ).content.decode()
+        m = re.search(
+            r'name="publish_request_id"\s+value="([0-9a-f-]{36})"',
+            html,
+        )
+        assert m is not None
+        self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "publish",
+                "publish_request_id": m.group(1),
+                "publish_locale": "de-DE",
+                "verification_ack": "1",
+            },
+            follow=True,
+        )
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "start_revision"},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_entry_publish_without_verification_ack(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "publish",
+                "publish_request_id": str(uuid.uuid4()),
+                "publish_locale": "de-DE",
+            },
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_entry_publish_invalid_locale(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {
+                "action": "publish",
+                "publish_request_id": str(uuid.uuid4()),
+                "publish_locale": "xx-XX",
+                "verification_ack": "1",
+            },
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_entry_invalid_action_shows_error(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "nope"},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_entry_select_without_document_shows_error(self) -> None:
+        self.client.force_login(self.reception)
+        r = self.client.post(
+            reverse(
+                "admin_external_upload_entry",
+                kwargs={"queue_entry_id": self.entry.id},
+            ),
+            {"action": "select", "attachment_id": str(uuid.uuid4())},
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)

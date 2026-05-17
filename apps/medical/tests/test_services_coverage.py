@@ -3,24 +3,33 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from freezegun import freeze_time
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
+from apps.medical.external_pdf_service import (
+    hidrive_incoming_dir,
+    hidrive_processed_dir,
+)
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -30,7 +39,9 @@ from apps.medical.models import (
 )
 from apps.medical.services import (
     acquire_document_lock,
+    create_external_upload_medical_document,
     create_or_get_medical_document,
+    select_external_upload_attachment_for_draft,
     get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
@@ -43,6 +54,7 @@ from apps.medical.services import (
     release_document_lock,
     revoke_document_version,
     save_draft_document_version,
+    upload_external_pdf_to_incoming,
     work_queue_row_outbound_complete,
 )
 from apps.outbox.models import (
@@ -61,6 +73,14 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _minimal_pdf_bytes() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class ServicesCoverageBase(TestCase):
@@ -251,6 +271,609 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             "intake_form_must_be_submitted",
             ctx.exception.api_message_key,
         )
+
+
+class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.reception = StaffUser.objects.create_user(
+            username="cov-reception-eu",
+            email="cov-reception-eu@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(cls.reception, "Reception")
+
+    def test_submitted_creates_document_and_draft_v1(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+        self.assertEqual(doc.status, MedicalDocStatus.DRAFT)
+        self.assertEqual(doc.current_version_no, 1)
+        v = MedicalDocumentVersion.objects.get(medical_document=doc, version_no=1)
+        self.assertEqual(v.version_status, DocVersionStatus.DRAFT)
+        self.assertEqual(v.medical_payload, {})
+        self.assertEqual(v.pdf_generation_status, PdfStatus.PENDING)
+
+    def test_second_call_is_idempotent(self) -> None:
+        a = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        b = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        self.assertEqual(a.id, b.id)
+        self.assertEqual(
+            MedicalDocumentVersion.objects.filter(medical_document_id=a.id).count(),
+            1,
+        )
+
+    def test_reopened_intake_allowed(self) -> None:
+        qe = self._make_queue_entry(position_no=50)
+        session = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+        )
+        doc = create_external_upload_medical_document(
+            queue_entry_id=qe.id,
+            created_by_user_id=self.reception.id,
+        )
+        self.assertEqual(doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+    def test_in_progress_raises(self) -> None:
+        qe = self._make_queue_entry(position_no=51)
+        session = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=qe.id,
+                created_by_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_intake_not_ready",
+            ctx.exception.api_message_key,
+        )
+
+    def test_no_intake_form_raises(self) -> None:
+        qe = self._make_queue_entry(position_no=52)
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=qe.id,
+                created_by_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "queue_entry_or_intake_not_found",
+            ctx.exception.api_message_key,
+        )
+
+    def test_unknown_queue_entry_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=uuid.uuid4(),
+                created_by_user_id=self.reception.id,
+            )
+        self.assertIn("queue_entry_not_found", ctx.exception.api_message_key)
+
+    def test_mismatch_when_digital_document_exists(self) -> None:
+        self._make_medical_doc(
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=0,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "medical_document_source_type_mismatch",
+            ctx.exception.api_message_key,
+        )
+
+    def test_doctor_role_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_staff_role_required",
+            ctx.exception.api_message_key,
+        )
+
+    def test_unknown_actor_user_raises(self) -> None:
+        with self.assertRaises(DomainError) as ctx:
+            create_external_upload_medical_document(
+                queue_entry_id=self.queue_entry.id,
+                created_by_user_id=uuid.uuid4(),
+            )
+        self.assertIn("staff_user_not_found", ctx.exception.api_message_key)
+
+
+class SelectExternalUploadAttachmentForDraftTests(
+    CreateExternalUploadMedicalDocumentTests
+):
+    def _incoming_external_path(self, filename: str = "x.pdf") -> str:
+        return (
+            f"{hidrive_incoming_dir()}/external-upload/{self.queue_entry.id}/{filename}"
+        )
+
+    def _processed_external_path(
+        self, queue_entry_id, filename: str = "old.pdf"
+    ) -> str:
+        return f"{hidrive_processed_dir()}/external-upload/{queue_entry_id}/{filename}"
+
+    def test_select_matched_sets_audit_and_clears_prior_pdf_fields(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        draft = MedicalDocumentVersion.objects.get(medical_document=doc, version_no=1)
+        draft.pdf_local_path = "pdfs/stale.pdf"
+        draft.pdf_checksum_sha256 = "a" * 64
+        draft.pdf_generation_status = PdfStatus.COMPLETED
+        draft.save(
+            update_fields=[
+                "pdf_local_path",
+                "pdf_checksum_sha256",
+                "pdf_generation_status",
+            ]
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        out = select_external_upload_attachment_for_draft(
+            medical_document_id=doc.id,
+            attachment_id=att.id,
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(out.id, draft.id)
+        out.refresh_from_db()
+        self.assertEqual(out.external_selected_attachment_id, att.id)
+        self.assertEqual(out.external_original_filename, "x.pdf")
+        self.assertEqual(out.external_uploaded_by_user_id, self.reception.id)
+        self.assertIsNotNone(out.external_uploaded_at)
+        self.assertIsNone(out.pdf_local_path)
+        self.assertIsNone(out.pdf_checksum_sha256)
+        self.assertEqual(out.pdf_generation_status, PdfStatus.PENDING)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+
+    def test_select_accepted_processed_path(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        path = self._processed_external_path(self.queue_entry.id)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=path,
+            original_filename="old.pdf",
+            status=ExternalPdfStatus.ACCEPTED,
+        )
+        select_external_upload_attachment_for_draft(
+            medical_document_id=doc.id,
+            attachment_id=att.id,
+            actor_user_id=self.reception.id,
+        )
+        draft = MedicalDocumentVersion.objects.get(medical_document=doc, version_no=1)
+        self.assertEqual(draft.external_selected_attachment_id, att.id)
+
+    def test_rejected_status_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="bad.pdf",
+            status=ExternalPdfStatus.REJECTED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_attachment_invalid_status",
+            ctx.exception.api_message_key,
+        )
+
+    def test_attachment_wrong_document_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        other_qe = self._make_queue_entry(position_no=77)
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_qe,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=other_qe,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_sha256="b" * 64,
+            submitted_at=timezone.now(),
+        )
+        other_doc = create_external_upload_medical_document(
+            queue_entry_id=other_qe.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=other_doc,
+            hidrive_remote_path=f"{hidrive_incoming_dir()}/external-upload/{other_qe.id}/o.pdf",
+            original_filename="o.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_attachment_not_found",
+            ctx.exception.api_message_key,
+        )
+
+    def test_non_external_document_raises(self) -> None:
+        digital_doc = self._make_medical_doc(
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=1,
+        )
+        MedicalDocumentVersion.objects.create(
+            medical_document=digital_doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={},
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=digital_doc,
+            hidrive_remote_path=f"{hidrive_incoming_dir()}/external-upload/{self.queue_entry.id}/d.pdf",
+            original_filename="d.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=digital_doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_not_external_source",
+            ctx.exception.api_message_key,
+        )
+
+    def test_no_active_draft_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        draft = MedicalDocumentVersion.objects.get(medical_document=doc, version_no=1)
+        rid = uuid.uuid4()
+        now = timezone.now()
+        draft.version_status = DocVersionStatus.PUBLISHED
+        draft.publish_request_id = rid
+        draft.published_at = now
+        draft.publish_locale = "de-DE"
+        draft.save(
+            update_fields=[
+                "version_status",
+                "publish_request_id",
+                "published_at",
+                "publish_locale",
+            ]
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_no_active_draft",
+            ctx.exception.api_message_key,
+        )
+
+    def test_invalid_hidrive_prefix_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=f"{hidrive_incoming_dir()}/lab-result.pdf",
+            original_filename="lab-result.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_attachment_path_invalid",
+            ctx.exception.api_message_key,
+        )
+
+    def test_hidrive_path_traversal_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=(
+                f"{hidrive_incoming_dir()}/external-upload/../lab-result.pdf"
+            ),
+            original_filename="lab-result.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_attachment_path_invalid",
+            ctx.exception.api_message_key,
+        )
+
+    def test_doctor_role_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=doc.id,
+                attachment_id=att.id,
+                actor_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_staff_role_required",
+            ctx.exception.api_message_key,
+        )
+
+    def test_medical_document_not_found_raises(self) -> None:
+        doc = create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=doc,
+            hidrive_remote_path=self._incoming_external_path(),
+            original_filename="x.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            select_external_upload_attachment_for_draft(
+                medical_document_id=uuid.uuid4(),
+                attachment_id=att.id,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+
+
+class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests):
+    def _make_external_doc(self) -> MedicalDocument:
+        return create_external_upload_medical_document(
+            queue_entry_id=self.queue_entry.id,
+            created_by_user_id=self.reception.id,
+        )
+
+    def _pdf_upload(self, *, name: str = "lab.pdf", content: bytes | None = None):
+        data = content if content is not None else _minimal_pdf_bytes()
+        return SimpleUploadedFile(name, data, content_type="application/pdf")
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_upload_happy_path_creates_matched_attachment(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter = Mock()
+        adapter_factory.return_value = adapter
+        upload = self._pdf_upload(name="Lab Result.pdf")
+
+        att = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=upload,
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(att.medical_document_id, doc.id)
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        self.assertIn("/external-upload/", att.hidrive_remote_path)
+        self.assertTrue(att.hidrive_remote_path.endswith("Lab_Result.pdf"))
+        adapter.upload.assert_called_once()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_upload_is_idempotent_on_same_remote_path(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter_factory.return_value = Mock()
+        first = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=self._pdf_upload(name="same.pdf"),
+            actor_user_id=self.reception.id,
+        )
+        second = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=self._pdf_upload(name="same.pdf"),
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            ExternalPdfAttachment.objects.filter(medical_document_id=doc.id).count(),
+            1,
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_boundary_size_allowed(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter_factory.return_value = Mock()
+        upload = self._pdf_upload(name="edge.pdf")
+        upload.size = 250 * 1024 * 1024
+        att = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=upload,
+            actor_user_id=self.reception.id,
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+
+    def test_size_over_limit_raises(self):
+        doc = self._make_external_doc()
+        upload = self._pdf_upload(name="too-big.pdf")
+        upload.size = 250 * 1024 * 1024 + 1
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+
+    @patch("apps.medical.services.EXTERNAL_UPLOAD_MAX_BYTES", 64)
+    def test_upload_streaming_byte_limit_rejects_body_larger_than_declared_size(
+        self,
+    ) -> None:
+        doc = self._make_external_doc()
+        body = _minimal_pdf_bytes() + (b"0" * 128)
+        upload = SimpleUploadedFile("spoofed.pdf", body, content_type="application/pdf")
+        upload.size = 10
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+
+    def test_invalid_content_type_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "bad.txt", b"%PDF-1.4\nx", content_type="text/plain"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_invalid_content_type",
+            ctx.exception.api_message_key,
+        )
+
+    def test_invalid_magic_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "bad.pdf", b"NOPE-not-pdf", content_type="application/pdf"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("external_upload_not_pdf", ctx.exception.api_message_key)
+
+    def test_corrupt_pdf_raises(self):
+        doc = self._make_external_doc()
+        upload = SimpleUploadedFile(
+            "corrupt.pdf", b"%PDF-1.4\nnot-valid-xref", content_type="application/pdf"
+        )
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_invalid_or_empty_pdf",
+            ctx.exception.api_message_key,
+        )
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_non_external_document_raises(self, adapter_factory: Mock):
+        digital_doc = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
+        upload = self._pdf_upload()
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=digital_doc.id,
+                uploaded_file=upload,
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn(
+            "external_upload_not_external_source",
+            ctx.exception.api_message_key,
+        )
+        adapter_factory.assert_not_called()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_doctor_role_raises(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=doc.id,
+                uploaded_file=self._pdf_upload(),
+                actor_user_id=self.doctor.id,
+            )
+        self.assertIn(
+            "external_upload_staff_role_required",
+            ctx.exception.api_message_key,
+        )
+        adapter_factory.assert_not_called()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    def test_medical_document_not_found_raises(self, adapter_factory: Mock):
+        with self.assertRaises(DomainError) as ctx:
+            upload_external_pdf_to_incoming(
+                medical_document_id=uuid.uuid4(),
+                uploaded_file=self._pdf_upload(),
+                actor_user_id=self.reception.id,
+            )
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+        adapter_factory.assert_not_called()
 
 
 # ------------------------------------------------------------------
@@ -1552,3 +2175,42 @@ class WorkQueueRowOutboundCompleteTests(TestCase):
         v = SimpleNamespace(pdf_generation_status=PdfStatus.COMPLETED)
         self.assertTrue(pdf_generation_stage_complete(v, {}))
         self.assertFalse(pdf_generation_stage_complete(None, {}))
+
+
+# ------------------------------------------------------------------
+# get_medical_document_context — doctor panel / refreshRevisionUi inputs
+# ------------------------------------------------------------------
+class GetMedicalDocumentContextRevokeUiTests(ServicesCoverageBase):
+    """Contract for ``current_version`` flags consumed by doctor ``befund-form.js``."""
+
+    def test_current_version_exposes_hidrive_and_sms_sent(self) -> None:
+        doc = self._make_medical_doc()
+        now = timezone.now()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=False,
+            sms_sent_at=None,
+        )
+        ctx = get_medical_document_context(medical_document_id=doc.id, user=self.doctor)
+        cv = ctx["current_version"]
+        self.assertTrue(cv["hidrive_sent"])
+        self.assertFalse(cv["sms_sent"])
+        self.assertIsNone(cv.get("revoked_at"))
+
+    def test_current_version_exposes_revoked_at_when_set(self) -> None:
+        doc = self._make_medical_doc()
+        revoked_at = timezone.now()
+        self._make_published_version(
+            doc,
+            hidrive_sent=True,
+            hidrive_sent_at=timezone.now(),
+            sms_sent=True,
+            sms_sent_at=timezone.now(),
+            revoked_at=revoked_at,
+        )
+        ctx = get_medical_document_context(medical_document_id=doc.id, user=self.doctor)
+        cv = ctx["current_version"]
+        self.assertIsNotNone(cv.get("revoked_at"))
+        self.assertEqual(cv["revoked_at"], revoked_at.isoformat())

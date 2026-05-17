@@ -53,6 +53,10 @@ class MedicalDocumentSourceType(models.TextChoices):
         "administration.choice_medical_document_source_type_paper_intake",
         "Paper intake",
     )
+    EXTERNAL_UPLOAD = "EXTERNAL_UPLOAD", db_gettext_lazy(
+        "administration.choice_medical_document_source_type_external_upload",
+        "External upload",
+    )
 
 
 class MedicalDocument(models.Model):
@@ -178,6 +182,10 @@ class MedicalDocument(models.Model):
                 | (
                     Q(source_type=MedicalDocumentSourceType.PAPER_INTAKE)
                     & Q(intake_form__isnull=True)
+                )
+                | (
+                    Q(source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+                    & Q(intake_form__isnull=False)
                 ),
                 name="medical_document_source_type_intake_consistency",
             ),
@@ -418,6 +426,63 @@ class MedicalDocumentVersion(models.Model):
         null=True,
         verbose_name=db_gettext_lazy("administration.field_revoked_at", "Revoked at"),
     )
+    external_selected_attachment = models.ForeignKey(
+        "ExternalPdfAttachment",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name="selected_for_versions",
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_selected_attachment",
+            "External selected attachment",
+        ),
+    )
+    external_original_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_original_filename",
+            "External original filename",
+        ),
+    )
+    external_uploaded_by_user = models.ForeignKey(
+        "users.StaffUser",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="external_upload_versions_uploaded",
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_uploaded_by_user",
+            "External file linked by",
+        ),
+    )
+    external_uploaded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_uploaded_at", "External file linked at"
+        ),
+    )
+    external_verified_by_user = models.ForeignKey(
+        "users.StaffUser",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="external_upload_versions_verified",
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_verified_by_user",
+            "External publish verified by",
+        ),
+    )
+    external_verified_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_external_verified_at",
+            "External publish verified at",
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=db_gettext_lazy("administration.field_created_at", "Created at"),
@@ -650,10 +715,30 @@ class DoctorTextTemplate(models.Model):
 
 
 class ExternalPdfStatus(models.TextChoices):
-    MATCHED = "MATCHED", "Matched"
-    ACCEPTED = "ACCEPTED", "Accepted"
-    REJECTED = "REJECTED", "Rejected"
-    MERGE_FAILED = "MERGE_FAILED", "Merge failed"
+    PENDING_UPLOAD = "PENDING_UPLOAD", db_gettext_lazy(
+        "administration.choice_external_pdf_status_pending_upload",
+        "Pending upload",
+    )
+    MATCHED = "MATCHED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_matched",
+        "Matched",
+    )
+    ACCEPTED = "ACCEPTED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_accepted",
+        "Processed",
+    )
+    REJECTED = "REJECTED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_rejected",
+        "Rejected",
+    )
+    MERGE_FAILED = "MERGE_FAILED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_merge_failed",
+        "Merge failed",
+    )
+    UPLOAD_FAILED = "UPLOAD_FAILED", db_gettext_lazy(
+        "administration.choice_external_pdf_status_upload_failed",
+        "Upload failed",
+    )
 
 
 class ExternalPdfAttachment(models.Model):

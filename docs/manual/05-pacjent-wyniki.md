@@ -14,22 +14,22 @@ Dokumentacja dla **pacjenta**, który ma pobrać dokumentację medyczną po otrz
 
 ![Ekran logowania portalu wyników](/docs/manual/assets/screenshots/patient-01-login.png)
 
-**Dane muszą być zgodne** z tymi zarejestrowanymi przy wizycie (recepcja / tablet). Jeśli numer lub data urodzenia są inne, system nie wyśle kodu OTP lub nie dopasuje rekordu.
+**Dane muszą być zgodne** z tymi zarejestrowanymi przy wizycie (recepcja / tablet). Jeśli numer lub data urodzenia są inne, system nie wyśle kodu OTP lub nie dopasuje rekordu. Jeśli recepcja **poprawiła** Twój telefon lub datę urodzenia w systemie, używaj przy logowaniu **już zaktualizowanych** danych — szczegóły dla personelu: [Instrukcja recepcji, § 4.1](01-rejestracja.md).
 
-### Weryfikacja Cloudflare Turnstile (jeśli jest włączona)
+### Weryfikacja captcha (jeśli jest włączona)
 
-Na produkcji może być skonfigurowany **`TURNSTILE_SITE_KEY`**. Wtedy nad przyciskiem wysłania kodu pojawi się **widget** „captcha” (Cloudflare Turnstile). Pacjent musi **ukończyć weryfikację** (zazwyczaj automatycznie lub jednym kliknięciem), zanim wyśle formularz.
+W niektórych wersjach strony nad przyciskiem wysłania kodu pojawi się dodatkowa kontrola bezpieczeństwa („captcha”). Pacjent musi ją ukończyć (zazwyczaj automatycznie lub jednym kliknięciem), zanim wyśle formularz.
 
-Jeśli nie widzisz widgetu — środowisko może mieć wyłączoną captcha (dev).
+Jeśli jej nie widzisz, ta funkcja może być czasowo wyłączona.
 
 ---
 
 ## Krok 2: Żądanie kodu SMS (OTP)
 
 1. Wpisz **numer telefonu** w formacie akceptowanym przez formularz (np. bez spacji lub ze spacjami — zgodnie z polem).
-2. Wybierz **datę urodzenia** w kalendarzu (pole `type="date"`) lub wpisz w obsługiwanym formacie.
+2. Wybierz **datę urodzenia** w kalendarzu lub wpisz ją ręcznie.
 3. Kliknij przycisk w stylu **„Poproś o kod SMS”** / „Code per SMS anfordern” (tekst zależy od języka interfejsu).
-4. Po sukcesie następuje przekierowanie na stronę **OTP** (`/otp/`).
+4. Po poprawnym wysłaniu formularza przejdziesz do strony wpisywania kodu.
 
 **Uwaga:** Jeśli pojawi się komunikat błędu — sprawdź, czy numer i data są poprawne; jeśli nadal nie działa, skontaktuj się z **recepcją placówki** (nie podawaj danych wrażliwych osobom postronnym).
 
@@ -38,7 +38,7 @@ Jeśli nie widzisz widgetu — środowisko może mieć wyłączoną captcha (dev
 ## Krok 3: Wpis kodu OTP
 
 1. Na stronie **`/otp/`** wpisz **6-cyfrowy kod** otrzymany SMS-em na podany numer.
-2. Kod jest ważny **ograniczony czas** (w PRD: **15 minut** — potwierdź w aktualnej konfiguracji).
+2. Kod jest ważny przez **krótki czas** (zwykle około 15 minut).
 
 ![Ekran wpisywania kodu OTP](/docs/manual/assets/screenshots/patient-02-otp.png)
 
@@ -61,7 +61,7 @@ Po poprawnym OTP zobaczysz stronę **`/documents/`** z listą dostępnych plikó
 
 ## Język interfejsu
 
-Parametr **`?locale=`** w URL (`de`, `en`, `pl`) lub nagłówek `Accept-Language` może wpływać na język wyświetlanych stringów (implementacja w `patient_results` views).
+Język strony zależy od ustawień systemu i przeglądarki. W razie potrzeby placówka może pomóc przełączyć właściwy język.
 
 ---
 

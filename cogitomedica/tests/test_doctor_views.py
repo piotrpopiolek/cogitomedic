@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import re
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -17,6 +20,8 @@ from apps.operations.models import AuditEvent
 from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import (
     DocVersionStatus,
+    ExternalPdfAttachment,
+    ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentSourceType,
@@ -35,6 +40,25 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
+
+
+def _doctor_panel_data_from_detail_html(html: str) -> dict:
+    """Parse ``panel_data`` embedded via ``json_script`` on doctor detail."""
+    match = re.search(
+        r'<script[^>]+id="doctor-panel-data"[^>]*>(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match is not None, "doctor-panel-data script not found"
+    return json.loads(match.group(1))
+
+
+def _minimal_pdf_bytes() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
 
 
 class DoctorViewsSmokeTests(TestCase):
@@ -217,6 +241,400 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"reopened", resp.content.lower())
+
+    def test_open_by_queue_external_upload_redirects_skips_create_or_get(
+        self,
+    ) -> None:
+        """Reception external-upload doc on REOPENED intake: doctor opens detail, no Befund create."""
+        from apps.medical.services import create_external_upload_medical_document
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EU", name="Ext Upload Open Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="E1", name="E1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtUploadOpen",
+            date_of_birth=date(1991, 6, 6),
+            phone="+48500111222",
+            email="extuploadopen@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.REOPENED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        self.assertEqual(ext_doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+        with patch("cogitomedica.doctor_views.create_or_get_medical_document") as m_cog:
+            resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+            m_cog.assert_not_called()
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(f"/doctor/{ext_doc.id}/", resp.url)
+        self.assertIn("lang=en", resp.url)
+
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_document_detail_skips_gate_and_lock(
+        self,
+        gate_mock: MagicMock,
+        lock_mock: MagicMock,
+    ) -> None:
+        from apps.medical.services import create_external_upload_medical_document
+
+        gate_mock.side_effect = AssertionError(
+            "check_external_pdf_gate must not run for EXTERNAL_UPLOAD draft detail"
+        )
+        lock_mock.side_effect = AssertionError(
+            "acquire_document_lock must not run for EXTERNAL_UPLOAD draft detail"
+        )
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="ED", name="Ext Detail Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="D1", name="D1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtDetail",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48500111333",
+            email="extdetail@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        self.assertEqual(ext_doc.source_type, MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+
+        resp = self.client.get(f"/doctor/{ext_doc.id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        gate_mock.assert_not_called()
+        lock_mock.assert_not_called()
+        html = resp.content.decode("utf-8")
+        m = re.search(
+            r'<script id="doctor-panel-data" type="application/json">(.+?)</script>',
+            html,
+            re.S,
+        )
+        self.assertIsNotNone(m)
+        assert m is not None  # narrow for mypy
+        panel = json.loads(m.group(1))
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertNotIn('id="befund-form"', resp.content.decode("utf-8"))
+
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_readonly_draft_detail_hides_preview_until_published(
+        self,
+        _gate: MagicMock,
+        _lock: MagicMock,
+    ) -> None:
+        """DRAFT external upload: no doctor PDF preview (reception-only until publish)."""
+        from apps.medical.services import create_external_upload_medical_document
+
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EDL", name="Ext Draft Link Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="D1", name="D1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtDraftLink",
+            date_of_birth=date(1993, 3, 3),
+            phone="+48500111334",
+            email="extdraftlink@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        ext_doc = create_external_upload_medical_document(
+            queue_entry_id=entry.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        ver = MedicalDocumentVersion.objects.get(
+            medical_document_id=ext_doc.id, version_no=1
+        )
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=ext_doc,
+            hidrive_remote_path="/incoming/draft-href.pdf",
+            original_filename="draft-href.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        ver.external_selected_attachment = att
+        ver.save(update_fields=["external_selected_attachment_id"])
+
+        ext_doc.refresh_from_db()
+        self.assertEqual(ext_doc.status, MedicalDocStatus.DRAFT)
+
+        resp = self.client.get(f"/doctor/{ext_doc.id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        panel = _doctor_panel_data_from_detail_html(html)
+
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertFalse(panel.get("externalUploadLoadAttachmentPanel"))
+        self.assertNotIn('id="btn-preview-pdf"', html)
+        self.assertNotIn("external-upload/preview-pdf", html)
+        self.assertNotIn('id="btn-preview-published-external"', html)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_readonly_published_detail_links_standard_preview(
+        self,
+        adapter_factory: MagicMock,
+        _lock: MagicMock,
+        _gate: MagicMock,
+    ) -> None:
+        """Published EXTERNAL_UPLOAD: PDF link targets ``…/preview-pdf`` (doctor-accessible)."""
+        adapter_factory.return_value.upload.return_value = None
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EPL", name="Ext Pub Link Clinic")
+        self.reception_user.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="P1", name="P1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtPubLink",
+            date_of_birth=date(1994, 4, 4),
+            phone="+48500111335",
+            email="extpublink@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(entry.id),
+                "file": SimpleUploadedFile(
+                    "lab.pdf", _minimal_pdf_bytes(), content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertEqual(up.status_code, 201, up.content)
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        sel = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(sel.status_code, 200, sel.content)
+        pub = self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                    "resend_sms": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(pub.status_code, 200, pub.content)
+
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        panel = _doctor_panel_data_from_detail_html(html)
+        self.assertTrue(panel.get("externalUploadReadOnly"))
+        self.assertTrue(panel.get("externalUploadLoadAttachmentPanel"))
+        self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
+        self.assertNotIn("external-upload/preview-pdf", html)
+        self.assertIn('id="btn-preview-pdf"', html)
+
+    @patch("apps.medical.services.get_hidrive_adapter")
+    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_external_upload_pending_revision_without_attachment_links_published_preview(
+        self,
+        adapter_factory: MagicMock,
+        _gate: MagicMock,
+        _lock: MagicMock,
+    ) -> None:
+        """Pending revision draft without selection falls back to published preview URL."""
+        adapter_factory.return_value.upload.return_value = None
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="EPR", name="Ext Pending Rev Clinic")
+        self.reception_user.clinic_sites.add(clinic)
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="P2", name="P2")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Pat",
+            last_name="ExtPendingRev",
+            date_of_birth=date(1995, 5, 5),
+            phone="+48500111336",
+            email="extpendingrev@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="f" * 64,
+        )
+        self.client.force_login(self.reception_user)
+        up = self.client.post(
+            "/api/v1/medical-documents/external-upload/upload",
+            data={
+                "queue_entry_id": str(entry.id),
+                "file": SimpleUploadedFile(
+                    "lab.pdf", _minimal_pdf_bytes(), content_type="application/pdf"
+                ),
+            },
+        )
+        doc_id = up.json()["document_id"]
+        att_id = up.json()["attachment_id"]
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/select-attachment",
+            data=json.dumps({"attachment_id": att_id}),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
+            data=json.dumps(
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn(f"/api/v1/medical-documents/{doc_id}/preview-pdf", html)
+        self.assertNotIn("external-upload/preview-pdf", html)
 
     def test_open_by_queue_returns_400_when_intake_in_progress(self) -> None:
         """Befund creation requires SUBMITTED intake, not IN_PROGRESS."""
@@ -828,6 +1246,101 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertEqual(len(pts), 2)
         self.assertEqual(pts[0]["side"], "front")
 
+    @patch(
+        "cogitomedica.doctor_views.acquire_document_lock",
+        return_value=(True, None),
+    )
+    def test_detail_panel_current_version_includes_hidrive_sms_flags(
+        self,
+        _mock_lock: MagicMock,
+    ) -> None:
+        """Panel JSON must expose delivery flags used by ``refreshRevisionUi`` / revoke."""
+        now = timezone.now()
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/doctor-panel-revoke.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=False,
+            sms_sent_at=None,
+        )
+        MedicalDocument.objects.filter(pk=self.doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/?lang=pl")
+        self.assertEqual(resp.status_code, 200)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            resp.content.decode(),
+            re.DOTALL,
+        )
+        assert m is not None
+        panel = json.loads(m.group(1))
+        cv = panel["context"]["current_version"]
+        self.assertTrue(cv["hidrive_sent"])
+        self.assertFalse(cv["sms_sent"])
+        self.assertIsNone(cv.get("revoked_at"))
+
+    @patch(
+        "cogitomedica.doctor_views.acquire_document_lock",
+        return_value=(True, None),
+    )
+    def test_detail_panel_current_version_includes_revoked_at_when_revoked(
+        self,
+        _mock_lock: MagicMock,
+    ) -> None:
+        """Revoked publication: ``revoked_at`` in panel drives revoked banner in JS."""
+        now = timezone.now()
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/doctor-panel-revoked.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=True,
+            sms_sent_at=now,
+            revoked_at=now,
+        )
+        MedicalDocument.objects.filter(pk=self.doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/?lang=pl")
+        self.assertEqual(resp.status_code, 200)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            resp.content.decode(),
+            re.DOTALL,
+        )
+        assert m is not None
+        panel = json.loads(m.group(1))
+        cv = panel["context"]["current_version"]
+        self.assertIsNotNone(cv.get("revoked_at"))
+
     def test_detail_returns_423_when_locked_by_another_doctor(self):
         other = StaffUser.objects.create_user(
             username="hp-doc-2",
@@ -953,6 +1466,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         patient_last_name: str,
         published_by: StaffUser,
         queue_assigned_doctor: StaffUser | None = None,
+        source_type: str = "DIGITAL_INTAKE",
     ) -> MedicalDocument:
         patient = Patient.objects.create(
             first_name="Jan",
@@ -994,6 +1508,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         doc = MedicalDocument.objects.create(
             queue_entry=entry,
             intake_form=intake,
+            source_type=source_type,
             status=MedicalDocStatus.PUBLISHED,
             current_version_no=1,
             created_by_user=self.reception,
@@ -1029,6 +1544,29 @@ class DoctorListScopeAndPreviewTests(TestCase):
         self.assertIn("HistoryVisible", html)
         self.assertIn(
             f"/api/v1/medical-documents/{published_doc.id}/preview-pdf",
+            html,
+        )
+
+    def test_list_preview_uses_medical_document_preview_for_external_source(
+        self,
+    ) -> None:
+        ext_doc = self._create_published_document(
+            patient_last_name="ExternalListPreview",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.other_doctor,
+            source_type="EXTERNAL_UPLOAD",
+        )
+        self.client.force_login(self.other_doctor)
+        response = self.client.get("/doctor/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("ExternalListPreview", html)
+        self.assertIn(
+            f"/api/v1/medical-documents/{ext_doc.id}/preview-pdf",
+            html,
+        )
+        self.assertNotIn(
+            f"/api/v1/medical-documents/{ext_doc.id}/external-upload/preview-pdf",
             html,
         )
 

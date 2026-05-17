@@ -234,6 +234,11 @@
     "en": "No version to preview. Save a draft first.",
     "pl": "Brak wersji do podglądu. Najpierw zapisz szkic."
   },
+  "other.api.external_upload_attachment_missing": {
+    "de": "Die referenzierte externe PDF-Anlage existiert für diese Dokumentversion nicht mehr.",
+    "en": "The referenced external PDF attachment no longer exists for this document version.",
+    "pl": "Wskazany zewnętrzny załącznik PDF nie istnieje już dla tej wersji dokumentu."
+  },
   "other.api.only_admin_create_clinic_site": {
     "de": "Nur Admin kann Standorte anlegen.",
     "en": "Only Admin can create clinic sites.",

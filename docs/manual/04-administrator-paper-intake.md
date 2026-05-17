@@ -1,6 +1,6 @@
-# Autoryzacja ścieżki papierowej — procedura dla Admin / Manager
+# Autoryzacja ścieżki papierowej — procedura dla Administratora i Managera
 
-Dokument dla personelu z grupą **Admin** lub **Manager**, które **autoryzuje** (T1) lub **cofa autoryzację** (T1′) ścieżkę „dokument medyczny bez cyfrowej ankiety”. **Recepcja** i **Tablet** **nie** wykonują T1 ani T2.
+Dokument dla personelu z rolą **Administrator** lub **Manager**, który **autoryzuje** (T1) lub **cofa autoryzację** (T1′) ścieżkę „dokument medyczny bez cyfrowej ankiety”. **Recepcja** i **Tablet** nie wykonują tych działań.
 
 Powiązane: [diagram przepływu](paper_intake_flow.md), [skrót w instrukcji administratora](04-administrator.md), [instrukcja lekarza — sekcja papierowa](03-doktor.md).
 
@@ -10,7 +10,7 @@ Powiązane: [diagram przepływu](paper_intake_flow.md), [skrót w instrukcji adm
 
 - **T1 (autoryzacja):** formalna zgoda systemowa na to, że dany wpis kolejki może zostać obsłużony **bez** wypełnionej cyfrowej ankiety — bo ankieta / zgody są **prowadzone papierowo** według procedury placówki.
 - **T2 (utworzenie dokumentu):** wykonuje lekarz lub nadzorca z rolą kliniczną z **`/doctor/`** — poza zakresem tej strony, ale **nie nastąpi**, dopóki T1 nie zostanie zapisany poprawnie.
-- **Invariant:** status kolejki **PAPER_INTAKE_COMPLETED** występuje **wyłącznie** razem z istniejącym dokumentem `source_type = PAPER_INTAKE` (brak cyfrowego `intake_form`).
+- Status „paper intake completed” pojawia się dopiero po utworzeniu dokumentu papierowego.
 
 ---
 
@@ -18,9 +18,9 @@ Powiązane: [diagram przepływu](paper_intake_flow.md), [skrót w instrukcji adm
 
 | Zasób | Adres / ścieżka |
 |-------|-----------------|
-| **Hub HTML** | **`/admin/paper-intake/`** — lista wpisów kwalifikujących się z ostatnich dni (nagłówek menu Unfold zależy od wdrożenia). |
+| **Panel autoryzacji** | **`/admin/paper-intake/`** — lista wpisów z ostatnich dni. |
 | **Strona pojedynczego wpisu** | Z huba — szczegóły wpisu kolejki z formularzem autoryzacji / cofnięcia. |
-| **API** (integracje) | `POST` / `DELETE` **`/api/v1/queue-entries/<uuid>/paper-intake-authorization`** — tożsame reguły co HTML; dla Admin/Manager **bez** dodatkowej bramki „zakres placówki” jak przy innych endpointach wpisu (patrz ogólna instrukcja [04-administrator.md](04-administrator.md) §3a). |
+| **Integracje techniczne** | Szczegóły dla działu IT są opisane w [04-administrator.md](04-administrator.md). |
 
 ---
 
@@ -28,14 +28,14 @@ Powiązane: [diagram przepływu](paper_intake_flow.md), [skrót w instrukcji adm
 
 System **odrzuci** autoryzację, jeśli np.:
 
-1. **`entry_status`** wpisu nie jest **WAITING** (inny etap wizyty).
-2. Brak ustawionej **`appointment_time`** — ścieżka papierowa wymaga zaplanowanej godziny wizyty.
-3. Nie upłynęło jeszcze **minimum pełnych godzin** po `appointment_time` — wartość produkcyjna: stała **`PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT`** w kodzie (domyślnie **3** godziny). Ta sama logika jest ponownie sprawdzana przy **T2** (defense in depth).
-4. Istnieje już **ukończona cyfrowa ankieta** w statusie wysłanym (`SUBMITTED` itd.) — wtedy obowiązuje ścieżka z tableta, nie papier.
+1. Wpis jest na niewłaściwym etapie wizyty.
+2. Nie ma ustawionej godziny wizyty.
+3. Od godziny wizyty nie minął jeszcze wymagany czas.
+4. Cyfrowa ankieta została już wysłana — wtedy obowiązuje ścieżka cyfrowa, a nie papierowa.
 5. Istnieje już **dokument medyczny** dla tego wpisu kolejki.
-6. Istnieje już **aktywna autoryzacja** — najpierw użyj **T1′**, jeśli trzeba ją zastąpić (po konsultacji merytorycznej), zamiast dublować T1.
+6. Istnieje już aktywna autoryzacja — najpierw ją cofnij, jeśli trzeba ją zastąpić.
 
-Komunikaty błędów w UI / API są **słownikowe** (klucze domenowe) — przy problemie zapisz czas, użytkownika i treść zwróconą przez system dla audytu wewnętrznego.
+Gdy pojawi się błąd, zapisz czas, użytkownika i treść komunikatu.
 
 ---
 
@@ -44,8 +44,8 @@ Komunikaty błędów w UI / API są **słownikowe** (klucze domenowe) — przy p
 1. Zaloguj się do **`/admin/`** jako **Admin** lub **Manager**.
 2. Wejdź w **`/admin/paper-intake/`** i znajdź wpis (pacjent, data kolejki, placówka).
 3. Otwórz **stronę wpisu** z huba.
-4. Wypełnij pole **powód autoryzacji** (**reason**) — wymagana długość **10–500 znaków** (krótki opis sytuacji merytorycznej, np. awaria tableta, pacjent wyłącznie z papierową zgodą zgodnie z procedurą).
-5. Zatwierdź **Autoryzuj** (etykieta zależy od tłumaczenia).
+4. Wypełnij pole **powód autoryzacji** — krótko opisz sytuację (np. awaria tabletu).
+5. Kliknij **Autoryzuj**.
 6. **Efekt:** wpis pozostaje w **WAITING**, ale pojawia się na **liście lekarza** w **stanie B** z przyciskiem utworzenia dokumentu papierowego — lekarz widzi interfejs w [03-doktor.md](03-doktor.md).
 
 **Audyt:** zapis zdarzenia autoryzacji z identyfikatorem osoby zatwierdzającej i znacznikiem czasu.
@@ -57,7 +57,7 @@ Komunikaty błędów w UI / API są **słownikowe** (klucze domenowe) — przy p
 Dostępne **tylko dopóki nie utworzono dokumentu medycznego** (brak T2).
 
 1. Na tej samej stronie wpisu wybierz akcję cofnięcia (np. „Cofnij autoryzację” — wg tłumaczenia).
-2. Podaj **osobny powód** cofnięcia (ten sam limit długości co przy T1, o ile UI/API tak wymaga).
+2. Podaj **powód** cofnięcia.
 3. Po zapisie wpis **znika** ze „stanu B” na liście lekarza; można ponownie przejść ścieżkę cyfrową lub, po spełnieniu warunków, ponownie wykonać T1.
 
 **Audyt:** osobne zdarzenie cofnięcia.
@@ -68,7 +68,7 @@ Dostępne **tylko dopóki nie utworzono dokumentu medycznego** (brak T2).
 
 | Zdarzenie | Skutek |
 |-----------|--------|
-| Pacjent **wysłał** formularz cyfrowy z tableta | Autoryzacja papierowa jest **unieważniana** w tej samej transakcji co zapis ankiety — dalsza praca lekarza idzie w modelu **cyfrowym**. |
+| Pacjent **wysłał** formularz cyfrowy z tableta | Autoryzacja papierowa jest automatycznie unieważniana. Dalsza praca odbywa się ścieżką cyfrową. |
 | Wpis kolejki ustawiony na **CANCELLED** | Autoryzacja jest **unieważniana** razem z anulowaniem wizyty. |
 
 Personel powinien **nie planować** równoległej pracy „papier + tablet” na ten sam wpis — system rozstrzyga na korzyść **danych cyfrowych**, gdy się pojawią.
@@ -77,8 +77,8 @@ Personel powinien **nie planować** równoległej pracy „papier + tablet” na
 
 ## 7. Obowiązki poza systemem (procedura placówki)
 
-- **Fizyczna dokumentacja** (papierowa zgoda / anamneza) musi być **przechowywana i weryfikowana** zgodnie z polityką placówki — CogitoMedica przechowuje **metadane decyzji** i powiązanie z wpisem, a nie skan treści papieru.
-- Ustal **kto** (rola) może prosić o T1 oraz kto zatwierdza merytorycznie przed wejściem do huba — to jest kontrola organizacyjna, nie tylko techniczna.
+- **Dokumentacja papierowa** musi być przechowywana i weryfikowana zgodnie z polityką placówki.
+- Ustalcie wewnętrznie, kto może prosić o autoryzację i kto ją zatwierdza.
 
 ---
 

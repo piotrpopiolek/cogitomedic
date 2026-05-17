@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from freezegun import freeze_time
-from pypdf import PdfWriter
+
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.external_pdf_service import ExternalPdfCorruptError
@@ -23,6 +26,7 @@ from apps.medical.models import (
     ExternalPdfStatus,
     MedicalDocStatus,
     MedicalDocument,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
@@ -31,7 +35,9 @@ from apps.medical.pdf_builder import (
     _build_render_context,
     build_merged_preview_pdf_bytes,
     generate_befund_pdf,
+    generate_external_upload_pdf,
 )
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -48,6 +54,15 @@ from apps.users.models import StaffUser, StaffUserGender
 def _minimal_pdf_bytes() -> bytes:
     w = PdfWriter()
     w.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def _minimal_pdf_bytes_with_title() -> bytes:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    w.add_metadata({"/Title": "Lab fixture title"})
     buf = BytesIO()
     w.write(buf)
     return buf.getvalue()
@@ -272,8 +287,11 @@ class GenerateBefundPdfExternalTests(TestCase):
         expected = timezone.localtime(lp).strftime("%d.%m.%Y")
         self.assertEqual(ctx["publication_date_display"], expected)
 
-    @freeze_time("2026-04-13T10:00:00Z")
-    def test_publication_date_display_for_draft_uses_render_day_not_dash(self) -> None:
+    @patch("django.utils.timezone.now")
+    def test_publication_date_display_for_draft_uses_render_day_not_dash(
+        self, now_mock: MagicMock
+    ) -> None:
+        now_mock.return_value = datetime(2026, 4, 13, 10, 0, 0, tzinfo=dt_timezone.utc)
         MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
             last_published_at=None
         )
@@ -386,3 +404,237 @@ class GenerateBefundPdfExternalTests(TestCase):
         self.assertIsNotNone(lines)
         self.assertEqual(lines[1], "Dr. med. Piotr Popiołek")
         self.assertEqual(lines[2], "Facharzt für Dermatologie")
+
+
+class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
+    def setUp(self) -> None:
+        super().setUp()
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        )
+        self.medical_doc.refresh_from_db()
+
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_raises_domain_error_without_attachment(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_no_attachment",
+        )
+        dl_mock.assert_not_called()
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_conditional_promote_idempotent_on_retry(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-up.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-up.pdf",
+            original_filename="ext-up.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            generate_external_upload_pdf(self.version)
+            generate_external_upload_pdf(self.version)
+
+        self.assertEqual(dl_mock.call_count, 2)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_corrupt_demotes_matched_and_raises_domain_error(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-corrupt.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-corrupt.pdf",
+            original_filename="ext-corrupt.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = ExternalPdfCorruptError("bad")
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_corrupt",
+        )
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_CORRUPT",
+                medical_document_id=self.medical_doc.id,
+            ).exists()
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_infra_error_raises_all_downloads_failed_pattern(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-down.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-down.pdf",
+            original_filename="ext-down.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = OSError("hidrive unavailable")
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(AllExternalPdfDownloadsFailed) as ctx:
+                generate_external_upload_pdf(self.version)
+
+        self.assertEqual(ctx.exception.medical_document_id, self.medical_doc.id)
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        self.assertFalse(
+            AuditEvent.objects.filter(
+                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                medical_document_id=self.medical_doc.id,
+            ).exists()
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_infra_error_retry_promotes_after_hidrive_recovers(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-retry.pdf",
+            original_filename="ext-retry.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        dl_mock.side_effect = [OSError("hidrive unavailable"), pdf]
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(AllExternalPdfDownloadsFailed):
+                generate_external_upload_pdf(self.version)
+            rel_path, checksum = generate_external_upload_pdf(self.version)
+
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.ACCEPTED)
+        self.assertTrue(rel_path)
+        self.assertTrue(checksum)
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    def test_generate_external_upload_pdf_injects_document_id_metadata(
+        self,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes_with_title()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-meta.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-meta.pdf",
+            original_filename="ext-meta.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            rel_path, checksum = generate_external_upload_pdf(self.version)
+
+        self.assertTrue(checksum)
+        out_path = self.media_root / rel_path
+        reader = PdfReader(str(out_path))
+        raw_meta = reader.metadata
+        meta: dict[str, Any] = (
+            cast(dict[str, Any], raw_meta) if raw_meta is not None else {}
+        )
+        self.assertEqual(
+            meta.get("/cogitomedicaldocumentid"),
+            str(self.medical_doc.id),
+        )
+        self.assertEqual(meta.get("/Title"), "Lab fixture title")
+
+    def test_external_upload_metadata_helper_contract(self) -> None:
+        """Regression: rewriter must change bytes and set /cogitomedicaldocumentid."""
+        from apps.medical import pdf_builder as pb
+
+        doc_id = self.medical_doc.id
+        raw = _minimal_pdf_bytes_with_title()
+        stamped = pb._external_upload_pdf_bytes_with_document_metadata(raw, doc_id)
+        self.assertNotEqual(stamped, raw)
+        r2 = PdfReader(BytesIO(stamped))
+        raw2 = r2.metadata
+        meta2: dict[str, Any] = cast(dict[str, Any], raw2) if raw2 is not None else {}
+        self.assertEqual(
+            meta2.get("/cogitomedicaldocumentid"),
+            str(doc_id),
+        )
+
+    def test_external_upload_metadata_helper_raises_on_invalid_pdf(self) -> None:
+        from apps.medical import pdf_builder as pb
+        from pypdf.errors import PdfReadError
+
+        with self.assertRaises(PdfReadError):
+            pb._external_upload_pdf_bytes_with_document_metadata(
+                b"not-a-pdf", self.medical_doc.id
+            )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    @patch(
+        "apps.medical.pdf_builder._external_upload_pdf_bytes_with_document_metadata",
+        side_effect=PdfReadError("x"),
+    )
+    def test_generate_external_upload_metadata_rewrite_failure_marks_merge_failed(
+        self,
+        _meta_mock: MagicMock,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-meta-fail.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-meta-fail.pdf",
+            original_filename="ext-meta-fail.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_corrupt",
+        )
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)

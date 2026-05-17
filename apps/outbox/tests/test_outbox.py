@@ -10,11 +10,14 @@ from django.utils import timezone
 from pypdf import PdfWriter
 from unittest.mock import MagicMock, patch
 
+from apps.core.exceptions import DomainError
 from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     ExternalPdfAttachment,
     ExternalPdfStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
     PdfStatus,
 )
 from apps.medical.services import (
@@ -204,6 +207,47 @@ class OutboxProcessingTests(TestCase):
             ).exists()
         )
 
+    def test_external_upload_generate_pdf_invariant_domain_error_dead_letters_immediately(
+        self,
+    ) -> None:
+        MedicalDocument.objects.filter(pk=self.medical_document.pk).update(
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        )
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {}
+        event.max_retries = 10
+        event.retry_count = 0
+        event.status = OutboxStatus.PENDING
+        event.available_at = timezone.now() - timedelta(seconds=5)
+        event.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        OutboxEvent.objects.filter(medical_document_version=self.version).exclude(
+            id=event.id
+        ).delete()
+        with patch(
+            "apps.outbox.services.generate_external_upload_pdf",
+            side_effect=DomainError(
+                "no attachment",
+                api_message_key="other.domain.external_upload_generate_pdf_no_attachment",
+            ),
+        ):
+            result = process_outbox_events()
+        event.refresh_from_db()
+        self.assertEqual(result.dead_lettered, 1)
+        self.assertEqual(event.status, OutboxStatus.DEAD_LETTER)
+        self.assertGreaterEqual(event.retry_count, event.max_retries)
+
     def test_failed_outbox_event_persists_when_record_outbox_execution_raises(
         self,
     ) -> None:
@@ -357,11 +401,19 @@ class OutboxProcessingTests(TestCase):
         )
         self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
         self.assertEqual(att.hidrive_remote_path, "/incoming/not_seeded.pdf")
-        self.assertTrue(
+        failed_audits = AuditEvent.objects.filter(
+            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+            medical_document_id=self.medical_document.id,
+        )
+        self.assertEqual(failed_audits.count(), 1)
+
+        process_outbox_events()
+        self.assertEqual(
             AuditEvent.objects.filter(
                 event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                 medical_document_id=self.medical_document.id,
-            ).exists()
+            ).count(),
+            1,
         )
 
         pdf_bytes = _minimal_valid_pdf_bytes()

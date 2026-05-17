@@ -333,5 +333,115 @@
     "de": "Die Anamnese ist bereits zur Korrektur wieder geöffnet.",
     "en": "This intake form is already reopened for corrections.",
     "pl": "Ta ankieta jest już ponownie otwarta do poprawek."
+  },
+  "other.domain.external_upload_file_too_large": {
+    "de": "Die PDF-Datei überschreitet die maximale Größe ({max_bytes} Bytes).",
+    "en": "The PDF file exceeds the maximum allowed size ({max_bytes} bytes).",
+    "pl": "Plik PDF przekracza maksymalny dozwolony rozmiar ({max_bytes} bajtów)."
+  },
+  "other.domain.external_upload_invalid_content_type": {
+    "de": "Nur PDF-Dateien sind erlaubt.",
+    "en": "Only PDF files are allowed.",
+    "pl": "Dozwolone są wyłącznie pliki PDF."
+  },
+  "other.domain.external_upload_not_pdf": {
+    "de": "Die Datei ist kein PDF.",
+    "en": "The file is not a PDF.",
+    "pl": "Plik nie jest PDF-em."
+  },
+  "other.domain.external_upload_invalid_or_empty_pdf": {
+    "de": "Die PDF-Datei ist ungültig oder enthält keine Seiten.",
+    "en": "The PDF file is invalid or has no pages.",
+    "pl": "Plik PDF jest nieprawidłowy lub nie zawiera stron."
+  },
+  "other.domain.external_upload_intake_not_ready": {
+    "de": "Externer Upload ist erst möglich, wenn die Anamnese eingereicht oder zur Korrektur wieder geöffnet ist.",
+    "en": "External upload is only available after the intake form is submitted or reopened for corrections.",
+    "pl": "Wgranie zewnętrzne jest możliwe dopiero po złożeniu ankiety lub jej ponownym otwarciu do poprawek."
+  },
+  "other.domain.external_upload_multiple_medical_documents_for_queue_entry": {
+    "de": "Für diesen Warteschlangeneintrag existieren mehrere medizinische Dokumente. Bitte Datenbereinigung durchführen.",
+    "en": "Multiple medical documents exist for this queue entry. Data cleanup is required.",
+    "pl": "Dla tego wpisu kolejki istnieje więcej niż jeden dokument medyczny. Wymagane jest uporządkowanie danych."
+  },
+  "other.domain.external_upload_staff_role_required": {
+    "de": "Nur Empfang, Administrator oder Manager können externe Uploads für medizinische Dokumente ausführen (Anlegen, Hochladen, Auswahl).",
+    "en": "Only reception, an administrator, or a manager can perform external-upload actions for medical documents (create, upload, or bind to draft).",
+    "pl": "Tylko recepcja, administrator lub manager może wykonywać operacje wgrania zewnętrznego dokumentu medycznego (utworzenie, upload, przypisanie do wersji roboczej)."
+  },
+  "other.domain.external_upload_create_document_invalid_role": {
+    "de": "Nur Empfang, Administrator oder Manager können ein externes Upload-Dokument anlegen.",
+    "en": "Only reception, an administrator, or a manager can create an external-upload medical document.",
+    "pl": "Tylko recepcja, administrator lub manager może utworzyć dokument ze ścieżki wgrania zewnętrznego."
+  },
+  "other.domain.medical_document_source_type_mismatch": {
+    "de": "Für diesen Warteschlangeneintrag existiert bereits ein medizinisches Dokument mit anderem Quelltyp.",
+    "en": "A medical document for this queue entry already exists with a different source type.",
+    "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny o innym typie źródła."
+  },
+  "other.domain.external_upload_select_attachment_invalid_role": {
+    "de": "Nur Empfang, Administrator oder Manager können einen externen PDF-Anhang auswählen.",
+    "en": "Only reception, an administrator, or a manager can select an external PDF attachment.",
+    "pl": "Tylko recepcja, administrator lub manager może wybrać zewnętrzny załącznik PDF."
+  },
+  "other.domain.external_upload_not_external_source": {
+    "de": "Diese Aktion gilt nur für Dokumente mit Quelltyp „Externer Upload“.",
+    "en": "This action applies only to medical documents with source type external upload.",
+    "pl": "Ta operacja dotyczy wyłącznie dokumentów ze źródłem „wgranie zewnętrzne”."
+  },
+  "other.domain.external_upload_no_active_draft": {
+    "de": "Es gibt keine aktive Entwurfsversion für dieses Dokument.",
+    "en": "There is no active draft version for this document.",
+    "pl": "Brak aktywnej wersji roboczej (DRAFT) dla tego dokumentu."
+  },
+  "other.domain.external_upload_attachment_not_found": {
+    "de": "Der externe PDF-Anhang wurde nicht gefunden oder gehört nicht zu diesem Dokument.",
+    "en": "The external PDF attachment was not found or does not belong to this document.",
+    "pl": "Nie znaleziono zewnętrznego załącznika PDF lub nie należy on do tego dokumentu."
+  },
+  "other.domain.external_upload_attachment_invalid_status": {
+    "de": "Für die Auswahl sind nur Anhänge mit Status „MATCHED“ oder „ACCEPTED“ zulässig.",
+    "en": "Only attachments in MATCHED or ACCEPTED status can be selected.",
+    "pl": "Do wyboru dopuszczalne są tylko załączniki w statusie MATCHED lub ACCEPTED."
+  },
+  "other.domain.external_upload_attachment_path_invalid": {
+    "de": "Der HiDrive-Pfad des Anhangs liegt nicht unter dem erwarteten Präfix für externe Uploads.",
+    "en": "The attachment HiDrive path is not under the expected external-upload prefix.",
+    "pl": "Ścieżka HiDrive załącznika nie znajduje się pod oczekiwanym prefiksem wgrania zewnętrznego."
+  },
+  "other.domain.external_upload_publish_no_attachment_selected": {
+    "de": "Zum Veröffentlichen muss im Entwurf ein externer PDF-Anhang ausgewählt sein.",
+    "en": "The draft must have an external PDF attachment selected before publishing.",
+    "pl": "Przed publikacją wersja robocza musi mieć wybrany zewnętrzny załącznik PDF."
+  },
+  "other.domain.publication_pipeline_in_progress": {
+    "de": "Die Veröffentlichung einer früheren Version läuft noch (PDF, HiDrive oder SMS). Bitte warten Sie, bevor Sie eine Revision starten oder erneut veröffentlichen.",
+    "en": "A previous version is still being published (PDF, HiDrive, or SMS). Wait before starting a revision or publishing again.",
+    "pl": "Trwa jeszcze publikacja wcześniejszej wersji (PDF, HiDrive lub SMS). Poczekaj przed rozpoczęciem rewizji lub ponowną publikacją."
+  },
+  "other.domain.external_upload_revision_requires_published": {
+    "de": "Eine neue Revision ist nur für bereits veröffentlichte externe Upload-Dokumente möglich.",
+    "en": "Starting a revision is only allowed when the external-upload document is already published.",
+    "pl": "Rozpoczęcie rewizji jest możliwe tylko dla już opublikowanego dokumentu ze ścieżki wgrania zewnętrznego."
+  },
+  "other.domain.external_upload_revision_already_pending": {
+    "de": "Für dieses Dokument gibt es bereits eine ausstehende Revision.",
+    "en": "This document already has a pending revision.",
+    "pl": "Ten dokument ma już oczekującą rewizję."
+  },
+  "other.domain.external_upload_preview_no_attachment": {
+    "de": "Für diese Vorschau ist kein externer PDF-Anhang verfügbar.",
+    "en": "No external PDF attachment is available for this preview.",
+    "pl": "Brak zewnętrznego załącznika PDF do wyświetlenia w podglądzie."
+  },
+  "other.domain.external_upload_generate_pdf_no_attachment": {
+    "de": "Die veröffentlichte Version hat keinen ausgewählten externen PDF-Anhang; PDF-Generierung abgebrochen.",
+    "en": "Published version has no external PDF attachment selected; PDF generation cannot proceed.",
+    "pl": "Opublikowana wersja nie ma wybranego zewnętrznego załącznika PDF — generowanie PDF nie może być kontynuowane."
+  },
+  "other.domain.external_upload_generate_pdf_corrupt": {
+    "de": "Die ausgewählte externe PDF-Datei ist beschädigt oder leer; PDF-Generierung abgebrochen.",
+    "en": "The selected external PDF is corrupt or empty; PDF generation cannot proceed.",
+    "pl": "Wybrany zewnętrzny plik PDF jest uszkodzony lub pusty — generowanie PDF nie może być kontynuowane."
   }
 }
