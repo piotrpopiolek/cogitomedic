@@ -1,0 +1,18 @@
+{# Shared external PDF list + iframe (doctor detail: readonly banner branch and befund-form branch). #}
+<section id="external-pdfs-panel" class="mb-4 border border-base-200 dark:border-base-700 rounded-default bg-white dark:bg-base-900 overflow-hidden shadow-xs hidden" aria-live="polite">
+  <div class="px-4 py-3 border-b border-base-200 dark:border-base-700 font-medium text-sm text-base-900 dark:text-base-100">{{ ui.external_pdf_section_title }}</div>
+  <div class="p-4 text-sm text-base-900 dark:text-base-100 space-y-3">
+    <p id="external-pdfs-empty" class="text-base-500 dark:text-base-400 mb-0 hidden"></p>
+    <ul id="external-pdfs-list" class="list-none space-y-2 p-0 m-0"></ul>
+    {# Wysokość inline: bundel Tailwinda z admina często nie zawiera klas arbitrary (min-h-[…]), więc iframe zostawał „pasek”. #}
+    <div class="border border-base-200 dark:border-base-700 rounded-default overflow-hidden bg-base-50 dark:bg-base-950" style="min-height: 70vh;">
+      <iframe
+        id="external-pdf-iframe"
+        title="{{ ui.external_pdf_iframe_title }}"
+        class="w-full border-0"
+        style="display: block; width: 100%; min-height: 680px; height: 80vh; max-height: 1200px;"
+        src="about:blank"
+      ></iframe>
+    </div>
+  </div>
+</section>

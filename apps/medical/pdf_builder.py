@@ -4,14 +4,20 @@ import hashlib
 import logging
 import uuid
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
 from weasyprint import HTML
 
+from apps.core.domain_messages import domain_message
+from apps.core.exceptions import DomainError
 from apps.core.translation_service import (
     get_doctor_ui,
     get_fitzpatrick_choices,
@@ -32,6 +38,29 @@ from apps.operations.services import create_audit_event
 from apps.users.models import StaffUser, StaffUserGender
 
 logger = logging.getLogger(__name__)
+
+
+def _external_upload_pdf_bytes_with_document_metadata(
+    pdf_bytes: bytes, medical_document_id: uuid.UUID
+) -> bytes:
+    """Re-pack PDF bytes with ``/Info`` ``/cogitomedicaldocumentid`` (patient-facing anchor)."""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+    except PdfReadError:
+        raise
+    writer = PdfWriter()
+    writer.append(reader)
+    merged_meta: dict[str, str] = {}
+    if reader.metadata:
+        for key, value in reader.metadata.items():
+            if value is None:
+                continue
+            merged_meta[str(key)] = str(value)
+    merged_meta["/cogitomedicaldocumentid"] = str(medical_document_id)
+    writer.add_metadata(merged_meta)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 class AllExternalPdfDownloadsFailed(RuntimeError):
@@ -664,6 +693,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
             failed_download_metadata=meta_list,
         )
 
+    # Partial infra failures only: all-fail path raises above; outbox writes audits then.
     for att, download_error in infra_errors:
         # Only newly MATCHED attachments should flip to MERGE_FAILED on
         # transient download failure. Historical ACCEPTED stay as-is so a
@@ -728,6 +758,134 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     full_path.write_bytes(pdf_bytes)
 
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
+    relative_str = str(relative_path).replace("\\", "/")
+    return relative_str, checksum
+
+
+def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
+    """
+    Copy the reception-selected external PDF to local storage for ``HIDRIVE_UPLOAD``.
+
+    No Befund HTML merge — the patient-facing file is the uploaded PDF. After a
+    successful download, ``MATCHED`` rows are promoted to ``ACCEPTED`` with a
+    conditional ``UPDATE … WHERE status=MATCHED`` so a repeated successful run
+    (e.g. outbox retry after transient errors) does not touch attachments already
+    ``ACCEPTED``.
+
+    Raises :class:`~apps.core.exceptions.DomainError` when the version has no
+    selected attachment (data invariant broken), or when the PDF bytes are corrupt
+    (``MATCHED`` rows are demoted to ``MERGE_FAILED``; terminal in outbox).
+
+    On **infrastructure** download errors, raises
+    :class:`AllExternalPdfDownloadsFailed` without changing attachment status
+    (``MATCHED`` is kept, same as Befund when all lab downloads fail) so outbox retry
+    can promote to ``ACCEPTED`` after HiDrive recovers. ``EXTERNAL_PDF_DOWNLOAD_FAILED``
+    audits are written by the outbox handler after the per-event savepoint rolls back.
+    """
+    version = MedicalDocumentVersion.objects.select_related(
+        "external_selected_attachment",
+        "medical_document",
+    ).get(pk=version.pk)
+    if version.external_selected_attachment_id is None:
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_no_attachment"),
+            api_message_key="other.domain.external_upload_generate_pdf_no_attachment",
+        )
+    att = version.external_selected_attachment
+    doc = version.medical_document
+    patient_id = doc.queue_entry.patient_id
+    status_before_download = att.status
+    try:
+        pdf_bytes = download_external_pdf(att)
+    except ExternalPdfCorruptError:
+        ExternalPdfAttachment.objects.filter(
+            pk=att.pk,
+            status=ExternalPdfStatus.MATCHED,
+        ).update(status=ExternalPdfStatus.MERGE_FAILED)
+        att.refresh_from_db()
+        create_audit_event(
+            event_type="EXTERNAL_PDF_CORRUPT",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "previous_status": status_before_download,
+            },
+        )
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_corrupt"),
+            api_message_key="other.domain.external_upload_generate_pdf_corrupt",
+        ) from None
+    except Exception as exc:
+        logger.warning(
+            "download_external_pdf failed for external-upload GENERATE_PDF: "
+            "attachment_id=%s path=%s",
+            att.id,
+            att.hidrive_remote_path,
+            exc_info=True,
+        )
+        raise AllExternalPdfDownloadsFailed(
+            "External upload PDF download failed (HiDrive unavailable?); "
+            "outbox will retry once the file is reachable.",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            failed_download_metadata=[
+                {
+                    "hidrive_remote_path": att.hidrive_remote_path,
+                    "external_pdf_attachment_id": str(att.id),
+                    "error_type": type(exc).__name__,
+                    "attachment_status": status_before_download,
+                }
+            ],
+        ) from exc
+
+    try:
+        materialized_bytes = _external_upload_pdf_bytes_with_document_metadata(
+            pdf_bytes, doc.id
+        )
+    except PdfReadError as exc:
+        ExternalPdfAttachment.objects.filter(
+            pk=att.pk,
+            status=ExternalPdfStatus.MATCHED,
+        ).update(status=ExternalPdfStatus.MERGE_FAILED)
+        att.refresh_from_db()
+        create_audit_event(
+            event_type="EXTERNAL_PDF_CORRUPT",
+            patient_id=patient_id,
+            medical_document_id=doc.id,
+            metadata={
+                "hidrive_remote_path": att.hidrive_remote_path,
+                "external_pdf_attachment_id": str(att.id),
+                "previous_status": status_before_download,
+                "stage": "external_upload_metadata_rewrite",
+            },
+        )
+        raise DomainError(
+            domain_message("other.domain.external_upload_generate_pdf_corrupt"),
+            api_message_key="other.domain.external_upload_generate_pdf_corrupt",
+        ) from exc
+
+    promoted = ExternalPdfAttachment.objects.filter(
+        pk=att.pk,
+        status=ExternalPdfStatus.MATCHED,
+    ).update(status=ExternalPdfStatus.ACCEPTED)
+    if promoted:
+        att.status = ExternalPdfStatus.ACCEPTED
+
+    now = version.created_at
+    relative_dir = (
+        Path(getattr(settings, "PDF_RELATIVE_DIR", "pdfs"))
+        / "external-upload"
+        / f"{now.year:04d}"
+        / f"{now.month:02d}"
+    )
+    relative_path = relative_dir / f"{version.id}.pdf"
+    full_path = Path(settings.MEDIA_ROOT) / relative_path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_bytes(materialized_bytes)
+
+    checksum = hashlib.sha256(materialized_bytes).hexdigest()
     relative_str = str(relative_path).replace("\\", "/")
     return relative_str, checksum
 

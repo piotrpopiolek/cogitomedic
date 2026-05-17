@@ -567,6 +567,30 @@ if HAS_UNFOLD:
                 },
                 {
                     "title": db_gettext_lazy(
+                        "administration.side_external_upload",
+                        "External examination",
+                    ),
+                    "permission": lambda request: _is_reception_manager_or_admin_role(
+                        request
+                    ),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_external_upload_hub",
+                                "External examination PDF hub",
+                            ),
+                            "icon": "cloud_upload",
+                            "link": lambda request: reverse_lazy(
+                                "admin_external_upload_hub"
+                            ),
+                            "permission": lambda request: _is_reception_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy(
                         "administration.side_outbox_ops", "Outbox i operacje"
                     ),
                     "permission": lambda request: _is_doctor_or_admin_role(request),
@@ -779,6 +803,12 @@ else:
 
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
+# Duże multipart (np. PDF ~250 MB): mały bufor w RAM, reszta strumieniowana na dysk (patrz Nginx client_max_body_size).
+_UPLOAD_MEM_MB = int(os.environ.get("UPLOAD_MEMORY_BUFFER_MB", "5"))
+_UPLOAD_MEM_BYTES = _UPLOAD_MEM_MB * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = _UPLOAD_MEM_BYTES
+FILE_UPLOAD_MAX_MEMORY_SIZE = _UPLOAD_MEM_BYTES
+
 # Za reverse proxy (np. Nginx z TLS): USE_TRUSTED_REVERSE_PROXY=1 + nagłówki X-Forwarded-* w proxy.
 if os.environ.get("USE_TRUSTED_REVERSE_PROXY", "").strip().lower() in (
     "1",
@@ -869,6 +899,12 @@ if ENVIRONMENT == "prod" and str(HIDRIVE_USE_MOCK).lower() not in ("1", "true", 
         )
 
 PATIENT_RESULTS_BASE_URL = os.environ.get("PATIENT_RESULTS_BASE_URL", "")
+# Optional origin (scheme + host, no path) for staff external-upload hub "preview PDF"
+# links when the REST API is exposed on another host than the admin HTML. If empty,
+# links use request.build_absolute_uri (same host as the browser request).
+EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL = os.environ.get(
+    "EXTERNAL_UPLOAD_PREVIEW_API_BASE_URL", ""
+).strip()
 PATIENT_RESULTS_OTP_PEPPER = os.environ.get("PATIENT_RESULTS_OTP_PEPPER", "")
 if ENVIRONMENT != "dev" and not str(PATIENT_RESULTS_OTP_PEPPER).strip():
     raise ImproperlyConfigured(

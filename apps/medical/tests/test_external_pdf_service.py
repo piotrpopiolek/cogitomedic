@@ -18,6 +18,9 @@ from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
     MatchedIncomingFile,
     _ambiguous_undated_stem,
+    _full_incoming_pdf_path,
+    _is_reception_external_upload_incoming_path,
+    _normalize_incoming_logical_path,
     check_external_pdf_gate,
     create_attachment_records,
     download_external_pdf,
@@ -227,6 +230,72 @@ class ExternalPdfGateTests(TestCase):
         )
         self.assertFalse(gate.passed)
         self.assertEqual(gate.error_message, "NO_FILE")
+
+    def test_gate_skips_reception_external_upload_subtree(self) -> None:
+        """PDFs under ``/incoming/external-upload/`` are reception app uploads — not lab gate."""
+        patient = Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500100255",
+            email="gate.external.upload@example.com",
+        )
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/external-upload/00000000-0000-4000-8000-000000000001/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+            ],
+        )
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertTrue(gate.passed)
+        self.assertEqual(len(gate.matched_files), 1)
+        self.assertEqual(gate.matched_files[0].path, "/incoming/Med_Test.pdf")
+
+    def test_gate_ignores_only_external_upload_pdfs_for_lab_gate(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Test",
+            last_name="Med",
+            date_of_birth=date(1990, 1, 1),
+            phone="+48500100256",
+            email="gate.only.external@example.com",
+        )
+        hidrive_client._MockHiDriveAdapter.seed_listing(
+            "/incoming",
+            [
+                {
+                    "name": "Med_Test.pdf",
+                    "path": "/incoming/external-upload/00000000-0000-4000-8000-000000000002/Med_Test.pdf",
+                    "size": 10,
+                    "mtime": None,
+                },
+            ],
+        )
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+        )
+        self.assertFalse(gate.passed)
+        self.assertEqual(gate.error_message, "NO_PDFS")
 
     def test_ambiguous_stem_prefilter_narrows_to_colliding_patients(self) -> None:
         """Regression: DB prefilter must ignore unrelated patients (indexed keys)."""
@@ -550,3 +619,47 @@ class ExternalPdfServiceDbTests(TestCase):
         reject_external_pdf(att)
         att.refresh_from_db()
         self.assertEqual(att.status, ExternalPdfStatus.REJECTED)
+
+
+class IncomingPathHelperTests(SimpleTestCase):
+    def test_normalize_incoming_logical_path(self) -> None:
+        self.assertEqual(_normalize_incoming_logical_path(""), "")
+        self.assertEqual(_normalize_incoming_logical_path("  "), "")
+        self.assertEqual(
+            _normalize_incoming_logical_path("incoming/x.pdf"),
+            "/incoming/x.pdf",
+        )
+        self.assertEqual(
+            _normalize_incoming_logical_path("/incoming/x.pdf"),
+            "/incoming/x.pdf",
+        )
+
+    def test_full_incoming_pdf_path_prefers_entry_path(self) -> None:
+        self.assertEqual(
+            _full_incoming_pdf_path(
+                {"path": "/incoming/a.pdf", "name": "x"},
+                inc="/incoming",
+                pdf_name="ignored.pdf",
+            ),
+            "/incoming/a.pdf",
+        )
+
+    def test_full_incoming_pdf_path_falls_back_to_inc_and_name(self) -> None:
+        self.assertEqual(
+            _full_incoming_pdf_path(
+                {"path": "", "name": "b.pdf"}, inc="/incoming", pdf_name="b.pdf"
+            ),
+            "/incoming/b.pdf",
+        )
+
+    def test_is_reception_external_upload_incoming_path(self) -> None:
+        self.assertFalse(_is_reception_external_upload_incoming_path("", "/incoming"))
+        self.assertFalse(
+            _is_reception_external_upload_incoming_path("/incoming/x.pdf", "/incoming")
+        )
+        self.assertTrue(
+            _is_reception_external_upload_incoming_path(
+                "/incoming/external-upload/queue-1/file.pdf",
+                "/incoming",
+            )
+        )

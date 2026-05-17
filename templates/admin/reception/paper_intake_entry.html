@@ -19,6 +19,7 @@
 <div class="px-4 sm:px-8 pb-8 max-w-3xl">
     <h1 class="text-2xl font-bold mb-4">{{ title }}</h1>
 
+    {# User-facing copy only: views must pass strings from resolve_other_message / translation keys. Do not feed raw exception text or mark_safe HTML. Django auto-escapes {{ message }} by default. #}
     {% if messages %}
     <ul class="mb-4 space-y-2">
         {% for message in messages %}
@@ -60,9 +61,11 @@
             <textarea id="id_reason_revoke" name="reason" rows="4" required minlength="10" maxlength="500"
                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"></textarea>
         </div>
-        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-            {% admin_trans "administration.paper_intake_admin_entry_submit_revoke" "Revoke authorization" %}
-        </button>
+        <div class="pt-4">
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                {% admin_trans "administration.paper_intake_admin_entry_submit_revoke" "Revoke authorization" %}
+            </button>
+        </div>
     </form>
 
     {% elif can_authorize %}
@@ -75,9 +78,11 @@
             <textarea id="id_reason_auth" name="reason" rows="5" required minlength="10" maxlength="500"
                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"></textarea>
         </div>
-        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            {% admin_trans "administration.paper_intake_admin_entry_submit_authorize" "Authorize" %}
-        </button>
+        <div class="pt-4">
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% admin_trans "administration.paper_intake_admin_entry_submit_authorize" "Authorize" %}
+            </button>
+        </div>
     </form>
 
     {% else %}

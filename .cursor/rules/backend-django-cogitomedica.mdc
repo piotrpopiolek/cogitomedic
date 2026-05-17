@@ -12,8 +12,8 @@ alwaysApply: false
 - Wymuszaj DRY: duplikacja kodu jest traktowana jako błąd krytyczny do refaktoryzacji.
 - Projektuj moduły i klasy zgodnie z SOLID, szczególnie SRP i DIP.
 
-## 2) Django/DRF + walidacja danych
-- Dla API używaj spójnych kontraktów wejścia/wyjścia (DRF serializers lub Pydantic, zależnie od kontekstu modułu).
+## 2) Walidacja danych
+- Dla API używaj spójnych kontraktów wejścia/wyjścia Pydantic.
 - Używaj poprawnych metod HTTP i jednoznacznych kodów odpowiedzi.
 - Operacje I/O-bound nie mogą blokować cyklu request/response; deleguj je do Django 6 Tasks.
 
@@ -25,7 +25,6 @@ alwaysApply: false
 
 ## 4) Reguły domenowe specyficzne dla projektu
 - Obsługuj role `RECEPTION`, `DOCTOR`, `ADMIN`, `MANAGER` (oraz `TABLET` tam, gdzie dotyczy) zgodnie z PRD i implementacją grup Django.
-- Dla manualnie dodanych pacjentów bez `Doctolib Patient ID` utrzymuj status tymczasowy i alert administracyjny.
 - Dla sesji tabletu stosuj model `latest-wins`: nowy token unieważnia poprzedni aktywny.
 - Wymuszaj walidację wymaganych zgód i pytań anamnestycznych przed `SUBMITTED`.
 - Wspieraj wersjonowanie dokumentu medycznego i ponowną publikację bez utraty historii.
@@ -49,8 +48,9 @@ alwaysApply: false
 - Monitoruj minimum: metryki outbox, skuteczność HiDrive/SMS, metryki importu oraz opóźnienia publikacji.
 
 ## 8) Jakość kodu i testy
-- **Źródło prawdy dla testów w tym repozytorium:** `make pytest` (Docker: `docker compose run web` + `requirements-dev.txt` + pełny `pytest` wg `pytest.ini`). Alternatywnie lokalnie: aktywuj `venv` i `python -m pytest` po `pip install -r requirements-dev.txt`.
-- Pracuj w aktywnym środowisku wirtualnym (`venv\Scripts\activate`) przy pracy poza Dockerem.
+- **Migracje i testy — wyłącznie w kontenerze Docker** (środowisko jak w CI/prod: WeasyPrint, biblioteki natywne, ta sama baza). Nie uruchamiaj `manage.py migrate` ani `pytest` / `make pytest` na gołym interpreterze hosta, o ile użytkownik nie wymusi inaczej.
+- **Uruchomienie stacku:** z katalogu repo `docker compose up -d db web` (lub pełny `docker compose up -d`). Jednorazowe polecenia: `docker compose run --rm web python manage.py migrate` oraz testy przez `make pytest` albo `docker compose run --rm web pytest` (wg `Makefile` / `pytest.ini`).
+- Przy edycji kodu poza kontenerem nadal możesz używać lokalnego lintera; runtime Django dla migracji/testów ma być w kontenerze `web`.
 - Zachowuj PEP 8 i formatowanie `black`.
 - Dla nowego kodu wymagane są adnotacje typów.
 - Każde przejście stanu domenowego testuj scenariuszem pozytywnym i negatywnym (`pytest` lub `pytest-django`).

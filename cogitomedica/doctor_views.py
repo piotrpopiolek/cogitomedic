@@ -33,7 +33,11 @@ from apps.medical.external_pdf_service import (
     check_external_pdf_gate,
     create_attachment_records,
 )
-from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
+)
 from apps.medical.services import (
     acquire_document_lock,
     check_doctor_queue_entry_access,
@@ -330,7 +334,12 @@ def _render_no_intake_action_page(
 def doctor_open_by_queue_view(
     request: HttpRequest, queue_entry_id: UUID
 ) -> HttpResponse:
-    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document)."""
+    """Open queue entry in Befund flow (requires SUBMITTED digital intake or existing document).
+
+    If a medical document with ``source_type=EXTERNAL_UPLOAD`` already exists for this
+    queue entry, redirect straight to document detail — do not run Befund intake gates
+    or :func:`~apps.medical.services.create_or_get_medical_document`.
+    """
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
     lang = _get_doctor_lang(request)
@@ -351,6 +360,21 @@ def doctor_open_by_queue_view(
             },
             status=404,
         )
+    ext_doc = (
+        MedicalDocument.objects.filter(
+            queue_entry_id=entry.id,
+            source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
+        )
+        .only("id")
+        .first()
+    )
+    if ext_doc is not None:
+        url = reverse(
+            "doctor-document-detail",
+            kwargs={"medical_document_id": ext_doc.id},
+        )
+        return HttpResponseRedirect(url + "?lang=" + lang)
+
     existing_doc = getattr(entry, "medical_document", None)
     if existing_doc is not None:
         doc = existing_doc
@@ -490,7 +514,8 @@ def doctor_document_detail_view(
         patient = Patient.objects.get(pk=patient_pk) if patient_pk else None
         if patient is None:
             raise ObjectDoesNotExist()
-        if doc.status == MedicalDocStatus.PUBLISHED:
+        external_readonly = doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        if doc.status == MedicalDocStatus.PUBLISHED or external_readonly:
             gate = GateResult(
                 passed=True,
                 matched_files=(),
@@ -526,9 +551,12 @@ def doctor_document_detail_view(
                 status=424,
             )
 
-        granted, lock_holder = acquire_document_lock(
-            medical_document_id=medical_document_id, user=request.user
-        )
+        if external_readonly:
+            granted, lock_holder = True, None
+        else:
+            granted, lock_holder = acquire_document_lock(
+                medical_document_id=medical_document_id, user=request.user
+            )
     except DomainError as exc:
         msg_key = exc.api_message_key or ""
         message = (
@@ -587,6 +615,30 @@ def doctor_document_detail_view(
     if "authoring_locale" not in context:
         context["authoring_locale"] = authoring_locale
     body_map_rel = static("tablet/body.jpg")
+    doctor_external_upload_pdf_href = None
+    external_upload_load_attachment_panel = False
+    if external_readonly:
+        # Doctors do not preview reception DRAFT uploads (processed off-platform).
+        # Preview is offered only after publish, or the last published PDF during revision.
+        if doc.status == MedicalDocStatus.PUBLISHED:
+            doctor_external_upload_pdf_href = request.build_absolute_uri(
+                reverse(
+                    "medical-document-preview-pdf",
+                    kwargs={"medical_document_id": doc.id},
+                )
+            )
+        elif doc.published_version_no is not None:
+            doctor_external_upload_pdf_href = request.build_absolute_uri(
+                reverse(
+                    "medical-document-preview-pdf",
+                    kwargs={"medical_document_id": doc.id},
+                )
+            )
+        # Attachment list/iframe uses doctor-accessible APIs; block for doctors pre-publish.
+        if getattr(request.user, "is_doctor", False):
+            external_upload_load_attachment_panel = doc.status != MedicalDocStatus.DRAFT
+        else:
+            external_upload_load_attachment_panel = True
     panel_data = {
         "documentId": str(medical_document_id),
         "apiBase": "/api/v1",
@@ -594,6 +646,8 @@ def doctor_document_detail_view(
         "ui": ui,
         "listUrl": request.build_absolute_uri(reverse("doctor-list")),
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
+        "externalUploadReadOnly": external_readonly,
+        "externalUploadLoadAttachmentPanel": external_upload_load_attachment_panel,
     }
     return _render_doctor(
         request,
@@ -607,6 +661,11 @@ def doctor_document_detail_view(
             "lang": lang,
             "external_pdf_hidrive_warning": (
                 gate.error_message if gate.passed and gate.error_message else None
+            ),
+            "doctor_external_upload_readonly": external_readonly,
+            "doctor_external_upload_pdf_href": doctor_external_upload_pdf_href,
+            "doctor_external_upload_has_pending_revision": bool(
+                external_readonly and doc.has_pending_revision
             ),
         },
     )

@@ -18,6 +18,14 @@ def login_admin(page, base: str, password: str) -> None:
     page.wait_for_load_state("networkidle")
 
 
+def login_reception(page, base: str, password: str) -> None:
+    page.goto(f"{base}/admin/login/", wait_until="networkidle")
+    page.locator('input[name="username"]').fill("screenshot_reception")
+    page.locator('input[name="password"]').fill(password)
+    page.locator('#login-form button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+
 def login_doctor(page, base: str, password: str) -> None:
     page.goto(f"{base}/doctor/login/", wait_until="networkidle")
     page.locator('input[name="username"]').fill("screenshot_doctor")

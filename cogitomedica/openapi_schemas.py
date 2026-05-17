@@ -57,6 +57,7 @@ class PublishDocumentVersionResponse(BaseModel):
     version_no: int
     version_status: str
     publish_request_id: str | None = None
+    publish_locale: str | None = None
 
 
 class DiscardMedicalDocumentRevisionResponse(BaseModel):
@@ -69,6 +70,40 @@ class DiscardMedicalDocumentRevisionResponse(BaseModel):
     status: str
     current_version_no: int
     published_version_no: int | None = None
+    has_pending_revision: bool
+
+
+class ExternalUploadUploadResponse(BaseModel):
+    """Response for POST /medical-documents/external-upload/upload (201)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: str
+    draft_version_id: str
+    attachment_id: str
+    hidrive_remote_path: str
+    size_bytes: int
+    original_filename: str
+
+
+class ExternalUploadSelectAttachmentResponse(BaseModel):
+    """Response for POST …/external-upload/select-attachment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    draft_version_id: str
+    attachment_id: str
+    version_no: int
+
+
+class ExternalUploadRevisionStartResponse(BaseModel):
+    """Response for POST …/external-upload/revision/start (201)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    medical_document_version_id: str
+    version_no: int
+    version_status: str
     has_pending_revision: bool
 
 
@@ -195,6 +230,8 @@ def _get_request_model_registry() -> list[type]:
         CreateMedicalDocumentWithoutIntakeRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        ExternalUploadRevisionStartRequest,
+        ExternalUploadSelectAttachmentRequest,
         MedicalPayloadMinimal,
         PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
@@ -250,6 +287,8 @@ def _get_request_model_registry() -> list[type]:
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
         PublishMedicalDocumentRequest,
+        ExternalUploadSelectAttachmentRequest,
+        ExternalUploadRevisionStartRequest,
         # Intake (AnamnesisAnswerPayload is nested in UpdateAnamnesisPayloadRequest; BodyMapPointPayload in UpdateBodyMapRequest)
         AnamnesisAnswerPayload,
         BodyMapPointPayload,
@@ -279,6 +318,9 @@ def _get_request_model_registry() -> list[type]:
         SaveDraftMedicalDocumentResponse,
         DiscardMedicalDocumentRevisionResponse,
         PublishDocumentVersionResponse,
+        ExternalUploadUploadResponse,
+        ExternalUploadSelectAttachmentResponse,
+        ExternalUploadRevisionStartResponse,
         CreateQueueEntrySessionResponse,
     ]
 
@@ -309,6 +351,8 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         CreateMedicalDocumentWithoutIntakeRequest,
         DoctorTemplateCreateRequest,
         DoctorTemplateUpdateRequest,
+        ExternalUploadRevisionStartRequest,
+        ExternalUploadSelectAttachmentRequest,
         PaperIntakeAuthorizationRequest,
         PublishMedicalDocumentRequest,
         RetryProcessingRequest,
@@ -374,6 +418,18 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
             f"{P}/medical-documents/{{medical_document_id}}/publish",
             "post",
         ): PublishMedicalDocumentRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/publish",
+            "post",
+        ): PublishMedicalDocumentRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/select-attachment",
+            "post",
+        ): ExternalUploadSelectAttachmentRequest,
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/revision/start",
+            "post",
+        ): ExternalUploadRevisionStartRequest,
         (f"{P}/clinic-sites", "post"): CreateClinicSiteRequest,
         (f"{P}/clinic-sites/{{clinic_site_id}}", "patch"): UpdateClinicSiteRequest,
         (f"{P}/consulting-rooms", "post"): CreateConsultingRoomRequest,
@@ -454,6 +510,21 @@ def _response_schema_map() -> dict[tuple[str, str], dict[str, type]]:
         (f"{P}/medical-documents/{{medical_document_id}}/publish", "post"): {
             "200": PublishDocumentVersionResponse
         },
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/publish",
+            "post",
+        ): {"200": PublishDocumentVersionResponse},
+        (f"{P}/medical-documents/external-upload/upload", "post"): {
+            "201": ExternalUploadUploadResponse
+        },
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/select-attachment",
+            "post",
+        ): {"200": ExternalUploadSelectAttachmentResponse},
+        (
+            f"{P}/medical-documents/{{medical_document_id}}/external-upload/revision/start",
+            "post",
+        ): {"201": ExternalUploadRevisionStartResponse},
         (f"{P}/queue-entries/{{queue_entry_id}}/sessions", "post"): {
             "201": CreateQueueEntrySessionResponse
         },

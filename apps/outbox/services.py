@@ -18,7 +18,11 @@ from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import get_hidrive_adapter
 from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
-from apps.medical.pdf_builder import AllExternalPdfDownloadsFailed, generate_befund_pdf
+from apps.medical.pdf_builder import (
+    AllExternalPdfDownloadsFailed,
+    generate_befund_pdf,
+    generate_external_upload_pdf,
+)
 from apps.medical.external_pdf_service import (
     hidrive_incoming_dir,
     logical_path_to_processed,
@@ -27,15 +31,25 @@ from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
     ExternalPdfStatus,
+    MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
 )
+from apps.operations.models import AuditEvent
 from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 
 logger = logging.getLogger(__name__)
+
+# GENERATE_PDF failures that will not self-heal on retry (bad row state).
+_NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS = frozenset(
+    {
+        "other.domain.external_upload_generate_pdf_no_attachment",
+        "other.domain.external_upload_generate_pdf_corrupt",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -108,7 +122,13 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         version.pdf_generation_status = PdfStatus.PROCESSING
         version.save(update_fields=["pdf_generation_status"])
 
-        pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
+        if (
+            version.medical_document.source_type
+            == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        ):
+            pdf_local_path, pdf_checksum_sha256 = generate_external_upload_pdf(version)
+        else:
+            pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
         version.pdf_generation_status = PdfStatus.COMPLETED
         version.pdf_local_path = pdf_local_path
         version.pdf_checksum_sha256 = pdf_checksum_sha256
@@ -148,10 +168,22 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         incoming_q = Q(hidrive_remote_path__startswith=f"{inc}/") | Q(
             hidrive_remote_path=inc
         )
-        for att in ExternalPdfAttachment.objects.filter(
+        attachment_qs = ExternalPdfAttachment.objects.filter(
             medical_document_id=version.medical_document_id,
             status__in=(ExternalPdfStatus.MATCHED, ExternalPdfStatus.ACCEPTED),
-        ).filter(incoming_q):
+        ).filter(incoming_q)
+        if (
+            version.medical_document.source_type
+            == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        ):
+            if version.external_selected_attachment_id is None:
+                raise RuntimeError(
+                    "EXTERNAL_UPLOAD HIDRIVE_UPLOAD requires external_selected_attachment."
+                )
+            attachment_qs = attachment_qs.filter(
+                pk=version.external_selected_attachment_id
+            )
+        for att in attachment_qs:
             dest_path = logical_path_to_processed(att.hidrive_remote_path)
             adapter.move_file(
                 source_path=att.hidrive_remote_path,
@@ -298,10 +330,22 @@ def process_outbox_events(
             transaction.savepoint_rollback(sid)
             if isinstance(exc, AllExternalPdfDownloadsFailed):
                 for meta in exc.failed_download_metadata:
+                    att_id = meta.get("external_pdf_attachment_id")
+                    if (
+                        att_id
+                        and AuditEvent.objects.filter(
+                            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                            outbox_event_id=event_id,
+                            medical_document_id=exc.medical_document_id,
+                            metadata__external_pdf_attachment_id=att_id,
+                        ).exists()
+                    ):
+                        continue
                     create_audit_event(
                         event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
                         patient_id=exc.patient_id,
                         medical_document_id=exc.medical_document_id,
+                        outbox_event_id=event_id,
                         metadata=meta,
                     )
             ev = OutboxEvent.objects.get(pk=event_id)
@@ -310,6 +354,12 @@ def process_outbox_events(
                     id=ev.medical_document_version_id
                 ).update(pdf_generation_status=PdfStatus.FAILED)
             ev.retry_count += 1
+            if (
+                isinstance(exc, DomainError)
+                and exc.api_message_key in _NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS
+                and ev.event_type == OutboxEventType.GENERATE_PDF
+            ):
+                ev.retry_count = max(ev.retry_count, ev.max_retries)
             ev.locked_at = None
             ev.error_message = str(exc)
             if ev.retry_count >= ev.max_retries:

@@ -145,6 +145,63 @@ class Tests(TestCase):
         r = self.client.post(url)
         self.assertEqual(r.status_code, 404)
 
+    def _publish_default_doc_with_delivery(
+        self,
+        *,
+        hidrive_sent: bool = True,
+        sms_sent: bool = True,
+    ) -> MedicalDocumentVersion:
+        """Turn ``self.medical_doc`` into PUBLISHED v1 for revoke / panel contract tests."""
+        doc = self.medical_doc
+        now = timezone.now()
+        ver = MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/api-coverage-revoke.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            hidrive_sent=hidrive_sent,
+            hidrive_sent_at=now if hidrive_sent else None,
+            sms_sent=sms_sent,
+            sms_sent_at=now if sms_sent else None,
+        )
+        MedicalDocument.objects.filter(pk=doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+        )
+        return ver
+
+    @patch("apps.medical.services._try_delete_file")
+    def test_revoke_post_doctor_returns_200_when_hidrive_and_sms_sent(
+        self, _mock_del: object
+    ) -> None:
+        """Doctor panel POST …/revoke: happy path when delivery flags allow revoke."""
+        self._publish_default_doc_with_delivery()
+        self._login_doctor()
+        r = self.client.post(self._doc_url("/revoke"))
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertIn("revoked_at", body)
+        self.assertIsNotNone(body["revoked_at"])
+
+    def test_revoke_post_doctor_returns_400_when_sms_not_sent(self) -> None:
+        """``revoke_document_version`` rejects revoke until SMS (and HiDrive) are complete."""
+        self._publish_default_doc_with_delivery(hidrive_sent=True, sms_sent=False)
+        self._login_doctor()
+        r = self.client.post(self._doc_url("/revoke"))
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertEqual(
+            r.json().get("error_key"),
+            "other.domain.revoke_requires_full_delivery",
+        )
+
     # =============================================================
     # 2. medical_document_audit_trail_view  (GET …/<uuid>/audit-trail)
     # =============================================================
@@ -508,6 +565,25 @@ class Tests(TestCase):
         self._login_doctor()
         r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
         self.assertEqual(r.status_code, 410)
+
+    @override_settings(DEBUG=False, HIDRIVE_USE_MOCK="1")
+    @patch(
+        "apps.medical.api_views.download_external_pdf",
+        side_effect=RuntimeError("hidrive down"),
+    )
+    def test_external_pdf_content_infra_error_returns_502(
+        self, _mock_dl: object
+    ) -> None:
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/Test_Med.pdf",
+            original_filename="Test_Med.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self._login_doctor()
+        r = self.client.get(self._doc_url(f"/external-pdfs/{att.id}/content"))
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("error", r.json())
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_external_pdf_content_corrupt_returns_422(self) -> None:

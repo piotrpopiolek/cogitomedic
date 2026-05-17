@@ -41,6 +41,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.consent_definition_not_active": ["consent_id", "date"],
     "other.domain.signature_payload_too_large": ["max_bytes"],
     "other.api.request_body_too_large": ["max_bytes"],
+    "other.domain.external_upload_file_too_large": ["max_bytes"],
     "other.sms.patient_results": ["url"],
     "other.auth.already_authenticated_other_account": ["username"],
     "administration.login_authenticated_but_unauthorized": ["username"],
