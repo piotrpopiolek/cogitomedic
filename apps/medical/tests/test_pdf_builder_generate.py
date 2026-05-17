@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
@@ -569,3 +570,44 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
             meta2.get("/cogitomedicaldocumentid"),
             str(doc_id),
         )
+
+    def test_external_upload_metadata_helper_raises_on_invalid_pdf(self) -> None:
+        from apps.medical import pdf_builder as pb
+        from pypdf.errors import PdfReadError
+
+        with self.assertRaises(PdfReadError):
+            pb._external_upload_pdf_bytes_with_document_metadata(
+                b"not-a-pdf", self.medical_doc.id
+            )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.medical.pdf_builder.download_external_pdf")
+    @patch(
+        "apps.medical.pdf_builder._external_upload_pdf_bytes_with_document_metadata",
+        side_effect=PdfReadError("x"),
+    )
+    def test_generate_external_upload_metadata_rewrite_failure_marks_merge_failed(
+        self,
+        _meta_mock: MagicMock,
+        dl_mock: MagicMock,
+    ) -> None:
+        pdf = _minimal_pdf_bytes()
+        dl_mock.return_value = pdf
+        hidrive_client._MockHiDriveAdapter.seed_file("/incoming/ext-meta-fail.pdf", pdf)
+        att = ExternalPdfAttachment.objects.create(
+            medical_document=self.medical_doc,
+            hidrive_remote_path="/incoming/ext-meta-fail.pdf",
+            original_filename="ext-meta-fail.pdf",
+            status=ExternalPdfStatus.MATCHED,
+        )
+        self.version.external_selected_attachment = att
+        self.version.save(update_fields=["external_selected_attachment"])
+        with self.settings(MEDIA_ROOT=str(self.media_root)):
+            with self.assertRaises(DomainError) as ctx:
+                generate_external_upload_pdf(self.version)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.external_upload_generate_pdf_corrupt",
+        )
+        att.refresh_from_db()
+        self.assertEqual(att.status, ExternalPdfStatus.MERGE_FAILED)
