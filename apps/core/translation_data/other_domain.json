@@ -134,6 +134,11 @@
     "en": "A medical document already exists for this queue entry.",
     "pl": "Dla tego wpisu kolejki istnieje już dokument medyczny."
   },
+  "other.domain.medical_document_publish_doctor_role_required": {
+    "de": "Nur Ärzte können medizinische Befunde veröffentlichen.",
+    "en": "Only doctors can publish medical reports.",
+    "pl": "Tylko lekarze mogą publikować opisy medyczne."
+  },
   "other.domain.publish_locale_required": {
     "de": "publish_locale ist für die Veröffentlichung erforderlich.",
     "en": "publish_locale is required for publish.",
