@@ -319,6 +319,16 @@
     "en": "Visit date descending",
     "pl": "Data wizyty malejąco"
   },
+  "doctor.list_sort_asc": {
+    "de": "Aufsteigend sortiert",
+    "en": "Sorted ascending",
+    "pl": "Sortowanie rosnąco"
+  },
+  "doctor.list_sort_desc": {
+    "de": "Absteigend sortiert",
+    "en": "Sorted descending",
+    "pl": "Sortowanie malejąco"
+  },
   "doctor.list_status_in_revision": {
     "de": "Revision",
     "en": "In revision",

@@ -26,6 +26,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.core.http_utils import get_client_ip
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
@@ -39,13 +40,15 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
 )
 from apps.medical.services import (
+    DoctorAccessAuditContext,
+    _is_admin_or_manager_medical_oversight,
     acquire_document_lock,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
-    parse_medical_documents_list_params,
+    parse_doctor_work_queue_list_params,
 )
 from apps.reception.models import Patient, QueueEntry
 from apps.users.display import staff_user_display_name
@@ -156,6 +159,10 @@ def _get_doctor_lang(request: HttpRequest) -> str:
     return "en" if lang == "en" else "pl" if lang == "pl" else "de"
 
 
+def _doctor_access_audit_context(request: HttpRequest) -> DoctorAccessAuditContext:
+    return DoctorAccessAuditContext(client_ip=get_client_ip(request))
+
+
 def _apply_doctor_lang(request: HttpRequest) -> str:
     """Ustaw język z GET w sesji (jeśli podany) i zwróć aktualny lang."""
     lang = _get_doctor_lang(request)
@@ -164,15 +171,82 @@ def _apply_doctor_lang(request: HttpRequest) -> str:
     return lang
 
 
-def _doctor_list_page_querystring(request: HttpRequest, *, target_page: int) -> str:
-    """Rebuild GET query for doctor list with ``page`` set (omit ``page`` when ``target_page`` is 1)."""
-    q = request.GET.copy()
-    q.pop("lang", None)
-    if target_page <= 1:
-        q.pop("page", None)
+_DOCTOR_LIST_QUERY_KEYS_BASE = (
+    "status",
+    "queue_date",
+    "patient_search",
+    "sort",
+    "order",
+)
+_DOCTOR_LIST_QUERY_KEYS_OVERSIGHT = ("scope", "published_by_user_id")
+
+
+def build_doctor_list_querystring(
+    request: HttpRequest,
+    *,
+    show_oversight_filters: bool,
+    page: int | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+) -> str:
+    """Whitelist GET params for doctor work-queue list (pagination, sort, filters)."""
+    allowed = list(_DOCTOR_LIST_QUERY_KEYS_BASE)
+    if show_oversight_filters:
+        allowed.extend(_DOCTOR_LIST_QUERY_KEYS_OVERSIGHT)
+    q: dict[str, str] = {}
+    for key in allowed:
+        raw = request.GET.get(key)
+        if raw is not None and str(raw).strip() != "":
+            q[key] = str(raw).strip()
+    if sort is not None:
+        if sort:
+            q["sort"] = sort
+        else:
+            q.pop("sort", None)
+    if order is not None:
+        if order:
+            q["order"] = order
+        else:
+            q.pop("order", None)
+    if page is not None:
+        if page > 1:
+            q["page"] = str(page)
+        else:
+            q.pop("page", None)
+    from urllib.parse import urlencode
+
+    return urlencode(q)
+
+
+def _doctor_list_page_querystring(
+    request: HttpRequest, *, target_page: int, show_oversight_filters: bool
+) -> str:
+    return build_doctor_list_querystring(
+        request,
+        show_oversight_filters=show_oversight_filters,
+        page=target_page,
+    )
+
+
+def _doctor_list_sort_link_query(
+    request: HttpRequest,
+    *,
+    show_oversight_filters: bool,
+    sort_column: str,
+    current_sort: str,
+    current_order: str,
+) -> str:
+    if current_sort == sort_column:
+        next_order = "asc" if current_order == "desc" else "desc"
     else:
-        q["page"] = str(target_page)
-    return q.urlencode()
+        next_order = "asc" if sort_column == "patient" else "desc"
+    return build_doctor_list_querystring(
+        request,
+        show_oversight_filters=show_oversight_filters,
+        page=1,
+        sort=sort_column,
+        order=next_order,
+    )
 
 
 def _doctor_filter_published_by_options() -> list[tuple[str, str]]:
@@ -195,7 +269,11 @@ def _doctor_filter_published_by_options() -> list[tuple[str, str]]:
 
 
 def _doctor_list_page_link_items(
-    request: HttpRequest, *, num_pages: int, page: int
+    request: HttpRequest,
+    *,
+    num_pages: int,
+    page: int,
+    show_oversight_filters: bool,
 ) -> list[dict[str, object]]:
     """Unfold-style elided page numbers (same algorithm as Django admin paginator)."""
     if num_pages <= 1:
@@ -209,7 +287,11 @@ def _doctor_list_page_link_items(
                 {
                     "type": "page",
                     "number": n,
-                    "query": _doctor_list_page_querystring(request, target_page=n),
+                    "query": _doctor_list_page_querystring(
+                        request,
+                        target_page=n,
+                        show_oversight_filters=show_oversight_filters,
+                    ),
                     "current": n == page,
                 }
             )
@@ -224,18 +306,25 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     """List medical documents (work queue) with optional filters."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
-    list_params = parse_medical_documents_list_params(request.GET)
+    list_params = parse_doctor_work_queue_list_params(request.GET, user=request.user)
     list_items, total = list_doctor_work_queue(
         **list_params,
         user=request.user,
     )
+    show_oversight_filters = _is_admin_or_manager_medical_oversight(request.user)
     page = list_params["page"]
     page_size = list_params["page_size"]
     num_pages = (total + page_size - 1) // page_size if total > 0 else 1
     has_previous = page > 1 and num_pages > 1
     has_next = page < num_pages
-    prev_query = _doctor_list_page_querystring(request, target_page=page - 1)
-    next_query = _doctor_list_page_querystring(request, target_page=page + 1)
+    prev_query = _doctor_list_page_querystring(
+        request, target_page=page - 1, show_oversight_filters=show_oversight_filters
+    )
+    next_query = _doctor_list_page_querystring(
+        request, target_page=page + 1, show_oversight_filters=show_oversight_filters
+    )
+    current_sort = list_params["sort"]
+    current_order = list_params["order"]
     lang = _apply_doctor_lang(request)
     if request.GET.get("lang"):
         query = request.GET.copy()
@@ -258,9 +347,26 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                 "prev_query": prev_query,
                 "next_query": next_query,
                 "page_link_items": _doctor_list_page_link_items(
-                    request, num_pages=num_pages, page=page
+                    request,
+                    num_pages=num_pages,
+                    page=page,
+                    show_oversight_filters=show_oversight_filters,
                 ),
             },
+            "sort_link_patient": _doctor_list_sort_link_query(
+                request,
+                show_oversight_filters=show_oversight_filters,
+                sort_column="patient",
+                current_sort=current_sort,
+                current_order=current_order,
+            ),
+            "sort_link_date": _doctor_list_sort_link_query(
+                request,
+                show_oversight_filters=show_oversight_filters,
+                sort_column="date",
+                current_sort=current_sort,
+                current_order=current_order,
+            ),
             "filters": {
                 "status": list_params["status"] or "",
                 "queue_date": request.GET.get("queue_date") or "",
@@ -271,8 +377,17 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                     else ""
                 ),
                 "scope": list_params["scope"],
+                "sort": list_params["sort"],
+                "order": list_params["order"],
             },
-            "published_by_doctor_options": _doctor_filter_published_by_options(),
+            "show_oversight_filters": show_oversight_filters,
+            "list_query_hidden": {
+                "sort": list_params["sort"],
+                "order": list_params["order"],
+            },
+            "published_by_doctor_options": (
+                _doctor_filter_published_by_options() if show_oversight_filters else []
+            ),
             "paper_intake_create_cta": resolve_other_message(
                 request,
                 "doctor.paper_intake_create_cta",
@@ -348,7 +463,11 @@ def doctor_open_by_queue_view(
         entry = QueueEntry.objects.select_related(
             "intake_form", "daily_queue", "medical_document"
         ).get(id=queue_entry_id)
-        check_doctor_queue_entry_access(entry, request.user)
+        check_doctor_queue_entry_access(
+            entry,
+            request.user,
+            audit_context=_doctor_access_audit_context(request),
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
@@ -447,7 +566,11 @@ def doctor_create_no_intake_view(
     ui = get_doctor_ui(lang)
     try:
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
-        check_doctor_queue_entry_access(entry, request.user)
+        check_doctor_queue_entry_access(
+            entry,
+            request.user,
+            audit_context=_doctor_access_audit_context(request),
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
@@ -507,6 +630,7 @@ def doctor_document_detail_view(
             form_locale=request.GET.get("form_locale")
             or ("en-GB" if lang == "en" else "pl-PL" if lang == "pl" else "de-DE"),
             user=request.user,
+            audit_context=_doctor_access_audit_context(request),
         )
         doc = MedicalDocument.objects.get(pk=medical_document_id)
         patient_summary = (context.get("intake_summary") or {}).get("patient") or {}
