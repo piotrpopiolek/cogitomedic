@@ -24,7 +24,10 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
-from apps.medical.services import authorize_paper_intake
+from apps.medical.services import (
+    authorize_paper_intake,
+    list_doctor_work_queue,
+)
 from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.models import (
@@ -233,6 +236,64 @@ class MedicalApiTests(TestCase):
         self.assertIn("patient", item)
         self.assertIn("document_id", item)
         self.assertEqual(item["patient"]["last_name"], "Api")
+
+    def test_medical_documents_list_order_matches_list_doctor_work_queue(self) -> None:
+        """GET list and service share the same work-queue ordering (plan §4.5)."""
+        other_patient = Patient.objects.create(
+            first_name="Beta",
+            last_name="Zebra",
+            date_of_birth=date(1991, 1, 1),
+            phone="+48123456789",
+            email="zebra.api@example.com",
+        )
+        other_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=2,
+            created_by_user=self.reception_user,
+            doctor_list_sort_at=timezone.now() - timedelta(hours=1),
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            created_by_user=self.reception_user,
+        )
+        other_intake = PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            signature_file_path="/tmp/signature2.png",
+            signature_sha256="b" * 64,
+            submitted_at=timezone.now(),
+        )
+        self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(other_entry.id),
+                    "intake_form_id": str(other_intake.id),
+                }
+            ),
+            content_type="application/json",
+        )
+
+        api_resp = self.client.get(
+            "/api/v1/medical-documents",
+            {"sort": "patient", "order": "asc", "page_size": "50"},
+        )
+        self.assertEqual(api_resp.status_code, 200)
+        api_ids = [row["queue_entry_id"] for row in api_resp.json()["items"]]
+
+        service_items, _ = list_doctor_work_queue(
+            user=self.doctor_user,
+            sort="patient",
+            order="asc",
+            page_size=50,
+        )
+        service_ids = [row["queue_entry_id"] for row in service_items]
+        self.assertEqual(api_ids, service_ids)
 
     def test_medical_document_detail_get(self) -> None:
         create_response = self.client.post(
@@ -1705,6 +1766,55 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         self.client.force_login(self.admin_user)
+        resp = self.client.post(
+            f"/api/v1/medical-documents/{mid}/publish",
+            data=json.dumps(
+                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_manager_cannot_publish_medical_document(self) -> None:
+        manager = StaffUser.objects.create_user(
+            username="api-manager-publish",
+            email="api.manager.publish@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(manager, "Manager")
+        manager.clinic_sites.add(self.queue_entry.daily_queue.clinic_site)
+
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        draft_body = {
+            "medical_payload_schema_version": 1,
+            "medical_payload": {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        }
+        self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.client.force_login(manager)
         resp = self.client.post(
             f"/api/v1/medical-documents/{mid}/publish",
             data=json.dumps(
