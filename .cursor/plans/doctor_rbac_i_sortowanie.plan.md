@@ -3,56 +3,69 @@ name: Doctor RBAC i sortowanie
 overview: "Wdrożenie punktów z `.ai/TODO.md` na bazie rozwiązania A: RBAC, publish tylko DOCTOR, sort, jedna lista, filtry, bezpieczeństwo (404 + audyt + macierz IDOR)."
 todos:
   - id: solution-a-queue-tier
-    content: "_doctor_queue_unpublished_q + _doctor_queue_pub_group (tier 0 = doc null / DRAFT / has_pending_revision) — naprawa annotate przed sortem UI"
-    status: pending
+    content: _doctor_queue_unpublished_q + _doctor_queue_pub_group (tier 0 = doc null / DRAFT / has_pending_revision) — naprawa annotate przed sortem UI
+    status: completed
   - id: sort-tier-antiregression
     content: "Testy sort×tier: rewizja nad opublikowanym przy sort=patient asc; macierz sort/order; brak regresji A nad Z w tier 1"
-    status: pending
+    status: completed
   - id: rbac-helpers
     content: Dodać _doctor_work_queue_visibility_q / _doctor_may_access_medical_document w apps/medical/services.py
-    status: pending
+    status: completed
   - id: rbac-enforce
     content: Podpiąć regułę w check_doctor_* , list_doctor_work_queue, get_medical_document_context
-    status: pending
+    status: completed
   - id: doctor-filters-simplify
     content: "Lekarz: ukryć scope + published_by w list.html; serwis/API — scope=all, in_revision bez personal AND; testy"
-    status: pending
+    status: completed
   - id: unify-list-api
-    content: "GET /medical-documents → list_doctor_work_queue; usuń list_medical_documents i _serialize_medical_document_list_item"
-    status: pending
+    content: GET /medical-documents → list_doctor_work_queue; usuń list_medical_documents i _serialize_medical_document_list_item
+    status: completed
   - id: rbac-tests
     content: "Testy: assigned doctor + cudze PUBLISHED (lista 404), shared DRAFT, API/HTML detail"
-    status: pending
+    status: completed
   - id: security-404-audit
-    content: "Semantyka 404 vs 403; audyt MEDICAL_DOCUMENT_ACCESS_DENIED w check_doctor_*; bez 403 na IDOR dokumentu"
-    status: pending
+    content: Semantyka 404 vs 403; audyt MEDICAL_DOCUMENT_ACCESS_DENIED w check_doctor_*; bez 403 na IDOR dokumentu
+    status: completed
   - id: idor-matrix-tests
-    content: "Macierz IDOR API+HTML (open, preview, draft/lock, publish, revoke, external-pdfs, revision) — test_api + test_doctor_views"
-    status: pending
+    content: Macierz IDOR API+HTML (open, preview, draft/lock, publish, revoke, external-pdfs, revision) — test_api + test_doctor_views
+    status: completed
   - id: publish-doctor-only
     content: "Publikacja Befund tylko DOCTOR: API publish, assert w publish_document_version, OpenAPI, testy 403 ADMIN/MANAGER"
-    status: pending
+    status: completed
   - id: publish-doctor-docs
-    content: "docs/manual/03-doktor.md, SECURITY_AUDIT.md; odhaczyć .ai/TODO.md linia 9 po wdrożeniu"
-    status: pending
+    content: docs/manual/03-doktor.md, SECURITY_AUDIT.md; odhaczyć .ai/TODO.md linia 9 po wdrożeniu
+    status: completed
   - id: sort-params
     content: parse_doctor_work_queue_list_params sort/order + _doctor_queue_pub_group wg rozwiązania A (tier 0 = DRAFT lub has_pending_revision)
-    status: pending
+    status: completed
   - id: sort-ui-i18n
     content: Nagłówki sortowania w templates/doctor/list.html, kontekst w doctor_views, doctor_ui.json + migracja seed
-    status: pending
+    status: completed
   - id: list-query-preserve-ux
-    content: "Jeden helper query listy (paginacja + sort + hidden w formularzu); test doctor_views — filtr nie resetuje sort/order"
-    status: pending
+    content: Jeden helper query listy (paginacja + sort + hidden w formularzu); test doctor_views — filtr nie resetuje sort/order
+    status: completed
   - id: sort-api-openapi
     content: Sort tylko w list_doctor_work_queue + OpenAPI schemat wiersza work queue; testy API GET list
-    status: pending
+    status: completed
 isProject: false
 ---
 
 # Plan: RBAC lekarza + sortowanie Work Queue
 
-## Stan obecny (skrót)
+## Stan wdrożenia (2026-05)
+
+**Epik zamknięty w kodzie.** Poniższa sekcja „Stan obecny (skrót)” opisuje **stan sprzed wdrożenia** (archiwum decyzji).
+
+| Warstwa | Zachowanie po wdrożeniu |
+|--------|-------------------------|
+| [`check_doctor_document_access`](apps/medical/services.py) | Rozwiązanie A: praca robocza wspólna; opublikowany bez rewizji tylko dla `published_by_user` |
+| [`list_doctor_work_queue`](apps/medical/services.py) | Jedyna lista (HTML + API); `_doctor_work_queue_visibility_q`, tier sort z `has_pending_revision` |
+| `GET /api/v1/medical-documents` | `list_doctor_work_queue` — `list_medical_documents` usunięte |
+| Testy | Macierz IDOR, tier×sort, publish tylko DOCTOR (admin + manager 403), scope/in_revision lekarza, kolejność API = serwis |
+
+Opcjonalnie poza epikiem: ukrycie `#btn-publish` dla admin/manager na `doctor/detail`, pydantic `DoctorWorkQueueListItem` w OpenAPI.
+
+## Stan obecny (skrót) — archiwum (przed wdrożeniem)
 
 | Warstwa | Zachowanie dziś |
 |--------|------------------|

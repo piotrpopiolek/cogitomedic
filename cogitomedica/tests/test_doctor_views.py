@@ -1748,6 +1748,21 @@ class DoctorRbacIdorHtmlTests(TestCase):
         self.assertEqual(resp.status_code, 404)
         self.assertNotIn(str(mid), resp.content.decode())
 
+    def test_h2_open_queue_writes_access_denied_audit(self) -> None:
+        """HTML open-by-queue audits denial before 404 (same as API detail)."""
+        mid = self._publish_as_doctor_a()
+        AuditEvent.objects.filter(event_type="MEDICAL_DOCUMENT_ACCESS_DENIED").delete()
+        self.client.force_login(self.doctor_b)
+        resp = self.client.get(f"/doctor/open/{self.queue_entry.id}/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
+                medical_document_id=mid,
+            ).count(),
+            1,
+        )
+
 
 class DoctorListSortUxTests(TestCase):
     def setUp(self) -> None:

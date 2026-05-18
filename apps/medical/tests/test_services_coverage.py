@@ -1323,6 +1323,86 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
                 )
                 self.assertLess(tier0_idx, tier1_idx)
 
+    def test_draft_and_revision_both_tier0_above_published(self) -> None:
+        """DRAFT + open revision + published without revision: tier 0 block before tier 1."""
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        self._tier_sort_queue_row(
+            last_name="MidDraft",
+            sort_at=now,
+            doc_status=MedicalDocStatus.DRAFT,
+        )
+        self._tier_sort_queue_row(
+            last_name="MidRevision",
+            sort_at=now + timedelta(minutes=1),
+            has_pending_revision=True,
+            include_draft_version=True,
+        )
+        self._tier_sort_queue_row(
+            last_name="ZzzPublished",
+            sort_at=now + timedelta(hours=5),
+        )
+        tier0_names = ("MidDraft", "MidRevision")
+        tier1_name = "ZzzPublished"
+        for sort, order in (
+            ("date", "desc"),
+            ("date", "asc"),
+            ("patient", "asc"),
+            ("patient", "desc"),
+        ):
+            with self.subTest(sort=sort, order=order):
+                items, _ = list_doctor_work_queue(
+                    user=admin, sort=sort, order=order, page_size=50
+                )
+                indices = {
+                    row["patient"]["last_name"]: i
+                    for i, row in enumerate(items)
+                    if row["patient"]["last_name"] in (*tier0_names, tier1_name)
+                }
+                self.assertEqual(len(indices), 3)
+                tier0_max = max(indices[name] for name in tier0_names)
+                tier1_idx = indices[tier1_name]
+                self.assertLess(tier0_max, tier1_idx)
+
+    def test_doctor_scope_published_by_me_matches_all(self) -> None:
+        doc = self._make_medical_doc()
+        self._make_published_version(doc)
+        items_all, total_all = list_doctor_work_queue(user=self.doctor, scope="all")
+        items_pbm, total_pbm = list_doctor_work_queue(
+            user=self.doctor, scope="published_by_me"
+        )
+        self.assertEqual(total_all, total_pbm)
+        self.assertEqual(
+            [i["queue_entry_id"] for i in items_all],
+            [i["queue_entry_id"] for i in items_pbm],
+        )
+
+    def test_doctor_in_revision_includes_foreign_pending_revision(self) -> None:
+        doc = self._make_medical_doc()
+        self._make_published_version(doc)
+        MedicalDocument.objects.filter(pk=doc.pk).update(
+            has_pending_revision=True,
+            current_version_no=2,
+        )
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=2,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        other = StaffUser.objects.create_user(
+            username="other-rev-scope",
+            email="other.rev.scope@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(other, "Doctor")
+        items, total = list_doctor_work_queue(user=other, scope="in_revision")
+        self.assertEqual(total, 1)
+        self.assertEqual(items[0]["document_id"], str(doc.id))
+        self.assertTrue(items[0]["has_pending_revision"])
+
     def test_empty_when_no_submitted_intake(self):
         self.intake.form_status = IntakeStatus.IN_PROGRESS
         self.intake.submitted_at = None
