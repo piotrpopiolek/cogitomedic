@@ -7,6 +7,7 @@ import uuid
 from os import close as os_close
 from datetime import date, datetime, timedelta
 from pathlib import Path, PurePosixPath
+from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -136,6 +137,138 @@ def _is_admin_or_manager_medical_oversight(user: Any) -> bool:
     return bool(
         getattr(user, "is_admin_role", False) or getattr(user, "is_manager", False)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorAccessAuditContext:
+    """Optional HTTP context for access-denied audit (client still receives 404)."""
+
+    client_ip: str | None = None
+
+
+def _doctor_queue_unpublished_q() -> Q:
+    """Tier 0 work queue: no document, first draft, or open revision."""
+    return (
+        Q(medical_document__isnull=True)
+        | Q(medical_document__status=MedicalDocStatus.DRAFT)
+        | Q(
+            medical_document__status=MedicalDocStatus.PUBLISHED,
+            medical_document__has_pending_revision=True,
+        )
+    )
+
+
+def _queue_entry_published_by_user_at_record_version_q(*, user_id: uuid.UUID) -> Q:
+    """Queue row visible: user published the version at ``published_version_no``."""
+    return Q(
+        Exists(
+            MedicalDocumentVersion.objects.filter(
+                medical_document__queue_entry_id=OuterRef("pk"),
+                version_status=DocVersionStatus.PUBLISHED,
+                published_by_user_id=user_id,
+                version_no=OuterRef("medical_document__published_version_no"),
+            )
+        )
+    )
+
+
+def _doctor_work_queue_visibility_q(*, user: Any) -> Q:
+    """Doctor list/detail visibility: shared work (tier 0) or own published result (tier 1)."""
+    return (
+        _doctor_queue_unpublished_q()
+        | _queue_entry_published_by_user_at_record_version_q(user_id=user.id)
+    )
+
+
+def _document_is_doctor_shared_work(doc: MedicalDocument) -> bool:
+    if doc.status == MedicalDocStatus.DRAFT:
+        return True
+    return bool(doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision)
+
+
+def _user_is_publisher_of_record_version(
+    doc: MedicalDocument, user_id: uuid.UUID
+) -> bool:
+    qs = MedicalDocumentVersion.objects.filter(
+        medical_document_id=doc.id,
+        version_status=DocVersionStatus.PUBLISHED,
+        published_by_user_id=user_id,
+    )
+    if doc.published_version_no is not None:
+        return qs.filter(version_no=doc.published_version_no).exists()
+    return qs.exists()
+
+
+def _doctor_may_access_medical_document(doc: MedicalDocument, user: Any) -> bool:
+    if _is_admin_or_manager_medical_oversight(user):
+        return True
+    if not getattr(user, "is_doctor", False):
+        return False
+    if _document_is_doctor_shared_work(doc):
+        return True
+    if (
+        doc.status == MedicalDocStatus.PUBLISHED
+        and not doc.has_pending_revision
+        and _user_is_publisher_of_record_version(doc, user.id)
+    ):
+        return True
+    return False
+
+
+def _audit_medical_document_access_denied(
+    *,
+    document: MedicalDocument,
+    user: Any,
+    denial_reason: str,
+    audit_context: DoctorAccessAuditContext | None,
+) -> None:
+    if audit_context is None:
+        return
+    queue = document.queue_entry
+    daily = queue.daily_queue
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
+        actor_user_id=user.id,
+        patient_id=queue.patient_id,
+        medical_document_id=document.id,
+        context_clinic_site_id=daily.clinic_site_id,
+        metadata={
+            "denial_reason": denial_reason,
+            "client_ip": audit_context.client_ip,
+        },
+    )
+
+
+def _audit_queue_entry_access_denied(
+    *,
+    queue_entry: QueueEntry,
+    user: Any,
+    denial_reason: str,
+    audit_context: DoctorAccessAuditContext | None,
+) -> None:
+    if audit_context is None:
+        return
+    create_audit_event(
+        event_type="QUEUE_ENTRY_ACCESS_DENIED",
+        actor_user_id=user.id,
+        patient_id=queue_entry.patient_id,
+        context_clinic_site_id=queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "denial_reason": denial_reason,
+            "queue_entry_id": str(queue_entry.id),
+            "client_ip": audit_context.client_ip if audit_context else None,
+        },
+    )
+
+
+def _assert_staff_user_may_publish_medical_document(*, actor: StaffUser) -> None:
+    if not actor.is_doctor:
+        raise DomainError(
+            domain_message(
+                "other.domain.medical_document_publish_doctor_role_required"
+            ),
+            api_message_key="other.domain.medical_document_publish_doctor_role_required",
+        )
 
 
 def get_document_lock_state(
@@ -351,44 +484,63 @@ def latest_version_processing_error_message(
     return failed[0].error_message
 
 
-def check_doctor_document_access(document: MedicalDocument, user: Any) -> None:
+def check_doctor_document_access(
+    document: MedicalDocument,
+    user: Any,
+    *,
+    audit_context: DoctorAccessAuditContext | None = None,
+) -> None:
     """
-    Raise ObjectDoesNotExist if user (doctor) does not have access.
-    Access is granted if user is the author OR is assigned to the document's queue.
-    Any doctor may access a document in DRAFT (shared work queue for describing).
-    ADMIN and Manager (nadzór) have access to all.
+    Raise ObjectDoesNotExist if user does not have access (404 to the client).
+
+    Doctors: shared work (DRAFT / open revision) or published result they published.
+    Admin/Manager: full oversight.
     """
-    if _is_admin_or_manager_medical_oversight(user):
+    if _doctor_may_access_medical_document(document, user):
         return
-    if document.created_by_user_id == user.id:
-        return
-    if document.queue_entry.daily_queue.assigned_doctor_id == user.id:
-        return
-    if document.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
-        return
+    denial_reason = "foreign_published"
+    if (
+        document.status == MedicalDocStatus.PUBLISHED
+        and not document.has_pending_revision
+    ):
+        denial_reason = "not_publisher"
+    elif not getattr(user, "is_doctor", False):
+        denial_reason = "not_doctor"
+    _audit_medical_document_access_denied(
+        document=document,
+        user=user,
+        denial_reason=denial_reason,
+        audit_context=audit_context,
+    )
     raise ObjectDoesNotExist("Medical document not found.")
 
 
-def check_doctor_queue_entry_access(queue_entry: QueueEntry, user: Any) -> None:
+def check_doctor_queue_entry_access(
+    queue_entry: QueueEntry,
+    user: Any,
+    *,
+    audit_context: DoctorAccessAuditContext | None = None,
+) -> None:
     """
     Raise ObjectDoesNotExist if user does not have access to the queue entry.
 
-    Allowed: admin or manager; doctor assigned to the daily queue; creator of an existing
-    medical document for this entry; any doctor when there is no document yet
-    or the document is still DRAFT (shared queue).
+    Without a medical document, any doctor may open the entry (paper / intake queue).
+    With a document, same rules as ``check_doctor_document_access``.
     """
     if _is_admin_or_manager_medical_oversight(user):
         return
-    if queue_entry.daily_queue.assigned_doctor_id == user.id:
-        return
     md = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
     if md is not None:
-        if md.created_by_user_id == user.id:
-            return
-        if md.status == MedicalDocStatus.DRAFT and getattr(user, "is_doctor", False):
-            return
-    elif getattr(user, "is_doctor", False):
+        check_doctor_document_access(md, user, audit_context=audit_context)
         return
+    if getattr(user, "is_doctor", False):
+        return
+    _audit_queue_entry_access_denied(
+        queue_entry=queue_entry,
+        user=user,
+        denial_reason="queue_not_visible",
+        audit_context=audit_context,
+    )
     raise ObjectDoesNotExist("Queue entry not found.")
 
 
@@ -1859,6 +2011,15 @@ def publish_document_version(
             api_message_key="other.domain.publish_locale_required",
         )
 
+    try:
+        actor = StaffUser.objects.get(id=published_by_user_id)
+    except StaffUser.DoesNotExist as exc:
+        raise DomainError(
+            domain_message("other.api.staff_user_not_found"),
+            api_message_key="other.api.staff_user_not_found",
+        ) from exc
+    _assert_staff_user_may_publish_medical_document(actor=actor)
+
     requested_at = now or timezone.now()
     medical_document = MedicalDocument.objects.select_for_update().get(
         id=medical_document_id
@@ -2386,11 +2547,13 @@ def revoke_document_version(
     return current_version
 
 
-def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
+def parse_doctor_work_queue_list_params(
+    get_params: Any, *, user: Any = None
+) -> dict[str, Any]:
     """
-    Parse GET parameters for medical documents list (work queue).
-    Returns dict with status, queue_date, patient_search, published_by_user_id,
-    scope, page, page_size.
+    Parse GET parameters for doctor work queue (HTML + API list).
+
+    Doctors: ``scope`` is always ``all``; ``published_by_user_id`` is ignored.
     """
     status = get_params.get("status") or None
     queue_date = None
@@ -2403,15 +2566,29 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
             pass
     patient_search = get_params.get("patient_search") or None
     published_by_user_id: uuid.UUID | None = None
-    raw_pub_id = (get_params.get("published_by_user_id") or "").strip()
-    if raw_pub_id:
-        try:
-            published_by_user_id = uuid.UUID(raw_pub_id)
-        except (ValueError, TypeError):
-            published_by_user_id = None
     scope = (get_params.get("scope") or "all").strip()
     if scope not in {"all", "mine", "published_by_me", "in_revision"}:
         scope = "all"
+    is_doctor_only = (
+        user is not None
+        and getattr(user, "is_doctor", False)
+        and not _is_admin_or_manager_medical_oversight(user)
+    )
+    if is_doctor_only:
+        scope = "all"
+    else:
+        raw_pub_id = (get_params.get("published_by_user_id") or "").strip()
+        if raw_pub_id:
+            try:
+                published_by_user_id = uuid.UUID(raw_pub_id)
+            except (ValueError, TypeError):
+                published_by_user_id = None
+    sort = (get_params.get("sort") or "date").strip().lower()
+    if sort not in {"date", "patient"}:
+        sort = "date"
+    order = (get_params.get("order") or "desc").strip().lower()
+    if order not in {"asc", "desc"}:
+        order = "desc"
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
     page_size = safe_parse_positive_int(
         get_params.get("page_size"),
@@ -2424,88 +2601,11 @@ def parse_medical_documents_list_params(get_params: Any) -> dict[str, Any]:
         "patient_search": patient_search,
         "published_by_user_id": published_by_user_id,
         "scope": scope,
+        "sort": sort,
+        "order": order,
         "page": page,
         "page_size": page_size,
     }
-
-
-def list_medical_documents(
-    *,
-    status: str | None = None,
-    queue_date: date | None = None,
-    patient_search: str | None = None,
-    published_by_user_id: uuid.UUID | None = None,
-    scope: str = "all",
-    user: Any = None,
-    page: int = 1,
-    page_size: int = DEFAULT_LIST_LIMIT,
-) -> tuple[list[MedicalDocument], int]:
-    """
-    List medical documents for doctor work queue.
-    If user is DOCTOR (not admin), returns documents where user is author OR assigned
-    to queue, plus every document still in DRAFT (shared describing queue).
-    ``scope``:
-    - ``all`` / ``mine`` / ``published_by_me``: parity with doctor HTML list (doctor-only subset still applies).
-    - ``in_revision``: only ``PUBLISHED`` documents with ``has_pending_revision``.
-    """
-    qs = (
-        MedicalDocument.objects.select_related(
-            "queue_entry",
-            "queue_entry__patient",
-            "queue_entry__daily_queue",
-            "locked_by_user",
-        )
-        .prefetch_related(
-            Prefetch(
-                "versions",
-                queryset=MedicalDocumentVersion.objects.order_by(
-                    "-version_no"
-                ).prefetch_related(
-                    Prefetch(
-                        "outbox_events",
-                        queryset=OutboxEvent.objects.order_by("-created_at"),
-                    )
-                ),
-            )
-        )
-        .order_by("-updated_at")
-    )
-    if not _is_admin_or_manager_medical_oversight(user) and user is not None:
-        qs = qs.filter(
-            Q(created_by_user_id=user.id)
-            | Q(queue_entry__daily_queue__assigned_doctor_id=user.id)
-            | Q(status=MedicalDocStatus.DRAFT)
-        )
-    if status:
-        qs = qs.filter(status=status)
-    if queue_date is not None:
-        qs = qs.filter(queue_entry__daily_queue__queue_date=queue_date)
-    if patient_search and patient_search.strip():
-        term = patient_search.strip()
-        qs = qs.filter(
-            Q(queue_entry__patient__last_name__icontains=term)
-            | Q(queue_entry__patient__first_name__icontains=term)
-        )
-    if published_by_user_id is not None:
-        qs = qs.filter(
-            Exists(
-                MedicalDocumentVersion.objects.filter(
-                    medical_document_id=OuterRef("pk"),
-                    version_status=DocVersionStatus.PUBLISHED,
-                    published_by_user_id=published_by_user_id,
-                )
-            )
-        )
-    if scope == "in_revision":
-        qs = qs.filter(
-            status=MedicalDocStatus.PUBLISHED,
-            has_pending_revision=True,
-        )
-    total = qs.count()
-    start = (page - 1) * page_size
-    end = start + page_size
-    items = list(qs[start:end])
-    return items, total
 
 
 def list_doctor_work_queue(
@@ -2515,6 +2615,8 @@ def list_doctor_work_queue(
     patient_search: str | None = None,
     published_by_user_id: uuid.UUID | None = None,
     scope: str = "all",
+    sort: str = "date",
+    order: str = "desc",
     user: Any = None,
     page: int = 1,
     page_size: int = DEFAULT_LIST_LIMIT,
@@ -2557,14 +2659,10 @@ def list_doctor_work_queue(
     )
     if user is not None:
         is_oversight = _is_admin_or_manager_medical_oversight(user)
-        need_published_by_annotation = (not is_oversight) or scope in {
-            "mine",
-            "published_by_me",
-        }
-        personal = Q(medical_document__created_by_user_id=user.id) | Q(
-            daily_queue__assigned_doctor_id=user.id
-        )
-        if need_published_by_annotation:
+        if is_oversight:
+            personal = Q(medical_document__created_by_user_id=user.id) | Q(
+                daily_queue__assigned_doctor_id=user.id
+            )
             published_by_user_exists = Exists(
                 MedicalDocumentVersion.objects.filter(
                     medical_document__queue_entry_id=OuterRef("pk"),
@@ -2574,14 +2672,10 @@ def list_doctor_work_queue(
             )
             qs = qs.annotate(has_published_by_user=published_by_user_exists)
             personal = personal | Q(has_published_by_user=True)
-        shared_draft_or_pending = Q(medical_document__isnull=True) | Q(
-            medical_document__status=MedicalDocStatus.DRAFT
-        )
-        in_revision_q = Q(
-            medical_document__status=MedicalDocStatus.PUBLISHED,
-            medical_document__has_pending_revision=True,
-        )
-        if is_oversight:
+            in_revision_q = Q(
+                medical_document__status=MedicalDocStatus.PUBLISHED,
+                medical_document__has_pending_revision=True,
+            )
             if scope == "mine":
                 qs = qs.filter(personal)
             elif scope == "published_by_me":
@@ -2589,16 +2683,20 @@ def list_doctor_work_queue(
             elif scope == "in_revision":
                 qs = qs.filter(in_revision_q)
         else:
-            if scope == "mine":
-                qs = qs.filter(personal)
-            elif scope == "published_by_me":
-                qs = qs.filter(has_published_by_user=True)
-            elif scope == "in_revision":
-                qs = qs.filter(in_revision_q & personal)
-            else:
-                qs = qs.filter(shared_draft_or_pending | personal)
+            qs = qs.filter(_doctor_work_queue_visibility_q(user=user))
+            if scope == "in_revision":
+                qs = qs.filter(
+                    medical_document__status=MedicalDocStatus.PUBLISHED,
+                    medical_document__has_pending_revision=True,
+                )
     if status:
-        qs = qs.filter(medical_document__status=status)
+        if status == MedicalDocStatus.DRAFT:
+            qs = qs.filter(
+                Q(medical_document__status=MedicalDocStatus.DRAFT)
+                | Q(medical_document__has_pending_revision=True)
+            )
+        else:
+            qs = qs.filter(medical_document__status=status)
     if queue_date is not None:
         qs = qs.filter(daily_queue__queue_date=queue_date)
     if patient_search and patient_search.strip():
@@ -2616,23 +2714,43 @@ def list_doctor_work_queue(
             )
         )
         qs = qs.filter(publisher_row_exists)
-    # Unpublished work first: no document yet, or document still DRAFT; then recency.
+    unpublished_q = _doctor_queue_unpublished_q()
     qs = qs.annotate(
         _doctor_queue_pub_group=Case(
-            When(
-                Q(medical_document__isnull=True)
-                | Q(medical_document__status=MedicalDocStatus.DRAFT),
-                then=Value(0),
-            ),
+            When(unpublished_q, then=Value(0)),
             default=Value(1),
             output_field=IntegerField(),
         )
-    ).order_by(
-        "_doctor_queue_pub_group",
-        "-doctor_list_sort_at",
-        "-daily_queue__queue_date",
-        "-id",
     )
+    if sort == "patient":
+        if order == "asc":
+            qs = qs.order_by(
+                "_doctor_queue_pub_group",
+                "patient__last_name",
+                "patient__first_name",
+                "id",
+            )
+        else:
+            qs = qs.order_by(
+                "_doctor_queue_pub_group",
+                "-patient__last_name",
+                "-patient__first_name",
+                "-id",
+            )
+    elif order == "asc":
+        qs = qs.order_by(
+            "_doctor_queue_pub_group",
+            "doctor_list_sort_at",
+            "daily_queue__queue_date",
+            "id",
+        )
+    else:
+        qs = qs.order_by(
+            "_doctor_queue_pub_group",
+            "-doctor_list_sort_at",
+            "-daily_queue__queue_date",
+            "-id",
+        )
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size

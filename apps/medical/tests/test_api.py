@@ -201,13 +201,15 @@ class MedicalApiTests(TestCase):
         self.assertEqual(version.medical_document.status, MedicalDocStatus.PUBLISHED)
 
     def test_medical_documents_list_get(self) -> None:
-        list_empty = self.client.get("/api/v1/medical-documents")
-        self.assertEqual(list_empty.status_code, 200)
-        data = list_empty.json()
+        list_before_doc = self.client.get("/api/v1/medical-documents")
+        self.assertEqual(list_before_doc.status_code, 200)
+        data = list_before_doc.json()
         self.assertIn("items", data)
         self.assertIn("pagination", data)
-        self.assertEqual(data["pagination"]["total"], 0)
-        self.assertEqual(len(data["items"]), 0)
+        self.assertEqual(data["pagination"]["total"], 1)
+        self.assertEqual(len(data["items"]), 1)
+        self.assertIsNone(data["items"][0].get("document_id"))
+        self.assertEqual(data["items"][0]["patient"]["last_name"], "Api")
 
         self.client.post(
             "/api/v1/medical-documents",
@@ -220,15 +222,16 @@ class MedicalApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        list_one = self.client.get("/api/v1/medical-documents")
-        self.assertEqual(list_one.status_code, 200)
-        data = list_one.json()
+        list_with_doc = self.client.get("/api/v1/medical-documents")
+        self.assertEqual(list_with_doc.status_code, 200)
+        data = list_with_doc.json()
         self.assertEqual(data["pagination"]["total"], 1)
         self.assertEqual(len(data["items"]), 1)
         item = data["items"][0]
         self.assertEqual(item["status"], MedicalDocStatus.DRAFT)
         self.assertIn("queue_date", item)
         self.assertIn("patient", item)
+        self.assertIn("document_id", item)
         self.assertEqual(item["patient"]["last_name"], "Api")
 
     def test_medical_document_detail_get(self) -> None:
@@ -1671,7 +1674,7 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
 
-    def test_admin_can_override_lock_on_publish(self) -> None:
+    def test_admin_cannot_publish_medical_document(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1701,10 +1704,6 @@ class MedicalApiTests(TestCase):
             data=json.dumps(draft_body),
             content_type="application/json",
         )
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=timezone.now(),
-        )
         self.client.force_login(self.admin_user)
         resp = self.client.post(
             f"/api/v1/medical-documents/{mid}/publish",
@@ -1713,8 +1712,7 @@ class MedicalApiTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["version_status"], "PUBLISHED")
+        self.assertEqual(resp.status_code, 403)
 
     def test_admin_can_unlock_another_users_lock(self) -> None:
         create_resp = self.client.post(

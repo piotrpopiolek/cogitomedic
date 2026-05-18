@@ -39,13 +39,14 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
 )
 from apps.medical.services import (
+    _is_admin_or_manager_medical_oversight,
     acquire_document_lock,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
     list_doctor_work_queue,
-    parse_medical_documents_list_params,
+    parse_doctor_work_queue_list_params,
 )
 from apps.reception.models import Patient, QueueEntry
 from apps.users.display import staff_user_display_name
@@ -224,11 +225,12 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
     """List medical documents (work queue) with optional filters."""
     if not _doctor_role_ok(request):
         return redirect("doctor-login")
-    list_params = parse_medical_documents_list_params(request.GET)
+    list_params = parse_doctor_work_queue_list_params(request.GET, user=request.user)
     list_items, total = list_doctor_work_queue(
         **list_params,
         user=request.user,
     )
+    show_oversight_filters = _is_admin_or_manager_medical_oversight(request.user)
     page = list_params["page"]
     page_size = list_params["page_size"]
     num_pages = (total + page_size - 1) // page_size if total > 0 else 1
@@ -271,8 +273,17 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
                     else ""
                 ),
                 "scope": list_params["scope"],
+                "sort": list_params["sort"],
+                "order": list_params["order"],
             },
-            "published_by_doctor_options": _doctor_filter_published_by_options(),
+            "show_oversight_filters": show_oversight_filters,
+            "list_query_hidden": {
+                "sort": list_params["sort"],
+                "order": list_params["order"],
+            },
+            "published_by_doctor_options": (
+                _doctor_filter_published_by_options() if show_oversight_filters else []
+            ),
             "paper_intake_create_cta": resolve_other_message(
                 request,
                 "doctor.paper_intake_create_cta",
