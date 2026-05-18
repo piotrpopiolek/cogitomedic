@@ -2697,3 +2697,106 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(preview["Content-Type"], "application/pdf")
         self.assertEqual(bytes(preview.content), raw_lab_pdf)
         merge_mock.assert_not_called()
+
+
+class DoctorRbacIdorMatrixTests(MedicalApiTests):
+    """Doctor B must not access doctor A's published document without revision (404 + audit)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.doctor_b = StaffUser.objects.create_user(
+            username="api-idor-b",
+            email="api.idor.b@example.com",
+            password="safe-password",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor_b, "Doctor")
+        self.queue_entry.daily_queue.assigned_doctor = self.doctor_b
+        self.queue_entry.daily_queue.save(
+            update_fields=["assigned_doctor", "updated_at"]
+        )
+
+    def _publish_as_doctor_a(self) -> str:
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        draft_body = {
+            "medical_payload_schema_version": 1,
+            "medical_payload": {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        }
+        self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(draft_body),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{mid}/publish",
+            data=json.dumps(
+                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+            ),
+            content_type="application/json",
+        )
+        return mid
+
+    def test_doctor_b_get_detail_returns_404_and_audit(self) -> None:
+        mid = self._publish_as_doctor_a()
+        AuditEvent.objects.filter(event_type="MEDICAL_DOCUMENT_ACCESS_DENIED").delete()
+        self.client.force_login(self.doctor_b)
+        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
+        self.assertEqual(detail.status_code, 404)
+        denied = AuditEvent.objects.filter(
+            event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
+            medical_document_id=mid,
+        )
+        self.assertEqual(denied.count(), 1)
+
+    def test_doctor_b_preview_pdf_returns_404(self) -> None:
+        mid = self._publish_as_doctor_a()
+        self.client.force_login(self.doctor_b)
+        preview = self.client.get(f"/api/v1/medical-documents/{mid}/preview-pdf")
+        self.assertEqual(preview.status_code, 404)
+
+    def test_doctor_b_publish_returns_404(self) -> None:
+        mid = self._publish_as_doctor_a()
+        self.client.force_login(self.doctor_b)
+        resp = self.client.post(
+            f"/api/v1/medical-documents/{mid}/publish",
+            data=json.dumps(
+                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_doctor_b_can_access_shared_draft(self) -> None:
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        self.client.force_login(self.doctor_b)
+        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
+        self.assertEqual(detail.status_code, 200)

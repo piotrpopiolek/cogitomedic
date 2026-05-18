@@ -28,7 +28,7 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 ## Integralność danych – blokada edycji Befund
 
-- Dla dokumentów w stanie **DRAFT** stosowana jest **aplikacyjna blokada** na rekordzie `medical_document` (`locked_by_user`, `locked_at`), aby ograniczyć równoległe nadpisywanie szkicu przez dwóch lekarzy. Blokada wygasa po **6 godzinach** (bez osobnego schedulera) i jest zwalniana przy **publikacji** oraz **best-effort** przy zamknięciu karty (żądanie `POST /api/v1/medical-documents/{id}/unlock`). **Admin** i **Manager** (nadzór medyczny w module Befund) mogą zapisywać szkic i publikować mimo blokady innego użytkownika — zgodnie z logiką serwisu.
+- Dla dokumentów w stanie **DRAFT** stosowana jest **aplikacyjna blokada** na rekordzie `medical_document` (`locked_by_user`, `locked_at`), aby ograniczyć równoległe nadpisywanie szkicu przez dwóch lekarzy. Blokada wygasa po **6 godzinach** (bez osobnego schedulera) i jest zwalniana przy **publikacji** oraz **best-effort** przy zamknięciu karty (żądanie `POST /api/v1/medical-documents/{id}/unlock`). **Admin** i **Manager** mogą zapisywać szkic mimo blokady innego użytkownika (PUT …/draft); **publikacja** Befund (`POST …/publish`) jest wyłącznie dla roli **DOCTOR**.
 
 ## Weryfikacja zabezpieczeń
 
@@ -36,6 +36,9 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 
 - Logowanie: `doctor_login_view` – użytkownicy z `user.is_doctor`, `user.is_admin_role` lub `user.is_manager` mogą się zalogować (kolejka Befund w `apps.medical.services` traktuje admina i managera jak pełen nadzór przy dostępie do listy / dokumentu w panelu HTML).
 - Wszystkie widoki chronione: `@login_required(login_url="doctor-login")` oraz na początku widoku `if not _doctor_role_ok(request): return redirect("doctor-login")`.
+- **RBAC kolejki lekarza:** wspólny dostęp do pracy roboczej (brak dokumentu, `DRAFT`, rewizja `has_pending_revision`); opublikowany wynik bez rewizji widoczny tylko dla lekarza, który go opublikował (`published_by_user` na wersji przy `published_version_no`). Próba dostępu do cudzego UUID → **404** (nie 403), żeby nie ujawniać istnienia rekordu.
+- **Audyt odmowy:** `check_doctor_document_access` / `check_doctor_queue_entry_access` zapisują `MEDICAL_DOCUMENT_ACCESS_DENIED` / `QUEUE_ENTRY_ACCESS_DENIED` w `AuditEvent` przed zwróceniem 404 (metadata m.in. `denial_reason`, opcjonalnie `client_ip`).
+- **Publikacja Befund:** `POST …/medical-documents/{id}/publish` — wyłącznie rola **DOCTOR** (admin/manager nie publikują w imieniu lekarza).
 - Pacjent (model `Patient`) nie ma konta w `StaffUser` – nie może zalogować się do panelu lekarza.
 
 ### Tablet (`cogitomedica/tablet_views.py`)
