@@ -16,6 +16,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import (
     Case,
     Exists,
+    F,
     IntegerField,
     Max,
     OuterRef,
@@ -2740,15 +2741,15 @@ def list_doctor_work_queue(
     elif order == "asc":
         qs = qs.order_by(
             "_doctor_queue_pub_group",
-            "doctor_list_sort_at",
-            "daily_queue__queue_date",
+            F("doctor_list_sort_at").asc(nulls_last=True),
+            F("daily_queue__queue_date").asc(nulls_last=True),
             "id",
         )
     else:
         qs = qs.order_by(
             "_doctor_queue_pub_group",
-            "-doctor_list_sort_at",
-            "-daily_queue__queue_date",
+            F("doctor_list_sort_at").desc(nulls_last=True),
+            F("daily_queue__queue_date").desc(nulls_last=True),
             "-id",
         )
     total = qs.count()
@@ -2833,9 +2834,17 @@ def _doctor_list_unpublished_sla_urgency_and_deadline(
     Urgency is 0..1. Deadline ISO is set only when urgency > 0 and not paper state B
     (same rules as prior separate deadline field).
     """
-    if doc is not None and doc.status == MedicalDocStatus.PUBLISHED:
+    if (
+        doc is not None
+        and doc.status == MedicalDocStatus.PUBLISHED
+        and not doc.has_pending_revision
+    ):
         return 0.0, None
-    unpublished = doc is None or doc.status == MedicalDocStatus.DRAFT
+    unpublished = (
+        doc is None
+        or doc.status == MedicalDocStatus.DRAFT
+        or bool(doc and doc.has_pending_revision)
+    )
     if not unpublished:
         return 0.0, None
     if paper_intake_action_required:
@@ -2905,6 +2914,7 @@ def _serialize_doctor_work_queue_row(
     row_is_fully_delivered = bool(
         doc
         and doc.status == MedicalDocStatus.PUBLISHED
+        and not doc.has_pending_revision
         and work_queue_row_outbound_complete(
             version=latest,
             events_by_type=events_by_type,
