@@ -1213,6 +1213,34 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertTrue(tier_rows[0]["has_pending_revision"])
         self.assertEqual(tier_rows[1]["patient"]["last_name"], "AaaPublished")
 
+    def test_pending_revision_uses_unpublished_sla_tint(self) -> None:
+        """Open revision is tier-0 work — same SLA row tint as DRAFT, not delivered white."""
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        t0 = now - timedelta(hours=12)
+        rev_doc = self._tier_sort_queue_row(
+            last_name="RevSla",
+            sort_at=now,
+            has_pending_revision=True,
+            include_draft_version=True,
+        )
+        QueueEntry.objects.filter(pk=rev_doc.queue_entry_id).update(
+            doctor_list_sort_at=t0
+        )
+        self._tier_sort_queue_row(
+            last_name="PubNoSla",
+            sort_at=now,
+        )
+        items, _ = list_doctor_work_queue(user=admin, page_size=100)
+        rev_row = next(i for i in items if i["patient"]["last_name"] == "RevSla")
+        pub_row = next(i for i in items if i["patient"]["last_name"] == "PubNoSla")
+        self.assertTrue(rev_row["has_pending_revision"])
+        self.assertGreater(rev_row["row_unpublished_urgency"], 0.0)
+        self.assertTrue(rev_row["row_unpublished_sla_active"])
+        self.assertFalse(rev_row["row_is_fully_delivered"])
+        self.assertEqual(pub_row["row_unpublished_urgency"], 0.0)
+        self.assertFalse(pub_row["row_unpublished_sla_active"])
+
     def test_tier0_precedes_tier1_sort_patient_asc_antiregression(self) -> None:
         admin = self._tier_sort_admin()
         now = timezone.now()
