@@ -463,7 +463,11 @@ def doctor_open_by_queue_view(
         entry = QueueEntry.objects.select_related(
             "intake_form", "daily_queue", "medical_document"
         ).get(id=queue_entry_id)
-        check_doctor_queue_entry_access(entry, request.user)
+        check_doctor_queue_entry_access(
+            entry,
+            request.user,
+            audit_context=_doctor_access_audit_context(request),
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
@@ -562,7 +566,11 @@ def doctor_create_no_intake_view(
     ui = get_doctor_ui(lang)
     try:
         entry = QueueEntry.objects.select_related("daily_queue").get(id=queue_entry_id)
-        check_doctor_queue_entry_access(entry, request.user)
+        check_doctor_queue_entry_access(
+            entry,
+            request.user,
+            audit_context=_doctor_access_audit_context(request),
+        )
     except ObjectDoesNotExist:
         return _render_doctor(
             request,
