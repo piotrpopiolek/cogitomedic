@@ -47,7 +47,6 @@ from apps.medical.services import (
     latest_retryable_outbox_event,
     latest_version_processing_error_message,
     list_doctor_work_queue,
-    list_medical_documents,
     outbox_event_stage_status,
     pdf_generation_stage_complete,
     refresh_document_lock,
@@ -170,9 +169,15 @@ class ServicesCoverageBase(TestCase):
             publish_request_id=uuid.uuid4(),
             published_at=timezone.now(),
             publish_locale="de-DE",
+            published_by_user=kw.pop("published_by_user", self.doctor),
         )
         defaults.update(kw)
-        return MedicalDocumentVersion.objects.create(**defaults)
+        version = MedicalDocumentVersion.objects.create(**defaults)
+        MedicalDocument.objects.filter(pk=doc.pk).update(
+            published_version_no=version_no,
+            current_version_no=version_no,
+        )
+        return version
 
 
 # ------------------------------------------------------------------
@@ -1277,6 +1282,13 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertEqual(total, 0)
 
     def test_published_by_user_id_filter(self) -> None:
+        admin = StaffUser.objects.create_user(
+            username="cov-admin-pub-filter",
+            email="cov.admin.pub@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(admin, "Admin")
         publisher = StaffUser.objects.create_user(
             username="cov-publisher-z",
             email="cov.publisher.z@example.com",
@@ -1290,13 +1302,13 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self._make_published_version(doc, published_by_user=publisher)
 
         items, total = list_doctor_work_queue(
-            user=self.doctor, published_by_user_id=publisher.id
+            user=admin, published_by_user_id=publisher.id
         )
         self.assertEqual(total, 1)
         self.assertEqual(items[0]["document_id"], str(doc.id))
 
         items, total = list_doctor_work_queue(
-            user=self.doctor, published_by_user_id=self.doctor.id
+            user=admin, published_by_user_id=self.doctor.id
         )
         self.assertEqual(total, 0)
 
@@ -1971,17 +1983,6 @@ class DocumentLockTests(ServicesCoverageBase):
         result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
         self.assertTrue(result)
 
-    # -- list_medical_documents lock fields --
-    def test_list_medical_documents_includes_lock_fields(self):
-        doc = self._make_draft_doc()
-        doc.locked_by_user = self.doctor
-        doc.locked_at = timezone.now()
-        doc.save(update_fields=["locked_by_user", "locked_at"])
-        items, total = list_medical_documents(user=self.doctor)
-        self.assertEqual(total, 1)
-        item_data = items[0]
-        self.assertIsNotNone(item_data.locked_by_user_id)
-
     # -- list_doctor_work_queue lock fields --
     def test_work_queue_includes_lock_fields_in_output(self):
         doc = self._make_draft_doc()
@@ -2096,19 +2097,20 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertFalse(found[0]["row_is_fully_delivered"])
         self.assertEqual(found[0]["row_unpublished_urgency"], 0.0)
 
-    # -- list_medical_documents draft visibility for non-assigned doctor --
-    def test_list_medical_documents_draft_visible_to_non_assigned(self):
+    def test_work_queue_draft_visible_to_non_assigned_doctor(self):
         self._make_draft_doc()
         other = self._other_doctor("list-vis")
-        items, total = list_medical_documents(user=other)
+        items, total = list_doctor_work_queue(user=other)
         self.assertEqual(total, 1)
 
-    def test_list_medical_documents_published_hidden_from_non_assigned(self):
+    def test_work_queue_published_hidden_from_non_publisher_even_if_assigned(
+        self,
+    ):
         self._make_medical_doc()
         other = self._other_doctor("list-hid")
-        self.daily_queue.assigned_doctor = self.doctor
+        self.daily_queue.assigned_doctor = other
         self.daily_queue.save(update_fields=["assigned_doctor"])
-        items, total = list_medical_documents(user=other)
+        items, total = list_doctor_work_queue(user=other)
         self.assertEqual(total, 0)
 
 
