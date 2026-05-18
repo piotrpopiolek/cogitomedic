@@ -17,6 +17,7 @@ from pypdf import PdfWriter
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.operations.models import AuditEvent
+from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.medical.external_pdf_service import GateResult
 from apps.medical.models import (
     DocVersionStatus,
@@ -150,8 +151,16 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
 
-    def test_list_includes_published_by_doctor_select(self) -> None:
+    def test_list_hides_oversight_filters_for_doctor(self) -> None:
         self._login_doctor()
+        resp = self.client.get("/doctor/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertNotIn('name="published_by_user_id"', html)
+        self.assertNotIn('name="scope"', html)
+
+    def test_list_includes_published_by_doctor_select_for_manager(self) -> None:
+        self.client.force_login(self.manager_user)
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
@@ -536,7 +545,7 @@ class DoctorViewsSmokeTests(TestCase):
         )
         self.assertEqual(pub.status_code, 200, pub.content)
 
-        self.client.force_login(self.doctor)
+        self.client.force_login(self.manager_user)
         resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode("utf-8")
@@ -614,7 +623,7 @@ class DoctorViewsSmokeTests(TestCase):
             data=json.dumps({"attachment_id": att_id}),
             content_type="application/json",
         )
-        self.client.post(
+        pub = self.client.post(
             f"/api/v1/medical-documents/{doc_id}/external-upload/publish",
             data=json.dumps(
                 {
@@ -624,11 +633,16 @@ class DoctorViewsSmokeTests(TestCase):
             ),
             content_type="application/json",
         )
-        self.client.post(
+        self.assertEqual(pub.status_code, 200, pub.content)
+        OutboxEvent.objects.filter(
+            medical_document_version_id=pub.json()["medical_document_version_id"]
+        ).update(status=OutboxStatus.PROCESSED)
+        rev = self.client.post(
             f"/api/v1/medical-documents/{doc_id}/external-upload/revision/start",
             data=json.dumps({}),
             content_type="application/json",
         )
+        self.assertEqual(rev.status_code, 201, rev.content)
         self.client.force_login(self.doctor)
         resp = self.client.get(f"/doctor/{doc_id}/?lang=de")
         self.assertEqual(resp.status_code, 200)
@@ -1408,7 +1422,27 @@ class DoctorDetailHappyPathTests(TestCase):
         mock_gate: MagicMock,
     ) -> None:
         self.doc.status = MedicalDocStatus.PUBLISHED
-        self.doc.save(update_fields=["status", "updated_at"])
+        self.doc.published_version_no = 1
+        self.doc.current_version_no = 1
+        self.doc.save(
+            update_fields=[
+                "status",
+                "published_version_no",
+                "current_version_no",
+                "updated_at",
+            ]
+        )
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            publish_request_id=uuid4(),
+            published_at=timezone.now(),
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+        )
 
         self.client.force_login(self.doctor)
         resp = self.client.get(f"/doctor/{self.doc.id}/")
@@ -1453,6 +1487,13 @@ class DoctorListScopeAndPreviewTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.reception, "Reception")
+        self.manager_user = StaffUser.objects.create_user(
+            username="scope-mgr",
+            email="scope-mgr@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.manager_user, "Manager")
         self.clinic = ClinicSite.objects.create(code="SC", name="Scope Clinic")
         self.room = ConsultingRoom.objects.create(
             clinic_site=self.clinic,
@@ -1511,6 +1552,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
             source_type=source_type,
             status=MedicalDocStatus.PUBLISHED,
             current_version_no=1,
+            published_version_no=1,
             created_by_user=self.reception,
             updated_by_user=published_by,
         )
@@ -1556,7 +1598,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
             queue_assigned_doctor=self.other_doctor,
             source_type="EXTERNAL_UPLOAD",
         )
-        self.client.force_login(self.other_doctor)
+        self.client.force_login(self.doctor)
         response = self.client.get("/doctor/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
@@ -1570,7 +1612,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
             html,
         )
 
-    def test_scope_published_by_me_filters_list_and_keeps_preview_link(self):
+    def test_doctor_list_shows_only_own_published_results(self):
         matching_doc = self._create_published_document(
             patient_last_name="PublishedByMe",
             published_by=self.doctor,
@@ -1582,18 +1624,35 @@ class DoctorListScopeAndPreviewTests(TestCase):
             queue_assigned_doctor=self.other_doctor,
         )
         self.client.force_login(self.doctor)
-
-        response = self.client.get("/doctor/?scope=published_by_me")
+        response = self.client.get("/doctor/")
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
         self.assertIn("PublishedByMe", html)
         self.assertNotIn("PublishedByOther", html)
-        self.assertIn('option value="published_by_me" selected', html)
         self.assertIn(
             f"/api/v1/medical-documents/{matching_doc.id}/preview-pdf",
             html,
         )
+
+    def test_manager_published_by_filter_limits_list(self):
+        self._create_published_document(
+            patient_last_name="PublishedByMe",
+            published_by=self.doctor,
+            queue_assigned_doctor=self.other_doctor,
+        )
+        self._create_published_document(
+            patient_last_name="PublishedByOther",
+            published_by=self.other_doctor,
+            queue_assigned_doctor=self.other_doctor,
+        )
+        self.client.force_login(self.manager_user)
+        response = self.client.get(f"/doctor/?published_by_user_id={self.doctor.id}")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("PublishedByMe", html)
+        self.assertNotIn("PublishedByOther", html)
 
     def test_scope_in_revision_filters_pending_revision_rows(self) -> None:
         rev_doc = self._create_published_document(
@@ -1607,7 +1666,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
             published_by=self.doctor,
             queue_assigned_doctor=self.doctor,
         )
-        self.client.force_login(self.doctor)
+        self.client.force_login(self.manager_user)
 
         response = self.client.get("/doctor/?scope=in_revision")
 

@@ -65,6 +65,7 @@ from apps.medical.models import (
 )
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
+    DoctorAccessAuditContext,
     _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
     authorize_paper_intake,
@@ -76,11 +77,8 @@ from apps.medical.services import (
     discard_pending_revision,
     get_document_lock_state,
     get_medical_document_context,
-    latest_retryable_outbox_event,
-    latest_version_processing_error_message,
-    list_medical_documents,
-    outbox_event_stage_status,
-    parse_medical_documents_list_params,
+    list_doctor_work_queue,
+    parse_doctor_work_queue_list_params,
     publish_document_version,
     publish_external_upload_version,
     refresh_document_lock,
@@ -138,59 +136,8 @@ def _json_document_locked(
     )
 
 
-def _serialize_medical_document_list_item(doc) -> dict:
-    """Serialize one medical document for list response; doc has prefetched versions (ordered -version_no)."""
-    versions = list(doc.versions.all())
-    latest = versions[0] if versions else None
-    events_by_type = (
-        {e.event_type: e for e in latest.outbox_events.all()} if latest else {}
-    )
-    patient = doc.queue_entry.patient
-    queue = doc.queue_entry.daily_queue
-    lock_eff, lock_name, lock_at = get_document_lock_state(doc)
-    return {
-        "id": str(doc.id),
-        "queue_entry_id": str(doc.queue_entry_id),
-        "status": doc.status,
-        "current_version_no": doc.current_version_no,
-        "last_published_at": (
-            doc.last_published_at.isoformat() if doc.last_published_at else None
-        ),
-        "queue_date": queue.queue_date.isoformat(),
-        "patient": {
-            "id": str(patient.id),
-            "first_name": patient.first_name,
-            "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat(),
-        },
-        "locked_by_username": lock_name if lock_eff else None,
-        "locked_at": lock_at.isoformat() if lock_eff and lock_at else None,
-        "pdf_generation_status": latest.pdf_generation_status if latest else None,
-        "hidrive_sent": latest.hidrive_sent if latest else False,
-        "sms_sent": latest.sms_sent if latest else False,
-        "hidrive_status": (
-            outbox_event_stage_status(
-                events_by_type.get("HIDRIVE_UPLOAD"),
-                completed=bool(latest and latest.hidrive_sent),
-            )
-            if latest
-            else None
-        ),
-        "sms_status": (
-            outbox_event_stage_status(
-                events_by_type.get("SMS_SEND"),
-                completed=bool(latest and latest.sms_sent),
-            )
-            if latest
-            else None
-        ),
-        "processing_error_message": (
-            latest_version_processing_error_message(latest) if latest else None
-        ),
-        "can_retry_processing": (
-            latest_retryable_outbox_event(latest) is not None if latest else False
-        ),
-    }
+def _doctor_access_audit_context(request: HttpRequest) -> DoctorAccessAuditContext:
+    return DoctorAccessAuditContext(client_ip=get_client_ip(request))
 
 
 @require_auth
@@ -201,8 +148,10 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
     if role_error:
         return role_error
     if request.method == "GET":
-        list_params = parse_medical_documents_list_params(request.GET)
-        items, total = list_medical_documents(
+        list_params = parse_doctor_work_queue_list_params(
+            request.GET, user=request.user
+        )
+        items, total = list_doctor_work_queue(
             **list_params,
             user=request.user,
         )
@@ -219,7 +168,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         )
         return JsonResponse(
             {
-                "items": [_serialize_medical_document_list_item(d) for d in items],
+                "items": items,
                 "pagination": {
                     "page": list_params["page"],
                     "page_size": list_params["page_size"],
@@ -242,7 +191,9 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             entry = QueueEntry.objects.select_related("daily_queue").get(
                 id=body.queue_entry_id
             )
-            check_doctor_queue_entry_access(entry, request.user)
+            check_doctor_queue_entry_access(
+                entry, request.user, audit_context=_doctor_access_audit_context(request)
+            )
             document = create_or_get_medical_document(
                 queue_entry_id=body.queue_entry_id,
                 intake_form_id=body.intake_form_id,
@@ -287,7 +238,9 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
         entry = QueueEntry.objects.select_related("daily_queue").get(
             id=body.queue_entry_id
         )
-        check_doctor_queue_entry_access(entry, request.user)
+        check_doctor_queue_entry_access(
+            entry, request.user, audit_context=_doctor_access_audit_context(request)
+        )
         document = create_medical_document_without_intake(
             queue_entry_id=body.queue_entry_id,
             created_by_user_id=request.user.id,
@@ -870,7 +823,9 @@ def medical_document_preview_pdf_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
@@ -1015,7 +970,9 @@ def medical_document_versions_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
@@ -1111,7 +1068,9 @@ def medical_document_draft_view(
                 )
                 .get(id=medical_document_id)
             )
-            check_doctor_document_access(doc, request.user)
+            check_doctor_document_access(
+                doc, request.user, audit_context=_doctor_access_audit_context(request)
+            )
             if doc.status == MedicalDocStatus.DRAFT:
                 eff, holder_name, _ = get_document_lock_state(doc)
                 if (
@@ -1186,7 +1145,9 @@ def medical_document_discard_revision_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
@@ -1231,7 +1192,9 @@ def medical_document_unlock_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     try:
@@ -1259,9 +1222,7 @@ def medical_document_unlock_view(
 def medical_document_publish_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(
-        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
-    )
+    role_error = require_user_role(request, allowed_roles={"DOCTOR"})
     if role_error:
         return role_error
     if request.method != "POST":
@@ -1282,15 +1243,13 @@ def medical_document_publish_view(
                 .select_related("queue_entry__daily_queue")
                 .get(id=medical_document_id)
             )
-            check_doctor_document_access(doc, request.user)
+            check_doctor_document_access(
+                doc, request.user, audit_context=_doctor_access_audit_context(request)
+            )
 
             if doc.status == MedicalDocStatus.DRAFT:
                 eff, holder_name, _ = get_document_lock_state(doc)
-                if (
-                    eff
-                    and doc.locked_by_user_id != request.user.id
-                    and not _is_admin_or_manager_medical_oversight(request.user)
-                ):
+                if eff and doc.locked_by_user_id != request.user.id:
                     raise _MedicalDocumentEditLocked(holder_name)
 
             version = publish_document_version(
@@ -1339,7 +1298,11 @@ def medical_document_version_detail_view(
         version = MedicalDocumentVersion.objects.select_related(
             "medical_document", "medical_document__queue_entry__daily_queue"
         ).get(id=version_id)
-        check_doctor_document_access(version.medical_document, request.user)
+        check_doctor_document_access(
+            version.medical_document,
+            request.user,
+            audit_context=_doctor_access_audit_context(request),
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_version_not_found", status=404)
     mdoc = version.medical_document
@@ -1415,7 +1378,9 @@ def medical_document_retry_processing_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
         retried = retry_latest_document_processing(
             medical_document_id=medical_document_id,
             actor=request.user,
@@ -1453,7 +1418,9 @@ def medical_document_revoke_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
         version = revoke_document_version(
             medical_document_id=medical_document_id,
             revoked_by_user_id=request.user.id,
@@ -1683,7 +1650,9 @@ def medical_document_audit_trail_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
@@ -1725,7 +1694,9 @@ def medical_document_external_pdfs_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
@@ -1764,7 +1735,9 @@ def medical_document_external_pdf_content_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
         att = ExternalPdfAttachment.objects.get(
             id=attachment_id, medical_document_id=medical_document_id
         )
@@ -1827,7 +1800,9 @@ def medical_document_external_pdf_reject_view(
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
         )
-        check_doctor_document_access(doc, request.user)
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
         att = ExternalPdfAttachment.objects.get(
             id=attachment_id, medical_document_id=medical_document_id
         )

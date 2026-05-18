@@ -943,7 +943,9 @@ class MedicalServicesTests(TestCase):
         # Should not raise exception
         check_doctor_document_access(self.medical_document, self.doctor_user)
 
-    def test_check_doctor_document_access_allows_assigned_doctor(self) -> None:
+    def test_check_doctor_document_access_allows_assigned_doctor_only_for_shared_work(
+        self,
+    ) -> None:
         other_doctor = StaffUser.objects.create_user(
             username="otherdoc",
             email="otherdoc@example.com",
@@ -962,12 +964,11 @@ class MedicalServicesTests(TestCase):
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_document_access(self.medical_document, other_doctor)
 
-        # Assign other_doctor to the queue
+        # Assigned doctor does not bypass publisher-only rule on published docs
         self.medical_document.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.medical_document.queue_entry.daily_queue.save()
-
-        # Should not raise now (assigned on published document)
-        check_doctor_document_access(self.medical_document, other_doctor)
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_document_access(self.medical_document, other_doctor)
 
     def test_check_doctor_document_access_allows_admin(self) -> None:
         admin_user = StaffUser.objects.create_user(
@@ -1002,7 +1003,8 @@ class MedicalServicesTests(TestCase):
 
         self.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.queue_entry.daily_queue.save()
-        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, other_doctor)
 
     def test_check_doctor_queue_entry_access_doctor_without_medical_document(
         self,
