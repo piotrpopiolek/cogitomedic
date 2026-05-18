@@ -62,8 +62,24 @@
   <table class="w-full min-w-full divide-y divide-base-200 dark:divide-base-700 text-sm">
     <thead class="bg-base-50 dark:bg-base-900/80">
       <tr>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_patient }}</th>
-        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_date }}</th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">
+          <a href="{% url 'doctor-list' %}?{% if sort_link_patient %}{{ sort_link_patient }}&amp;{% endif %}lang={{ lang|default:'de' }}" class="inline-flex items-center gap-1 hover:text-primary-600 dark:hover:text-primary-400{% if filters.sort == 'patient' %} text-primary-600 dark:text-primary-400 font-semibold{% endif %}">
+            <span>{{ ui.table_patient }}</span>
+            {% if filters.sort == 'patient' %}
+            <span class="material-symbols-outlined text-[18px] leading-none" aria-hidden="true">{% if filters.order == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}</span>
+            <span class="sr-only">{% if filters.order == 'asc' %}{{ ui.list_sort_asc }}{% else %}{{ ui.list_sort_desc }}{% endif %}</span>
+            {% endif %}
+          </a>
+        </th>
+        <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">
+          <a href="{% url 'doctor-list' %}?{% if sort_link_date %}{{ sort_link_date }}&amp;{% endif %}lang={{ lang|default:'de' }}" class="inline-flex items-center gap-1 hover:text-primary-600 dark:hover:text-primary-400{% if filters.sort == 'date' or not filters.sort %} text-primary-600 dark:text-primary-400 font-semibold{% endif %}">
+            <span>{{ ui.table_date }}</span>
+            {% if filters.sort == 'date' or not filters.sort %}
+            <span class="material-symbols-outlined text-[18px] leading-none" aria-hidden="true">{% if filters.order == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}</span>
+            <span class="sr-only">{% if filters.order == 'asc' %}{{ ui.list_sort_asc }}{% else %}{{ ui.list_sort_desc }}{% endif %}</span>
+            {% endif %}
+          </a>
+        </th>
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_status }}</th>
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_pdf }}</th>
         <th class="px-4 py-3 text-left font-medium text-base-700 dark:text-base-300">{{ ui.table_hidrive }}</th>

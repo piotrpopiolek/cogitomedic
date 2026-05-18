@@ -1675,3 +1675,81 @@ class DoctorListScopeAndPreviewTests(TestCase):
         self.assertIn("InRevisionOnly", html)
         self.assertNotIn("PublishedStable", html)
         self.assertIn('option value="in_revision" selected', html)
+
+
+class DoctorListSortUxTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.doctor = StaffUser.objects.create_user(
+            username="sort-ux-doc",
+            email="sort.ux@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor, "Doctor")
+        clinic = ClinicSite.objects.create(code="SUX", name="Sort UX Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
+        rec = StaffUser.objects.create_user(
+            username="sort-ux-rec",
+            email="sort.ux.rec@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(rec, "Reception")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=rec,
+        )
+        patient = Patient.objects.create(
+            first_name="Sort",
+            last_name="UxPatient",
+            date_of_birth=date(1985, 1, 1),
+            phone="+48500999001",
+            email="sortux@example.com",
+        )
+        self.queue_entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=rec,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=self.queue_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=rec,
+        )
+        self.intake = PatientIntakeForm.objects.create(
+            queue_entry=self.queue_entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="a" * 64,
+        )
+
+    def test_filter_submit_preserves_sort_and_order(self) -> None:
+        self.client.force_login(self.doctor)
+        response = self.client.get(
+            "/doctor/",
+            {"sort": "patient", "order": "asc", "status": "DRAFT"},
+        )
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('name="sort"', html)
+        self.assertIn('value="patient"', html)
+        self.assertIn('name="order"', html)
+        self.assertIn('value="asc"', html)
+
+    def test_sort_link_patient_toggles_order(self) -> None:
+        self.client.force_login(self.doctor)
+        first = self.client.get("/doctor/", {"sort": "patient", "order": "asc"})
+        self.assertEqual(first.status_code, 200)
+        second = self.client.get("/doctor/", {"sort": "patient", "order": "desc"})
+        self.assertEqual(second.status_code, 200)
+        html = second.content.decode()
+        self.assertIn("arrow_downward", html)

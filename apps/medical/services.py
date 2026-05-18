@@ -2973,6 +2973,7 @@ def get_medical_document_context(
     medical_document_id: uuid.UUID,
     form_locale: str = "de-DE",
     user: Any = None,
+    audit_context: DoctorAccessAuditContext | None = None,
 ) -> dict[str, Any]:
     """
     Build full context for doctor view: document, intake summary, current (latest) version.
@@ -3003,7 +3004,7 @@ def get_medical_document_context(
         .get(id=medical_document_id)
     )
     if user is not None:
-        check_doctor_document_access(doc, user)
+        check_doctor_document_access(doc, user, audit_context=audit_context)
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 

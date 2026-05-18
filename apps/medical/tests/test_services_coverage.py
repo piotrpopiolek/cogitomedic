@@ -1116,6 +1116,185 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertEqual(items[1]["status"], "PUBLISHED")
         self.assertEqual(items[1]["patient"]["last_name"], "Y")
 
+    def _tier_sort_admin(self) -> StaffUser:
+        admin = StaffUser.objects.create_user(
+            username=f"admin-tier-{uuid.uuid4().hex[:8]}",
+            email=f"tier-{uuid.uuid4().hex[:8]}@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(admin, "Admin")
+        return admin
+
+    def _tier_sort_queue_row(
+        self,
+        *,
+        last_name: str,
+        sort_at,
+        doc_status=MedicalDocStatus.PUBLISHED,
+        has_pending_revision: bool = False,
+        include_draft_version: bool = False,
+    ) -> MedicalDocument:
+        patient = Patient.objects.create(
+            first_name="T",
+            last_name=last_name,
+            date_of_birth=date(1990, 1, 1),
+            phone=f"48500{uuid.uuid4().int % 100000000:08d}",
+            email=f"{last_name.lower()}@tier.example.com",
+        )
+        qe = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=100 + uuid.uuid4().int % 1000,
+            created_by_user=self.doctor,
+            doctor_list_sort_at=sort_at,
+        )
+        sess = PatientFormSession.objects.create(
+            queue_entry=qe,
+            form_locale="de-DE",
+            expires_at=sort_at + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=qe,
+            session=sess,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=sort_at,
+            signature_sha256="c" * 64,
+        )
+        doc = MedicalDocument.objects.create(
+            queue_entry=qe,
+            intake_form=intake,
+            source_type=MedicalDocumentSourceType.DIGITAL_INTAKE,
+            status=doc_status,
+            has_pending_revision=has_pending_revision,
+            current_version_no=2 if include_draft_version else 1,
+            published_version_no=(
+                1 if doc_status == MedicalDocStatus.PUBLISHED else None
+            ),
+            created_by_user=self.doctor,
+        )
+        if doc_status == MedicalDocStatus.PUBLISHED:
+            self._make_published_version(
+                doc, version_no=1, published_by_user=self.doctor
+            )
+        if include_draft_version:
+            MedicalDocumentVersion.objects.create(
+                medical_document=doc,
+                version_no=2,
+                version_status=DocVersionStatus.DRAFT,
+                medical_payload_schema_version=1,
+                medical_payload={"schema_version": 1},
+            )
+        return doc
+
+    def test_revision_in_tier0_above_published_without_revision(self) -> None:
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        self._tier_sort_queue_row(
+            last_name="ZzzRevision",
+            sort_at=now,
+            has_pending_revision=True,
+            include_draft_version=True,
+        )
+        self._tier_sort_queue_row(
+            last_name="AaaPublished",
+            sort_at=now + timedelta(hours=2),
+        )
+        items, _ = list_doctor_work_queue(user=admin, page_size=100)
+        tier_rows = [
+            i
+            for i in items
+            if i["patient"]["last_name"] in ("ZzzRevision", "AaaPublished")
+        ]
+        self.assertEqual(len(tier_rows), 2)
+        self.assertEqual(tier_rows[0]["patient"]["last_name"], "ZzzRevision")
+        self.assertTrue(tier_rows[0]["has_pending_revision"])
+        self.assertEqual(tier_rows[1]["patient"]["last_name"], "AaaPublished")
+
+    def test_tier0_precedes_tier1_sort_patient_asc_antiregression(self) -> None:
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        self._tier_sort_queue_row(
+            last_name="ZzzRevision",
+            sort_at=now,
+            has_pending_revision=True,
+            include_draft_version=True,
+        )
+        self._tier_sort_queue_row(
+            last_name="AaaPublished",
+            sort_at=now + timedelta(hours=2),
+        )
+        items, _ = list_doctor_work_queue(
+            user=admin, sort="patient", order="asc", page_size=100
+        )
+        tier_rows = [
+            i
+            for i in items
+            if i["patient"]["last_name"] in ("ZzzRevision", "AaaPublished")
+        ]
+        self.assertEqual(tier_rows[0]["patient"]["last_name"], "ZzzRevision")
+
+    def test_tier0_precedes_tier1_sort_patient_desc(self) -> None:
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        self._tier_sort_queue_row(
+            last_name="AaaDraft",
+            sort_at=now,
+            doc_status=MedicalDocStatus.DRAFT,
+        )
+        self._tier_sort_queue_row(
+            last_name="ZzzPublished",
+            sort_at=now + timedelta(hours=1),
+        )
+        items, _ = list_doctor_work_queue(
+            user=admin, sort="patient", order="desc", page_size=100
+        )
+        names = [
+            i["patient"]["last_name"]
+            for i in items
+            if i["patient"]["last_name"] in ("AaaDraft", "ZzzPublished")
+        ]
+        self.assertEqual(len(names), 2)
+        self.assertEqual(names[0], "AaaDraft")
+        self.assertEqual(names[1], "ZzzPublished")
+
+    def test_tier0_before_tier1_for_all_sort_orders(self) -> None:
+        admin = self._tier_sort_admin()
+        now = timezone.now()
+        self._tier_sort_queue_row(
+            last_name="Tier0Rev",
+            sort_at=now,
+            has_pending_revision=True,
+            include_draft_version=True,
+        )
+        self._tier_sort_queue_row(
+            last_name="Tier1Pub",
+            sort_at=now + timedelta(hours=3),
+        )
+        for sort, order in (
+            ("date", "desc"),
+            ("date", "asc"),
+            ("patient", "asc"),
+            ("patient", "desc"),
+        ):
+            with self.subTest(sort=sort, order=order):
+                items, _ = list_doctor_work_queue(
+                    user=admin, sort=sort, order=order, page_size=50
+                )
+                tier0_idx = next(
+                    i
+                    for i, row in enumerate(items)
+                    if row["patient"]["last_name"] == "Tier0Rev"
+                )
+                tier1_idx = next(
+                    i
+                    for i, row in enumerate(items)
+                    if row["patient"]["last_name"] == "Tier1Pub"
+                )
+                self.assertLess(tier0_idx, tier1_idx)
+
     def test_empty_when_no_submitted_intake(self):
         self.intake.form_status = IntakeStatus.IN_PROGRESS
         self.intake.submitted_at = None

@@ -769,6 +769,7 @@ def medical_document_detail_view(
             medical_document_id=medical_document_id,
             form_locale=form_locale,
             user=request.user,
+            audit_context=_doctor_access_audit_context(request),
         )
     except DomainError as exc:
         return json_domain_error(exc, status=422)

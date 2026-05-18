@@ -647,11 +647,14 @@ COGITO_PATHS = {
     },
     f"{PREFIX}/medical-documents": {
         "get": {
-            "summary": "List medical documents",
+            "summary": "List doctor work queue",
             "description": (
-                "Doctor work queue (DOCTOR, ADMIN, MANAGER). Paginated: page (default 1), "
-                "page_size (default 20, max 100). Query `scope`: `all` (default), `mine`, "
-                "`published_by_me`, or `in_revision` (published document with pending revision only)."
+                "Doctor work queue on `QueueEntry` (DOCTOR, ADMIN, MANAGER). Paginated: "
+                "page (default 1), page_size (default 20, max 100). Rows are ordered with "
+                "tier 0 first (no document, DRAFT, or published with pending revision), then "
+                "tier 1 (published without open revision). Within each tier, `sort`/`order` "
+                "apply. Doctors always see scope=all; `scope` and `published_by_user_id` are "
+                "for ADMIN/MANAGER oversight only."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -670,7 +673,31 @@ COGITO_PATHS = {
                         "enum": ["all", "mine", "published_by_me", "in_revision"],
                         "default": "all",
                     },
-                    "description": "Row filter for the work queue (see `list_medical_documents`).",
+                    "description": "Oversight row filter (ADMIN/MANAGER only).",
+                },
+                {
+                    "name": "published_by_user_id",
+                    "in": "query",
+                    "schema": {"type": "string", "format": "uuid"},
+                    "description": "Filter by publisher (ADMIN/MANAGER only).",
+                },
+                {
+                    "name": "sort",
+                    "in": "query",
+                    "schema": {
+                        "type": "string",
+                        "enum": ["date", "patient"],
+                        "default": "date",
+                    },
+                },
+                {
+                    "name": "order",
+                    "in": "query",
+                    "schema": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "desc",
+                    },
                 },
                 PAGE_Q,
                 PAGE_SIZE_Q,
@@ -1457,8 +1484,8 @@ COGITO_PATHS = {
         "post": {
             "summary": "Publish document",
             "description": (
-                "DOCTOR, ADMIN, or MANAGER. Publishes the latest DRAFT (or completes a revision). "
-                "DRAFT edit-lock rules match PUT …/draft (MANAGER/ADMIN may bypass another user's lock)."
+                "**DOCTOR only.** Publishes the latest DRAFT (or completes a revision). "
+                "DRAFT edit-lock: only the lock holder may publish; ADMIN/MANAGER receive 403 on this endpoint."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -1476,6 +1503,7 @@ COGITO_PATHS = {
             "responses": {
                 "200": {"description": "Version"},
                 "400": {"description": "Validation or domain error (e.g. no draft)"},
+                "403": {"description": "Caller is not a doctor"},
                 "404": {"description": "Not found"},
                 "409": {
                     "description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"

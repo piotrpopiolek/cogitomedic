@@ -48,7 +48,13 @@ Zielone podświetlenie oznacza dokument opublikowany i zakończone przetwarzanie
 - **Status** — szkic / opublikowany / wszystkie (zależnie od opcji).
 - **Data kolejki**.
 - **Wyszukiwanie pacjenta** (pole tekstowe).
-- **Opublikowano przez** — opcjonalny filtr, jeśli placówka z niego korzysta.
+- **Zakres** i **Opublikowano przez** — tylko dla **Administratora** i **Managera** (nadzór); lekarz widzi uproszczony zestaw filtrów.
+
+### Sortowanie listy
+
+- Kliknij nagłówek **Pacjent** lub **Data**, aby zmienić sortowanie w obrębie listy.
+- **Zawsze na górze** pozostają wpisy wymagające pracy: bez dokumentu, szkic (`DRAFT`) lub opublikowany dokument z otwartą rewizją; dopiero poniżej — opublikowane wyniki bez rewizji (widoczne dla lekarza, który je opublikował).
+- Zmiana filtra **nie resetuje** wybranego sortowania (kierunek jest zachowany w ukrytych polach formularza); zmiana strony paginacji też zachowuje sortowanie.
 
 ![Lista dokumentów z filtrami](/docs/manual/assets/screenshots/doctor-02-list-filters.png)
 
