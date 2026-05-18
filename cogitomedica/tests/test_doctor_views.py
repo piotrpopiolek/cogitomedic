@@ -1677,6 +1677,78 @@ class DoctorListScopeAndPreviewTests(TestCase):
         self.assertIn('option value="in_revision" selected', html)
 
 
+class DoctorRbacIdorHtmlTests(TestCase):
+    """IDOR matrix §6.3: HTML paths H1–H2."""
+
+    def setUp(self) -> None:
+        from apps.medical.tests.test_api import MedicalApiTests
+
+        MedicalApiTests.setUp(self)
+
+        self.doctor_b = StaffUser.objects.create_user(
+            username="html-idor-b",
+            email="html.idor.b@example.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doctor_b, "Doctor")
+        self.queue_entry.daily_queue.assigned_doctor = self.doctor_b
+        self.queue_entry.daily_queue.save(
+            update_fields=["assigned_doctor", "updated_at"]
+        )
+
+    def _publish_as_doctor_a(self) -> str:
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+        }
+        self.client.force_login(self.doctor_user)
+        create_resp = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        mid = create_resp.json()["medical_document_id"]
+        self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(
+                {"medical_payload_schema_version": 1, "medical_payload": payload}
+            ),
+            content_type="application/json",
+        )
+        self.client.post(
+            f"/api/v1/medical-documents/{mid}/publish",
+            data=json.dumps(
+                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+            ),
+            content_type="application/json",
+        )
+        return mid
+
+    def test_h1_doctor_b_document_detail_returns_404(self) -> None:
+        mid = self._publish_as_doctor_a()
+        self.client.force_login(self.doctor_b)
+        resp = self.client.get(f"/doctor/{mid}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_h2_open_queue_does_not_expose_foreign_published_document(self) -> None:
+        mid = self._publish_as_doctor_a()
+        self.client.force_login(self.doctor_b)
+        resp = self.client.get(f"/doctor/open/{self.queue_entry.id}/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertNotIn(str(mid), resp.content.decode())
+
+
 class DoctorListSortUxTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()

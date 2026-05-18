@@ -2699,11 +2699,21 @@ class ExternalUploadApiTests(MedicalApiTests):
         merge_mock.assert_not_called()
 
 
-class DoctorRbacIdorMatrixTests(MedicalApiTests):
-    """Doctor B must not access doctor A's published document without revision (404 + audit)."""
+class DoctorRbacIdorMatrixTests(TestCase):
+    """IDOR matrix §6.3: doctor B vs doctor A's published document (tier 1)."""
+
+    _VALID_PAYLOAD = {
+        "schema_version": 1,
+        "authoring_locale": "de-DE",
+        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+        "fitzpatrick_type": "TYPE_III",
+        "overall_image_assessment": "NO_CONTROL_NEEDED",
+        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+    }
 
     def setUp(self) -> None:
-        super().setUp()
+        MedicalApiTests.setUp(self)
         self.doctor_b = StaffUser.objects.create_user(
             username="api-idor-b",
             email="api.idor.b@example.com",
@@ -2716,7 +2726,17 @@ class DoctorRbacIdorMatrixTests(MedicalApiTests):
             update_fields=["assigned_doctor", "updated_at"]
         )
 
-    def _publish_as_doctor_a(self) -> str:
+    def _draft_put_body(self, *, intent: str | None = None) -> dict:
+        body: dict = {
+            "medical_payload_schema_version": 1,
+            "medical_payload": self._VALID_PAYLOAD,
+        }
+        if intent is not None:
+            body["intent"] = intent
+        return body
+
+    def _create_document_as(self, user: StaffUser) -> str:
+        self.client.force_login(user)
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -2727,76 +2747,198 @@ class DoctorRbacIdorMatrixTests(MedicalApiTests):
             ),
             content_type="application/json",
         )
-        mid = create_resp.json()["medical_document_id"]
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
-        }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
+        self.assertEqual(create_resp.status_code, 201, create_resp.content)
+        return create_resp.json()["medical_document_id"]
+
+    def _publish_document_as(self, user: StaffUser, medical_document_id: str) -> None:
+        self.client.force_login(user)
+        draft_resp = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(self._draft_put_body()),
             content_type="application/json",
         )
-        self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
+        self.assertEqual(draft_resp.status_code, 200, draft_resp.content)
+        pub_resp = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
             data=json.dumps(
                 {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
             ),
             content_type="application/json",
         )
+        self.assertEqual(pub_resp.status_code, 200, pub_resp.content)
+
+    def _publish_as_doctor_a(self) -> str:
+        mid = self._create_document_as(self.doctor_user)
+        self._publish_document_as(self.doctor_user, mid)
         return mid
 
-    def test_doctor_b_get_detail_returns_404_and_audit(self) -> None:
+    def _login_doctor_b(self) -> None:
+        self.client.force_login(self.doctor_b)
+
+    def test_doctor_b_denied_on_foreign_published_api_matrix(self) -> None:
+        """A1–A14: never 200 / mutation on A's published doc without revision."""
+        mid = self._publish_as_doctor_a()
+        self._login_doctor_b()
+        fake_att = uuid4()
+        cases: list[tuple[str, str, dict | None, int]] = [
+            ("GET", f"/api/v1/medical-documents/{mid}", None, 404),
+            ("GET", f"/api/v1/medical-documents/{mid}/preview-pdf", None, 404),
+            (
+                "PUT",
+                f"/api/v1/medical-documents/{mid}/draft",
+                self._draft_put_body(),
+                404,
+            ),
+            (
+                "POST",
+                f"/api/v1/medical-documents/{mid}/publish",
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                },
+                404,
+            ),
+            ("POST", f"/api/v1/medical-documents/{mid}/revoke", {}, 404),
+            ("POST", f"/api/v1/medical-documents/{mid}/unlock", {}, 404),
+            ("GET", f"/api/v1/medical-documents/{mid}/external-pdfs", None, 404),
+            (
+                "GET",
+                f"/api/v1/medical-documents/{mid}/external-pdfs/{fake_att}/content",
+                None,
+                404,
+            ),
+            (
+                "POST",
+                f"/api/v1/medical-documents/{mid}/external-pdfs/{fake_att}/reject",
+                {},
+                404,
+            ),
+            (
+                "POST",
+                f"/api/v1/medical-documents/{mid}/discard-revision",
+                {},
+                404,
+            ),
+            ("GET", f"/api/v1/medical-documents/{mid}/versions", None, 404),
+            ("GET", f"/api/v1/medical-documents/{mid}/audit-trail", None, 404),
+            (
+                "POST",
+                f"/api/v1/medical-documents/{mid}/retry-processing",
+                {"reason": "retry"},
+                403,
+            ),
+            (
+                "POST",
+                f"/api/v1/medical-documents/{mid}/external-upload/revision/start",
+                {},
+                403,
+            ),
+        ]
+        for method, url, body, expected_status in cases:
+            with self.subTest(method=method, url=url):
+                if method == "GET":
+                    resp = self.client.get(url)
+                elif method == "PUT":
+                    resp = self.client.put(
+                        url,
+                        data=json.dumps(body),
+                        content_type="application/json",
+                    )
+                else:
+                    resp = self.client.post(
+                        url,
+                        data=json.dumps(body or {}),
+                        content_type="application/json",
+                    )
+                self.assertEqual(resp.status_code, expected_status, resp.content)
+
+    def test_doctor_b_get_detail_writes_access_denied_audit(self) -> None:
         mid = self._publish_as_doctor_a()
         AuditEvent.objects.filter(event_type="MEDICAL_DOCUMENT_ACCESS_DENIED").delete()
-        self.client.force_login(self.doctor_b)
+        self._login_doctor_b()
         detail = self.client.get(f"/api/v1/medical-documents/{mid}")
         self.assertEqual(detail.status_code, 404)
-        denied = AuditEvent.objects.filter(
-            event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
-            medical_document_id=mid,
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
+                medical_document_id=mid,
+            ).count(),
+            1,
         )
-        self.assertEqual(denied.count(), 1)
-
-    def test_doctor_b_preview_pdf_returns_404(self) -> None:
-        mid = self._publish_as_doctor_a()
-        self.client.force_login(self.doctor_b)
-        preview = self.client.get(f"/api/v1/medical-documents/{mid}/preview-pdf")
-        self.assertEqual(preview.status_code, 404)
-
-    def test_doctor_b_publish_returns_404(self) -> None:
-        mid = self._publish_as_doctor_a()
-        self.client.force_login(self.doctor_b)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 404)
 
     def test_doctor_b_can_access_shared_draft(self) -> None:
+        """P1: shared DRAFT from doctor A."""
+        mid = self._create_document_as(self.doctor_user)
+        self._login_doctor_b()
+        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
+        self.assertEqual(detail.status_code, 200)
+        draft = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(self._draft_put_body()),
+            content_type="application/json",
+        )
+        self.assertEqual(draft.status_code, 200)
+
+    def test_doctor_b_can_amend_when_pending_revision(self) -> None:
+        """P2: published + pending revision is tier-0 shared work."""
+        mid = self._publish_as_doctor_a()
+        self.client.force_login(self.doctor_user)
+        amend = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(self._draft_put_body(intent="amend")),
+            content_type="application/json",
+        )
+        self.assertEqual(amend.status_code, 200)
+        self._login_doctor_b()
+        draft = self.client.put(
+            f"/api/v1/medical-documents/{mid}/draft",
+            data=json.dumps(self._draft_put_body(intent="amend")),
+            content_type="application/json",
+        )
+        self.assertEqual(draft.status_code, 200, draft.content)
+
+    def test_doctor_b_can_preview_own_published_document(self) -> None:
+        """P3: doctor B sees own published result."""
+        other_patient = Patient.objects.create(
+            first_name="Idor",
+            last_name="DoctorB",
+            date_of_birth=date(1991, 2, 2),
+            phone="+48500999111",
+            email="idor.b@example.com",
+        )
+        other_entry = QueueEntry.objects.create(
+            daily_queue=self.queue_entry.daily_queue,
+            patient=other_patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=99,
+            created_by_user=self.reception_user,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            created_by_user=self.reception_user,
+        )
+        other_intake = PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="d" * 64,
+        )
+        self.client.force_login(self.doctor_b)
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
                 {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
+                    "queue_entry_id": str(other_entry.id),
+                    "intake_form_id": str(other_intake.id),
                 }
             ),
             content_type="application/json",
         )
-        mid = create_resp.json()["medical_document_id"]
-        self.client.force_login(self.doctor_b)
-        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
-        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(create_resp.status_code, 201)
+        mid_b = create_resp.json()["medical_document_id"]
+        self._publish_document_as(self.doctor_b, mid_b)
+        preview = self.client.get(f"/api/v1/medical-documents/{mid_b}/preview-pdf")
+        self.assertEqual(preview.status_code, 200)
