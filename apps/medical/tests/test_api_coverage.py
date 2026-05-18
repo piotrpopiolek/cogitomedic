@@ -165,6 +165,7 @@ class Tests(TestCase):
             publish_request_id=uuid4(),
             published_at=now,
             publish_locale="de-DE",
+            published_by_user=self.doctor,
             hidrive_sent=hidrive_sent,
             hidrive_sent_at=now if hidrive_sent else None,
             sms_sent=sms_sent,

@@ -823,6 +823,32 @@ class MedicalServicesTests(TestCase):
             ).exists()
         )
 
+    def test_publish_document_version_rejects_non_doctor_publisher(self) -> None:
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
+        )
+        with self.assertRaises(DomainError) as ctx:
+            publish_document_version(
+                medical_document_id=self.medical_document.id,
+                publish_request_id=uuid4(),
+                published_by_user_id=self.manager_user.id,
+                publish_locale="de-DE",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.medical_document_publish_doctor_role_required",
+        )
+
     def test_publish_document_version_is_idempotent_for_same_request_id(self) -> None:
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
@@ -943,7 +969,9 @@ class MedicalServicesTests(TestCase):
         # Should not raise exception
         check_doctor_document_access(self.medical_document, self.doctor_user)
 
-    def test_check_doctor_document_access_allows_assigned_doctor(self) -> None:
+    def test_check_doctor_document_access_allows_assigned_doctor_only_for_shared_work(
+        self,
+    ) -> None:
         other_doctor = StaffUser.objects.create_user(
             username="otherdoc",
             email="otherdoc@example.com",
@@ -962,12 +990,11 @@ class MedicalServicesTests(TestCase):
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_document_access(self.medical_document, other_doctor)
 
-        # Assign other_doctor to the queue
+        # Assigned doctor does not bypass publisher-only rule on published docs
         self.medical_document.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.medical_document.queue_entry.daily_queue.save()
-
-        # Should not raise now (assigned on published document)
-        check_doctor_document_access(self.medical_document, other_doctor)
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_document_access(self.medical_document, other_doctor)
 
     def test_check_doctor_document_access_allows_admin(self) -> None:
         admin_user = StaffUser.objects.create_user(
@@ -1002,7 +1029,8 @@ class MedicalServicesTests(TestCase):
 
         self.queue_entry.daily_queue.assigned_doctor = other_doctor
         self.queue_entry.daily_queue.save()
-        check_doctor_queue_entry_access(self.queue_entry, other_doctor)
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, other_doctor)
 
     def test_check_doctor_queue_entry_access_doctor_without_medical_document(
         self,
