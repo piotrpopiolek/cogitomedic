@@ -69,15 +69,13 @@ Pacjent może potrzebować interfejsu w języku **DE / EN / PL**. Przed przekaza
 
 ![Formularz — nagłówek i wybór języka (jeśli widoczny)](/docs/manual/assets/screenshots/tablet-05-form-locale.png)
 
-### 5.2 Sekcje formularza
+### 5.2 Sekcje formularza (3 kroki)
 
-Kolejność i etykiety pochodzą z konfiguracji systemu; typowo obejmuje:
+Formularz ma **trzy kroki** (stepper u góry). Kolejność i etykiety pochodzą z konfiguracji systemu:
 
-1. **Dane osobowe** — do weryfikacji (tryb tylko do odczytu lub zgodnie z implementacją).
-2. **Ankieta anamnestyczna** — pytania jedno- i wielokrotnego wyboru (bez swobodnego opisu medycznego).
-3. **Zgody** — checkboxy; wymagane zgody blokują przejście dalej bez zaznaczenia.
-4. **Schemat ciała** — dotyk: zaznaczanie miejsc (przód/tył); możliwość cofnięcia znacznika.
-5. **Podpis** — odręczny podpis palcem/rysikiem; wymagany przed finalizacją.
+1. **Krok 1 — zgody** — na początku kroku pacjent widzi **wyraźną kartę ze swoimi danymi** (nazwisko i imię, data urodzenia, telefon, e-mail) oraz krótką informację, że wynik i dostęp do portalu są powiązane z tymi danymi (SMS). Następnie checkboxy zgód; wymagane zgody blokują przejście dalej bez zaznaczenia. Karta danych **nie** jest widoczna na kolejnych krokach (można wrócić do kroku 1 przyciskiem „Wstecz”).
+2. **Krok 2 — schemat ciała i anamneza** — dotyk: zaznaczanie miejsc (przód/tył); pytania jedno- i wielokrotnego wyboru (bez swobodnego opisu medycznego).
+3. **Krok 3 — podpis** — odręczny podpis palcem/rysikiem; wymagany przed finalizacją.
 
 ![Fragment ankiety / zgód](/docs/manual/assets/screenshots/tablet-06-form-sections.png)
 

@@ -194,6 +194,11 @@ class TabletViewsSmokeTests(TestCase):
         url = f"/tablet/form/{self.intake.id}/"
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "tablet-patient-identity")
+        self.assertContains(resp, "Test, Smoke")
+        self.assertContains(resp, "01.01.1990")
+        self.assertContains(resp, "48500000001")
+        self.assertContains(resp, "Bitte prüfen Sie Name, Geburtsdatum")
 
 
 class TabletViewsScopeAndEdgeTests(TestCase):
