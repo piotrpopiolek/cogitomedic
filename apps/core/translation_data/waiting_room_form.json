@@ -154,6 +154,16 @@
     "en": "Patient data (for verification)",
     "pl": "Dane pacjenta (do weryfikacji)"
   },
+  "waiting_room.form.patient_identity_eyebrow": {
+    "de": "Ihre Angaben",
+    "en": "Your details",
+    "pl": "Twoje dane"
+  },
+  "waiting_room.form.patient_identity_results_hint": {
+    "de": "Bitte prüfen Sie Name, Geburtsdatum und Telefonnummer. Ihr Befund und der Zugang zum Portal werden an diese Daten gebunden.",
+    "en": "Please check your name, date of birth and phone number. Your report and portal access are linked to these details.",
+    "pl": "Sprawdź imię, nazwisko, datę urodzenia i numer telefonu. Wynik badania i dostęp do portalu są powiązane z tymi danymi."
+  },
   "waiting_room.form.phone": {
     "de": "Telefon:",
     "en": "Phone:",

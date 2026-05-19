@@ -296,6 +296,64 @@ button:disabled {
   justify-content: center;
 }
 
+/* Patient identity card (step 1 only) */
+.tablet-patient-identity {
+  margin: 0 0 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--cm-surface, #f5f7f8);
+  border: 2px solid var(--cm-primary, #075255);
+  border-radius: 10px;
+}
+
+.tablet-patient-identity-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cm-primary, #075255);
+}
+
+.tablet-patient-identity-name {
+  margin: 0 0 1rem;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--cm-grey-900, #111827);
+}
+
+.tablet-patient-identity-details {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.tablet-patient-identity-details > div {
+  display: contents;
+}
+
+.tablet-patient-identity-details dt {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--cm-muted, #6b7280);
+}
+
+.tablet-patient-identity-details dd {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--cm-grey-900, #111827);
+  word-break: break-word;
+}
+
+.tablet-patient-identity-hint {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--cm-body, #374151);
+}
+
 /* Stepper (1 – 2 – 3) */
 .tablet-form-stepper {
   display: flex;
