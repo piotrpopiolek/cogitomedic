@@ -39,6 +39,16 @@ logger = logging.getLogger(__name__)
 CONTACT_METHOD_CONSENT_CODE = "PRAEVENTIONS_ERINNERUNGEN_KONTAKTWEG"
 CONTACT_METHOD_ALLOWED_OPTIONS = {"EMAIL", "SMS", "PHONE"}
 
+
+def _format_patient_dob_for_form(dob: date | None, form_locale: str) -> str:
+    """Locale-aware DOB label for tablet verification card."""
+    if dob is None:
+        return ""
+    if form_locale.startswith("en"):
+        return dob.strftime("%d %B %Y")
+    return dob.strftime("%d.%m.%Y")
+
+
 _INTAKE_STATUSES_ALLOWING_PATIENT_EDITS = frozenset(
     {IntakeStatus.IN_PROGRESS, IntakeStatus.REOPENED}
 )
@@ -736,7 +746,12 @@ def get_intake_form_context(
         "id": str(patient.id),
         "first_name": patient.first_name,
         "last_name": patient.last_name,
-        "date_of_birth": patient.date_of_birth.isoformat(),
+        "date_of_birth": (
+            patient.date_of_birth.isoformat() if patient.date_of_birth else ""
+        ),
+        "date_of_birth_display": _format_patient_dob_for_form(
+            patient.date_of_birth, form_locale
+        ),
         "phone": patient.phone,
         "email": patient.email,
     }

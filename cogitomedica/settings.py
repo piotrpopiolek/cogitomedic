@@ -38,16 +38,18 @@ def before_send_filter(event: dict, hint: dict) -> dict:
     return event
 
 
-SENTRY_DSN = os.environ.get("SENTRY_DSN")
-if SENTRY_DSN:
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
+
+# Sentry: opcjonalnie, tylko poza lokalnym dev. Zostaw SENTRY_DSN puste w .env (patrz .env.example).
+SENTRY_DSN = (os.environ.get("SENTRY_DSN") or "").strip()
+if SENTRY_DSN and ENVIRONMENT != "dev":
     sentry_sdk.init(
         dsn=SENTRY_DSN,
+        environment=ENVIRONMENT,
         send_default_pii=False,
         traces_sample_rate=1.0,
         before_send=before_send_filter,  # type: ignore[arg-type]
     )
-
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
     raise ImproperlyConfigured(
         "SECRET_KEY must be set in production (set the SECRET_KEY environment variable)."

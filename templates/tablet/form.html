@@ -32,14 +32,6 @@
     </nav>
   </div>
 
-  <section>
-    <h2>{{ ui.patient_data_title }}</h2>
-    <div class="field"><strong>{{ patient.last_name }} {{ patient.first_name }}</strong></div>
-    <div class="field">{{ ui.date_of_birth }} {{ patient.date_of_birth }}</div>
-    <div class="field">{{ ui.phone }} {{ patient.phone }}</div>
-    <div class="field">{{ ui.email }} {{ patient.email }}</div>
-  </section>
-
   <nav class="tablet-form-stepper" aria-label="{{ ui.step_1_title }}">
     <span class="stepper-dot current" id="stepper-dot-1" aria-current="step">1</span>
     <span class="stepper-line" aria-hidden="true"></span>
@@ -51,6 +43,7 @@
 
   <div class="form-steps-wrapper" role="region" aria-labelledby="step-indicator">
   <div class="form-step active" id="step-1" role="group" aria-labelledby="step-indicator" aria-hidden="false">
+    {% include "tablet/includes/patient_identity.html" %}
     <section id="consents-section">
       <h2>{{ ui.consents_title }}</h2>
       {% for c in consents %}

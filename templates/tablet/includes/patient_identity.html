@@ -1,0 +1,25 @@
+<section class="tablet-patient-identity" role="region" aria-labelledby="patient-identity-heading">
+  <p class="tablet-patient-identity-eyebrow">{{ ui.patient_identity_eyebrow }}</p>
+  <h2 id="patient-identity-heading" class="tablet-patient-identity-name">
+    {{ patient.last_name }}, {{ patient.first_name }}
+  </h2>
+  <dl class="tablet-patient-identity-details">
+    <div>
+      <dt>{{ ui.date_of_birth }}</dt>
+      <dd>{% if patient.date_of_birth_display %}{{ patient.date_of_birth_display }}{% else %}—{% endif %}</dd>
+    </div>
+    {% if patient.phone %}
+    <div>
+      <dt>{{ ui.phone }}</dt>
+      <dd>{{ patient.phone }}</dd>
+    </div>
+    {% endif %}
+    {% if patient.email %}
+    <div>
+      <dt>{{ ui.email }}</dt>
+      <dd>{{ patient.email }}</dd>
+    </div>
+    {% endif %}
+  </dl>
+  <p class="tablet-patient-identity-hint">{{ ui.patient_identity_results_hint }}</p>
+</section>
