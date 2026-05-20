@@ -167,8 +167,12 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      - web
-      - postgres_exporter
+      web:
+        condition: service_started
+      postgres_exporter:
+        condition: service_started
+      otel-collector:
+        condition: service_started
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -219,6 +223,10 @@ services:
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./deploy/otel/otel-collector-config.yml:/etc/otel-collector-config.yml
+    networks:
+      default:
+        aliases:
+          - otelcollector
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
