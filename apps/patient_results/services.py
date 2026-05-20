@@ -24,7 +24,11 @@ from apps.patient_results.constants import (
 )
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import Patient
-from apps.reception.phone_utils import normalize_phone
+from apps.reception.phone_utils import (
+    infer_sms_region_from_phone,
+    normalize_phone,
+    phone_lookup_variants,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,21 @@ def _phone_match_q(phone_normalized: str):
     if not phone_normalized:
         return Q(pk=None)  # no match
     return Q(phone=phone_normalized) | Q(phone=f"+{phone_normalized}")
+
+
+def _find_patient_by_phone_and_dob(phone: str, date_of_birth: date) -> Patient | None:
+    for variant in phone_lookup_variants(phone):
+        patient = (
+            Patient.objects.filter(
+                _phone_match_q(variant),
+                date_of_birth=date_of_birth,
+            )
+            .order_by("created_at")
+            .first()
+        )
+        if patient:
+            return patient
+    return None
 
 
 def _hash_otp(otp_code: str) -> str:
@@ -124,14 +143,7 @@ def request_otp(
     if recent_count >= OTP_RATE_LIMIT_PER_HOUR:
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
-    patient = (
-        Patient.objects.filter(
-            _phone_match_q(phone_norm),
-            date_of_birth=date_of_birth,
-        )
-        .order_by("created_at")
-        .first()
-    )
+    patient = _find_patient_by_phone_and_dob(phone, date_of_birth)
     if not patient:
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
@@ -149,13 +161,13 @@ def request_otp(
     with transaction.atomic():
         PatientResultsOtpSession.objects.create(
             patient=patient,
-            phone=phone_norm,
+            phone=patient.phone,
             otp_code_hash=otp_hash,
             expires_at=expires_at,
         )
         sms_text = _get_otp_sms_text(otp_code)
         adapter = get_sms_adapter()
-        region = (patient.country_code or "DE").strip().upper()
+        region = infer_sms_region_from_phone(patient.phone)
         adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
 
     return RequestOtpResult(
@@ -171,8 +183,8 @@ def verify_otp(
     otp_code: str,
 ) -> VerifyOtpResult:
     """Verify OTP and return patient_id on success. Uses session for authenticated access."""
-    phone_norm = normalize_phone(phone)
-    if len(phone_norm) < 7:
+    patient = _find_patient_by_phone_and_dob(phone, date_of_birth)
+    if not patient:
         return VerifyOtpResult(success=False, error="invalid")
 
     otp_stripped = (otp_code or "").strip()
@@ -183,8 +195,7 @@ def verify_otp(
     session = (
         PatientResultsOtpSession.objects.select_related("patient")
         .filter(
-            phone=phone_norm,
-            patient__date_of_birth=date_of_birth,
+            patient=patient,
             expires_at__gt=now,
             verified_at__isnull=True,
         )

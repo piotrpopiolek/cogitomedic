@@ -8,7 +8,10 @@ from django.test import SimpleTestCase
 from apps.reception.phone_utils import (
     SUPPORTED_SMS_REGIONS,
     format_phone_e164_for_sms,
+    infer_sms_region_from_phone,
     normalize_phone,
+    normalize_phone_for_patient_storage,
+    phone_lookup_variants,
 )
 
 
@@ -100,6 +103,70 @@ class FormatPhoneE164ForSmsTests(SimpleTestCase):
     def test_empty_returns_empty(self) -> None:
         self.assertEqual(format_phone_e164_for_sms(""), "")
         self.assertEqual(format_phone_e164_for_sms("   "), "")
+
+
+class InferSmsRegionTests(SimpleTestCase):
+    def test_uk_stored_with_44_prefix(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        assert ex is not None
+        stored = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        self.assertEqual(infer_sms_region_from_phone(stored.lstrip("+")), "GB")
+
+    def test_de_stored_without_country_prefix(self) -> None:
+        self.assertEqual(infer_sms_region_from_phone("1762222222"), "DE")
+
+    def test_empty_defaults_de(self) -> None:
+        self.assertEqual(infer_sms_region_from_phone(""), "DE")
+
+
+class NormalizePhoneGbStorageTests(SimpleTestCase):
+    def test_uk_national_input_stores_44_prefix(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        self.assertIsNotNone(ex)
+        assert ex is not None
+        national = phonenumbers.format_number(
+            ex, phonenumbers.PhoneNumberFormat.NATIONAL
+        )
+        stored = normalize_phone_for_patient_storage(national)
+        self.assertEqual(infer_sms_region_from_phone(stored), "GB")
+        e164 = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        self.assertEqual(format_phone_e164_for_sms(stored), e164)
+
+    def test_uk_international_input(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        assert ex is not None
+        e164 = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        stored = normalize_phone_for_patient_storage(e164)
+        self.assertEqual(stored, e164.lstrip("+"))
+
+
+class PhoneLookupVariantsTests(SimpleTestCase):
+    def test_uk_national_includes_gb_variant(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        assert ex is not None
+        national = phonenumbers.format_number(
+            ex, phonenumbers.PhoneNumberFormat.NATIONAL
+        )
+        variants = phone_lookup_variants(national)
+        stored = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        self.assertIn(stored.lstrip("+"), variants)
+
+    def test_de_legacy_single_variant(self) -> None:
+        variants = phone_lookup_variants("01762222222")
+        self.assertEqual(variants[0], "1762222222")
+
+
+class FormatPhoneGbTests(SimpleTestCase):
+    def test_stored_uk_digits_e164_with_de_default_region(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        self.assertIsNotNone(ex)
+        assert ex is not None
+        e164 = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        stored = e164.lstrip("+")
+        self.assertEqual(
+            format_phone_e164_for_sms(stored, default_region="DE"),
+            e164,
+        )
 
 
 class FormatPhoneSupportedSmsRegionsTests(SimpleTestCase):

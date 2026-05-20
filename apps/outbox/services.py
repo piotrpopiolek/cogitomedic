@@ -244,7 +244,9 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             form_locale = intake_form.session.form_locale
         sms_text = get_sms_patient_results_text(form_locale, base_url)
         sms_adapter = get_sms_adapter()
-        region = (patient.country_code or "DE").strip().upper()
+        from apps.reception.phone_utils import infer_sms_region_from_phone
+
+        region = infer_sms_region_from_phone(patient.phone)
         sms_adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
 
         version.sms_sent = True

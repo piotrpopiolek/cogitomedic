@@ -10,7 +10,6 @@ from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy
 from apps.medical.name_normalize import compute_incoming_pdf_name_keys
-from apps.reception.phone_utils import normalize_phone
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -260,8 +259,9 @@ class Patient(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        region = (self.country_code or "DE").strip().upper()
-        norm = normalize_phone(self.phone, default_region=region)
+        from apps.reception.phone_utils import normalize_phone_for_patient_storage
+
+        norm = normalize_phone_for_patient_storage(self.phone)
         if norm:
             self.phone = norm
         fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
