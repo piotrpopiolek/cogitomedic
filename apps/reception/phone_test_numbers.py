@@ -34,8 +34,11 @@ def iter_mobile_candidates(region: str) -> Iterator[PhoneNumber]:
     base = example_number_for_type(region, PhoneNumberType.MOBILE)
     if base is None:
         return
-    seed = int(base.national_number)
+    nn = base.national_number
     cc = base.country_code
+    if nn is None or cc is None:
+        return
+    seed = int(nn)
     seen: set[int] = set()
     for delta in range(MAX_SEARCH_DELTA):
         for candidate in (seed + delta, seed - delta):
