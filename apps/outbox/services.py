@@ -40,6 +40,7 @@ from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
+from apps.reception.phone_utils import infer_sms_region_from_phone
 
 logger = logging.getLogger(__name__)
 
@@ -244,8 +245,6 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             form_locale = intake_form.session.form_locale
         sms_text = get_sms_patient_results_text(form_locale, base_url)
         sms_adapter = get_sms_adapter()
-        from apps.reception.phone_utils import infer_sms_region_from_phone
-
         region = infer_sms_region_from_phone(patient.phone)
         sms_adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
 
