@@ -21,6 +21,7 @@ SUPPORTED_SMS_REGIONS: Final[tuple[str, ...]] = (
     "CH",
     "AT",
     "CZ",
+    "GB",
 )
 
 
@@ -36,6 +37,72 @@ def _supported_prefix_table() -> tuple[tuple[str, str], ...]:
 
 
 _PREFIX_TABLE: tuple[tuple[str, str], ...] = _supported_prefix_table()
+
+
+def _digits_only(value: str) -> str:
+    return re.sub(r"[^\d]", "", (value or "").strip())
+
+
+def _region_from_parsed_digits(digits: str) -> str | None:
+    if not digits:
+        return None
+    for prefix, region in _PREFIX_TABLE:
+        if not digits.startswith(prefix):
+            continue
+        try:
+            parsed = phonenumbers.parse("+" + digits, None)
+            if phonenumbers.is_valid_number(parsed):
+                rc = phonenumbers.region_code_for_number(parsed)
+                if rc and rc in SUPPORTED_SMS_REGIONS:
+                    return rc
+        except NumberParseException:
+            pass
+        break
+    return None
+
+
+def infer_sms_region_from_phone(phone: str) -> str:
+    """
+    Infer ISO region for SMS / normalization from phone digits.
+
+    Uses calling-code prefixes in stored digits. Does not use Patient.country_code
+    (often always DE in production). Falls back to DE for legacy national numbers.
+    """
+    region = _region_from_parsed_digits(_digits_only(phone))
+    return region if region else "DE"
+
+
+def phone_lookup_variants(value: str) -> tuple[str, ...]:
+    """
+    Candidate normalized digit strings for patient / OTP lookup.
+
+    Primary variant preserves legacy DE behavior; GB national format (07…) is added
+    when it normalizes differently.
+    """
+    seen: list[str] = []
+
+    def add(candidate: str) -> None:
+        if candidate and candidate not in seen:
+            seen.append(candidate)
+
+    add(normalize_phone(value))
+    gb = normalize_phone(value, default_region="GB")
+    add(gb)
+    return tuple(seen)
+
+
+def normalize_phone_for_patient_storage(phone: str) -> str:
+    """Normalize phone on Patient.save using region inferred from the number."""
+    if not phone:
+        return phone
+    legacy = normalize_phone(phone)
+    region = infer_sms_region_from_phone(legacy or phone)
+    norm = normalize_phone(phone, default_region=region)
+    if region == "DE":
+        gb_norm = normalize_phone(phone, default_region="GB")
+        if gb_norm and infer_sms_region_from_phone(gb_norm) == "GB":
+            norm = gb_norm
+    return norm or legacy
 
 
 def _legacy_digit_normalize(value: str) -> str:
@@ -57,8 +124,8 @@ def normalize_phone(value: str, default_region: str | None = None) -> str:
     converge to the same digit string as far as leading zeros allow.
 
     With ``default_region`` (ISO-3166-1 alpha-2), parses using libphonenumber
-    when possible so national numbers (e.g. ``0612…`` in FR) are stored with
-    the correct country calling code.
+    when possible so national numbers (e.g. ``0612…`` in FR, ``07911…`` in GB)
+    are stored with the correct country calling code.
     """
     if default_region is None:
         return _legacy_digit_normalize(value)
@@ -126,14 +193,13 @@ def format_phone_e164_for_sms(phone: str, default_region: str = "DE") -> str:
     """
     Build E.164 with leading ``+`` for SMS APIs from stored digits (no ``+`` in DB).
 
-    Detects country from supported calling-code prefixes (PL, DE, FR, IT, ES,
-    UA, PT, NL, BE, CH, AT, CZ). If none match, parses as a national number in
-    ``default_region`` (default Germany). Falls back to ``+49`` + digits for
-    backward compatibility with legacy data.
+    Detects country from supported calling-code prefixes. If none match, parses as
+    a national number in ``default_region`` (use ``infer_sms_region_from_phone`` for
+    stored digits). Falls back to ``+49`` + digits for backward compatibility.
     """
     if not phone or not isinstance(phone, str):
         return ""
-    digits = re.sub(r"[^\d]", "", phone.strip())
+    digits = _digits_only(phone)
     if not digits:
         return ""
 

@@ -48,3 +48,17 @@ class FormatPhoneForSmsApiTests(SimpleTestCase):
             format_phone_for_smsapi("612345678", default_region="FR"),
             "+33612345678",
         )
+
+    def test_uk_international_digits_with_de_default_region(self) -> None:
+        import phonenumbers
+
+        ex = phonenumbers.example_number("GB")
+        self.assertIsNotNone(ex)
+        assert ex is not None
+        stored = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        stored = stored.lstrip("+")
+        e164 = phonenumbers.format_number(ex, phonenumbers.PhoneNumberFormat.E164)
+        self.assertEqual(
+            format_phone_for_smsapi(stored, default_region="DE"),
+            e164,
+        )
