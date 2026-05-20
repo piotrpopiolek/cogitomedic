@@ -145,6 +145,8 @@ services:
         condition: service_healthy
       postgres_exporter:
         condition: service_started
+      otel-collector:
+        condition: service_started
 
   alertmanager:
     profiles: [observability]
@@ -191,6 +193,10 @@ services:
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./deploy/otel/otel-collector-config.yml:/etc/otel-collector-config.yml
+    networks:
+      default:
+        aliases:
+          - otelcollector
     ports:
       - "${OBSERVABILITY_BIND_ADDR:-127.0.0.1}:4317:4317"
       - "${OBSERVABILITY_BIND_ADDR:-127.0.0.1}:4318:4318"
