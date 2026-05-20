@@ -72,12 +72,116 @@ def infer_sms_region_from_phone(phone: str) -> str:
     return region if region else "DE"
 
 
+def _valid_national_number_in_region(value: str, region: str) -> bool:
+    """True when ``value`` is a national-format number valid in ``region`` only."""
+    trimmed = (value or "").strip()
+    if not trimmed or trimmed.startswith("+"):
+        return False
+    try:
+        parsed = phonenumbers.parse(trimmed, region)
+    except NumberParseException:
+        return False
+    if phonenumbers.region_code_for_number(parsed) != region:
+        return False
+    if not phonenumbers.is_valid_number_for_region(parsed, region):
+        return False
+    national_fmt = phonenumbers.format_number(parsed, PhoneNumberFormat.NATIONAL)
+    return _digits_only(trimmed) == _digits_only(national_fmt)
+
+
+def _regions_matching_national_input(value: str) -> tuple[str, ...]:
+    """
+    Supported regions where ``value`` parses as a valid national number.
+
+    Same rules for every entry in ``SUPPORTED_SMS_REGIONS``.
+    """
+    legacy = normalize_phone(value)
+    if len(legacy) < 7:
+        return ()
+
+    valid_regions = [
+        region
+        for region in SUPPORTED_SMS_REGIONS
+        if _valid_national_number_in_region(value, region)
+    ]
+    de_norm = normalize_phone(value, default_region="DE")
+    if (
+        "DE" in valid_regions
+        and de_norm == legacy
+        and legacy.startswith(("15", "16", "17"))
+    ):
+        return ("DE",)
+
+    matched: list[str] = []
+    for region in valid_regions:
+        cc = phonenumbers.country_code_for_region(region) or 0
+        if cc >= 300:
+            continue
+        candidate = normalize_phone(value, default_region=region)
+        if candidate and candidate != legacy:
+            matched.append(region)
+    return tuple(matched)
+
+
+def _national_input_region_hint(value: str, matched: tuple[str, ...]) -> str | None:
+    """
+    Disambiguate national trunk input using dial-string prefixes (before legacy strip).
+
+    Same idea as DE-first for 15/16/17: local conventions, not a second parse pass for one region.
+    """
+    digits = _digits_only(value)
+    if not digits:
+        return None
+    if digits.startswith("06") and "FR" in matched:
+        return "FR"
+    if digits.startswith("07"):
+        if "GB" in matched and "FR" not in matched:
+            return "GB"
+        if "FR" in matched and "GB" not in matched:
+            return "FR"
+    if digits.startswith(("01", "02", "03")) and "GB" in matched:
+        return "GB"
+    return None
+
+
+def _pick_national_storage_region(value: str, matched: tuple[str, ...]) -> str:
+    """Choose one region when several national parses validate."""
+    if not matched:
+        return ""
+    if len(matched) == 1:
+        return matched[0]
+
+    hinted = _national_input_region_hint(value, matched)
+    if hinted:
+        return hinted
+
+    for region in sorted(
+        matched,
+        key=lambda r: phonenumbers.country_code_for_region(r) or 0,
+        reverse=True,
+    ):
+        stored = normalize_phone(value, default_region=region)
+        if not stored:
+            continue
+        try:
+            parsed = phonenumbers.parse("+" + stored, None)
+        except NumberParseException:
+            continue
+        if (
+            phonenumbers.is_valid_number(parsed)
+            and phonenumbers.region_code_for_number(parsed) == region
+        ):
+            return region
+    return matched[0]
+
+
 def phone_lookup_variants(value: str) -> tuple[str, ...]:
     """
     Candidate normalized digit strings for patient / OTP lookup.
 
-    Primary variant preserves legacy DE behavior; GB national format (07…) is added
-    when it normalizes differently.
+    Legacy digit strip first; international prefixes use the matching region;
+    national trunk numbers (no CC in input) add storage forms for each supported
+    region where libphonenumber validates the number.
     """
     seen: list[str] = []
 
@@ -85,9 +189,23 @@ def phone_lookup_variants(value: str) -> tuple[str, ...]:
         if candidate and candidate not in seen:
             seen.append(candidate)
 
-    add(normalize_phone(value))
-    gb = normalize_phone(value, default_region="GB")
-    add(gb)
+    legacy = normalize_phone(value)
+    add(legacy)
+
+    digits = _digits_only(value)
+    region_from_prefix = _region_from_parsed_digits(digits)
+    if region_from_prefix:
+        add(normalize_phone(value, default_region=region_from_prefix))
+        return tuple(seen)
+
+    matched = _regions_matching_national_input(value)
+    if matched == ("DE",):
+        add(normalize_phone(value, default_region="DE"))
+        return tuple(seen)
+    if matched:
+        region = _pick_national_storage_region(value, matched)
+        add(normalize_phone(value, default_region=region))
+
     return tuple(seen)
 
 
@@ -95,14 +213,22 @@ def normalize_phone_for_patient_storage(phone: str) -> str:
     """Normalize phone on Patient.save using region inferred from the number."""
     if not phone:
         return phone
-    legacy = normalize_phone(phone)
-    region = infer_sms_region_from_phone(legacy or phone)
-    norm = normalize_phone(phone, default_region=region)
-    if region == "DE":
-        gb_norm = normalize_phone(phone, default_region="GB")
-        if gb_norm and infer_sms_region_from_phone(gb_norm) == "GB":
-            norm = gb_norm
-    return norm or legacy
+    digits = _digits_only(phone)
+    region_from_prefix = _region_from_parsed_digits(digits)
+    if region_from_prefix:
+        norm = normalize_phone(phone, default_region=region_from_prefix)
+        return norm or normalize_phone(phone)
+
+    matched = _regions_matching_national_input(phone)
+    if matched:
+        region = _pick_national_storage_region(phone, matched)
+        norm = normalize_phone(phone, default_region=region)
+        return norm or normalize_phone(phone)
+
+    if _valid_national_number_in_region(phone, "DE"):
+        return normalize_phone(phone, default_region="DE") or normalize_phone(phone)
+
+    return normalize_phone(phone)
 
 
 def _legacy_digit_normalize(value: str) -> str:

@@ -141,7 +141,7 @@ class NormalizePhoneGbStorageTests(SimpleTestCase):
 
 
 class PhoneLookupVariantsTests(SimpleTestCase):
-    def test_uk_national_includes_gb_variant(self) -> None:
+    def test_uk_national_includes_international_storage_variant(self) -> None:
         ex = phonenumbers.example_number("GB")
         assert ex is not None
         national = phonenumbers.format_number(
@@ -153,7 +153,11 @@ class PhoneLookupVariantsTests(SimpleTestCase):
 
     def test_de_legacy_single_variant(self) -> None:
         variants = phone_lookup_variants("01762222222")
-        self.assertEqual(variants[0], "1762222222")
+        self.assertEqual(variants, ("1762222222",))
+
+    def test_fr_national_adds_international_variant(self) -> None:
+        variants = phone_lookup_variants("06 12 34 56 78")
+        self.assertIn("33612345678", variants)
 
 
 class FormatPhoneGbTests(SimpleTestCase):
