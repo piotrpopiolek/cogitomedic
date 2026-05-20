@@ -130,21 +130,20 @@ def request_otp(
             audit_outcome="captcha_failed",
         )
 
-    phone_norm = normalize_phone(phone)
-    if len(phone_norm) < 7:
-        return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
-
-    # Rate limit: max 3 OTP per number per hour
-    since = timezone.now() - timedelta(hours=1)
-    recent_count = PatientResultsOtpSession.objects.filter(
-        phone=phone_norm,
-        created_at__gte=since,
-    ).count()
-    if recent_count >= OTP_RATE_LIMIT_PER_HOUR:
+    if len(normalize_phone(phone)) < 7:
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     patient = _find_patient_by_phone_and_dob(phone, date_of_birth)
     if not patient:
+        return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
+
+    # Rate limit per patient (not raw input digits — formats share one bucket).
+    since = timezone.now() - timedelta(hours=1)
+    recent_count = PatientResultsOtpSession.objects.filter(
+        patient_id=patient.id,
+        created_at__gte=since,
+    ).count()
+    if recent_count >= OTP_RATE_LIMIT_PER_HOUR:
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     pepper = (getattr(settings, "PATIENT_RESULTS_OTP_PEPPER", "") or "").strip()
