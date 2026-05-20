@@ -23,7 +23,7 @@ scrape_configs:
   - job_name: "otel_spanmetrics"
     scrape_interval: 30s
     static_configs:
-      - targets: ["otel-collector:8889"]
+      - targets: ["otelcollector:8889"]
 
   - job_name: "postgres"
     scrape_interval: 30s
