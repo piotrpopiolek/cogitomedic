@@ -11,7 +11,9 @@ from django.utils import timezone
 
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.patient_results.services import request_otp, verify_otp
-from apps.reception.phone_utils import normalize_phone
+import phonenumbers
+
+from apps.reception.phone_utils import infer_sms_region_from_phone
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -113,6 +115,68 @@ class RequestOtpTests(TestCase):
         mock_get_adapter.return_value.send_sms.assert_not_called()
 
 
+class RequestOtpUkTests(TestCase):
+    def setUp(self) -> None:
+        ex = phonenumbers.example_number("GB")
+        assert ex is not None
+        self.gb_e164 = phonenumbers.format_number(
+            ex, phonenumbers.PhoneNumberFormat.E164
+        )
+        self.gb_national = phonenumbers.format_number(
+            ex, phonenumbers.PhoneNumberFormat.NATIONAL
+        )
+        self.patient = Patient.objects.create(
+            first_name="UK",
+            last_name="Patient",
+            date_of_birth=date(1988, 7, 7),
+            phone=self.gb_e164,
+            email="uk@example.com",
+            country_code="DE",
+            doctolib_patient_id=None,
+        )
+        self.patient.refresh_from_db()
+        self.assertEqual(infer_sms_region_from_phone(self.patient.phone), "GB")
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_uk_national_format(self, mock_get_adapter) -> None:
+        mock_adapter = mock_get_adapter.return_value
+        result = request_otp(
+            phone=self.gb_national,
+            date_of_birth=date(1988, 7, 7),
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "sms_sent")
+        mock_adapter.send_sms.assert_called_once()
+        self.assertEqual(mock_adapter.send_sms.call_args.kwargs["default_region"], "GB")
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_verify_otp_uk_national_format(self, mock_get_adapter) -> None:
+        mock_get_adapter.return_value.send_sms = lambda *a, **k: None
+        request_otp(
+            phone=self.gb_national,
+            date_of_birth=date(1988, 7, 7),
+            captcha_token="skip",
+        )
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        otp = "654321"
+        pepper = "test-pepper"
+        session.otp_code_hash = hashlib.sha256(f"{pepper}{otp}".encode()).hexdigest()
+        session.save(update_fields=["otp_code_hash"])
+        result = verify_otp(
+            phone=self.gb_national,
+            date_of_birth=date(1988, 7, 7),
+            otp_code=otp,
+        )
+        self.assertTrue(result.success)
+
+
 class VerifyOtpTests(TestCase):
     def setUp(self) -> None:
         self.patient = Patient.objects.create(
@@ -134,7 +198,7 @@ class VerifyOtpTests(TestCase):
         ):
             return PatientResultsOtpSession.objects.create(
                 patient=self.patient,
-                phone=normalize_phone("01761111111"),
+                phone=self.patient.phone,
                 otp_code_hash=h,
                 expires_at=timezone.now() + timedelta(minutes=15),
             )
