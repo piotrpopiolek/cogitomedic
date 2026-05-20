@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.patient_results.constants import OTP_RATE_LIMIT_PER_HOUR
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.patient_results.services import request_otp, verify_otp
 import phonenumbers
@@ -175,6 +176,41 @@ class RequestOtpUkTests(TestCase):
             otp_code=otp,
         )
         self.assertTrue(result.success)
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_rate_limit_shared_across_phone_formats(
+        self, mock_get_adapter
+    ) -> None:
+        """Legacy phone_norm vs stored 44… must not bypass OTP_RATE_LIMIT_PER_HOUR."""
+        mock_adapter = mock_get_adapter.return_value
+        mock_adapter.send_sms = MagicMock()
+        dob = date(1988, 7, 7)
+        for _ in range(OTP_RATE_LIMIT_PER_HOUR):
+            request_otp(
+                phone=self.gb_national,
+                date_of_birth=dob,
+                captcha_token="skip",
+            )
+        self.assertEqual(
+            PatientResultsOtpSession.objects.filter(patient=self.patient).count(),
+            OTP_RATE_LIMIT_PER_HOUR,
+        )
+        self.assertEqual(mock_adapter.send_sms.call_count, OTP_RATE_LIMIT_PER_HOUR)
+        result = request_otp(
+            phone=self.gb_e164,
+            date_of_birth=dob,
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "silent_no_op")
+        self.assertEqual(
+            PatientResultsOtpSession.objects.filter(patient=self.patient).count(),
+            OTP_RATE_LIMIT_PER_HOUR,
+        )
+        self.assertEqual(mock_adapter.send_sms.call_count, OTP_RATE_LIMIT_PER_HOUR)
 
 
 class VerifyOtpTests(TestCase):
