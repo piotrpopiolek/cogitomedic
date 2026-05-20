@@ -1,0 +1,2303 @@
+{
+  "PL": [
+    {
+      "region": "PL",
+      "e164": "+48512345678",
+      "national": "512 345 678",
+      "international_digits": "48512345678",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345679",
+      "national": "512 345 679",
+      "international_digits": "48512345679",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345677",
+      "national": "512 345 677",
+      "international_digits": "48512345677",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345680",
+      "national": "512 345 680",
+      "international_digits": "48512345680",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345676",
+      "national": "512 345 676",
+      "international_digits": "48512345676",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345681",
+      "national": "512 345 681",
+      "international_digits": "48512345681",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345675",
+      "national": "512 345 675",
+      "international_digits": "48512345675",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345682",
+      "national": "512 345 682",
+      "international_digits": "48512345682",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345674",
+      "national": "512 345 674",
+      "international_digits": "48512345674",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345683",
+      "national": "512 345 683",
+      "international_digits": "48512345683",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345673",
+      "national": "512 345 673",
+      "international_digits": "48512345673",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345684",
+      "national": "512 345 684",
+      "international_digits": "48512345684",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345672",
+      "national": "512 345 672",
+      "international_digits": "48512345672",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345685",
+      "national": "512 345 685",
+      "international_digits": "48512345685",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345671",
+      "national": "512 345 671",
+      "international_digits": "48512345671",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345686",
+      "national": "512 345 686",
+      "international_digits": "48512345686",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345670",
+      "national": "512 345 670",
+      "international_digits": "48512345670",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345687",
+      "national": "512 345 687",
+      "international_digits": "48512345687",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345669",
+      "national": "512 345 669",
+      "international_digits": "48512345669",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345688",
+      "national": "512 345 688",
+      "international_digits": "48512345688",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345668",
+      "national": "512 345 668",
+      "international_digits": "48512345668",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345689",
+      "national": "512 345 689",
+      "international_digits": "48512345689",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345667",
+      "national": "512 345 667",
+      "international_digits": "48512345667",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345690",
+      "national": "512 345 690",
+      "international_digits": "48512345690",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "PL",
+      "e164": "+48512345666",
+      "national": "512 345 666",
+      "international_digits": "48512345666",
+      "supports_national_roundtrip": true
+    }
+  ],
+  "DE": [
+    {
+      "region": "DE",
+      "e164": "+4915123456789",
+      "national": "01512 3456789",
+      "international_digits": "4915123456789",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456790",
+      "national": "01512 3456790",
+      "international_digits": "4915123456790",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456788",
+      "national": "01512 3456788",
+      "international_digits": "4915123456788",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456791",
+      "national": "01512 3456791",
+      "international_digits": "4915123456791",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456787",
+      "national": "01512 3456787",
+      "international_digits": "4915123456787",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456792",
+      "national": "01512 3456792",
+      "international_digits": "4915123456792",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456786",
+      "national": "01512 3456786",
+      "international_digits": "4915123456786",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456793",
+      "national": "01512 3456793",
+      "international_digits": "4915123456793",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456785",
+      "national": "01512 3456785",
+      "international_digits": "4915123456785",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456794",
+      "national": "01512 3456794",
+      "international_digits": "4915123456794",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456784",
+      "national": "01512 3456784",
+      "international_digits": "4915123456784",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456795",
+      "national": "01512 3456795",
+      "international_digits": "4915123456795",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456783",
+      "national": "01512 3456783",
+      "international_digits": "4915123456783",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456796",
+      "national": "01512 3456796",
+      "international_digits": "4915123456796",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456782",
+      "national": "01512 3456782",
+      "international_digits": "4915123456782",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456797",
+      "national": "01512 3456797",
+      "international_digits": "4915123456797",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456781",
+      "national": "01512 3456781",
+      "international_digits": "4915123456781",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456798",
+      "national": "01512 3456798",
+      "international_digits": "4915123456798",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456780",
+      "national": "01512 3456780",
+      "international_digits": "4915123456780",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456799",
+      "national": "01512 3456799",
+      "international_digits": "4915123456799",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456779",
+      "national": "01512 3456779",
+      "international_digits": "4915123456779",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456800",
+      "national": "01512 3456800",
+      "international_digits": "4915123456800",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456778",
+      "national": "01512 3456778",
+      "international_digits": "4915123456778",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456801",
+      "national": "01512 3456801",
+      "international_digits": "4915123456801",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "DE",
+      "e164": "+4915123456777",
+      "national": "01512 3456777",
+      "international_digits": "4915123456777",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "FR": [
+    {
+      "region": "FR",
+      "e164": "+33612345678",
+      "national": "06 12 34 56 78",
+      "international_digits": "33612345678",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345679",
+      "national": "06 12 34 56 79",
+      "international_digits": "33612345679",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345677",
+      "national": "06 12 34 56 77",
+      "international_digits": "33612345677",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345680",
+      "national": "06 12 34 56 80",
+      "international_digits": "33612345680",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345676",
+      "national": "06 12 34 56 76",
+      "international_digits": "33612345676",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345681",
+      "national": "06 12 34 56 81",
+      "international_digits": "33612345681",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345675",
+      "national": "06 12 34 56 75",
+      "international_digits": "33612345675",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345682",
+      "national": "06 12 34 56 82",
+      "international_digits": "33612345682",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345674",
+      "national": "06 12 34 56 74",
+      "international_digits": "33612345674",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345683",
+      "national": "06 12 34 56 83",
+      "international_digits": "33612345683",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345673",
+      "national": "06 12 34 56 73",
+      "international_digits": "33612345673",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345684",
+      "national": "06 12 34 56 84",
+      "international_digits": "33612345684",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345672",
+      "national": "06 12 34 56 72",
+      "international_digits": "33612345672",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345685",
+      "national": "06 12 34 56 85",
+      "international_digits": "33612345685",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345671",
+      "national": "06 12 34 56 71",
+      "international_digits": "33612345671",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345686",
+      "national": "06 12 34 56 86",
+      "international_digits": "33612345686",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345670",
+      "national": "06 12 34 56 70",
+      "international_digits": "33612345670",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345687",
+      "national": "06 12 34 56 87",
+      "international_digits": "33612345687",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345669",
+      "national": "06 12 34 56 69",
+      "international_digits": "33612345669",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345688",
+      "national": "06 12 34 56 88",
+      "international_digits": "33612345688",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345668",
+      "national": "06 12 34 56 68",
+      "international_digits": "33612345668",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345689",
+      "national": "06 12 34 56 89",
+      "international_digits": "33612345689",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345667",
+      "national": "06 12 34 56 67",
+      "international_digits": "33612345667",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345690",
+      "national": "06 12 34 56 90",
+      "international_digits": "33612345690",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "FR",
+      "e164": "+33612345666",
+      "national": "06 12 34 56 66",
+      "international_digits": "33612345666",
+      "supports_national_roundtrip": true
+    }
+  ],
+  "IT": [
+    {
+      "region": "IT",
+      "e164": "+393123456789",
+      "national": "312 345 6789",
+      "international_digits": "393123456789",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456790",
+      "national": "312 345 6790",
+      "international_digits": "393123456790",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456788",
+      "national": "312 345 6788",
+      "international_digits": "393123456788",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456791",
+      "national": "312 345 6791",
+      "international_digits": "393123456791",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456787",
+      "national": "312 345 6787",
+      "international_digits": "393123456787",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456792",
+      "national": "312 345 6792",
+      "international_digits": "393123456792",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456786",
+      "national": "312 345 6786",
+      "international_digits": "393123456786",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456793",
+      "national": "312 345 6793",
+      "international_digits": "393123456793",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456785",
+      "national": "312 345 6785",
+      "international_digits": "393123456785",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456794",
+      "national": "312 345 6794",
+      "international_digits": "393123456794",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456784",
+      "national": "312 345 6784",
+      "international_digits": "393123456784",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456795",
+      "national": "312 345 6795",
+      "international_digits": "393123456795",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456783",
+      "national": "312 345 6783",
+      "international_digits": "393123456783",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456796",
+      "national": "312 345 6796",
+      "international_digits": "393123456796",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456782",
+      "national": "312 345 6782",
+      "international_digits": "393123456782",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456797",
+      "national": "312 345 6797",
+      "international_digits": "393123456797",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456781",
+      "national": "312 345 6781",
+      "international_digits": "393123456781",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456798",
+      "national": "312 345 6798",
+      "international_digits": "393123456798",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456780",
+      "national": "312 345 6780",
+      "international_digits": "393123456780",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456799",
+      "national": "312 345 6799",
+      "international_digits": "393123456799",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456779",
+      "national": "312 345 6779",
+      "international_digits": "393123456779",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456800",
+      "national": "312 345 6800",
+      "international_digits": "393123456800",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456778",
+      "national": "312 345 6778",
+      "international_digits": "393123456778",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456801",
+      "national": "312 345 6801",
+      "international_digits": "393123456801",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "IT",
+      "e164": "+393123456777",
+      "national": "312 345 6777",
+      "international_digits": "393123456777",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "ES": [
+    {
+      "region": "ES",
+      "e164": "+34612345678",
+      "national": "612 34 56 78",
+      "international_digits": "34612345678",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345679",
+      "national": "612 34 56 79",
+      "international_digits": "34612345679",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345677",
+      "national": "612 34 56 77",
+      "international_digits": "34612345677",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345680",
+      "national": "612 34 56 80",
+      "international_digits": "34612345680",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345676",
+      "national": "612 34 56 76",
+      "international_digits": "34612345676",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345681",
+      "national": "612 34 56 81",
+      "international_digits": "34612345681",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345675",
+      "national": "612 34 56 75",
+      "international_digits": "34612345675",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345682",
+      "national": "612 34 56 82",
+      "international_digits": "34612345682",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345674",
+      "national": "612 34 56 74",
+      "international_digits": "34612345674",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345683",
+      "national": "612 34 56 83",
+      "international_digits": "34612345683",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345673",
+      "national": "612 34 56 73",
+      "international_digits": "34612345673",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345684",
+      "national": "612 34 56 84",
+      "international_digits": "34612345684",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345672",
+      "national": "612 34 56 72",
+      "international_digits": "34612345672",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345685",
+      "national": "612 34 56 85",
+      "international_digits": "34612345685",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345671",
+      "national": "612 34 56 71",
+      "international_digits": "34612345671",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345686",
+      "national": "612 34 56 86",
+      "international_digits": "34612345686",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345670",
+      "national": "612 34 56 70",
+      "international_digits": "34612345670",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345687",
+      "national": "612 34 56 87",
+      "international_digits": "34612345687",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345669",
+      "national": "612 34 56 69",
+      "international_digits": "34612345669",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345688",
+      "national": "612 34 56 88",
+      "international_digits": "34612345688",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345668",
+      "national": "612 34 56 68",
+      "international_digits": "34612345668",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345689",
+      "national": "612 34 56 89",
+      "international_digits": "34612345689",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345667",
+      "national": "612 34 56 67",
+      "international_digits": "34612345667",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345690",
+      "national": "612 34 56 90",
+      "international_digits": "34612345690",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "ES",
+      "e164": "+34612345666",
+      "national": "612 34 56 66",
+      "international_digits": "34612345666",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "UA": [
+    {
+      "region": "UA",
+      "e164": "+380501234567",
+      "national": "050 123 4567",
+      "international_digits": "380501234567",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234568",
+      "national": "050 123 4568",
+      "international_digits": "380501234568",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234566",
+      "national": "050 123 4566",
+      "international_digits": "380501234566",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234569",
+      "national": "050 123 4569",
+      "international_digits": "380501234569",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234565",
+      "national": "050 123 4565",
+      "international_digits": "380501234565",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234570",
+      "national": "050 123 4570",
+      "international_digits": "380501234570",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234564",
+      "national": "050 123 4564",
+      "international_digits": "380501234564",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234571",
+      "national": "050 123 4571",
+      "international_digits": "380501234571",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234563",
+      "national": "050 123 4563",
+      "international_digits": "380501234563",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234572",
+      "national": "050 123 4572",
+      "international_digits": "380501234572",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234562",
+      "national": "050 123 4562",
+      "international_digits": "380501234562",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234573",
+      "national": "050 123 4573",
+      "international_digits": "380501234573",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234561",
+      "national": "050 123 4561",
+      "international_digits": "380501234561",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234574",
+      "national": "050 123 4574",
+      "international_digits": "380501234574",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234560",
+      "national": "050 123 4560",
+      "international_digits": "380501234560",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234575",
+      "national": "050 123 4575",
+      "international_digits": "380501234575",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234559",
+      "national": "050 123 4559",
+      "international_digits": "380501234559",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234576",
+      "national": "050 123 4576",
+      "international_digits": "380501234576",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234558",
+      "national": "050 123 4558",
+      "international_digits": "380501234558",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234577",
+      "national": "050 123 4577",
+      "international_digits": "380501234577",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234557",
+      "national": "050 123 4557",
+      "international_digits": "380501234557",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234578",
+      "national": "050 123 4578",
+      "international_digits": "380501234578",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234556",
+      "national": "050 123 4556",
+      "international_digits": "380501234556",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234579",
+      "national": "050 123 4579",
+      "international_digits": "380501234579",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "UA",
+      "e164": "+380501234555",
+      "national": "050 123 4555",
+      "international_digits": "380501234555",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "PT": [
+    {
+      "region": "PT",
+      "e164": "+351912345678",
+      "national": "912 345 678",
+      "international_digits": "351912345678",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345679",
+      "national": "912 345 679",
+      "international_digits": "351912345679",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345677",
+      "national": "912 345 677",
+      "international_digits": "351912345677",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345680",
+      "national": "912 345 680",
+      "international_digits": "351912345680",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345676",
+      "national": "912 345 676",
+      "international_digits": "351912345676",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345681",
+      "national": "912 345 681",
+      "international_digits": "351912345681",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345675",
+      "national": "912 345 675",
+      "international_digits": "351912345675",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345682",
+      "national": "912 345 682",
+      "international_digits": "351912345682",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345674",
+      "national": "912 345 674",
+      "international_digits": "351912345674",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345683",
+      "national": "912 345 683",
+      "international_digits": "351912345683",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345673",
+      "national": "912 345 673",
+      "international_digits": "351912345673",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345684",
+      "national": "912 345 684",
+      "international_digits": "351912345684",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345672",
+      "national": "912 345 672",
+      "international_digits": "351912345672",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345685",
+      "national": "912 345 685",
+      "international_digits": "351912345685",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345671",
+      "national": "912 345 671",
+      "international_digits": "351912345671",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345686",
+      "national": "912 345 686",
+      "international_digits": "351912345686",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345670",
+      "national": "912 345 670",
+      "international_digits": "351912345670",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345687",
+      "national": "912 345 687",
+      "international_digits": "351912345687",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345669",
+      "national": "912 345 669",
+      "international_digits": "351912345669",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345688",
+      "national": "912 345 688",
+      "international_digits": "351912345688",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345668",
+      "national": "912 345 668",
+      "international_digits": "351912345668",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345689",
+      "national": "912 345 689",
+      "international_digits": "351912345689",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345667",
+      "national": "912 345 667",
+      "international_digits": "351912345667",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345690",
+      "national": "912 345 690",
+      "international_digits": "351912345690",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "PT",
+      "e164": "+351912345666",
+      "national": "912 345 666",
+      "international_digits": "351912345666",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "NL": [
+    {
+      "region": "NL",
+      "e164": "+31612345678",
+      "national": "06 12345678",
+      "international_digits": "31612345678",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345679",
+      "national": "06 12345679",
+      "international_digits": "31612345679",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345677",
+      "national": "06 12345677",
+      "international_digits": "31612345677",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345680",
+      "national": "06 12345680",
+      "international_digits": "31612345680",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345676",
+      "national": "06 12345676",
+      "international_digits": "31612345676",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345681",
+      "national": "06 12345681",
+      "international_digits": "31612345681",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345675",
+      "national": "06 12345675",
+      "international_digits": "31612345675",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345682",
+      "national": "06 12345682",
+      "international_digits": "31612345682",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345674",
+      "national": "06 12345674",
+      "international_digits": "31612345674",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345683",
+      "national": "06 12345683",
+      "international_digits": "31612345683",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345673",
+      "national": "06 12345673",
+      "international_digits": "31612345673",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345684",
+      "national": "06 12345684",
+      "international_digits": "31612345684",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345672",
+      "national": "06 12345672",
+      "international_digits": "31612345672",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345685",
+      "national": "06 12345685",
+      "international_digits": "31612345685",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345671",
+      "national": "06 12345671",
+      "international_digits": "31612345671",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345686",
+      "national": "06 12345686",
+      "international_digits": "31612345686",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345670",
+      "national": "06 12345670",
+      "international_digits": "31612345670",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345687",
+      "national": "06 12345687",
+      "international_digits": "31612345687",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345669",
+      "national": "06 12345669",
+      "international_digits": "31612345669",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345688",
+      "national": "06 12345688",
+      "international_digits": "31612345688",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345668",
+      "national": "06 12345668",
+      "international_digits": "31612345668",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345689",
+      "national": "06 12345689",
+      "international_digits": "31612345689",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345667",
+      "national": "06 12345667",
+      "international_digits": "31612345667",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345690",
+      "national": "06 12345690",
+      "international_digits": "31612345690",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "NL",
+      "e164": "+31612345666",
+      "national": "06 12345666",
+      "international_digits": "31612345666",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "BE": [
+    {
+      "region": "BE",
+      "e164": "+32450001234",
+      "national": "0450 00 12 34",
+      "international_digits": "32450001234",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001235",
+      "national": "0450 00 12 35",
+      "international_digits": "32450001235",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001233",
+      "national": "0450 00 12 33",
+      "international_digits": "32450001233",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001236",
+      "national": "0450 00 12 36",
+      "international_digits": "32450001236",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001232",
+      "national": "0450 00 12 32",
+      "international_digits": "32450001232",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001237",
+      "national": "0450 00 12 37",
+      "international_digits": "32450001237",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001231",
+      "national": "0450 00 12 31",
+      "international_digits": "32450001231",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001238",
+      "national": "0450 00 12 38",
+      "international_digits": "32450001238",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001230",
+      "national": "0450 00 12 30",
+      "international_digits": "32450001230",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001239",
+      "national": "0450 00 12 39",
+      "international_digits": "32450001239",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001229",
+      "national": "0450 00 12 29",
+      "international_digits": "32450001229",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001240",
+      "national": "0450 00 12 40",
+      "international_digits": "32450001240",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001228",
+      "national": "0450 00 12 28",
+      "international_digits": "32450001228",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001241",
+      "national": "0450 00 12 41",
+      "international_digits": "32450001241",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001227",
+      "national": "0450 00 12 27",
+      "international_digits": "32450001227",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001242",
+      "national": "0450 00 12 42",
+      "international_digits": "32450001242",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001226",
+      "national": "0450 00 12 26",
+      "international_digits": "32450001226",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001243",
+      "national": "0450 00 12 43",
+      "international_digits": "32450001243",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001225",
+      "national": "0450 00 12 25",
+      "international_digits": "32450001225",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001244",
+      "national": "0450 00 12 44",
+      "international_digits": "32450001244",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001224",
+      "national": "0450 00 12 24",
+      "international_digits": "32450001224",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001245",
+      "national": "0450 00 12 45",
+      "international_digits": "32450001245",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001223",
+      "national": "0450 00 12 23",
+      "international_digits": "32450001223",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001246",
+      "national": "0450 00 12 46",
+      "international_digits": "32450001246",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "BE",
+      "e164": "+32450001222",
+      "national": "0450 00 12 22",
+      "international_digits": "32450001222",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "CH": [
+    {
+      "region": "CH",
+      "e164": "+41781234567",
+      "national": "078 123 45 67",
+      "international_digits": "41781234567",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234568",
+      "national": "078 123 45 68",
+      "international_digits": "41781234568",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234566",
+      "national": "078 123 45 66",
+      "international_digits": "41781234566",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234569",
+      "national": "078 123 45 69",
+      "international_digits": "41781234569",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234565",
+      "national": "078 123 45 65",
+      "international_digits": "41781234565",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234570",
+      "national": "078 123 45 70",
+      "international_digits": "41781234570",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234564",
+      "national": "078 123 45 64",
+      "international_digits": "41781234564",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234571",
+      "national": "078 123 45 71",
+      "international_digits": "41781234571",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234563",
+      "national": "078 123 45 63",
+      "international_digits": "41781234563",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234572",
+      "national": "078 123 45 72",
+      "international_digits": "41781234572",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234562",
+      "national": "078 123 45 62",
+      "international_digits": "41781234562",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234573",
+      "national": "078 123 45 73",
+      "international_digits": "41781234573",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234561",
+      "national": "078 123 45 61",
+      "international_digits": "41781234561",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234574",
+      "national": "078 123 45 74",
+      "international_digits": "41781234574",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234560",
+      "national": "078 123 45 60",
+      "international_digits": "41781234560",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234575",
+      "national": "078 123 45 75",
+      "international_digits": "41781234575",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234559",
+      "national": "078 123 45 59",
+      "international_digits": "41781234559",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234576",
+      "national": "078 123 45 76",
+      "international_digits": "41781234576",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234558",
+      "national": "078 123 45 58",
+      "international_digits": "41781234558",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234577",
+      "national": "078 123 45 77",
+      "international_digits": "41781234577",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234557",
+      "national": "078 123 45 57",
+      "international_digits": "41781234557",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234578",
+      "national": "078 123 45 78",
+      "international_digits": "41781234578",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234556",
+      "national": "078 123 45 56",
+      "international_digits": "41781234556",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234579",
+      "national": "078 123 45 79",
+      "international_digits": "41781234579",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CH",
+      "e164": "+41781234555",
+      "national": "078 123 45 55",
+      "international_digits": "41781234555",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "AT": [
+    {
+      "region": "AT",
+      "e164": "+43664123456",
+      "national": "0664 123456",
+      "international_digits": "43664123456",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123457",
+      "national": "0664 123457",
+      "international_digits": "43664123457",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123455",
+      "national": "0664 123455",
+      "international_digits": "43664123455",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123458",
+      "national": "0664 123458",
+      "international_digits": "43664123458",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123454",
+      "national": "0664 123454",
+      "international_digits": "43664123454",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123459",
+      "national": "0664 123459",
+      "international_digits": "43664123459",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123453",
+      "national": "0664 123453",
+      "international_digits": "43664123453",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123460",
+      "national": "0664 123460",
+      "international_digits": "43664123460",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123452",
+      "national": "0664 123452",
+      "international_digits": "43664123452",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123461",
+      "national": "0664 123461",
+      "international_digits": "43664123461",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123451",
+      "national": "0664 123451",
+      "international_digits": "43664123451",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123462",
+      "national": "0664 123462",
+      "international_digits": "43664123462",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123450",
+      "national": "0664 123450",
+      "international_digits": "43664123450",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123463",
+      "national": "0664 123463",
+      "international_digits": "43664123463",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123449",
+      "national": "0664 123449",
+      "international_digits": "43664123449",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123464",
+      "national": "0664 123464",
+      "international_digits": "43664123464",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123448",
+      "national": "0664 123448",
+      "international_digits": "43664123448",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123465",
+      "national": "0664 123465",
+      "international_digits": "43664123465",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123447",
+      "national": "0664 123447",
+      "international_digits": "43664123447",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123466",
+      "national": "0664 123466",
+      "international_digits": "43664123466",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123446",
+      "national": "0664 123446",
+      "international_digits": "43664123446",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123467",
+      "national": "0664 123467",
+      "international_digits": "43664123467",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123445",
+      "national": "0664 123445",
+      "international_digits": "43664123445",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123468",
+      "national": "0664 123468",
+      "international_digits": "43664123468",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "AT",
+      "e164": "+43664123444",
+      "national": "0664 123444",
+      "international_digits": "43664123444",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "CZ": [
+    {
+      "region": "CZ",
+      "e164": "+420601123456",
+      "national": "601 123 456",
+      "international_digits": "420601123456",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123457",
+      "national": "601 123 457",
+      "international_digits": "420601123457",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123455",
+      "national": "601 123 455",
+      "international_digits": "420601123455",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123458",
+      "national": "601 123 458",
+      "international_digits": "420601123458",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123454",
+      "national": "601 123 454",
+      "international_digits": "420601123454",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123459",
+      "national": "601 123 459",
+      "international_digits": "420601123459",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123453",
+      "national": "601 123 453",
+      "international_digits": "420601123453",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123460",
+      "national": "601 123 460",
+      "international_digits": "420601123460",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123452",
+      "national": "601 123 452",
+      "international_digits": "420601123452",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123461",
+      "national": "601 123 461",
+      "international_digits": "420601123461",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123451",
+      "national": "601 123 451",
+      "international_digits": "420601123451",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123462",
+      "national": "601 123 462",
+      "international_digits": "420601123462",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123450",
+      "national": "601 123 450",
+      "international_digits": "420601123450",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123463",
+      "national": "601 123 463",
+      "international_digits": "420601123463",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123449",
+      "national": "601 123 449",
+      "international_digits": "420601123449",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123464",
+      "national": "601 123 464",
+      "international_digits": "420601123464",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123448",
+      "national": "601 123 448",
+      "international_digits": "420601123448",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123465",
+      "national": "601 123 465",
+      "international_digits": "420601123465",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123447",
+      "national": "601 123 447",
+      "international_digits": "420601123447",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123466",
+      "national": "601 123 466",
+      "international_digits": "420601123466",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123446",
+      "national": "601 123 446",
+      "international_digits": "420601123446",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123467",
+      "national": "601 123 467",
+      "international_digits": "420601123467",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123445",
+      "national": "601 123 445",
+      "international_digits": "420601123445",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123468",
+      "national": "601 123 468",
+      "international_digits": "420601123468",
+      "supports_national_roundtrip": false
+    },
+    {
+      "region": "CZ",
+      "e164": "+420601123444",
+      "national": "601 123 444",
+      "international_digits": "420601123444",
+      "supports_national_roundtrip": false
+    }
+  ],
+  "GB": [
+    {
+      "region": "GB",
+      "e164": "+447400123456",
+      "national": "07400 123456",
+      "international_digits": "447400123456",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123457",
+      "national": "07400 123457",
+      "international_digits": "447400123457",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123455",
+      "national": "07400 123455",
+      "international_digits": "447400123455",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123458",
+      "national": "07400 123458",
+      "international_digits": "447400123458",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123454",
+      "national": "07400 123454",
+      "international_digits": "447400123454",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123459",
+      "national": "07400 123459",
+      "international_digits": "447400123459",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123453",
+      "national": "07400 123453",
+      "international_digits": "447400123453",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123460",
+      "national": "07400 123460",
+      "international_digits": "447400123460",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123452",
+      "national": "07400 123452",
+      "international_digits": "447400123452",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123461",
+      "national": "07400 123461",
+      "international_digits": "447400123461",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123451",
+      "national": "07400 123451",
+      "international_digits": "447400123451",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123462",
+      "national": "07400 123462",
+      "international_digits": "447400123462",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123450",
+      "national": "07400 123450",
+      "international_digits": "447400123450",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123463",
+      "national": "07400 123463",
+      "international_digits": "447400123463",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123449",
+      "national": "07400 123449",
+      "international_digits": "447400123449",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123464",
+      "national": "07400 123464",
+      "international_digits": "447400123464",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123448",
+      "national": "07400 123448",
+      "international_digits": "447400123448",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123465",
+      "national": "07400 123465",
+      "international_digits": "447400123465",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123447",
+      "national": "07400 123447",
+      "international_digits": "447400123447",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123466",
+      "national": "07400 123466",
+      "international_digits": "447400123466",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123446",
+      "national": "07400 123446",
+      "international_digits": "447400123446",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123467",
+      "national": "07400 123467",
+      "international_digits": "447400123467",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123445",
+      "national": "07400 123445",
+      "international_digits": "447400123445",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123468",
+      "national": "07400 123468",
+      "international_digits": "447400123468",
+      "supports_national_roundtrip": true
+    },
+    {
+      "region": "GB",
+      "e164": "+447400123444",
+      "national": "07400 123444",
+      "international_digits": "447400123444",
+      "supports_national_roundtrip": true
+    }
+  ]
+}
