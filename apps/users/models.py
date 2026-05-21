@@ -98,8 +98,8 @@ class StaffUser(AbstractUser):
     )
     professional_title = models.CharField(
         max_length=80,
-        default="Dr. med.",
         blank=True,
+        default="",
         verbose_name=db_gettext_lazy(
             "administration.field_professional_title", "Professional title"
         ),
