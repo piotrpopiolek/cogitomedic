@@ -147,6 +147,9 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
+    # Wpis do /etc/hosts w prometheus (otelcollector → IP kolektora); wget i scraper widzą hosta.
+    links:
+      - otel-collector:otelcollector
 
   alertmanager:
     profiles: [observability]

@@ -20,3 +20,11 @@ class StaffUserDisplayNameTests(TestCase):
             is_staff=True,
         )
         self.assertEqual(staff_user_display_name(bare), "uonly")
+
+    def test_create_user_has_empty_professional_title_by_default(self) -> None:
+        user = StaffUser.objects.create_user(
+            username="no-title",
+            email="no-title@example.com",
+            password="pwd",
+        )
+        self.assertEqual(user.professional_title, "")
