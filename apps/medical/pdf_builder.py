@@ -395,7 +395,7 @@ def _pdf_signoff_footer_lines(
     name_display: str | None,
     labels: dict[str, str],
 ) -> list[str] | None:
-    """Mit freundlichen Grüßen + ``Dr. med. Vorname Nachname`` + Facharzt/Fachärztin + Teledermatologie.
+    """Mit freundlichen Grüßen + optionaler Titel + Vorname Nachname + Facharzt/Fachärztin + Teledermatologie.
 
     Specialty line: explicit ``FEMALE`` / ``MALE`` from ``StaffUser.gender``. If gender is still
     ``UNSPECIFIED`` (legacy accounts), we use the **male** German line — Klaudia's spec avoids the
@@ -410,9 +410,7 @@ def _pdf_signoff_footer_lines(
     if staff is not None:
         title = (getattr(staff, "professional_title", None) or "").strip()
         gender_val = getattr(staff, "gender", None) or StaffUserGender.UNSPECIFIED
-    if not title:
-        title = "Dr. med."
-    name_line = f"{title} {signoff_name}".strip() if signoff_name else title
+    name_line = " ".join(p for p in (title, signoff_name) if p).strip()
     if gender_val == StaffUserGender.FEMALE:
         spec = (labels.get("specialty_female") or "").strip()
     else:

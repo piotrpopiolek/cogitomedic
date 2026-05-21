@@ -31,7 +31,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
                 "first_name": "New",
                 "last_name": "Staff",
                 "phone_number": "",
-                "professional_title": "Dr. med.",
+                "professional_title": "",
                 "gender": "UNSPECIFIED",
                 "preferred_locale": "de-DE",
                 "is_staff": "on",
@@ -56,7 +56,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
                 "first_name": "New",
                 "last_name": "Staff",
                 "phone_number": "",
-                "professional_title": "Dr. med.",
+                "professional_title": "",
                 "gender": "UNSPECIFIED",
                 "preferred_locale": "de-DE",
                 "is_staff": "on",
@@ -67,6 +67,7 @@ class StaffUserAdminGroupsRequiredTests(TestCase):
         self.assertEqual(response.status_code, 302)
         user = StaffUser.objects.get(username="new-staff-2")
         self.assertTrue(user.groups.filter(pk=self.doctor_group.pk).exists())
+        self.assertEqual(user.professional_title, "")
 
     def test_change_user_clearing_groups_shows_validation_error(self) -> None:
         user = StaffUser.objects.create_user(
