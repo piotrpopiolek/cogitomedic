@@ -824,6 +824,7 @@ if os.environ.get("USE_TRUSTED_REVERSE_PROXY", "").strip().lower() in (
 SECURE_SSL_REDIRECT = ENVIRONMENT == "prod" and os.environ.get(
     "SECURE_SSL_REDIRECT", "1"
 ).strip().lower() not in ("0", "false", "no")
+SECURE_REDIRECT_EXEMPT = [r"^/api/v1/observability/"]
 CSRF_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_SECURE = ENVIRONMENT == "prod"
 SESSION_COOKIE_HTTPONLY = True
