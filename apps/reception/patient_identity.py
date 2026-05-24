@@ -1,0 +1,145 @@
+"""Shared patient identity normalization and lookup (reception + import)."""
+
+from __future__ import annotations
+
+import re
+from datetime import date
+
+from apps.core.domain_messages import domain_message
+from apps.core.exceptions import DomainError
+from apps.reception.models import Patient
+from apps.reception.phone_utils import normalize_phone_for_patient_storage
+
+_PLACEHOLDER_NAMES = frozenset({"—", "-"})
+
+
+def normalize_patient_name(value: str) -> str:
+    """Trim and collapse whitespace; preserve casing as stored in DB."""
+    return re.sub(r"\s+", " ", (value or "").strip())
+
+
+def normalize_patient_name_for_storage(value: str) -> str:
+    """
+    Title-case person name (same rules as XLSX import) before persisting.
+    """
+    value = normalize_patient_name(value)
+    if not value:
+        return ""
+    chunks = re.split(r"([\-'\s])", value.lower())
+    normalized_chunks = [
+        (
+            chunk[:1].upper() + chunk[1:]
+            if chunk and not re.fullmatch(r"[\-'\s]", chunk)
+            else chunk
+        )
+        for chunk in chunks
+    ]
+    return "".join(normalized_chunks)
+
+
+def normalize_patient_phone_for_storage(phone: str) -> str:
+    return normalize_phone_for_patient_storage(phone)
+
+
+def patient_identity_key(
+    *,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    date_of_birth: date,
+) -> tuple[str, str, str, date]:
+    return (
+        normalize_patient_name_for_storage(first_name),
+        normalize_patient_name_for_storage(last_name),
+        normalize_patient_phone_for_storage(phone),
+        date_of_birth,
+    )
+
+
+def validate_patient_names_for_import(*, first_name: str, last_name: str) -> None:
+    first = normalize_patient_name(first_name)
+    last = normalize_patient_name(last_name)
+    if (
+        not first
+        or not last
+        or first in _PLACEHOLDER_NAMES
+        or last in _PLACEHOLDER_NAMES
+    ):
+        raise DomainError(
+            domain_message("other.domain.import_missing_patient_name"),
+            api_message_key="other.domain.import_missing_patient_name",
+        )
+
+
+def patient_is_import_anonymized(patient: Patient) -> bool:
+    if getattr(patient, "anonymized_at", None) is not None:
+        return True
+    return (patient.first_name or "").strip().upper() == "ANONYMIZED"
+
+
+def find_patient_for_import(
+    *,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    date_of_birth: date,
+) -> Patient | None:
+    """Active patient matching the full identity tuple, or None."""
+    key = patient_identity_key(
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        date_of_birth=date_of_birth,
+    )
+    try:
+        patient = Patient.objects.get(
+            first_name=key[0],
+            last_name=key[1],
+            phone=key[2],
+            date_of_birth=key[3],
+        )
+    except Patient.DoesNotExist:
+        return None
+    if patient_is_import_anonymized(patient):
+        return None
+    return patient
+
+
+def stale_anonymized_patient_blocks_phone(*, phone: str) -> bool:
+    """
+    True when an anonymized row still holds this phone (legacy/test edge case).
+    """
+    stored_phone = normalize_patient_phone_for_storage(phone)
+    return Patient.objects.filter(
+        phone=stored_phone,
+        anonymized_at__isnull=False,
+    ).exists()
+
+
+def assert_patient_identity_available(
+    *,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    date_of_birth: date,
+    exclude_patient_id=None,
+) -> None:
+    key = patient_identity_key(
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        date_of_birth=date_of_birth,
+    )
+    qs = Patient.objects.filter(
+        first_name=key[0],
+        last_name=key[1],
+        phone=key[2],
+        date_of_birth=key[3],
+    )
+    if exclude_patient_id is not None:
+        qs = qs.exclude(id=exclude_patient_id)
+    if qs.exists():
+        raise DomainError(
+            domain_message("other.domain.patient_identity_conflict"),
+            api_message_key="other.domain.patient_identity_conflict",
+        )
