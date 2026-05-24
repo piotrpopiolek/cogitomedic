@@ -249,8 +249,8 @@ class Patient(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["phone"],
-                name="patient_phone_unique",
+                fields=("first_name", "last_name", "phone", "date_of_birth"),
+                name="patient_identity_unique",
             ),
             models.CheckConstraint(
                 condition=Q(phone__regex=r"^[0-9]{7,20}$"),

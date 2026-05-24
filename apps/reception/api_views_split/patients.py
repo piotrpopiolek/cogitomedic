@@ -34,6 +34,13 @@ from apps.reception.models import Patient
 from apps.reception.services import create_or_update_patient_manual
 
 
+def _patient_domain_error_response(exc: DomainError) -> JsonResponse:
+    status = (
+        409 if exc.api_message_key == "other.domain.patient_identity_conflict" else 400
+    )
+    return json_domain_error(exc, status=status)
+
+
 def _serialize_patient(patient: Patient) -> dict:
     return {
         "id": str(patient.id),
@@ -167,7 +174,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         except IntegrityError:
             return json_error("other.api.patient_uniqueness_conflict", status=409)
         except DomainError as exc:
-            return json_domain_error(exc, status=400)
+            return _patient_domain_error_response(exc)
         return JsonResponse({"patient": _serialize_patient(patient)}, status=201)
 
     return json_error("other.api.method_not_allowed", status=405)
@@ -273,7 +280,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     except IntegrityError:
         return json_error("other.api.patient_uniqueness_conflict", status=409)
     except DomainError as exc:
-        return json_domain_error(exc, status=400)
+        return _patient_domain_error_response(exc)
 
     return JsonResponse(_serialize_patient(patient))
 
