@@ -8,7 +8,9 @@ from uuid import uuid4
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from pypdf import PdfWriter
 
@@ -294,6 +296,28 @@ class MedicalApiTests(TestCase):
         )
         service_ids = [row["queue_entry_id"] for row in service_items]
         self.assertEqual(api_ids, service_ids)
+
+    def test_medical_documents_list_get_has_stable_query_count(self) -> None:
+        """GET /api/v1/medical-documents: bounded SQL (service prefetch + API overhead)."""
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(
+                "/api/v1/medical-documents",
+                {"page": "1", "page_size": "10"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("items", data)
+        self.assertIn("pagination", data)
+        # Service alone is <=8 (test_services_coverage). HTTP adds session, groups,
+        # MEDICAL_DOCUMENTS_LISTED audit — measured 19 on MedicalApiTests setUp (1 row).
+        self.assertLessEqual(
+            len(ctx.captured_queries),
+            19,
+            msg=(
+                f"Expected <=19 SQL queries for GET list, got "
+                f"{len(ctx.captured_queries)}"
+            ),
+        )
 
     def test_medical_document_detail_get(self) -> None:
         create_response = self.client.post(

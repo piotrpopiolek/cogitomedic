@@ -264,7 +264,6 @@ W nowym panelu:
    - Powinna wrócić odpowiedź 200 i tekst z liniami typu `cogitomedica_outbox_events_total` lub `cogitomedica_import_rows_total`.  
    - Jeśli 401 – token w nagłówku nie zgadza się z `PROMETHEUS_METRICS_TOKEN` w Django (czyli w `.env` dla kontenera `web`).
    - Jeśli **400 Bad Request** – najczęściej brak `web` w `ALLOWED_HOSTS`. Prometheus wysyła żądanie z hosta `web:8000`; w `.env` ustaw np. `ALLOWED_HOSTS=localhost,127.0.0.1,web`.
-   - Jeśli w logach `web` widać **`301`** na `GET /api/v1/observability/metrics` z user-agent `Prometheus/…` — w prod włączone jest `SECURE_SSL_REDIRECT`; scraper idzie po **HTTP** na `web:8000` i dostaje przekierowanie na HTTPS (timeout/DOWN). Rozwiązanie w repo: `SECURE_REDIRECT_EXEMPT` dla `/api/v1/observability/` w `settings.py` (wymaga rebuild `web`). Tymczasowo (niezalecane globalnie): `SECURE_SSL_REDIRECT=0` w `.env`.
 
 4. **Pusta baza**
    - Aplikacja emituje metryki także przy braku zdarzeń (wartości 0). Jeśli Prometheus ma status UP i token jest poprawny, po minucie odświeżenia w Grafanie powinny pojawić się zera zamiast „No data”.
