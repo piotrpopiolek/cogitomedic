@@ -84,6 +84,13 @@ def patient_is_import_anonymized(patient: Patient) -> bool:
     return (patient.first_name or "").strip().upper() == "ANONYMIZED"
 
 
+def patient_is_active_record(patient: Patient) -> bool:
+    """Eligible for portal OTP, shared-phone cohort, and import identity match."""
+    if patient_is_import_anonymized(patient):
+        return False
+    return bool(patient.is_active)
+
+
 def find_patient_for_import(
     *,
     first_name: str,
@@ -107,20 +114,45 @@ def find_patient_for_import(
         )
     except Patient.DoesNotExist:
         return None
-    if patient_is_import_anonymized(patient):
+    if not patient_is_active_record(patient):
         return None
     return patient
+
+
+def _iter_patients_matching_phone(
+    phone: str,
+    *,
+    extra_q: Q | None = None,
+) -> list[Patient]:
+    """
+    Patients whose stored ``phone`` matches any lookup variant of ``phone``.
+
+    Uses the same variant set as the patient-results portal. After DB backfill
+    (``normalize_patient_phone_for_storage`` on every row) rows should match the
+    canonical variant; variants still cover legacy rows and pre-save API input.
+    """
+    by_id: dict[UUID, Patient] = {}
+    extra = extra_q if extra_q is not None else Q()
+    for variant in phone_lookup_variants(phone):
+        for patient in Patient.objects.filter(
+            _phone_match_q(variant),
+        ).filter(extra):
+            if patient.id in by_id:
+                continue
+            by_id[patient.id] = patient
+    return sorted(by_id.values(), key=lambda p: p.created_at)
 
 
 def stale_anonymized_patient_blocks_phone(*, phone: str) -> bool:
     """
     True when an anonymized row still holds this phone (legacy/test edge case).
     """
-    stored_phone = normalize_patient_phone_for_storage(phone)
-    return Patient.objects.filter(
-        phone=stored_phone,
-        anonymized_at__isnull=False,
-    ).exists()
+    return bool(
+        _iter_patients_matching_phone(
+            phone,
+            extra_q=Q(anonymized_at__isnull=False),
+        )
+    )
 
 
 def assert_phone_not_blocked_by_stale_anonymized(
@@ -134,16 +166,12 @@ def assert_phone_not_blocked_by_stale_anonymized(
     Skips the check when ``exclude_patient_id`` already uses the normalized phone
     (manual update without changing phone).
     """
-    stored_phone = normalize_patient_phone_for_storage(phone)
-    if exclude_patient_id is not None:
-        current_phone = (
-            Patient.objects.filter(id=exclude_patient_id)
-            .values_list("phone", flat=True)
-            .first()
-        )
-        if current_phone == stored_phone:
-            return
-    if stale_anonymized_patient_blocks_phone(phone=stored_phone):
+    if exclude_patient_id is not None and _iter_patients_matching_phone(
+        phone,
+        extra_q=Q(id=exclude_patient_id),
+    ):
+        return
+    if stale_anonymized_patient_blocks_phone(phone=phone):
         raise DomainError(
             domain_message("other.domain.import_patient_anonymized_same_phone"),
             api_message_key="other.domain.import_patient_anonymized_same_phone",
@@ -185,23 +213,29 @@ def _phone_match_q(phone_normalized: str) -> Q:
     return Q(phone=phone_normalized) | Q(phone=f"+{phone_normalized}")
 
 
+def find_active_patients_by_phone(
+    phone: str,
+    *,
+    exclude_patient_id: UUID | None = None,
+) -> list[Patient]:
+    """Active (``is_active``), non-anonymized patients matching ``phone``."""
+    patients = _iter_patients_matching_phone(phone)
+    active = [p for p in patients if patient_is_active_record(p)]
+    if exclude_patient_id is not None:
+        active = [p for p in active if p.id != exclude_patient_id]
+    return active
+
+
 def find_active_patients_by_phone_and_dob(
     phone: str,
     date_of_birth: date,
 ) -> list[Patient]:
-    """Non-anonymized patients matching phone variants and date of birth."""
-    by_id: dict[UUID, Patient] = {}
-    for variant in phone_lookup_variants(phone):
-        for patient in Patient.objects.filter(
-            _phone_match_q(variant),
-            date_of_birth=date_of_birth,
-        ).order_by("created_at"):
-            if patient.id in by_id:
-                continue
-            if patient_is_import_anonymized(patient):
-                continue
-            by_id[patient.id] = patient
-    return sorted(by_id.values(), key=lambda p: p.created_at)
+    """Active, non-anonymized patients matching phone variants and date of birth."""
+    return [
+        patient
+        for patient in find_active_patients_by_phone(phone)
+        if patient.date_of_birth == date_of_birth
+    ]
 
 
 def resolve_patient_for_portal(
@@ -248,14 +282,10 @@ def other_active_patients_with_same_phone(
     phone: str,
     exclude_patient_id: UUID | None = None,
 ) -> list[Patient]:
-    stored_phone = normalize_patient_phone_for_storage(phone)
-    qs = Patient.objects.filter(
-        phone=stored_phone,
-        anonymized_at__isnull=True,
+    return find_active_patients_by_phone(
+        phone,
+        exclude_patient_id=exclude_patient_id,
     )
-    if exclude_patient_id is not None:
-        qs = qs.exclude(id=exclude_patient_id)
-    return list(qs.order_by("last_name", "first_name", "date_of_birth"))
 
 
 def build_shared_phone_warnings(

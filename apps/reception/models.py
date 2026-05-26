@@ -210,13 +210,19 @@ class Patient(models.Model):
         max_length=300,
         default="",
         editable=False,
-        verbose_name="Incoming PDF name key (first_last)",
+        verbose_name=db_gettext_lazy(
+            "administration.field_incoming_pdf_name_key_fl",
+            "Incoming PDF name key (first_last)",
+        ),
     )
     incoming_pdf_name_key_lf = models.CharField(
         max_length=300,
         default="",
         editable=False,
-        verbose_name="Incoming PDF name key (last_first)",
+        verbose_name=db_gettext_lazy(
+            "administration.field_incoming_pdf_name_key_lf",
+            "Incoming PDF name key (last_first)",
+        ),
     )
 
     class Meta:

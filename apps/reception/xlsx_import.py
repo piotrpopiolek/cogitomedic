@@ -350,6 +350,8 @@ def _normalize_row(
             first_name, last_name = _split_full_name(full)
     first_name = _title_case_name(first_name)
     last_name = _title_case_name(last_name)
+    if not first_name and not last_name:
+        return None
     if not first_name or not last_name:
         raise XlsxImportFailure(
             XlsxImportErrorCode.MISSING_REQUIRED_FIELD,

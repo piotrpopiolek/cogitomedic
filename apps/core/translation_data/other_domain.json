@@ -463,5 +463,10 @@
     "de": "Die ausgewählte externe PDF-Datei ist beschädigt oder leer; PDF-Generierung abgebrochen.",
     "en": "The selected external PDF is corrupt or empty; PDF generation cannot proceed.",
     "pl": "Wybrany zewnętrzny plik PDF jest uszkodzony lub pusty — generowanie PDF nie może być kontynuowane."
+  },
+  "other.domain.error": {
+    "de": "Ein Fehler ist aufgetreten.",
+    "en": "An error occurred.",
+    "pl": "Wystąpił błąd."
   }
 }
