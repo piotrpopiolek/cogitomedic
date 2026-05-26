@@ -1059,6 +1059,39 @@ class PatientXlsxImportTests(TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def test_import_rejects_placeholder_or_empty_patient_names(self) -> None:
+        from apps.core.domain_messages import domain_message
+
+        missing_name_msg = domain_message("other.domain.import_missing_patient_name")
+        cases = (
+            (
+                ("—", "Nowak", "01.01.1990", "+48 777 888 907", "dash@example.com"),
+                XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                missing_name_msg,
+            ),
+            (
+                ("", "Pusty", "02.02.1991", "+48 777 888 908", "empty@example.com"),
+                XlsxImportErrorCode.MISSING_REQUIRED_FIELD,
+                None,
+            ),
+            (
+                ("Jan", "-", "03.03.1992", "+48 777 888 909", "hyphen@example.com"),
+                XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                missing_name_msg,
+            ),
+        )
+        for row, expected_code, expected_message in cases:
+            with self.subTest(row=row):
+                batch = self._run_import([row])
+                self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+                self.assertEqual(batch.inserted_rows, 0)
+                self.assertEqual(batch.error_rows, 1)
+                err = PatientImportError.objects.get(batch=batch)
+                self.assertEqual(err.error_code, expected_code)
+                if expected_message is not None:
+                    self.assertEqual(err.error_message, expected_message)
+                self.assertEqual(Patient.objects.count(), 0)
+
     def test_import_stale_anonymized_same_phone_errors(self) -> None:
         p = Patient.objects.create(
             first_name="ANONYMIZED",
