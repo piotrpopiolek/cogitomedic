@@ -116,6 +116,107 @@ class RequestOtpTests(TestCase):
         mock_get_adapter.return_value.send_sms.assert_not_called()
 
 
+class SharedPhonePortalOtpTests(TestCase):
+    """Father and son may share a phone; portal must disambiguate by last name."""
+
+    def setUp(self) -> None:
+        self.shared_phone = "01761234567"
+        self.dob_father = date(1970, 3, 10)
+        self.dob_son = date(2005, 8, 20)
+        self.father = Patient.objects.create(
+            first_name="Hans",
+            last_name="Müller",
+            date_of_birth=self.dob_father,
+            phone=self.shared_phone,
+            email="hans@example.com",
+        )
+        self.son = Patient.objects.create(
+            first_name="Paul",
+            last_name="Müller",
+            date_of_birth=self.dob_son,
+            phone=self.shared_phone,
+            email="paul@example.com",
+        )
+
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_same_phone_different_dob_unique_match(
+        self, mock_get_adapter
+    ) -> None:
+        result = request_otp(
+            phone=self.shared_phone,
+            date_of_birth=self.dob_father,
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "sms_sent")
+        self.assertEqual(
+            PatientResultsOtpSession.objects.filter(patient=self.father).count(), 1
+        )
+        mock_get_adapter.return_value.send_sms.assert_called_once()
+
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_ambiguous_same_phone_and_dob_no_sms(
+        self, mock_get_adapter
+    ) -> None:
+        twin_dob = date(2010, 1, 1)
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Schmidt",
+            date_of_birth=twin_dob,
+            phone=self.shared_phone,
+            email="anna1@example.com",
+        )
+        Patient.objects.create(
+            first_name="Eva",
+            last_name="Weber",
+            date_of_birth=twin_dob,
+            phone=self.shared_phone,
+            email="eva@example.com",
+        )
+        result = request_otp(
+            phone=self.shared_phone,
+            date_of_birth=twin_dob,
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "ambiguous_identity")
+        self.assertTrue(result.needs_last_name)
+        self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
+        mock_get_adapter.return_value.send_sms.assert_not_called()
+
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_with_last_name_disambiguates(self, mock_get_adapter) -> None:
+        twin_dob = date(2010, 1, 1)
+        anna = Patient.objects.create(
+            first_name="Anna",
+            last_name="Schmidt",
+            date_of_birth=twin_dob,
+            phone=self.shared_phone,
+            email="anna2@example.com",
+        )
+        Patient.objects.create(
+            first_name="Eva",
+            last_name="Weber",
+            date_of_birth=twin_dob,
+            phone=self.shared_phone,
+            email="eva2@example.com",
+        )
+        result = request_otp(
+            phone=self.shared_phone,
+            date_of_birth=twin_dob,
+            captcha_token="skip",
+            last_name="Schmidt",
+        )
+        self.assertEqual(result.audit_outcome, "sms_sent")
+        self.assertEqual(
+            PatientResultsOtpSession.objects.filter(patient=anna).count(), 1
+        )
+        mock_get_adapter.return_value.send_sms.assert_called_once()
+
+
 class RequestOtpUkTests(TestCase):
     def setUp(self) -> None:
         ex = phonenumbers.example_number("GB")

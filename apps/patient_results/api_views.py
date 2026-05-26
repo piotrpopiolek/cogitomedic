@@ -60,7 +60,13 @@ def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     dob = _parse_date(str(dob_str))
     if not dob:
         return json_error("other.api.date_of_birth_format", status=400)
-    result = request_otp(phone=phone, date_of_birth=dob, captcha_token=captcha_token)
+    last_name = (body.get("last_name") or "").strip() or None
+    result = request_otp(
+        phone=phone,
+        date_of_birth=dob,
+        captcha_token=captcha_token,
+        last_name=last_name,
+    )
     client_ip = get_client_ip(request)
     meta = {"client_ip": client_ip, "outcome": result.audit_outcome}
     create_audit_event(
@@ -70,7 +76,10 @@ def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     )
     if result.status == "captcha_failed":
         return json_error("other.api.captcha_verification_failed", status=400)
-    return JsonResponse({"status": "ok"}, status=200)
+    payload: dict = {"status": "ok"}
+    if result.needs_last_name:
+        payload["needs_last_name"] = True
+    return JsonResponse(payload, status=200)
 
 
 @ratelimit(key="ip", rate="15/m", method="POST", block=True)
@@ -94,7 +103,13 @@ def patient_results_verify_otp_view(request: HttpRequest) -> JsonResponse:
         return json_error("other.api.date_of_birth_format", status=400)
     if not otp_code:
         return json_error("other.api.otp_code_required", status=400)
-    result = verify_otp(phone=phone, date_of_birth=dob, otp_code=otp_code)
+    last_name = (body.get("last_name") or "").strip() or None
+    result = verify_otp(
+        phone=phone,
+        date_of_birth=dob,
+        otp_code=otp_code,
+        last_name=last_name,
+    )
     client_ip = get_client_ip(request)
     if not result.success:
         outcome = result.error or "invalid"

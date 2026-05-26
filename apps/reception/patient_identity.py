@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from typing import Any
+from uuid import UUID
+
+from django.db.models import Q
 
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
 from apps.reception.models import Patient
-from apps.reception.phone_utils import normalize_phone_for_patient_storage
+from apps.reception.phone_utils import (
+    normalize_phone_for_patient_storage,
+    phone_lookup_variants,
+)
 
 _PLACEHOLDER_NAMES = frozenset({"—", "-"})
 
@@ -170,3 +177,114 @@ def assert_patient_identity_available(
             domain_message("other.domain.patient_identity_conflict"),
             api_message_key="other.domain.patient_identity_conflict",
         )
+
+
+def _phone_match_q(phone_normalized: str) -> Q:
+    if not phone_normalized:
+        return Q(pk=None)
+    return Q(phone=phone_normalized) | Q(phone=f"+{phone_normalized}")
+
+
+def find_active_patients_by_phone_and_dob(
+    phone: str,
+    date_of_birth: date,
+) -> list[Patient]:
+    """Non-anonymized patients matching phone variants and date of birth."""
+    by_id: dict[UUID, Patient] = {}
+    for variant in phone_lookup_variants(phone):
+        for patient in Patient.objects.filter(
+            _phone_match_q(variant),
+            date_of_birth=date_of_birth,
+        ).order_by("created_at"):
+            if patient.id in by_id:
+                continue
+            if patient_is_import_anonymized(patient):
+                continue
+            by_id[patient.id] = patient
+    return sorted(by_id.values(), key=lambda p: p.created_at)
+
+
+def resolve_patient_for_portal(
+    phone: str,
+    date_of_birth: date,
+    last_name: str | None = None,
+) -> Patient | None:
+    """
+    Resolve a single patient for portal OTP.
+
+    Returns None when there is no match, or when multiple candidates exist and
+    ``last_name`` is missing or does not disambiguate.
+    """
+    patients = find_active_patients_by_phone_and_dob(phone, date_of_birth)
+    if not patients:
+        return None
+    if len(patients) == 1:
+        return patients[0]
+    normalized_last = normalize_patient_name_for_storage(last_name or "")
+    if not normalized_last:
+        return None
+    matched = [
+        patient
+        for patient in patients
+        if normalize_patient_name_for_storage(patient.last_name) == normalized_last
+    ]
+    return matched[0] if len(matched) == 1 else None
+
+
+def portal_identity_is_ambiguous(
+    phone: str,
+    date_of_birth: date,
+    last_name: str | None = None,
+) -> bool:
+    """True when more than one active patient matches phone+DOB without a unique last name."""
+    patients = find_active_patients_by_phone_and_dob(phone, date_of_birth)
+    if len(patients) <= 1:
+        return False
+    return resolve_patient_for_portal(phone, date_of_birth, last_name) is None
+
+
+def other_active_patients_with_same_phone(
+    *,
+    phone: str,
+    exclude_patient_id: UUID | None = None,
+) -> list[Patient]:
+    stored_phone = normalize_patient_phone_for_storage(phone)
+    qs = Patient.objects.filter(
+        phone=stored_phone,
+        anonymized_at__isnull=True,
+    )
+    if exclude_patient_id is not None:
+        qs = qs.exclude(id=exclude_patient_id)
+    return list(qs.order_by("last_name", "first_name", "date_of_birth"))
+
+
+def build_shared_phone_warnings(
+    *,
+    phone: str,
+    exclude_patient_id: UUID | None = None,
+) -> list[dict[str, Any]]:
+    others = other_active_patients_with_same_phone(
+        phone=phone,
+        exclude_patient_id=exclude_patient_id,
+    )
+    if not others:
+        return []
+    return [
+        {
+            "code": "shared_phone",
+            "message_key": "other.api.patient_shared_phone_warning",
+            "other_patients": [
+                {
+                    "id": str(patient.id),
+                    "first_name": patient.first_name,
+                    "last_name": patient.last_name,
+                    "date_of_birth": (
+                        patient.date_of_birth.isoformat()
+                        if patient.date_of_birth
+                        else None
+                    ),
+                }
+                for patient in others
+            ],
+        }
+    ]

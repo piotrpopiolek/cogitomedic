@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 import requests
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 
 from apps.integrations.sms.client import get_sms_adapter
@@ -23,12 +22,11 @@ from apps.patient_results.constants import (
     OTP_VALID_MINUTES,
 )
 from apps.patient_results.models import PatientResultsOtpSession
-from apps.reception.models import Patient
-from apps.reception.phone_utils import (
-    infer_sms_region_from_phone,
-    normalize_phone,
-    phone_lookup_variants,
+from apps.reception.patient_identity import (
+    portal_identity_is_ambiguous,
+    resolve_patient_for_portal,
 )
+from apps.reception.phone_utils import infer_sms_region_from_phone, normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -37,28 +35,6 @@ if TYPE_CHECKING:
 
 # Simple OTP SMS template (DE default) – no DB translation for Phase 2 to avoid migration dependency
 _DEFAULT_OTP_SMS = "CogitoMed: Ihr Code lautet {otp}"
-
-
-def _phone_match_q(phone_normalized: str):
-    """Q filter to match Patient.phone (stored as digits only after migration)."""
-    if not phone_normalized:
-        return Q(pk=None)  # no match
-    return Q(phone=phone_normalized) | Q(phone=f"+{phone_normalized}")
-
-
-def _find_patient_by_phone_and_dob(phone: str, date_of_birth: date) -> Patient | None:
-    for variant in phone_lookup_variants(phone):
-        patient = (
-            Patient.objects.filter(
-                _phone_match_q(variant),
-                date_of_birth=date_of_birth,
-            )
-            .order_by("created_at")
-            .first()
-        )
-        if patient:
-            return patient
-    return None
 
 
 def _hash_otp(otp_code: str) -> str:
@@ -101,8 +77,11 @@ class RequestOtpResult:
 
     status: str  # "ok" | "captcha_failed"
     error: str | None = None  # "captcha_failed" when CAPTCHA invalid
-    audit_outcome: str = "silent_no_op"  # sms_sent | silent_no_op | captcha_failed
+    audit_outcome: str = (
+        "silent_no_op"  # sms_sent | silent_no_op | captcha_failed | ambiguous_identity
+    )
     patient_id: uuid.UUID | None = None  # set when SMS was sent (audit only)
+    needs_last_name: bool = False
 
 
 @dataclass(frozen=True)
@@ -118,6 +97,7 @@ def request_otp(
     phone: str,
     date_of_birth: date,
     captcha_token: str,
+    last_name: str | None = None,
 ) -> RequestOtpResult:
     """
     Request OTP for patient results. Sends SMS if patient exists.
@@ -133,8 +113,14 @@ def request_otp(
     if len(normalize_phone(phone)) < 7:
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
-    patient = _find_patient_by_phone_and_dob(phone, date_of_birth)
-    if not patient:
+    patient = resolve_patient_for_portal(phone, date_of_birth, last_name)
+    if patient is None:
+        if portal_identity_is_ambiguous(phone, date_of_birth, last_name):
+            return RequestOtpResult(
+                status="ok",
+                audit_outcome="ambiguous_identity",
+                needs_last_name=True,
+            )
         return RequestOtpResult(status="ok", audit_outcome="silent_no_op")
 
     # Rate limit per patient (not raw input digits — formats share one bucket).
@@ -180,9 +166,10 @@ def verify_otp(
     phone: str,
     date_of_birth: date,
     otp_code: str,
+    last_name: str | None = None,
 ) -> VerifyOtpResult:
     """Verify OTP and return patient_id on success. Uses session for authenticated access."""
-    patient = _find_patient_by_phone_and_dob(phone, date_of_birth)
+    patient = resolve_patient_for_portal(phone, date_of_birth, last_name)
     if not patient:
         return VerifyOtpResult(success=False, error="invalid")
 

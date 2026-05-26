@@ -320,7 +320,13 @@ def create_or_update_patient_manual(
     from apps.reception.patient_identity import (
         assert_patient_identity_available,
         assert_phone_not_blocked_by_stale_anonymized,
+        normalize_patient_name_for_storage,
+        normalize_patient_phone_for_storage,
     )
+
+    first_name = normalize_patient_name_for_storage(first_name)
+    last_name = normalize_patient_name_for_storage(last_name)
+    phone = normalize_patient_phone_for_storage(phone)
 
     assert_phone_not_blocked_by_stale_anonymized(
         phone=phone,

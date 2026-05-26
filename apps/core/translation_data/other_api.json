@@ -284,6 +284,11 @@
     "en": "Patient uniqueness conflict.",
     "pl": "Konflikt unikalności pacjenta."
   },
+  "other.api.patient_shared_phone_warning": {
+    "de": "Weitere aktive Patienten nutzen dieselbe Telefonnummer.",
+    "en": "Other active patients share this phone number.",
+    "pl": "Inni aktywni pacjenci mają ten sam numer telefonu."
+  },
   "other.api.pdf_file_not_found": {
     "de": "PDF-Datei nicht gefunden.",
     "en": "PDF file not found.",
