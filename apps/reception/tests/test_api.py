@@ -1120,6 +1120,36 @@ class PatientsApiTests(TestCase):
         response = self.client.get(f"/api/v1/patients/{uuid4()}")
         self.assertEqual(response.status_code, 404)
 
+    def test_post_patient_allows_same_phone_different_identity(self) -> None:
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalski",
+            date_of_birth=date(1975, 6, 1),
+            phone="+491701234567",
+            email="anna@example.com",
+        ).clinic_sites.add(self.clinic)
+
+        response = self.client.post(
+            "/api/v1/patients",
+            data=json.dumps(
+                {
+                    "first_name": "Jan",
+                    "last_name": "Kowalski",
+                    "date_of_birth": "2005-12-24",
+                    "phone": "+491701234567",
+                    "email": "jan@example.com",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["patient"]["first_name"], "Jan")
+        self.assertEqual(len(payload["warnings"]), 1)
+        self.assertEqual(payload["warnings"][0]["code"], "shared_phone")
+        self.assertEqual(len(payload["warnings"][0]["other_patients"]), 1)
+
     def test_post_patient_returns_409_for_duplicate_patient_identity(self) -> None:
         Patient.objects.create(
             first_name="Anna",

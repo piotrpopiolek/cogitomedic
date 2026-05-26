@@ -68,20 +68,40 @@ def ergebnisse_login_view(request):
     phone = (request.POST.get("phone") or "").strip()
     dob_str = _parse_dob(request.POST.get("date_of_birth") or "")
     captcha_token = (request.POST.get("captcha_token") or "").strip()
+    last_name = (request.POST.get("last_name") or "").strip()
     if not phone or not dob_str:
         ui["error"] = ui["ergebnisse_ui"].get(
             "error_required", "Phone and date of birth are required."
         )
         return render(request, "ergebnisse/login.html", ui)
     dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
-    result = request_otp(phone=phone, date_of_birth=dob, captcha_token=captcha_token)
+    result = request_otp(
+        phone=phone,
+        date_of_birth=dob,
+        captcha_token=captcha_token,
+        last_name=last_name or None,
+    )
     if result.status != "ok":
         ui["error"] = ui["ergebnisse_ui"].get(
             "error_captcha", "CAPTCHA verification failed. Please try again."
         )
         return render(request, "ergebnisse/login.html", ui)
+    if result.needs_last_name:
+        ui["needs_last_name"] = True
+        ui["phone_value"] = phone
+        ui["dob_value"] = dob_str
+        if last_name:
+            ui["error"] = ui["ergebnisse_ui"].get(
+                "error_ambiguous_identity",
+                "Please check your last name and try again.",
+            )
+        return render(request, "ergebnisse/login.html", ui)
     request.session["ergebnisse_phone"] = phone
     request.session["ergebnisse_dob"] = dob_str
+    if last_name:
+        request.session["ergebnisse_last_name"] = last_name
+    else:
+        request.session.pop("ergebnisse_last_name", None)
     locale = _get_locale(request)
     return redirect(
         f"{reverse('ergebnisse:otp')}?locale={locale}"
@@ -120,7 +140,13 @@ def ergebnisse_otp_view(request):
             "error_otp_required", "Please enter the code."
         )
         return render(request, "ergebnisse/otp.html", ui)
-    result = verify_otp(phone=phone, date_of_birth=dob, otp_code=otp_code)
+    last_name = request.session.get("ergebnisse_last_name") or None
+    result = verify_otp(
+        phone=phone,
+        date_of_birth=dob,
+        otp_code=otp_code,
+        last_name=last_name,
+    )
     if not result.success:
         ui["error"] = ui["ergebnisse_ui"].get(
             "error_invalid_otp", "Invalid or expired code. Please try again."
@@ -129,6 +155,7 @@ def ergebnisse_otp_view(request):
     set_patient_results_session(request, result.patient_id or "")
     del request.session["ergebnisse_phone"]
     del request.session["ergebnisse_dob"]
+    request.session.pop("ergebnisse_last_name", None)
     locale = _get_locale(request)
     return redirect(
         f"{reverse('ergebnisse:documents')}?locale={locale}"
