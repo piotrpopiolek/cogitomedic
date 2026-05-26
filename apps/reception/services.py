@@ -319,14 +319,16 @@ def create_or_update_patient_manual(
 
     from apps.reception.patient_identity import (
         assert_patient_identity_available,
-        normalize_patient_name_for_storage,
+        assert_phone_not_blocked_by_stale_anonymized,
     )
 
-    stored_first = normalize_patient_name_for_storage(first_name)
-    stored_last = normalize_patient_name_for_storage(last_name)
+    assert_phone_not_blocked_by_stale_anonymized(
+        phone=phone,
+        exclude_patient_id=patient_id,
+    )
     assert_patient_identity_available(
-        first_name=stored_first,
-        last_name=stored_last,
+        first_name=first_name,
+        last_name=last_name,
         phone=phone,
         date_of_birth=date_of_birth,
         exclude_patient_id=patient_id,
@@ -337,8 +339,8 @@ def create_or_update_patient_manual(
         if patient_id
         else Patient()
     )
-    patient.first_name = stored_first
-    patient.last_name = stored_last
+    patient.first_name = first_name
+    patient.last_name = last_name
     patient.date_of_birth = date_of_birth
     patient.phone = phone
     patient.email = email
