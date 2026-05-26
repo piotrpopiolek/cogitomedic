@@ -724,6 +724,56 @@
     "en": "Cancel",
     "pl": "Anuluj"
   },
+  "doctor.paper_intake_cancel": {
+    "de": "Zurück zur Liste",
+    "en": "Back to list",
+    "pl": "Wróć do listy"
+  },
+  "doctor.paper_intake_create_cta": {
+    "de": "Papierdokument erstellen",
+    "en": "Create paper document",
+    "pl": "Utwórz dokument papierowy"
+  },
+  "doctor.paper_intake_no_digital_title": {
+    "de": "Keine digitale Anamnese vorhanden",
+    "en": "No digital intake available",
+    "pl": "Brak cyfrowej ankiety"
+  },
+  "doctor.paper_intake_no_digital_message": {
+    "de": "Für diesen Eintrag liegt keine digitale Anamnese vor. Sie können jetzt ein medizinisches Dokument im Papiermodus erstellen.",
+    "en": "This queue entry has no digital intake. You can create a medical document in paper mode now.",
+    "pl": "Dla tego wpisu nie ma cyfrowej ankiety. Możesz teraz utworzyć dokument medyczny w trybie papierowym."
+  },
+  "doctor.list_stage_status_pending": {
+    "de": "Ausstehend",
+    "en": "Pending",
+    "pl": "Oczekuje"
+  },
+  "doctor.list_stage_status_processing": {
+    "de": "Wird verarbeitet",
+    "en": "Processing",
+    "pl": "Przetwarzanie"
+  },
+  "doctor.list_stage_status_completed": {
+    "de": "Abgeschlossen",
+    "en": "Completed",
+    "pl": "Zakończono"
+  },
+  "doctor.list_stage_status_failed": {
+    "de": "Fehlgeschlagen",
+    "en": "Failed",
+    "pl": "Niepowodzenie"
+  },
+  "doctor.list_doc_status_draft": {
+    "de": "Entwurf",
+    "en": "Draft",
+    "pl": "Szkic"
+  },
+  "doctor.list_doc_status_published": {
+    "de": "Veröffentlicht",
+    "en": "Published",
+    "pl": "Opublikowano"
+  },
   "doctor.password": {
     "de": "Passwort",
     "en": "Password",

@@ -197,6 +197,178 @@ class PatientResultsVerifyOtpApiTests(TestCase):
         self.assertIsNone(ev.patient_id)
 
 
+class PatientResultsSharedPhoneOtpApiTests(TestCase):
+    """Shared phone + same DOB: request-otp exposes needs_last_name; verify requires last_name."""
+
+    def setUp(self) -> None:
+        self.shared_phone = "01761238877"
+        self.shared_dob = date(2010, 6, 15)
+
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_returns_needs_last_name_when_ambiguous(
+        self, mock_get_adapter
+    ) -> None:
+        mock_get_adapter.return_value.send_sms = lambda *a, **k: None
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Schmidt",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="anna.api@example.com",
+        )
+        Patient.objects.create(
+            first_name="Eva",
+            last_name="Weber",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="eva.api@example.com",
+        )
+        response = self.client.post(
+            "/api/v1/patient-results/request-otp",
+            data={
+                "phone": self.shared_phone,
+                "date_of_birth": self.shared_dob.isoformat(),
+                "captcha_token": "skip",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"status": "ok", "needs_last_name": True},
+        )
+        self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
+        ev = (
+            AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_REQUEST")
+            .order_by("-event_time")
+            .first()
+        )
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
+        self.assertIsNone(ev.patient_id)
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_verify_otp_ambiguous_without_last_name_same_error_as_invalid(
+        self, mock_get_adapter
+    ) -> None:
+        mock_get_adapter.return_value.send_sms = lambda *a, **k: None
+        anna = Patient.objects.create(
+            first_name="Anna",
+            last_name="Schmidt",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="anna.verify@example.com",
+        )
+        Patient.objects.create(
+            first_name="Eva",
+            last_name="Weber",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="eva.verify@example.com",
+        )
+        request_response = self.client.post(
+            "/api/v1/patient-results/request-otp",
+            data={
+                "phone": self.shared_phone,
+                "date_of_birth": self.shared_dob.isoformat(),
+                "captcha_token": "skip",
+                "last_name": "Schmidt",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(request_response.status_code, 200)
+        self.assertEqual(request_response.json(), {"status": "ok"})
+
+        otp = "112233"
+        session = PatientResultsOtpSession.objects.get(patient=anna)
+        session.otp_code_hash = hashlib.sha256(f"test-pepper{otp}".encode()).hexdigest()
+        session.save(update_fields=["otp_code_hash"])
+
+        verify_response = self.client.post(
+            "/api/v1/patient-results/verify-otp",
+            data={
+                "phone": self.shared_phone,
+                "date_of_birth": self.shared_dob.isoformat(),
+                "otp_code": otp,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(verify_response.status_code, 400)
+        self.assertIn("error", verify_response.json())
+        self.assertNotIn("sessionid", self.client.cookies)
+        ev = (
+            AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY")
+            .order_by("-event_time")
+            .first()
+        )
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "invalid")
+        self.assertIsNone(ev.patient_id)
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_verify_otp_with_last_name_disambiguates_and_sets_session(
+        self, mock_get_adapter
+    ) -> None:
+        mock_get_adapter.return_value.send_sms = lambda *a, **k: None
+        anna = Patient.objects.create(
+            first_name="Anna",
+            last_name="Schmidt",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="anna.ok@example.com",
+        )
+        Patient.objects.create(
+            first_name="Eva",
+            last_name="Weber",
+            date_of_birth=self.shared_dob,
+            phone=self.shared_phone,
+            email="eva.ok@example.com",
+        )
+        self.client.post(
+            "/api/v1/patient-results/request-otp",
+            data={
+                "phone": self.shared_phone,
+                "date_of_birth": self.shared_dob.isoformat(),
+                "captcha_token": "skip",
+                "last_name": "Schmidt",
+            },
+            content_type="application/json",
+        )
+        otp = "445566"
+        session = PatientResultsOtpSession.objects.get(patient=anna)
+        session.otp_code_hash = hashlib.sha256(f"test-pepper{otp}".encode()).hexdigest()
+        session.save(update_fields=["otp_code_hash"])
+
+        verify_response = self.client.post(
+            "/api/v1/patient-results/verify-otp",
+            data={
+                "phone": self.shared_phone,
+                "date_of_birth": self.shared_dob.isoformat(),
+                "otp_code": otp,
+                "last_name": "Schmidt",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(verify_response.status_code, 200)
+        self.assertEqual(verify_response.json(), {"status": "ok"})
+        self.assertIn("sessionid", self.client.cookies)
+        ev = (
+            AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY")
+            .order_by("-event_time")
+            .first()
+        )
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.metadata.get("outcome"), "success")
+        self.assertEqual(ev.patient_id, anna.id)
+
+
 class PatientResultsDocumentsApiTests(TestCase):
     def setUp(self) -> None:
         self.patient = Patient.objects.create(

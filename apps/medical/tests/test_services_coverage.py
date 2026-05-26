@@ -37,6 +37,9 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
+from apps.reception.patient_identity import (
+    normalize_patient_name_for_storage as _stored_patient_name,
+)
 from apps.medical.services import (
     acquire_document_lock,
     create_external_upload_medical_document,
@@ -1203,15 +1206,15 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
             sort_at=now + timedelta(hours=2),
         )
         items, _ = list_doctor_work_queue(user=admin, page_size=100)
+        zzz_rev = _stored_patient_name("ZzzRevision")
+        aaa_pub = _stored_patient_name("AaaPublished")
         tier_rows = [
-            i
-            for i in items
-            if i["patient"]["last_name"] in ("ZzzRevision", "AaaPublished")
+            i for i in items if i["patient"]["last_name"] in (zzz_rev, aaa_pub)
         ]
         self.assertEqual(len(tier_rows), 2)
-        self.assertEqual(tier_rows[0]["patient"]["last_name"], "ZzzRevision")
+        self.assertEqual(tier_rows[0]["patient"]["last_name"], zzz_rev)
         self.assertTrue(tier_rows[0]["has_pending_revision"])
-        self.assertEqual(tier_rows[1]["patient"]["last_name"], "AaaPublished")
+        self.assertEqual(tier_rows[1]["patient"]["last_name"], aaa_pub)
 
     def test_pending_revision_uses_unpublished_sla_tint(self) -> None:
         """Open revision is tier-0 work — same SLA row tint as DRAFT, not delivered white."""
@@ -1232,8 +1235,10 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
             sort_at=now,
         )
         items, _ = list_doctor_work_queue(user=admin, page_size=100)
-        rev_row = next(i for i in items if i["patient"]["last_name"] == "RevSla")
-        pub_row = next(i for i in items if i["patient"]["last_name"] == "PubNoSla")
+        rev_sla = _stored_patient_name("RevSla")
+        pub_no_sla = _stored_patient_name("PubNoSla")
+        rev_row = next(i for i in items if i["patient"]["last_name"] == rev_sla)
+        pub_row = next(i for i in items if i["patient"]["last_name"] == pub_no_sla)
         self.assertTrue(rev_row["has_pending_revision"])
         self.assertGreater(rev_row["row_unpublished_urgency"], 0.0)
         self.assertTrue(rev_row["row_unpublished_sla_active"])
@@ -1257,12 +1262,12 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         items, _ = list_doctor_work_queue(
             user=admin, sort="patient", order="asc", page_size=100
         )
+        zzz_rev = _stored_patient_name("ZzzRevision")
+        aaa_pub = _stored_patient_name("AaaPublished")
         tier_rows = [
-            i
-            for i in items
-            if i["patient"]["last_name"] in ("ZzzRevision", "AaaPublished")
+            i for i in items if i["patient"]["last_name"] in (zzz_rev, aaa_pub)
         ]
-        self.assertEqual(tier_rows[0]["patient"]["last_name"], "ZzzRevision")
+        self.assertEqual(tier_rows[0]["patient"]["last_name"], zzz_rev)
 
     def test_tier0_precedes_tier1_sort_patient_desc(self) -> None:
         admin = self._tier_sort_admin()
@@ -1279,14 +1284,16 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         items, _ = list_doctor_work_queue(
             user=admin, sort="patient", order="desc", page_size=100
         )
+        aaa_draft = _stored_patient_name("AaaDraft")
+        zzz_published = _stored_patient_name("ZzzPublished")
         names = [
             i["patient"]["last_name"]
             for i in items
-            if i["patient"]["last_name"] in ("AaaDraft", "ZzzPublished")
+            if i["patient"]["last_name"] in (aaa_draft, zzz_published)
         ]
         self.assertEqual(len(names), 2)
-        self.assertEqual(names[0], "AaaDraft")
-        self.assertEqual(names[1], "ZzzPublished")
+        self.assertEqual(names[0], aaa_draft)
+        self.assertEqual(names[1], zzz_published)
 
     def test_tier0_before_tier1_for_all_sort_orders(self) -> None:
         admin = self._tier_sort_admin()
@@ -1311,15 +1318,17 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
                 items, _ = list_doctor_work_queue(
                     user=admin, sort=sort, order=order, page_size=50
                 )
+                tier0_rev = _stored_patient_name("Tier0Rev")
+                tier1_pub = _stored_patient_name("Tier1Pub")
                 tier0_idx = next(
                     i
                     for i, row in enumerate(items)
-                    if row["patient"]["last_name"] == "Tier0Rev"
+                    if row["patient"]["last_name"] == tier0_rev
                 )
                 tier1_idx = next(
                     i
                     for i, row in enumerate(items)
-                    if row["patient"]["last_name"] == "Tier1Pub"
+                    if row["patient"]["last_name"] == tier1_pub
                 )
                 self.assertLess(tier0_idx, tier1_idx)
 
@@ -1342,8 +1351,11 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
             last_name="ZzzPublished",
             sort_at=now + timedelta(hours=5),
         )
-        tier0_names = ("MidDraft", "MidRevision")
-        tier1_name = "ZzzPublished"
+        tier0_names = (
+            _stored_patient_name("MidDraft"),
+            _stored_patient_name("MidRevision"),
+        )
+        tier1_name = _stored_patient_name("ZzzPublished")
         for sort, order in (
             ("date", "desc"),
             ("date", "asc"),

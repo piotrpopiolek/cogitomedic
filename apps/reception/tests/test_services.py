@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import tempfile
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -118,6 +119,7 @@ class ReceptionServicesTests(TestCase):
             date_of_birth=date(1988, 10, 10),
         )
         self.assertIsNotNone(found)
+        assert found is not None  # narrow for mypy
         self.assertEqual(found.first_name, "Jan")
         self.assertEqual(found.last_name, "Kowalski")
 
@@ -215,6 +217,53 @@ class ReceptionServicesTests(TestCase):
         )
         self.assertEqual(Patient.objects.filter(phone=stored_phone).count(), 2)
         self.assertEqual(son.first_name, "Peter")
+
+    def test_find_active_patients_by_phone_excludes_inactive(self) -> None:
+        from apps.reception.patient_identity import find_active_patients_by_phone
+
+        phone = normalize_phone_for_patient_storage("+491709998877")
+        active = Patient.objects.create(
+            first_name="Active",
+            last_name="User",
+            date_of_birth=date(1980, 1, 1),
+            phone=phone,
+            email="active@example.com",
+            is_active=True,
+        )
+        Patient.objects.create(
+            first_name="Inactive",
+            last_name="User",
+            date_of_birth=date(1981, 2, 2),
+            phone=phone,
+            email="inactive@example.com",
+            is_active=False,
+        )
+        found = find_active_patients_by_phone(phone)
+        self.assertEqual([p.id for p in found], [active.id])
+
+    def test_shared_phone_warning_uses_same_lookup_variants_as_portal(self) -> None:
+        from apps.reception.patient_identity import (
+            build_shared_phone_warnings,
+            find_active_patients_by_phone,
+        )
+
+        stored = normalize_phone_for_patient_storage("+491701112233")
+        existing = Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalska",
+            date_of_birth=date(1975, 1, 1),
+            phone=stored,
+            email="anna.shared@example.com",
+        )
+        others = find_active_patients_by_phone("+49 170 111 2233")
+        self.assertEqual(len(others), 1)
+        self.assertEqual(others[0].id, existing.id)
+        warnings = build_shared_phone_warnings(
+            phone="+49 170-111 2233",
+            exclude_patient_id=uuid.uuid4(),
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["other_patients"][0]["id"], str(existing.id))
 
     def test_doctolib_patient_id_remains_unique(self) -> None:
         Patient.objects.create(

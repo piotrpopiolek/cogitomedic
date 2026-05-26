@@ -30,6 +30,9 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
+from apps.reception.patient_identity import (
+    normalize_patient_name_for_storage as _stored_patient_name,
+)
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -1583,7 +1586,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("HistoryVisible", html)
+        self.assertIn(_stored_patient_name("HistoryVisible"), html)
         self.assertIn(
             f"/api/v1/medical-documents/{published_doc.id}/preview-pdf",
             html,
@@ -1602,7 +1605,7 @@ class DoctorListScopeAndPreviewTests(TestCase):
         response = self.client.get("/doctor/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("ExternalListPreview", html)
+        self.assertIn(_stored_patient_name("ExternalListPreview"), html)
         self.assertIn(
             f"/api/v1/medical-documents/{ext_doc.id}/preview-pdf",
             html,
@@ -1628,8 +1631,8 @@ class DoctorListScopeAndPreviewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("PublishedByMe", html)
-        self.assertNotIn("PublishedByOther", html)
+        self.assertIn(_stored_patient_name("PublishedByMe"), html)
+        self.assertNotIn(_stored_patient_name("PublishedByOther"), html)
         self.assertIn(
             f"/api/v1/medical-documents/{matching_doc.id}/preview-pdf",
             html,
@@ -1651,8 +1654,8 @@ class DoctorListScopeAndPreviewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("PublishedByMe", html)
-        self.assertNotIn("PublishedByOther", html)
+        self.assertIn(_stored_patient_name("PublishedByMe"), html)
+        self.assertNotIn(_stored_patient_name("PublishedByOther"), html)
 
     def test_scope_in_revision_filters_pending_revision_rows(self) -> None:
         rev_doc = self._create_published_document(
@@ -1672,8 +1675,8 @@ class DoctorListScopeAndPreviewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("InRevisionOnly", html)
-        self.assertNotIn("PublishedStable", html)
+        self.assertIn(_stored_patient_name("InRevisionOnly"), html)
+        self.assertNotIn(_stored_patient_name("PublishedStable"), html)
         self.assertIn('option value="in_revision" selected', html)
 
 
