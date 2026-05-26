@@ -258,19 +258,52 @@ class Patient(models.Model):
             ),
         ]
 
+    def _should_normalize_patient_names_on_save(
+        self,
+        *,
+        update_fields: list[str] | None,
+    ) -> bool:
+        if self.anonymized_at is not None:
+            return False
+        if (self.first_name or "").strip().upper() == "ANONYMIZED":
+            return False
+        if (self.last_name or "").strip().upper() == "ANONYMIZED":
+            return False
+        if update_fields is not None and not {
+            "first_name",
+            "last_name",
+        }.intersection(update_fields):
+            return False
+        return True
+
     def save(self, *args, **kwargs):
+        from apps.reception.patient_identity import normalize_patient_name_for_storage
         from apps.reception.phone_utils import normalize_phone_for_patient_storage
 
         norm = normalize_phone_for_patient_storage(self.phone)
         if norm:
             self.phone = norm
-        fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
-        self.incoming_pdf_name_key_fl = fl[:300]
-        self.incoming_pdf_name_key_lf = lf[:300]
+
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = list(update_fields)
-            for key in ("incoming_pdf_name_key_fl", "incoming_pdf_name_key_lf"):
+
+        if self._should_normalize_patient_names_on_save(update_fields=update_fields):
+            if self.first_name:
+                self.first_name = normalize_patient_name_for_storage(self.first_name)
+            if self.last_name:
+                self.last_name = normalize_patient_name_for_storage(self.last_name)
+
+        fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
+        self.incoming_pdf_name_key_fl = fl[:300]
+        self.incoming_pdf_name_key_lf = lf[:300]
+        if update_fields is not None:
+            for key in (
+                "first_name",
+                "last_name",
+                "incoming_pdf_name_key_fl",
+                "incoming_pdf_name_key_lf",
+            ):
                 if key not in update_fields:
                     update_fields.append(key)
             kwargs["update_fields"] = update_fields
