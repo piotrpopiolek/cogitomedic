@@ -116,6 +116,33 @@ def stale_anonymized_patient_blocks_phone(*, phone: str) -> bool:
     ).exists()
 
 
+def assert_phone_not_blocked_by_stale_anonymized(
+    *,
+    phone: str,
+    exclude_patient_id=None,
+) -> None:
+    """
+    Block assigning this phone when a stale anonymized row still holds it.
+
+    Skips the check when ``exclude_patient_id`` already uses the normalized phone
+    (manual update without changing phone).
+    """
+    stored_phone = normalize_patient_phone_for_storage(phone)
+    if exclude_patient_id is not None:
+        current_phone = (
+            Patient.objects.filter(id=exclude_patient_id)
+            .values_list("phone", flat=True)
+            .first()
+        )
+        if current_phone == stored_phone:
+            return
+    if stale_anonymized_patient_blocks_phone(phone=stored_phone):
+        raise DomainError(
+            domain_message("other.domain.import_patient_anonymized_same_phone"),
+            api_message_key="other.domain.import_patient_anonymized_same_phone",
+        )
+
+
 def assert_patient_identity_available(
     *,
     first_name: str,

@@ -36,7 +36,13 @@ from apps.reception.services import create_or_update_patient_manual
 
 def _patient_domain_error_response(exc: DomainError) -> JsonResponse:
     status = (
-        409 if exc.api_message_key == "other.domain.patient_identity_conflict" else 400
+        409
+        if exc.api_message_key
+        in {
+            "other.domain.patient_identity_conflict",
+            "other.domain.import_patient_anonymized_same_phone",
+        }
+        else 400
     )
     return json_domain_error(exc, status=status)
 

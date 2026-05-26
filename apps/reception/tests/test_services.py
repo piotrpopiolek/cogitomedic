@@ -91,6 +91,51 @@ class ReceptionServicesTests(TestCase):
             created_by_user=self.reception_user,
         )
 
+    def test_patient_save_normalizes_name_casing(self) -> None:
+        patient = Patient.objects.create(
+            first_name="aLeXanDra",
+            last_name="nIzhENKO",
+            date_of_birth=date(1991, 6, 6),
+            phone="+48111222333",
+            email="alex@example.com",
+        )
+        patient.refresh_from_db()
+        self.assertEqual(patient.first_name, "Alexandra")
+        self.assertEqual(patient.last_name, "Nizhenko")
+
+    def test_find_patient_for_import_matches_title_cased_storage(self) -> None:
+        Patient.objects.create(
+            first_name="JAN",
+            last_name="KOWALSKI",
+            date_of_birth=date(1988, 10, 10),
+            phone="+48777888910",
+            email="jan@example.com",
+        )
+        found = find_patient_for_import(
+            first_name="jan",
+            last_name="kowalski",
+            phone="+48 777 888 910",
+            date_of_birth=date(1988, 10, 10),
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found.first_name, "Jan")
+        self.assertEqual(found.last_name, "Kowalski")
+
+    def test_patient_save_preserves_anonymized_name_sentinel(self) -> None:
+        patient = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=None,
+            phone="49999999999",
+            email="anon@example.com",
+        )
+        Patient.objects.filter(pk=patient.pk).update(anonymized_at=timezone.now())
+        patient.refresh_from_db()
+        patient.save()
+        patient.refresh_from_db()
+        self.assertEqual(patient.first_name, "ANONYMIZED")
+        self.assertEqual(patient.last_name, "ANONYMIZED")
+
     def test_create_or_update_patient_manual_allows_missing_doctolib_id(self) -> None:
         patient = create_or_update_patient_manual(
             first_name="Jan",
@@ -105,6 +150,33 @@ class ReceptionServicesTests(TestCase):
         self.assertIsNone(patient.doctolib_patient_id)
         self.assertEqual(patient.first_name, "Jan")
         self.assertEqual(patient.phone, "48123123123")
+
+    def test_create_or_update_patient_manual_blocks_stale_anonymized_phone(
+        self,
+    ) -> None:
+        stale = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1970, 1, 1),
+            phone="48777888906",
+            email="stale@example.com",
+        )
+        Patient.objects.filter(pk=stale.pk).update(anonymized_at=timezone.now())
+
+        with self.assertRaises(DomainError) as ctx:
+            create_or_update_patient_manual(
+                first_name="Nowy",
+                last_name="Pacjent",
+                date_of_birth=date(1990, 2, 2),
+                phone="+48 777 888 906",
+                email="nowy@example.com",
+                created_or_updated_by_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.import_patient_anonymized_same_phone",
+        )
+        self.assertEqual(Patient.objects.count(), 1)
 
     def test_patient_identity_unique_constraint_blocks_duplicate_patient(self) -> None:
         Patient.objects.create(
