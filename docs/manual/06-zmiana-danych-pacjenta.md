@@ -113,7 +113,7 @@ Przewiń do dołu formularza i kliknij przycisk zapisu (np. **Save** lub **Zapis
 
 ![Komunikat sukcesu po zapisie (przykład demo)](/docs/manual/assets/screenshots/reception-patient-05-save-confirmation.png)
 
-**Typowe błędy:** numer telefonu zajęty przez innego pacjenta, niepoprawny zapis numeru lub daty, brak dostępu do zapisu.
+**Typowe błędy:** duplikat tej samej czwórki (imię, nazwisko, telefon, data urodzenia) u innego pacjenta — zapis zostanie odrzucony; **wspólny numer** z inną tożsamością jest dozwolony (możliwe ostrzeżenie w API). Niepoprawny zapis numeru lub daty, brak dostępu do zapisu.
 
 ---
 
