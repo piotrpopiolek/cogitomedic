@@ -1,6 +1,6 @@
 # Runbook: migracja wspólnego numeru telefonu (prod)
 
-Migracje: `reception.0040_restore_patient_identity_unique`, `0041_normalize_patient_name_casing` (jeśli jeszcze nie zastosowane).
+Migracje: `reception.0040_restore_patient_identity_unique`, `0041_normalize_patient_name_casing`, `0042_normalize_patient_phone_storage` (jeśli jeszcze nie zastosowane).
 
 ## Przed `migrate`
 

@@ -10,6 +10,7 @@ UI strings and error messages use the ``doctor`` translation category (see
 from __future__ import annotations
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from django.contrib import admin
@@ -169,6 +170,52 @@ def _apply_doctor_lang(request: HttpRequest) -> str:
     if request.GET.get("lang") in ("de", "en", "pl"):
         request.session["doctor_lang"] = request.GET.get("lang")
     return lang
+
+
+_LIST_STAGE_STATUS_UI_KEYS = {
+    "PENDING": "list_stage_status_pending",
+    "PROCESSING": "list_stage_status_processing",
+    "COMPLETED": "list_stage_status_completed",
+    "FAILED": "list_stage_status_failed",
+}
+
+_LIST_DOC_STATUS_UI_KEYS = {
+    "DRAFT": "list_doc_status_draft",
+    "PUBLISHED": "list_doc_status_published",
+}
+
+
+def _doctor_list_status_display(
+    code: str | None,
+    ui: dict[str, str],
+    mapping: dict[str, str],
+) -> str | None:
+    if not code or code == "—":
+        return code
+    ui_key = mapping.get(code)
+    if ui_key:
+        return ui.get(ui_key, code)
+    return code
+
+
+def _enrich_doctor_work_queue_items_for_display(
+    items: list[dict[str, Any]],
+    ui: dict[str, str],
+) -> None:
+    for item in items:
+        for field in ("pdf_generation_status", "hidrive_status", "sms_status"):
+            code = item.get(field)
+            if code:
+                item[f"{field}_display"] = _doctor_list_status_display(
+                    code,
+                    ui,
+                    _LIST_STAGE_STATUS_UI_KEYS,
+                )
+        item["status_display"] = _doctor_list_status_display(
+            item.get("status"),
+            ui,
+            _LIST_DOC_STATUS_UI_KEYS,
+        )
 
 
 _DOCTOR_LIST_QUERY_KEYS_BASE = (
@@ -331,6 +378,8 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
         query.pop("lang", None)
         url = request.path + ("?" + query.urlencode() if query else "")
         return redirect(url or "doctor-list")
+    ui = get_doctor_ui(lang)
+    _enrich_doctor_work_queue_items_for_display(list_items, ui)
     return _render_doctor(
         request,
         "doctor/list.html",
@@ -388,12 +437,11 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             "published_by_doctor_options": (
                 _doctor_filter_published_by_options() if show_oversight_filters else []
             ),
-            "paper_intake_create_cta": resolve_other_message(
-                request,
-                "doctor.paper_intake_create_cta",
+            "paper_intake_create_cta": ui.get(
+                "paper_intake_create_cta",
                 "Papierdokument erstellen",
             ),
-            "ui": get_doctor_ui(lang),
+            "ui": ui,
             "lang": lang,
         },
     )

@@ -216,6 +216,21 @@ class SharedPhonePortalOtpTests(TestCase):
         )
         mock_get_adapter.return_value.send_sms.assert_called_once()
 
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_skips_inactive_patient(self, mock_get_adapter) -> None:
+        Patient.objects.filter(pk=self.father.pk).update(is_active=False)
+        result = request_otp(
+            phone=self.shared_phone,
+            date_of_birth=self.dob_father,
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "silent_no_op")
+        self.assertFalse(result.needs_last_name)
+        self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
+        mock_get_adapter.return_value.send_sms.assert_not_called()
+
 
 class RequestOtpUkTests(TestCase):
     def setUp(self) -> None:
