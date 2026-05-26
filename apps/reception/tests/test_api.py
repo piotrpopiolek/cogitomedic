@@ -1150,6 +1150,38 @@ class PatientsApiTests(TestCase):
         self.assertEqual(payload["warnings"][0]["code"], "shared_phone")
         self.assertEqual(len(payload["warnings"][0]["other_patients"]), 1)
 
+    def test_patch_patient_returns_409_for_duplicate_patient_identity(self) -> None:
+        Patient.objects.create(
+            first_name="Anna",
+            last_name="Nowak",
+            date_of_birth=date(1990, 1, 1),
+            phone="+49123456789",
+            email="anna@example.com",
+        ).clinic_sites.add(self.clinic)
+        other = Patient.objects.create(
+            first_name="Jan",
+            last_name="Kowalski",
+            date_of_birth=date(1985, 5, 5),
+            phone="+49999999999",
+            email="jan@example.com",
+        )
+        other.clinic_sites.add(self.clinic)
+
+        response = self.client.patch(
+            f"/api/v1/patients/{other.id}",
+            data=json.dumps(
+                {
+                    "first_name": "Anna",
+                    "last_name": "Nowak",
+                    "date_of_birth": "1990-01-01",
+                    "phone": "+49123456789",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_post_patient_returns_409_for_duplicate_patient_identity(self) -> None:
         Patient.objects.create(
             first_name="Anna",
