@@ -305,15 +305,15 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     except DomainError as exc:
         return _patient_domain_error_response(exc)
 
-    body = _serialize_patient(patient)
-    if "phone" in fields_set and body.get("phone"):
+    patient_payload: dict = _serialize_patient(patient)
+    if "phone" in fields_set and patient_payload.get("phone"):
         warnings = build_shared_phone_warnings(
             phone=patient.phone,
             exclude_patient_id=patient.id,
         )
         if warnings:
-            body["warnings"] = warnings
-    return JsonResponse(body)
+            patient_payload["warnings"] = warnings
+    return JsonResponse(patient_payload)
 
 
 @require_auth
