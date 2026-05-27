@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import tempfile
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -44,7 +45,10 @@ from apps.reception.services import (
     issue_tablet_session_latest_wins,
 )
 from apps.operations.prom_metrics import build_metrics_payload
-from apps.reception.phone_utils import normalize_phone
+from apps.reception.phone_utils import (
+    normalize_phone,
+    normalize_phone_for_patient_storage,
+)
 from apps.reception.xlsx_import import (
     XlsxImportErrorCode,
     _audit_xlsx_import_finished,
@@ -88,6 +92,68 @@ class ReceptionServicesTests(TestCase):
             created_by_user=self.reception_user,
         )
 
+    def test_patient_save_normalizes_name_casing(self) -> None:
+        patient = Patient.objects.create(
+            first_name="aLeXanDra",
+            last_name="nIzhENKO",
+            date_of_birth=date(1991, 6, 6),
+            phone="+48111222333",
+            email="alex@example.com",
+        )
+        patient.refresh_from_db()
+        self.assertEqual(patient.first_name, "Alexandra")
+        self.assertEqual(patient.last_name, "Nizhenko")
+
+    def test_find_patient_for_import_matches_title_cased_storage(self) -> None:
+        Patient.objects.create(
+            first_name="JAN",
+            last_name="KOWALSKI",
+            date_of_birth=date(1988, 10, 10),
+            phone="+48777888910",
+            email="jan@example.com",
+        )
+        found = find_patient_for_import(
+            first_name="jan",
+            last_name="kowalski",
+            phone="+48 777 888 910",
+            date_of_birth=date(1988, 10, 10),
+        )
+        self.assertIsNotNone(found)
+        assert found is not None  # narrow for mypy
+        self.assertEqual(found.first_name, "Jan")
+        self.assertEqual(found.last_name, "Kowalski")
+
+    def test_patient_save_preserves_anonymized_name_sentinel(self) -> None:
+        patient = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=None,
+            phone="49999999999",
+            email="anon@example.com",
+        )
+        Patient.objects.filter(pk=patient.pk).update(anonymized_at=timezone.now())
+        patient.refresh_from_db()
+        patient.save()
+        patient.refresh_from_db()
+        self.assertEqual(patient.first_name, "ANONYMIZED")
+        self.assertEqual(patient.last_name, "ANONYMIZED")
+
+    def test_patient_save_skips_name_normalize_when_last_name_anonymized_sentinel(
+        self,
+    ) -> None:
+        patient = Patient.objects.create(
+            first_name="Real",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1988, 1, 1),
+            phone="48111222350",
+            email="partial@example.com",
+        )
+        patient.phone = "48111222351"
+        patient.save(update_fields=["phone"])
+        patient.refresh_from_db()
+        self.assertEqual(patient.first_name, "Real")
+        self.assertEqual(patient.last_name, "ANONYMIZED")
+
     def test_create_or_update_patient_manual_allows_missing_doctolib_id(self) -> None:
         patient = create_or_update_patient_manual(
             first_name="Jan",
@@ -102,6 +168,33 @@ class ReceptionServicesTests(TestCase):
         self.assertIsNone(patient.doctolib_patient_id)
         self.assertEqual(patient.first_name, "Jan")
         self.assertEqual(patient.phone, "48123123123")
+
+    def test_create_or_update_patient_manual_blocks_stale_anonymized_phone(
+        self,
+    ) -> None:
+        stale = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1970, 1, 1),
+            phone="48777888906",
+            email="stale@example.com",
+        )
+        Patient.objects.filter(pk=stale.pk).update(anonymized_at=timezone.now())
+
+        with self.assertRaises(DomainError) as ctx:
+            create_or_update_patient_manual(
+                first_name="Nowy",
+                last_name="Pacjent",
+                date_of_birth=date(1990, 2, 2),
+                phone="+48 777 888 906",
+                email="nowy@example.com",
+                created_or_updated_by_user_id=self.reception_user.id,
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.import_patient_anonymized_same_phone",
+        )
+        self.assertEqual(Patient.objects.count(), 1)
 
     def test_patient_identity_unique_constraint_blocks_duplicate_patient(self) -> None:
         Patient.objects.create(
@@ -120,6 +213,73 @@ class ReceptionServicesTests(TestCase):
                 phone="+48999999999",
                 email="other@example.com",
             )
+
+    def test_two_patients_same_phone_different_identity_allowed(self) -> None:
+        shared_phone = "+48988887777"
+        stored_phone = normalize_phone_for_patient_storage(shared_phone)
+        Patient.objects.create(
+            first_name="Hans",
+            last_name="Müller",
+            date_of_birth=date(1970, 3, 12),
+            phone=shared_phone,
+            email="hans@example.com",
+        )
+        son = Patient.objects.create(
+            first_name="Peter",
+            last_name="Müller",
+            date_of_birth=date(2000, 7, 21),
+            phone=shared_phone,
+            email="peter@example.com",
+        )
+        self.assertEqual(Patient.objects.filter(phone=stored_phone).count(), 2)
+        self.assertEqual(son.first_name, "Peter")
+
+    def test_find_active_patients_by_phone_excludes_inactive(self) -> None:
+        from apps.reception.patient_identity import find_active_patients_by_phone
+
+        phone = normalize_phone_for_patient_storage("+491709998877")
+        active = Patient.objects.create(
+            first_name="Active",
+            last_name="User",
+            date_of_birth=date(1980, 1, 1),
+            phone=phone,
+            email="active@example.com",
+            is_active=True,
+        )
+        Patient.objects.create(
+            first_name="Inactive",
+            last_name="User",
+            date_of_birth=date(1981, 2, 2),
+            phone=phone,
+            email="inactive@example.com",
+            is_active=False,
+        )
+        found = find_active_patients_by_phone(phone)
+        self.assertEqual([p.id for p in found], [active.id])
+
+    def test_shared_phone_warning_uses_same_lookup_variants_as_portal(self) -> None:
+        from apps.reception.patient_identity import (
+            build_shared_phone_warnings,
+            find_active_patients_by_phone,
+        )
+
+        stored = normalize_phone_for_patient_storage("+491701112233")
+        existing = Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalska",
+            date_of_birth=date(1975, 1, 1),
+            phone=stored,
+            email="anna.shared@example.com",
+        )
+        others = find_active_patients_by_phone("+49 170 111 2233")
+        self.assertEqual(len(others), 1)
+        self.assertEqual(others[0].id, existing.id)
+        warnings = build_shared_phone_warnings(
+            phone="+49 170-111 2233",
+            exclude_patient_id=uuid.uuid4(),
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["other_patients"][0]["id"], str(existing.id))
 
     def test_doctolib_patient_id_remains_unique(self) -> None:
         Patient.objects.create(
@@ -676,6 +836,100 @@ class PatientXlsxImportTests(TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def test_validate_patient_names_for_import_rejects_placeholder(self) -> None:
+        from apps.core.exceptions import DomainError
+        from apps.reception.patient_identity import validate_patient_names_for_import
+
+        with self.assertRaises(DomainError) as ctx:
+            validate_patient_names_for_import(first_name="—", last_name="Kowalski")
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.import_missing_patient_name",
+        )
+
+    def test_patient_is_active_record_false_for_anonymized_at(self) -> None:
+        from apps.reception.patient_identity import (
+            patient_is_active_record,
+            patient_is_import_anonymized,
+        )
+
+        patient = Patient.objects.create(
+            first_name="Ewa",
+            last_name="Test",
+            date_of_birth=date(1980, 1, 1),
+            phone="48111222352",
+            email="ewa.anon@example.com",
+        )
+        Patient.objects.filter(pk=patient.pk).update(anonymized_at=timezone.now())
+        patient.refresh_from_db()
+        self.assertTrue(patient_is_import_anonymized(patient))
+        self.assertFalse(patient_is_active_record(patient))
+
+    def test_find_patient_for_import_none_for_inactive(self) -> None:
+        Patient.objects.create(
+            first_name="Inactive",
+            last_name="Import",
+            date_of_birth=date(1980, 2, 2),
+            phone="48111222353",
+            email="inactive.import@example.com",
+            is_active=False,
+        )
+        self.assertIsNone(
+            find_patient_for_import(
+                first_name="Inactive",
+                last_name="Import",
+                phone="48111222353",
+                date_of_birth=date(1980, 2, 2),
+            )
+        )
+
+    def test_iter_patients_matching_phone_dedupes_variant_hits(self) -> None:
+        from apps.reception.patient_identity import _iter_patients_matching_phone
+
+        stored = normalize_phone_for_patient_storage("+491701112244")
+        Patient.objects.create(
+            first_name="Legacy",
+            last_name="Plus",
+            date_of_birth=date(1975, 3, 3),
+            phone=f"+{stored}",
+            email="legacy.plus@example.com",
+        )
+        found = _iter_patients_matching_phone("+49 170 111 2244")
+        self.assertEqual(len(found), 1)
+
+    def test_assert_phone_not_blocked_when_exclude_patient_already_has_phone(
+        self,
+    ) -> None:
+        from apps.reception.patient_identity import (
+            assert_phone_not_blocked_by_stale_anonymized,
+        )
+
+        phone = normalize_phone_for_patient_storage("+48 777 888 907")
+        stale = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1970, 1, 1),
+            phone=phone,
+            email="stale.exclude@example.com",
+        )
+        Patient.objects.filter(pk=stale.pk).update(anonymized_at=timezone.now())
+        active = Patient.objects.create(
+            first_name="Active",
+            last_name="Holder",
+            date_of_birth=date(1990, 1, 1),
+            phone=phone,
+            email="active.holder@example.com",
+        )
+        assert_phone_not_blocked_by_stale_anonymized(
+            phone=phone,
+            exclude_patient_id=active.id,
+        )
+
+    def test_iter_patients_matching_phone_empty_returns_none(self) -> None:
+        from apps.reception.patient_identity import _iter_patients_matching_phone
+
+        self.assertEqual(_iter_patients_matching_phone(""), [])
+
     def test_find_patient_for_import_none_for_anonymized(self) -> None:
         p = Patient.objects.create(
             first_name="ANONYMIZED",
@@ -686,7 +940,14 @@ class PatientXlsxImportTests(TestCase):
         )
         Patient.objects.filter(pk=p.pk).update(anonymized_at=timezone.now())
         p.refresh_from_db()
-        self.assertIsNone(find_patient_for_import(phone="48111222301"))
+        self.assertIsNone(
+            find_patient_for_import(
+                first_name="ANONYMIZED",
+                last_name="ANONYMIZED",
+                phone="48111222301",
+                date_of_birth=date(1980, 1, 1),
+            )
+        )
 
     def test_find_patient_for_import_returns_active(self) -> None:
         p = Patient.objects.create(
@@ -696,7 +957,12 @@ class PatientXlsxImportTests(TestCase):
             phone="48111222302",
             email="ewa@example.com",
         )
-        found = find_patient_for_import(phone="48111222302")
+        found = find_patient_for_import(
+            first_name="Ewa",
+            last_name="K",
+            phone="48111222302",
+            date_of_birth=date(1980, 1, 1),
+        )
         self.assertIsNotNone(found)
         assert found is not None
         self.assertEqual(found.id, p.id)
@@ -709,12 +975,56 @@ class PatientXlsxImportTests(TestCase):
         self.assertEqual(batch.inserted_rows, 1)
         self.assertEqual(batch.matched_rows, 0)
         self.assertEqual(batch.error_rows, 0)
-        norm = normalize_phone("+48 777 888 901")
+        norm = normalize_phone_for_patient_storage("+48 777 888 901")
         self.assertEqual(Patient.objects.filter(phone=norm).count(), 1)
         payload = build_metrics_payload()
         self.assertIn(b"cogitomedica_import_batches_total", payload)
 
-    def test_import_existing_patient_reuses_record(self) -> None:
+    @patch(
+        "apps.reception.xlsx_import.create_or_update_patient_manual",
+        side_effect=RuntimeError("import boom"),
+    )
+    def test_import_patient_create_exception_records_row_error(
+        self, _mock_create
+    ) -> None:
+        batch = self._run_import(
+            [("Fail", "Row", "01.01.1990", "+48 777 888 912", "fail@example.com")],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(Patient.objects.count(), 0)
+        err = PatientImportError.objects.get(batch=batch)
+        self.assertEqual(err.error_code, XlsxImportErrorCode.INVALID_ROW_FORMAT)
+        self.assertIn("import boom", err.error_message)
+
+    def test_import_existing_patient_reuses_record_same_identity(self) -> None:
+        Patient.objects.create(
+            first_name="Stary",
+            last_name="Pacjent",
+            date_of_birth=date(1990, 1, 1),
+            phone="48777888902",
+            email="stary@example.com",
+        )
+        batch = self._run_import(
+            [
+                (
+                    "Stary",
+                    "Pacjent",
+                    "01.01.1990",
+                    "+48 777 888 902",
+                    "nowyemail@example.com",
+                )
+            ],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(batch.inserted_rows, 0)
+        self.assertEqual(batch.matched_rows, 1)
+        p = Patient.objects.get()
+        self.assertEqual(p.first_name, "Stary")
+        self.assertEqual(QueueEntry.objects.filter(patient=p).count(), 1)
+
+    def test_import_same_phone_different_identity_creates_new_patient(self) -> None:
         Patient.objects.create(
             first_name="Stary",
             last_name="Pacjent",
@@ -734,12 +1044,9 @@ class PatientXlsxImportTests(TestCase):
             ],
         )
         self.assertEqual(batch.status, ImportStatus.COMPLETED)
-        self.assertEqual(Patient.objects.count(), 1)
-        self.assertEqual(batch.inserted_rows, 0)
-        self.assertEqual(batch.matched_rows, 1)
-        p = Patient.objects.get()
-        self.assertEqual(p.first_name, "Stary")
-        self.assertEqual(QueueEntry.objects.filter(patient=p).count(), 1)
+        self.assertEqual(Patient.objects.count(), 2)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 0)
 
     def test_import_anonymized_patient_creates_new(self) -> None:
         old = Patient.objects.create(
@@ -878,6 +1185,39 @@ class PatientXlsxImportTests(TestCase):
             self.assertEqual(batch.status, ImportStatus.FAILED)
         finally:
             path.unlink(missing_ok=True)
+
+    def test_import_rejects_placeholder_or_empty_patient_names(self) -> None:
+        from apps.core.domain_messages import domain_message
+
+        missing_name_msg = domain_message("other.domain.import_missing_patient_name")
+        cases = (
+            (
+                ("—", "Nowak", "01.01.1990", "+48 777 888 907", "dash@example.com"),
+                XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                missing_name_msg,
+            ),
+            (
+                ("", "Pusty", "02.02.1991", "+48 777 888 908", "empty@example.com"),
+                XlsxImportErrorCode.MISSING_REQUIRED_FIELD,
+                None,
+            ),
+            (
+                ("Jan", "-", "03.03.1992", "+48 777 888 909", "hyphen@example.com"),
+                XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                missing_name_msg,
+            ),
+        )
+        for row, expected_code, expected_message in cases:
+            with self.subTest(row=row):
+                batch = self._run_import([row])
+                self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+                self.assertEqual(batch.inserted_rows, 0)
+                self.assertEqual(batch.error_rows, 1)
+                err = PatientImportError.objects.get(batch=batch)
+                self.assertEqual(err.error_code, expected_code)
+                if expected_message is not None:
+                    self.assertEqual(err.error_message, expected_message)
+                self.assertEqual(Patient.objects.count(), 0)
 
     def test_import_stale_anonymized_same_phone_errors(self) -> None:
         p = Patient.objects.create(

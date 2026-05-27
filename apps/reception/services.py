@@ -317,6 +317,29 @@ def create_or_update_patient_manual(
     # The actor id is part of the service signature for audit extension in next steps.
     _ = created_or_updated_by_user_id
 
+    from apps.reception.patient_identity import (
+        assert_patient_identity_available,
+        assert_phone_not_blocked_by_stale_anonymized,
+        normalize_patient_name_for_storage,
+        normalize_patient_phone_for_storage,
+    )
+
+    first_name = normalize_patient_name_for_storage(first_name)
+    last_name = normalize_patient_name_for_storage(last_name)
+    phone = normalize_patient_phone_for_storage(phone)
+
+    assert_phone_not_blocked_by_stale_anonymized(
+        phone=phone,
+        exclude_patient_id=patient_id,
+    )
+    assert_patient_identity_available(
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        date_of_birth=date_of_birth,
+        exclude_patient_id=patient_id,
+    )
+
     patient = (
         Patient.objects.select_for_update().filter(id=patient_id).first()
         if patient_id

@@ -29,13 +29,18 @@ from apps.reception.models import (
     ImportSourceSystem,
     ImportStatus,
     ImportType,
-    Patient,
     PatientImportBatch,
     PatientImportError,
     QueueEntry,
     QueueSource,
 )
-from apps.reception.phone_utils import normalize_phone
+from apps.reception.phone_utils import normalize_phone_for_patient_storage
+from apps.reception.patient_identity import (
+    find_patient_for_import,
+    patient_identity_key,
+    stale_anonymized_patient_blocks_phone,
+    validate_patient_names_for_import,
+)
 from apps.reception.services import (
     create_daily_queue,
     create_or_update_patient_manual,
@@ -66,25 +71,8 @@ class XlsxImportErrorCode:
     PATIENT_ANONYMIZED_NEW_RECORD = "PATIENT_ANONYMIZED_NEW_RECORD"
 
 
-def _patient_is_import_anonymized(patient: Patient) -> bool:
-    if getattr(patient, "anonymized_at", None) is not None:
-        return True
-    return (patient.first_name or "").strip().upper() == "ANONYMIZED"
-
-
-def find_patient_for_import(*, phone: str) -> Patient | None:
-    """
-    Active (non-anonymized) patient for this normalized phone, or None.
-    Anonymized rows are treated as absent so import can create a new patient
-    (typically after the old row received a numeric sentinel phone).
-    """
-    try:
-        patient = Patient.objects.get(phone=phone)
-    except Patient.DoesNotExist:
-        return None
-    if _patient_is_import_anonymized(patient):
-        return None
-    return patient
+# Re-export for tests and callers.
+__all__ = ["find_patient_for_import", "process_patient_xlsx_import_batch"]
 
 
 # --- Header mapping: possible header labels (normalized) -> internal key ---
@@ -231,23 +219,9 @@ def _split_full_name(full: str) -> tuple[str, str]:
 
 
 def _title_case_name(value: str) -> str:
-    """
-    Normalize person name to: first letter uppercase, remaining lowercase.
-    Preserves separators like spaces, apostrophes and hyphens.
-    """
-    value = re.sub(r"\s+", " ", (value or "").strip())
-    if not value:
-        return ""
-    chunks = re.split(r"([\-'\s])", value.lower())
-    normalized_chunks = [
-        (
-            chunk[:1].upper() + chunk[1:]
-            if chunk and not re.fullmatch(r"[\-'\s]", chunk)
-            else chunk
-        )
-        for chunk in chunks
-    ]
-    return "".join(normalized_chunks)
+    from apps.reception.patient_identity import normalize_patient_name_for_storage
+
+    return normalize_patient_name_for_storage(value)
 
 
 def _normalize_site_name(name: str) -> str:
@@ -378,6 +352,11 @@ def _normalize_row(
     last_name = _title_case_name(last_name)
     if not first_name and not last_name:
         return None
+    if not first_name or not last_name:
+        raise XlsxImportFailure(
+            XlsxImportErrorCode.MISSING_REQUIRED_FIELD,
+            f"Row {row_index}: missing first_name or last_name",
+        )
 
     dob_idx = header_indices.get("date_of_birth", -1)
     raw_dob = row[dob_idx] if 0 <= dob_idx < len(row) else None
@@ -396,7 +375,7 @@ def _normalize_row(
         )
 
     phone_raw = _cell("phone")
-    phone = normalize_phone(phone_raw)
+    phone = normalize_phone_for_patient_storage(phone_raw)
     if not phone or len(phone) < 7:
         raise XlsxImportFailure(
             XlsxImportErrorCode.INVALID_PHONE,
@@ -417,8 +396,8 @@ def _normalize_row(
 
     return NormalizedRow(
         row_number=row_index,
-        first_name=first_name or "—",
-        last_name=last_name or "—",
+        first_name=first_name,
+        last_name=last_name,
         date_of_birth=dob,
         phone=phone,
         email=email,
@@ -545,7 +524,7 @@ def process_patient_xlsx_import_batch(
     matched = 0
     skipped_already_present = 0
     errors_count = 0
-    seen_phones: set[str] = set()
+    seen_identity: set[tuple[str, str, str, date]] = set()
     header_indices: dict[str, int] = {}
     daily_queue_id: uuid.UUID | None = None
     queue_date: date | None = None
@@ -628,15 +607,24 @@ def process_patient_xlsx_import_batch(
                 )
                 continue
 
-            if norm.phone in seen_phones:
+            identity_key = patient_identity_key(
+                first_name=norm.first_name,
+                last_name=norm.last_name,
+                phone=norm.phone,
+                date_of_birth=norm.date_of_birth,
+            )
+            if identity_key in seen_identity:
                 errors_count += 1
                 PatientImportError.objects.create(
                     batch=batch,
                     row_number=norm.row_number,
                     error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
                     error_message=domain_message(
-                        "other.domain.import_duplicate_phone_in_file",
+                        "other.domain.import_duplicate_identity_in_file",
+                        first_name=norm.first_name,
+                        last_name=norm.last_name,
                         phone=norm.phone,
+                        date_of_birth=norm.date_of_birth.isoformat(),
                     ),
                     raw_row={
                         "first_name": norm.first_name,
@@ -644,61 +632,62 @@ def process_patient_xlsx_import_batch(
                     },
                 )
                 continue
-            seen_phones.add(norm.phone)
+            seen_identity.add(identity_key)
 
-            existing_active = find_patient_for_import(phone=norm.phone)
+            existing_active = find_patient_for_import(
+                first_name=norm.first_name,
+                last_name=norm.last_name,
+                phone=norm.phone,
+                date_of_birth=norm.date_of_birth,
+            )
             reused_existing = False
             if existing_active is not None:
                 patient = existing_active
                 reused_existing = True
             else:
+                if stale_anonymized_patient_blocks_phone(phone=norm.phone):
+                    errors_count += 1
+                    PatientImportError.objects.create(
+                        batch=batch,
+                        row_number=norm.row_number,
+                        error_code=XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD,
+                        error_message=domain_message(
+                            "other.domain.import_patient_anonymized_same_phone",
+                        ),
+                        raw_row={
+                            "first_name": norm.first_name,
+                            "last_name": norm.last_name,
+                        },
+                    )
+                    continue
                 try:
-                    same_phone = Patient.objects.get(phone=norm.phone)
-                except Patient.DoesNotExist:
-                    same_phone = None
-                if same_phone is not None:
-                    if _patient_is_import_anonymized(same_phone):
-                        errors_count += 1
-                        PatientImportError.objects.create(
-                            batch=batch,
-                            row_number=norm.row_number,
-                            error_code=XlsxImportErrorCode.PATIENT_ANONYMIZED_NEW_RECORD,
-                            error_message=domain_message(
-                                "other.domain.import_patient_anonymized_same_phone",
-                            ),
-                            raw_row={
-                                "first_name": norm.first_name,
-                                "last_name": norm.last_name,
-                            },
-                        )
-                        continue
-                    patient = same_phone
-                    reused_existing = True
-                else:
-                    try:
-                        patient = create_or_update_patient_manual(
-                            first_name=norm.first_name,
-                            last_name=norm.last_name,
-                            date_of_birth=norm.date_of_birth,
-                            phone=norm.phone,
-                            email=norm.email,
-                            created_or_updated_by_user_id=created_by_user_id,
-                            doctolib_patient_id=None,
-                            patient_id=None,
-                        )
-                    except Exception as e:
-                        errors_count += 1
-                        PatientImportError.objects.create(
-                            batch=batch,
-                            row_number=norm.row_number,
-                            error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
-                            error_message=str(e),
-                            raw_row={
-                                "first_name": norm.first_name,
-                                "last_name": norm.last_name,
-                            },
-                        )
-                        continue
+                    validate_patient_names_for_import(
+                        first_name=norm.first_name,
+                        last_name=norm.last_name,
+                    )
+                    patient = create_or_update_patient_manual(
+                        first_name=norm.first_name,
+                        last_name=norm.last_name,
+                        date_of_birth=norm.date_of_birth,
+                        phone=norm.phone,
+                        email=norm.email,
+                        created_or_updated_by_user_id=created_by_user_id,
+                        doctolib_patient_id=None,
+                        patient_id=None,
+                    )
+                except Exception as e:
+                    errors_count += 1
+                    PatientImportError.objects.create(
+                        batch=batch,
+                        row_number=norm.row_number,
+                        error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
+                        error_message=str(e),
+                        raw_row={
+                            "first_name": norm.first_name,
+                            "last_name": norm.last_name,
+                        },
+                    )
+                    continue
 
             if daily_queue_id is None:
                 queue = DailyQueue.objects.filter(

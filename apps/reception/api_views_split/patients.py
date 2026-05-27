@@ -31,7 +31,33 @@ from apps.reception.api_schemas import (
     UpdatePatientRequest,
 )
 from apps.reception.models import Patient
+from apps.reception.patient_identity import build_shared_phone_warnings
 from apps.reception.services import create_or_update_patient_manual
+
+
+def _patient_json_response(
+    patient: Patient,
+    *,
+    status: int = 200,
+    warnings: list | None = None,
+) -> JsonResponse:
+    body: dict = {"patient": _serialize_patient(patient)}
+    if warnings:
+        body["warnings"] = warnings
+    return JsonResponse(body, status=status)
+
+
+def _patient_domain_error_response(exc: DomainError) -> JsonResponse:
+    status = (
+        409
+        if exc.api_message_key
+        in {
+            "other.domain.patient_identity_conflict",
+            "other.domain.import_patient_anonymized_same_phone",
+        }
+        else 400
+    )
+    return json_domain_error(exc, status=status)
 
 
 def _serialize_patient(patient: Patient) -> dict:
@@ -167,8 +193,12 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         except IntegrityError:
             return json_error("other.api.patient_uniqueness_conflict", status=409)
         except DomainError as exc:
-            return json_domain_error(exc, status=400)
-        return JsonResponse({"patient": _serialize_patient(patient)}, status=201)
+            return _patient_domain_error_response(exc)
+        warnings = build_shared_phone_warnings(
+            phone=patient.phone,
+            exclude_patient_id=patient.id,
+        )
+        return _patient_json_response(patient, status=201, warnings=warnings or None)
 
     return json_error("other.api.method_not_allowed", status=405)
 
@@ -273,9 +303,17 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     except IntegrityError:
         return json_error("other.api.patient_uniqueness_conflict", status=409)
     except DomainError as exc:
-        return json_domain_error(exc, status=400)
+        return _patient_domain_error_response(exc)
 
-    return JsonResponse(_serialize_patient(patient))
+    patient_payload: dict = _serialize_patient(patient)
+    if "phone" in fields_set and patient_payload.get("phone"):
+        warnings = build_shared_phone_warnings(
+            phone=patient.phone,
+            exclude_patient_id=patient.id,
+        )
+        if warnings:
+            patient_payload["warnings"] = warnings
+    return JsonResponse(patient_payload)
 
 
 @require_auth
