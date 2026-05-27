@@ -784,6 +784,36 @@
     "en": "Medical document",
     "pl": "Dokument medyczny"
   },
+  "administration.field_has_pending_revision": {
+    "de": "Ausstehende Revision",
+    "en": "Has pending revision",
+    "pl": "Oczekuje rewizji"
+  },
+  "administration.field_published_version_no": {
+    "de": "Veröffentlichte Versionsnummer",
+    "en": "Published version no",
+    "pl": "Numer opublikowanej wersji"
+  },
+  "administration.field_hidrive_remote_path": {
+    "de": "HiDrive-Pfad",
+    "en": "HiDrive path",
+    "pl": "Ścieżka HiDrive"
+  },
+  "administration.field_original_filename": {
+    "de": "Ursprünglicher Dateiname",
+    "en": "Original filename",
+    "pl": "Oryginalna nazwa pliku"
+  },
+  "administration.field_incoming_pdf_name_key_fl": {
+    "de": "PDF-Eingangsname (Vorname_Nachname)",
+    "en": "Incoming PDF name key (first_last)",
+    "pl": "Klucz nazwy PDF (imię_nazwisko)"
+  },
+  "administration.field_incoming_pdf_name_key_lf": {
+    "de": "PDF-Eingangsname (Nachname_Vorname)",
+    "en": "Incoming PDF name key (last_first)",
+    "pl": "Klucz nazwy PDF (nazwisko_imię)"
+  },
   "administration.field_intake_document_version": {
     "de": "Intake-Dokumentversion",
     "en": "Intake document version",

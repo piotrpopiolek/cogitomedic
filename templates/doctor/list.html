@@ -108,7 +108,7 @@
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
               {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
               {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
-              {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status }}</span>
+              {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status_display|default:item.status }}</span>
             {% if item.has_pending_revision %}
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100">{{ ui.list_status_in_revision }}</span>
             {% endif %}
@@ -117,13 +117,13 @@
         <td class="px-4 py-3">{% if item.pdf_generation_status %}<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase
             {% if item.pdf_generation_status == 'COMPLETED' %}bg-primary-600 text-white dark:bg-primary-500
             {% elif item.pdf_generation_status == 'FAILED' %}bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300
-            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
+            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.pdf_generation_status_display|default:item.pdf_generation_status }}</span>{% else %}–{% endif %}</td>
         <td class="px-4 py-3">
           {% if item.hidrive_status %}
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase
             {% if item.hidrive_status == 'COMPLETED' %}bg-primary-600 text-white dark:bg-primary-500
             {% elif item.hidrive_status == 'FAILED' %}bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300
-            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.hidrive_status }}</span>
+            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.hidrive_status_display|default:item.hidrive_status }}</span>
           {% else %}–{% endif %}
         </td>
         <td class="px-4 py-3">
@@ -131,7 +131,7 @@
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase
             {% if item.sms_status == 'COMPLETED' %}bg-primary-600 text-white dark:bg-primary-500
             {% elif item.sms_status == 'FAILED' %}bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300
-            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.sms_status }}</span>
+            {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.sms_status_display|default:item.sms_status }}</span>
           {% else %}–{% endif %}
         </td>
         <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.published_by }}</td>

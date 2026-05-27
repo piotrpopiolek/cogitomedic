@@ -99,7 +99,7 @@ Wymagane są m.in.:
 - telefon (format numeryczny zgodny z walidacją systemu),
 - e-mail.
 
-System pilnuje, aby jeden numer telefonu nie był przypisany do dwóch osób. Pacjent może być powiązany z wieloma placówkami.
+**Ten sam numer telefonu** może być przypisany do **kilku osób** (np. ojciec i syn korzystający z jednego telefonu domowego). System wymaga unikalnej **czwórki**: imię, nazwisko, telefon, data urodzenia — duplikat tej samej czwórki zwraca błąd. Przy zapisie nowego pacjenta z numerem już używanym przez kogoś innego recepcja może zobaczyć **ostrzeżenie** (bez blokady zapisu). Pacjent może być powiązany z wieloma placówkami.
 
 #### Zmiana danych osobowych pacjenta
 

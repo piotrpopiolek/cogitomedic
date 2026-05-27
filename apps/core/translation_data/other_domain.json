@@ -194,6 +194,21 @@
     "en": "Duplicate phone number {phone!r} in this file.",
     "pl": "Duplikat numeru telefonu {phone!r} w tym pliku."
   },
+  "other.domain.import_duplicate_identity_in_file": {
+    "de": "Doppelter Patient in dieser Datei: {first_name} {last_name}, Telefon {phone}, Geburtsdatum {date_of_birth}.",
+    "en": "Duplicate patient in this file: {first_name} {last_name}, phone {phone}, date of birth {date_of_birth}.",
+    "pl": "Duplikat pacjenta w pliku: {first_name} {last_name}, telefon {phone}, data urodzenia {date_of_birth}."
+  },
+  "other.domain.import_missing_patient_name": {
+    "de": "Vor- und Nachname sind für einen neuen Patienten erforderlich.",
+    "en": "First and last name are required to create a new patient.",
+    "pl": "Imię i nazwisko są wymagane, aby utworzyć nowego pacjenta."
+  },
+  "other.domain.patient_identity_conflict": {
+    "de": "Ein Patient mit derselben Identität (Vorname, Nachname, Telefon, Geburtsdatum) existiert bereits.",
+    "en": "A patient with the same identity (first name, last name, phone, date of birth) already exists.",
+    "pl": "Pacjent o tej samej tożsamości (imię, nazwisko, telefon, data urodzenia) już istnieje."
+  },
   "other.domain.import_patient_anonymized_same_phone": {
     "de": "Der Patient mit dieser Telefonnummer ist anonymisiert; ein weiterer Datensatz mit derselben Nummer ist nicht möglich.",
     "en": "The patient with this phone number is anonymized; another record cannot use the same phone number.",
@@ -448,5 +463,10 @@
     "de": "Die ausgewählte externe PDF-Datei ist beschädigt oder leer; PDF-Generierung abgebrochen.",
     "en": "The selected external PDF is corrupt or empty; PDF generation cannot proceed.",
     "pl": "Wybrany zewnętrzny plik PDF jest uszkodzony lub pusty — generowanie PDF nie może być kontynuowane."
+  },
+  "other.domain.error": {
+    "de": "Ein Fehler ist aufgetreten.",
+    "en": "An error occurred.",
+    "pl": "Wystąpił błąd."
   }
 }

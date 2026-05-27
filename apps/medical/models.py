@@ -755,11 +755,17 @@ class ExternalPdfAttachment(models.Model):
     )
     hidrive_remote_path = models.CharField(
         max_length=500,
-        verbose_name="HiDrive path",
+        verbose_name=db_gettext_lazy(
+            "administration.field_hidrive_remote_path",
+            "HiDrive path",
+        ),
     )
     original_filename = models.CharField(
         max_length=255,
-        verbose_name="Original filename",
+        verbose_name=db_gettext_lazy(
+            "administration.field_original_filename",
+            "Original filename",
+        ),
     )
     status = models.CharField(
         max_length=20,
