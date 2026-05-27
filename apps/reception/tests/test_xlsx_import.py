@@ -332,6 +332,15 @@ class NormalizeRowTests(SimpleTestCase):
         result = _normalize_row(2, row, self.HEADERS)
         self.assertIsNone(result)
 
+    def test_partial_name_raises_missing_required(self):
+        row = ["Jan", "", "15.05.1990", "+48500100200", "a@b.com", ""]
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            _normalize_row(2, row, self.HEADERS)
+        self.assertEqual(
+            ctx.exception.error_code,
+            XlsxImportErrorCode.MISSING_REQUIRED_FIELD,
+        )
+
     def test_full_name_fallback(self):
         headers = {
             "full_name": 0,
