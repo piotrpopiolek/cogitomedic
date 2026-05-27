@@ -23,6 +23,9 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
+from apps.reception.patient_identity import (
+    normalize_patient_name_for_storage as _stored_patient_name,
+)
 from apps.users.models import StaffUser
 
 _REASON = "Paper intake authorization reason long enough for validation in tests."
@@ -104,7 +107,10 @@ class PaperIntakeAuthorizationAdminTests(TestCase):
         self.auth.save(update_fields=["reason"])
         qs = self.model_admin.get_queryset(_request_with_messages(self.admin))
         obj = qs.get(pk=self.auth.pk)
-        self.assertIn("AdminPatient", self.model_admin._patient_repr(obj))
+        self.assertIn(
+            _stored_patient_name("AdminPatient"),
+            self.model_admin._patient_repr(obj),
+        )
         self.assertTrue(self.model_admin._short_reason(obj).endswith("…"))
         self.assertFalse(self.model_admin._has_document(obj))
 

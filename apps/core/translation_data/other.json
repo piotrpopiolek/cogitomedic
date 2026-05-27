@@ -109,6 +109,21 @@
     "en": "Invalid or expired code. Please try again.",
     "pl": "Nieprawidłowy lub wygasły kod. Spróbuj ponownie."
   },
+  "other.ergebnisse.login_last_name_label": {
+    "de": "Nachname",
+    "en": "Last name",
+    "pl": "Nazwisko"
+  },
+  "other.ergebnisse.login_ambiguous_intro": {
+    "de": "Mehrere Personen nutzen diese Telefonnummer. Bitte geben Sie zusätzlich Ihren Nachnamen ein.",
+    "en": "Several people share this phone number. Please also enter your last name.",
+    "pl": "Kilka osób korzysta z tego numeru. Podaj dodatkowo nazwisko."
+  },
+  "other.ergebnisse.error_ambiguous_identity": {
+    "de": "Nachname konnte nicht zugeordnet werden. Bitte prüfen Sie die Eingabe.",
+    "en": "Could not match your last name. Please check your entry.",
+    "pl": "Nie udało się dopasować nazwiska. Sprawdź wpis."
+  },
   "other.ergebnisse.lang_de": {
     "de": "Deutsch",
     "en": "Deutsch",

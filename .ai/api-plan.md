@@ -228,7 +228,8 @@
     }
     ```
   - Success: `201 CREATED`.
-  - Errors: `400 VALIDATION_ERROR` (e.g. invalid phone format: must match `^[0-9+() -]{7,20}$`), `409 UNIQUE_CONSTRAINT`.
+  - Errors: `400 VALIDATION_ERROR` (e.g. invalid phone format: must match `^[0-9+() -]{7,20}$`), `409` on duplicate `(first_name, last_name, phone, date_of_birth)` (`patient_identity_conflict` / `patient_uniqueness_conflict`).
+  - Success `201` may include `warnings[]` with `code: shared_phone` when other active patients already use the same normalized phone (informational, save is not blocked).
 
 - **GET** `/patients/{id}`
 - **PATCH** `/patients/{id}`
@@ -1180,8 +1181,8 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 
 - Patient results portal (US-018, PRD 3.4a):
   - SMS is strictly logistic; patient visits e.g. wyniki.cogitomedica.pl.
-  - Login: phone + date_of_birth (verified at reception).
-  - OTP: 6-digit code, 15 min validity; sent asynchronously when phone+DOB match.
+  - Login: phone + date_of_birth (verified at reception). If multiple active patients share phone+DOB, client must also send `last_name` (`needs_last_name: true` on request-otp until disambiguated).
+  - OTP: 6-digit code, 15 min validity; sent asynchronously when phone+DOB (+ last name when required) resolve to one patient.
   - After valid OTP: serve PDF via HTTPS. **Audit (`audit_event`):** typed events such as `PATIENT_RESULTS_OTP_REQUEST`, `PATIENT_RESULTS_OTP_VERIFY`, `PATIENT_RESULTS_DOCUMENTS_LISTED`, `PATIENT_RESULTS_PDF_DOWNLOAD`, `PATIENT_RESULTS_PDF_DOWNLOAD_DENIED` with `event_time`, `patient_id` where applicable, and `metadata` including `client_ip` and outcomes (e.g. OTP request outcome, denied-download reason).
   - Doctor can revoke publication; patient will not see revoked file after OTP entry.
 

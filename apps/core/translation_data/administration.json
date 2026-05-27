@@ -214,6 +214,16 @@
     "en": "Medical document versions",
     "pl": "Wersje dokumentów medycznych"
   },
+  "administration.model_externalpdfattachment": {
+    "de": "Externer PDF-Anhang",
+    "en": "External PDF attachment",
+    "pl": "Zewnętrzny załącznik PDF"
+  },
+  "administration.model_externalpdfattachment_plural": {
+    "de": "Externe PDF-Anhänge",
+    "en": "External PDF attachments",
+    "pl": "Zewnętrzne załączniki PDF"
+  },
   "administration.model_paperintakeauthorization": {
     "de": "Papier-Intake-Autorisierung",
     "en": "Paper intake authorization",
@@ -498,6 +508,11 @@
     "de": "Wählen Sie ein gültiges Veröffentlichungslocale.",
     "en": "Choose a valid publish locale.",
     "pl": "Wybierz prawidłowe locale publikacji."
+  },
+  "administration.external_upload_entry_publish_request_id_invalid": {
+    "de": "Seite aktualisieren und erneut veröffentlichen (ungültige Veröffentlichungsanfrage-ID).",
+    "en": "Refresh the page and publish again (invalid publish request id).",
+    "pl": "Odśwież stronę i opublikuj ponownie (nieprawidłowy identyfikator żądania publikacji)."
   },
   "administration.external_upload_entry_publish_resend_sms": {
     "de": "SMS erneut an den Patienten senden",

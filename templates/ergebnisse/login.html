@@ -2,14 +2,18 @@
 {% block title %}{{ ergebnisse_ui.login_title|default:"Ergebnisse – Anmeldung" }}{% endblock %}
 {% block content %}
   <h1>{{ ergebnisse_ui.login_title|default:"Ergebnisse – Anmeldung" }}</h1>
-  <p>{{ ergebnisse_ui.login_intro|default:"Bitte geben Sie Ihre Telefonnummer und Ihr Geburtsdatum ein." }}</p>
+  <p>{% if needs_last_name %}{{ ergebnisse_ui.login_ambiguous_intro|default:"Mehrere Personen nutzen diese Telefonnummer. Bitte geben Sie zusätzlich Ihren Nachnamen ein." }}{% else %}{{ ergebnisse_ui.login_intro|default:"Bitte geben Sie Ihre Telefonnummer und Ihr Geburtsdatum ein." }}{% endif %}</p>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   <form method="post" action="" id="ergebnisse-login-form">
     {% csrf_token %}
     <label for="phone">{{ ergebnisse_ui.phone_label|default:"Telefonnummer" }}</label>
-    <input id="phone" name="phone" type="tel" required placeholder="176 1234567" />
+    <input id="phone" name="phone" type="tel" required placeholder="176 1234567" value="{{ phone_value|default:'' }}" />
     <label for="date_of_birth">{{ ergebnisse_ui.dob_label|default:"Geburtsdatum" }}</label>
-    <input id="date_of_birth" name="date_of_birth" type="date" required max="{{ today_iso }}" />
+    <input id="date_of_birth" name="date_of_birth" type="date" required max="{{ today_iso }}" value="{{ dob_value|default:'' }}" />
+    {% if needs_last_name %}
+    <label for="last_name">{{ ergebnisse_ui.login_last_name_label|default:"Nachname" }}</label>
+    <input id="last_name" name="last_name" type="text" required autocomplete="family-name" />
+    {% endif %}
     {% if turnstile_site_key %}
     <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
     {% endif %}
