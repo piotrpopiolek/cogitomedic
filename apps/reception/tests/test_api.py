@@ -1182,6 +1182,63 @@ class PatientsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 409)
 
+    def test_patch_patient_returns_shared_phone_warnings(self) -> None:
+        shared = "+491709998811"
+        existing = Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalski",
+            date_of_birth=date(1975, 6, 1),
+            phone=shared,
+            email="anna.shared.patch@example.com",
+        )
+        existing.clinic_sites.add(self.clinic)
+        patient = Patient.objects.create(
+            first_name="Jan",
+            last_name="Nowak",
+            date_of_birth=date(2000, 1, 1),
+            phone="+49999001122",
+            email="jan.patch@example.com",
+        )
+        patient.clinic_sites.add(self.clinic)
+
+        response = self.client.patch(
+            f"/api/v1/patients/{patient.id}",
+            data=json.dumps({"phone": shared}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["phone"], "491709998811")
+        self.assertEqual(len(payload["warnings"]), 1)
+        self.assertEqual(payload["warnings"][0]["code"], "shared_phone")
+
+    def test_patch_patient_returns_409_for_stale_anonymized_phone(self) -> None:
+        stale = Patient.objects.create(
+            first_name="ANONYMIZED",
+            last_name="ANONYMIZED",
+            date_of_birth=date(1970, 1, 1),
+            phone="48777888999",
+            email="stale.patch@example.com",
+        )
+        Patient.objects.filter(pk=stale.pk).update(anonymized_at=timezone.now())
+        patient = Patient.objects.create(
+            first_name="Jan",
+            last_name="Patch",
+            date_of_birth=date(1991, 2, 2),
+            phone="+48111222344",
+            email="jan.stale.patch@example.com",
+        )
+        patient.clinic_sites.add(self.clinic)
+
+        response = self.client.patch(
+            f"/api/v1/patients/{patient.id}",
+            data=json.dumps({"phone": "+48 777 888 999"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_post_patient_returns_409_for_duplicate_patient_identity(self) -> None:
         Patient.objects.create(
             first_name="Anna",

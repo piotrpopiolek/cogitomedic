@@ -1843,3 +1843,13 @@ class DoctorListSortUxTests(TestCase):
         self.assertEqual(second.status_code, 200)
         html = second.content.decode()
         self.assertIn("arrow_downward", html)
+
+
+class DoctorListStatusDisplayTests(TestCase):
+    def test_unknown_status_code_returns_raw_value(self) -> None:
+        from cogitomedica.doctor_views import _doctor_list_status_display
+
+        self.assertEqual(
+            _doctor_list_status_display("CUSTOM_STAGE", {}, {}),
+            "CUSTOM_STAGE",
+        )
