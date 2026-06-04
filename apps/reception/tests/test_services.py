@@ -1095,6 +1095,26 @@ class PatientXlsxImportTests(TestCase):
             error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
         )
 
+    def test_import_same_phone_three_different_identities_in_one_file(self) -> None:
+        """Doctolib-style rows: shared family phone, different names/DOBs — no DUPLICATE_IN_FILE."""
+        batch = self._run_import(
+            [
+                ("A", "B", "4.07.1996 (30 Jahre)", "664412709", "email@gmail.com"),
+                ("B", "B", "5.07.1996 (30 Jahre)", "664412709", "email@gmail.com"),
+                ("C", "B", "6.07.1996 (30 Jahre)", "664412709", "email@gmail.com"),
+            ],
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(batch.error_rows, 0)
+        self.assertEqual(batch.inserted_rows, 3)
+        self.assertEqual(Patient.objects.count(), 3)
+        self.assertFalse(
+            PatientImportError.objects.filter(
+                batch=batch,
+                error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
+            ).exists()
+        )
+
     def test_reimport_same_daily_queue_skips_existing_queue_entry(self) -> None:
         row = (
             "Erika",

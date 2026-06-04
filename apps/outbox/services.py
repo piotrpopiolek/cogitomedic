@@ -226,8 +226,19 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 .exists()
             )
             if other_version_sent:
-                version.sms_sent = False
-                version.save(update_fields=["sms_sent"])
+                prior = (
+                    MedicalDocumentVersion.objects.filter(
+                        medical_document_id=version.medical_document_id,
+                        sms_sent=True,
+                        sms_sent_at__isnull=False,
+                    )
+                    .exclude(id=version.id)
+                    .order_by("-sms_sent_at")
+                    .first()
+                )
+                version.sms_sent = True
+                version.sms_sent_at = prior.sms_sent_at if prior else now
+                version.save(update_fields=["sms_sent", "sms_sent_at"])
                 return
 
         patient = version.medical_document.queue_entry.patient
