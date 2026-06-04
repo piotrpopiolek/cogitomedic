@@ -6,6 +6,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
 try:
@@ -268,6 +269,14 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
                 widget=UnfoldAdminSelectWidget,
             )
         return form
+
+    def save_model(self, request, obj, form, change) -> None:
+        now = timezone.now()
+        if obj.hidrive_sent and obj.hidrive_sent_at is None:
+            obj.hidrive_sent_at = now
+        if obj.sms_sent and obj.sms_sent_at is None:
+            obj.sms_sent_at = now
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(PaperIntakeAuthorization)
