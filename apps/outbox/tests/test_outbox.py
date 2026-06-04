@@ -158,6 +158,45 @@ class OutboxProcessingTests(TestCase):
         self.assertIn(b"cogitomedica_outbox_processing_duration_seconds_sum", payload)
         self.assertIn(b"cogitomedica_outbox_events_total", payload)
 
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    @patch("apps.outbox.services.get_sms_adapter")
+    def test_republished_version_sms_sent_when_prior_version_notified(
+        self, mock_get_sms: MagicMock
+    ) -> None:
+        mock_sms = MagicMock()
+        mock_get_sms.return_value = mock_sms
+
+        for _ in range(3):
+            process_outbox_events()
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.sms_sent)
+        v1_sms_at = self.version.sms_sent_at
+        self.assertEqual(mock_sms.send_sms.call_count, 1)
+
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "rev": 2},
+            intent="amend",
+        )
+        v2 = publish_document_version(
+            medical_document_id=self.medical_document.id,
+            publish_request_id=uuid4(),
+            published_by_user_id=self.doctor_user.id,
+            publish_locale="de-DE",
+        )
+
+        for _ in range(12):
+            result = process_outbox_events()
+            if result.processed == 0:
+                break
+
+        v2.refresh_from_db()
+        self.assertTrue(v2.hidrive_sent)
+        self.assertTrue(v2.sms_sent)
+        self.assertEqual(v2.sms_sent_at, v1_sms_at)
+        self.assertEqual(mock_sms.send_sms.call_count, 1)
+
     def test_execute_event_internal_sets_span_attributes_when_recording(self) -> None:
         event = OutboxEvent.objects.get(
             medical_document_version=self.version,
