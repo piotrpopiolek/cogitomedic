@@ -37,3 +37,16 @@ Rozwiąż duplikaty czwórki (merge w adminie / korekta literówek) **przed** mi
 ## Rollback
 
 Przywrócenie `patient_phone_unique` wymaga analizy danych (możliwe wiele rekordów z tym samym `phone`). Nie cofaj migracji bez planu merge.
+
+## Testy automatyczne (dev / CI)
+
+Scenariusze rodzin (wspólny numer ×3, osobne numery ×3, kolizja phone+DOB ×2, outbox smoke) są w:
+
+- `apps/patient_results/tests/family_results_fixtures.py`
+- `apps/patient_results/tests/test_family_results_delivery.py`
+
+Uruchomienie (Docker, baza testowa — bez wpływu na prod):
+
+```bash
+docker compose run --rm web sh -c "pip install -q -r requirements-dev.txt && python -m pytest apps/patient_results/tests/test_family_results_delivery.py -v"
+```
