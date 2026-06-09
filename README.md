@@ -299,6 +299,8 @@ All commands are run from the project root with the virtual environment activate
 | `python manage.py makemigrations [app]` | Create migrations for model changes |
 | `make pytest` | **Canonical test suite:** Docker `web` + `requirements-dev` + full `pytest` (same as CI gate after migrations/translations) |
 | `make test-ci` | Migrations, translation seed + completeness check, then same `pytest` as `make pytest` |
+| `make mutmut-name-normalize` | **Pilot mutation testing:** `mutmut run` on `apps/medical/name_normalize.py` + `test_name_normalize.py` (Docker/Linux; see `pyproject.toml` `[tool.mutmut]`) |
+| `make mutmut-name-normalize-results` | Summary after `mutmut run` (killed / survived counts) |
 | `python manage.py test` | Legacy Django runner (subset only; prefer `make pytest`) |
 | `python manage.py collectstatic` | Gather static files for deployment |
 | `python manage.py createsuperuser` | Create an admin/superuser account |

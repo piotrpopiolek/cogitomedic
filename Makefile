@@ -1,4 +1,4 @@
-.PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci pytest
+.PHONY: up down logs ps build rebuild migrate superuser shell check-translations test-ci pytest mutmut-name-normalize mutmut-name-normalize-results
 
 # Pełna weryfikacja testów (pytest w Dockerze) z coverage gate z pyproject.toml.
 DOCKER_PYTEST = pip install --no-cache-dir -q -r requirements-dev.txt && python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
@@ -41,3 +41,10 @@ test-ci:
 
 pytest:
 	docker compose run --rm web sh -c "$(DOCKER_PYTEST)"
+
+# Mutation testing pilot: pure logic module, SimpleTestCase (no DB). Linux/Docker only (fork).
+mutmut-name-normalize:
+	docker compose run --rm web sh -c "pip install --no-cache-dir -q -r requirements-dev.txt && rm -rf mutants && mutmut run 'apps.medical.name_normalize*'"
+
+mutmut-name-normalize-results:
+	docker compose run --rm web sh -c "pip install --no-cache-dir -q -r requirements-dev.txt && mutmut results"
