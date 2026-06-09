@@ -45,8 +45,20 @@ def write_demo_doctolib_xlsx(
     wb.close()
 
 
+def _assert_demo_seed_dev_only() -> None:
+    from django.conf import settings
+
+    environment = (getattr(settings, "ENVIRONMENT", "dev") or "dev").strip().lower()
+    if environment != "dev":
+        raise RuntimeError(
+            f"Demo seed must only run in dev (ENVIRONMENT={environment!r})"
+        )
+
+
 def seed_import_troubleshooting_demo(ctx: dict) -> None:
     """One patient in today's queue; second exists in DB but was not imported today."""
+    _assert_demo_seed_dev_only()
+
     from django.utils import timezone
 
     from apps.core.api_utils import assign_group_to_test_user

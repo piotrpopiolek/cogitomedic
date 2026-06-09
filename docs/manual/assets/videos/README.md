@@ -15,7 +15,7 @@ python manage.py runserver 127.0.0.1:8000
 python scripts/record_manual_videos.py --base-url http://127.0.0.1:8000 --role all
 ```
 
-Pliki trafiają do tego katalogu, np. `reception/reception.webm`, `tablet/tablet.webm`. Rozszerzenie `.webm` jest w `.gitignore` (duże pliki).
+Pliki trafiają do tego katalogu, np. `reception/reception.webm`, `tablet/tablet.webm`. Rozszerzenia `.webm` i `.mp4` są w `.gitignore` (duże binaria — generuj lokalnie, nie commituj).
 
 ### Parametry przydatne w pracy
 
@@ -35,12 +35,12 @@ docker compose --profile manual-videos run --rm manual-videos
 
 Wyniki są na volume `./docs/manual/assets/videos` (host).
 
-## Konwersja do MP4 (opcjonalnie)
+## Konwersja do MP4 (opcjonalnie, lokalnie)
 
-Jeśli masz ffmpeg:
+MP4 **nie trafia do gita** — tylko WebM z Playwright. Jeśli potrzebujesz MP4 (np. do LMS), wygeneruj ffmpeg z katalogu `docs/manual/assets/videos/`:
 
 ```bash
-ffmpeg -i reception/reception.webm -c:v libx264 -crf 23 -c:a aac reception.mp4
+ffmpeg -i reception/reception.webm -c:v libx264 -crf 23 -c:a aac reception/reception.mp4
 ```
 
 ## Treść vs dokumentacja
