@@ -35,6 +35,7 @@ _TEST_SETTINGS = dict(
     CAPTCHA_VERIFY_SKIP=True,
     PATIENT_RESULTS_OTP_PEPPER=TEST_PEPPER_FAMILY,
     SMSAPI_USE_MOCK="1",
+    RATELIMIT_ENABLE=False,
 )
 
 LOGIN_URL = "/"
@@ -539,7 +540,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "needs_last_name": True})
         ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
-        self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertIsNone(ev.patient_id)
         mock_get_adapter.return_value.send_sms.assert_not_called()
@@ -576,7 +577,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         self.assertEqual(verify.status_code, 400)
         self.assertNotIn("sessionid", self.client.cookies)
         ev = _latest_audit("PATIENT_RESULTS_OTP_VERIFY")
-        self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "invalid")
         self.assertIsNone(ev.patient_id)
 
@@ -612,7 +613,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         )
         self.assertEqual(verify.status_code, 200)
         ev = _latest_audit("PATIENT_RESULTS_OTP_VERIFY")
-        self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "success")
         self.assertEqual(ev.patient_id, gina.patient.id)
 
