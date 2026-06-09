@@ -52,6 +52,25 @@ ffmpeg -i reception/reception.webm -c:v libx264 -crf 23 -c:a aac reception.mp4
 | `doctor.webm` | [03-doktor.md](../../03-doktor.md) |
 | `admin.webm` | [04-administrator.md](../../04-administrator.md) |
 | `patient.webm` | [05-pacjent-wyniki.md](../../05-pacjent-wyniki.md) |
+| `reception/import-troubleshooting.webm` | Zgłoszenie klienta: po imporcie XLSX widać tylko jednego pacjenta — weryfikacja i ręczne dopisanie do kolejki. Narracja: [import-troubleshooting-narration.pl.md](reception/import-troubleshooting-narration.pl.md) |
+
+### Film: brakujący pacjent po imporcie
+
+```bash
+python manage.py runserver 127.0.0.1:8000
+# drugi terminal:
+python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000
+```
+
+Opcjonalnie MP4: `ffmpeg -i reception/import-troubleshooting.webm -c:v libx264 -crf 23 -pix_fmt yuv420p reception/import-troubleshooting.mp4`
+
+Na Windows (seed w Dockerze, nagranie na hoście):
+
+```bash
+docker compose exec web python scripts/manual_demo/seed_import_troubleshooting.py
+set SCREENSHOT_SKIP_DJANGO=1
+python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000
+```
 
 **Pacjent:** scenariusz używa wstępnie utworzonej sesji (cookie), żeby pokazać ekrany `/otp/` i `/documents/` bez mocka SMS — to nie jest pełny „request OTP z formularza”. Lektor / napisy wyjaśniają krok z kodem SMS.
 
