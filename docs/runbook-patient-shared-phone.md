@@ -9,7 +9,7 @@ Migracje: `reception.0040_restore_patient_identity_unique`, `0041_normalize_pati
 
 ```sql
 SELECT first_name, last_name, phone, date_of_birth, COUNT(*)
-FROM reception_patient
+FROM patient
 WHERE anonymized_at IS NULL
 GROUP BY 1, 2, 3, 4
 HAVING COUNT(*) > 1;
@@ -19,7 +19,7 @@ HAVING COUNT(*) > 1;
 
 ```sql
 SELECT phone, COUNT(*) AS cnt
-FROM reception_patient
+FROM patient
 WHERE anonymized_at IS NULL
 GROUP BY phone
 HAVING COUNT(*) > 1

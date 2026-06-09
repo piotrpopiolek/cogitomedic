@@ -22,9 +22,9 @@ Instrukcja poniżej dotyczy pracy **w panelu administracyjnym przez przeglądark
 
 ## Przed rozpoczęciem
 
-1. Upewnij się, że pracujesz na **właściwym środowisku** (adres placówki / VPN zgodnie z procedurą IT).
-2. Zaloguj się kontem **Recepcja** (lub **Administrator / Manager**) z dostępem do panelu administracyjnego.
-3. Przygotuj **identyfikator rekordu** do wyszukania na liście pacjentów: **nazwisko**, fragment **numeru**, **pełny e-mail**, lub **imię i nazwisko** — pola te są uwzględniane w wyszukiwarce listy.
+1. Zaloguj się kontem **Recepcja** (lub **Administrator / Manager**) z dostępem do panelu administracyjnego.
+2. Przygotuj **identyfikator rekordu** do wyszukania na liście pacjentów: **nazwisko**, fragment **numeru**, **pełny e-mail**, lub **imię i nazwisko** — pola te są uwzględniane w wyszukiwarce listy.
+3. Od wersji **1.5** kilka osób (np. rodzina) może mieć **ten sam numer telefonu**. Przy wspólnym numerze **nie wystarczy** wyszukać wyłącznie po telefonie — doprecyzuj kryterium (**imię + nazwisko**, **e-mail** lub **data urodzenia** na liście), żeby otworzyć **właściwy** rekord.
 
 ---
 
@@ -41,7 +41,7 @@ Instrukcja poniżej dotyczy pracy **w panelu administracyjnym przez przeglądark
 ## Krok 2 — Otwarcie listy pacjentów (Patients)
 
 1. Po zalogowaniu znajdź sekcję aplikacji **Reception**.
-2. Kliknij **Patients** (w polskiej wersji interfejsu może to być np. **Pacjenci**).
+2. Kliknij **Patients**.
 3. Adres listy jest postaci **`/admin/reception/patient/`**.
 
 ![Lista pacjentów — Reception → Patients](/docs/manual/assets/screenshots/reception-patient-01-changelist.png)
@@ -50,7 +50,7 @@ Instrukcja poniżej dotyczy pracy **w panelu administracyjnym przez przeglądark
 
 ## Krok 3 — Wyszukanie właściwego pacjenta
 
-1. U góry listy wpisz kryterium w polu **Search** (Szukaj).
+1. U góry listy wpisz kryterium w polu **Search**.
 2. Zatwierdź (przycisk szukania lub Enter).
 
 Na zrzucie demo wyszukiwany jest **adres e-mail** `anna.demo@example.invalid` — to eliminuje pomyłkę przy częstych nazwiskach.
@@ -94,26 +94,38 @@ Sprawdź pola **bez literówek** — szczególnie dzień i miesiąc urodzenia or
 
 ![Te same pola po wpisaniu nowych wartości (jeszcze przed zapisem)](/docs/manual/assets/screenshots/reception-patient-04-identity-after-edit.png)
 
-### Reguły ważne przy tej kombinacji pól
+### Reguły ważne przy tej kombinacji pól (od wersji 1.5)
 
-- **Telefon:** nie może być już przypisany do innego pacjenta. Jeśli ten sam numer jest zapisany przy dwóch osobach, system nie pozwoli zapisać zmian i trzeba to wyjaśnić z administratorem.
-- **Data urodzenia:** musi się **zgadzać** z logowaniem do [portal wyników](05-pacjent-wyniki.md). **Uwaga krytyczna:** przy takiej zmianie **oba** pola wejściowe pacjenta (telefon **i** DOB na portalu) muszą być zaktualizowane jednocześnie w komunikacie do pacjenta — nadal stare DOB przy nowym numerze lub odwrotnie doprowadzą do blokady logowania.
+System rozpoznaje pacjenta po **czwórce**: **imię + nazwisko + telefon + data urodzenia**. Tożsamość musi być unikalna — nie sam numer telefonu.
+
+- **Telefon (wspólny numer rodzinny):** **dozwolony** u kilku osób, jeśli różnią się imieniem, nazwiskiem lub datą urodzenia (np. ojciec i syn z jednym telefonem domowym). Zapis w panelu admin **nie jest blokowany** wyłącznie dlatego, że inna osoba ma ten sam numer. **Zablokowany** jest tylko przypadek, gdy po zmianie powstanie **identyczna czwórka** u innego pacjenta (ten sam zestaw czterech pól).
+- **Wybór właściwego rekordu:** przy wspólnym numerze zawsze sprawdź na liście **imię, nazwisko i datę urodzenia** przed edycją — łatwo otworzyć niewłaściwą osobę, jeśli szukasz tylko po telefonie.
+- **Normalizacja przy zapisie:** system sam ujednolica zapis **numeru telefonu** oraz format **imienia i nazwiska** (np. wielkość liter). Po zapisie wartości w formularzu mogą wyglądać nieco inaczej niż wpisałeś — to oczekiwane.
+- **Data urodzenia:** musi się **zgadzać** z logowaniem do [portal wyników](05-pacjent-wyniki.md). **Uwaga krytyczna:** przy zmianie telefonu lub DOB poinformuj pacjenta o **obu** wartościach naraz — stary numer przy nowej dacie (lub odwrotnie) uniemożliwi logowanie.
+- **Portal przy wspólnym numerze:** jeśli dwie osoby mają ten sam telefon i tę samą datę urodzenia (rzadko), portal może dodatkowo poprosić o **nazwisko** — wpisane musi być tak jak w recepcji ([szczegóły](05-pacjent-wyniki.md)).
 - **Imię i nazwisko:** system przelicza klucze dopasowania nazw PDF z laboratorium; po zmianie upewnij się, że [nazewnictwo plików HiDrive](hidrive_incoming_reception.md) jest spójne z dokumentacją przychodzącą.
 - **Email:** w tym przykładzie **nie** jest zmieniany; jeśli poprawiasz adres, wpisz pełny i poprawny e-mail.
 
-Przewiń do dołu formularza i kliknij przycisk zapisu (np. **Save** lub **Zapisz**).
+Przewiń do dołu formularza i kliknij przycisk zapisu.
 
 ---
 
 ## Krok 6 — Zapis i potwierdzenie
 
 1. Jeszcze raz porównaj **telefon** i **datę urodzenia** pod kątem portalu wyników.
-2. Kliknij **Save / Zapisz**.
+2. Kliknij **Zapisz**.
 3. Upewnij się, że widzisz **komunikat o pomyślnym zapisie** i że pola po przeładowaniu strony pokazują nowe wartości.
 
 ![Komunikat sukcesu po zapisie (przykład demo)](/docs/manual/assets/screenshots/reception-patient-05-save-confirmation.png)
 
-**Typowe błędy:** duplikat tej samej czwórki (imię, nazwisko, telefon, data urodzenia) u innego pacjenta — zapis zostanie odrzucony; **wspólny numer** z inną tożsamością jest dozwolony (możliwe ostrzeżenie w API). Niepoprawny zapis numeru lub daty, brak dostępu do zapisu.
+**Typowe błędy:**
+
+- **Duplikat czwórki** — po zapisie inny pacjent ma już identyczne imię, nazwisko, telefon i datę urodzenia. Panel admin pokaże błąd unikalności (constraint bazy); zapis się nie uda. Popraw dane lub skonsultuj z administratorem.
+- **Wspólny numer z inną tożsamością** — **nie jest błędem**; zapis powinien przejść. Upewnij się tylko, że edytujesz właściwy rekord (patrz Krok 3).
+- **Niepoprawny format** — numer telefonu lub data urodzenia poza dopuszczalnym formatem.
+- **Brak dostępu** — konto bez uprawnień do zapisu.
+
+**Uwaga:** ostrzeżenie o wspólnym numerze (`shared_phone`) pojawia się w **API recepcji** (integracje), nie w tym formularzu panelu admin.
 
 ---
 
@@ -127,15 +139,13 @@ Przewiń do dołu formularza i kliknij przycisk zapisu (np. **Save** lub **Zapis
 | **Is active** | To nie anonimizacja RODO. |
 | **Id, Created at, Updated at** | Tylko odczyt. |
 
-**Identyfikator Doctolib pacjenta:** pole jest ukryte; w razie potrzeby zgłoś zmianę do działu IT.
-
 ---
 
 ## Po zmianie danych — obowiązki informacyjne
 
-1. **Pacjent portalu:** przekaż **nowy telefon i nową datę urodzenia**, jeżeli zmieniłeś którekolwiek — oba muszą się zgadzać z rekordem przy następnym logowaniu (jeśli zmienisz tylko jedno pole, dostęp się nie uda).
+1. **Pacjent portalu:** przekaż **nowy telefon i nową datę urodzenia**, jeżeli zmieniłeś którekolwiek — oba muszą się zgadzać z rekordem przy następnym logowaniu (jeśli zmienisz tylko jedno pole, dostęp się nie uda). Przy **wspólnym numerze rodzinnym** każda osoba loguje się **swoją** datą urodzenia; w skrajnym przypadku (ten sam numer i ta sama data urodzenia u dwóch osób) portal może wymagać także **nazwiska**.
 2. **HiDrive / laboratorium:** po zmianie imienia i nazwiska dopasuj wrzutkę lub konwencję nazw plików.
-3. Audyt — postępuj zgodnie z polityką placówki i IT.
+3. **Import Doctolib:** po zmianie tożsamości upewnij się, że kolejny import dopasuje wiersz po **pełnej czwórce**, nie tylko po numerze telefonu.
 
 ---
 

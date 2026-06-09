@@ -41,3 +41,19 @@ omit = [
 fail_under = 80
 show_missing = true
 skip_covered = true
+
+[tool.mutmut]
+source_paths = ["apps/medical"]
+only_mutate = ["apps/medical/name_normalize.py"]
+pytest_add_cli_args_test_selection = ["apps/medical/tests/test_name_normalize.py"]
+pytest_add_cli_args = ["-c", "mutmut_pytest.ini", "--no-cov"]
+also_copy = [
+    "cogitomedica",
+    "mutmut_pytest.ini",
+    "apps/__init__.py",
+    "apps/medical/__init__.py",
+    "apps/medical/tests/conftest.py",
+    "apps/medical/tests/test_name_normalize.py",
+]
+max_stack_depth = 50
+
