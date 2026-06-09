@@ -121,6 +121,10 @@ jobs:
         run: python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
         timeout-minutes: 30
 
+      - name: Mutmut smoke (name_normalize pilot)
+        run: sh scripts/mutmut_smoke.sh
+        timeout-minutes: 10
+
       - name: Diff coverage
         run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
 
