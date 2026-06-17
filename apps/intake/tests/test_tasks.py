@@ -26,13 +26,13 @@ class ProcessIntakeOutboxEventsTaskTests(TestCase):
 
 
 class RunIntakeRetentionCleanupTaskTests(TestCase):
-    @override_settings(PDF_RETENTION_DAYS=30)
+    @override_settings(PDF_RETENTION_DAYS=60)
     @patch("apps.intake.tasks.run_intake_retention_cleanup_service")
     def test_task_calls_retention_service_with_settings_days(self, mock_svc) -> None:
         from apps.intake.tasks import run_intake_retention_cleanup
 
         run_intake_retention_cleanup.call()
-        mock_svc.assert_called_once_with(older_than_days=30, dry_run=False)
+        mock_svc.assert_called_once_with(older_than_days=60, dry_run=False)
 
     @override_settings(PDF_RETENTION_DAYS=90)
     @patch("apps.intake.tasks.run_intake_retention_cleanup_service")
@@ -42,7 +42,7 @@ class RunIntakeRetentionCleanupTaskTests(TestCase):
         run_intake_retention_cleanup.call()
         mock_svc.assert_called_once_with(older_than_days=90, dry_run=False)
 
-    @override_settings(PDF_RETENTION_DAYS=30)
+    @override_settings(PDF_RETENTION_DAYS=60)
     @patch("apps.intake.tasks.run_intake_retention_cleanup_service")
     def test_task_always_runs_with_dry_run_false(self, mock_svc) -> None:
         from apps.intake.tasks import run_intake_retention_cleanup
