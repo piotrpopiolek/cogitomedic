@@ -60,6 +60,8 @@ Po poprawnym OTP zobaczysz stronę **`/documents/`** z listą dostępnych plikó
 
 **Wycofanie publikacji:** jeśli lekarz **cofnie publikację** w systemie placówki, pacjent po wpisaniu OTP może **nie zobaczyć** już wycofanego pliku — zgodnie z PRD. W razie wątpliwości skontaktuj się z placówką.
 
+**Okno dostępu do PDF:** plik można pobrać przez portal przez **60 dni** od publikacji (konfiguracja `PDF_RETENTION_DAYS` w systemie placówki). Po tym czasie lokalna kopia jest usuwana z serwera aplikacji (gdy wynik jest już bezpiecznie zarchiwizowany w chmurze placówki i wysłano SMS). Pobranie po upływie okna nie jest możliwe — skontaktuj się z **recepcją**, która może udostępnić kopię z archiwum zgodnie z procedurą placówki.
+
 ---
 
 ## Język interfejsu
@@ -83,6 +85,7 @@ Język strony zależy od ustawień systemu i przeglądarki. W razie potrzeby pla
 | Brak SMS z kodem | Sprawdź zasięg sieci; poczekaj chwilę; poproś ponownie o kod; zadzwoń do recepcji. |
 | „Nieprawidłowe dane” przy logowaniu | Upewnij się, że numer i data zgadzają się z danymi podanymi w placówce. |
 | Pusta lista dokumentów | Możliwe opóźnienie publikacji; wycofanie przez lekarza; skontaktuj się z placówką. |
+| Błąd pobrania / „dokument niedostępny” po dłuższym czasie | Minęło okno dostępu (zwykle **60 dni** od publikacji). Zadzwoń do recepcji — placówka może udostępnić kopię z archiwum. |
 | Błąd captcha | Odśwież stronę; spróbuj innej przeglądarki; wyłącz VPN jeśli blokuje Turnstile. |
 
 Powiązane u personelu: [Przegląd](00-przeglad.md), [Lekarz — publikacja](03-doktor.md).

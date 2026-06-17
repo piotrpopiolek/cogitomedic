@@ -79,7 +79,7 @@ Rozwiązanie ma wyeliminować te niedogodności poprzez wprowadzenie w pełni cy
 - **Struktura logiczna HiDrive:** PDF Befund/intake zapisywane pod `/patients/{uuid_pacjenta}/` (np. `Befund_v1.pdf`); PDF z laboratorium w `/incoming/`; po publikacji dopasowane załączniki przenoszone do `/processed/` — implementacja: `apps/outbox/hidrive_paths.py`, `apps/medical/external_pdf_service.py`, instrukcja: `docs/manual/hidrive_incoming_reception.md`.
 - Integracja z API HiDrive (Faza 3).
 - Integracja z SMSApi do powiadamiania pacjentów (SMS wyłącznie logistyczny: „Nowa dokumentacja w Cogito” – bez informacji o badaniu/wyniku; 100% zgodność RODO/BÄK).
-- Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 30 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
+- Polityka retencji: automatyczne usuwanie plików PDF z serwera aplikacji po 60 dniach, pod warunkiem potwierdzonego zapisu w HiDrive i wysłania SMS.
 - Tłumaczenia UI/PDF są utrzymywane wyłącznie w bazie danych i edytowalne przez administrację w Django Admin (bez fallbacków runtime w kodzie).
 
 ### 3.4a. Proces udostępniania wyników pacjentowi (4 etapy, RODO/BÄK)
@@ -286,11 +286,11 @@ Kryteria akceptacji:
 - Dokument ma status Opublikowany, ale flagi hidrive_sent/sms_sent odzwierciedlają stan faktyczny.
 
 ID: US-013
-Tytuł: Polityka retencji (30 dni)
-Opis: System automatycznie usuwa pliki PDF z lokalnego serwera po 30 dniach, aby oszczędzać miejsce i dbać o bezpieczeństwo, ale tylko jeśli są bezpieczne w archiwum.
+Tytuł: Polityka retencji (60 dni)
+Opis: System automatycznie usuwa pliki PDF z lokalnego serwera po 60 dniach, aby oszczędzać miejsce i dbać o bezpieczeństwo, ale tylko jeśli są bezpieczne w archiwum.
 Kryteria akceptacji:
 
-- Cron sprawdza dokumenty starsze niż 30 dni od publikacji.
+- Cron sprawdza dokumenty starsze niż 60 dni od publikacji.
 - Usunięcie następuje TYLKO GDY: flaga zapisu do HiDrive == true ORAZ flaga wysyłki SMS == true.
 - Zdarzenie usunięcia jest logowane w systemie.
 

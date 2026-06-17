@@ -859,7 +859,7 @@ TASKS = {
 OUTBOX_BATCH_SIZE = int(os.environ.get("OUTBOX_BATCH_SIZE", "10"))
 OUTBOX_MAX_RETRIES = int(os.environ.get("OUTBOX_MAX_RETRIES", "10"))
 OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", "30"))
-PDF_RETENTION_DAYS = int(os.environ.get("PDF_RETENTION_DAYS", "30"))
+PDF_RETENTION_DAYS = int(os.environ.get("PDF_RETENTION_DAYS", "60"))
 
 # SMS (SMSApi smsapi.pl)
 SMSAPI_ACCESS_TOKEN = os.environ.get("SMSAPI_ACCESS_TOKEN", "")
