@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
+from django.db.models import Max
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -148,6 +149,15 @@ class ServicesCoverageBase(TestCase):
         )
         defaults.update(overrides)
         return MedicalDocument.objects.create(**defaults)
+
+    def _next_queue_position_no(self) -> int:
+        current = (
+            QueueEntry.objects.filter(daily_queue=self.daily_queue).aggregate(
+                m=Max("position_no")
+            )["m"]
+            or 0
+        )
+        return current + 1
 
     def _make_queue_entry(self, **overrides):
         defaults = dict(
@@ -1149,7 +1159,7 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
             daily_queue=self.daily_queue,
             patient=patient,
             entry_status=QueueEntryStatus.PATIENT_COMPLETED,
-            position_no=100 + uuid.uuid4().int % 1000,
+            position_no=self._next_queue_position_no(),
             created_by_user=self.doctor,
             doctor_list_sort_at=sort_at,
         )
