@@ -207,6 +207,16 @@ button:disabled {
   margin-top: 0.5rem;
 }
 
+#body-map-section .body-map-instruction {
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+#body-map-section .body-map-instruction-technical {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
 #body-map-section .body-map-wrap {
   position: relative;
   max-width: 100%;

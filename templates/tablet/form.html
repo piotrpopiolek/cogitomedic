@@ -79,7 +79,8 @@
   <div class="form-step" id="step-2" role="group" aria-labelledby="step-indicator" aria-hidden="true">
     <section id="body-map-section">
     <h2>{{ ui.body_map_title }}</h2>
-    <p class="text-muted-portal" style="font-size:0.9rem;">{{ ui.body_map_hint }}</p>
+    <p class="text-muted-portal body-map-instruction">{{ ui.body_map_hint }}</p>
+    <p class="text-muted-portal body-map-instruction-technical">{{ ui.body_map_hint_technical }}</p>
     <div id="body-map-msg" class="error" style="display:none;"></div>
     <div class="body-map-wrap" id="body-map-wrap">
       <img src="{% static 'tablet/body.jpg' %}" alt="{{ ui.body_map_alt }}" id="body-map-img" />
