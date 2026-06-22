@@ -20,9 +20,14 @@
     "pl": "Schemat ciała – przód i tył"
   },
   "waiting_room.form.body_map_hint": {
-    "de": "Tippen Sie auf die Abbildung, um die Lage von Hautveränderungen (z. B. Muttermale) zu markieren. Links: Vorderansicht, rechts: Rückansicht.",
-    "en": "Tap on the figure to mark the location of skin changes (e.g. moles). Left: front, right: back.",
-    "pl": "Dotknij rysunku, aby zaznaczyć lokalizację zmian skórnych (np. znamion). Lewy: przód, prawy: tył."
+    "de": "Bitte markieren Sie auf dem Körperschema die Hautveränderungen, die Ihnen besonders auffällig oder besorgniserregend erscheinen.",
+    "en": "Please mark on the body diagram which skin changes are of particular concern to you.",
+    "pl": "Proszę zaznaczyć na schemacie ciała, które zmiany skórne szczególnie Pana/Panią niepokoją."
+  },
+  "waiting_room.form.body_map_hint_technical": {
+    "de": "Tippen Sie auf die Abbildung, um einen Punkt zu setzen. Links: Vorderansicht, rechts: Rückansicht.",
+    "en": "Tap on the figure to place a point. Left: front, right: back.",
+    "pl": "Dotknij rysunku, aby ustawić punkt. Lewy: przód, prawy: tył."
   },
   "waiting_room.form.body_map_title": {
     "de": "Körperschema",
