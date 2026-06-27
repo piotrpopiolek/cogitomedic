@@ -47,3 +47,23 @@ inhibit_rules:
     target_match:
       severity: warning
     equal: ["alertname"]
+  - source_match:
+      alertname: DiskUsageAbove90Percent
+    target_match_re:
+      alertname: DiskUsageAbove(50|60|70|80)Percent
+    equal: ["instance"]
+  - source_match:
+      alertname: DiskUsageAbove80Percent
+    target_match_re:
+      alertname: DiskUsageAbove(50|60|70)Percent
+    equal: ["instance"]
+  - source_match:
+      alertname: DiskUsageAbove70Percent
+    target_match_re:
+      alertname: DiskUsageAbove(50|60)Percent
+    equal: ["instance"]
+  - source_match:
+      alertname: DiskUsageAbove60Percent
+    target_match:
+      alertname: DiskUsageAbove50Percent
+    equal: ["instance"]

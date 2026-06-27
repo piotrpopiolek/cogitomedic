@@ -147,6 +147,15 @@ Invoke-RestMethod -Uri "http://localhost:9093/api/v2/alerts" -Method Post -Conte
 - Port **9187** nie jest wystawiany na host — wyłącznie scrape wewnętrzny z Prometheusa.
 - Alerty: [deploy/prometheus/alerts.yml](deploy/prometheus/alerts.yml) (`PostgresExporterTargetDown`, `PostgresDatabaseUnreachable`).
 
+## Dysk hosta — node_exporter
+
+- Serwis **`node_exporter`** ([prom/node-exporter](https://github.com/prometheus/node_exporter)) w [docker-compose.yml](../docker-compose.yml) oraz [docker-compose.prod.yml](../docker-compose.prod.yml) z profilem **`observability`**: montuje `/`, `/proc`, `/sys` hosta (read-only), scrape wewnętrzny z Prometheusa (job `node`, port **9100** — nie wystawiony na Internet).
+- Metryka: `cogitomedica:node_root_filesystem_used_percent` (recording rule w [deploy/prometheus/alerts.yml](deploy/prometheus/alerts.yml)).
+- Alerty Discord/Alertmanager: **`DiskUsageAbove50Percent`** … **`DiskUsageAbove90Percent`** (warning 50–70, critical 80–90); **`for: 10m`** ogranicza flapping na granicy progu. Po **spadku** zajętości (np. retencja lokalnych PDF po `PDF_RETENTION_DAYS`, domyślnie 60 dni) alerty przechodzą w **Resolved** — wiadomość na Discordzie, jeśli `send_resolved: true`.
+- Przy wielu progach naraz Alertmanager wysyła tylko **najwyższy** (inhibit_rules w szablonach Alertmanagera).
+- Runbook: [docs/runbooks/DISK_USAGE.md](runbooks/DISK_USAGE.md).
+- **Wdrożenie na prod:** po `git pull` uruchom `docker compose -f docker-compose.prod.yml --profile observability up -d node_exporter prometheus alertmanager` (restart Alertmanagera wczytuje inhibit_rules).
+
 ## OTel Collector — spanmetrics → Prometheus
 
 - Kolektor eksportuje metryki RED ze spanów na porcie **8889** (job Prometheus `otel_spanmetrics` w [deploy/prometheus/prometheus.yml.template](deploy/prometheus/prometheus.yml.template)).
