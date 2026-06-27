@@ -1,4 +1,90 @@
 groups:
+  - name: cogitomedica_node_recording
+    rules:
+      - record: cogitomedica:node_root_filesystem_used_percent
+        expr: |
+          max by (instance) (
+            (
+              1 -
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|overlay|squashfs|aufs|devtmpfs",
+                mountpoint=~"/rootfs|/"
+              }
+              /
+              node_filesystem_size_bytes{
+                fstype!~"tmpfs|overlay|squashfs|aufs|devtmpfs",
+                mountpoint=~"/rootfs|/"
+              }
+            ) * 100
+          )
+
+  - name: cogitomedica_host_disk_alerts
+    rules:
+      - alert: NodeExporterTargetDown
+        expr: up{job="node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: host_disk
+        annotations:
+          summary: "Prometheus nie zbiera metryk node_exporter (dysk hosta)."
+          description: "Sprawdź kontener node_exporter i profil observability. Bez tego alerty zajętości dysku nie działają."
+
+      - alert: DiskUsageAbove50Percent
+        expr: cogitomedica:node_root_filesystem_used_percent >= 50
+        for: 10m
+        labels:
+          severity: warning
+          component: host_disk
+          disk_threshold_percent: "50"
+        annotations:
+          summary: "Dysk VPS ≥ 50% ({{ $value | printf \"%.1f\" }}%)."
+          description: "Zajętość partycji root rośnie. Po retencji PDF (PDF_RETENTION_DAYS, domyślnie 60 dni) i cronie run_retention_cleanup może spaść — wtedy alert przejdzie w Resolved. Runbook: docs/runbooks/DISK_USAGE.md"
+
+      - alert: DiskUsageAbove60Percent
+        expr: cogitomedica:node_root_filesystem_used_percent >= 60
+        for: 10m
+        labels:
+          severity: warning
+          component: host_disk
+          disk_threshold_percent: "60"
+        annotations:
+          summary: "Dysk VPS ≥ 60% ({{ $value | printf \"%.1f\" }}%)."
+          description: "Runbook: docs/runbooks/DISK_USAGE.md. Spadek poniżej progu (np. po retencji lokalnych PDF) zamyka alert."
+
+      - alert: DiskUsageAbove70Percent
+        expr: cogitomedica:node_root_filesystem_used_percent >= 70
+        for: 10m
+        labels:
+          severity: warning
+          component: host_disk
+          disk_threshold_percent: "70"
+        annotations:
+          summary: "Dysk VPS ≥ 70% ({{ $value | printf \"%.1f\" }}%)."
+          description: "Runbook: docs/runbooks/DISK_USAGE.md. Zaplanuj czyszczenie / rozszerzenie dysku."
+
+      - alert: DiskUsageAbove80Percent
+        expr: cogitomedica:node_root_filesystem_used_percent >= 80
+        for: 10m
+        labels:
+          severity: critical
+          component: host_disk
+          disk_threshold_percent: "80"
+        annotations:
+          summary: "Dysk VPS ≥ 80% ({{ $value | printf \"%.1f\" }}%) — krytyczne."
+          description: "Pilnie: df -h, docker system df -v, du na /var/lib/docker. Runbook: docs/runbooks/DISK_USAGE.md"
+
+      - alert: DiskUsageAbove90Percent
+        expr: cogitomedica:node_root_filesystem_used_percent >= 90
+        for: 10m
+        labels:
+          severity: critical
+          component: host_disk
+          disk_threshold_percent: "90"
+        annotations:
+          summary: "Dysk VPS ≥ 90% ({{ $value | printf \"%.1f\" }}%) — pilne."
+          description: "Ryzyko awarii DB/aplikacji. Runbook: docs/runbooks/DISK_USAGE.md"
+
   - name: cogitomedica_outbox_alerts
     rules:
       # PRD: krytyczny w godzinach pracy — okno godzinowe ustaw w Alertmanagerze (mute_time_intervals / routes), nie w PromQL (unika błędów wektorów).

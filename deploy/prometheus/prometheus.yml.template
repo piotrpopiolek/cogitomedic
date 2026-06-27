@@ -29,3 +29,8 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ["postgres_exporter:9187"]
+
+  - job_name: "node"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["node_exporter:9100"]
