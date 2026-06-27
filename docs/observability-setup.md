@@ -154,7 +154,8 @@ Invoke-RestMethod -Uri "http://localhost:9093/api/v2/alerts" -Method Post -Conte
 - Alerty Discord/Alertmanager: **`DiskUsageAbove50Percent`** … **`DiskUsageAbove90Percent`** (warning 50–70, critical 80–90); **`for: 10m`** ogranicza flapping na granicy progu. Po **spadku** zajętości (np. retencja lokalnych PDF po `PDF_RETENTION_DAYS`, domyślnie 60 dni) alerty przechodzą w **Resolved** — wiadomość na Discordzie, jeśli `send_resolved: true`.
 - Przy wielu progach naraz Alertmanager wysyła tylko **najwyższy** (inhibit_rules w szablonach Alertmanagera).
 - Runbook: [docs/runbooks/DISK_USAGE.md](runbooks/DISK_USAGE.md).
-- **Wdrożenie na prod:** po `git pull` uruchom `docker compose -f docker-compose.prod.yml --profile observability up -d node_exporter prometheus alertmanager` (restart Alertmanagera wczytuje inhibit_rules).
+- **Grafana:** dashboard [deploy/grafana/provisioning/dashboards/cogitomedica-observability.json](../deploy/grafana/provisioning/dashboards/cogitomedica-observability.json) — panele **VPS — zajętość dysku root (%)** (stat) i **VPS — trend zajętości dysku (alerty 50–90%)** (timeseries z progami 50/70/80%).
+- **Wdrożenie na prod:** po `git pull` uruchom `docker compose -f docker-compose.prod.yml --profile observability up -d node_exporter prometheus alertmanager grafana` (restart Grafany wczytuje zaktualizowany dashboard z provisioning).
 
 ## OTel Collector — spanmetrics → Prometheus
 
@@ -226,6 +227,7 @@ W nowym panelu:
 | Tempo zakończeń outbox (worker) | `sum by (stream,event_type,result) (rate(cogitomedica_outbox_executions_total[5m]))` |
 | Import batch zakończone (Counter) | `rate(cogitomedica_import_batches_completed_total[1h])` |
 | p95 publish→processed (Histogram) | `histogram_quantile(0.95, sum by (le, stream, event_type) (rate(cogitomedica_outbox_publish_to_processed_seconds_bucket[15m])))` |
+| Zajętość dysku VPS root (%) | `cogitomedica:node_root_filesystem_used_percent` — panele **VPS — zajętość dysku root (%)** / **VPS — trend zajętości dysku** na dashboardzie **Cogitomedica – Observability** |
 
 ### 4. Typ panelu
 

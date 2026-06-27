@@ -33,7 +33,7 @@ Wzrost zajętości może być **sezonowy** (więcej publikacji Befund → więce
 
 | Poziom | Działanie |
 |--------|-----------|
-| 50–70% | Obserwacja; sprawdź trend w Grafana/Prometheus (`cogitomedica:node_root_filesystem_used_percent`). |
+| 50–70% | Obserwacja; trend na Grafanie: **Dashboards → Cogitomedica – Observability** → panele **VPS — zajętość dysku root (%)** / **VPS — trend zajętości dysku** (`cogitomedica:node_root_filesystem_used_percent`). |
 | 80% | Zaplanuj cleanup: `docker system prune`, starych obrazów, rozmiar `media_data`; rozważ większy dysk VPS. |
 | 90% | Pilne — ryzyko awarii Postgres/aplikacji; nie używaj `docker volume prune` bez listy wolumenów. |
 
@@ -48,6 +48,10 @@ Prometheus (tunel SSH `-L 9090:127.0.0.1:9090`):
 
 - **Targets** → job `node` = UP
 - **Graph** → `cogitomedica:node_root_filesystem_used_percent`
+
+Grafana (tunel SSH `-L 3000:127.0.0.1:3000`):
+
+- **Dashboards → Cogitomedica – Observability** — panele dysku na dole dashboardu (stat + trend, progi 50/70/80% wizualnie).
 
 ## Powiązane
 
