@@ -1061,6 +1061,44 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
         self.assertEqual(item["patient"]["last_name"], "Kowalska")
         self.assertEqual(item["document_id"], str(doc.id))
 
+    def test_excludes_cancelled_queue_entry_with_submitted_intake(self):
+        """Regression: anulowany wpis nie może wracać do kolejki lekarza."""
+        patient = Patient.objects.create(
+            first_name="Ghost",
+            last_name="Cancelled",
+            date_of_birth=date(1975, 1, 1),
+            phone="48500999888",
+            email="ghost.cancelled@example.com",
+        )
+        cancelled_entry = self._make_queue_entry(
+            patient=patient,
+            entry_status=QueueEntryStatus.CANCELLED,
+            position_no=self._next_queue_position_no(),
+        )
+        cancelled_session = PatientFormSession.objects.create(
+            queue_entry=cancelled_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=cancelled_entry,
+            session=cancelled_session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+
+        doc = self._make_medical_doc()
+        self._make_published_version(doc)
+
+        items, total = list_doctor_work_queue(user=self.doctor)
+        queue_entry_ids = {item["queue_entry_id"] for item in items}
+
+        self.assertEqual(total, 1)
+        self.assertIn(str(self.queue_entry.id), queue_entry_ids)
+        self.assertNotIn(str(cancelled_entry.id), queue_entry_ids)
+
     def test_draft_sorts_before_published_even_when_published_is_newer(self):
         """DRAFT/unpublished rows must precede PUBLISHED regardless of doctor_list_sort_at."""
         admin = StaffUser.objects.create_user(
