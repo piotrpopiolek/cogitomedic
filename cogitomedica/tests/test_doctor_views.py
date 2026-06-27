@@ -210,6 +210,55 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 404)
 
+    def test_open_by_queue_cancelled_entry_returns_404_without_creating_document(
+        self,
+    ) -> None:
+        """Direct /doctor/open/{uuid}/ must not create Befund on cancelled visit."""
+        self._login_doctor()
+        clinic = ClinicSite.objects.create(code="CN", name="Cancelled Open Clinic")
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="C1", name="C1")
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.now().date(),
+            clinic_site=clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.reception_user,
+        )
+        patient = Patient.objects.create(
+            first_name="Ann",
+            last_name="Cancelled",
+            date_of_birth=date(1988, 3, 3),
+            phone="+48500997766",
+            email="cancelled.open@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.CANCELLED,
+            position_no=1,
+            created_by_user=self.reception_user,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.reception_user,
+        )
+        PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="d" * 64,
+        )
+
+        resp = self.client.get(f"/doctor/open/{entry.id}/?lang=en")
+        self.assertEqual(resp.status_code, 404)
+        self.assertFalse(
+            MedicalDocument.objects.filter(queue_entry_id=entry.id).exists()
+        )
+
     def test_open_by_queue_returns_400_when_intake_reopened(self):
         """Befund must not be created while intake is REOPENED (patient editing again)."""
         self._login_doctor()
