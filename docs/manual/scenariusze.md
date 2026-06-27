@@ -43,10 +43,10 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 |------|--------|
 | **Role** | Recepcja, Lekarz |
 | **Objaw** | W recepcji wpis ma status **Anulowano**, ale na liście lekarza (`/doctor/`) wiersz **nadal jest** (różowe tło, status `—` lub wcześniej SZKIC). |
-| **Przyczyna (techniczna)** | Kolejka lekarza (`list_doctor_work_queue`) kwalifikuje wpis, gdy ankieta ma status **Złożona** (`SUBMITTED`) lub **Ponownie otwarta** (`REOPENED`). Anulowanie wpisu kolejki (`CANCELLED`) **nie wyklucza** go z tej listy. |
-| **Co zrobić dziś (obejście)** | 1) Upewnij się, że anulowałeś **właściwy** wpis (ten ze statusem „Pacjent zakończył”, nie inny slot tego samego dnia). 2) **Nie klikaj „Otwórz”** u lekarza — odtworzy szkic. 3) Dla danych testowych / jednorazowo: cleanup wpisu w adminie (cały `QueueEntry` + powiązania) — tylko po uzgodnieniu z IT. 4) Poczekaj na fix: wykluczenie `CANCELLED` z kolejki (TODO). |
+| **Przyczyna (techniczna)** | Wcześniej: kolejka lekarza kwalifikowała wpis przy ankiecie `SUBMITTED`/`REOPENED` bez wykluczenia `CANCELLED`. **Od wdrożenia fix:** `list_doctor_work_queue` wyklucza `entry_status=CANCELLED`. |
+| **Co zrobić dziś (obejście)** | 1) Upewnij się, że anulowałeś **właściwy** wpis (ten ze statusem „Pacjent zakończył”, nie inny slot tego samego dnia). 2) **Nie klikaj „Otwórz”** u lekarza na nieaktualnych przypadkach — odtworzy szkic. 3) Po wdrożeniu nowej wersji aplikacji odśwież listę lekarza — anulowany wpis **nie powinien** się już pojawiać. 4) Jeśli nadal widać wpis po deployu — zgłoś IT (cache / stara wersja `web`). |
 | **Czego nie robić** | Nie traktuj anulowania wpisu jako „zamknięcia przypadku” przy złożonej ankiecie. Nie ma osobnej akcji „anuluj ankietę” w UI. |
-| **Docelowo (produkt)** | [`.ai/TODO.md`](../../.ai/TODO.md) — wykluczenie `CANCELLED` z `list_doctor_work_queue`. |
+| **Docelowo (produkt)** | Wykluczenie `CANCELLED` — **wdrożone** w `apps/medical/services.py`. |
 | **Film** | nie nagrany — proponowany tytuł: *„Anulowałem wizytę, a lekarz nadal widzi pacjenta”* |
 | **Powiązane** | [01-rejestracja.md](01-rejestracja.md), [03-doktor.md](03-doktor.md) § lista pracy |
 
@@ -59,9 +59,9 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | **Role** | Recepcja, Lekarz, Administrator |
 | **Objaw** | Po usunięciu **szkicu dokumentu** (`MedicalDocument` w adminie) lekarz nadal widzi wiersz: status **`—`**, kolumny PDF/HiDrive/SMS puste, przycisk **Otwórz**, różowe tło (SLA). |
 | **Przyczyna (techniczna)** | Usunięcie szkicu = brak dokumentu. System traktuje to jak **nowego kandydata do opisania** (tier 0: `medical_document IS NULL` + ankieta `SUBMITTED`). To **nie** zamyka wizyty. |
-| **Co zrobić dziś (obejście)** | Jeśli wizyta jest nieaktualna: anuluj wpis w recepcji **i** licz się z tym, że wpis może **nadal** być widoczny (patrz SC-001). Dla śmieciowych danych testowych — usunięcie całego wpisu kolejki w adminie. Jeśli wizyta jest realna — lekarz ma **opublikować** Befund, nie usuwać szkicu. |
+| **Co zrobić dziś (obejście)** | Jeśli wizyta jest nieaktualna: **anuluj wpis w recepcji** — po wdrożeniu fix wpis znika z listy lekarza (SC-001). Dla śmieciowych danych testowych — usunięcie całego wpisu kolejki w adminie. Jeśli wizyta jest realna — lekarz ma **opublikować** Befund, nie usuwać szkicu. |
 | **Czego nie robić** | **Nie klikać „Otwórz”** — `create_or_get_medical_document` utworzy **nowy** szkic DRAFT. Nie zmieniać ręcznie statusu ankiety na `IN_PROGRESS` w adminie bez procedury RODO. |
-| **Docelowo (produkt)** | Wykluczenie `CANCELLED` + akcja „zamknij przypadek bez publikacji” (backlog). |
+| **Docelowo (produkt)** | Wykluczenie `CANCELLED` — wdrożone; akcja „zamknij przypadek bez publikacji” — backlog. |
 | **Film** | nie nagrany — proponowany tytuł: *„Usunąłem szkic w adminie — dlaczego pacjent zostaje na liście?”* |
 | **Powiązane** | [03-doktor.md](03-doktor.md) |
 

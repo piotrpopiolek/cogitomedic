@@ -2629,6 +2629,8 @@ def list_doctor_work_queue(
     - A: digital intake submitted/reopened
     - B: paper intake authorized, no medical document yet
     - C: paper intake completed with medical document created from paper flow
+
+    Cancelled queue entries (``entry_status=CANCELLED``) are always excluded.
     """
     submitted_or_reopened_intake_exists = PatientIntakeForm.objects.filter(
         queue_entry_id=OuterRef("pk"),
@@ -2646,6 +2648,7 @@ def list_doctor_work_queue(
         has_submitted_or_reopened_intake=Exists(submitted_or_reopened_intake_exists),
         has_paper_intake_authorization=Exists(paper_authorization_exists),
     )
+    qs = qs.exclude(entry_status=QueueEntryStatus.CANCELLED)
     qs = qs.filter(
         Q(has_submitted_or_reopened_intake=True)
         | Q(
