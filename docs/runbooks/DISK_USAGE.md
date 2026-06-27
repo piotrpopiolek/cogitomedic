@@ -9,6 +9,15 @@ Alerty Prometheus → Alertmanager → Discord (profil `observability`, `node_ex
 - **Spadek zajętości:** gdy użycie spadnie poniżej progu (np. po retencji lokalnych PDF), alert przechodzi w **Resolved** — Discord dostaje wiadomość Resolved (`send_resolved: true`).
 - **Wiele progów naraz:** Alertmanager wysyła tylko **najwyższy** aktywny próg (inhibit_rules); po zejściu np. z 85% do 75% znikają progi 90/80, aktywny zostaje 70%.
 
+## Prometheus alerty vs Grafana
+
+| | Progi wizualne / powiadomienia |
+|--|-------------------------------|
+| **Prometheus → Discord** | Osobne alerty co **10%**: **50, 60, 70, 80, 90** (`deploy/prometheus/alerts.yml`) |
+| **Grafana** (dashboard **Cogitomedica – Observability**, panele VPS) | Linie progów kolorów: **50, 60, 70, 80, 90** — spójne z alertami; Grafana **nie wysyła** powiadomień, tylko trend |
+
+Próg **60%** ma własną regułę alertu w Prometheusie (Discord po 10 min powyżej 60%). Na dashboardzie służy do odczytu trendu w tym samym miejscu co pozostałe progi — bez dodatkowej konfiguracji w Grafanie.
+
 ## Szybka diagnostyka (SSH na VPS)
 
 ```bash
@@ -51,7 +60,7 @@ Prometheus (tunel SSH `-L 9090:127.0.0.1:9090`):
 
 Grafana (tunel SSH `-L 3000:127.0.0.1:3000`):
 
-- **Dashboards → Cogitomedica – Observability** — panele dysku na dole dashboardu (stat + trend, progi 50/70/80% wizualnie).
+- **Dashboards → Cogitomedica – Observability** — panele dysku na dole dashboardu (stat + trend, progi kolorów **50 / 60 / 70 / 80 / 90**).
 
 ## Powiązane
 

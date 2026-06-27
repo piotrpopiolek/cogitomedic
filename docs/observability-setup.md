@@ -154,7 +154,7 @@ Invoke-RestMethod -Uri "http://localhost:9093/api/v2/alerts" -Method Post -Conte
 - Alerty Discord/Alertmanager: **`DiskUsageAbove50Percent`** … **`DiskUsageAbove90Percent`** (warning 50–70, critical 80–90); **`for: 10m`** ogranicza flapping na granicy progu. Po **spadku** zajętości (np. retencja lokalnych PDF po `PDF_RETENTION_DAYS`, domyślnie 60 dni) alerty przechodzą w **Resolved** — wiadomość na Discordzie, jeśli `send_resolved: true`.
 - Przy wielu progach naraz Alertmanager wysyła tylko **najwyższy** (inhibit_rules w szablonach Alertmanagera).
 - Runbook: [docs/runbooks/DISK_USAGE.md](runbooks/DISK_USAGE.md).
-- **Grafana:** dashboard [deploy/grafana/provisioning/dashboards/cogitomedica-observability.json](../deploy/grafana/provisioning/dashboards/cogitomedica-observability.json) — panele **VPS — zajętość dysku root (%)** (stat) i **VPS — trend zajętości dysku (alerty 50–90%)** (timeseries z progami 50/70/80%).
+- **Grafana:** dashboard [deploy/grafana/provisioning/dashboards/cogitomedica-observability.json](../deploy/grafana/provisioning/dashboards/cogitomedica-observability.json) — panele **VPS — zajętość dysku root (%)** (stat) i **VPS — trend zajętości dysku (alerty 50–90%)** (timeseries; progi kolorów **50 / 60 / 70 / 80 / 90**, zgodne z regułami w `alerts.yml`). Szczegóły: [docs/runbooks/DISK_USAGE.md](runbooks/DISK_USAGE.md) → „Prometheus alerty vs Grafana”.
 - **Wdrożenie na prod:** po `git pull` uruchom `docker compose -f docker-compose.prod.yml --profile observability up -d node_exporter prometheus alertmanager grafana` (restart Grafany wczytuje zaktualizowany dashboard z provisioning).
 
 ## OTel Collector — spanmetrics → Prometheus

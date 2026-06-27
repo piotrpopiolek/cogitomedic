@@ -44,9 +44,9 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | **Role** | Recepcja, Lekarz |
 | **Objaw** | W recepcji wpis ma status **Anulowano**, ale na liście lekarza (`/doctor/`) wiersz **nadal jest** (różowe tło, status `—` lub wcześniej SZKIC). |
 | **Przyczyna (techniczna)** | Wcześniej: kolejka lekarza kwalifikowała wpis przy ankiecie `SUBMITTED`/`REOPENED` bez wykluczenia `CANCELLED`. **Od wdrożenia fix:** `list_doctor_work_queue` wyklucza `entry_status=CANCELLED`. |
-| **Co zrobić dziś (obejście)** | 1) Upewnij się, że anulowałeś **właściwy** wpis (ten ze statusem „Pacjent zakończył”, nie inny slot tego samego dnia). 2) **Nie klikaj „Otwórz”** u lekarza na nieaktualnych przypadkach — odtworzy szkic. 3) Po wdrożeniu nowej wersji aplikacji odśwież listę lekarza — anulowany wpis **nie powinien** się już pojawiać. 4) Jeśli nadal widać wpis po deployu — zgłoś IT (cache / stara wersja `web`). |
+| **Co zrobić dziś (obejście)** | 1) Upewnij się, że anulowałeś **właściwy** wpis (ten ze statusem „Pacjent zakończył”, nie inny slot tego samego dnia). 2) **Nie używaj starego linku** `/doctor/open/{uuid}/` ani zakładki z historii — po wdrożeniu zwracają **404** i nie tworzą szkicu. 3) Odśwież listę lekarza — anulowany wpis nie powinien się pojawiać. 4) Jeśli nadal widać wpis po deployu — zgłoś IT (stara wersja `web`). |
 | **Czego nie robić** | Nie traktuj anulowania wpisu jako „zamknięcia przypadku” przy złożonej ankiecie. Nie ma osobnej akcji „anuluj ankietę” w UI. |
-| **Docelowo (produkt)** | Wykluczenie `CANCELLED` — **wdrożone** w `apps/medical/services.py`. |
+| **Docelowo (produkt)** | Wykluczenie `CANCELLED` z listy **oraz** blokada `/doctor/open/` i `POST /api/v1/medical-documents` — wdrożone (`check_doctor_queue_entry_access`, `create_or_get_medical_document`). |
 | **Film** | nie nagrany — proponowany tytuł: *„Anulowałem wizytę, a lekarz nadal widzi pacjenta”* |
 | **Powiązane** | [01-rejestracja.md](01-rejestracja.md), [03-doktor.md](03-doktor.md) § lista pracy |
 

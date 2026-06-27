@@ -129,6 +129,26 @@ class MedicalApiTests(TestCase):
         )
         self.client.force_login(self.doctor_user)
 
+    def test_medical_document_create_rejects_cancelled_queue_entry(self) -> None:
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+        response = self.client.post(
+            "/api/v1/medical-documents",
+            data=json.dumps(
+                {
+                    "queue_entry_id": str(self.queue_entry.id),
+                    "intake_form_id": str(self.intake_form.id),
+                    "created_by_user_id": str(self.doctor_user.id),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            MedicalDocument.objects.filter(queue_entry_id=self.queue_entry.id).exists()
+        )
+
     def _external_upload_file(
         self, *, name: str = "lab.pdf", content: bytes | None = None
     ):

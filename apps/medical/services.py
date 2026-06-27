@@ -527,7 +527,17 @@ def check_doctor_queue_entry_access(
 
     Without a medical document, any doctor may open the entry (paper / intake queue).
     With a document, same rules as ``check_doctor_document_access``.
+
+    Cancelled entries (``entry_status=CANCELLED``) are never openable via this path.
     """
+    if queue_entry.entry_status == QueueEntryStatus.CANCELLED:
+        _audit_queue_entry_access_denied(
+            queue_entry=queue_entry,
+            user=user,
+            denial_reason="queue_entry_cancelled",
+            audit_context=audit_context,
+        )
+        raise ObjectDoesNotExist("Queue entry not found.")
     if _is_admin_or_manager_medical_oversight(user):
         return
     md = MedicalDocument.objects.filter(queue_entry_id=queue_entry.id).first()
@@ -557,7 +567,9 @@ def create_or_get_medical_document(
     (**REOPENED**, patient editing again), creation is blocked until the form is
     submitted again — avoids Befund against a changing intake snapshot.
     """
-    QueueEntry.objects.get(id=queue_entry_id)
+    queue_entry = QueueEntry.objects.get(id=queue_entry_id)
+    if queue_entry.entry_status == QueueEntryStatus.CANCELLED:
+        raise ObjectDoesNotExist("Queue entry not found.")
     intake_form = PatientIntakeForm.objects.get(id=intake_form_id)
     if intake_form.queue_entry_id != queue_entry_id:
         raise DomainError(
