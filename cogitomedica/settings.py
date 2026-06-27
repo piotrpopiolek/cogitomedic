@@ -12,6 +12,11 @@ from django.templatetags.static import static
 from dotenv import load_dotenv
 from django.urls import reverse_lazy
 
+from cogitomedica.sentry_sampling import (
+    parse_sentry_traces_sample_rate,
+    sentry_traces_sampler,
+)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -42,12 +47,23 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 
 # Sentry: opcjonalnie, tylko poza lokalnym dev. Zostaw SENTRY_DSN puste w .env (patrz .env.example).
 SENTRY_DSN = (os.environ.get("SENTRY_DSN") or "").strip()
+SENTRY_TRACES_SAMPLE_RATE = parse_sentry_traces_sample_rate(
+    os.environ.get("SENTRY_TRACES_SAMPLE_RATE")
+)
 if SENTRY_DSN and ENVIRONMENT != "dev":
+    _sentry_traces_default_rate = SENTRY_TRACES_SAMPLE_RATE
+
+    def _sentry_traces_sampler(sampling_context: dict) -> float:
+        return sentry_traces_sampler(
+            sampling_context,
+            default_sample_rate=_sentry_traces_default_rate,
+        )
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=ENVIRONMENT,
         send_default_pii=False,
-        traces_sample_rate=1.0,
+        traces_sampler=_sentry_traces_sampler,
         before_send=before_send_filter,  # type: ignore[arg-type]
     )
 if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
