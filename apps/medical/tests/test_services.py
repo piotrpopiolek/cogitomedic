@@ -1061,6 +1061,12 @@ class MedicalServicesTests(TestCase):
         with self.assertRaises(ObjectDoesNotExist):
             check_doctor_queue_entry_access(entry2, self.reception_user)
 
+    def test_check_doctor_queue_entry_access_rejects_cancelled(self) -> None:
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+        with self.assertRaises(ObjectDoesNotExist):
+            check_doctor_queue_entry_access(self.queue_entry, self.doctor_user)
+
 
 class LesionGroupFavoritesAdminTests(TestCase):
     """Tests for lesion_group_favorites widget and form validation in admin."""
