@@ -43,6 +43,7 @@ Skrypt składa rozdziały **00, 01, 06, 02–05** oraz **uzupełnienia o ścież
 | [paper_intake_flow.md](paper_intake_flow.md) | Wszyscy — diagram ścieżki papierowej i cyfrowej |
 | [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md) | Recepcja / Admin / Manager — PDF wyniku spoza panelu Befund (external upload) |
 | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) | Pacjent — pobieranie dokumentacji po SMS |
+| [scenariusze.md](scenariusze.md) | Wszyscy — FAQ operacyjne, przypadki brzegowe (materiały wideo) |
 | [screenshot-checklist.md](screenshot-checklist.md) | Lista plików PNG i odpowiadających im ekranów |
 
 Zrzuty ekranu: katalog [assets/screenshots/](/docs/manual/assets/screenshots/README.md) — **komplet plików z checklisty** generuje się skryptem [`scripts/capture_manual_screenshots.py`](../../scripts/capture_manual_screenshots.py) (np. w Dockerze: `docker compose --profile screenshots run --rm screenshots`; wąski tryb tylko dla rozdz. 06: `--only=reception-patient-personal-data`, opcjonalnie `SCREENSHOT_SKIP_DJANGO=1` — zob. [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md)). Nazewnictwo: `rola-NN-opis.png`; dane demo (`screenshot_*`) są tylko do dokumentacji.
