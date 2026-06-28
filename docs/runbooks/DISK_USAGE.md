@@ -53,6 +53,21 @@ cd ~/cogitomedica
 docker compose -f docker-compose.prod.yml --profile observability ps node_exporter prometheus
 ```
 
+Test z kontenera Prometheusa (uwaga: **http://** w URL — bez tego `wget` zgłasza `bad address`):
+
+```bash
+docker compose -f docker-compose.prod.yml --profile observability exec prometheus \
+  wget -qO- 'http://node_exporter:9100/metrics' | head -3
+```
+
+Jeśli `bad address` mimo poprawnego URL — Prometheus nie widzi `node_exporter` w sieci Compose (częste po dodaniu serwisu bez recreate Prometheusa):
+
+```bash
+docker compose -f docker-compose.prod.yml --profile observability up -d --force-recreate prometheus
+```
+
+Po recreate sprawdź ponownie `wget` i **Targets** (job `node` = UP). Alert `NodeExporterTargetDown` powinien przejść w **Resolved** w ciągu ~5 min.
+
 Prometheus (tunel SSH `-L 9090:127.0.0.1:9090`):
 
 - **Targets** → job `node` = UP
