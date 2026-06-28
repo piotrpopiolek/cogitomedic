@@ -13,6 +13,11 @@ from apps.core.translation_service import (
     get_ergebnisse_ui_strings,
     normalize_language_code,
 )
+from apps.patient_results.audit import (
+    audit_patient_results_documents_listed,
+    audit_patient_results_otp_request,
+    audit_patient_results_otp_verify,
+)
 from apps.patient_results.document_services import list_patient_documents
 from apps.patient_results.services import (
     get_patient_id_from_session,
@@ -81,6 +86,7 @@ def ergebnisse_login_view(request):
         captcha_token=captcha_token,
         last_name=last_name or None,
     )
+    audit_patient_results_otp_request(request, result)
     if result.status != "ok":
         ui["error"] = ui["ergebnisse_ui"].get(
             "error_captcha", "CAPTCHA verification failed. Please try again."
@@ -147,6 +153,7 @@ def ergebnisse_otp_view(request):
         otp_code=otp_code,
         last_name=last_name,
     )
+    audit_patient_results_otp_verify(request, result)
     if not result.success:
         ui["error"] = ui["ergebnisse_ui"].get(
             "error_invalid_otp", "Invalid or expired code. Please try again."
@@ -175,6 +182,9 @@ def ergebnisse_documents_view(request):
             else "ergebnisse:login"
         )
     items = list_patient_documents(UUID(patient_id))
+    audit_patient_results_documents_listed(
+        request, patient_id=UUID(patient_id), item_count=len(items)
+    )
     return render(
         request, "ergebnisse/documents.html", _ergebnisse_context(request, items=items)
     )
