@@ -164,9 +164,11 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
-    # Wpis do /etc/hosts w prometheus (otelcollector → IP kolektora); wget i scraper widzą hosta.
+    # Wpis do /etc/hosts w prometheus (DNS Compose); scraper widzi hosty po recreate kontenera.
     links:
       - otel-collector:otelcollector
+      - node_exporter:node_exporter
+      - postgres_exporter:postgres_exporter
 
   alertmanager:
     profiles: [observability]
