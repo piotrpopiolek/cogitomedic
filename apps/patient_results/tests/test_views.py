@@ -14,6 +14,7 @@ from unittest.mock import patch
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
+from apps.operations.models import AuditEvent
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import Patient
 
@@ -255,3 +256,75 @@ class ErgebnisseOtpPostTests(TestCase):
         self.assertIn("/documents/", response.url)
         self.assertNotIn("ergebnisse_phone", self.client.session)
         self.assertNotIn("ergebnisse_last_name", self.client.session)
+        ev = AuditEvent.objects.filter(
+            event_type="PATIENT_RESULTS_OTP_VERIFY",
+            patient_id=self.patient.id,
+        ).first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("outcome"), "success")
+        self.assertEqual(ev.metadata.get("channel"), "html")
+
+
+@override_settings(CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper")
+class ErgebnisseHtmlAuditTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.phone = "01765554433"
+        self.dob = date(1990, 7, 7)
+        self.patient = Patient.objects.create(
+            first_name="Audit",
+            last_name="Html",
+            date_of_birth=self.dob,
+            phone=self.phone,
+            email="audit.html@example.com",
+        )
+
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_login_post_writes_otp_request_audit(self, mock_get_adapter) -> None:
+        mock_get_adapter.return_value.send_sms = lambda *a, **k: None
+        response = self.client.post(
+            LOGIN_URL,
+            {
+                "phone": self.phone,
+                "date_of_birth": self.dob.isoformat(),
+                "captcha_token": "skip",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        ev = AuditEvent.objects.filter(
+            event_type="PATIENT_RESULTS_OTP_REQUEST",
+            patient_id=self.patient.id,
+        ).first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("outcome"), "sms_sent")
+        self.assertEqual(ev.metadata.get("channel"), "html")
+
+    def test_otp_post_invalid_writes_verify_audit_without_patient(self) -> None:
+        session = self.client.session
+        session["ergebnisse_phone"] = self.phone
+        session["ergebnisse_dob"] = self.dob.isoformat()
+        session.save()
+        response = self.client.post(OTP_URL, {"otp_code": "000000"})
+        self.assertEqual(response.status_code, 200)
+        ev = AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY").first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertIsNone(ev.patient_id)
+        self.assertEqual(ev.metadata.get("channel"), "html")
+
+    def test_documents_list_writes_audit(self) -> None:
+        session = self.client.session
+        session["patient_results_patient_id"] = str(self.patient.id)
+        session.save()
+        response = self.client.get(DOCUMENTS_URL)
+        self.assertEqual(response.status_code, 200)
+        ev = AuditEvent.objects.filter(
+            event_type="PATIENT_RESULTS_DOCUMENTS_LISTED",
+            patient_id=self.patient.id,
+        ).first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("channel"), "html")
+        self.assertIn("item_count", ev.metadata)

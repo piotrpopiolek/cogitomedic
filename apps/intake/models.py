@@ -8,6 +8,8 @@ from django.db import models
 from apps.core.translation_service import db_gettext_lazy
 from django.db.models import F, Q
 
+from apps.outbox.constants import outbox_max_retries_default
+
 
 class IntakeStatus(models.TextChoices):
     IN_PROGRESS = "IN_PROGRESS", db_gettext_lazy(
@@ -749,7 +751,7 @@ class IntakeOutboxEvent(models.Model):
         verbose_name=db_gettext_lazy("administration.field_retry_count", "Retry count"),
     )
     max_retries = models.SmallIntegerField(
-        default=10,
+        default=outbox_max_retries_default,
         verbose_name=db_gettext_lazy("administration.field_max_retries", "Max retries"),
     )
     available_at = models.DateTimeField(
