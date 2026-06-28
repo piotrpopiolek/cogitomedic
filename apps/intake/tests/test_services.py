@@ -211,6 +211,7 @@ class SubmitPatientIntakeFormTests(TestCase):
             event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
         )
         self.assertEqual(event.status, IntakeOutboxStatus.PENDING)
+        self.assertEqual(event.max_retries, 3)
 
     def test_submit_patient_intake_form_autorevokes_paper_authorization(self) -> None:
         from apps.medical.models import PaperIntakeAuthorization

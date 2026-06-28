@@ -14,6 +14,8 @@ Oznacza to, że worker zadań asynchronicznych (kontener `scheduler`) stoi w mie
 3. Zobacz, czy w logach widnieją błędy związane z połączeniem z bazą danych lub błędem biblioteki WeasyPrint.
 4. Wejdź do panelu administracyjnego: `/admin/outbox/outboxevent/` i sprawdź które zdarzenia "wiszą".
 
+**Retry:** nowe zdarzenia outbox mają domyślnie `max_retries=3` (`OUTBOX_MAX_RETRIES` w `.env`). Po 3 nieudanych próbach status przechodzi w `DEAD_LETTER` — wymaga ręcznego retry z recepcji lub admina.
+
 ## Obejście awaryjne / Naprawa
 1. Ręczne wyzwolenie przetwarzania kolejki outbox:
    `docker compose run --rm web python manage.py enqueue_tasks`
