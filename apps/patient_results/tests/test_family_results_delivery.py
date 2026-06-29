@@ -641,7 +641,12 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         request_audits_after = AuditEvent.objects.filter(
             event_type="PATIENT_RESULTS_OTP_REQUEST"
         ).count()
-        self.assertEqual(request_audits_before, request_audits_after)
+        self.assertEqual(request_audits_after, request_audits_before + 1)
+        ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
+        self.assertEqual(ev.metadata.get("channel"), "html")
+        self.assertIsNone(ev.patient_id)
 
     @patch("apps.patient_results.services.get_sms_adapter")
     def test_html_login_wrong_last_name_still_shows_last_name_field(
@@ -669,7 +674,12 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         request_audits_after = AuditEvent.objects.filter(
             event_type="PATIENT_RESULTS_OTP_REQUEST"
         ).count()
-        self.assertEqual(request_audits_before, request_audits_after)
+        self.assertEqual(request_audits_after, request_audits_before + 1)
+        ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
+        self.assertEqual(ev.metadata.get("channel"), "html")
+        self.assertIsNone(ev.patient_id)
 
     def test_api_e2e_each_collision_member_with_last_name(self) -> None:
         for member in self.fixture.collision_pair:
