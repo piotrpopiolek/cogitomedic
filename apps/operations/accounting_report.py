@@ -173,6 +173,7 @@ def accounting_report_versions_qs(
             version_no=1,
             published_at__gte=start_utc,
             published_at__lt=end_utc,
+            revoked_at__isnull=True,
         )
         .exclude(
             medical_document__source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,

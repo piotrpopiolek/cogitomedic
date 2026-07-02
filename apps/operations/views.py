@@ -10,6 +10,7 @@ from django.template.response import TemplateResponse
 from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
 from apps.core.constants import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from apps.core.translation_service import get_admin_translation, resolve_other_message
+from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
     build_accounting_report,
     resolve_accounting_report_export_headers,
@@ -21,18 +22,6 @@ from apps.operations.export import (
     render_accounting_report_xlsx,
 )
 from apps.operations.services import create_audit_event
-
-
-def accounting_report_access_ok(user) -> bool:
-    return bool(
-        user
-        and user.is_authenticated
-        and (
-            getattr(user, "is_admin_role", False)
-            or getattr(user, "is_manager", False)
-            or getattr(user, "is_accounting", False)
-        )
-    )
 
 
 def _accounting_report_forbidden_response(
