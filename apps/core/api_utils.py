@@ -218,6 +218,8 @@ def get_scoped_clinic_site_ids(user) -> list[UUID] | None:
     """
     if getattr(user, "is_admin_role", False) and user.is_admin_role:
         return None
+    if getattr(user, "is_accounting", False) and user.is_accounting:
+        return None
     if getattr(user, "is_manager", False) and user.is_manager:
         ids = list(user.clinic_sites.values_list("id", flat=True))
         return ids
