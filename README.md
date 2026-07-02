@@ -329,6 +329,7 @@ Publishing also persists immutable `publish_locale` per version, so generated PD
 - Daily patient/visit list import from **XLSX** (admin upload + background batch via Django Tasks); optional `doctolib_patient_id` field when present in data (no external queue-system API)
 - SMS notifications (logistic text only; patient retrieves PDF via the results portal, not via SMS link)
 - Audit trail (operations): event log with immutable entity refs in `metadata._ref` for compliance after anonymization; filters by patient, document, clinic site, actor, outbox event, and time range
+- Accounting weekly report (admin HTML): first Befund publications (`version_no=1`), per-doctor aggregates, CSV/XLSX export, role `ACCOUNTING` (+ ADMIN/MANAGER oversight); manual `docs/manual/08-ksiegowosc-raport.md`
 - Logging (e.g. OpenTelemetry as per PRD)
 - Operational dashboards: simplified reception/doctor view in Django + advanced maintenance view in Grafana OSS
 - UI languages: German, English, Polish

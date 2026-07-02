@@ -991,6 +991,28 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - Kody sukcesu: `202 ACCEPTED`.
   - Kody błędów: `403 FORBIDDEN`.
 
+### 2.12a Raport księgowości (admin HTML)
+
+Tygodniowy raport rozliczeniowy Befund — **bez** trasy JSON w API v1 (schematy Pydantic `AccountingReportQueryParams` / `AccountingReportResponse` pod planowany `GET /accounting/report`). Dostęp przez widoki HTML admina i eksport plików.
+
+**Role:** **ACCOUNTING**, **ADMIN** lub **MANAGER** (`accounting_report_access_ok` w `apps/operations/accounting_access.py`). Inne role staff → **403**.
+
+**Zakres placówki:** **ACCOUNTING** i **ADMIN** — wszystkie placówki (`get_scoped_clinic_site_ids` → `None`). **MANAGER** — tylko przypisane `clinic_sites`.
+
+**Ścieżki (sesja + `is_staff`, poza `/api/v1`):**
+
+| Metoda | Ścieżka | Opis |
+|--------|---------|------|
+| **GET** | `/admin/accounting/report/` | Dashboard: zakres dat (`date_from`, `date_to`, domyślnie bieżący pon.–niedz. w `TIME_ZONE`), podgląd z paginacją (`page`, `page_size` domyślnie **20**, maks. **100**), agregaty publikacji per lekarz. |
+| **GET** | `/admin/accounting/report/export.csv` | Pełny eksport CSV dla zakresu dat (nagłówki kolumn po niemiecku). |
+| **GET** | `/admin/accounting/report/export.xlsx` | Pełny eksport XLSX dla zakresu dat. |
+
+**Logika wierszy:** jeden wiersz na pierwszą publikację `MedicalDocument` (`MedicalDocumentVersion`: `version_status=PUBLISHED`, `version_no=1`, `revoked_at` null, `published_at` w zakresie). Rewizje (`version_no>1`) pominięte. Typ źródła `EXTERNAL_UPLOAD` wykluczony (MVP). Data badania z `DailyQueue.queue_date`.
+
+**Audyt:** każde pobranie CSV/XLSX tworzy `ACCOUNTING_REPORT_EXPORT` z `metadata`: `date_from`, `date_to`, `format`, `row_count` (bez PHI pacjenta).
+
+Instrukcja: `docs/manual/08-ksiegowosc-raport.md`.
+
 ### 2.13 Audyt i obserwowalność
 
 - **GET** `/audit-events`
@@ -1033,7 +1055,8 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
   - **TABLET**: tylko: lista kolejek na dziś (wybór), lista wpisów kolejki, POST queue-entries/{id}/sessions, GET kontekstu formularza intake, PUT anamneza/zgody, upload podpisu, POST submit intake. Brak wyszukiwarki pacjentów, braku CRUD kolejek, braku zarządzania użytkownikami.
   - `RECEPTION`: kolejki, wpisy kolejki, tworzenie/aktualizacja pacjentów, generacja sesji (POST sessions), importy read/write.
   - `DOCTOR`: odczyt/zapis dokumentów medycznych, publikacja/republikacja, podgląd wersji.
-  - `MANAGER`: nadzór operacyjny; w **API v1** m.in. import, urządzenia, wybrane outbox, a w module **medical** te same dekoratory co `DOCTOR`/`ADMIN` (`require_user_role` w `apps.medical.api_views`); w Django Admin ograniczenia wg uprawnień grupy.
+  - `MANAGER`: nadzór operacyjny; w **API v1** m.in. import, urządzenia, wybrane outbox, a w module **medical** te same dekoratory co `DOCTOR`/`ADMIN` (`require_user_role` w `apps.medical.api_views`); w Django Admin ograniczenia wg uprawnień grupy; raport księgowości HTML (zakres przypisanych placówek).
+  - `ACCOUNTING`: wyłącznie raport księgowości przez admin HTML (`/admin/accounting/report/`, eksport CSV/XLSX); wszystkie placówki; brak uprawnień Django ModelAdmin (własny RBAC); brak list pacjentów i innych modułów admina.
   - `ADMIN`: zarządzanie użytkownikami, słownik zgód, operacje techniczne, pełny podgląd audytu/outbox.
   - Ochrona endpointów przez klasy uprawnień Django + kontrole na poziomie obiektu.
 
@@ -1059,7 +1082,7 @@ Dostęp tylko dla ról **RECEPTION** i **ADMIN**. RECEPTION widzi wyłącznie do
 ### 4.1 Reguły walidacji zasobów
 
 - `staff_user`
-  - `username` unikalny, `email` unikalny (case-insensitive), `role` w `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER` (konto kierownicze; szczegółowe dozwolone role per endpoint: dekoratory w odpowiednich `api_views`).
+  - `username` unikalny, `email` unikalny (case-insensitive), `role` w `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER|ACCOUNTING` (konto kierownicze / księgowość; szczegółowe dozwolone role per endpoint: dekoratory w odpowiednich `api_views` lub helpery widoków).
   - `phone_number` regex: `^[0-9+() -]{7,20}$`.
 
 - `patient`

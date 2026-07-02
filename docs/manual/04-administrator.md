@@ -23,7 +23,7 @@ Wejdź na **`/admin/`** — masz dostęp do wszystkich głównych sekcji systemu
 
 ### 2.1 Tworzenie konta
 
-- Użyj formularza dodawania; grupa konta określa rolę (np. recepcja, lekarz, admin, tablet, manager).
+- Użyj formularza dodawania; grupa konta określa rolę (np. recepcja, lekarz, admin, tablet, manager, **księgowość**).
 - Konto administratora musi mieć dostęp do panelu.
 - Przypisz placówki lekarzowi i personelowi, jeśli ich widoczność ma być ograniczona do wybranych miejsc.
 
@@ -130,7 +130,17 @@ Grupa **Manager** służy do nadzoru operacyjnego bez pełni praw administratora
 ## 12. Dobre praktyki
 
 - **Kopie zapasowe** i testy zmian na stagingu przed produkcją.
-- **Minimalne uprawnienia:** nie przyznawaj konta administratora bez potrzeby; rolę Manager dawaj tylko tam, gdzie naprawdę jest potrzebny nadzór.
+- **Minimalne uprawnienia:** nie przyznawaj konta administratora bez potrzeby; rolę Manager dawaj tylko tam, gdzie naprawdę jest potrzebny nadzór; konto **Accounting** tylko dla osób z księgowości.
 - **Audyt:** zmiany krytycznych ustawień dokumentuj w systemie ticketów placówki.
 
-Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md), [Ścieżka papierowa — procedura](04-administrator-paper-intake.md), [Ścieżka papierowa — diagram](paper_intake_flow.md).
+## 13. Konto księgowości (grupa `Accounting`)
+
+Grupa **Accounting** służy wyłącznie do odczytu raportu rozliczeniowego Befund — bez dostępu do pacjentów, kolejek ani innych ekranów administracyjnych.
+
+- Utwórz konto staff z grupą **Accounting** (przez panel Users → Staff users albo API `POST /api/v1/staff-users` z `role=ACCOUNTING`). Konto musi mieć `is_staff=True`, żeby zalogować się do Unfold.
+- Grupa **nie** dostaje uprawnień Django ModelAdmin — dostęp wynika z dedykowanych widoków (`accounting_report_access_ok` w `apps/operations/accounting_access.py`).
+- Po zalogowaniu w menu bocznym: sekcja **Księgowość** → **Raport tygodniowy** (`/admin/accounting/report/`).
+- Zakres danych: **wszystkie placówki** (jak u administratora). Manager widzi ten sam raport, ale tylko dla przypisanych placówek.
+- Szczegóły kolumn, filtrów dat i eksportu: [08-ksiegowosc-raport.md](08-ksiegowosc-raport.md).
+
+Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md), [Raport księgowości](08-ksiegowosc-raport.md), [Ścieżka papierowa — procedura](04-administrator-paper-intake.md), [Ścieżka papierowa — diagram](paper_intake_flow.md).

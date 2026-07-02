@@ -12,6 +12,8 @@ Dokument opisuje endpointy używane przez personel oraz **RBAC** (kto ma dostęp
 | **TABLET**    | Lista kolejek, lista wpisów kolejki, kontekst formularza (GET intake-forms), zgody/anamneza/body map/podpis/submit (PUT/PATCH/POST na intake-forms). **Zakres kolejek:** gdy w sesji jest `tablet_device_id` i urządzenie ma przypisaną placówkę (`TabletDevice.clinic_site_id`), API i widok HTML zwracają tylko kolejki tej placówki; bez przypisania – pusta lista. |
 | **DOCTOR**    | Medical documents: lista (GET), tworzenie (POST), szczegóły (GET), draft (PUT), unlock (POST), publish (POST), wersje (GET). Blokada edycji szkicu (max 24h): inny lekarz dostaje `423` na PUT draft; GET kontekstu zawiera `locked_by_*`. |
 | **ADMIN**     | Wszystko powyżej + użytkownicy staff, operacje outbox (lista, retry, process), retention, metryki (observability/metrics). |
+| **MANAGER**   | Jak recepcja/admin w zakresie nadzoru (import, urządzenia, dokumenty intake, panel lekarza) + raport księgowości (tylko przypisane placówki). |
+| **ACCOUNTING** | Wyłącznie raport księgowości: dashboard HTML `/admin/accounting/report/`, eksport CSV/XLSX; brak API staff poza logowaniem; brak list pacjentów i innych modułów admina. Wszystkie placówki w raporcie. |
 
 ---
 
@@ -49,6 +51,7 @@ Szczegóły request/response i kody błędów: [api-plan.md](api-plan.md) §2.
 - **Tablet (poczekalnia):** `/tablet/` → logowanie (TABLET) → wybór kolejki → lista pacjentów → „Otwórz formularz” → ekran „Formularz przygotowany” → **„Przekaż tablet pacjentowi – wypełnij formularz”** → `/tablet/form/<intake_form_id>/` (zgody, anamneza, body map, podpis, submit).
 - **Lekarz:** `/doctor/` → logowanie (DOCTOR/ADMIN) → lista dokumentów (work queue) z filtrami → „Öffnen” → `/doctor/<medical_document_id>/` (formularz Befund, zapis szkicu, publikacja).
 - **Recepcja/Admin – dokumenty intake (PDF):** w menu panelu Unfold: Rejestracja (Admin) → **Dokumenty intake (PDF)** lub bezpośrednio `/admin/intake-documents/` – lista dokumentów z filtrami (data kolejki, status PDF, placówka, pacjent), paginacja, link do szczegółów i przycisk „Podgląd PDF” (inline).
+- **Księgowość / Admin / Manager – raport tygodniowy:** w menu Unfold: **Księgowość** → **Raport tygodniowy** lub `/admin/accounting/report/` – zakres dat, podgląd tabeli (paginacja 20/100), agregaty per lekarz, eksport `/admin/accounting/report/export.csv` i `export.xlsx`. Rola **ACCOUNTING** widzi wyłącznie ten moduł; **MANAGER** — dane tylko z przypisanych placówek.
 
 ---
 
@@ -65,4 +68,5 @@ Portal wyniki dla pacjenta (wyniki.cogitomedica.pl) korzysta z **osobnych endpoi
 - **Tablet przypisany do placówki:** TabletDevice ma pole `clinic_site_id`. Tablet zalogowany z `android_id` ma w sesji `tablet_device_id`; GET daily-queues / daily-queues/{id}/entries i widok HTML poczekalni filtrują kolejki po `device.clinic_site_id`. Bez przypisania tablet widzi pustą listę (komunikat w UI). Przypisanie w adminie lub przez API (POST/PATCH tablet-devices).
 - **Dokumenty intake (PDF):** Dodane endpointy GET intake-documents (lista), GET intake-documents/{id}, GET intake-documents/{id}/preview-pdf dla RECEPTION/ADMIN (scope po clinic_site). W panelu Unfold: strona „Dokumenty intake (PDF)” pod `/admin/intake-documents/` (lista, szczegóły, podgląd PDF).
 - **Opcja B (dopełnienie procesu):** GET outbox-events i POST outbox-events/{id}/retry ograniczone do roli ADMIN (wcześniej: dowolny zalogowany użytkownik). Process i retention były już ADMIN-only.
+- **Raport księgowości:** rola `ACCOUNTING` (grupa Django bez uprawnień ModelAdmin); widoki `/admin/accounting/report/` + eksport CSV/XLSX; RBAC w `apps/operations/accounting_access.py`; audyt `ACCOUNTING_REPORT_EXPORT` przy eksporcie. Schematy pod `GET /api/v1/accounting/report` w kodzie — endpoint jeszcze niewpięty w `api_urls`.
 - **Proces udostępniania (PRD 3.4a):** SMS wyłącznie logistyczny; pacjent pobiera PDF przez portal wyniki (phone+DOB, OTP, HTTPS).

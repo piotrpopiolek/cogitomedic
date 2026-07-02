@@ -1,6 +1,6 @@
 # Audyt bezpieczeństwa – CogitoMedica
 
-Data: 2025-03 (aktualizacja: 2026-04 — rola `Manager`, panel lekarza HTML)  
+Data: 2025-03 (aktualizacja: 2026-07 — rola `Accounting`, raport księgowości admin HTML)  
 Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub rejestracji; luki w systemie.
 
 ## Podsumowanie
@@ -52,6 +52,7 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 - `path("admin/", admin.site.urls)` – standardowa ochrona Django (wymaga `is_staff`).
 - `reception_dashboard_view`: `@staff_member_required`.
 - `intake_documents_list_view`, `intake_document_detail_view`: `@staff_member_required` oraz `_is_reception_or_admin(request)` (redirect do admin:index przy braku roli).
+- **Raport księgowości** (`accounting_report_dashboard_view`, `accounting_report_export_csv_view`, `accounting_report_export_xlsx_view` w `apps/operations/views.py`): `@staff_member_required` oraz `accounting_report_access_ok` — dozwolone role **ACCOUNTING**, **ADMIN**, **MANAGER**; inne role staff → **403**. Grupa Accounting **nie** ma uprawnień Django ModelAdmin (migracja `users/0020`); konto Accounting nie otwiera list pacjentów (`admin:reception_patient_changelist` → 403). Zakres placówek: Accounting/Admin — wszystkie; Manager — `get_scoped_clinic_site_ids`. Eksport zapisuje audyt `ACCOUNTING_REPORT_EXPORT` (metadane bez PHI).
 
 ### API v1 (`cogitomedica/api_urls.py`, aplikacje)
 
@@ -76,5 +77,6 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 ## Brak wykrytych luk
 
 - Pacjent nie może wejść na panel lekarza, admina ani rejestracji/tabletu (brak konta staff, osobne ścieżki logowania i sprawdzanie ról).
+- Konto **Accounting** ma dostęp wyłącznie do raportu księgowości w adminie — nie do pacjentów ani API medycznego.
 - API staff jest chronione rolami; dokumenty pacjenta w portalu wyników są filtrowane po `patient_id` z sesji.
 - Health nie ujawnia już wewnętrznych checks anonimowo; docs/schema tylko dla staff.
