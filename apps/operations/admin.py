@@ -23,6 +23,12 @@ class AuditEventAdmin(UnfoldModelAdmin):
     )
     list_display_links = ("event_time",)
     list_filter = ("event_type",)
+    search_fields = (
+        "patient__first_name",
+        "patient__last_name",
+        "patient__phone",
+        "patient__email",
+    )
     ordering = ["-event_time"]
     raw_id_fields = ("actor_user", "patient", "medical_document", "outbox_event")
     readonly_fields = (
