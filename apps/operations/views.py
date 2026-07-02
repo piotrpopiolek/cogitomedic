@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
@@ -22,6 +24,13 @@ from apps.operations.export import (
     render_accounting_report_xlsx,
 )
 from apps.operations.services import create_audit_event
+
+ExportFormat = Literal["csv", "xlsx"]
+
+_EXPORT_CONTENT_TYPES: dict[ExportFormat, str] = {
+    "csv": "text/csv; charset=utf-8",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 
 def _accounting_report_forbidden_response(
@@ -122,10 +131,9 @@ def _export_filename(date_from: str, date_to: str, ext: str) -> str:
     return f"accounting_report_{date_from}_{date_to}.{ext}"
 
 
-@staff_member_required
-def accounting_report_export_csv_view(request: HttpRequest) -> HttpResponse:
-    if not accounting_report_access_ok(request.user):
-        return _accounting_report_forbidden_response(request)
+def _build_export_response(
+    request: HttpRequest, export_format: ExportFormat
+) -> HttpResponse:
     date_from, date_to = resolve_report_date_range(
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
@@ -142,58 +150,35 @@ def accounting_report_export_csv_view(request: HttpRequest) -> HttpResponse:
         metadata={
             "date_from": date_from.isoformat(),
             "date_to": date_to.isoformat(),
-            "format": "csv",
+            "format": export_format,
             "row_count": len(report.rows),
         },
     )
-    response = HttpResponse(
-        render_accounting_report_csv(
+    headers = resolve_accounting_report_export_headers(request)
+    if export_format == "csv":
+        body = render_accounting_report_csv(report.rows, headers=headers)
+    else:
+        body = render_accounting_report_xlsx(
             report.rows,
-            headers=resolve_accounting_report_export_headers(request),
-        ),
-        content_type="text/csv; charset=utf-8",
-    )
+            headers=headers,
+            sheet_title=resolve_accounting_report_export_sheet_title(request),
+        )
+    response = HttpResponse(body, content_type=_EXPORT_CONTENT_TYPES[export_format])
     response["Content-Disposition"] = (
-        f'attachment; filename="{_export_filename(date_from.isoformat(), date_to.isoformat(), "csv")}"'
+        f'attachment; filename="{_export_filename(date_from.isoformat(), date_to.isoformat(), export_format)}"'
     )
     return response
+
+
+@staff_member_required
+def accounting_report_export_csv_view(request: HttpRequest) -> HttpResponse:
+    if not accounting_report_access_ok(request.user):
+        return _accounting_report_forbidden_response(request)
+    return _build_export_response(request, "csv")
 
 
 @staff_member_required
 def accounting_report_export_xlsx_view(request: HttpRequest) -> HttpResponse:
     if not accounting_report_access_ok(request.user):
         return _accounting_report_forbidden_response(request)
-    date_from, date_to = resolve_report_date_range(
-        date_from_raw=request.GET.get("date_from"),
-        date_to_raw=request.GET.get("date_to"),
-    )
-    scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
-    report = build_accounting_report(
-        date_from=date_from,
-        date_to=date_to,
-        scoped_clinic_site_ids=scoped_clinic_site_ids,
-    )
-    create_audit_event(
-        event_type="ACCOUNTING_REPORT_EXPORT",
-        actor_user_id=request.user.id,
-        metadata={
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            "format": "xlsx",
-            "row_count": len(report.rows),
-        },
-    )
-    response = HttpResponse(
-        render_accounting_report_xlsx(
-            report.rows,
-            headers=resolve_accounting_report_export_headers(request),
-            sheet_title=resolve_accounting_report_export_sheet_title(request),
-        ),
-        content_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-    )
-    response["Content-Disposition"] = (
-        f'attachment; filename="{_export_filename(date_from.isoformat(), date_to.isoformat(), "xlsx")}"'
-    )
-    return response
+    return _build_export_response(request, "xlsx")
