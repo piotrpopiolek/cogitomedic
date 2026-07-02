@@ -13,6 +13,7 @@ ROLE_GROUP_NAME_MAP = {
     "ADMIN": "Admin",
     "TABLET": "Tablet",
     "MANAGER": "Manager",
+    "ACCOUNTING": "Accounting",
 }
 VALID_STAFF_ROLES = frozenset(ROLE_GROUP_NAME_MAP.keys())
 
@@ -177,3 +178,7 @@ class StaffUser(AbstractUser):
     @property
     def is_manager(self) -> bool:
         return self._has_role_group(ROLE_GROUP_NAME_MAP["MANAGER"])
+
+    @property
+    def is_accounting(self) -> bool:
+        return self._has_role_group(ROLE_GROUP_NAME_MAP["ACCOUNTING"])

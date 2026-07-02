@@ -963,5 +963,125 @@
     "de": "Websiteverwaltung",
     "en": "Site administration",
     "pl": "Administracja stroną"
+  },
+  "administration.side_accounting": {
+    "de": "Buchhaltung",
+    "en": "Accounting",
+    "pl": "Księgowość"
+  },
+  "administration.side_accounting_report": {
+    "de": "Wochenbericht",
+    "en": "Weekly report",
+    "pl": "Raport tygodniowy"
+  },
+  "administration.accounting_report_title": {
+    "de": "Buchhaltungsbericht",
+    "en": "Accounting report",
+    "pl": "Raport księgowości"
+  },
+  "administration.accounting_access_forbidden": {
+    "de": "Keine Berechtigung für den Buchhaltungsbericht.",
+    "en": "You do not have permission to access the accounting report.",
+    "pl": "Brak uprawnień do raportu księgowości."
+  },
+  "administration.accounting_date_from": {
+    "de": "Von",
+    "en": "From",
+    "pl": "Od"
+  },
+  "administration.accounting_date_to": {
+    "de": "Bis",
+    "en": "To",
+    "pl": "Do"
+  },
+  "administration.accounting_apply_range": {
+    "de": "Bericht anzeigen",
+    "en": "Show report",
+    "pl": "Pokaż raport"
+  },
+  "administration.accounting_export_csv": {
+    "de": "CSV exportieren",
+    "en": "Export CSV",
+    "pl": "Eksport CSV"
+  },
+  "administration.accounting_export_xlsx": {
+    "de": "XLSX exportieren",
+    "en": "Export XLSX",
+    "pl": "Eksport XLSX"
+  },
+  "administration.accounting_report_hint": {
+    "de": "Zeilen: erste Befund-Veröffentlichung nach published_at. Revisionen erzeugen keine neue Position.",
+    "en": "Rows: first Befund publication by published_at date. Revisions do not create a new line item.",
+    "pl": "Wiersze: pierwsza publikacja Befundu wg daty published_at. Rewizje nie tworzą nowej pozycji."
+  },
+  "administration.accounting_report_rows_total": {
+    "de": "Zeilen im Zeitraum.",
+    "en": "rows in range.",
+    "pl": "wierszy w zakresie."
+  },
+  "administration.accounting_doctor_counts": {
+    "de": "Veröffentlichungen pro Arzt",
+    "en": "Publications per doctor",
+    "pl": "Publikacje per lekarz"
+  },
+  "administration.accounting_col_doctor": {
+    "de": "Arzt",
+    "en": "Doctor",
+    "pl": "Lekarz"
+  },
+  "administration.accounting_col_count": {
+    "de": "Anzahl",
+    "en": "Count",
+    "pl": "Liczba"
+  },
+  "administration.accounting_report_empty": {
+    "de": "Keine Veröffentlichungen im gewählten Datumsbereich.",
+    "en": "No publications in the selected date range.",
+    "pl": "Brak publikacji w wybranym zakresie dat."
+  },
+  "administration.accounting_col_nr": {
+    "de": "Nr",
+    "en": "No.",
+    "pl": "Lp."
+  },
+  "administration.accounting_col_first_name": {
+    "de": "Vorname",
+    "en": "First name",
+    "pl": "Imię"
+  },
+  "administration.accounting_col_last_name": {
+    "de": "Nachname",
+    "en": "Last name",
+    "pl": "Nazwisko"
+  },
+  "administration.accounting_col_address": {
+    "de": "Adresse",
+    "en": "Address",
+    "pl": "Adres"
+  },
+  "administration.accounting_col_email": {
+    "de": "E-Mail",
+    "en": "Email",
+    "pl": "E-mail"
+  },
+  "administration.accounting_col_befund_doctor": {
+    "de": "Befund-Arzt",
+    "en": "Report physician",
+    "pl": "Lekarz Befundu"
+  },
+  "administration.accounting_col_exam_date": {
+    "de": "Untersuchungsdatum",
+    "en": "Examination date",
+    "pl": "Data badania"
+  },
+  "administration.accounting_export_sheet_title": {
+    "de": "Patientendaten",
+    "en": "Patient data",
+    "pl": "Dane pacjenta"
+  },
+  "administration.accounting_pagination_total": {
+    "de": "insgesamt",
+    "en": "total",
+    "pl": "łącznie"
   }
 }

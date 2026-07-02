@@ -1,0 +1,118 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n cogitomedica_i18n %}
+
+{% block breadcrumbs %}
+    <div class="px-4 py-3 sm:px-8">
+        <nav aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2 text-sm font-medium text-gray-500">
+                <li><a href="{% url 'admin:index' %}" class="hover:text-gray-900">{% admin_trans "administration.breadcrumb_start" "Start" %}</a></li>
+                <li><span class="mx-2">/</span></li>
+                <li class="text-gray-900" aria-current="page">{{ title }}</li>
+            </ol>
+        </nav>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-8 pb-8">
+    <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
+
+    <form method="get" class="mb-6 flex flex-wrap items-end gap-4 bg-white rounded-md shadow border border-gray-200 p-4">
+        <div>
+            <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.accounting_date_from" "Od" %}</label>
+            <input type="date" id="date_from" name="date_from" value="{{ date_from }}" class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+        </div>
+        <div>
+            <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">{% admin_trans "administration.accounting_date_to" "Do" %}</label>
+            <input type="date" id="date_to" name="date_to" value="{{ date_to }}" class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+        </div>
+        <button type="submit" class="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+            {% admin_trans "administration.accounting_apply_range" "Pokaż raport" %}
+        </button>
+        <a href="{% url 'admin_accounting_report_export_csv' %}{{ export_querystring }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            {% admin_trans "administration.accounting_export_csv" "Eksport CSV" %}
+        </a>
+        <a href="{% url 'admin_accounting_report_export_xlsx' %}{{ export_querystring }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            {% admin_trans "administration.accounting_export_xlsx" "Eksport XLSX" %}
+        </a>
+    </form>
+
+    <p class="text-sm text-gray-600 mb-6">
+        {% admin_trans "administration.accounting_report_hint" "Wiersze: pierwsza publikacja Befundu (version 1) wg daty published_at. Rewizje nie tworzą nowej pozycji." %}
+        <span class="font-medium">{{ report_total_rows }}</span>
+        {% admin_trans "administration.accounting_report_rows_total" "wierszy w zakresie." %}
+    </p>
+
+    {% if doctor_counts %}
+    <div class="mb-8 bg-white rounded-md shadow border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold mb-4">{% admin_trans "administration.accounting_doctor_counts" "Publikacje per lekarz" %}</h2>
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead>
+                <tr>
+                    <th class="px-4 py-2 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_doctor" "Lekarz" %}</th>
+                    <th class="px-4 py-2 text-right font-medium text-gray-500">{% admin_trans "administration.accounting_col_count" "Liczba" %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for item in doctor_counts %}
+                <tr>
+                    <td class="px-4 py-2">{{ item.doctor_name }}</td>
+                    <td class="px-4 py-2 text-right">{{ item.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-md shadow border border-gray-200 overflow-hidden">
+        {% if items %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_nr" "Nr" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_first_name" "Vorname" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_last_name" "Nachname" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_address" "Adresse" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_email" "Email" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_befund_doctor" "Befund-Arzt" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.accounting_col_exam_date" "Untersuchungsdatum" %}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for row in items %}
+                    <tr>
+                        <td class="px-4 py-3">{{ row.row_no }}</td>
+                        <td class="px-4 py-3">{{ row.first_name }}</td>
+                        <td class="px-4 py-3">{{ row.last_name }}</td>
+                        <td class="px-4 py-3">{{ row.address }}</td>
+                        <td class="px-4 py-3">{{ row.email }}</td>
+                        <td class="px-4 py-3">{{ row.doctor_name }}</td>
+                        <td class="px-4 py-3">{{ row.exam_date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagination.total > pagination.page_size %}
+        <div class="px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm text-gray-600">
+            <span>
+                {{ pagination.total }} {% admin_trans "administration.accounting_pagination_total" "łącznie" %}, {{ pagination.page }} ({{ items|length }})
+            </span>
+            <div class="flex gap-2">
+                {% if previous_page_url %}
+                <a href="{{ previous_page_url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{% admin_trans "administration.link_previous" "← Poprzednia" %}</a>
+                {% endif %}
+                {% if next_page_url %}
+                <a href="{{ next_page_url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{% admin_trans "administration.link_next" "Następna →" %}</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="px-4 py-8 text-sm text-gray-500 italic">{% admin_trans "administration.accounting_report_empty" "Brak publikacji w wybranym zakresie dat." %}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
