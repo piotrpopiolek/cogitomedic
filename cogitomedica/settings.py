@@ -193,6 +193,19 @@ def _is_patient_directory_role(request) -> bool:
     )
 
 
+def _is_accounting_report_role(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_admin_role
+            or getattr(user, "is_manager", False)
+            or getattr(user, "is_accounting", False)
+        )
+    )
+
+
 def _is_panele_lekarz_item(request) -> bool:
     """Lekarz, Manager, Admin (nie sama Recepcja)."""
     user = getattr(request, "user", None)
@@ -602,6 +615,27 @@ if HAS_UNFOLD:
                                 "admin_external_upload_hub"
                             ),
                             "permission": lambda request: _is_reception_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy(
+                        "administration.side_accounting", "Księgowość"
+                    ),
+                    "permission": lambda request: _is_accounting_report_role(request),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_accounting_report",
+                                "Raport tygodniowy",
+                            ),
+                            "icon": "receipt_long",
+                            "link": lambda request: reverse_lazy(
+                                "admin_accounting_report"
+                            ),
+                            "permission": lambda request: _is_accounting_report_role(
                                 request
                             ),
                         },

@@ -1,0 +1,409 @@
+"""Accounting weekly report service, export, and admin views."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from django.contrib.auth.models import Group
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.models import (
+    DocVersionStatus,
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
+    MedicalDocumentVersion,
+    PdfStatus,
+)
+from apps.operations.accounting_report import (
+    build_accounting_report,
+    default_report_week_range,
+    format_patient_address,
+    published_at_range_utc,
+    resolve_report_date_range,
+)
+from apps.operations.export import render_accounting_report_csv
+from apps.operations.models import AuditEvent
+from apps.operations.views import accounting_report_access_ok
+from apps.reception.models import (
+    ClinicSite,
+    ConsultingRoom,
+    DailyQueue,
+    Patient,
+    PatientFormSession,
+    QueueEntry,
+    QueueEntryStatus,
+    QueueStatus,
+)
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
+
+
+class AccountingReportBase(TestCase):
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.doctor = StaffUser.objects.create_user(
+            username="acct-doctor",
+            email="acct-doctor@example.com",
+            password="test-pass-123",
+            first_name="Hans",
+            last_name="Müller",
+            is_staff=True,
+        )
+        Group.objects.get_or_create(name=ROLE_GROUP_NAME_MAP["DOCTOR"])[0].user_set.add(
+            cls.doctor
+        )
+        cls.doctor2 = StaffUser.objects.create_user(
+            username="acct-doctor-2",
+            email="acct-doctor-2@example.com",
+            password="test-pass-123",
+            first_name="Eva",
+            last_name="Schmidt",
+            is_staff=True,
+        )
+        Group.objects.get_or_create(name=ROLE_GROUP_NAME_MAP["DOCTOR"])[0].user_set.add(
+            cls.doctor2
+        )
+        cls.accounting_user = StaffUser.objects.create_user(
+            username="acct-user",
+            email="acct-user@example.com",
+            password="test-pass-123",
+            is_staff=True,
+        )
+        Group.objects.get_or_create(name=ROLE_GROUP_NAME_MAP["ACCOUNTING"])[
+            0
+        ].user_set.add(cls.accounting_user)
+        cls.clinic_site = ClinicSite.objects.create(
+            code="ACCT",
+            name="Accounting Clinic",
+        )
+        cls.consulting_room = ConsultingRoom.objects.create(
+            clinic_site=cls.clinic_site,
+            code="A1",
+            name="Room A1",
+        )
+        cls.daily_queue = DailyQueue.objects.create(
+            clinic_site=cls.clinic_site,
+            consulting_room=cls.consulting_room,
+            queue_date=date(2026, 3, 10),
+            status=QueueStatus.OPEN,
+            assigned_doctor=cls.doctor,
+            created_by_user=cls.doctor,
+        )
+        cls.patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Kowalska",
+            date_of_birth=date(1985, 5, 15),
+            phone="48500111222",
+            email="anna@example.com",
+            street="Musterstr. 1",
+            postal_code="10115",
+            city="Berlin",
+        )
+        cls.queue_entry = QueueEntry.objects.create(
+            daily_queue=cls.daily_queue,
+            patient=cls.patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=cls.doctor,
+        )
+        cls.session = PatientFormSession.objects.create(
+            queue_entry=cls.queue_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=cls.doctor,
+        )
+        cls.intake = PatientIntakeForm.objects.create(
+            queue_entry=cls.queue_entry,
+            session=cls.session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="a" * 64,
+        )
+
+    def _make_doc(self, **overrides) -> MedicalDocument:
+        defaults = dict(
+            queue_entry=self.queue_entry,
+            intake_form=self.intake,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        defaults.update(overrides)
+        return MedicalDocument.objects.create(**defaults)
+
+    def _make_published_version(
+        self,
+        doc: MedicalDocument,
+        *,
+        version_no: int = 1,
+        published_at: datetime | None = None,
+        published_by_user: StaffUser | None = None,
+    ) -> MedicalDocumentVersion:
+        when = published_at or timezone.now()
+        version = MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=version_no,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/test.pdf",
+            publish_request_id=uuid.uuid4(),
+            published_at=when,
+            publish_locale="de-DE",
+            published_by_user=published_by_user or self.doctor,
+        )
+        MedicalDocument.objects.filter(pk=doc.pk).update(
+            published_version_no=version_no,
+            current_version_no=version_no,
+        )
+        return version
+
+
+class AccountingReportServiceTests(AccountingReportBase):
+    def test_includes_first_publication_in_range(self) -> None:
+        doc = self._make_doc()
+        published_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(doc, published_at=published_at)
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(len(report.rows), 1)
+        row = report.rows[0]
+        self.assertEqual(row.row_no, 1)
+        self.assertEqual(row.first_name, "Anna")
+        self.assertEqual(row.last_name, "Kowalska")
+        self.assertEqual(row.address, "Musterstr. 1, 10115, Berlin")
+        self.assertEqual(row.email, "anna@example.com")
+        self.assertEqual(row.doctor_name, "Hans Müller")
+        self.assertEqual(row.exam_date, "10.03.2026")
+
+    def test_revision_v2_not_in_report(self) -> None:
+        doc = self._make_doc()
+        v1_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        v2_at = datetime(2026, 3, 12, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(doc, version_no=1, published_at=v1_at)
+        self._make_published_version(
+            doc, version_no=2, published_at=v2_at, published_by_user=self.doctor2
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].doctor_name, "Hans Müller")
+
+    def test_external_upload_excluded(self) -> None:
+        doc = self._make_doc(source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD)
+        published_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(doc, published_at=published_at)
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(report.rows, [])
+
+    def test_out_of_range_excluded(self) -> None:
+        doc = self._make_doc()
+        published_at = datetime(2026, 2, 1, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(doc, published_at=published_at)
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(report.rows, [])
+
+    def test_doctor_counts_aggregate_documents(self) -> None:
+        doc1 = self._make_doc()
+        self._make_published_version(
+            doc1,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        other_entry = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=Patient.objects.create(
+                first_name="Jan",
+                last_name="Nowak",
+                date_of_birth=date(1990, 1, 1),
+                phone="48500999888",
+                email="jan@example.com",
+            ),
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=2,
+            created_by_user=self.doctor,
+        )
+        other_session = PatientFormSession.objects.create(
+            queue_entry=other_entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        other_intake = PatientIntakeForm.objects.create(
+            queue_entry=other_entry,
+            session=other_session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="b" * 64,
+        )
+        doc2 = MedicalDocument.objects.create(
+            queue_entry=other_entry,
+            intake_form=other_intake,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor2,
+        )
+        self._make_published_version(
+            doc2,
+            published_at=datetime(2026, 3, 12, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+            published_by_user=self.doctor2,
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        counts = {item.doctor_name: item.count for item in report.doctor_counts}
+        self.assertEqual(counts["Hans Müller"], 1)
+        self.assertEqual(counts["Eva Schmidt"], 1)
+
+    def test_empty_address_parts_return_empty_string(self) -> None:
+        patient = Patient.objects.create(
+            first_name="No",
+            last_name="Address",
+            date_of_birth=date(1991, 1, 1),
+            phone="48500777666",
+            email="noaddr@example.com",
+        )
+        self.assertEqual(format_patient_address(patient), "")
+
+    def test_default_week_range_is_monday_to_sunday(self) -> None:
+        monday, sunday = default_report_week_range(today=date(2026, 3, 11))
+        self.assertEqual(monday, date(2026, 3, 9))
+        self.assertEqual(sunday, date(2026, 3, 15))
+
+    def test_resolve_report_date_range_swaps_inverted(self) -> None:
+        date_from, date_to = resolve_report_date_range(
+            date_from_raw="2026-03-20",
+            date_to_raw="2026-03-10",
+        )
+        self.assertEqual(date_from, date(2026, 3, 10))
+        self.assertEqual(date_to, date(2026, 3, 20))
+
+    def test_published_at_range_utc_respects_local_midnight(self) -> None:
+        start, end = published_at_range_utc(date(2026, 3, 10), date(2026, 3, 10))
+        self.assertLess(start, end)
+        self.assertEqual((end - start).days, 1)
+
+
+class AccountingReportExportTests(AccountingReportBase):
+    def test_csv_contains_german_headers(self) -> None:
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        content = render_accounting_report_csv(report.rows).decode("utf-8")
+        self.assertIn("Vorname", content)
+        self.assertIn("Anna", content)
+        self.assertIn("10.03.2026", content)
+
+
+class AccountingReportViewTests(AccountingReportBase):
+    def setUp(self) -> None:
+        self.client = Client()
+
+    def test_accounting_user_can_open_dashboard(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(reverse("admin_accounting_report"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_doctor_forbidden(self) -> None:
+        self.client.force_login(self.doctor)
+        response = self.client.get(reverse("admin_accounting_report"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_access_helper(self) -> None:
+        self.assertTrue(accounting_report_access_ok(self.accounting_user))
+        self.assertFalse(accounting_report_access_ok(self.doctor))
+
+    def test_export_csv_writes_audit_event(self) -> None:
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report_export_csv"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        ev = AuditEvent.objects.filter(event_type="ACCOUNTING_REPORT_EXPORT").first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("format"), "csv")
+        self.assertEqual(ev.metadata.get("row_count"), 1)
+
+    def test_pagination_defaults_to_twenty_rows(self) -> None:
+        for index in range(25):
+            patient = Patient.objects.create(
+                first_name=f"P{index}",
+                last_name="Test",
+                date_of_birth=date(1980, 1, 1),
+                phone=f"48500{index:06d}",
+                email=f"p{index}@example.com",
+            )
+            entry = QueueEntry.objects.create(
+                daily_queue=self.daily_queue,
+                patient=patient,
+                entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+                position_no=10 + index,
+                created_by_user=self.doctor,
+            )
+            session = PatientFormSession.objects.create(
+                queue_entry=entry,
+                form_locale="de-DE",
+                expires_at=timezone.now() + timedelta(hours=1),
+                created_by_user=self.doctor,
+            )
+            intake = PatientIntakeForm.objects.create(
+                queue_entry=entry,
+                session=session,
+                form_status=IntakeStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+                signature_sha256="c" * 64,
+            )
+            doc = MedicalDocument.objects.create(
+                queue_entry=entry,
+                intake_form=intake,
+                status=MedicalDocStatus.PUBLISHED,
+                current_version_no=1,
+                created_by_user=self.doctor,
+            )
+            self._make_published_version(
+                doc,
+                published_at=datetime(
+                    2026, 3, 11, 9, index, tzinfo=ZoneInfo("Europe/Warsaw")
+                ),
+            )
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {"date_from": "2026-03-10", "date_to": "2026-03-16"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["items"]), 20)
+        self.assertEqual(response.context["pagination"]["total"], 25)
