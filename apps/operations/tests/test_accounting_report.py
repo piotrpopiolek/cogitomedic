@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from openpyxl import load_workbook
+from pydantic import ValidationError
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -26,11 +27,18 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.operations.accounting_report import (
+    AccountingReportResult,
+    AccountingReportRow,
+    DoctorPublicationCount,
     build_accounting_report,
     default_report_week_range,
     format_patient_address,
     published_at_range_utc,
     resolve_report_date_range,
+)
+from apps.operations.api_schemas import (
+    AccountingReportQueryParams,
+    build_accounting_report_response,
 )
 from apps.operations.export import (
     render_accounting_report_csv,
@@ -636,3 +644,100 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["items"]), 20)
         self.assertEqual(response.context["pagination"]["total"], 25)
+
+
+class AccountingReportApiSchemaTests(AccountingReportBase):
+    def test_query_params_defaults_and_resolved_week(self) -> None:
+        query = AccountingReportQueryParams.model_validate({})
+        self.assertEqual(query.page, 1)
+        self.assertEqual(query.page_size, 20)
+        date_from, date_to = query.resolved_date_range()
+        expected_from, expected_to = default_report_week_range()
+        self.assertEqual(date_from, expected_from)
+        self.assertEqual(date_to, expected_to)
+
+    def test_query_params_parses_iso_dates(self) -> None:
+        query = AccountingReportQueryParams.model_validate(
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "page": "2",
+                "page_size": "5",
+            }
+        )
+        self.assertEqual(query.date_from, date(2026, 3, 10))
+        self.assertEqual(query.date_to, date(2026, 3, 16))
+        self.assertEqual(query.page, 2)
+        self.assertEqual(query.page_size, 5)
+
+    def test_query_params_rejects_invalid_date(self) -> None:
+        with self.assertRaises(ValidationError):
+            AccountingReportQueryParams.model_validate({"date_from": "not-a-date"})
+
+    def test_query_params_rejects_extra_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            AccountingReportQueryParams.model_validate({"unexpected": "x"})
+
+    def test_build_response_serializes_report_with_pagination(self) -> None:
+        doc_id = uuid.uuid4()
+        doctor_id = self.doctor.id
+        report = AccountingReportResult(
+            rows=[
+                AccountingReportRow(
+                    row_no=index,
+                    first_name=f"First{index}",
+                    last_name=f"Last{index}",
+                    address="Street 1",
+                    email=f"p{index}@example.com",
+                    doctor_name="Dr. Test",
+                    exam_date="10.03.2026",
+                    medical_document_id=doc_id,
+                    doctor_user_id=doctor_id,
+                )
+                for index in range(1, 4)
+            ],
+            doctor_counts=[
+                DoctorPublicationCount(
+                    doctor_user_id=doctor_id,
+                    doctor_name="Dr. Test",
+                    count=3,
+                )
+            ],
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        response = build_accounting_report_response(report, page=2, page_size=2)
+        payload = response.model_dump(mode="json")
+        self.assertEqual(payload["date_from"], "2026-03-10")
+        self.assertEqual(payload["date_to"], "2026-03-16")
+        self.assertEqual(payload["report_total_rows"], 3)
+        self.assertEqual(payload["pagination"], {"page": 2, "page_size": 2, "total": 3})
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["row_no"], 3)
+        self.assertEqual(payload["items"][0]["medical_document_id"], str(doc_id))
+        self.assertEqual(payload["doctor_counts"][0]["count"], 3)
+
+    def test_build_response_matches_service_output(self) -> None:
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        query = AccountingReportQueryParams.model_validate(
+            {"date_from": "2026-03-10", "date_to": "2026-03-16"}
+        )
+        date_from, date_to = query.resolved_date_range()
+        self.assertEqual(report.date_from, date_from)
+        self.assertEqual(report.date_to, date_to)
+        response = build_accounting_report_response(
+            report,
+            page=query.page,
+            page_size=query.page_size,
+        )
+        self.assertEqual(len(response.items), 1)
+        self.assertEqual(response.items[0].first_name, "Anna")
+        self.assertEqual(response.items[0].last_name, "Kowalska")
