@@ -16,6 +16,9 @@ from cogitomedica.sentry_sampling import (
     parse_sentry_traces_sample_rate,
     sentry_traces_sampler,
 )
+from apps.operations.accounting_access import (
+    is_accounting_report_role as _is_accounting_report_role,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -190,19 +193,6 @@ def _is_patient_directory_role(request) -> bool:
     return bool(
         _is_doctor_or_admin_role(request)
         or _is_reception_manager_or_admin_role(request)
-    )
-
-
-def _is_accounting_report_role(request) -> bool:
-    user = getattr(request, "user", None)
-    return bool(
-        user
-        and user.is_authenticated
-        and (
-            user.is_admin_role
-            or getattr(user, "is_manager", False)
-            or getattr(user, "is_accounting", False)
-        )
     )
 
 
