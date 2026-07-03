@@ -35,6 +35,11 @@ from apps.intake.views import (
     intake_documents_list_view,
     intake_document_detail_view,
 )
+from apps.operations.views import (
+    accounting_report_dashboard_view,
+    accounting_report_export_csv_view,
+    accounting_report_export_xlsx_view,
+)
 
 urlpatterns = [
     path("", include("apps.patient_results.urls", namespace="ergebnisse")),
@@ -77,6 +82,21 @@ urlpatterns = [
         "admin/intake-documents/<uuid:version_id>/",
         intake_document_detail_view,
         name="admin_intake_document_detail",
+    ),
+    path(
+        "admin/accounting/report/",
+        accounting_report_dashboard_view,
+        name="admin_accounting_report",
+    ),
+    path(
+        "admin/accounting/report/export.csv",
+        accounting_report_export_csv_view,
+        name="admin_accounting_report_export_csv",
+    ),
+    path(
+        "admin/accounting/report/export.xlsx",
+        accounting_report_export_xlsx_view,
+        name="admin_accounting_report_export_xlsx",
     ),
     path("admin/", admin.site.urls),
     path("tablet/", include("cogitomedica.tablet_urls", namespace="tablet")),

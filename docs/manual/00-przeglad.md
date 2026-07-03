@@ -14,14 +14,15 @@ Interfejs personelu i pacjenta obsługuje języki: **niemiecki, angielski, polsk
 
 ## Role w systemie
 
-Uprawnienia personelu wynikają z roli przypisanej do konta: `Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`.
+Uprawnienia personelu wynikają z roli przypisanej do konta: `Reception`, `Doctor`, `Admin`, `Tablet`, `Manager`, `Accounting`.
 
 | Grupa / rola | Główny dostęp |
 |--------------|----------------|
 | **Reception** | Panel administracyjny (`/admin/`) — kolejki dzienne, pacjenci, wpisy kolejki, importy, podgląd PDF, dashboard recepcji |
 | **Tablet** | Interfejs `/tablet/` — wybór kolejki i pacjenta, uruchomienie formularza dla pacjenta |
 | **Doctor** | Panel `/doctor/` — kolejka pracy medycznej, formularz Befund, szkic / publikacja |
-| **Manager** | Panel administracyjny i dashboard recepcji (kolejki, pacjenci, urządzenia, import, dokumenty) + panel `/doctor/` do nadzoru operacyjnego |
+| **Manager** | Panel administracyjny i dashboard recepcji (kolejki, pacjenci, urządzenia, import, dokumenty) + panel `/doctor/` do nadzoru operacyjnego; raport księgowości (zakres przypisanych placówek) |
+| **Accounting** | Panel administracyjny — wyłącznie **Raport księgowości** (`/admin/accounting/report/`) i eksport CSV/XLSX; brak dostępu do list pacjentów i innych modułów admina |
 | **Admin** | Pełny panel administracyjny + te same panele co lekarz i (w razie potrzeby) recepcja/tablet |
 
 Uwaga: konto **Admin** lub **Reception** może zalogować się na `/tablet/` (np. awaria dedykowanego konta TABLET). Zalecane jest jednak **osobne konto Tablet** na urządzeniu w poczekalni.
@@ -33,6 +34,7 @@ Uwaga: konto **Admin** lub **Reception** może zalogować się na `/tablet/` (np
 | `/admin/` | Panel administracyjny — logowanie personelu |
 | `/admin/reception-dashboard/` | Dashboard operacyjny recepcji (importy, błędy outbox) |
 | `/admin/intake-documents/` | Lista i podgląd wersji PDF dokumentów intake |
+| `/admin/accounting/report/` | Raport księgowości — pierwsze publikacje Befundu, agregaty per lekarz, eksport CSV/XLSX |
 | `/tablet/` | Poczekalnia — kolejki i formularz pacjenta |
 | `/doctor/` | Panel lekarza — lista dokumentów, edycja Befund |
 | `/` (root) | Portal pacjenta — logowanie do wyników |
@@ -78,6 +80,7 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 - [Tablet — poczekalnia i formularz pacjenta](02-tablet.md)
 - [Lekarz — panel Befund](03-doktor.md)
 - [Administrator — konfiguracja i utrzymanie](04-administrator.md)
+- [Księgowość — raport tygodniowy i eksport](08-ksiegowosc-raport.md)
 - [Administrator / Manager — autoryzacja ścieżki papierowej (T1, T1′)](04-administrator-paper-intake.md)
 - [Ścieżka papierowa — diagram procesu (T1 / T2)](paper_intake_flow.md)
 - [Pacjent — portal wyników](05-pacjent-wyniki.md)
