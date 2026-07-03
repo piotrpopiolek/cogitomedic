@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
-from typing import Any
+from datetime import date, datetime, time, timedelta
+from uuid import UUID
 
 from django.conf import settings
 from django.db.models import Q
@@ -33,12 +33,12 @@ MISSING_HIDRIVE_RESULTS_DISPLAY_LIMIT = 100
 @dataclass(frozen=True)
 class MissingHiDriveResultRow:
     patient_name: str
-    queue_date: Any
+    queue_date: date
     entry_status: str
     match_status: IncomingMatchStatus
     suggested_filename: str
     hours_waiting: float
-    queue_entry_id: Any
+    queue_entry_id: UUID
     rejected_filenames: tuple[str, ...] = ()
 
 
@@ -53,8 +53,8 @@ class MissingHiDriveResultsReport:
 
 def query_hidrive_result_candidates(
     *,
-    scoped_clinic_site_ids: list | None,
-    queue_date_from,
+    scoped_clinic_site_ids: list[UUID] | None,
+    queue_date_from: date,
 ) -> list[QueueEntry]:
     qs = (
         QueueEntry.objects.select_related(
@@ -97,7 +97,7 @@ def query_hidrive_result_candidates(
     return list(qs)
 
 
-def _hours_waiting_since_queue_date(queue_date) -> float:
+def _hours_waiting_since_queue_date(queue_date: date) -> float:
     start = timezone.make_aware(datetime.combine(queue_date, time.min))
     return max(0.0, (timezone.now() - start).total_seconds() / 3600.0)
 
