@@ -523,6 +523,8 @@ class NormalizeRowTests(SimpleTestCase):
             "Berlin",
         ]
         result = _normalize_row(2, row, headers)
+        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.street, "Musterstraße 1")
         self.assertEqual(result.postal_code, "10115")
         self.assertEqual(result.city, "Berlin")
