@@ -4,6 +4,7 @@ from django.contrib import admin
 
 from apps.core.api_utils import get_scoped_clinic_site_ids
 from apps.core.staff_custom_admin import ensure_reception_admin_manager_staff
+from apps.core.translation_service import get_admin_translation
 from apps.reception.hidrive_dashboard import (
     MISSING_HIDRIVE_RESULTS_DISPLAY_LIMIT,
     build_missing_hidrive_results_report,
@@ -36,7 +37,11 @@ def reception_dashboard_view(request):
 
     context = {
         **admin.site.each_context(request),
-        "title": "Dashboard operacyjny recepcji",
+        "title": get_admin_translation(
+            request,
+            "administration.reception_dashboard_title",
+            "Reception operations dashboard",
+        ),
         "recent_imports": recent_imports,
         "failed_outbox": failed_outbox,
         "missing_hidrive_results": missing_hidrive_results,
