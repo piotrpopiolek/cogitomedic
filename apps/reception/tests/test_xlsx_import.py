@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from freezegun import freeze_time
 
+from apps.reception.models import Patient
 from apps.reception.xlsx_import import (
     NormalizedRow,
     XlsxImportErrorCode,
@@ -15,12 +16,15 @@ from apps.reception.xlsx_import import (
     _cleanup_clinic_name,
     _extract_file_metadata,
     _find_header_indices,
+    _format_xlsx_cell_text,
     _normalize_header_cell,
+    _normalize_imported_postal_code,
     _normalize_row,
     _normalize_site_name,
     _parse_date,
     _parse_time,
     _split_full_name,
+    _sync_patient_address_from_import_row,
     _title_case_name,
     _validate_headers,
 )
@@ -68,6 +72,13 @@ class FindHeaderIndicesTests(SimpleTestCase):
         result = _find_header_indices(row)
         self.assertEqual(result["first_name"], 1)
         self.assertEqual(result["email"], 3)
+
+    def test_city_header_aliases(self) -> None:
+        for header in ("Ort", "Stadt", "city", "Miasto", "Wohnort", "locality"):
+            with self.subTest(header=header):
+                row = ["Vorname", "Nachname", header]
+                result = _find_header_indices(row)
+                self.assertEqual(result["city"], 2)
 
 
 class ParseDateTests(SimpleTestCase):
@@ -299,6 +310,28 @@ class ExtractFileMetadataTests(SimpleTestCase):
         self.assertEqual(clinic_name, "Kreutzigerstraße")
 
 
+class FormatXlsxCellTextTests(SimpleTestCase):
+    def test_whole_number_float_without_decimal_suffix(self):
+        self.assertEqual(_format_xlsx_cell_text(17498.0), "17498")
+
+    def test_int_passthrough(self):
+        self.assertEqual(_format_xlsx_cell_text(10245), "10245")
+
+    def test_string_passthrough(self):
+        self.assertEqual(_format_xlsx_cell_text("  00-590  "), "00-590")
+
+
+class NormalizeImportedPostalCodeTests(SimpleTestCase):
+    def test_excel_numeric_plz(self):
+        self.assertEqual(_normalize_imported_postal_code(15537.0), "15537")
+
+    def test_legacy_string_with_decimal_zero(self):
+        self.assertEqual(_normalize_imported_postal_code("10315.0"), "10315")
+
+    def test_polish_format_unchanged(self):
+        self.assertEqual(_normalize_imported_postal_code("00-590"), "00-590")
+
+
 class NormalizeRowTests(SimpleTestCase):
     HEADERS = {
         "first_name": 0,
@@ -450,3 +483,114 @@ class NormalizeRowTests(SimpleTestCase):
         ]
         result = _normalize_row(2, row, headers)
         self.assertIsNone(result.street)
+
+    def test_postal_code_from_excel_float(self):
+        headers = {
+            **self.HEADERS,
+            "address": 6,
+            "postal_code": 7,
+        }
+        row = [
+            "Jan",
+            "Kowalski",
+            "15.05.1990",
+            "+48 500 100 200",
+            "jan@example.com",
+            "",
+            "Gabriel-Max-Straße 21",
+            10245.0,
+        ]
+        result = _normalize_row(2, row, headers)
+        self.assertEqual(result.street, "Gabriel-Max-Straße 21")
+        self.assertEqual(result.postal_code, "10245")
+
+    def test_city_from_ort_column(self) -> None:
+        headers = {
+            **self.HEADERS,
+            "address": 6,
+            "postal_code": 7,
+            "city": 8,
+        }
+        row = [
+            "Jan",
+            "Kowalski",
+            "15.05.1990",
+            "+48 500 100 200",
+            "jan@example.com",
+            "",
+            "Musterstraße 1",
+            "10115",
+            "Berlin",
+        ]
+        result = _normalize_row(2, row, headers)
+        self.assertEqual(result.street, "Musterstraße 1")
+        self.assertEqual(result.postal_code, "10115")
+        self.assertEqual(result.city, "Berlin")
+
+
+class SyncPatientAddressFromImportRowTests(TestCase):
+    def setUp(self) -> None:
+        self.patient = Patient.objects.create(
+            first_name="Anna",
+            last_name="Test",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500111222",
+            email="anna@example.com",
+        )
+
+    def test_persists_street_postal_code_and_city(self) -> None:
+        norm = NormalizedRow(
+            row_number=2,
+            first_name="Anna",
+            last_name="Test",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500111222",
+            email="anna@example.com",
+            street="Gabriel-Max-Straße 21",
+            postal_code="10245",
+            city="Berlin",
+        )
+        _sync_patient_address_from_import_row(self.patient, norm)
+        self.patient.refresh_from_db()
+        self.assertEqual(self.patient.street, "Gabriel-Max-Straße 21")
+        self.assertEqual(self.patient.postal_code, "10245")
+        self.assertEqual(self.patient.city, "Berlin")
+
+    def test_skips_empty_values_without_clearing_existing(self) -> None:
+        self.patient.street = "Existing St"
+        self.patient.postal_code = "10115"
+        self.patient.city = "Berlin"
+        self.patient.save(update_fields=["street", "postal_code", "city", "updated_at"])
+        norm = NormalizedRow(
+            row_number=2,
+            first_name="Anna",
+            last_name="Test",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500111222",
+            email="anna@example.com",
+            street="New Street 5",
+            postal_code=None,
+            city=None,
+        )
+        _sync_patient_address_from_import_row(self.patient, norm)
+        self.patient.refresh_from_db()
+        self.assertEqual(self.patient.street, "New Street 5")
+        self.assertEqual(self.patient.postal_code, "10115")
+        self.assertEqual(self.patient.city, "Berlin")
+
+    def test_no_op_when_import_row_has_no_address_fields(self) -> None:
+        norm = NormalizedRow(
+            row_number=2,
+            first_name="Anna",
+            last_name="Test",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500111222",
+            email="anna@example.com",
+        )
+        updated_at_before = self.patient.updated_at
+        _sync_patient_address_from_import_row(self.patient, norm)
+        self.patient.refresh_from_db()
+        self.assertIsNone(self.patient.street)
+        self.assertIsNone(self.patient.postal_code)
+        self.assertIsNone(self.patient.city)
+        self.assertEqual(self.patient.updated_at, updated_at_before)
