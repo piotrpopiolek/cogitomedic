@@ -502,6 +502,24 @@ class AccountingReportViewTests(AccountingReportBase):
         response = self.client.get(reverse("admin_accounting_report"))
         self.assertEqual(response.status_code, 200)
 
+    def test_accounting_user_admin_index_redirects_to_report(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(reverse("admin:index"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("admin_accounting_report"))
+
+    def test_admin_user_admin_index_stays_on_index(self) -> None:
+        admin = StaffUser.objects.create_user(
+            username="acct-admin-index",
+            email="acct-admin-index@example.com",
+            password="test-pass-123",
+            is_staff=True,
+        )
+        assign_group_to_test_user(admin, "Admin")
+        self.client.force_login(admin)
+        response = self.client.get(reverse("admin:index"))
+        self.assertEqual(response.status_code, 200)
+
     def test_admin_user_can_open_dashboard(self) -> None:
         admin = StaffUser.objects.create_user(
             username="acct-admin",
