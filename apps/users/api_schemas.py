@@ -21,7 +21,7 @@ class CreateStaffUserRequest(BaseModel):
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=100)
     phone_number: str | None = Field(default=None, min_length=7, max_length=20)
-    role: str = Field(pattern="^(RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER)$")
+    role: str = Field(pattern="^(RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER|ACCOUNTING)$")
     preferred_locale: str = Field(
         default="de-DE", pattern="^(de-DE|en-GB|pl-PL)$", max_length=10
     )
@@ -38,7 +38,7 @@ class UpdateStaffUserRequest(BaseModel):
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
     phone_number: str | None = Field(default=None, min_length=7, max_length=20)
     role: str | None = Field(
-        default=None, pattern="^(RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER)$"
+        default=None, pattern="^(RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER|ACCOUNTING)$"
     )
     preferred_locale: str | None = Field(
         default=None, pattern="^(de-DE|en-GB|pl-PL)$", max_length=10

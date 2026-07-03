@@ -47,6 +47,8 @@ def get_primary_role(user) -> str | None:
         return "ADMIN"
     elif user.is_manager:
         return "MANAGER"
+    elif user.is_accounting:
+        return "ACCOUNTING"
     elif user.is_doctor:
         return "DOCTOR"
     elif user.is_reception:

@@ -16,6 +16,9 @@ from cogitomedica.sentry_sampling import (
     parse_sentry_traces_sample_rate,
     sentry_traces_sampler,
 )
+from apps.operations.accounting_access import (
+    is_accounting_report_role as _is_accounting_report_role,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -602,6 +605,27 @@ if HAS_UNFOLD:
                                 "admin_external_upload_hub"
                             ),
                             "permission": lambda request: _is_reception_manager_or_admin_role(
+                                request
+                            ),
+                        },
+                    ],
+                },
+                {
+                    "title": db_gettext_lazy(
+                        "administration.side_accounting", "Księgowość"
+                    ),
+                    "permission": lambda request: _is_accounting_report_role(request),
+                    "items": [
+                        {
+                            "title": db_gettext_lazy(
+                                "administration.side_accounting_report",
+                                "Raport tygodniowy",
+                            ),
+                            "icon": "receipt_long",
+                            "link": lambda request: reverse_lazy(
+                                "admin_accounting_report"
+                            ),
+                            "permission": lambda request: _is_accounting_report_role(
                                 request
                             ),
                         },
