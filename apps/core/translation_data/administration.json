@@ -1054,10 +1054,15 @@
     "en": "Last name",
     "pl": "Nazwisko"
   },
-  "administration.accounting_col_address": {
-    "de": "Adresse",
-    "en": "Address",
-    "pl": "Adres"
+  "administration.accounting_col_street": {
+    "de": "Straße",
+    "en": "Street",
+    "pl": "Ulica"
+  },
+  "administration.accounting_col_postal_city": {
+    "de": "PLZ/Ort",
+    "en": "Postal code / city",
+    "pl": "Kod i miejscowość"
   },
   "administration.accounting_col_email": {
     "de": "E-Mail",
