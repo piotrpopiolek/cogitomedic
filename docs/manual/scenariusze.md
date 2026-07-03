@@ -34,6 +34,7 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | [SC-001](#sc-001-anulowany-wpis-nadal-w-kolejce-lekarza) | Anulowany wpis nadal w kolejce lekarza | Recepcja, Lekarz | nie nagrany |
 | [SC-002](#sc-002-usunięty-szkic-wpis-z-statusem--) | Usunięty szkic — wpis ze statusem „—” | Recepcja, Lekarz, Admin | nie nagrany |
 | [SC-003](#sc-003-otwarta-rewizja-revision-a-nie-chcemy-jej-kończyć) | Otwarta rewizja — porzucenie | Lekarz | nie nagrany |
+| [SC-004](#sc-004-pobranie-listy-tygodniowej-dla-księgowości) | Pobranie listy tygodniowej dla księgowości | Księgowość, Manager, Admin | nie nagrany |
 
 ---
 
@@ -82,6 +83,22 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 
 ---
 
+### SC-004 — Pobranie listy tygodniowej dla księgowości
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Księgowość (`ACCOUNTING`), Manager, Administrator |
+| **Objaw** | Księgowość potrzebuje **listy pacjentów z pierwszą publikacją Befundu** w danym tygodniu (imię, nazwisko, adres, e-mail, lekarz opisujący, data badania) do rozliczeń. |
+| **Przyczyna (techniczna)** | Raport jest modułem admina — nie ma go w panelu recepcji ani lekarza. |
+| **Co zrobić dziś (instrukcja)** | 1) Zaloguj się na konto z rolą **Accounting**, **Manager** lub **Admin** (np. `https://…/admin/`). 2) W menu po lewej: **Księgowość** → **Raport tygodniowy** (`/admin/accounting/report/`). 3) **Zakres dat:** domyślnie bieżący tydzień (pon.–niedz.); opcjonalnie ustaw **Data od** / **Data do** i zatwierdź filtr. 4) Sprawdź podgląd tabeli i sekcję **Liczba publikacji per lekarz**. 5) Pobierz plik: **Eksport CSV** lub **Eksport XLSX** — zawiera **wszystkie** wiersze z zakresu (nie tylko bieżącą stronę podglądu). 6) Otwórz plik w Excelu / programie księgowym. Nazwa pliku: `accounting_report_{data_od}_{data_do}.csv` lub `.xlsx`. |
+| **Kolumny w pliku** | Nr, Vorname, Nachname, Adresse, Email, Befund-Arzt (lekarz pierwszej publikacji), Untersuchungsdatum (data badania / kolejki). Kolumny płatności (Rechnungsbetrag, Überweisung, Kartenzahlung) — **jeszcze niedostępne** w systemie. |
+| **Czego nie robić** | Nie szukaj tej listy w recepcji ani u lekarza. Nie licz **rewizji** Befundu jako osobnych wizyt — raport obejmuje tylko **pierwszą** publikację (`version_no = 1`). Publikacje „Zewnętrzne badanie” (EXTERNAL_UPLOAD) nie wchodzą w ten raport. |
+| **Docelowo (produkt)** | Kolumny płatności w eksporcie — backlog [`.ai/TODO.md`](../../.ai/TODO.md); ewentualny film instruktażowy — poniżej. |
+| **Film** | nie nagrany — proponowany tytuł: *„Jak pobrać tygodniową listę dla księgowości (CSV/XLSX)”* |
+| **Powiązane** | [08-ksiegowosc-raport.md](08-ksiegowosc-raport.md) (pełna specyfikacja), [04-administrator.md](04-administrator.md) |
+
+---
+
 ## Backlog filmów (propozycje)
 
 | Priorytet | SC | Czas ~ | Odbiorca |
@@ -89,5 +106,6 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | Wysoki | SC-001 | 2–3 min | Recepcja + lekarz |
 | Wysoki | SC-002 | 2 min | Admin / recepcja |
 | Średni | SC-003 | 2 min | Lekarz |
+| Średni | SC-004 | 2–3 min | Księgowość / manager |
 
 Po nagraniu: plik w `docs/manual/assets/videos/scenariusze/` (np. `sc-001-anulowany-wpis.webm`), aktualizacja kolumny **Film** w tabeli powyżej i ewentualny link z rozdziału manuala.
