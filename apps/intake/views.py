@@ -1,4 +1,4 @@
-"""Read-only admin panel views for intake document versions (PDF) for RECEPTION/ADMIN."""
+"""Read-only admin panel views for intake document versions (PDF) for RECEPTION/MANAGER/ADMIN."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from django.contrib import admin
 from django.urls import reverse
 
 from apps.core.api_utils import get_scoped_clinic_site_ids
+from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
 from apps.intake.document_services import (
     check_intake_document_access,
     get_intake_document_detail,
@@ -24,22 +25,10 @@ from apps.intake.models import IntakeDocumentVersion
 from apps.reception.models import ClinicSite
 
 
-def _is_reception_or_admin(request: HttpRequest) -> bool:
-    user = getattr(request, "user", None)
-    return bool(
-        user
-        and user.is_authenticated
-        and (
-            getattr(user, "is_admin_role", False)
-            or getattr(user, "is_reception", False)
-        )
-    )
-
-
 @staff_member_required
 def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
-    """List intake document versions; RECEPTION/ADMIN only, scoped by clinic_site."""
-    if not _is_reception_or_admin(request):
+    """List intake document versions; RECEPTION/MANAGER/ADMIN, scoped by clinic_site."""
+    if not is_reception_admin_or_manager_staff(request.user):
         return redirect("admin:index")
 
     params = parse_intake_documents_list_params(request.GET)
@@ -108,8 +97,8 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
 
 @staff_member_required
 def intake_document_detail_view(request: HttpRequest, version_id: UUID) -> HttpResponse:
-    """Detail of one intake document version; RECEPTION/ADMIN only, scoped by clinic_site."""
-    if not _is_reception_or_admin(request):
+    """Detail of one intake document version; RECEPTION/MANAGER/ADMIN, scoped by clinic_site."""
+    if not is_reception_admin_or_manager_staff(request.user):
         return redirect("admin:index")
 
     try:

@@ -127,7 +127,7 @@ def list_intake_documents(
 
 
 def check_intake_document_access(version: IntakeDocumentVersion, user: Any) -> None:
-    """Raise ObjectDoesNotExist if user (RECEPTION/ADMIN) does not have access to this version."""
+    """Raise ObjectDoesNotExist if user does not have access to this version (clinic scope)."""
     if getattr(user, "is_admin_role", False) and user.is_admin_role:
         return
     scope_ids = get_scoped_clinic_site_ids(user)
