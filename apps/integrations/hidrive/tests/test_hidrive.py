@@ -13,6 +13,7 @@ from apps.integrations.hidrive.auth import (
 from apps.integrations.hidrive import client as hidrive_client
 from apps.integrations.hidrive.client import (
     HiDriveApiError,
+    HiDriveTimeoutError,
     _parse_dir_list_response,
     _resolve_remote_target_path,
     get_hidrive_adapter,
@@ -858,6 +859,161 @@ class HiDriveRealAdapterListDirTests(SimpleTestCase):
         self.assertNotIn("fields", dir_params)
         self.assertEqual(dir_params.get("members"), "file")
         post_mock.assert_not_called()
+
+
+class HiDriveListDirPaginationTests(SimpleTestCase):
+    @override_settings(
+        HIDRIVE_USE_MOCK="0",
+        HIDRIVE_LIST_DIR_PAGE_SIZE=500,
+        HIDRIVE_LIST_DIR_MAX_PAGES=50,
+        HIDRIVE_TIMEOUT_SECONDS=30,
+    )
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.requests.post")
+    def test_list_dir_single_page_when_under_page_size(
+        self, post_mock: Mock, get_mock: Mock, oauth_client_mock: Mock
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        listing = Mock(status_code=200)
+        listing.json.return_value = {
+            "members": [
+                {
+                    "name": "A.pdf",
+                    "path": "/users/cogitomedica/incoming/A.pdf",
+                    "size": 1,
+                }
+            ]
+        }
+
+        def _get_side_effect(url: str, **kwargs: object) -> Mock:
+            if url.endswith("/dir"):
+                return listing
+            user_me = Mock(status_code=200)
+            user_me.json.return_value = {"alias": "cogitomedica"}
+            return user_me
+
+        get_mock.side_effect = _get_side_effect
+        adapter = get_hidrive_adapter()
+        files = adapter.list_dir(remote_path="/incoming")
+
+        self.assertEqual(len(files), 1)
+        dir_calls = [
+            c for c in get_mock.call_args_list if str(c.args[0]).endswith("/dir")
+        ]
+        self.assertEqual(len(dir_calls), 1)
+        self.assertEqual(dir_calls[0].kwargs["params"]["limit"], "500")
+
+    @override_settings(
+        HIDRIVE_USE_MOCK="0",
+        HIDRIVE_LIST_DIR_PAGE_SIZE=500,
+        HIDRIVE_LIST_DIR_MAX_PAGES=50,
+    )
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.requests.post")
+    def test_list_dir_paginates_until_short_page(
+        self, post_mock: Mock, get_mock: Mock, oauth_client_mock: Mock
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        def _member(i: int) -> dict:
+            return {
+                "name": f"F{i}.pdf",
+                "path": f"/users/cogitomedica/incoming/F{i}.pdf",
+                "size": 1,
+            }
+
+        page1 = Mock(status_code=200)
+        page1.json.return_value = {"members": [_member(i) for i in range(500)]}
+        page2 = Mock(status_code=200)
+        page2.json.return_value = {"members": [_member(i) for i in range(500, 700)]}
+        dir_responses = iter([page1, page2])
+
+        def _get_side_effect(url: str, **kwargs: object) -> Mock:
+            if url.endswith("/dir"):
+                return next(dir_responses)
+            user_me = Mock(status_code=200)
+            user_me.json.return_value = {"alias": "cogitomedica"}
+            return user_me
+
+        get_mock.side_effect = _get_side_effect
+        adapter = get_hidrive_adapter()
+        files = adapter.list_dir(remote_path="/incoming")
+
+        self.assertEqual(len(files), 700)
+        dir_calls = [
+            c for c in get_mock.call_args_list if str(c.args[0]).endswith("/dir")
+        ]
+        self.assertEqual(len(dir_calls), 2)
+        self.assertEqual(dir_calls[0].kwargs["params"]["limit"], "500")
+        self.assertEqual(dir_calls[1].kwargs["params"]["limit"], "500,500")
+
+    @override_settings(
+        HIDRIVE_USE_MOCK="0",
+        HIDRIVE_LIST_DIR_PAGE_SIZE=10,
+        HIDRIVE_LIST_DIR_MAX_PAGES=2,
+    )
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.requests.post")
+    def test_list_dir_raises_when_max_pages_exceeded(
+        self, post_mock: Mock, get_mock: Mock, oauth_client_mock: Mock
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        user_me = Mock(status_code=200)
+        user_me.json.return_value = {"alias": "cogitomedica"}
+
+        full_page = Mock(status_code=200)
+        full_page.json.return_value = {
+            "members": [
+                {
+                    "name": f"X{i}.pdf",
+                    "path": f"/users/cogitomedica/incoming/X{i}.pdf",
+                    "size": 1,
+                }
+                for i in range(10)
+            ]
+        }
+
+        get_mock.side_effect = [user_me, full_page, user_me, full_page, user_me]
+        adapter = get_hidrive_adapter()
+        with self.assertRaises(HiDriveApiError):
+            adapter.list_dir(remote_path="/incoming")
+
+    @override_settings(
+        HIDRIVE_USE_MOCK="0",
+        HIDRIVE_LIST_DIR_PAGE_SIZE=500,
+        HIDRIVE_DASHBOARD_PAGE_TIMEOUT_SECONDS=5,
+    )
+    @patch("apps.integrations.hidrive.client.get_hidrive_oauth_client")
+    @patch("apps.integrations.hidrive.client.requests.get")
+    @patch("apps.integrations.hidrive.client.requests.post")
+    @patch("apps.integrations.hidrive.client.time.monotonic")
+    def test_list_dir_total_timeout_raises(
+        self,
+        monotonic_mock: Mock,
+        post_mock: Mock,
+        get_mock: Mock,
+        oauth_client_mock: Mock,
+    ) -> None:
+        oauth = Mock()
+        oauth.get_access_token.return_value = "tok-1"
+        oauth_client_mock.return_value = oauth
+
+        monotonic_mock.side_effect = [0.0, 9.0]
+
+        adapter = get_hidrive_adapter()
+        with self.assertRaises(HiDriveTimeoutError):
+            adapter.list_dir(remote_path="/incoming", total_timeout_seconds=8.0)
 
 
 class HiDriveMockAdapterFileOpsTests(SimpleTestCase):

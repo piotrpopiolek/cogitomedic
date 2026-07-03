@@ -26,6 +26,90 @@
         </a>
     </div>
 
+    {% if missing_hidrive_meta.hidrive_status == "HIDRIVE_ERROR" %}
+    <div class="mb-8 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        {% admin_trans "administration.hidrive_error_banner" "HiDrive is unreachable (time limit or connection error). The list may be outdated." %}
+    </div>
+    {% elif missing_hidrive_meta.hidrive_status == "FOLDER_EMPTY" %}
+    <div class="mb-8 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        {% admin_trans "administration.hidrive_folder_empty_banner" "The /incoming/ folder currently contains no PDF files." %}
+        <span class="font-mono text-xs ml-1">{{ missing_hidrive_meta.incoming_path }}</span>
+    </div>
+    {% endif %}
+
+    <div class="mb-8 bg-white rounded-md shadow border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold flex items-center">
+                <span class="material-symbols-outlined mr-2">cloud_off</span>
+                {% admin_trans "administration.hidrive_missing_results_title" "Missing HiDrive laboratory results" %}
+            </h2>
+            <p class="text-sm text-gray-600 mt-2">
+                {% admin_trans "administration.hidrive_missing_results_hint" "Patients from the last 14 days with submitted intake / Befund in progress without a matching PDF in" %}
+                <span class="font-mono">{{ missing_hidrive_meta.incoming_path }}</span>
+                {% if missing_hidrive_total %}
+                — <span class="font-medium">{{ missing_hidrive_total }}</span>
+                {% admin_trans "administration.hidrive_rows_total" "entries total" %}
+                {% if missing_hidrive_total > missing_hidrive_results|length %}
+                — {% admin_trans "administration.hidrive_display_limit" "Showing first" %} {{ missing_hidrive_results|length }} / {{ missing_hidrive_total }}
+                {% endif %}
+                {% endif %}
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                {% admin_trans "administration.hidrive_runbook_hint" "See runbook: hidrive_incoming_reception.md" %}
+            </p>
+        </div>
+        {% if missing_hidrive_results %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_patient" "Patient" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_visit_date" "Visit date" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_status" "Status" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_suggested_name" "Suggested filename" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_waiting" "Waiting time" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">{% admin_trans "administration.hidrive_col_action" "Action" %}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for row in missing_hidrive_results %}
+                    <tr class="{% if row.hours_waiting >= 24 %}bg-amber-50{% endif %}">
+                        <td class="px-4 py-3 font-medium text-gray-900">{{ row.patient_name }}</td>
+                        <td class="px-4 py-3">{{ row.queue_date|date:"d.m.Y" }}</td>
+                        <td class="px-4 py-3">
+                            {% if row.match_status == "NO_FILE" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                {% admin_trans "administration.hidrive_status_no_file" "No file" %}
+                            </span>
+                            {% elif row.match_status == "AMBIGUOUS" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                {% admin_trans "administration.hidrive_status_ambiguous" "Ambiguous name" %}
+                            </span>
+                            {% elif row.match_status == "REJECTED_ONLY" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {% admin_trans "administration.hidrive_status_rejected_only" "Rejected file(s) only" %}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 font-mono text-xs">{{ row.suggested_filename }}</td>
+                        <td class="px-4 py-3">{% with hours=row.hours_waiting|floatformat:0 %}{% db_transf "administration.hidrive_hours_waiting" "{hours} h" hours=hours %}{% endwith %}</td>
+                        <td class="px-4 py-3">
+                            <a href="{% url 'admin:reception_queueentry_change' row.queue_entry_id %}" class="text-indigo-600 hover:text-indigo-900 font-medium">
+                                {% admin_trans "administration.hidrive_link_queue_entry" "Queue entry" %} &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% elif missing_hidrive_meta.hidrive_status != "HIDRIVE_ERROR" %}
+        <p class="px-6 py-4 text-sm text-gray-500 italic">
+            {% admin_trans "administration.hidrive_no_missing_results" "No missing laboratory PDF matches in the last 14 days." %}
+        </p>
+        {% endif %}
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Failed outbox -->
         <div class="bg-white rounded-md shadow p-6 border border-gray-200">

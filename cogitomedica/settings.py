@@ -917,6 +917,14 @@ HIDRIVE_API_BASE_URL = os.environ.get(
     "HIDRIVE_API_BASE_URL", "https://api.hidrive.strato.com/2.1"
 )
 HIDRIVE_TIMEOUT_SECONDS = int(os.environ.get("HIDRIVE_TIMEOUT_SECONDS", "30"))
+HIDRIVE_LIST_DIR_PAGE_SIZE = int(os.environ.get("HIDRIVE_LIST_DIR_PAGE_SIZE", "500"))
+HIDRIVE_LIST_DIR_MAX_PAGES = int(os.environ.get("HIDRIVE_LIST_DIR_MAX_PAGES", "50"))
+HIDRIVE_DASHBOARD_TIMEOUT_SECONDS = int(
+    os.environ.get("HIDRIVE_DASHBOARD_TIMEOUT_SECONDS", "8")
+)
+HIDRIVE_DASHBOARD_PAGE_TIMEOUT_SECONDS = int(
+    os.environ.get("HIDRIVE_DASHBOARD_PAGE_TIMEOUT_SECONDS", "5")
+)
 HIDRIVE_INCOMING_PATH = os.environ.get("HIDRIVE_INCOMING_PATH", "/incoming")
 HIDRIVE_PROCESSED_PATH = os.environ.get("HIDRIVE_PROCESSED_PATH", "/processed")
 # Logical root for Befund/intake PDFs (same resolution as incoming/processed: /users/<alias><prefix>/…).
