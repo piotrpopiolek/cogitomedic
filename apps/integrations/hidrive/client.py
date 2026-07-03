@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path, PurePosixPath
 from typing import Any, ClassVar, Protocol
 
@@ -20,6 +21,10 @@ class HiDriveApiError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+class HiDriveTimeoutError(HiDriveApiError):
+    """HiDrive listing or request exceeded a configured time budget."""
 
 
 def _response_json(response: requests.Response) -> Any:
@@ -43,7 +48,13 @@ class HiDriveAdapterProtocol(Protocol):
         """Download remote file and return raw bytes."""
         ...
 
-    def list_dir(self, *, remote_path: str) -> list[dict[str, Any]]:
+    def list_dir(
+        self,
+        *,
+        remote_path: str,
+        timeout_seconds: float | None = None,
+        total_timeout_seconds: float | None = None,
+    ) -> list[dict[str, Any]]:
         """List files in a remote directory (not subfolders)."""
         ...
 
@@ -97,7 +108,14 @@ class _MockHiDriveAdapter:
             raise FileNotFoundError(f"[MOCK HIDRIVE] no file seeded for {norm}")
         return self._file_contents[norm]
 
-    def list_dir(self, *, remote_path: str) -> list[dict[str, Any]]:
+    def list_dir(
+        self,
+        *,
+        remote_path: str,
+        timeout_seconds: float | None = None,
+        total_timeout_seconds: float | None = None,
+    ) -> list[dict[str, Any]]:
+        del timeout_seconds, total_timeout_seconds
         norm = _normalize_remote_path(remote_path)
         logger.info("[MOCK HIDRIVE] list_dir path=%s", norm)
         return list(self._dir_listings.get(norm, []))
@@ -266,51 +284,124 @@ class _HiDriveAdapter:
             timeout=timeout,
         )
 
-    def list_dir(self, *, remote_path: str) -> list[dict[str, Any]]:
+    def list_dir(
+        self,
+        *,
+        remote_path: str,
+        timeout_seconds: float | None = None,
+        total_timeout_seconds: float | None = None,
+    ) -> list[dict[str, Any]]:
         oauth_client = get_hidrive_oauth_client()
         access_token = oauth_client.get_access_token()
+        page_size = int(getattr(settings, "HIDRIVE_LIST_DIR_PAGE_SIZE", 500))
+        max_pages = int(getattr(settings, "HIDRIVE_LIST_DIR_MAX_PAGES", 50))
+        default_timeout = float(getattr(settings, "HIDRIVE_TIMEOUT_SECONDS", 30))
+        per_request_cap = float(
+            timeout_seconds if timeout_seconds is not None else default_timeout
+        )
+        deadline: float | None = None
+        if total_timeout_seconds is not None:
+            deadline = time.monotonic() + float(total_timeout_seconds)
+            page_cap = float(
+                getattr(settings, "HIDRIVE_DASHBOARD_PAGE_TIMEOUT_SECONDS", 5)
+            )
+            per_request_cap = min(per_request_cap, page_cap)
+
         # Intentionally no ``POST /dir`` before listing: read-only (no mkdir side effects
         # on e.g. /incoming when the folder is missing or not configured yet).
-        response = self._list_dir_once(
-            access_token=access_token, remote_path=remote_path
-        )
-        if response.status_code == 401:
-            access_token = oauth_client.get_access_token(force_refresh=True)
+        all_rows: list[dict[str, Any]] = []
+        offset = 0
+        pages_fetched = 0
+        last_page_len = 0
+        base_url = _hidrive_base_url()
+
+        while pages_fetched < max_pages:
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise HiDriveTimeoutError(
+                        f"HiDrive list_dir timed out for {remote_path} "
+                        f"after {pages_fetched} page(s)",
+                    )
+                request_timeout = min(remaining, per_request_cap)
+            else:
+                request_timeout = per_request_cap
+
             response = self._list_dir_once(
-                access_token=access_token, remote_path=remote_path
-            )
-        if response.status_code == 200:
-            resolved_for_parse = _resolve_remote_target_path(
-                base_url=_hidrive_base_url(),
                 access_token=access_token,
                 remote_path=remote_path,
+                offset=offset,
+                page_size=page_size,
+                timeout=request_timeout,
             )
-            payload = _response_json(response)
-            return _parse_dir_list_response(
-                resolved_dir_path=resolved_for_parse,
-                payload=payload,
-            )
-        # Missing directory (e.g. /incoming not created yet) — same as “no PDFs” for our gate.
-        if response.status_code == 404:
-            logger.info(
-                "HiDrive list_dir returned 404 for %s — treating as empty directory",
-                remote_path,
-            )
-            return []
-        if response.status_code >= 500:
+            if response.status_code == 401:
+                access_token = oauth_client.get_access_token(force_refresh=True)
+                response = self._list_dir_once(
+                    access_token=access_token,
+                    remote_path=remote_path,
+                    offset=offset,
+                    page_size=page_size,
+                    timeout=request_timeout,
+                )
+            if response.status_code == 200:
+                resolved_for_parse = _resolve_remote_target_path(
+                    base_url=base_url,
+                    access_token=access_token,
+                    remote_path=remote_path,
+                )
+                payload = _response_json(response)
+                page_rows = _parse_dir_list_response(
+                    resolved_dir_path=resolved_for_parse,
+                    payload=payload,
+                )
+                all_rows.extend(page_rows)
+                pages_fetched += 1
+                last_page_len = len(page_rows)
+                if last_page_len < page_size:
+                    break
+                offset += last_page_len
+                continue
+            if response.status_code == 404 and offset == 0:
+                logger.info(
+                    "HiDrive list_dir returned 404 for %s — treating as empty directory",
+                    remote_path,
+                )
+                return []
+            if response.status_code >= 500:
+                raise HiDriveApiError(
+                    f"HiDrive list_dir failed with status {response.status_code}",
+                    status_code=response.status_code,
+                )
+            if response.status_code == 401:
+                raise HiDriveAuthError(
+                    "HiDrive list_dir unauthorized after token refresh"
+                )
             raise HiDriveApiError(
-                f"HiDrive list_dir failed with status {response.status_code}",
+                f"HiDrive list_dir rejected with status {response.status_code}",
                 status_code=response.status_code,
             )
-        if response.status_code == 401:
-            raise HiDriveAuthError("HiDrive list_dir unauthorized after token refresh")
-        raise HiDriveApiError(
-            f"HiDrive list_dir rejected with status {response.status_code}",
-            status_code=response.status_code,
+
+        if pages_fetched >= max_pages and last_page_len >= page_size:
+            raise HiDriveApiError(
+                f"HiDrive list_dir exceeded max pages ({max_pages}) for {remote_path}",
+            )
+
+        logger.info(
+            "HiDrive list_dir path=%s pages=%s total_entries=%s",
+            remote_path,
+            pages_fetched,
+            len(all_rows),
         )
+        return all_rows
 
     def _list_dir_once(
-        self, *, access_token: str, remote_path: str
+        self,
+        *,
+        access_token: str,
+        remote_path: str,
+        offset: int = 0,
+        page_size: int | None = None,
+        timeout: float | None = None,
     ) -> requests.Response:
         base_url = _hidrive_base_url()
         resolved = _resolve_remote_target_path(
@@ -318,13 +409,23 @@ class _HiDriveAdapter:
             access_token=access_token,
             remote_path=remote_path,
         )
-        timeout = int(getattr(settings, "HIDRIVE_TIMEOUT_SECONDS", 30))
+        request_timeout = float(
+            timeout
+            if timeout is not None
+            else getattr(settings, "HIDRIVE_TIMEOUT_SECONDS", 30)
+        )
         headers = {"Authorization": f"Bearer {access_token}"}
         url = f"{base_url}/dir"
         base_params: dict[str, str] = {"path": resolved, "members": "file"}
+        if page_size is not None:
+            base_params["limit"] = (
+                str(page_size) if offset <= 0 else f"{offset},{page_size}"
+            )
         # Omit ``fields=`` on GET /dir: HiDrive can return 200 with only the directory node
         # (``name``, ``path``, …) and **no** ``members`` array, so the listing would be empty.
-        return requests.get(url, params=base_params, headers=headers, timeout=timeout)
+        return requests.get(
+            url, params=base_params, headers=headers, timeout=request_timeout
+        )
 
     def move_file(self, *, source_path: str, dest_path: str) -> None:
         oauth_client = get_hidrive_oauth_client()

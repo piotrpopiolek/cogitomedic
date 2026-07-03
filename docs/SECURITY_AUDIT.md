@@ -50,7 +50,7 @@ Zakres: Czy pacjent może uzyskać dostęp do panelu lekarza, administracji lub 
 ### Admin i widoki pod `/admin/`
 
 - `path("admin/", admin.site.urls)` – standardowa ochrona Django (wymaga `is_staff`).
-- `reception_dashboard_view`: `@staff_member_required`.
+- `reception_dashboard_view`: `@staff_member_required` oraz `ensure_reception_admin_manager_staff` — dozwolone role **RECEPTION**, **MANAGER**, **ADMIN**; role **TABLET**, **ACCOUNTING**, **DOCTOR** i inny staff bez tych ról → **403** (bezpośredni URL nie obchodzi ukrycia linku w sidebarze). Sekcja „Brakujące wyniki HiDrive” ujawnia PHI (nazwisko, data wizyty); zakres placówek jak outbox (`get_scoped_clinic_site_ids`).
 - `intake_documents_list_view`, `intake_document_detail_view`: `@staff_member_required` oraz `_is_reception_or_admin(request)` (redirect do admin:index przy braku roli).
 - **Raport księgowości** (`accounting_report_dashboard_view`, `accounting_report_export_csv_view`, `accounting_report_export_xlsx_view` w `apps/operations/views.py`): `@staff_member_required` oraz `accounting_report_access_ok` — dozwolone role **ACCOUNTING**, **ADMIN**, **MANAGER**; inne role staff → **403**. Grupa Accounting **nie** ma uprawnień Django ModelAdmin (migracja `users/0020`); konto Accounting nie otwiera list pacjentów (`admin:reception_patient_changelist` → 403). Zakres placówek: Accounting/Admin — wszystkie; Manager — `get_scoped_clinic_site_ids`. Eksport zapisuje audyt `ACCOUNTING_REPORT_EXPORT` (metadane bez PHI).
 

@@ -31,10 +31,11 @@ Adres: **`/admin/reception-dashboard/`**
 
 Strona pokazuje m.in.:
 
+- **Brakujące wyniki HiDrive** — pacjenci z ostatnich **14 dni** ze złożonym intake / Befundem w toku, u których **nie ma dopasowanego PDF** w folderze `/incoming/` na HiDrive (status: brak pliku, niejednoznaczna nazwa, tylko pliki `rejected_`). Kolumna **Sugerowana nazwa pliku** pomaga poprawnie nazwać PDF wg [hidrive_incoming_reception.md](hidrive_incoming_reception.md). Przy awarii chmury wyświetla się baner błędu — reszta dashboardu (importy, outbox) działa normalnie.
 - **Zaległe zdarzenia (błędy)** — wpisy outbox ze statusem błędu (np. problem z generowaniem PDF, uploadem lub SMS). Link „Zobacz szczegóły” prowadzi do rekordu w module Outbox.
 - **Ostatnie importy** — pliki importu pacjentów (nazwa pliku, liczba dodanych wierszy, błędy, status wsadu).
 
-**Kiedy tu zaglądać:** codziennie na początku zmiany oraz gdy pacjent zgłasza brak SMS lub dokumentu — aby szybko zobaczyć, czy w systemie nie ma zablokowanych zadań.
+**Kiedy tu zaglądać:** codziennie na początku zmiany oraz gdy lekarz zgłasza **blokadę Befundu (brak PDF z laboratorium)** lub pacjent zgłasza brak SMS — aby szybko zobaczyć brakujące dopasowania HiDrive i zablokowane zadania outbox.
 
 ![Dashboard recepcji — zaległe zdarzenia i importy](/docs/manual/assets/screenshots/reception-02-reception-dashboard.png)
 

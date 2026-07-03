@@ -35,6 +35,7 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | [SC-002](#sc-002-usunięty-szkic-wpis-z-statusem--) | Usunięty szkic — wpis ze statusem „—” | Recepcja, Lekarz, Admin | nie nagrany |
 | [SC-003](#sc-003-otwarta-rewizja-revision-a-nie-chcemy-jej-kończyć) | Otwarta rewizja — porzucenie | Lekarz | nie nagrany |
 | [SC-004](#sc-004-pobranie-listy-tygodniowej-dla-księgowości) | Pobranie listy tygodniowej dla księgowości | Księgowość, Manager, Admin | nie nagrany |
+| [SC-005](#sc-005-lekarz-nie-może-otworzyć-befundu-brak-pdf-z-laboratorium) | Lekarz nie może otworzyć Befundu — brak PDF z laboratorium | Recepcja, Lekarz | nie nagrany |
 
 ---
 
@@ -96,6 +97,19 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | **Docelowo (produkt)** | Kolumny płatności w eksporcie — backlog [`.ai/TODO.md`](../../.ai/TODO.md); ewentualny film instruktażowy — poniżej. |
 | **Film** | nie nagrany — proponowany tytuł: *„Jak pobrać tygodniową listę dla księgowości (CSV/XLSX)”* |
 | **Powiązane** | [08-ksiegowosc-raport.md](08-ksiegowosc-raport.md) (pełna specyfikacja), [04-administrator.md](04-administrator.md) |
+
+### SC-005 — Lekarz nie może otworzyć Befundu — brak PDF z laboratorium
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Recepcja, Lekarz |
+| **Objaw** | Lekarz widzi komunikat o braku dopasowanego pliku PDF w HiDrive (blokada wejścia w Befund / HTTP 424). |
+| **Przyczyna (techniczna)** | W folderze `/incoming/` na HiDrive nie ma pliku PDF o nazwie zgodnej z pacjentem, nazwa jest niejednoznaczna (homonim), albo jedyny pasujący plik ma prefix `rejected_`. |
+| **Co zrobić dziś (obejście)** | Recepcja otwiera **`/admin/reception-dashboard/`** → sekcja **Brakujące wyniki HiDrive**. Sprawdza pacjenta, status i **sugerowaną nazwę pliku**; wgrywa PDF do `/incoming/` lub poprawia nazwę wg [hidrive_incoming_reception.md](hidrive_incoming_reception.md). |
+| **Czego nie robić** | Nie udostępniać dashboardu roli bez uprawnień recepcji (TABLET, księgowość). Przy banerze awarii HiDrive na dashboardzie — nie traktować pustej listy jako „wszyscy mają pliki”. |
+| **Docelowo (produkt)** | Alert operacyjny ≥24 h — observability ([`.cursor/plans/observability_stack_upgrade.plan.md`](../../.cursor/plans/observability_stack_upgrade.plan.md)). |
+| **Film** | nie nagrany — proponowany tytuł: *„Recepcja: brakujący PDF z laboratorium na HiDrive”* |
+| **Powiązane** | [01-rejestracja.md](01-rejestracja.md) §2, [hidrive_incoming_reception.md](hidrive_incoming_reception.md) |
 
 ---
 
