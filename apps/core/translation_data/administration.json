@@ -424,6 +424,11 @@
     "en": "Paper intake authorization",
     "pl": "Autoryzacja ścieżki papierowej"
   },
+  "administration.reception_dashboard_title": {
+    "de": "Betriebs-Dashboard Anmeldung",
+    "en": "Reception operations dashboard",
+    "pl": "Dashboard operacyjny recepcji"
+  },
   "administration.external_upload_entry_attachments_heading": {
     "de": "PDF-Anhänge",
     "en": "PDF attachments",
@@ -884,6 +889,11 @@
     "en": "Reception (Admin)",
     "pl": "Rejestracja (Admin)"
   },
+  "administration.side_dashboard_recepcji": {
+    "de": "Betriebs-Dashboard",
+    "en": "Operations dashboard",
+    "pl": "Dashboard operacyjny"
+  },
   "administration.side_rejestracja": {
     "de": "Anmeldung",
     "en": "Reception",
@@ -1088,5 +1098,100 @@
     "de": "insgesamt",
     "en": "total",
     "pl": "łącznie"
+  },
+  "administration.hidrive_missing_results_title": {
+    "de": "Fehlende HiDrive-Laborergebnisse",
+    "en": "Missing HiDrive laboratory results",
+    "pl": "Brakujące wyniki laboratoryjne HiDrive"
+  },
+  "administration.hidrive_missing_results_hint": {
+    "de": "Patienten der letzten 14 Tage mit abgeschlossenem Intake / laufendem Befund ohne passende PDF in",
+    "en": "Patients from the last 14 days with submitted intake / Befund in progress without a matching PDF in",
+    "pl": "Pacjenci z ostatnich 14 dni ze złożonym intake / Befundem w toku bez dopasowanego PDF w"
+  },
+  "administration.hidrive_error_banner": {
+    "de": "HiDrive ist nicht erreichbar (Zeitlimit oder Verbindungsfehler). Die Liste kann veraltet sein.",
+    "en": "HiDrive is unreachable (time limit or connection error). The list may be outdated.",
+    "pl": "HiDrive jest niedostępny (limit czasu lub błąd połączenia). Lista może być nieaktualna."
+  },
+  "administration.hidrive_folder_empty_banner": {
+    "de": "Der Ordner /incoming/ enthält derzeit keine PDF-Dateien.",
+    "en": "The /incoming/ folder currently contains no PDF files.",
+    "pl": "Folder /incoming/ nie zawiera obecnie plików PDF."
+  },
+  "administration.hidrive_col_patient": {
+    "de": "Patient",
+    "en": "Patient",
+    "pl": "Pacjent"
+  },
+  "administration.hidrive_col_visit_date": {
+    "de": "Besuchsdatum",
+    "en": "Visit date",
+    "pl": "Data wizyty"
+  },
+  "administration.hidrive_col_status": {
+    "de": "Status",
+    "en": "Status",
+    "pl": "Status"
+  },
+  "administration.hidrive_col_suggested_name": {
+    "de": "Vorgeschlagener Dateiname",
+    "en": "Suggested filename",
+    "pl": "Sugerowana nazwa pliku"
+  },
+  "administration.hidrive_col_waiting": {
+    "de": "Wartezeit",
+    "en": "Waiting time",
+    "pl": "Czas oczekiwania"
+  },
+  "administration.hidrive_col_action": {
+    "de": "Aktion",
+    "en": "Action",
+    "pl": "Akcja"
+  },
+  "administration.hidrive_status_no_file": {
+    "de": "Keine Datei",
+    "en": "No file",
+    "pl": "Brak pliku"
+  },
+  "administration.hidrive_status_ambiguous": {
+    "de": "Mehrdeutiger Name",
+    "en": "Ambiguous name",
+    "pl": "Niejednoznaczna nazwa"
+  },
+  "administration.hidrive_status_rejected_only": {
+    "de": "Nur abgelehnte Datei(en)",
+    "en": "Rejected file(s) only",
+    "pl": "Tylko odrzucone pliki"
+  },
+  "administration.hidrive_hours_waiting": {
+    "de": "{hours} h",
+    "en": "{hours} h",
+    "pl": "{hours} h"
+  },
+  "administration.hidrive_no_missing_results": {
+    "de": "Keine fehlenden Labor-PDF-Zuordnungen in den letzten 14 Tagen.",
+    "en": "No missing laboratory PDF matches in the last 14 days.",
+    "pl": "Brak brakujących dopasowań PDF laboratoryjnych w ostatnich 14 dniach."
+  },
+  "administration.hidrive_rows_total": {
+    "de": "Einträge insgesamt",
+    "en": "entries total",
+    "pl": "wpisów łącznie"
+  },
+  "administration.hidrive_display_limit": {
+    "de": "Angezeigt",
+    "en": "Showing first",
+    "pl": "Wyświetlono"
+  },
+  "administration.hidrive_link_queue_entry": {
+    "de": "Wartelisteneintrag",
+    "en": "Queue entry",
+    "pl": "Wpis kolejki"
+  },
+  "administration.hidrive_runbook_hint": {
+    "de": "Siehe Anleitung: hidrive_incoming_reception.md",
+    "en": "See runbook: hidrive_incoming_reception.md",
+    "pl": "Patrz instrukcja: hidrive_incoming_reception.md"
   }
 }
