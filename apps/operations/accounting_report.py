@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING
@@ -139,6 +140,16 @@ def published_at_range_utc(date_from: date, date_to: date) -> tuple[datetime, da
     return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
+def normalize_postal_code_display(code: str | None) -> str:
+    """Strip Excel float artifact (``17498.0``) from stored postal codes."""
+    text = (code or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+\.0+", text):
+        return text.split(".", 1)[0]
+    return text
+
+
 def format_patient_street(patient: Patient | None) -> str:
     if patient is None:
         return ""
@@ -149,7 +160,7 @@ def format_patient_postal_city(patient: Patient | None) -> str:
     """German-style locality: ``PLZ Ort`` (postal code + city)."""
     if patient is None:
         return ""
-    postal = (patient.postal_code or "").strip()
+    postal = normalize_postal_code_display(patient.postal_code)
     city = (patient.city or "").strip()
     if postal and city:
         return f"{postal} {city}"

@@ -98,6 +98,32 @@ HEADER_ALIASES = {
 }
 
 
+def _format_xlsx_cell_text(value) -> str:
+    """Render an XLSX cell as display text (Excel numbers → text without ``.0``)."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        return str(value)
+    return str(value).strip()
+
+
+def _normalize_imported_postal_code(value) -> str | None:
+    """Postleitzahl from Doctolib XLSX — often stored as Excel number (``17498.0``)."""
+    text = _format_xlsx_cell_text(value)
+    if not text:
+        return None
+    # Legacy rows already saved as ``15537.0`` string.
+    if re.fullmatch(r"\d+\.0+", text):
+        return text.split(".", 1)[0]
+    return text
+
+
 def _normalize_header_cell(cell_value: str | None) -> str:
     if cell_value is None:
         return ""
@@ -342,8 +368,7 @@ def _normalize_row(
         idx = header_indices.get(key, -1)
         if idx < 0 or idx >= len(row):
             return ""
-        v = row[idx]
-        return str(v).strip() if v is not None else ""
+        return _format_xlsx_cell_text(row[idx])
 
     first_name = _cell("first_name")
     last_name = _cell("last_name")
@@ -395,7 +420,11 @@ def _normalize_row(
     time_raw = _cell("appointment_time")
     appointment_time = _parse_time(time_raw) if time_raw else None
     street = _cell("address") or None
-    postal_code = _cell("postal_code") or None
+    postal_code = _normalize_imported_postal_code(
+        row[header_indices["postal_code"]]
+        if "postal_code" in header_indices and header_indices["postal_code"] < len(row)
+        else None
+    )
     city = _cell("city") or None
 
     return NormalizedRow(

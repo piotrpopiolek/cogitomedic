@@ -35,6 +35,7 @@ from apps.operations.accounting_report import (
     format_patient_address,
     format_patient_postal_city,
     format_patient_street,
+    normalize_postal_code_display,
     published_at_range_utc,
     resolve_report_date_range,
 )
@@ -385,6 +386,19 @@ class AccountingReportServiceTests(AccountingReportBase):
             postal_code="10115",
         )
         self.assertEqual(format_patient_postal_city(patient), "10115")
+
+    def test_postal_code_strips_excel_float_artifact(self) -> None:
+        self.assertEqual(normalize_postal_code_display("17498.0"), "17498")
+        patient = Patient.objects.create(
+            first_name="PLZ",
+            last_name="Fix",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500777669",
+            email="plz@example.com",
+            postal_code="17498.0",
+            city="Neubrandenburg",
+        )
+        self.assertEqual(format_patient_postal_city(patient), "17498 Neubrandenburg")
 
     def test_default_week_range_is_monday_to_sunday(self) -> None:
         monday, sunday = default_report_week_range(today=date(2026, 3, 11))
