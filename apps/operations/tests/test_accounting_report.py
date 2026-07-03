@@ -33,6 +33,8 @@ from apps.operations.accounting_report import (
     build_accounting_report,
     default_report_week_range,
     format_patient_address,
+    format_patient_postal_city,
+    format_patient_street,
     published_at_range_utc,
     resolve_report_date_range,
 )
@@ -256,7 +258,8 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(row.row_no, 1)
         self.assertEqual(row.first_name, "Anna")
         self.assertEqual(row.last_name, "Kowalska")
-        self.assertEqual(row.address, "Musterstr. 1, 10115, Berlin")
+        self.assertEqual(row.street, "Musterstr. 1")
+        self.assertEqual(row.postal_city, "10115 Berlin")
         self.assertEqual(row.email, "anna@example.com")
         self.assertEqual(row.doctor_name, "Hans Müller")
         self.assertEqual(row.exam_date, "10.03.2026")
@@ -356,7 +359,32 @@ class AccountingReportServiceTests(AccountingReportBase):
             phone="48500777666",
             email="noaddr@example.com",
         )
+        self.assertEqual(format_patient_street(patient), "")
+        self.assertEqual(format_patient_postal_city(patient), "")
         self.assertEqual(format_patient_address(patient), "")
+
+    def test_postal_city_formats_plz_and_ort(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Max",
+            last_name="Mustermann",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500777667",
+            email="max@example.com",
+            postal_code="10115",
+            city="Berlin",
+        )
+        self.assertEqual(format_patient_postal_city(patient), "10115 Berlin")
+
+    def test_postal_city_partial_fields(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Eva",
+            last_name="Test",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500777668",
+            email="eva@example.com",
+            postal_code="10115",
+        )
+        self.assertEqual(format_patient_postal_city(patient), "10115")
 
     def test_default_week_range_is_monday_to_sunday(self) -> None:
         monday, sunday = default_report_week_range(today=date(2026, 3, 11))
@@ -429,6 +457,8 @@ class AccountingReportExportTests(AccountingReportBase):
         )
         content = render_accounting_report_csv(report.rows).decode("utf-8")
         self.assertIn("Vorname", content)
+        self.assertIn("Straße", content)
+        self.assertIn("PLZ/Ort", content)
         self.assertIn("Anna", content)
         self.assertIn("10.03.2026", content)
 
@@ -687,7 +717,8 @@ class AccountingReportApiSchemaTests(AccountingReportBase):
                     row_no=index,
                     first_name=f"First{index}",
                     last_name=f"Last{index}",
-                    address="Street 1",
+                    street="Street 1",
+                    postal_city="10115 Berlin",
                     email=f"p{index}@example.com",
                     doctor_name="Dr. Test",
                     exam_date="10.03.2026",

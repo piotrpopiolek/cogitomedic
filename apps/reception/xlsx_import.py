@@ -29,6 +29,7 @@ from apps.reception.models import (
     ImportSourceSystem,
     ImportStatus,
     ImportType,
+    Patient,
     PatientImportBatch,
     PatientImportError,
     QueueEntry,
@@ -93,6 +94,7 @@ HEADER_ALIASES = {
     "appointment_time": ["godzina", "uhrzeit", "time", "appointment_time", "heure"],
     "address": ["adres", "address", "anschrift", "adresse"],
     "postal_code": ["kod pocztowy", "postal_code", "postleitzahl", "plz", "zip"],
+    "city": ["miasto", "city", "ort", "stadt", "wohnort", "locality"],
 }
 
 
@@ -326,6 +328,7 @@ class NormalizedRow:
     appointment_time: time | None = None
     street: str | None = None
     postal_code: str | None = None
+    city: str | None = None
 
 
 def _normalize_row(
@@ -393,6 +396,7 @@ def _normalize_row(
     appointment_time = _parse_time(time_raw) if time_raw else None
     street = _cell("address") or None
     postal_code = _cell("postal_code") or None
+    city = _cell("city") or None
 
     return NormalizedRow(
         row_number=row_index,
@@ -404,7 +408,28 @@ def _normalize_row(
         appointment_time=appointment_time,
         street=street,
         postal_code=postal_code,
+        city=city,
     )
+
+
+def _sync_patient_address_from_import_row(
+    patient: Patient,
+    norm: NormalizedRow,
+) -> None:
+    """Persist address fields from XLSX when present (Doctolib Anschrift / PLZ / Ort)."""
+    update_fields: list[str] = []
+    for field_name, raw in (
+        ("street", norm.street),
+        ("postal_code", norm.postal_code),
+        ("city", norm.city),
+    ):
+        text = (raw or "").strip()
+        if text:
+            setattr(patient, field_name, text)
+            update_fields.append(field_name)
+    if update_fields:
+        update_fields.append("updated_at")
+        patient.save(update_fields=update_fields)
 
 
 def _validate_headers(header_indices: dict[str, int]) -> None:
@@ -688,6 +713,8 @@ def process_patient_xlsx_import_batch(
                         },
                     )
                     continue
+
+            _sync_patient_address_from_import_row(patient, norm)
 
             if daily_queue_id is None:
                 queue = DailyQueue.objects.filter(

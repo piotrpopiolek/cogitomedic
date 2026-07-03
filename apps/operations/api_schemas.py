@@ -51,7 +51,8 @@ class AccountingReportRowResponse(BaseModel):
     row_no: int
     first_name: str
     last_name: str
-    address: str
+    street: str
+    postal_city: str
     email: str
     doctor_name: str
     exam_date: str

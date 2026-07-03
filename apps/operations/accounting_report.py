@@ -28,7 +28,8 @@ ACCOUNTING_REPORT_EXPORT_HEADER_SPECS: tuple[tuple[str, str], ...] = (
     ("administration.accounting_col_nr", "Nr"),
     ("administration.accounting_col_first_name", "Vorname"),
     ("administration.accounting_col_last_name", "Nachname"),
-    ("administration.accounting_col_address", "Adresse"),
+    ("administration.accounting_col_street", "Straße"),
+    ("administration.accounting_col_postal_city", "PLZ/Ort"),
     ("administration.accounting_col_email", "Email"),
     ("administration.accounting_col_befund_doctor", "Befund-Arzt"),
     ("administration.accounting_col_exam_date", "Untersuchungsdatum"),
@@ -68,7 +69,8 @@ class AccountingReportRow:
     row_no: int
     first_name: str
     last_name: str
-    address: str
+    street: str
+    postal_city: str
     email: str
     doctor_name: str
     exam_date: str
@@ -137,14 +139,32 @@ def published_at_range_utc(date_from: date, date_to: date) -> tuple[datetime, da
     return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
-def format_patient_address(patient: Patient | None) -> str:
+def format_patient_street(patient: Patient | None) -> str:
     if patient is None:
         return ""
+    return (patient.street or "").strip()
+
+
+def format_patient_postal_city(patient: Patient | None) -> str:
+    """German-style locality: ``PLZ Ort`` (postal code + city)."""
+    if patient is None:
+        return ""
+    postal = (patient.postal_code or "").strip()
+    city = (patient.city or "").strip()
+    if postal and city:
+        return f"{postal} {city}"
+    return postal or city
+
+
+def format_patient_address(patient: Patient | None) -> str:
+    """Legacy combined address (street + postal/city) for callers that need one line."""
     parts: list[str] = []
-    for value in (patient.street, patient.postal_code, patient.city):
-        text = (value or "").strip()
-        if text:
-            parts.append(text)
+    for value in (
+        format_patient_street(patient),
+        format_patient_postal_city(patient),
+    ):
+        if value:
+            parts.append(value)
     return ", ".join(parts)
 
 
@@ -203,7 +223,8 @@ def _row_from_version(
         row_no=row_no,
         first_name=(patient.first_name or "").strip(),
         last_name=(patient.last_name or "").strip(),
-        address=format_patient_address(patient),
+        street=format_patient_street(patient),
+        postal_city=format_patient_postal_city(patient),
         email=(patient.email or "").strip(),
         doctor_name=format_doctor_name(doctor),
         exam_date=format_exam_date_display(

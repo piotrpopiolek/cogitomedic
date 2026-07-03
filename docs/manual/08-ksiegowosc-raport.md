@@ -40,7 +40,8 @@ Nagłówki w eksporcie są w języku niemieckim (kanoniczne nazwy kolumn); w UI 
 | --- | --- |
 | Nr | lp. w raporcie |
 | Vorname / Nachname | pacjent |
-| Adresse | ulica, kod, miasto |
+| Straße | ulica (`patient.street`) |
+| PLZ/Ort | kod pocztowy + miejscowość (`postal_code` + `city`, format np. `10115 Berlin`) |
 | Email | pacjent |
 | Befund-Arzt | lekarz pierwszej publikacji (`published_by_user`) |
 | Untersuchungsdatum | data kolejki (`queue_date`), format `DD.MM.RRRR` |
