@@ -424,6 +424,11 @@
     "en": "Paper intake authorization",
     "pl": "Autoryzacja ścieżki papierowej"
   },
+  "administration.reception_dashboard_title": {
+    "de": "Betriebs-Dashboard Anmeldung",
+    "en": "Reception operations dashboard",
+    "pl": "Dashboard operacyjny recepcji"
+  },
   "administration.external_upload_entry_attachments_heading": {
     "de": "PDF-Anhänge",
     "en": "PDF attachments",
@@ -884,6 +889,11 @@
     "en": "Reception (Admin)",
     "pl": "Rejestracja (Admin)"
   },
+  "administration.side_dashboard_recepcji": {
+    "de": "Betriebs-Dashboard",
+    "en": "Operations dashboard",
+    "pl": "Dashboard operacyjny"
+  },
   "administration.side_rejestracja": {
     "de": "Anmeldung",
     "en": "Reception",
@@ -1155,9 +1165,9 @@
     "pl": "Tylko odrzucone pliki"
   },
   "administration.hidrive_hours_waiting": {
-    "de": "{{hours}} h",
-    "en": "{{hours}} h",
-    "pl": "{{hours}} h"
+    "de": "{hours} h",
+    "en": "{hours} h",
+    "pl": "{hours} h"
   },
   "administration.hidrive_no_missing_results": {
     "de": "Keine fehlenden Labor-PDF-Zuordnungen in den letzten 14 Tagen.",
