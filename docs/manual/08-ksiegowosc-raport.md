@@ -2,6 +2,8 @@
 
 Moduł **Raport tygodniowy** w panelu administracyjnym (`/admin/accounting/report/`).
 
+**Instrukcja krok po kroku (scenariusz operacyjny):** [scenariusze.md § SC-004](scenariusze.md#sc-004-pobranie-listy-tygodniowej-dla-księgowości).
+
 Wejście z menu Unfold: sekcja **Księgowość** → **Raport tygodniowy**.
 
 ## Kto ma dostęp
