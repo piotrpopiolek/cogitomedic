@@ -238,6 +238,10 @@ def _get_request_model_registry() -> list[type]:
         RetryProcessingRequest,
         SaveDraftMedicalDocumentRequest,
     )
+    from apps.operations.api_schemas import (
+        AccountingReportQueryParams,
+        AccountingReportResponse,
+    )
     from apps.outbox.api_schemas import (
         ProcessOutboxRequest,
         RetentionRunRequest,
@@ -279,6 +283,9 @@ def _get_request_model_registry() -> list[type]:
         RetryIntakeOutboxEventRequest,
         RetryOutboxEventRequest,
         RetentionRunRequest,
+        # Accounting report (query + response; endpoint TBD)
+        AccountingReportQueryParams,
+        AccountingReportResponse,
         # Medical (MedicalPayloadMinimal is nested in SaveDraftMedicalDocumentRequest; §6 schema_version)
         MedicalPayloadMinimal,
         CreateMedicalDocumentRequest,

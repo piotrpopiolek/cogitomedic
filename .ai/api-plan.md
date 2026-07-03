@@ -1006,6 +1006,28 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - Success: `202 ACCEPTED`.
   - Errors: `403 FORBIDDEN`.
 
+### 2.12a Accounting report (admin HTML)
+
+Weekly Befund billing report — **not** a JSON API route in v1 yet (Pydantic schemas `AccountingReportQueryParams` / `AccountingReportResponse` exist for a planned `GET /accounting/report`). Access is via Django admin HTML views and file export.
+
+**Roles:** **ACCOUNTING**, **ADMIN**, or **MANAGER** (`accounting_report_access_ok` in `apps/operations/accounting_access.py`). Other staff roles → **403**.
+
+**Clinic scope:** **ACCOUNTING** and **ADMIN** see all clinic sites (`get_scoped_clinic_site_ids` → `None`). **MANAGER** is limited to assigned `clinic_sites`.
+
+**Paths (session + `is_staff`, not under `/api/v1`):**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| **GET** | `/admin/accounting/report/` | Dashboard: date range (`date_from`, `date_to`, default current Mon–Sun in `TIME_ZONE`), paginated preview (`page`, `page_size` default **20**, max **100**), per-doctor publication counts. |
+| **GET** | `/admin/accounting/report/export.csv` | Full CSV export for selected date range (German column headers). |
+| **GET** | `/admin/accounting/report/export.xlsx` | Full XLSX export for selected date range. |
+
+**Row logic:** one row per `MedicalDocument` first publication only (`MedicalDocumentVersion` with `version_status=PUBLISHED`, `version_no=1`, `revoked_at` null, `published_at` in range). Revisions (`version_no>1`) excluded. `EXTERNAL_UPLOAD` source type excluded (MVP). Exam date from `DailyQueue.queue_date`.
+
+**Audit:** each CSV/XLSX download creates `ACCOUNTING_REPORT_EXPORT` with `metadata`: `date_from`, `date_to`, `format`, `row_count` (no patient PHI).
+
+Manual: `docs/manual/08-ksiegowosc-raport.md`.
+
 ### 2.13 Audit and observability
 
 - **GET** `/audit-events`
@@ -1048,7 +1070,8 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
   - **TABLET**: only: list today's queues (choice), list queue entries for a queue, POST queue-entries/{id}/sessions, GET intake form context, PUT anamnesis/consents, signature upload, POST intake submit. No patient search, no queue CRUD, no user management.
   - `RECEPTION`: queues, queue entries, patient create/update, session generation (POST sessions), import operations read/write.
   - `DOCTOR`: medical document read/write, publish/republish, version view.
-  - `MANAGER`: operational oversight; in **API v1** also imports, devices, selected outbox surfaces, and in the **medical** module the same `require_user_role` sets as `DOCTOR`/`ADMIN` (`apps.medical.api_views`); Django Admin remains limited by the Manager group permissions.
+  - `MANAGER`: operational oversight; in **API v1** also imports, devices, selected outbox surfaces, and in the **medical** module the same `require_user_role` sets as `DOCTOR`/`ADMIN` (`apps.medical.api_views`); Django Admin remains limited by the Manager group permissions; accounting report HTML (scoped clinic sites).
+  - `ACCOUNTING`: read-only accounting weekly report via admin HTML (`/admin/accounting/report/`, CSV/XLSX export); all clinic sites; no Django ModelAdmin permissions (custom RBAC only); cannot access patient lists or other admin modules.
   - `ADMIN`: user management, consent dictionary, operational controls, full audit/outbox visibility.
   - Endpoint guards implemented via Django permission classes + object-level checks.
 
@@ -1074,7 +1097,7 @@ Access for **RECEPTION** and **ADMIN** only. RECEPTION sees only documents from 
 ### 4.1 Resource validation rules
 
 - `staff_user`
-  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER` (oversight account; per-endpoint allowed roles are enforced in the respective `api_views` decorators).
+  - `username` unique, `email` unique (case-insensitive), `role` in `RECEPTION|DOCTOR|ADMIN|TABLET|MANAGER|ACCOUNTING` (oversight / accounting accounts; per-endpoint allowed roles are enforced in the respective `api_views` decorators or custom view helpers).
   - `phone_number` regex: `^[0-9+() -]{7,20}$`.
 
 - `patient`
