@@ -336,50 +336,49 @@ class RequireActorMatchTests(TestCase):
 
 
 class GetScopedClinicSiteIdsTests(SimpleTestCase):
+    @staticmethod
+    def _scoped_user_mock(**overrides: bool) -> Mock:
+        """Mock staff user; ``is_accounting=False`` avoids Mock truthiness on new role flags."""
+        flags = {
+            "is_admin_role": False,
+            "is_accounting": False,
+            "is_manager": False,
+            "is_reception": False,
+            "is_doctor": False,
+            "is_tablet": False,
+        }
+        flags.update(overrides)
+        return Mock(**flags)
+
     def test_admin_returns_none(self):
-        user = Mock(is_admin_role=True, is_manager=False)
+        user = self._scoped_user_mock(is_admin_role=True)
+        self.assertIsNone(get_scoped_clinic_site_ids(user))
+
+    def test_accounting_returns_none(self):
+        user = self._scoped_user_mock(is_accounting=True)
         self.assertIsNone(get_scoped_clinic_site_ids(user))
 
     def test_manager_returns_ids(self):
-        user = Mock(
-            is_admin_role=False,
-            is_manager=True,
-            is_reception=False,
-        )
+        user = self._scoped_user_mock(is_manager=True)
         user.clinic_sites.values_list.return_value = [uuid4()]
         result = get_scoped_clinic_site_ids(user)
         self.assertEqual(len(result), 1)
 
     def test_reception_returns_ids(self):
-        user = Mock(
-            is_admin_role=False,
-            is_manager=False,
-            is_reception=True,
-        )
+        user = self._scoped_user_mock(is_reception=True)
         user.clinic_sites.values_list.return_value = [uuid4()]
         result = get_scoped_clinic_site_ids(user)
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
 
     def test_doctor_returns_ids(self):
-        user = Mock(
-            is_admin_role=False,
-            is_manager=False,
-            is_reception=False,
-            is_doctor=True,
-        )
+        user = self._scoped_user_mock(is_doctor=True)
         user.clinic_sites.values_list.return_value = []
         result = get_scoped_clinic_site_ids(user)
         self.assertEqual(result, [])
 
     def test_tablet_returns_ids(self):
-        user = Mock(
-            is_admin_role=False,
-            is_manager=False,
-            is_reception=False,
-            is_doctor=False,
-            is_tablet=True,
-        )
+        user = self._scoped_user_mock(is_tablet=True)
         user.clinic_sites.values_list.return_value = [
             uuid4(),
             uuid4(),
@@ -388,12 +387,6 @@ class GetScopedClinicSiteIdsTests(SimpleTestCase):
         self.assertEqual(len(result), 2)
 
     def test_unknown_role_returns_empty(self):
-        user = Mock(
-            is_admin_role=False,
-            is_manager=False,
-            is_reception=False,
-            is_doctor=False,
-            is_tablet=False,
-        )
+        user = self._scoped_user_mock()
         result = get_scoped_clinic_site_ids(user)
         self.assertEqual(result, [])
