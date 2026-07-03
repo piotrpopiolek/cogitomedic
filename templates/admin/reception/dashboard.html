@@ -54,6 +54,9 @@
                 {% endif %}
                 {% endif %}
             </p>
+            <p class="text-xs text-gray-500 mt-2">
+                {% admin_trans "administration.hidrive_runbook_hint" "See runbook: hidrive_incoming_reception.md" %}
+            </p>
         </div>
         {% if missing_hidrive_results %}
         <div class="overflow-x-auto">
@@ -89,7 +92,7 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 font-mono text-xs">{{ row.suggested_filename }}</td>
-                        <td class="px-4 py-3">{{ row.hours_waiting|floatformat:0 }} h</td>
+                        <td class="px-4 py-3">{% with hours=row.hours_waiting|floatformat:0 %}{% db_transf "administration.hidrive_hours_waiting" "{hours} h" hours=hours %}{% endwith %}</td>
                         <td class="px-4 py-3">
                             <a href="{% url 'admin:reception_queueentry_change' row.queue_entry_id %}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {% admin_trans "administration.hidrive_link_queue_entry" "Queue entry" %} &rarr;
