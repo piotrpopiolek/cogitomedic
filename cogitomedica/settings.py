@@ -18,6 +18,7 @@ from cogitomedica.sentry_sampling import (
 )
 from apps.operations.accounting_access import (
     is_accounting_report_role as _is_accounting_report_role,
+    staff_admin_login_redirect as _staff_admin_login_redirect,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -717,7 +718,7 @@ if HAS_UNFOLD:
             ],
         },
         "LOGIN": {
-            "redirect_after": lambda request: reverse_lazy("admin:index"),
+            "redirect_after": _staff_admin_login_redirect,
         },
         # Primary: teal #075255 jak w skompilowanym CSS witryny (post-17.css / post-33.css), nie blue z global-settings.
         "COLORS": {
