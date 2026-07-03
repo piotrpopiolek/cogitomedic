@@ -106,7 +106,7 @@ class ExternalPdfGateTests(TestCase):
         adapter = MagicMock()
         adapter.list_dir.side_effect = RuntimeError("connection reset")
         with patch(
-            "apps.medical.external_pdf_service.get_hidrive_adapter",
+            "apps.medical.incoming_pdf_scan.get_hidrive_adapter",
             return_value=adapter,
         ):
             gate = check_external_pdf_gate(

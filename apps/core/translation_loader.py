@@ -64,6 +64,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     ],
     "administration.admin_paper_intake_revoke_result": ["ok", "failed"],
     "administration.paper_intake_admin_earliest_hint": ["hours"],
+    "administration.hidrive_hours_waiting": ["hours"],
     "other.domain.paper_intake_authorization_too_early": ["hours"],
     "other.domain.paper_intake_earliest_after_appointment": ["hours"],
 }
