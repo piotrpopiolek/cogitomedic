@@ -19,6 +19,11 @@
     "en": "Intake documents (PDF)",
     "pl": "Dokumenty intake (PDF)"
   },
+  "administration.intake_document_detail_title": {
+    "de": "Intake-Dokument – {patient_name}",
+    "en": "Intake document – {patient_name}",
+    "pl": "Dokument intake – {patient_name}"
+  },
   "administration.btn_filter": {
     "de": "Filtern",
     "en": "Filter",

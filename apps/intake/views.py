@@ -14,7 +14,10 @@ from django.urls import reverse
 
 from apps.core.admin_list_page_size import changelist_page_size_context
 from apps.core.api_utils import get_scoped_clinic_site_ids
-from apps.core.translation_service import get_admin_translation
+from apps.core.translation_service import (
+    format_administration_message,
+    get_admin_translation,
+)
 from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
 from apps.intake.document_services import (
     check_intake_document_access,
@@ -162,13 +165,23 @@ def intake_document_detail_view(request: HttpRequest, version_id: UUID) -> HttpR
         )
 
     detail = get_intake_document_detail(version)
+    detail["pdf_generation_status_display"] = _intake_pdf_status_display(
+        request, detail.get("pdf_generation_status")
+    )
+    patient = detail["patient"]
+    patient_name = f"{patient['last_name']} {patient['first_name']}".strip()
     preview_pdf_url = reverse(
         "intake-document-preview-pdf",
         kwargs={"intake_document_version_id": version_id},
     )
     context = {
         **admin.site.each_context(request),
-        "title": f"Dokument intake – {detail['patient']['last_name']} {detail['patient']['first_name']}",
+        "title": format_administration_message(
+            "administration.intake_document_detail_title",
+            "Intake document – {patient_name}",
+            request,
+            patient_name=patient_name,
+        ),
         "doc": detail,
         "not_found": False,
         "preview_pdf_url": preview_pdf_url,

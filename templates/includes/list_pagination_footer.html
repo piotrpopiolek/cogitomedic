@@ -7,7 +7,7 @@
     {% elif pagination.total %}
     <p class="text-sm text-base-600 m-0">
       <span class="font-semibold tabular-nums text-base-900">{{ pagination.total }}</span>
-      {% admin_trans "administration.accounting_pagination_total" "łącznie" %}
+      {% admin_trans "administration.pagination_total" "łącznie" %}
       {% if pagination.total > pagination.page_size %}
       <span class="text-base-400"> · {{ pagination.page }}{% if items_on_page %} ({{ items_on_page }}){% endif %}</span>
       {% endif %}
