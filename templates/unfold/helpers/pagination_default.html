@@ -1,0 +1,22 @@
+{% load unfold_list i18n %}
+
+<div class="flex flex-wrap items-center gap-3">
+  {% if pagination_required %}
+    <nav class="cogito-pagenums inline-flex flex-wrap items-center gap-1" aria-label="{% translate 'Pagination' %}">
+      {% for i in page_range %}
+        {% paginator_number cl i %}
+      {% endfor %}
+    </nav>
+  {% endif %}
+
+  <div class="inline-flex items-center gap-1.5 text-sm text-base-600">
+    <span class="font-semibold tabular-nums text-base-900">{{ cl.result_count }}</span>
+    <span class="text-base-500">
+      {% if cl.result_count == 1 %}
+        {{ cl.opts.verbose_name }}
+      {% else %}
+        {{ cl.opts.verbose_name_plural }}
+      {% endif %}
+    </span>
+  </div>
+</div>

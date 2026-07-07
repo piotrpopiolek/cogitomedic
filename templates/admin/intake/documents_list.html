@@ -32,7 +32,7 @@
                 <select name="pdf_generation_status" id="pdf_generation_status" class="block w-full rounded border-gray-300 text-sm">
                     <option value="">{% admin_trans "administration.filter_all" "Wszystkie" %}</option>
                     <option value="PENDING" {% if filters.pdf_generation_status == 'PENDING' %}selected{% endif %}>{% admin_trans "administration.pdf_status_pending" "Oczekuje" %}</option>
-                    <option value="IN_PROGRESS" {% if filters.pdf_generation_status == 'IN_PROGRESS' %}selected{% endif %}>{% admin_trans "administration.pdf_status_in_progress" "W trakcie" %}</option>
+                    <option value="PROCESSING" {% if filters.pdf_generation_status == 'PROCESSING' %}selected{% endif %}>{% admin_trans "administration.pdf_status_in_progress" "W trakcie" %}</option>
                     <option value="COMPLETED" {% if filters.pdf_generation_status == 'COMPLETED' %}selected{% endif %}>{% admin_trans "administration.pdf_status_completed" "Wygenerowany" %}</option>
                     <option value="FAILED" {% if filters.pdf_generation_status == 'FAILED' %}selected{% endif %}>{% admin_trans "administration.pdf_status_failed" "Błąd" %}</option>
                 </select>
@@ -93,9 +93,9 @@
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                 {% if item.pdf_generation_status == 'COMPLETED' %}bg-green-100 text-green-800
                                 {% elif item.pdf_generation_status == 'FAILED' %}bg-red-100 text-red-800
-                                {% elif item.pdf_generation_status == 'IN_PROGRESS' %}bg-blue-100 text-blue-800
+                                {% elif item.pdf_generation_status == 'PROCESSING' or item.pdf_generation_status == 'IN_PROGRESS' %}bg-blue-100 text-blue-800
                                 {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                {{ item.pdf_generation_status }}
+                                {{ item.pdf_generation_status_display|default:item.pdf_generation_status }}
                             </span>
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-500">{{ item.created_at_display }}</td>
@@ -113,25 +113,7 @@
             </table>
         </div>
         {% if pagination.total > 0 %}
-        <div class="px-4 py-3 border-t border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600">
-            <span>
-                {{ pagination.total }} {% admin_trans "administration.accounting_pagination_total" "łącznie" %}{% if pagination.total > pagination.page_size %}, {{ pagination.page }} ({{ items|length }}){% endif %}
-            </span>
-            <div class="flex flex-wrap items-center gap-4">
-                {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
-                {% include "includes/list_page_size_selector.html" %}
-                {% if pagination.total > pagination.page_size %}
-                <div class="flex gap-2">
-                {% if previous_page_url %}
-                <a href="{{ previous_page_url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{% admin_trans "administration.link_previous" "← Poprzednia" %}</a>
-                {% endif %}
-                {% if next_page_url %}
-                <a href="{{ next_page_url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">{% admin_trans "administration.link_next" "Następna →" %}</a>
-                {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
+        {% include "includes/list_pagination_footer.html" with items_on_page=items|length %}
         {% endif %}
         {% else %}
         <p class="px-4 py-8 text-sm text-gray-500 italic">{% admin_trans "administration.intake_docs_empty" "Brak dokumentów intake spełniających kryteria." %}</p>

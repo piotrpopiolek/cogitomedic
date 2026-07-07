@@ -1,14 +1,25 @@
-{# Page-size switcher: pass page_size_options (from page_size_switch_items) and page_size_label. #}
+{# Segmented page-size control. Pass page_size_options and page_size_label. #}
 {% if page_size_options %}
-<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-  <span class="text-gray-600 dark:text-base-400">{{ page_size_label }}</span>
-  {% for opt in page_size_options %}
-    {% if not forloop.first %}<span class="text-gray-300 dark:text-base-600" aria-hidden="true">|</span>{% endif %}
-    {% if opt.active %}
-    <span class="font-semibold text-primary-600 dark:text-primary-400" aria-current="true">{{ opt.size }}</span>
-    {% else %}
-    <a href="{{ opt.url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">{{ opt.size }}</a>
-    {% endif %}
-  {% endfor %}
+<div class="inline-flex flex-wrap items-center gap-2 sm:gap-3">
+  <span class="text-sm text-base-500 shrink-0">{{ page_size_label }}</span>
+  <div
+    class="inline-flex rounded-default border border-base-200 bg-base-50 p-0.5 shadow-xs"
+    role="group"
+    aria-label="{{ page_size_label }}"
+  >
+    {% for opt in page_size_options %}
+      {% if opt.active %}
+      <span
+        class="inline-flex min-w-9 items-center justify-center rounded-[calc(var(--radius-default,0.375rem)-2px)] bg-primary-600 px-2.5 py-1.5 text-sm font-semibold tabular-nums text-white shadow-xs"
+        aria-current="true"
+      >{{ opt.size }}</span>
+      {% else %}
+      <a
+        href="{{ opt.url }}"
+        class="inline-flex min-w-9 items-center justify-center rounded-[calc(var(--radius-default,0.375rem)-2px)] px-2.5 py-1.5 text-sm font-medium tabular-nums text-base-600 hover:bg-white hover:text-primary-600"
+      >{{ opt.size }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
 </div>
 {% endif %}

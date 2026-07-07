@@ -14,6 +14,11 @@
     "en": "Intake documents (PDF)",
     "pl": "Dokumenty intake (PDF)"
   },
+  "administration.intake_documents_list_title": {
+    "de": "Intake-Dokumente (PDF)",
+    "en": "Intake documents (PDF)",
+    "pl": "Dokumenty intake (PDF)"
+  },
   "administration.btn_filter": {
     "de": "Filtern",
     "en": "Filter",
