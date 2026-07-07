@@ -1,26 +1,17 @@
 {# Custom admin HTML lists: page size + optional prev/next. #}
 {% load cogitomedica_i18n %}
-<footer class="flex flex-col gap-3 border-t border-base-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-  {% if pagination_summary %}
-  <p class="text-sm text-base-600 m-0">{{ pagination_summary }}</p>
-  {% elif pagination.total %}
-  <p class="text-sm text-base-600 m-0">
-    <span class="font-semibold tabular-nums text-base-900">{{ pagination.total }}</span>
-    {% admin_trans "administration.accounting_pagination_total" "łącznie" %}
-    {% if pagination.total > pagination.page_size %}
-    <span class="text-base-400"> · {{ pagination.page }}{% if items_on_page %} ({{ items_on_page }}){% endif %}</span>
-    {% endif %}
-  </p>
-  {% else %}
-  <span aria-hidden="true"></span>
-  {% endif %}
-
-  <div class="flex flex-wrap items-center gap-3 sm:gap-4 sm:justify-end">
-    {% if page_size_options %}
-      {% if not page_size_label %}
-      {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
+<footer class="flex w-full flex-col gap-3 border-t border-base-200 bg-white px-4 py-3 sm:flex-row sm:items-center">
+  <div class="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+    {% if pagination_summary %}
+    <p class="text-sm text-base-600 m-0">{{ pagination_summary }}</p>
+    {% elif pagination.total %}
+    <p class="text-sm text-base-600 m-0">
+      <span class="font-semibold tabular-nums text-base-900">{{ pagination.total }}</span>
+      {% admin_trans "administration.accounting_pagination_total" "łącznie" %}
+      {% if pagination.total > pagination.page_size %}
+      <span class="text-base-400"> · {{ pagination.page }}{% if items_on_page %} ({{ items_on_page }}){% endif %}</span>
       {% endif %}
-      {% include "includes/list_page_size_selector.html" %}
+    </p>
     {% endif %}
 
     {% if pagination.total > pagination.page_size %}
@@ -40,4 +31,13 @@
     {% endif %}
     {% endif %}
   </div>
+
+  {% if page_size_options %}
+  <div class="shrink-0 self-end sm:self-auto sm:ml-auto">
+    {% if not page_size_label %}
+    {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
+    {% endif %}
+    {% include "includes/list_page_size_selector.html" %}
+  </div>
+  {% endif %}
 </footer>
