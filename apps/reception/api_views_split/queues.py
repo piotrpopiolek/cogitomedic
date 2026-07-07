@@ -14,7 +14,7 @@ from apps.core.api_utils import (
     get_tablet_scope_clinic_site_ids,
     json_domain_error,
     json_error,
-    parse_list_limit,
+    resolve_list_limit_query,
     read_json_body,
     require_auth,
     require_user_role,
@@ -123,7 +123,9 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         status = request.GET.get("status")
         if status:
             qs = qs.filter(status=status)
-        limit = parse_list_limit(request.GET.get("limit"))
+        limit = resolve_list_limit_query(request.GET.get("limit"))
+        if isinstance(limit, JsonResponse):
+            return limit
         items = [_serialize_queue(q) for q in qs[:limit]]
         return JsonResponse({"items": items})
     if request.method == "POST":
@@ -259,7 +261,9 @@ def daily_queue_entries_view(
         ordering = request.GET.get("ordering", "position_no")
         if ordering.lstrip("-") == "position_no":
             qs = qs.order_by(ordering)
-        limit = parse_list_limit(request.GET.get("limit"))
+        limit = resolve_list_limit_query(request.GET.get("limit"))
+        if isinstance(limit, JsonResponse):
+            return limit
         items = [_serialize_entry(e) for e in qs[:limit]]
         return JsonResponse({"items": items})
     try:

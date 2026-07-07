@@ -1318,6 +1318,11 @@ class ListLimitApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 50)
 
+    def test_tablet_devices_invalid_limit_returns_400(self) -> None:
+        response = self.client.get("/api/v1/tablet-devices?limit=25")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
 
 class ImportBatchesApiTests(TestCase):
     """Tests for PatientImportBatch / PatientImportError API (format-agnostic)."""

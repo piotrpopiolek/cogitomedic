@@ -149,6 +149,16 @@
     "en": "Invalid is_active query parameter.",
     "pl": "Nieprawidłowy parametr zapytania is_active."
   },
+  "other.api.invalid_limit": {
+    "de": "Ungültiger limit-Abfrageparameter. Zulässige Werte: 10, 20, 50, 100.",
+    "en": "Invalid limit query parameter. Allowed values: 10, 20, 50, 100.",
+    "pl": "Nieprawidłowy parametr limit. Dozwolone wartości: 10, 20, 50, 100."
+  },
+  "other.api.invalid_page_size": {
+    "de": "Ungültiger page_size-Abfrageparameter. Zulässige Werte: 10, 20, 50, 100.",
+    "en": "Invalid page_size query parameter. Allowed values: 10, 20, 50, 100.",
+    "pl": "Nieprawidłowy parametr page_size. Dozwolone wartości: 10, 20, 50, 100."
+  },
   "other.api.invalid_json_body": {
     "de": "Ungültiger JSON-Body.",
     "en": "Invalid JSON body.",

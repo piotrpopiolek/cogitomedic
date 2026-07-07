@@ -59,6 +59,8 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.invalid_credentials": "Invalid credentials.",
     "other.api.invalid_form_locale_format": "Invalid form_locale format.",
     "other.api.invalid_is_active": "Invalid is_active query parameter.",
+    "other.api.invalid_limit": "Invalid limit query parameter. Allowed values: 10, 20, 50, 100.",
+    "other.api.invalid_page_size": "Invalid page_size query parameter. Allowed values: 10, 20, 50, 100.",
     "other.api.invalid_json_body": "Invalid JSON body.",
     "other.api.invalid_json_payload": "Invalid JSON payload.",
     "other.api.invalid_or_expired_code": "Invalid or expired code.",

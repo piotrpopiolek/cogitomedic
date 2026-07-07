@@ -14,7 +14,7 @@ from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
 from apps.core.constants import (
     MAX_JSON_BODY_BYTES,
 )
-from apps.core.list_pagination import parse_page_size
+from apps.core.list_pagination import validate_allowed_page_size
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.translation_service import (
@@ -103,6 +103,10 @@ def json_pydantic_query_validation_error(exc: ValidationError) -> JsonResponse:
             return json_error("other.api.invalid_role_query", status=400)
         if loc == ("is_active",):
             return json_error("other.api.invalid_is_active", status=400)
+        if loc == ("page_size",):
+            return json_error("other.api.invalid_page_size", status=400)
+        if loc == ("limit",):
+            return json_error("other.api.invalid_limit", status=400)
     return json_pydantic_validation_error(
         exc, error_key="other.api.invalid_request_body"
     )
@@ -177,8 +181,16 @@ def safe_parse_positive_int(
 
 
 def parse_list_limit(value: str | None) -> int:
-    """Parse ``limit`` for reception-style lists; same allowed sizes as ``page_size``."""
-    return parse_page_size(value)
+    """Parse ``limit`` for API lists; same allowed sizes as ``page_size`` (strict)."""
+    return validate_allowed_page_size(value)
+
+
+def resolve_list_limit_query(value: str | None) -> int | JsonResponse:
+    """Parse ``limit`` or return HTTP 400 ``JsonResponse`` for invalid explicit values."""
+    try:
+        return parse_list_limit(value)
+    except ValueError:
+        return json_error("other.api.invalid_limit", status=400)
 
 
 QueryParamsModelT = TypeVar("QueryParamsModelT", bound=BaseModel)
