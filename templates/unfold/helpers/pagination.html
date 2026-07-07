@@ -1,0 +1,17 @@
+{% load admin_list unfold cogitomedica_i18n %}
+
+{% if cl %}
+    <div class="px-4 lg:backdrop-blur-xs lg:bg-white/80 lg:flex lg:flex-wrap lg:items-center lg:gap-4 lg:dark:bg-base-900/80 lg:left-0 lg:right-0 lg:bottom-0 lg:sticky relative z-40 lg:border-t lg:border-base-200 lg:relative lg:scrollable-top lg:dark:border-base-800 {% element_classes 'pagination' %}">
+        {% if page_size_options %}
+        <div class="py-2 lg:py-0">
+            {% if not page_size_label %}
+            {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
+            {% endif %}
+            {% include "includes/list_page_size_selector.html" %}
+        </div>
+        {% endif %}
+        <div class="grow min-w-0 py-2 lg:py-0">
+            {% pagination cl %}
+        </div>
+    </div>
+{% endif %}

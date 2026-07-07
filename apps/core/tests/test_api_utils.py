@@ -105,13 +105,18 @@ class SafeParsePositiveIntTests(SimpleTestCase):
 
 class ParseListLimitTests(SimpleTestCase):
     def test_default(self):
-        self.assertEqual(parse_list_limit(None), 20)
+        self.assertEqual(parse_list_limit(None), 50)
 
     def test_custom_value(self):
         self.assertEqual(parse_list_limit("50"), 50)
 
-    def test_capped_at_100(self):
-        self.assertEqual(parse_list_limit("999"), 100)
+    def test_allowed_min_and_max(self):
+        self.assertEqual(parse_list_limit("10"), 10)
+        self.assertEqual(parse_list_limit("100"), 100)
+
+    def test_invalid_falls_back_to_default(self):
+        self.assertEqual(parse_list_limit("25"), 50)
+        self.assertEqual(parse_list_limit("999"), 50)
 
 
 class ReadJsonBodyTests(SimpleTestCase):

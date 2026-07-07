@@ -709,6 +709,11 @@
     "en": "Next",
     "pl": "Następna"
   },
+  "doctor.pagination_page_size": {
+    "de": "Einträge pro Seite:",
+    "en": "Rows per page:",
+    "pl": "Wierszy na stronę:"
+  },
   "doctor.paper_intake_create_confirm_message": {
     "de": "Medizinisches Dokument auf Basis der Papier-Autorisierung anlegen? Die Autorisierung kann danach nicht widerrufen werden.",
     "en": "Create the medical document from the paper authorization? The authorization cannot be revoked after the document exists.",

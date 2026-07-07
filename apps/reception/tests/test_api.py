@@ -1307,7 +1307,7 @@ class ListLimitApiTests(TestCase):
         self.client.login(username="listlimit-api", password="safe-password")
 
     def test_tablet_devices_list_uses_default_limit(self) -> None:
-        """Without limit param, list returns DEFAULT_LIST_LIMIT (20) items."""
+        """Without limit param, list returns DEFAULT_LIST_LIMIT (50) items."""
         for idx in range(120):
             TabletDevice.objects.create(
                 android_id=f"device-TAB-{idx}",
@@ -1316,7 +1316,7 @@ class ListLimitApiTests(TestCase):
             )
         response = self.client.get("/api/v1/tablet-devices")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["items"]), 20)
+        self.assertEqual(len(response.json()["items"]), 50)
 
 
 class ImportBatchesApiTests(TestCase):

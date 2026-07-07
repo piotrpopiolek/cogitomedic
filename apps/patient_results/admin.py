@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
+
 from .models import PatientResultsOtpSession
 
 
 @admin.register(PatientResultsOtpSession)
-class PatientResultsOtpSessionAdmin(admin.ModelAdmin):
+class PatientResultsOtpSessionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "id",
         "patient",

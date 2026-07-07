@@ -16,11 +16,11 @@ from django.utils.html import format_html
 from django.utils.http import urlencode
 
 try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
     from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
     UnfoldAdminSelectWidget = forms.Select
+
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
 from apps.core.translation_service import db_gettext_lazy
 from apps.reception.models import (
@@ -52,7 +52,7 @@ class PatientXlsxImportAdminForm(forms.Form):
 
 
 @admin.register(Patient)
-class PatientAdmin(UnfoldModelAdmin):
+class PatientAdmin(CogitomedicaModelAdmin):
     list_display = (
         "last_name",
         "first_name",
@@ -134,7 +134,7 @@ def _consulting_rooms_for_clinic_site_queryset(
 
 
 @admin.register(ClinicSite)
-class ClinicSiteAdmin(UnfoldModelAdmin):
+class ClinicSiteAdmin(CogitomedicaModelAdmin):
     list_display = (
         "code",
         "name",
@@ -160,7 +160,7 @@ class ClinicSiteAdmin(UnfoldModelAdmin):
 
 
 @admin.register(ConsultingRoom)
-class ConsultingRoomAdmin(UnfoldModelAdmin):
+class ConsultingRoomAdmin(CogitomedicaModelAdmin):
     list_display = ("code", "name", "clinic_site", "created_at", "is_active")
     list_filter = ("is_active", "clinic_site")
     ordering = ["-created_at"]
@@ -182,7 +182,7 @@ class ConsultingRoomAdmin(UnfoldModelAdmin):
 
 
 @admin.register(DailyQueue)
-class DailyQueueAdmin(UnfoldModelAdmin):
+class DailyQueueAdmin(CogitomedicaModelAdmin):
     change_list_template = "admin/reception/dailyqueue/change_list.html"
     list_display = (
         "queue_date",
@@ -394,7 +394,7 @@ class DailyQueueAdmin(UnfoldModelAdmin):
 
 
 @admin.register(QueueEntry)
-class QueueEntryAdmin(UnfoldModelAdmin):
+class QueueEntryAdmin(CogitomedicaModelAdmin):
     list_display = (
         "position_no",
         "daily_queue",
@@ -433,7 +433,7 @@ class QueueEntryAdmin(UnfoldModelAdmin):
 
 
 @admin.register(TabletDevice)
-class TabletDeviceAdmin(UnfoldModelAdmin):
+class TabletDeviceAdmin(CogitomedicaModelAdmin):
     list_display = (
         "android_id",
         "clinic_site",
@@ -448,7 +448,7 @@ class TabletDeviceAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PatientFormSession)
-class PatientFormSessionAdmin(UnfoldModelAdmin):
+class PatientFormSessionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "id",
         "queue_entry",
@@ -486,7 +486,7 @@ class PatientFormSessionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PatientImportBatch)
-class PatientImportBatchAdmin(UnfoldModelAdmin):
+class PatientImportBatchAdmin(CogitomedicaModelAdmin):
     list_display = (
         "source_file_name",
         "import_type",
@@ -517,7 +517,7 @@ class PatientImportBatchAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PatientImportError)
-class PatientImportErrorAdmin(UnfoldModelAdmin):
+class PatientImportErrorAdmin(CogitomedicaModelAdmin):
     list_display = ("batch", "row_number", "error_code", "error_message", "created_at")
     list_display_links = ("batch",)
     list_filter = ("error_code",)

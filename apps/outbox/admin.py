@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
-except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
 from apps.outbox.models import OutboxEvent
 
 
 @admin.register(OutboxEvent)
-class OutboxEventAdmin(UnfoldModelAdmin):
+class OutboxEventAdmin(CogitomedicaModelAdmin):
     list_display = (
         "event_type",
         "status",

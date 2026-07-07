@@ -12,15 +12,13 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
     json_domain_error,
     json_error,
-    parse_bool_query,
+    json_pydantic_query_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
-    safe_parse_positive_int,
+    validate_get_query_params,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
@@ -29,10 +27,11 @@ from apps.reception.services import record_tablet_login_for_android_id
 from apps.users.api_schemas import (
     AuthLoginRequest,
     CreateStaffUserRequest,
+    StaffUsersListQueryParams,
     UpdateStaffUserClinicSitesRequest,
     UpdateStaffUserRequest,
 )
-from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
+from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
 from apps.users.services import (
     create_staff_user,
     deactivate_staff_user,
@@ -197,29 +196,23 @@ def staff_users_view(request: HttpRequest) -> JsonResponse:
         return role_error
 
     if request.method == "GET":
+        try:
+            query = validate_get_query_params(StaffUsersListQueryParams, request.GET)
+        except ValidationError as exc:
+            return json_pydantic_query_validation_error(exc)
+
         qs = StaffUser.objects.all().order_by("username")
-        role = request.GET.get("role")
-        if role:
-            if role not in VALID_STAFF_ROLES:
-                return json_error("other.api.invalid_role_query", status=400)
-            group_name = ROLE_GROUP_NAME_MAP[role]
+        if query.role:
+            group_name = ROLE_GROUP_NAME_MAP[query.role]
             qs = qs.filter(groups__name=group_name).distinct()
-        is_active = parse_bool_query(request.GET.get("is_active"))
-        if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("other.api.invalid_is_active", status=400)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
-        search = request.GET.get("search")
-        if search:
-            qs = qs.filter(Q(username__icontains=search) | Q(email__icontains=search))
-        page = safe_parse_positive_int(
-            request.GET.get("page"), default=1, maximum=10_000
-        )
-        page_size = safe_parse_positive_int(
-            request.GET.get("page_size"),
-            default=DEFAULT_LIST_LIMIT,
-            maximum=MAX_LIST_LIMIT,
-        )
+        if query.is_active is not None:
+            qs = qs.filter(is_active=query.is_active)
+        if query.search:
+            qs = qs.filter(
+                Q(username__icontains=query.search) | Q(email__icontains=query.search)
+            )
+        page = query.page
+        page_size = query.page_size
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size

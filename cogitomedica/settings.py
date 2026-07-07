@@ -16,6 +16,7 @@ from cogitomedica.sentry_sampling import (
     parse_sentry_traces_sample_rate,
     sentry_traces_sampler,
 )
+from apps.core.constants import ALLOWED_LIST_PAGE_SIZES, DEFAULT_LIST_LIMIT
 from apps.operations.accounting_access import (
     is_accounting_report_role as _is_accounting_report_role,
     staff_admin_login_redirect as _staff_admin_login_redirect,
@@ -901,6 +902,22 @@ OUTBOX_BATCH_SIZE = int(os.environ.get("OUTBOX_BATCH_SIZE", "10"))
 OUTBOX_MAX_RETRIES = int(os.environ.get("OUTBOX_MAX_RETRIES", "3"))
 OUTBOX_BASE_BACKOFF_SECONDS = int(os.environ.get("OUTBOX_BASE_BACKOFF_SECONDS", "30"))
 PDF_RETENTION_DAYS = int(os.environ.get("PDF_RETENTION_DAYS", "60"))
+
+# List pagination default page size (10, 20, 50, or 100); invalid env → 50.
+_list_page_size_env = os.environ.get("LIST_PAGE_SIZE_DEFAULT", "").strip()
+if _list_page_size_env:
+    try:
+        _list_page_size_parsed = int(_list_page_size_env)
+    except ValueError:
+        LIST_PAGE_SIZE_DEFAULT = DEFAULT_LIST_LIMIT
+    else:
+        LIST_PAGE_SIZE_DEFAULT = (
+            _list_page_size_parsed
+            if _list_page_size_parsed in ALLOWED_LIST_PAGE_SIZES
+            else DEFAULT_LIST_LIMIT
+        )
+else:
+    LIST_PAGE_SIZE_DEFAULT = DEFAULT_LIST_LIMIT
 
 # SMS (SMSApi smsapi.pl)
 SMSAPI_ACCESS_TOKEN = os.environ.get("SMSAPI_ACCESS_TOKEN", "")

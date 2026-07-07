@@ -13,12 +13,9 @@ from django.db.models import Q
 from django.db.models import QuerySet
 from django.utils import timezone as django_timezone
 
-from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
-    get_scoped_clinic_site_ids,
-    safe_parse_positive_int,
-)
+from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
+from apps.core.constants import DEFAULT_LIST_LIMIT
+from apps.core.list_pagination import parse_page_size
 from apps.intake.models import (
     IntakeDocumentVersion,
     IntakeOutboxEvent,
@@ -59,11 +56,7 @@ def parse_intake_documents_list_params(get_params: Any) -> dict[str, Any]:
     patient_search = (get_params.get("patient_search") or "").strip() or None
     clinic_site_id = get_params.get("clinic_site_id") or None
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(
-        get_params.get("page_size"),
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
+    page_size = parse_page_size(get_params.get("page_size"))
     return {
         "queue_date": queue_date,
         "pdf_generation_status": pdf_generation_status,

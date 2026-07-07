@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import json
 from functools import wraps
+from typing import Any, Mapping, TypeVar
 from uuid import UUID
 
 from django.contrib.auth.models import Group
-from django.http import HttpRequest
+from django.http import HttpRequest, QueryDict
 from django.http import JsonResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
 from apps.core.constants import (
-    DEFAULT_LIST_LIMIT,
     MAX_JSON_BODY_BYTES,
-    MAX_LIST_LIMIT,
 )
+from apps.core.list_pagination import parse_page_size
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.translation_service import (
@@ -93,6 +93,21 @@ def json_pydantic_validation_error(
     )
 
 
+def json_pydantic_query_validation_error(exc: ValidationError) -> JsonResponse:
+    """HTTP 400 for GET query validation; preserves legacy keys where applicable."""
+    for err in exc.errors(include_url=False):
+        loc = err.get("loc") or ()
+        if loc == ("retry_count_gte",):
+            return json_error("other.api.retry_count_gte_integer", status=400)
+        if loc == ("role",):
+            return json_error("other.api.invalid_role_query", status=400)
+        if loc == ("is_active",):
+            return json_error("other.api.invalid_is_active", status=400)
+    return json_pydantic_validation_error(
+        exc, error_key="other.api.invalid_request_body"
+    )
+
+
 def read_json_body(request: HttpRequest) -> dict:
     """Decode JSON body for API views. Raises JSONDecodeError or InvalidRequestBodyEncoding on invalid input."""
     if len(request.body) > MAX_JSON_BODY_BYTES:
@@ -162,12 +177,34 @@ def safe_parse_positive_int(
 
 
 def parse_list_limit(value: str | None) -> int:
-    """Parse `limit` query param for reception-style list endpoints. Same default/max as page_size (20/100). Never raises."""
-    return safe_parse_positive_int(
-        value,
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
+    """Parse ``limit`` for reception-style lists; same allowed sizes as ``page_size``."""
+    return parse_page_size(value)
+
+
+QueryParamsModelT = TypeVar("QueryParamsModelT", bound=BaseModel)
+
+
+def validate_get_query_params(
+    model: type[QueryParamsModelT],
+    query: QueryDict | Mapping[str, Any],
+) -> QueryParamsModelT:
+    """Build a Pydantic query model from GET parameters (field names and aliases)."""
+    payload: dict[str, Any] = {}
+    for name, field_info in model.model_fields.items():
+        lookup_keys = [name]
+        if field_info.alias and field_info.alias not in lookup_keys:
+            lookup_keys.insert(0, field_info.alias)
+        value = None
+        for key in lookup_keys:
+            if hasattr(query, "get"):
+                candidate = query.get(key)
+            else:
+                candidate = query.get(key) if key in query else None
+            if candidate is not None:
+                value = candidate
+                break
+        payload[field_info.alias or name] = value
+    return model.model_validate(payload)
 
 
 def require_authenticated_user(request: HttpRequest) -> JsonResponse | None:

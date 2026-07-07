@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from django.conf import settings
@@ -9,16 +8,17 @@ from django.db.models import Q
 from django.db.utils import Error as DatabaseError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.dateparse import parse_datetime
+from pydantic import ValidationError
 
 from apps.operations.services import REF_KEY
 from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
     json_error,
+    json_pydantic_query_validation_error,
     require_auth,
     require_user_role,
-    safe_parse_positive_int,
+    validate_get_query_params,
 )
+from apps.operations.api_schemas import AuditEventsListQueryParams
 from apps.operations.metrics import build_metrics_payload
 from apps.operations.models import AuditEvent
 
@@ -70,6 +70,11 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
 
+    try:
+        query = validate_get_query_params(AuditEventsListQueryParams, request.GET)
+    except ValidationError as exc:
+        return json_pydantic_query_validation_error(exc)
+
     qs = AuditEvent.objects.all().order_by("-event_time")
 
     if request.user.is_doctor:
@@ -81,73 +86,47 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
             | Q(actor_user_id=request.user.id)
         )
 
-    event_type = request.GET.get("event_type")
-    if event_type:
-        qs = qs.filter(event_type=event_type)
+    if query.event_type:
+        qs = qs.filter(event_type=query.event_type)
 
-    patient_id = request.GET.get("patient_id")
-    if patient_id:
-        try:
-            qs = qs.filter(patient_id=uuid.UUID(patient_id))
-        except (ValueError, TypeError):
-            pass
+    if query.patient_id:
+        qs = qs.filter(patient_id=query.patient_id)
 
-    medical_document_id = request.GET.get("medical_document_id")
-    if medical_document_id:
-        try:
-            qs = qs.filter(medical_document_id=uuid.UUID(medical_document_id))
-        except (ValueError, TypeError):
-            pass
+    if query.medical_document_id:
+        qs = qs.filter(medical_document_id=query.medical_document_id)
 
-    context_clinic_site_id = request.GET.get("context_clinic_site_id")
-    if context_clinic_site_id:
-        try:
-            qs = qs.filter(context_clinic_site_id=uuid.UUID(context_clinic_site_id))
-        except (ValueError, TypeError):
-            pass
+    if query.context_clinic_site_id:
+        qs = qs.filter(context_clinic_site_id=query.context_clinic_site_id)
 
-    actor_user_id = request.GET.get("actor_user_id")
-    if actor_user_id:
-        try:
-            qs = qs.filter(actor_user_id=uuid.UUID(actor_user_id))
-        except (ValueError, TypeError):
-            pass
+    if query.actor_user_id:
+        qs = qs.filter(actor_user_id=query.actor_user_id)
 
-    outbox_event_id = request.GET.get("outbox_event_id")
-    if outbox_event_id:
-        try:
-            qs = qs.filter(outbox_event_id=uuid.UUID(outbox_event_id))
-        except (ValueError, TypeError):
-            pass
+    if query.outbox_event_id:
+        qs = qs.filter(outbox_event_id=query.outbox_event_id)
 
-    from_time = request.GET.get("from")
-    if from_time:
-        parsed = parse_datetime(from_time)
+    if query.from_:
+        parsed = parse_datetime(query.from_)
         if parsed:
             qs = qs.filter(event_time__gte=parsed)
 
-    to_time = request.GET.get("to")
-    if to_time:
-        parsed = parse_datetime(to_time)
+    if query.to_:
+        parsed = parse_datetime(query.to_)
         if parsed:
             qs = qs.filter(event_time__lte=parsed)
 
-    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(
-        request.GET.get("page_size"),
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
-
     total = qs.count()
-    start = (page - 1) * page_size
-    end = start + page_size
+    start = (query.page - 1) * query.page_size
+    end = start + query.page_size
     items = [_serialize_audit_event(e) for e in qs[start:end]]
 
     return JsonResponse(
         {
             "items": items,
-            "pagination": {"page": page, "page_size": page_size, "total": total},
+            "pagination": {
+                "page": query.page,
+                "page_size": query.page_size,
+                "total": total,
+            },
         }
     )
 

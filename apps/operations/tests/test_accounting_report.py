@@ -656,7 +656,7 @@ class AccountingReportViewTests(AccountingReportBase):
         assert ev is not None
         self.assertEqual(ev.metadata.get("row_count"), 1)
 
-    def test_pagination_defaults_to_twenty_rows(self) -> None:
+    def test_pagination_defaults_to_fifty_rows(self) -> None:
         for index in range(25):
             patient = Patient.objects.create(
                 first_name=f"P{index}",
@@ -704,15 +704,23 @@ class AccountingReportViewTests(AccountingReportBase):
             {"date_from": "2026-03-10", "date_to": "2026-03-16"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["items"]), 20)
+        self.assertEqual(len(response.context["items"]), 25)
         self.assertEqual(response.context["pagination"]["total"], 25)
+        self.assertEqual(response.context["pagination"]["page_size"], 50)
 
+    def test_pagination_rejects_invalid_page_size(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {"date_from": "2026-03-10", "date_to": "2026-03-16", "page_size": "25"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["pagination"]["page_size"], 50)
 
-class AccountingReportApiSchemaTests(AccountingReportBase):
     def test_query_params_defaults_and_resolved_week(self) -> None:
         query = AccountingReportQueryParams.model_validate({})
         self.assertEqual(query.page, 1)
-        self.assertEqual(query.page_size, 20)
+        self.assertEqual(query.page_size, 50)
         date_from, date_to = query.resolved_date_range()
         expected_from, expected_to = default_report_week_range()
         self.assertEqual(date_from, expected_from)
@@ -730,7 +738,7 @@ class AccountingReportApiSchemaTests(AccountingReportBase):
         self.assertEqual(query.date_from, date(2026, 3, 10))
         self.assertEqual(query.date_to, date(2026, 3, 16))
         self.assertEqual(query.page, 2)
-        self.assertEqual(query.page_size, 5)
+        self.assertEqual(query.page_size, 50)
 
     def test_query_params_rejects_invalid_date(self) -> None:
         with self.assertRaises(ValidationError):

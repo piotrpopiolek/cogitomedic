@@ -13,16 +13,15 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
     get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
+    json_pydantic_query_validation_error,
     json_pydantic_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
-    safe_parse_positive_int,
+    validate_get_query_params,
 )
 from apps.core.domain_messages import domain_message
 from apps.core.http_utils import get_client_ip
@@ -43,6 +42,7 @@ from apps.medical.api_schemas import (
     ExternalUploadSelectAttachmentRequest,
     RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
+    MedicalDocumentAuditTrailQueryParams,
 )
 from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
@@ -1657,23 +1657,28 @@ def medical_document_audit_trail_view(
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
 
-    page = safe_parse_positive_int(request.GET.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(
-        request.GET.get("page_size"),
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
+    try:
+        query = validate_get_query_params(
+            MedicalDocumentAuditTrailQueryParams, request.GET
+        )
+    except ValidationError as exc:
+        return json_pydantic_query_validation_error(exc)
+
     qs = AuditEvent.objects.filter(medical_document_id=medical_document_id).order_by(
         "-event_time"
     )
     total = qs.count()
-    start = (page - 1) * page_size
-    events = list(qs[start : start + page_size])
+    start = (query.page - 1) * query.page_size
+    events = list(qs[start : start + query.page_size])
     items = [_serialize_audit_event(event) for event in events]
     return JsonResponse(
         {
             "items": items,
-            "pagination": {"page": page, "page_size": page_size, "total": total},
+            "pagination": {
+                "page": query.page,
+                "page_size": query.page_size,
+                "total": total,
+            },
         },
         status=200,
     )

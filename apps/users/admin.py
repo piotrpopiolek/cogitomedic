@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import Group
 from django.utils import timezone as django_timezone
 
-try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
-except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
 from apps.core.translation_service import db_gettext_lazy
 from apps.users.api_views import get_primary_role
@@ -16,7 +15,7 @@ from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
 
 
 @admin.register(StaffUser)
-class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
+class StaffUserAdmin(CogitomedicaModelAdmin, BaseUserAdmin):
     form = StaffUserChangeForm
     add_form = StaffUserCreationForm
     list_display = (
@@ -170,3 +169,14 @@ class StaffUserAdmin(UnfoldModelAdmin, BaseUserAdmin):
         if getattr(obj, "is_admin_role", False) or getattr(obj, "is_manager", False):
             obj.is_staff = True
         super().save_model(request, obj, form, change)
+
+
+class GroupAdmin(CogitomedicaModelAdmin, DjangoGroupAdmin):
+    """auth.Group with the same changelist page-size switcher as other admin modules."""
+
+
+try:
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:
+    pass
+admin.site.register(Group, GroupAdmin)

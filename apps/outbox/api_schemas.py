@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+from apps.core.api_schemas import ListLimitQueryParams
 from apps.outbox.models import OutboxEventType, OutboxStatus
 
 
-class OutboxEventsQueryParams(BaseModel):
+class OutboxEventsQueryParams(ListLimitQueryParams):
     model_config = ConfigDict(extra="forbid")
 
     status: OutboxStatus | None = None
     event_type: OutboxEventType | None = None
     retry_count_gte: int = Field(default=0, ge=0)
-    limit: int = Field(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT)
+
+    @field_validator("retry_count_gte", mode="before")
+    @classmethod
+    def parse_retry_count_gte(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return 0
+        return value
 
 
 class ProcessOutboxRequest(BaseModel):
