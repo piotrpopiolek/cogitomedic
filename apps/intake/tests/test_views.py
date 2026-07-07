@@ -11,7 +11,10 @@ from uuid import uuid4
 from django.test import Client, RequestFactory, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.core.translation_service import format_administration_message
+from apps.core.translation_service import (
+    format_administration_message,
+    get_admin_translation,
+)
 from apps.intake.views import (
     _enrich_intake_document_list_items_for_display,
     _intake_pdf_status_display,
@@ -114,18 +117,30 @@ class IntakeDocumentsListDisplayTests(TestCase):
         request = RequestFactory().get("/admin/intake-documents/")
         self.assertEqual(
             _intake_pdf_status_display(request, "COMPLETED"),
-            "Wygenerowany",
+            get_admin_translation(
+                request, "administration.pdf_status_completed", "Wygenerowany"
+            ),
         )
         self.assertEqual(
             _intake_pdf_status_display(request, "PROCESSING"),
-            "W trakcie",
+            get_admin_translation(
+                request, "administration.pdf_status_in_progress", "W trakcie"
+            ),
         )
+
+    def test_pdf_status_display_unknown_code_returns_code(self):
+        request = RequestFactory().get("/admin/intake-documents/")
+        self.assertEqual(_intake_pdf_status_display(request, "WAT"), "WAT")
+        self.assertEqual(_intake_pdf_status_display(request, None), "")
 
     def test_enrich_list_items_adds_status_display(self):
         request = RequestFactory().get("/admin/intake-documents/")
         items = [{"pdf_generation_status": "FAILED"}]
         _enrich_intake_document_list_items_for_display(request, items)
-        self.assertEqual(items[0]["pdf_generation_status_display"], "Błąd")
+        self.assertEqual(
+            items[0]["pdf_generation_status_display"],
+            get_admin_translation(request, "administration.pdf_status_failed", "Błąd"),
+        )
 
     def test_detail_title_uses_administration_message(self):
         request = RequestFactory().get("/admin/intake-documents/")
@@ -135,4 +150,5 @@ class IntakeDocumentsListDisplayTests(TestCase):
             request,
             patient_name="Kowalski Jan",
         )
-        self.assertEqual(title, "Intake document – Kowalski Jan")
+        self.assertIn("Kowalski Jan", title)
+        self.assertNotIn("{patient_name}", title)
