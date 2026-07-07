@@ -45,7 +45,7 @@ Translations are managed in Django Admin and loaded from the database as the sin
 ## API Documentation
 
 - **Interactive docs (OpenAPI/Swagger):** [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/) (Swagger UI) and [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/) (ReDoc). Schema: `/api/schema/`.
-- **List pagination (staff API):** offset lists use `page` (default `1`) and `page_size` (default **20**, max **100**). List endpoints that take `limit` (recepcja, outbox, intake-outbox, import batches, …) use the same defaults and cap via `parse_list_limit` → `DEFAULT_LIST_LIMIT` / `MAX_LIST_LIMIT` defined in **`apps/core/constants.py`** (importowalne także z `apps.core.api_utils` dla kompatybilności wstecznej).
+- **List pagination (staff API):** offset lists use `page` (default `1`) and `page_size` (default **50**, allowed **10 / 20 / 50 / 100** only). Omitting `page_size` uses the default; an explicit invalid value returns **HTTP 400** (`other.api.invalid_page_size`). List endpoints that take `limit` (recepcja, outbox, intake-outbox, import batches, …) follow the same allowed set and default via `parse_list_limit` / `ListLimitQueryParams` in **`apps/core/constants.py`** and **`apps/core/list_pagination.py`**. Optional env `LIST_PAGE_SIZE_DEFAULT` (must be one of the allowed values) overrides the default for HTML admin/doctor lists and API defaults. Tablet waiting-room HTML (`/tablet/queue/…`) loads all queue entries without pagination.
 - **Written plans:** Polish [`.ai/api-plan-pl.md`](.ai/api-plan-pl.md), English [`.ai/api-plan.md`](.ai/api-plan.md).
 
 ---

@@ -6,6 +6,7 @@ from apps.core.list_pagination import (
     effective_default_page_size,
     page_size_switch_items,
     parse_page_size,
+    validate_allowed_page_size,
 )
 
 
@@ -23,6 +24,12 @@ class ParsePageSizeTests(SimpleTestCase):
         self.assertEqual(parse_page_size("25"), DEFAULT_LIST_LIMIT)
         self.assertEqual(parse_page_size("999"), DEFAULT_LIST_LIMIT)
         self.assertEqual(parse_page_size("abc"), DEFAULT_LIST_LIMIT)
+
+    def test_validate_allowed_page_size_rejects_invalid(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_allowed_page_size("25")
+        with self.assertRaises(ValueError):
+            validate_allowed_page_size("abc")
 
     @override_settings(LIST_PAGE_SIZE_DEFAULT=20)
     def test_settings_override_when_allowed(self) -> None:

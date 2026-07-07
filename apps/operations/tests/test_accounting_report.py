@@ -732,13 +732,17 @@ class AccountingReportViewTests(AccountingReportBase):
                 "date_from": "2026-03-10",
                 "date_to": "2026-03-16",
                 "page": "2",
-                "page_size": "5",
+                "page_size": "10",
             }
         )
         self.assertEqual(query.date_from, date(2026, 3, 10))
         self.assertEqual(query.date_to, date(2026, 3, 16))
         self.assertEqual(query.page, 2)
-        self.assertEqual(query.page_size, 50)
+        self.assertEqual(query.page_size, 10)
+
+    def test_query_params_rejects_invalid_page_size(self) -> None:
+        with self.assertRaises(ValidationError):
+            AccountingReportQueryParams.model_validate({"page_size": "25"})
 
     def test_query_params_rejects_invalid_date(self) -> None:
         with self.assertRaises(ValidationError):

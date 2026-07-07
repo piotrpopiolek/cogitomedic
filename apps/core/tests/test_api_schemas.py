@@ -14,12 +14,12 @@ class ValidateGetQueryParamsTests(SimpleTestCase):
         self.assertEqual(query.page, 1)
         self.assertEqual(query.page_size, 50)
 
-    def test_offset_pagination_rejects_invalid_page_size(self) -> None:
-        query = validate_get_query_params(
-            OffsetPaginationQueryParams,
-            QueryDict("page_size=25"),
-        )
-        self.assertEqual(query.page_size, 50)
+    def test_offset_pagination_invalid_page_size_raises(self) -> None:
+        with self.assertRaises(ValidationError):
+            validate_get_query_params(
+                OffsetPaginationQueryParams,
+                QueryDict("page_size=25"),
+            )
 
     def test_staff_users_query_params(self) -> None:
         query = validate_get_query_params(

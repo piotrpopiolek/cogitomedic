@@ -114,9 +114,11 @@ class ParseListLimitTests(SimpleTestCase):
         self.assertEqual(parse_list_limit("10"), 10)
         self.assertEqual(parse_list_limit("100"), 100)
 
-    def test_invalid_falls_back_to_default(self):
-        self.assertEqual(parse_list_limit("25"), 50)
-        self.assertEqual(parse_list_limit("999"), 50)
+    def test_invalid_raises(self):
+        with self.assertRaises(ValueError):
+            parse_list_limit("25")
+        with self.assertRaises(ValueError):
+            parse_list_limit("999")
 
 
 class ReadJsonBodyTests(SimpleTestCase):

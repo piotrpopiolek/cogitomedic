@@ -301,6 +301,49 @@ class TabletViewsScopeAndEdgeTests(TestCase):
         self.client.get("/tablet/login/?locale=pl")
         self.assertEqual(self.client.session.get("tablet_staff_locale"), "pl")
 
+    def test_queue_entries_html_returns_all_entries_when_more_than_fifty(self) -> None:
+        """Regression: HTML list is unpaginated (unlike API limit default 50)."""
+        room = ConsultingRoom.objects.create(
+            clinic_site=self.clinic, code="BLK", name="Bulk room"
+        )
+        queue = DailyQueue.objects.create(
+            queue_date=timezone.localdate(),
+            clinic_site=self.clinic,
+            consulting_room=room,
+            status=QueueStatus.OPEN,
+            created_by_user=self.tablet_user,
+        )
+        total = 55
+        patients = [
+            Patient(
+                first_name=f"Q{index:03d}",
+                last_name="Queue",
+                date_of_birth=date(1988, 6, 15),
+                phone=f"+4852{index:06d}",
+                email=f"queue-bulk-{index}@example.com",
+            )
+            for index in range(total)
+        ]
+        Patient.objects.bulk_create(patients)
+        QueueEntry.objects.bulk_create(
+            [
+                QueueEntry(
+                    daily_queue=queue,
+                    patient=patients[index],
+                    entry_status=QueueEntryStatus.WAITING,
+                    position_no=index + 1,
+                    created_by_user=self.tablet_user,
+                )
+                for index in range(total)
+            ]
+        )
+        self._login_tablet()
+        resp = self.client.get(f"/tablet/queue/{queue.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.context["entries"]), total)
+        self.assertContains(resp, "1. Queue Q000")
+        self.assertContains(resp, "55. Queue Q054")
+
     def test_queue_entries_not_today_returns_400(self) -> None:
         room = ConsultingRoom.objects.create(
             clinic_site=self.clinic, code="S2", name="S2"

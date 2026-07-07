@@ -44,7 +44,7 @@ _OPENAPI_PAGE_SIZE_SCHEMA = {
     "default": DEFAULT_LIST_LIMIT,
     "description": (
         "Page size; allowed values 10, 20, 50, 100; default 50. "
-        "Invalid values fall back to the default."
+        "Omitted or empty uses the default; any other value returns HTTP 400."
     ),
 }
 _OPENAPI_LIST_LIMIT_SCHEMA = {
@@ -53,7 +53,8 @@ _OPENAPI_LIST_LIMIT_SCHEMA = {
     "default": DEFAULT_LIST_LIMIT,
     "description": (
         "Maximum items; allowed values 10, 20, 50, 100; default 50 "
-        "(parse_list_limit; same as page_size). Invalid values fall back to the default."
+        "(same rules as page_size). Omitted or empty uses the default; "
+        "any other value returns HTTP 400."
     ),
 }
 PAGE_Q = {"name": "page", "in": "query", "schema": _OPENAPI_PAGE_SCHEMA}

@@ -7,7 +7,7 @@ from django.http import HttpRequest, JsonResponse
 
 from apps.core.api_utils import (
     json_error,
-    parse_list_limit,
+    resolve_list_limit_query,
     require_auth,
     require_user_role,
 )
@@ -62,7 +62,9 @@ def import_batches_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
 
-    limit = parse_list_limit(request.GET.get("limit"))
+    limit = resolve_list_limit_query(request.GET.get("limit"))
+    if isinstance(limit, JsonResponse):
+        return limit
     items = [_serialize_batch(batch) for batch in _visible_batches(request)[:limit]]
     return JsonResponse({"items": items})
 

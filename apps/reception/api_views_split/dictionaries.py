@@ -14,7 +14,7 @@ from apps.core.api_utils import (
     json_domain_error,
     json_error,
     parse_bool_query,
-    parse_list_limit,
+    resolve_list_limit_query,
     read_json_body,
     require_auth,
     require_user_role,
@@ -86,7 +86,9 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        limit = parse_list_limit(request.GET.get("limit"))
+        limit = resolve_list_limit_query(request.GET.get("limit"))
+        if isinstance(limit, JsonResponse):
+            return limit
         return JsonResponse(
             {"items": [_serialize_clinic_site(site) for site in qs[:limit]]}
         )
@@ -210,7 +212,9 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         search = request.GET.get("search")
         if search:
             qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        limit = parse_list_limit(request.GET.get("limit"))
+        limit = resolve_list_limit_query(request.GET.get("limit"))
+        if isinstance(limit, JsonResponse):
+            return limit
         return JsonResponse(
             {"items": [_serialize_consulting_room(room) for room in qs[:limit]]}
         )

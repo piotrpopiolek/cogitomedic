@@ -24,8 +24,32 @@ def effective_default_page_size() -> int:
     return DEFAULT_LIST_LIMIT
 
 
+def validate_allowed_page_size(value: object) -> int:
+    """API strict parse: missing/empty → default; explicit invalid → ``ValueError``."""
+    default = effective_default_page_size()
+    if value is None:
+        return default
+    if isinstance(value, str) and not value.strip():
+        return default
+    if isinstance(value, bool):
+        raise ValueError("Invalid list page size.")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = int(value.strip())
+        except ValueError as exc:
+            raise ValueError("Invalid list page size.") from exc
+    else:
+        raise ValueError("Invalid list page size.")
+    if parsed not in ALLOWED_LIST_PAGE_SIZES:
+        allowed = ", ".join(str(size) for size in ALLOWED_LIST_PAGE_SIZES)
+        raise ValueError(f"List page size must be one of: {allowed}.")
+    return parsed
+
+
 def parse_page_size(value: str | int | None) -> int:
-    """Parse ``page_size`` / ``limit``; only {10, 20, 50, 100}; invalid → default."""
+    """Lenient parse for HTML admin/doctor UI; invalid → default."""
     default = effective_default_page_size()
     if value is None:
         return default
@@ -69,16 +93,8 @@ def coerce_page_number(value: object, *, maximum: int = 10_000) -> int:
 
 
 def coerce_allowed_page_size(value: object) -> int:
-    """Normalize ``page_size`` / ``limit`` for Pydantic (invalid values → default)."""
-    if value is None:
-        return effective_default_page_size()
-    if isinstance(value, bool):
-        return effective_default_page_size()
-    if isinstance(value, int):
-        return parse_page_size(value)
-    if isinstance(value, str):
-        return parse_page_size(value)
-    return effective_default_page_size()
+    """Normalize ``page_size`` / ``limit`` for Pydantic (strict; raises on invalid input)."""
+    return validate_allowed_page_size(value)
 
 
 def _copy_query_mapping(query: QueryDict | Mapping[str, Any]) -> dict[str, str]:
