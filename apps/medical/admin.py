@@ -10,11 +10,11 @@ from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
 try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
     from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
     UnfoldAdminSelectWidget = forms.Select
+
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
 from apps.medical.api_schemas import FavoriteLesionGroupPreset
 from apps.medical.constants import (
@@ -152,7 +152,7 @@ def _set_medical_document_users(request, obj, change: bool) -> None:
 
 
 @admin.register(MedicalDocument)
-class MedicalDocumentAdmin(UnfoldModelAdmin):
+class MedicalDocumentAdmin(CogitomedicaModelAdmin):
     list_display = (
         "queue_entry",
         "intake_form",
@@ -203,7 +203,7 @@ class MedicalDocumentAdmin(UnfoldModelAdmin):
 
 
 @admin.register(MedicalDocumentVersion)
-class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
+class MedicalDocumentVersionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "medical_document",
         "version_no",
@@ -280,7 +280,7 @@ class MedicalDocumentVersionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PaperIntakeAuthorization)
-class PaperIntakeAuthorizationAdmin(UnfoldModelAdmin):
+class PaperIntakeAuthorizationAdmin(CogitomedicaModelAdmin):
     list_display = (
         "queue_entry",
         "_patient_repr",
@@ -417,7 +417,7 @@ class PaperIntakeAuthorizationAdmin(UnfoldModelAdmin):
 
 
 @admin.register(DoctorTextTemplate)
-class DoctorTextTemplateAdmin(UnfoldModelAdmin):
+class DoctorTextTemplateAdmin(CogitomedicaModelAdmin):
     form = DoctorTextTemplateForm
     list_display = (
         "name",

@@ -11,10 +11,11 @@ from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
-    parse_list_limit,
+    json_pydantic_query_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
+    validate_get_query_params,
 )
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
@@ -44,28 +45,10 @@ def outbox_events_view(request: HttpRequest) -> JsonResponse:
     if request.method != "GET":
         return json_error("other.api.method_not_allowed", status=405)
 
-    raw_retry_count_gte = request.GET.get("retry_count_gte")
     try:
-        retry_count_gte = (
-            int(raw_retry_count_gte) if raw_retry_count_gte not in (None, "") else 0
-        )
-    except ValueError:
-        return json_error("other.api.retry_count_gte_integer", status=400)
-    limit = parse_list_limit(request.GET.get("limit"))
-
-    try:
-        body = OutboxEventsQueryParams.model_validate(
-            {
-                "status": request.GET.get("status"),
-                "event_type": request.GET.get("event_type"),
-                "retry_count_gte": retry_count_gte,
-                "limit": limit,
-            }
-        )
+        body = validate_get_query_params(OutboxEventsQueryParams, request.GET)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_query_validation_error(exc)
 
     qs = OutboxEvent.objects.select_related(
         "medical_document_version__medical_document__queue_entry__daily_queue"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib import admin, messages
 from django.urls import reverse
 
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 from apps.core.exceptions import StateTransitionError
 from apps.core.translation_service import (
     db_gettext_lazy,
@@ -26,14 +27,9 @@ _MARKDOWN_HELP = (
     "Zentriert: -> Text <- (z.B. -> Unterschrift <-)."
 )
 
-try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
-except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
-
 
 @admin.register(ConsentDefinition)
-class ConsentDefinitionAdmin(UnfoldModelAdmin):
+class ConsentDefinitionAdmin(CogitomedicaModelAdmin):
     show_add_link = True
     list_display = (
         "code",
@@ -89,7 +85,7 @@ class ConsentDefinitionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(AnamnesisQuestionDefinition)
-class AnamnesisQuestionDefinitionAdmin(UnfoldModelAdmin):
+class AnamnesisQuestionDefinitionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "code",
         "version",
@@ -108,7 +104,7 @@ class AnamnesisQuestionDefinitionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(AnamnesisOptionDefinition)
-class AnamnesisOptionDefinitionAdmin(UnfoldModelAdmin):
+class AnamnesisOptionDefinitionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "question",
         "code",
@@ -125,7 +121,7 @@ class AnamnesisOptionDefinitionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PatientIntakeForm)
-class PatientIntakeFormAdmin(UnfoldModelAdmin):
+class PatientIntakeFormAdmin(CogitomedicaModelAdmin):
     actions = ("reopen_intake_for_patient_editing",)
 
     list_display = (
@@ -221,7 +217,7 @@ class PatientIntakeFormAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PatientIntakeConsent)
-class PatientIntakeConsentAdmin(UnfoldModelAdmin):
+class PatientIntakeConsentAdmin(CogitomedicaModelAdmin):
     list_display = ("intake_form", "consent_definition", "accepted", "accepted_at")
     list_display_links = ("intake_form",)
     list_filter = ("accepted",)
@@ -232,7 +228,7 @@ class PatientIntakeConsentAdmin(UnfoldModelAdmin):
 
 
 @admin.register(IntakeDocumentVersion)
-class IntakeDocumentVersionAdmin(UnfoldModelAdmin):
+class IntakeDocumentVersionAdmin(CogitomedicaModelAdmin):
     list_display = (
         "id",
         "intake_form",
@@ -258,7 +254,7 @@ class IntakeDocumentVersionAdmin(UnfoldModelAdmin):
 
 
 @admin.register(IntakeOutboxEvent)
-class IntakeOutboxEventAdmin(UnfoldModelAdmin):
+class IntakeOutboxEventAdmin(CogitomedicaModelAdmin):
     list_display = (
         "id",
         "event_type",

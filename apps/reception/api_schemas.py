@@ -6,6 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apps.core.api_schemas import OffsetPaginationQueryParams
+from apps.core.api_utils import parse_bool_query
+
 # Must match Patient model CheckConstraint patient_phone_format
 PHONE_PATTERN = re.compile(r"^[0-9+() -]{7,20}$")
 
@@ -180,12 +183,15 @@ class UpdatePatientRequest(BaseModel):
         return _validate_phone_format(v)
 
 
-class PatientsListQuery(BaseModel):
-    """Query params for GET /api/v1/patients. Validates date_of_birth format (YYYY-MM-DD)."""
-
-    model_config = ConfigDict(extra="forbid")
+class PatientsListQuery(OffsetPaginationQueryParams):
+    """Query params for GET /api/v1/patients."""
 
     date_of_birth: date | None = None
+    search: str | None = Field(default=None, max_length=254)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+    doctolib_patient_id: str | None = Field(default=None, max_length=64)
+    is_active: bool | None = None
 
     @field_validator("date_of_birth", mode="before")
     @classmethod
@@ -198,3 +204,30 @@ class PatientsListQuery(BaseModel):
             return date.fromisoformat(v.strip())
         except ValueError:
             raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.")
+
+    @field_validator(
+        "search",
+        "last_name",
+        "phone",
+        "doctolib_patient_id",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_str_to_none(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
+
+    @field_validator("is_active", mode="before")
+    @classmethod
+    def parse_is_active(cls, value: object) -> bool | None:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            parsed = parse_bool_query(value)
+            if parsed is None:
+                raise ValueError("Invalid is_active query parameter.")
+            return parsed
+        raise ValueError("Invalid is_active query parameter.")

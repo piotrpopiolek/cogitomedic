@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from apps.core.api_utils import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+from apps.core.api_schemas import OffsetPaginationQueryParams
 from apps.operations.accounting_report import (
     AccountingReportResult,
     AccountingReportRow,
@@ -16,15 +16,11 @@ from apps.operations.accounting_report import (
 )
 
 
-class AccountingReportQueryParams(BaseModel):
+class AccountingReportQueryParams(OffsetPaginationQueryParams):
     """Query params for GET /api/v1/accounting/report."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date_from: date | None = None
     date_to: date | None = None
-    page: int = Field(default=1, ge=1, le=10_000)
-    page_size: int = Field(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT)
 
     @field_validator("date_from", "date_to", mode="before")
     @classmethod
@@ -43,6 +39,52 @@ class AccountingReportQueryParams(BaseModel):
             date_from_raw=self.date_from.isoformat() if self.date_from else None,
             date_to_raw=self.date_to.isoformat() if self.date_to else None,
         )
+
+
+class AuditEventsListQueryParams(OffsetPaginationQueryParams):
+    """Query params for GET /api/v1/audit-events."""
+
+    event_type: str | None = None
+    patient_id: UUID | None = None
+    medical_document_id: UUID | None = None
+    context_clinic_site_id: UUID | None = None
+    actor_user_id: UUID | None = None
+    outbox_event_id: UUID | None = None
+    from_: str | None = Field(default=None, alias="from")
+    to_: str | None = Field(default=None, alias="to")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @field_validator("event_type", mode="before")
+    @classmethod
+    def empty_event_type_to_none(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
+
+    @field_validator(
+        "patient_id",
+        "medical_document_id",
+        "context_clinic_site_id",
+        "actor_user_id",
+        "outbox_event_id",
+        mode="before",
+    )
+    @classmethod
+    def optional_uuid(cls, value: object) -> UUID | None:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        try:
+            return UUID(str(value))
+        except (ValueError, TypeError):
+            return None
+
+    @field_validator("from_", "to_", mode="before")
+    @classmethod
+    def empty_datetime_to_none(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
 
 
 class AccountingReportRowResponse(BaseModel):

@@ -22,6 +22,7 @@ from cogitomedica.openapi_schemas import (
     get_request_body_schema_for,
     get_response_schema_for,
 )
+from apps.core.constants import ALLOWED_LIST_PAGE_SIZES, DEFAULT_LIST_LIMIT
 
 PREFIX = "/api/v1"
 
@@ -30,7 +31,7 @@ _API_LOCALIZED_ERROR_SCHEMA: dict[str, Any] = {
     "$ref": f"{COMPONENTS_REF_PREFIX}ApiLocalizedErrorBody"
 }
 
-# Staff list pagination — aligned with apps.core.api_utils (DEFAULT_LIST_LIMIT=20, MAX_LIST_LIMIT=100).
+# Staff list pagination — aligned with apps.core.list_pagination (default 50; allowed 10/20/50/100).
 _OPENAPI_PAGE_SCHEMA = {
     "type": "integer",
     "minimum": 1,
@@ -39,17 +40,21 @@ _OPENAPI_PAGE_SCHEMA = {
 }
 _OPENAPI_PAGE_SIZE_SCHEMA = {
     "type": "integer",
-    "minimum": 1,
-    "maximum": 100,
-    "default": 20,
-    "description": "Page size; default 20, maximum 100.",
+    "enum": list(ALLOWED_LIST_PAGE_SIZES),
+    "default": DEFAULT_LIST_LIMIT,
+    "description": (
+        "Page size; allowed values 10, 20, 50, 100; default 50. "
+        "Invalid values fall back to the default."
+    ),
 }
 _OPENAPI_LIST_LIMIT_SCHEMA = {
     "type": "integer",
-    "minimum": 1,
-    "maximum": 100,
-    "default": 20,
-    "description": "Maximum items; default 20, maximum 100 (parse_list_limit; same as page_size).",
+    "enum": list(ALLOWED_LIST_PAGE_SIZES),
+    "default": DEFAULT_LIST_LIMIT,
+    "description": (
+        "Maximum items; allowed values 10, 20, 50, 100; default 50 "
+        "(parse_list_limit; same as page_size). Invalid values fall back to the default."
+    ),
 }
 PAGE_Q = {"name": "page", "in": "query", "schema": _OPENAPI_PAGE_SCHEMA}
 PAGE_SIZE_Q = {"name": "page_size", "in": "query", "schema": _OPENAPI_PAGE_SIZE_SCHEMA}
@@ -460,7 +465,7 @@ COGITO_PATHS = {
     f"{PREFIX}/audit-events": {
         "get": {
             "summary": "List audit events",
-            "description": "ADMIN: full feed. DOCTOR: scoped. Pagination: page (default 1), page_size (default 20, max 100).",
+            "description": "ADMIN: full feed. DOCTOR: scoped. Pagination: page (default 1), page_size (default 50; allowed 10, 20, 50, 100).",
             "tags": ["Operations"],
             "parameters": [
                 {"name": "event_type", "in": "query", "schema": {"type": "string"}},
@@ -565,7 +570,7 @@ COGITO_PATHS = {
     f"{PREFIX}/intake-documents": {
         "get": {
             "summary": "List intake document versions (PDF)",
-            "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page (default 1), page_size (default 20, max 100).",
+            "description": "List generated intake PDF document versions. RECEPTION/ADMIN only; RECEPTION sees only documents from assigned clinic_sites. Query: queue_date (YYYY-MM-DD), pdf_generation_status (PENDING, IN_PROGRESS, COMPLETED, FAILED), patient_search, clinic_site_id, page (default 1), page_size (default 50; allowed 10, 20, 50, 100).",
             "tags": ["Intake – Documents"],
             "parameters": [
                 {
@@ -650,7 +655,7 @@ COGITO_PATHS = {
             "summary": "List doctor work queue",
             "description": (
                 "Doctor work queue on `QueueEntry` (DOCTOR, ADMIN, MANAGER). Paginated: "
-                "page (default 1), page_size (default 20, max 100). Rows are ordered with "
+                "page (default 1), page_size (default 50; allowed 10, 20, 50, 100). Rows are ordered with "
                 "tier 0 first (no document, DRAFT, or published with pending revision), then "
                 "tier 1 (published without open revision). Within each tier, `sort`/`order` "
                 "apply. Doctors always see scope=all; `scope` and `published_by_user_id` are "
@@ -1293,7 +1298,7 @@ COGITO_PATHS = {
         "get": {
             "summary": "List audit events for document",
             "description": (
-                "DOCTOR, ADMIN, or MANAGER. Pagination: page (default 1), page_size (default 20, max 100)."
+                "DOCTOR, ADMIN, or MANAGER. Pagination: page (default 1), page_size (default 50; allowed 10, 20, 50, 100)."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -2082,7 +2087,7 @@ COGITO_PATHS = {
     f"{PREFIX}/tablet-devices": {
         "get": {
             "summary": "List tablet devices",
-            "description": "Items have id, android_id, is_active, last_seen_at (last tablet-area login for that android_id via /tablet/login or /auth/login with android_id, or manual POST …/heartbeat). Query: is_active, search (by android_id), limit (default 20, max 100).",
+            "description": "Items have id, android_id, is_active, last_seen_at (last tablet-area login for that android_id via /tablet/login or /auth/login with android_id, or manual POST …/heartbeat). Query: is_active, search (by android_id), limit (default 50; allowed 10, 20, 50, 100).",
             "tags": ["Reception – Devices"],
             "parameters": [
                 {"name": "is_active", "in": "query", "schema": {"type": "boolean"}},

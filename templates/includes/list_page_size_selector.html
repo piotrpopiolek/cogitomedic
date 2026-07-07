@@ -1,0 +1,14 @@
+{# Page-size switcher: pass page_size_options (from page_size_switch_items) and page_size_label. #}
+{% if page_size_options %}
+<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+  <span class="text-gray-600 dark:text-base-400">{{ page_size_label }}</span>
+  {% for opt in page_size_options %}
+    {% if not forloop.first %}<span class="text-gray-300 dark:text-base-600" aria-hidden="true">|</span>{% endif %}
+    {% if opt.active %}
+    <span class="font-semibold text-primary-600 dark:text-primary-400" aria-current="true">{{ opt.size }}</span>
+    {% else %}
+    <a href="{{ opt.url }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">{{ opt.size }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}

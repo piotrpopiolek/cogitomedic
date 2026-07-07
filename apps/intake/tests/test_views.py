@@ -44,6 +44,13 @@ class IntakeDocumentsViewTests(TestCase):
             is_staff=True,
         )
         assign_group_to_test_user(self.admin, "Admin")
+        self.manager = StaffUser.objects.create_user(
+            username="iv-mgr",
+            email="iv-mgr@ex.com",
+            password="x",
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.manager, "Manager")
 
     # -- list view auth ---------------------------------------------------
 
@@ -68,6 +75,11 @@ class IntakeDocumentsViewTests(TestCase):
         resp = self.client.get(LIST_URL)
         self.assertEqual(resp.status_code, 200)
 
+    def test_list_manager_ok(self):
+        self.client.login(username="iv-mgr", password="x")
+        resp = self.client.get(LIST_URL)
+        self.assertEqual(resp.status_code, 200)
+
     # -- detail view -------------------------------------------------------
 
     def test_detail_nonexistent_uuid_returns_404(self):
@@ -85,3 +97,8 @@ class IntakeDocumentsViewTests(TestCase):
         resp = self.client.get(_detail_url(uuid4()))
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/admin/", resp.url)
+
+    def test_detail_manager_nonexistent_uuid_returns_404(self):
+        self.client.login(username="iv-mgr", password="x")
+        resp = self.client.get(_detail_url(uuid4()))
+        self.assertEqual(resp.status_code, 404)

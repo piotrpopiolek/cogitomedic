@@ -10,16 +10,14 @@ from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from apps.core.api_utils import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
     get_scoped_clinic_site_ids,
     json_domain_error,
     json_error,
-    parse_bool_query,
+    json_pydantic_query_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
-    safe_parse_positive_int,
+    validate_get_query_params,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
@@ -90,13 +88,10 @@ def patients_view(request: HttpRequest) -> JsonResponse:
         return role_error
     if request.method == "GET":
         try:
-            list_query = PatientsListQuery.model_validate(
-                {"date_of_birth": request.GET.get("date_of_birth")}
-            )
+            list_query = validate_get_query_params(PatientsListQuery, request.GET)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_query_validation_error(exc)
+
         qs = Patient.objects.all().order_by("-created_at")
 
         scope_ids = get_scoped_clinic_site_ids(request.user)
@@ -106,8 +101,8 @@ def patients_view(request: HttpRequest) -> JsonResponse:
                     {
                         "items": [],
                         "pagination": {
-                            "page": 1,
-                            "page_size": DEFAULT_LIST_LIMIT,
+                            "page": list_query.page,
+                            "page_size": list_query.page_size,
                             "total": 0,
                         },
                     }
@@ -116,38 +111,25 @@ def patients_view(request: HttpRequest) -> JsonResponse:
                 Q(clinic_sites__id__in=scope_ids)
                 | Q(queue_entries__daily_queue__clinic_site_id__in=scope_ids)
             ).distinct()
-        search = request.GET.get("search")
-        if search:
+        if list_query.search:
             qs = qs.filter(
-                Q(first_name__icontains=search)
-                | Q(last_name__icontains=search)
-                | Q(phone__icontains=search)
-                | Q(email__icontains=search)
+                Q(first_name__icontains=list_query.search)
+                | Q(last_name__icontains=list_query.search)
+                | Q(phone__icontains=list_query.search)
+                | Q(email__icontains=list_query.search)
             )
-        last_name = request.GET.get("last_name")
-        if last_name:
-            qs = qs.filter(last_name__icontains=last_name)
+        if list_query.last_name:
+            qs = qs.filter(last_name__icontains=list_query.last_name)
         if list_query.date_of_birth is not None:
             qs = qs.filter(date_of_birth=list_query.date_of_birth)
-        phone = request.GET.get("phone")
-        if phone:
-            qs = qs.filter(phone__icontains=phone)
-        doctolib_patient_id = request.GET.get("doctolib_patient_id")
-        if doctolib_patient_id:
-            qs = qs.filter(doctolib_patient_id=doctolib_patient_id)
-        is_active = parse_bool_query(request.GET.get("is_active"))
-        if request.GET.get("is_active") is not None and is_active is None:
-            return json_error("other.api.invalid_is_active", status=400)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
-        page = safe_parse_positive_int(
-            request.GET.get("page"), default=1, maximum=10_000
-        )
-        page_size = safe_parse_positive_int(
-            request.GET.get("page_size"),
-            default=DEFAULT_LIST_LIMIT,
-            maximum=MAX_LIST_LIMIT,
-        )
+        if list_query.phone:
+            qs = qs.filter(phone__icontains=list_query.phone)
+        if list_query.doctolib_patient_id:
+            qs = qs.filter(doctolib_patient_id=list_query.doctolib_patient_id)
+        if list_query.is_active is not None:
+            qs = qs.filter(is_active=list_query.is_active)
+        page = list_query.page
+        page_size = list_query.page_size
         total = qs.count()
         start = (page - 1) * page_size
         end = start + page_size

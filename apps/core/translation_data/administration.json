@@ -1099,6 +1099,11 @@
     "en": "total",
     "pl": "łącznie"
   },
+  "administration.pagination_page_size": {
+    "de": "Einträge pro Seite:",
+    "en": "Rows per page:",
+    "pl": "Wierszy na stronę:"
+  },
   "administration.hidrive_missing_results_title": {
     "de": "Fehlende HiDrive-Laborergebnisse",
     "en": "Missing HiDrive laboratory results",

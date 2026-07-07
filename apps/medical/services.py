@@ -28,7 +28,8 @@ from django.db.models import (
 from django.utils import timezone
 
 from apps.core.api_utils import safe_parse_positive_int
-from apps.core.constants import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+from apps.core.constants import DEFAULT_LIST_LIMIT
+from apps.core.list_pagination import parse_page_size
 from apps.core.domain_messages import domain_message
 from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import (
@@ -2603,11 +2604,7 @@ def parse_doctor_work_queue_list_params(
     if order not in {"asc", "desc"}:
         order = "desc"
     page = safe_parse_positive_int(get_params.get("page"), default=1, maximum=10_000)
-    page_size = safe_parse_positive_int(
-        get_params.get("page_size"),
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
+    page_size = parse_page_size(get_params.get("page_size"))
     return {
         "status": status,
         "queue_date": queue_date,

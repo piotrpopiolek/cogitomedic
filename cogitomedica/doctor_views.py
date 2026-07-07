@@ -28,6 +28,10 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from apps.core.http_utils import get_client_ip
+from apps.core.list_pagination import (
+    effective_default_page_size,
+    page_size_switch_items,
+)
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
 from apps.medical.external_pdf_service import (
@@ -224,6 +228,7 @@ _DOCTOR_LIST_QUERY_KEYS_BASE = (
     "patient_search",
     "sort",
     "order",
+    "page_size",
 )
 _DOCTOR_LIST_QUERY_KEYS_OVERSIGHT = ("scope", "published_by_user_id")
 
@@ -433,7 +438,15 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             "list_query_hidden": {
                 "sort": list_params["sort"],
                 "order": list_params["order"],
+                **(
+                    {"page_size": str(page_size)}
+                    if page_size != effective_default_page_size()
+                    else {}
+                ),
             },
+            "page_size_options": page_size_switch_items(
+                request.GET, current_page_size=page_size
+            ),
             "published_by_doctor_options": (
                 _doctor_filter_published_by_options() if show_oversight_filters else []
             ),

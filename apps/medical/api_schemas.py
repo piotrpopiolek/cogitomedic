@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from apps.core.api_schemas import OffsetPaginationQueryParams
+
 
 class FavoriteLesionGroupPreset(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -142,3 +144,9 @@ class RetryProcessingRequest(BaseModel):
     reason: str = Field(
         default="manual retry from doctor panel", min_length=3, max_length=200
     )
+
+
+class MedicalDocumentAuditTrailQueryParams(OffsetPaginationQueryParams):
+    """Query params for GET /api/v1/medical-documents/{id}/audit-trail."""
+
+    pass

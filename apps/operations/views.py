@@ -9,8 +9,9 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.template.response import TemplateResponse
 
+from apps.core.admin_list_page_size import changelist_page_size_context
 from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
-from apps.core.constants import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+from apps.core.list_pagination import parse_page_size
 from apps.core.translation_service import get_admin_translation, resolve_other_message
 from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
@@ -51,11 +52,7 @@ def _parse_pagination(request: HttpRequest) -> tuple[int, int]:
         default=1,
         maximum=10_000,
     )
-    page_size = safe_parse_positive_int(
-        request.GET.get("page_size"),
-        default=DEFAULT_LIST_LIMIT,
-        maximum=MAX_LIST_LIMIT,
-    )
+    page_size = parse_page_size(request.GET.get("page_size"))
     return page, page_size
 
 
@@ -111,6 +108,7 @@ def _report_context(request: HttpRequest) -> dict:
         },
         "previous_page_url": previous_page_url,
         "next_page_url": next_page_url,
+        **changelist_page_size_context(request),
         "export_querystring": export_querystring(),
         "report_total_rows": total,
     }

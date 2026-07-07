@@ -4,18 +4,17 @@ from django import forms
 from django.contrib import admin
 
 try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
     from unfold.widgets import UnfoldAdminSelectWidget
 except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
     UnfoldAdminSelectWidget = forms.Select
 
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 from apps.core.models import TranslationCacheVersion, TranslationKey, TranslationValue
 from apps.users.models import StaffUserPreferredLocale
 
 
 @admin.register(TranslationKey)
-class TranslationKeyAdmin(UnfoldModelAdmin):
+class TranslationKeyAdmin(CogitomedicaModelAdmin):
     list_display = ("key", "category", "status", "is_html_allowed", "updated_at")
     list_display_links = ("key",)
     list_filter = ("category", "status", "is_html_allowed")
@@ -25,7 +24,7 @@ class TranslationKeyAdmin(UnfoldModelAdmin):
 
 
 @admin.register(TranslationValue)
-class TranslationValueAdmin(UnfoldModelAdmin):
+class TranslationValueAdmin(CogitomedicaModelAdmin):
     list_display = (
         "translation_key",
         "language_code",
@@ -67,7 +66,7 @@ class TranslationValueAdmin(UnfoldModelAdmin):
 
 
 @admin.register(TranslationCacheVersion)
-class TranslationCacheVersionAdmin(UnfoldModelAdmin):
+class TranslationCacheVersionAdmin(CogitomedicaModelAdmin):
     list_display = ("category", "language_code", "version", "updated_at")
     list_display_links = ("category",)
     list_filter = ("category", "language_code")

@@ -3,16 +3,13 @@ from __future__ import annotations
 from django.contrib import admin
 from django.db.models import Q
 
-try:
-    from unfold.admin import ModelAdmin as UnfoldModelAdmin
-except ImportError:
-    UnfoldModelAdmin = admin.ModelAdmin
+from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
 from apps.operations.models import AuditEvent
 
 
 @admin.register(AuditEvent)
-class AuditEventAdmin(UnfoldModelAdmin):
+class AuditEventAdmin(CogitomedicaModelAdmin):
     list_display = (
         "event_time",
         "event_type",
