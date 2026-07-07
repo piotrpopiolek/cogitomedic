@@ -8,6 +8,8 @@ from unittest.mock import Mock
 from django.test import SimpleTestCase
 
 from apps.medical.name_normalize import (
+    _stem_without_pdf,
+    _suffix_after_candidate_is_lab_or_multifile,
     build_patient_filename_candidates,
     compute_incoming_pdf_name_keys,
     dated_match_candidates,
@@ -380,6 +382,45 @@ class NameNormalizeTests(SimpleTestCase):
         self.assertEqual(normalize_name("   "), "")
         self.assertEqual(normalize_name("  Kowalski   Jan  "), "kowalski_jan")
         self.assertEqual(normalize_name("A__B"), "a__b")
+
+    def test_normalize_name_polish_l_stroke(self) -> None:
+        """``ł``/``Ł`` after NFKD — explicit replace, not only combining-char strip."""
+        self.assertEqual(normalize_name("Łódź"), "lodz")
+        self.assertEqual(normalize_name("łukasz"), "lukasz")
+
+    def test_normalized_name_variants_and_stem_empty_inputs(self) -> None:
+        self.assertEqual(normalized_name_variants(""), ())
+        self.assertEqual(_stem_without_pdf(""), "")
+        self.assertFalse(match_filename_to_candidates("", ["jan_kowalski"]))
+
+    def test_suffix_after_candidate_numeric_and_lab_prefix_edges(self) -> None:
+        """Branches in lab/multi-file suffix helper (numeric tail, 4-char lab token)."""
+        self.assertTrue(
+            _suffix_after_candidate_is_lab_or_multifile(
+                "jan_kowalski_999", "jan_kowalski"
+            )
+        )
+        self.assertTrue(
+            _suffix_after_candidate_is_lab_or_multifile(
+                "kowalski_jan_ab12_extra", "kowalski_jan"
+            )
+        )
+        self.assertFalse(
+            _suffix_after_candidate_is_lab_or_multifile(
+                "jan_kowalski_wyniki_brata", "jan_kowalski"
+            )
+        )
+        self.assertFalse(
+            _suffix_after_candidate_is_lab_or_multifile("other_token", "jan_kowalski")
+        )
+
+    def test_match_filename_four_char_lab_prefix_via_suffix_helper(self) -> None:
+        p = Mock()
+        p.first_name = "Jan"
+        p.last_name = "Kowalski"
+        p.date_of_birth = None
+        c = build_patient_filename_candidates(p)
+        self.assertTrue(match_filename_to_candidates("kowalski_jan_ab12_extra", c))
 
     def test_build_patient_filename_candidates_without_dob(self) -> None:
         p = Mock()
