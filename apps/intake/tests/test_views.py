@@ -11,6 +11,7 @@ from uuid import uuid4
 from django.test import Client, RequestFactory, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.translation_service import format_administration_message
 from apps.intake.views import (
     _enrich_intake_document_list_items_for_display,
     _intake_pdf_status_display,
@@ -125,3 +126,13 @@ class IntakeDocumentsListDisplayTests(TestCase):
         items = [{"pdf_generation_status": "FAILED"}]
         _enrich_intake_document_list_items_for_display(request, items)
         self.assertEqual(items[0]["pdf_generation_status_display"], "Błąd")
+
+    def test_detail_title_uses_administration_message(self):
+        request = RequestFactory().get("/admin/intake-documents/")
+        title = format_administration_message(
+            "administration.intake_document_detail_title",
+            "Intake document – {patient_name}",
+            request,
+            patient_name="Kowalski Jan",
+        )
+        self.assertEqual(title, "Intake document – Kowalski Jan")

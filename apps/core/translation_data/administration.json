@@ -1099,6 +1099,16 @@
     "en": "total",
     "pl": "łącznie"
   },
+  "administration.pagination_total": {
+    "de": "insgesamt",
+    "en": "total",
+    "pl": "łącznie"
+  },
+  "administration.pagination_nav": {
+    "de": "Seitennavigation",
+    "en": "Page navigation",
+    "pl": "Nawigacja stron"
+  },
   "administration.pagination_page_size": {
     "de": "Einträge pro Seite:",
     "en": "Rows per page:",
