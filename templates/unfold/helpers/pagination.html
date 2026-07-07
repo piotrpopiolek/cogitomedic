@@ -2,21 +2,19 @@
 
 {% if cl %}
 <footer class="sticky bottom-0 z-40 border-t border-base-200 bg-white {% element_classes 'pagination' %}">
-  <div class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 lg:min-h-16 {% if not cl.model_admin.list_fullwidth %}container mx-auto{% endif %}">
+  <div class="flex w-full flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center lg:min-h-16 {% if not cl.model_admin.list_fullwidth %}container mx-auto{% endif %}">
+    <div class="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-3">
+      {% pagination cl %}
+    </div>
+
     {% if page_size_options %}
-    <div class="shrink-0">
+    <div class="shrink-0 self-end sm:self-auto sm:ml-auto">
       {% if not page_size_label %}
       {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
       {% endif %}
       {% include "includes/list_page_size_selector.html" %}
     </div>
-    {% else %}
-    <span class="hidden sm:block" aria-hidden="true"></span>
     {% endif %}
-
-    <div class="flex min-w-0 flex-1 flex-wrap items-center justify-start sm:justify-end gap-3">
-      {% pagination cl %}
-    </div>
   </div>
 </footer>
 {% endif %}

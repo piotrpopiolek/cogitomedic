@@ -352,6 +352,20 @@ def _doctor_list_page_link_items(
     return items
 
 
+_PAGE_SIZE_LABEL_BY_LANG = {
+    "de": "Einträge pro Seite:",
+    "en": "Rows per page:",
+    "pl": "Wierszy na stronę:",
+}
+
+
+def _doctor_page_size_label(lang: str, ui: dict[str, str]) -> str:
+    label = ui.get("pagination_page_size", "").strip()
+    if label:
+        return label
+    return _PAGE_SIZE_LABEL_BY_LANG.get(lang, _PAGE_SIZE_LABEL_BY_LANG["de"])
+
+
 @login_required(login_url="doctor-login")
 @require_http_methods(["GET"])
 def doctor_list_view(request: HttpRequest) -> HttpResponse:
@@ -447,6 +461,7 @@ def doctor_list_view(request: HttpRequest) -> HttpResponse:
             "page_size_options": page_size_switch_items(
                 request.GET, current_page_size=page_size
             ),
+            "page_size_label": _doctor_page_size_label(lang, ui),
             "published_by_doctor_options": (
                 _doctor_filter_published_by_options() if show_oversight_filters else []
             ),
