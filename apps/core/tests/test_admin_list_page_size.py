@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from django.contrib import admin
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.admin_list_page_size import resolve_admin_list_page_size
 from apps.core.constants import DEFAULT_LIST_LIMIT
+from apps.operations.admin import AuditEventAdmin
 from apps.operations.models import AuditEvent
 from apps.users.models import StaffUser
 
@@ -54,3 +56,15 @@ class AdminChangelistPageSizeTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["cl"].result_list), 10)
+
+    def test_get_list_per_page_does_not_mutate_admin_singleton(self) -> None:
+        factory = RequestFactory()
+        request = factory.get(
+            "/admin/operations/auditevent/",
+            {"page_size": "10"},
+        )
+        request.session = self.client.session
+        admin_instance = AuditEventAdmin(AuditEvent, admin.site)
+        original_list_per_page = admin_instance.list_per_page
+        self.assertEqual(admin_instance.get_list_per_page(request), 10)
+        self.assertEqual(admin_instance.list_per_page, original_list_per_page)

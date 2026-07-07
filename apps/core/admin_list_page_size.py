@@ -61,22 +61,46 @@ class ListPageSizeAdminMixin:
 
     list_per_page = DEFAULT_LIST_LIMIT
 
+    def get_list_per_page(self, request: HttpRequest) -> int:
+        """Per-request page size; avoids mutating ``self.list_per_page`` on the admin singleton."""
+        return resolve_admin_list_page_size(request)
+
+    def get_changelist_instance(self, request):
+        """Pass resolved page size into ``ChangeList`` (thread-safe vs ``self.list_per_page``)."""
+        list_display = self.get_list_display(request)
+        list_display_links = self.get_list_display_links(request, list_display)
+        if self.get_actions(request):
+            list_display = ["action_checkbox", *list_display]
+        sortable_by = self.get_sortable_by(request)
+        ChangeList = self.get_changelist(request)
+        return ChangeList(
+            request,
+            self.model,
+            list_display,
+            list_display_links,
+            self.get_list_filter(request),
+            self.date_hierarchy,
+            self.get_search_fields(request),
+            self.get_list_select_related(request),
+            self.get_list_per_page(request),
+            self.list_max_show_all,
+            self.list_editable,
+            self,
+            sortable_by,
+            self.search_help_text,
+        )
+
     def changelist_view(
         self,
         request: HttpRequest,
         extra_context: dict[str, Any] | None = None,
     ) -> HttpResponse:
         persist_admin_list_page_size(request)
-        previous_list_per_page = self.list_per_page
-        self.list_per_page = resolve_admin_list_page_size(request)
         extra_context = {
             **(extra_context or {}),
             **changelist_page_size_context(request),
         }
-        try:
-            return super().changelist_view(request, extra_context=extra_context)  # type: ignore[misc]
-        finally:
-            self.list_per_page = previous_list_per_page
+        return super().changelist_view(request, extra_context=extra_context)  # type: ignore[misc]
 
 
 class CogitomedicaModelAdmin(ListPageSizeAdminMixin, UnfoldModelAdmin):

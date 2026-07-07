@@ -319,7 +319,7 @@ class TabletViewsScopeAndEdgeTests(TestCase):
                 first_name=f"Q{index:03d}",
                 last_name="Queue",
                 date_of_birth=date(1988, 6, 15),
-                phone=f"+4852{index:06d}",
+                phone=f"48510{index:06d}",
                 email=f"queue-bulk-{index}@example.com",
             )
             for index in range(total)
