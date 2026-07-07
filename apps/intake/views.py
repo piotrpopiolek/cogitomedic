@@ -14,6 +14,7 @@ from django.urls import reverse
 
 from apps.core.admin_list_page_size import changelist_page_size_context
 from apps.core.api_utils import get_scoped_clinic_site_ids
+from apps.core.translation_service import get_admin_translation
 from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
 from apps.intake.document_services import (
     check_intake_document_access,
@@ -24,6 +25,36 @@ from apps.intake.document_services import (
 )
 from apps.intake.models import IntakeDocumentVersion
 from apps.reception.models import ClinicSite
+
+_INTAKE_PDF_STATUS_ADMIN_KEYS: dict[str, tuple[str, str]] = {
+    "PENDING": ("administration.pdf_status_pending", "Oczekuje"),
+    "PROCESSING": ("administration.pdf_status_in_progress", "W trakcie"),
+    "IN_PROGRESS": ("administration.pdf_status_in_progress", "W trakcie"),
+    "COMPLETED": ("administration.pdf_status_completed", "Wygenerowany"),
+    "FAILED": ("administration.pdf_status_failed", "Błąd"),
+}
+
+
+def _intake_pdf_status_display(request: HttpRequest, code: str | None) -> str:
+    if not code:
+        return ""
+    key_default = _INTAKE_PDF_STATUS_ADMIN_KEYS.get(code)
+    if key_default is None:
+        return code
+    key, default = key_default
+    return get_admin_translation(request, key, default)
+
+
+def _enrich_intake_document_list_items_for_display(
+    request: HttpRequest,
+    items: list[dict[str, object]],
+) -> None:
+    for item in items:
+        code = item.get("pdf_generation_status")
+        if isinstance(code, str) and code:
+            item["pdf_generation_status_display"] = _intake_pdf_status_display(
+                request, code
+            )
 
 
 @staff_member_required
@@ -50,6 +81,7 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
         page_size=params["page_size"],
     )
     list_data = [get_intake_document_list_item(v) for v in items]
+    _enrich_intake_document_list_items_for_display(request, list_data)
 
     scope_ids = get_scoped_clinic_site_ids(request.user)
     clinic_sites = []
@@ -76,7 +108,11 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
 
     context = {
         **admin.site.each_context(request),
-        "title": "Dokumenty intake (PDF)",
+        "title": get_admin_translation(
+            request,
+            "administration.intake_documents_list_title",
+            "Dokumenty intake (PDF)",
+        ),
         "items": list_data,
         "pagination": {
             "page": page,

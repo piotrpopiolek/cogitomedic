@@ -8,9 +8,13 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.intake.views import (
+    _enrich_intake_document_list_items_for_display,
+    _intake_pdf_status_display,
+)
 from apps.users.models import StaffUser
 
 LIST_URL = "/admin/intake-documents/"
@@ -102,3 +106,22 @@ class IntakeDocumentsViewTests(TestCase):
         self.client.login(username="iv-mgr", password="x")
         resp = self.client.get(_detail_url(uuid4()))
         self.assertEqual(resp.status_code, 404)
+
+
+class IntakeDocumentsListDisplayTests(TestCase):
+    def test_pdf_status_display_uses_admin_translation_fallback(self):
+        request = RequestFactory().get("/admin/intake-documents/")
+        self.assertEqual(
+            _intake_pdf_status_display(request, "COMPLETED"),
+            "Wygenerowany",
+        )
+        self.assertEqual(
+            _intake_pdf_status_display(request, "PROCESSING"),
+            "W trakcie",
+        )
+
+    def test_enrich_list_items_adds_status_display(self):
+        request = RequestFactory().get("/admin/intake-documents/")
+        items = [{"pdf_generation_status": "FAILED"}]
+        _enrich_intake_document_list_items_for_display(request, items)
+        self.assertEqual(items[0]["pdf_generation_status_display"], "Błąd")
