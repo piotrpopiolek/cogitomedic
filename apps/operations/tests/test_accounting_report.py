@@ -502,6 +502,48 @@ class AccountingReportViewTests(AccountingReportBase):
         response = self.client.get(reverse("admin_accounting_report"))
         self.assertEqual(response.status_code, 200)
 
+    def test_dashboard_includes_auto_submit_form_markup(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(reverse("admin_accounting_report"))
+        content = response.content.decode()
+        self.assertIn('id="accounting-report-form"', content)
+        self.assertIn("accounting-report-form.js", content)
+        self.assertIn("data-export-csv-url", content)
+        self.assertIn("data-export-csv", content)
+        self.assertIn("data-export-xlsx", content)
+
+    def test_export_querystring_omits_page_and_keeps_dates(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "page": "2",
+                "page_size": "20",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["export_querystring"],
+            "?date_from=2026-03-10&date_to=2026-03-16",
+        )
+
+    def test_date_range_get_without_page_returns_first_page(self) -> None:
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {"date_from": "2026-03-10", "date_to": "2026-03-16"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["pagination"]["page"], 1)
+        self.assertEqual(response.context["pagination"]["total"], 1)
+
     def test_accounting_user_admin_index_redirects_to_report(self) -> None:
         self.client.force_login(self.accounting_user)
         response = self.client.get(reverse("admin:index"))
