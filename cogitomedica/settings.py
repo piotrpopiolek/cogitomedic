@@ -762,6 +762,7 @@ if HAS_UNFOLD:
             lambda request: static("cogitomedica/css/unfold-sidebar-fix.css"),
             lambda request: static("cogitomedica/css/admin-changelist-link.css"),
             lambda request: static("cogitomedica/css/admin-list-pagination.css"),
+            lambda request: static("cogitomedica/css/admin-reception-dashboard.css"),
         ],
         "SCRIPTS": [
             lambda request: static("admin/js/unfold-force-light.js"),

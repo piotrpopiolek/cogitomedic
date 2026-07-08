@@ -155,26 +155,26 @@ body.cm-portal {
 tr.doctor-queue-row--delivered > td {
   background-color: #ecfdf5 !important; /* emerald-50 */
 }
-.dark tr.doctor-queue-row--delivered > td {
+html.dark tr.doctor-queue-row--delivered > td {
   background-color: rgba(6, 78, 59, 0.28) !important;
 }
 tr.doctor-queue-row--delivered:hover > td {
   background-color: #d1fae5 !important; /* emerald-100 */
 }
-.dark tr.doctor-queue-row--delivered:hover > td {
+html.dark tr.doctor-queue-row--delivered:hover > td {
   background-color: rgba(6, 78, 59, 0.38) !important;
 }
 
 tr.doctor-queue-row--semaphore > td {
   background-color: #fffbeb !important; /* amber-50 */
 }
-.dark tr.doctor-queue-row--semaphore > td {
+html.dark tr.doctor-queue-row--semaphore > td {
   background-color: rgba(120, 53, 15, 0.22) !important;
 }
 tr.doctor-queue-row--semaphore:hover > td {
   background-color: #fef3c7 !important; /* amber-100 */
 }
-.dark tr.doctor-queue-row--semaphore:hover > td {
+html.dark tr.doctor-queue-row--semaphore:hover > td {
   background-color: rgba(120, 53, 15, 0.32) !important;
 }
 
@@ -182,12 +182,78 @@ tr.doctor-queue-row--semaphore:hover > td {
 tr.doctor-queue-row--unpublished-sla > td {
   background-color: rgba(254, 202, 202, calc(0.14 + var(--sla-urgency, 0) * 0.48)) !important;
 }
-.dark tr.doctor-queue-row--unpublished-sla > td {
+html.dark tr.doctor-queue-row--unpublished-sla > td {
   background-color: rgba(127, 29, 29, calc(0.18 + var(--sla-urgency, 0) * 0.48)) !important;
 }
 tr.doctor-queue-row--unpublished-sla:hover > td {
   background-color: rgba(252, 165, 165, calc(0.18 + var(--sla-urgency, 0) * 0.5)) !important;
 }
-.dark tr.doctor-queue-row--unpublished-sla:hover > td {
+html.dark tr.doctor-queue-row--unpublished-sla:hover > td {
   background-color: rgba(153, 27, 27, calc(0.22 + var(--sla-urgency, 0) * 0.52)) !important;
+}
+
+/* Tinted rows: force readable text when Tailwind dark: utilities are missing from admin bundle. */
+html.dark tr.doctor-queue-row--delivered > td,
+html.dark tr.doctor-queue-row--semaphore > td,
+html.dark tr.doctor-queue-row--unpublished-sla > td {
+  color: var(--color-base-100, #f3f4f6) !important;
+}
+
+html.dark tr.doctor-queue-row--delivered > td .doctor-queue-cell-muted,
+html.dark tr.doctor-queue-row--semaphore > td .doctor-queue-cell-muted,
+html.dark tr.doctor-queue-row--unpublished-sla > td .doctor-queue-cell-muted {
+  color: var(--color-base-300, #d1d5db) !important;
+}
+
+/* Doctor list pagination footer */
+html.dark footer.cogito-doctor-list-footer {
+  background-color: var(--color-base-900, #111827);
+  border-color: var(--color-base-700, #374151);
+}
+
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-footer-summary {
+  color: var(--color-base-300, #d1d5db);
+}
+
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-footer-summary strong,
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-footer-summary .font-semibold {
+  color: var(--color-base-100, #f3f4f6);
+}
+
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-footer-page {
+  color: var(--color-base-400, #9ca3af);
+}
+
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-nav-btn {
+  border-color: var(--color-base-700, #374151);
+  background-color: var(--color-base-900, #111827);
+  color: var(--color-base-200, #e5e7eb);
+}
+
+html.dark footer.cogito-doctor-list-footer .cogito-doctor-list-nav-btn:hover {
+  border-color: color-mix(in srgb, var(--color-primary-500, #3b82f6) 45%, transparent);
+  background-color: var(--color-base-800, #1f2937);
+  color: var(--color-primary-400, #60a5fa);
+}
+
+/* Status badges on tinted rows: light-mode pill colors are illegible in dark admin. */
+html.dark tr.doctor-queue-row--delivered > td .bg-amber-100,
+html.dark tr.doctor-queue-row--semaphore > td .bg-amber-100,
+html.dark tr.doctor-queue-row--unpublished-sla > td .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.55) !important;
+  color: #fde68a !important;
+}
+
+html.dark tr.doctor-queue-row--delivered > td .bg-red-100,
+html.dark tr.doctor-queue-row--semaphore > td .bg-red-100,
+html.dark tr.doctor-queue-row--unpublished-sla > td .bg-red-100 {
+  background-color: rgba(127, 29, 29, 0.55) !important;
+  color: #fecaca !important;
+}
+
+html.dark tr.doctor-queue-row--delivered > td .bg-base-200,
+html.dark tr.doctor-queue-row--semaphore > td .bg-base-200,
+html.dark tr.doctor-queue-row--unpublished-sla > td .bg-base-200 {
+  background-color: var(--color-base-700, #374151) !important;
+  color: var(--color-base-100, #f3f4f6) !important;
 }

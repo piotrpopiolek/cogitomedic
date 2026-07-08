@@ -154,6 +154,15 @@ class DoctorViewsSmokeTests(TestCase):
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 200)
 
+    def test_list_includes_dark_mode_classes(self) -> None:
+        self._login_doctor()
+        html = self.client.get("/doctor/").content.decode()
+        self.assertIn("cogitomedica/css/cogitomedica-brand.css", html)
+        self.assertIn("cogitomedica/css/admin-list-pagination.css", html)
+        self.assertIn("dark:bg-base-900", html)
+        self.assertIn("dark:text-base-300", html)
+        self.assertIn("dark:border-base-700", html)
+
     def test_list_hides_oversight_filters_for_doctor(self) -> None:
         self._login_doctor()
         resp = self.client.get("/doctor/")
