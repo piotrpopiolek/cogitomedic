@@ -75,10 +75,13 @@ class ReceptionDashboardRbacTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(self.url)
         content = response.content.decode()
-        self.assertIn("dark:text-base-100", content)
+        self.assertIn("cogito-reception-dashboard", content)
+        self.assertIn("cogito-reception-muted", content)
+        self.assertIn("cogito-reception-banner--info", content)
+        self.assertIn("dark:text-base-300", content)
         self.assertIn("dark:bg-base-900", content)
         self.assertIn("dark:bg-base-800", content)
-        self.assertIn("dark:border-base-800", content)
+        self.assertIn("dark:border-base-700", content)
 
 
 @override_settings(

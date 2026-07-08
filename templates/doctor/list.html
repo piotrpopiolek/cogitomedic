@@ -3,6 +3,7 @@
 {% load l10n %}
 {% block doctor_extrahead %}
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/admin-list-pagination.css' %}" />
 {% endblock %}
 {% block title %}{{ ui.list_title }}{% endblock %}
 {% block content_inner %}
@@ -102,7 +103,7 @@
             {% endif %}
           </span>
         </td>
-        <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.queue_date }}</td>
+        <td class="doctor-queue-cell-muted px-4 py-3 text-base-700 dark:text-base-300">{{ item.queue_date }}</td>
         <td class="px-4 py-3">
           <span class="inline-flex flex-wrap items-center gap-1.5">
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide
@@ -134,7 +135,7 @@
             {% else %}bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200{% endif %}">{{ item.sms_status_display|default:item.sms_status }}</span>
           {% else %}–{% endif %}
         </td>
-        <td class="px-4 py-3 text-base-700 dark:text-base-300">{{ item.published_by }}</td>
+        <td class="doctor-queue-cell-muted px-4 py-3 text-base-700 dark:text-base-300">{{ item.published_by }}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           <div class="inline-flex items-center gap-2">
           {% if item.document_id %}
@@ -170,14 +171,14 @@
       </tr>
       {% endif %}
       {% empty %}
-      <tr><td colspan="8" class="px-4 py-6 text-center text-base-500 dark:text-base-400">{{ ui.no_documents }}</td></tr>
+      <tr><td colspan="8" class="px-4 py-6 text-center text-base-500 dark:text-base-300">{{ ui.no_documents }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
 {% if pagination.total > 0 %}
-<footer class="mt-4 rounded-default border border-base-200 bg-white px-4 py-3">
+<footer class="cogito-doctor-list-footer mt-4 rounded-default border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 px-4 py-3">
   <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
   <div class="flex min-w-0 flex-1 flex-wrap items-center gap-3">
   {% if pagination.num_pages > 1 %}
@@ -185,7 +186,7 @@
     {% if pagination.has_previous %}
     <a
       href="{% url 'doctor-list' %}?{% if pagination.prev_query %}{{ pagination.prev_query }}&amp;{% endif %}lang={{ lang|default:'de' }}"
-      class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-default border border-base-200 bg-white text-base-700 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-600"
+      class="cogito-doctor-list-nav-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-default border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 text-base-700 dark:text-base-200 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-600 dark:hover:border-primary-500/40 dark:hover:bg-base-800 dark:hover:text-primary-400"
       aria-label="{{ ui.pagination_prev }}"
       title="{{ ui.pagination_prev }}"
     >
@@ -195,9 +196,9 @@
 
     {% for item in pagination.page_link_items %}
       {% if item.type == "ellipsis" %}
-        <span class="inline-flex min-w-6 select-none justify-center px-1 text-base-400" aria-hidden="true">…</span>
+        <span class="inline-flex min-w-6 select-none justify-center px-1 text-base-400 dark:text-base-500" aria-hidden="true">…</span>
       {% elif item.current %}
-        <span class="inline-flex min-w-9 items-center justify-center rounded-default bg-primary-600 px-2 py-1.5 text-sm font-semibold tabular-nums text-white shadow-xs" aria-current="page">{{ item.number }}</span>
+        <span class="inline-flex min-w-9 items-center justify-center rounded-default bg-primary-600 px-2 py-1.5 text-sm font-semibold tabular-nums text-white shadow-xs dark:bg-primary-500" aria-current="page">{{ item.number }}</span>
       {% else %}
         <a href="{% url 'doctor-list' %}?{% if item.query %}{{ item.query }}&amp;{% endif %}lang={{ lang|default:'de' }}">{{ item.number }}</a>
       {% endif %}
@@ -206,7 +207,7 @@
     {% if pagination.has_next %}
     <a
       href="{% url 'doctor-list' %}?{{ pagination.next_query }}&amp;lang={{ lang|default:'de' }}"
-      class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-default border border-base-200 bg-white text-base-700 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-600"
+      class="cogito-doctor-list-nav-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-default border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 text-base-700 dark:text-base-200 hover:border-primary-600/40 hover:bg-primary-600/5 hover:text-primary-600 dark:hover:border-primary-500/40 dark:hover:bg-base-800 dark:hover:text-primary-400"
       aria-label="{{ ui.pagination_next }}"
       title="{{ ui.pagination_next }}"
     >
@@ -216,11 +217,11 @@
   </nav>
   {% endif %}
 
-  <div class="text-sm text-base-600">
-    <span class="font-semibold tabular-nums text-base-900">{{ pagination.total }}</span>
+  <div class="cogito-doctor-list-footer-summary text-sm text-base-600 dark:text-base-300">
+    <span class="font-semibold tabular-nums text-base-900 dark:text-base-100">{{ pagination.total }}</span>
     {{ ui.pagination_total }}
     {% if pagination.num_pages > 1 %}
-    <span class="text-base-400"> · {{ ui.pagination_page }} {{ pagination.page }} / {{ pagination.num_pages }}</span>
+    <span class="cogito-doctor-list-footer-page text-base-400 dark:text-base-500"> · {{ ui.pagination_page }} {{ pagination.page }} / {{ pagination.num_pages }}</span>
     {% endif %}
   </div>
   </div>
