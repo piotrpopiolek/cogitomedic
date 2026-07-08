@@ -45,6 +45,8 @@ class AdminChangelistPageSizeTests(TestCase):
         content = response.content.decode()
         self.assertIn("page_size=10", content)
         self.assertIn("page_size=100", content)
+        self.assertIn("dark:bg-base-900", content)
+        self.assertIn("dark:border-base-800", content)
 
     def test_changelist_page_size_query_limits_rows(self) -> None:
         for _ in range(15):

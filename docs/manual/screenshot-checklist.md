@@ -83,6 +83,15 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 | 3   | `admin-03-import-xlsx.png` | Import XLSX (admin/recepcja) |
 
 
+## Księgowość (`08-ksiegowosc-raport`)
+
+
+| #   | Plik | Ekran / uwagi |
+| --- | ---- | ------------- |
+| 1   | `accounting-01-report-light.png` | `/admin/accounting/report/` — tryb jasny, tabela z danymi |
+| 2   | `accounting-02-report-dark.png` | Ten sam ekran — **tryb ciemny** Unfold (kontrast tabeli, hint, paginacja) |
+
+
 ## Pacjent (`05-pacjent-wyniki`)
 
 
