@@ -544,6 +544,14 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.context["pagination"]["page"], 1)
         self.assertEqual(response.context["pagination"]["total"], 1)
 
+    def test_dashboard_includes_dark_mode_table_classes(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(reverse("admin_accounting_report"))
+        content = response.content.decode()
+        self.assertIn("dark:text-base-100", content)
+        self.assertIn("dark:bg-base-900", content)
+        self.assertIn("dark:bg-base-800", content)
+
     def test_accounting_user_admin_index_redirects_to_report(self) -> None:
         self.client.force_login(self.accounting_user)
         response = self.client.get(reverse("admin:index"))

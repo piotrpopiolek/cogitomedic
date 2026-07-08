@@ -1,7 +1,7 @@
 {% load admin_list unfold cogitomedica_i18n %}
 
 {% if cl %}
-<footer class="sticky bottom-0 z-40 border-t border-base-200 bg-white {% element_classes 'pagination' %}">
+<footer class="sticky bottom-0 z-40 border-t border-base-200 dark:border-base-800 bg-white dark:bg-base-900 {% element_classes 'pagination' %}">
   <div class="flex w-full flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center lg:min-h-16 {% if not cl.model_admin.list_fullwidth %}container mx-auto{% endif %}">
     <div class="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-3">
       {% pagination cl %}

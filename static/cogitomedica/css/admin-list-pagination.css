@@ -1,5 +1,4 @@
-/* Bare <a> tags from Unfold paginator_number — styled to match Tailwind buttons in templates.
-   Admin always uses light theme (unfold-force-light.js); no dark-mode overrides here. */
+/* Bare <a> tags from Unfold paginator_number — match Tailwind pagination buttons. */
 
 .cogito-pagenums a {
   display: inline-flex;
@@ -23,4 +22,16 @@
   border-color: color-mix(in srgb, var(--color-primary-600, #075255) 40%, transparent);
   background: color-mix(in srgb, var(--color-primary-600, #075255) 5%, #fff);
   color: var(--color-primary-700, #063f41);
+}
+
+html.dark .cogito-pagenums a {
+  border-color: var(--color-base-700, #374151);
+  background: var(--color-base-900, #111827);
+  color: var(--color-base-200, #e5e7eb);
+}
+
+html.dark .cogito-pagenums a:hover {
+  border-color: color-mix(in srgb, var(--color-primary-500, #3b82f6) 45%, transparent);
+  background: var(--color-base-800, #1f2937);
+  color: var(--color-primary-400, #60a5fa);
 }
