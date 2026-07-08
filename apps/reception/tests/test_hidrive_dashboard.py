@@ -70,6 +70,16 @@ class ReceptionDashboardRbacTests(TestCase):
             response = self.client.get(self.url)
             self.assertEqual(response.status_code, 403, group)
 
+    def test_dashboard_includes_dark_mode_classes(self) -> None:
+        user = self._staff("dash-dark-mode", "Reception")
+        self.client.force_login(user)
+        response = self.client.get(self.url)
+        content = response.content.decode()
+        self.assertIn("dark:text-base-100", content)
+        self.assertIn("dark:bg-base-900", content)
+        self.assertIn("dark:bg-base-800", content)
+        self.assertIn("dark:border-base-800", content)
+
 
 @override_settings(
     HIDRIVE_USE_MOCK="1",
