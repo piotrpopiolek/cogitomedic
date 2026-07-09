@@ -36,6 +36,7 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 | [SC-003](#sc-003-otwarta-rewizja-revision-a-nie-chcemy-jej-kończyć) | Otwarta rewizja — porzucenie | Lekarz | nie nagrany |
 | [SC-004](#sc-004-pobranie-listy-tygodniowej-dla-księgowości) | Pobranie listy tygodniowej dla księgowości | Księgowość, Manager, Admin | nie nagrany |
 | [SC-005](#sc-005-lekarz-nie-może-otworzyć-befundu-brak-pdf-z-laboratorium) | Lekarz nie może otworzyć Befundu — brak PDF z laboratorium | Recepcja, Lekarz | nie nagrany |
+| [SC-006](#sc-006-pacjent-nie-dostał-sms-powtórka-przez-outbox) | Pacjent nie dostał SMS — powtórka przez outbox | Recepcja, Manager, Administrator | nie nagrany |
 
 ---
 
@@ -113,12 +114,28 @@ Skopiuj szablon na koniec pliku i uzupełnij:
 
 ---
 
+### SC-006 — Pacjent nie dostał SMS — powtórka przez outbox
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Recepcja, Manager, Administrator |
+| **Objaw** | Befund jest **opublikowany**, w panelu lekarza kolumna **SMS** wygląda na zakończoną (sukces), ale pacjent **nie otrzymał** SMS-a z kodem do portalu — albo zdarzenie outbox ma status błędu (`Nieudane` / `Dead letter`). |
+| **Przyczyna (techniczna)** | Wysyłka SMS jest **osobnym zdarzeniem outbox** (`SMS_SEND`) w łańcuchu po publikacji. Może się nie powieść (brak numeru, błąd bramki SMS), zostać pominięta przy rewizji bez flagi `resend_sms`, albo SMS mógł nie dotrzeć mimo statusu „Przetworzono” po stronie systemu. **Administrator nie może ponownie opublikować Befundu** — publikacja należy wyłącznie do lekarza. |
+| **Co zrobić dziś (obejście)** | **Przed ponowieniem:** sprawdź w adminie **numer telefonu pacjenta** (poprawny format, obsługiwany kraj SMS). **1)** Wejdź na **`/admin/outbox/outboxevent/`** (menu **Skrzynka wyjściowa → Zdarzenia skrzynki wyjściowej**). **2)** Filtruj po **Typ zdarzenia: Wysyłka SMS** i znajdź wiersz powiązany z **właściwą wersją dokumentu medycznego** (kolumna „Wersja dokumentu medycznego”). **3a)** Gdy status to **`Nieudane`** lub **`Dead letter`**: na **`/admin/reception-dashboard/`** użyj **Ponów** przy błędzie outbox **albo** w edycji zdarzenia ustaw status na **`Oczekuje`** (`PENDING`). **3b)** Gdy status to **`Przetworzono`**, a SMS trzeba wysłać **ponownie** (np. pacjent potwierdza brak wiadomości): otwórz rekord zdarzenia `SMS_SEND` dla tej wersji i **cofnij status** z **`Przetworzono`** na **`Oczekuje`**. Opcjonalnie wyczyść pole **Przetworzono** (`processed_at`) i upewnij się, że **Dostępne od** (`available_at`) jest w przeszłości. **4)** Poczekaj na worker (`scheduler`) lub — po konsultacji z IT — uruchom ręcznie: `python manage.py enqueue_tasks`. **5)** Odśwież dashboard recepcji i listę lekarza — brak nowego błędu outbox oznacza ponowną próbę. |
+| **Czego nie robić** | **Nie** proś lekarza o „republikację” Befundu tylko po to, żeby admin wymusił SMS — admin **nie ma** tej akcji. Nie zmieniaj statusu zdarzeń **PDF** ani **HiDrive** bez potrzeby. Nie wysyłaj SMS poza systemem z treścią medyczną (RODO/BÄK). Przy **Zewnętrznym badaniu** (`EXTERNAL_UPLOAD`) rozważ ponowną publikację z checkboxem **Wyślij SMS ponownie** zamiast ręcznej edycji outbox — patrz [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md). |
+| **Docelowo (produkt)** | Osobna akcja „wyślij SMS ponownie” bez edycji statusu w adminie — backlog [`.ai/TODO.md`](../../.ai/TODO.md). |
+| **Film** | nie nagrany — proponowany tytuł: *„Recepcja: pacjent nie dostał SMS — cofnięcie statusu zdarzenia outbox”* |
+| **Powiązane** | [01-rejestracja.md](01-rejestracja.md) § dashboard recepcji, [04-administrator.md](04-administrator.md) §8, [05-pacjent-wyniki.md](05-pacjent-wyniki.md), runbook [OUTBOX_BACKLOG_AGE.md](../runbooks/OUTBOX_BACKLOG_AGE.md) |
+
+---
+
 ## Backlog filmów (propozycje)
 
 | Priorytet | SC | Czas ~ | Odbiorca |
 |-----------|-----|--------|----------|
 | Wysoki | SC-001 | 2–3 min | Recepcja + lekarz |
 | Wysoki | SC-002 | 2 min | Admin / recepcja |
+| Wysoki | SC-006 | 2–3 min | Recepcja / admin |
 | Średni | SC-003 | 2 min | Lekarz |
 | Średni | SC-004 | 2–3 min | Księgowość / manager |
 
