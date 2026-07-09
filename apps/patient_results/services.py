@@ -78,7 +78,7 @@ class RequestOtpResult:
     status: str  # "ok" | "captcha_failed"
     error: str | None = None  # "captcha_failed" when CAPTCHA invalid
     audit_outcome: str = (
-        "silent_no_op"  # sms_sent | silent_no_op | captcha_failed | ambiguous_identity
+        "silent_no_op"  # sms_sent | silent_no_op | captcha_failed | ambiguous_identity | sms_failed
     )
     patient_id: uuid.UUID | None = None  # set when SMS was sent (audit only)
     needs_last_name: bool = False
@@ -144,16 +144,30 @@ def request_otp(
     expires_at = timezone.now() + timedelta(minutes=OTP_VALID_MINUTES)
 
     with transaction.atomic():
-        PatientResultsOtpSession.objects.create(
+        session = PatientResultsOtpSession.objects.create(
             patient=patient,
             phone=patient.phone,
             otp_code_hash=otp_hash,
             expires_at=expires_at,
         )
-        sms_text = _get_otp_sms_text(otp_code)
-        adapter = get_sms_adapter()
-        region = infer_sms_region_from_phone(patient.phone)
+
+    sms_text = _get_otp_sms_text(otp_code)
+    adapter = get_sms_adapter()
+    region = infer_sms_region_from_phone(patient.phone)
+    try:
         adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
+    except Exception:
+        logger.exception(
+            "OTP SMS delivery failed for patient %s (session %s)",
+            patient.id,
+            session.id,
+        )
+        session.delete()
+        return RequestOtpResult(
+            status="ok",
+            audit_outcome="sms_failed",
+            patient_id=patient.id,
+        )
 
     return RequestOtpResult(
         status="ok",
