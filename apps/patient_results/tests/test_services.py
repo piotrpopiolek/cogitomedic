@@ -80,6 +80,24 @@ class RequestOtpTests(TestCase):
         self.assertIn("1762222222", str(call_args))
         self.assertRegex(call_args[1]["message"], r"\d{6}")
 
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_sms_failure_returns_ok_without_session(
+        self, mock_get_adapter
+    ) -> None:
+        mock_get_adapter.return_value.send_sms.side_effect = Exception(
+            "Cannot send sms, account balance is low"
+        )
+        result = request_otp(
+            phone="01762222222",
+            date_of_birth=date(1990, 5, 15),
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "sms_failed")
+        self.assertEqual(result.patient_id, self.patient.id)
+        self.assertEqual(PatientResultsOtpSession.objects.count(), 0)
+
     @override_settings(CAPTCHA_VERIFY_SKIP=False)
     def test_request_otp_fails_without_captcha(self) -> None:
         result = request_otp(

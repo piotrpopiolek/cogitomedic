@@ -95,6 +95,31 @@ class ErgebnisseLoginPostTests(TestCase):
         self.assertNotIn("ergebnisse_last_name", self.client.session)
 
     @patch("apps.patient_results.services.get_sms_adapter")
+    def test_login_post_sms_failure_still_redirects_to_otp(
+        self, mock_get_adapter
+    ) -> None:
+        mock_get_adapter.return_value.send_sms.side_effect = Exception(
+            "Cannot send sms, account balance is low"
+        )
+        Patient.objects.create(
+            first_name="Html",
+            last_name="Patient",
+            date_of_birth=self.dob,
+            phone=self.phone,
+            email="html@example.com",
+        )
+        response = self.client.post(
+            LOGIN_URL,
+            {
+                "phone": self.phone,
+                "date_of_birth": self.dob.isoformat(),
+                "captcha_token": "skip",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session["ergebnisse_phone"], self.phone)
+
+    @patch("apps.patient_results.services.get_sms_adapter")
     def test_login_post_needs_last_name_for_shared_phone(
         self, mock_get_adapter
     ) -> None:
