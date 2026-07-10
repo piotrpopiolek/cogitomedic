@@ -267,7 +267,7 @@ make superuser
 
 ### 6) Produkcja na VPS (`docker-compose.prod.yml`)
 
-**Domyślny** stack: **db** (Postgres 16, **bez** publikacji 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod) instaluje [requirements.txt](requirements.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` z wolumenu); — tylko port **80** na hoście. Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
+**Domyślny** stack: **db** (Postgres 16, **bez** publikacji 5432 na host), **web** ([Dockerfile.prod](Dockerfile.prod) instaluje [requirements.txt](requirements.txt), Gunicorn `--workers 1`), **scheduler** (`run_periodic_tasks` co 300 s, `--skip-import`), **nginx** (reverse proxy, `/static/` z wolumenu; **bez** publicznego `/media/` — PDF medyczne tylko przez autoryzowane endpointy Django) — porty **80** i **443** na hoście. Kod w obrazie (brak `.:/app`). Obrazy: **`cogitomedica-web:prod`** / **`cogitomedica-scheduler:prod`** (dev: `:dev` w [docker-compose.yml](docker-compose.yml)).
 
 **Observability** (Prometheus, postgres_exporter, Alertmanager, Tempo, OTel Collector, Grafana — jak w dev, [docs/observability-setup.md](docs/observability-setup.md)): profil Compose `observability`. Porty **3000, 9090, 9093, 3200, 4317–4318, 8889** na hoście są domyślnie związane z **`127.0.0.1`** (brak nasłuchu na publicznym IP — dostęp z zewnątrz przez SSH tunnel, np. `ssh -L 3000:127.0.0.1:3000 user@vps`). Świadome wystawienie na LAN/Internet: **`OBSERVABILITY_BIND_ADDR=0.0.0.0`** w `.env` + firewall. Ustaw **`PROMETHEUS_METRICS_TOKEN`** i **`web` w `ALLOWED_HOSTS`** (scraping), **`GF_SECURITY_ADMIN_PASSWORD`** dla Grafany oraz **`OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces`**, jeśli chcesz trace’y do Tempo.
 
@@ -276,7 +276,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml --profile observability up -d --build
 ```
 
-Domyślnie HTTP na porcie **80** (Nginx). Przy `ENVIRONMENT=prod` i TLS na Nginx ustaw m.in. `USE_TRUSTED_REVERSE_PROXY=1` oraz `CSRF_TRUSTED_ORIGINS`; przy pierwszym teście wyłącznie po HTTP możesz tymczasowo ustawić `SECURE_SSL_REDIRECT=0` (komentarze w [.env.example](.env.example)). Healthcheck kontenera `web` uruchamia [scripts/docker-healthcheck-web.sh](scripts/docker-healthcheck-web.sh) (połączenie z bazą przez `django.setup()` — bez HTTP, żeby uniknąć przekierowania HTTPS przy `SECURE_SSL_REDIRECT`). Przy dalszym `unhealthy` zobacz `docker compose -f docker-compose.prod.yml logs web` (np. `ImproperlyConfigured` z `.env` prod). Jeśli w logu jest **`exec /docker-entrypoint-prod.sh: no such file or directory`**, to zwykle **CRLF w `scripts/*.sh`** z Windows — w [Dockerfile.prod](Dockerfile.prod) jest `sed` usuwający `\r`; zrób `docker compose -f docker-compose.prod.yml build --no-cache web`.
+Nginx w [deploy/nginx/nginx.prod.conf](deploy/nginx/nginx.prod.conf): port **80** (ACME + przekierowanie na HTTPS), port **443** (TLS, reverse proxy do Gunicorna). Przy `ENVIRONMENT=prod` ustaw m.in. `USE_TRUSTED_REVERSE_PROXY=1` oraz `CSRF_TRUSTED_ORIGINS` (komentarze w [.env.example](.env.example)). Certyfikaty Let’s Encrypt montowane z `/etc/letsencrypt` na hoście; webroot ACME: `deploy/nginx/certbot-webroot`. Healthcheck kontenera `web` uruchamia [scripts/docker-healthcheck-web.sh](scripts/docker-healthcheck-web.sh) (połączenie z bazą przez `django.setup()` — bez HTTP, żeby uniknąć przekierowania HTTPS przy `SECURE_SSL_REDIRECT`). Przy dalszym `unhealthy` zobacz `docker compose -f docker-compose.prod.yml logs web` (np. `ImproperlyConfigured` z `.env` prod). Jeśli w logu jest **`exec /docker-entrypoint-prod.sh: no such file or directory`**, to zwykle **CRLF w `scripts/*.sh`** z Windows — w [Dockerfile.prod](Dockerfile.prod) jest `sed` usuwający `\r`; zrób `docker compose -f docker-compose.prod.yml build --no-cache web`.
 
 Jednorazowe `manage.py` bez pełnego entrypointa `web` (migracje uruchamiają się przy starcie kontenera `web`):
 
@@ -284,7 +284,7 @@ Jednorazowe `manage.py` bez pełnego entrypointa `web` (migracje uruchamiają si
 docker compose -f docker-compose.prod.yml run --rm --entrypoint python web manage.py createsuperuser
 ```
 
-TLS: dopisz `listen 443 ssl` i zamontuj certyfikaty w [deploy/nginx/nginx.prod.conf](deploy/nginx/nginx.prod.conf), potem odkomentuj mapowanie `443:443` w compose. Operacyjnie: [.cursor/plans/produkcja_vps_cogitomedica.plan.md](.cursor/plans/produkcja_vps_cogitomedica.plan.md).
+Polityka plików: **nie dodawaj** `location /media/` w Nginx — publiczny alias omija OTP i audyt (regresja sprawdzana testem [cogitomedica/tests/test_nginx_prod_media_policy.py](cogitomedica/tests/test_nginx_prod_media_policy.py)). Operacyjnie: [.cursor/plans/produkcja_vps_cogitomedica.plan.md](.cursor/plans/produkcja_vps_cogitomedica.plan.md).
 
 ---
 
