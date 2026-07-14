@@ -247,9 +247,11 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 domain_message("other.domain.patient_phone_required_sms"),
                 api_message_key="other.domain.patient_phone_required_sms",
             )
-        base_url = getattr(
-            settings, "PATIENT_RESULTS_BASE_URL", "https://ergebnisse.cogitomedica.pl"
-        )
+        base_url = (settings.PATIENT_RESULTS_BASE_URL or "").strip()
+        if not base_url:
+            raise RuntimeError(
+                "PATIENT_RESULTS_BASE_URL must be set when processing SMS_SEND outbox events"
+            )
         form_locale = None
         intake_form = version.medical_document.intake_form
         if intake_form and intake_form.session_id:
