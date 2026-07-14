@@ -6,7 +6,7 @@ import pytest
 from django.test import Client
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_NGINX_PROD_CONF = _REPO_ROOT / "deploy" / "nginx" / "nginx.prod.conf"
+_NGINX_PROD_CONF = _REPO_ROOT / "deploy" / "nginx" / "nginx.prod.conf.template"
 
 
 def test_nginx_prod_conf_does_not_publicly_serve_media() -> None:

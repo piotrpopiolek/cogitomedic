@@ -1,15 +1,15 @@
-# Produkcyjny reverse proxy (Docker). Montowany jako /etc/nginx/conf.d/default.conf
+# Produkcyjny reverse proxy (Docker). Szablon — przy starcie kontenera nginx podstawia
+# __NGINX_PUBLIC_HOST__ z env NGINX_PUBLIC_HOST (docker-compose.prod.yml, .env na VPS).
 #
-# Certyfikaty: montaż /etc/letsencrypt z hosta (certbot). Dostosuj ścieżki i server_name
-# jeśli używasz innej domeny niż poniżej.
+# Certyfikaty: montaż /etc/letsencrypt z hosta (certbot). Ścieżki certów muszą
+# odpowiadać hostname w NGINX_PUBLIC_HOST.
 #
-# Brak bloku upstream { server web:8000; } — używamy resolvera Dockera + proxy_pass ze zmienną
-# (patrz location / w bloku 443).
+# Brak bloku upstream { server web:8000; } — resolver Dockera + proxy_pass ze zmienną.
 
 # --- HTTP: ACME (odnowienia certbot --webroot) + przekierowanie na HTTPS ---
 server {
     listen 80;
-    server_name ergebnisse.cogitomedica.de;
+    server_name __NGINX_PUBLIC_HOST__;
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -24,18 +24,16 @@ server {
 # --- HTTPS ---
 server {
     listen 443 ssl http2;
-    server_name ergebnisse.cogitomedica.de;
+    server_name __NGINX_PUBLIC_HOST__;
 
-    ssl_certificate     /etc/letsencrypt/live/ergebnisse.cogitomedica.de/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/ergebnisse.cogitomedica.de/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/__NGINX_PUBLIC_HOST__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__NGINX_PUBLIC_HOST__/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    # Docker embedded DNS (zob. docker network inspect)
     resolver 127.0.0.11 valid=30s ipv6=off;
 
-    # Zgodnie z limitem uploadu zewnętrznego badania (~250 MB); po zmianie: nginx -s reload w kontenerze.
     client_max_body_size 250m;
     client_body_timeout 600s;
 
@@ -44,6 +42,9 @@ server {
         expires 30d;
         add_header Cache-Control "public";
     }
+
+    # PHI (PDF Befund, podpisy, intake) — nie serwuj /media/ tutaj.
+    # Pobrania tylko przez Django (portal OTP, staff API). /media/ → proxy poniżej → 404.
 
     location / {
         set $cogito_web_upstream web:8000;

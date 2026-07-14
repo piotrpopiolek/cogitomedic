@@ -2,7 +2,7 @@
 
 Dokumentacja dla **pacjenta**, który ma pobrać dokumentację medyczną po otrzymaniu **SMS** z placówki. Portal jest dostępny pod adresem **głównym serwisu** (w konfiguracji deweloperskiej często `http://127.0.0.1:8000/` — produkcyjnie np. dedykowana domena podana przez placówkę).
 
-**Ważne (RODO / BÄK):** SMS ma charakter **wyłącznie logistyczny** — nie zawiera informacji o rodzaju badania ani wyniku. Treść w stylu: „Nowa dokumentacja w Cogito” (dokładnie wg ustawień systemu). Pacjent **nie dostaje linku w SMS** — sam wpisuje znany adres portalu lub korzysta z zakładki zapisaną wcześniej.
+**Ważne (RODO / BÄK):** SMS ma charakter **wyłącznie logistyczny** — nie zawiera informacji o rodzaju badania ani wyniku. Treść wg szablonu systemu (np. „Nowa dokumentacja w CogitoMed” + **adres portalu** z `PATIENT_RESULTS_BASE_URL`). To **nie jest** link do konkretnego pliku PDF — nadal trzeba zalogować się (telefon, data urodzenia, kod OTP).
 
 ---
 
