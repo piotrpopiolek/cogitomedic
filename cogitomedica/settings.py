@@ -77,7 +77,7 @@ if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
     )
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
-DEBUG = os.environ.get("DEBUG", "1") == "1"
+DEBUG = ENVIRONMENT != "prod" and os.environ.get("DEBUG", "1") == "1"
 
 PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
 
