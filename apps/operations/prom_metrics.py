@@ -2,8 +2,10 @@
 Prometheus metrics: ORM snapshot collector + runtime Counters/Histograms.
 
 Runtime counters are incremented when workers complete outbox steps (correct semantics
-for rate() / increase() in Prometheus). ORM-derived Gauges duplicate DB state for
-dashboards and backlog alerts.
+for rate() / increase() in Prometheus). With ImmediateBackend those workers run in the
+**scheduler** process — scrape job ``cogitomedica_scheduler`` (port SCHEDULER_METRICS_PORT).
+ORM-derived Gauges are exported from ``web`` (``build_metrics_payload``); the scheduler
+endpoint exports runtime metrics only (``build_runtime_metrics_payload``).
 """
 
 from __future__ import annotations

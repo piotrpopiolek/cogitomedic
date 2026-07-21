@@ -20,6 +20,14 @@ scrape_configs:
     static_configs:
       - targets: ["web:8000"]
 
+  - job_name: "cogitomedica_scheduler"
+    metrics_path: "/api/v1/observability/metrics"
+    authorization:
+      type: Bearer
+      credentials: "__PROMETHEUS_METRICS_TOKEN__"
+    static_configs:
+      - targets: ["scheduler:8001"]
+
   - job_name: "otel_spanmetrics"
     scrape_interval: 30s
     static_configs:
