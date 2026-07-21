@@ -160,6 +160,15 @@ class CreatePatientRequest(BaseModel):
     def phone_format(cls, v: str) -> str:
         return _validate_phone_format(v) or v
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        from apps.reception.patient_identity import normalize_email_for_storage
+
+        return normalize_email_for_storage(v)
+
 
 class UpdatePatientRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -181,6 +190,15 @@ class UpdatePatientRequest(BaseModel):
     @classmethod
     def phone_format(cls, v: str | None) -> str | None:
         return _validate_phone_format(v)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: object) -> object:
+        if v is None or not isinstance(v, str):
+            return v
+        from apps.reception.patient_identity import normalize_email_for_storage
+
+        return normalize_email_for_storage(v)
 
 
 class PatientsListQuery(OffsetPaginationQueryParams):

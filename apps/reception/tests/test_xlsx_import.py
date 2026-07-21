@@ -360,6 +360,19 @@ class NormalizeRowTests(SimpleTestCase):
         self.assertEqual(result.email, "jan@example.com")
         self.assertEqual(result.appointment_time, time(9, 30))
 
+    def test_email_with_leading_space_and_nbsp_normalized(self):
+        row = [
+            "Jan",
+            "Kowalski",
+            "15.05.1990",
+            "+48 500 100 200",
+            "\u00a0 Jan@Example.com ",
+            "09:30",
+        ]
+        result = _normalize_row(2, row, self.HEADERS)
+        self.assertIsInstance(result, NormalizedRow)
+        self.assertEqual(result.email, "jan@example.com")
+
     def test_empty_name_returns_none(self):
         row = ["", "", "15.05.1990", "+48500100200", "a@b.com", ""]
         result = _normalize_row(2, row, self.HEADERS)

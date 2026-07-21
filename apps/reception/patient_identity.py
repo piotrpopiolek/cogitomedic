@@ -48,6 +48,20 @@ def normalize_patient_phone_for_storage(phone: str) -> str:
     return normalize_phone_for_patient_storage(phone)
 
 
+def normalize_email_for_storage(value: str | None) -> str:
+    """
+    Normalize patient email before persist.
+
+    Strips all Unicode whitespace (including NBSP from Excel), then lowercases.
+    Empty input yields an empty string.
+    """
+    raw = value or ""
+    # Explicit NBSP / narrow NBSP before \\s (defensive for mixed sources).
+    cleaned = raw.replace("\u00a0", " ").replace("\u202f", " ")
+    cleaned = re.sub(r"\s+", "", cleaned)
+    return cleaned.casefold()
+
+
 def patient_identity_key(
     *,
     first_name: str,

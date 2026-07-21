@@ -283,7 +283,10 @@ class Patient(models.Model):
         return True
 
     def save(self, *args, **kwargs):
-        from apps.reception.patient_identity import normalize_patient_name_for_storage
+        from apps.reception.patient_identity import (
+            normalize_email_for_storage,
+            normalize_patient_name_for_storage,
+        )
         from apps.reception.phone_utils import normalize_phone_for_patient_storage
 
         norm = normalize_phone_for_patient_storage(self.phone)
@@ -299,6 +302,11 @@ class Patient(models.Model):
                 self.first_name = normalize_patient_name_for_storage(self.first_name)
             if self.last_name:
                 self.last_name = normalize_patient_name_for_storage(self.last_name)
+
+        if self.email is not None and (
+            update_fields is None or "email" in update_fields
+        ):
+            self.email = normalize_email_for_storage(self.email)
 
         fl, lf = compute_incoming_pdf_name_keys(self.first_name, self.last_name)
         self.incoming_pdf_name_key_fl = fl[:300]
