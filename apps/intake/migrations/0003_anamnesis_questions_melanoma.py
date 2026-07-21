@@ -27,7 +27,7 @@ QUESTIONS = [
     ),
     (
         "Q4_NEW_SKIN_CHANGES_LOCATION",
-        "Haben Sie aktuell neue Hautveränderungen, die Sie beunruhigen? Falls ja: wo? (z. B. Unterer Rücken, BWS, Bauch, andere Stelle – bitte im Feld Uwagi angeben)",
+        "Haben Sie aktuell neue Hautveränderungen, die Sie beunruhigen? Falls ja: wo? (z. B. Unterer Rücken, BWS, Bauch, andere Stelle – bitte im Feld Anmerkungen angeben)",
         "Do you currently have new skin changes that concern you? If yes: where? (e.g. lower back, thoracic spine, abdomen, other – please specify in notes)",
         [("NO", "Nein", "No"), ("YES", "Ja", "Yes")],
     ),
