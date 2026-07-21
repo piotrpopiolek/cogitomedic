@@ -330,14 +330,14 @@ class DailyQueueAdmin(CogitomedicaModelAdmin):
         )
 
     @admin.display(
-        description=db_gettext_lazy("administration.admin_col_wpisy", "Wpisy"),
+        description=db_gettext_lazy("administration.admin_col_wpisy", "Einträge"),
         ordering="entries_count_annotated",
     )
     def entries_count(self, obj):
         return getattr(obj, "entries_count_annotated", 0)
 
     @admin.display(
-        description=db_gettext_lazy("administration.admin_col_pacjenci", "Pacjenci"),
+        description=db_gettext_lazy("administration.admin_col_pacjenci", "Patienten"),
         ordering="patients_count_annotated",
     )
     def patients_count(self, obj):
@@ -345,16 +345,21 @@ class DailyQueueAdmin(CogitomedicaModelAdmin):
 
     @admin.display(
         description=db_gettext_lazy(
-            "administration.admin_col_widok_wpisow", "Widok wpisów"
+            "administration.admin_col_widok_wpisow", "Einträge anzeigen"
         )
     )
     def view_queue_entries(self, obj):
         url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode({'daily_queue__id__exact': str(obj.id)})}"
-        return format_html('<a href="{}">Wpisy tej kolejki</a>', url)
+        label = str(
+            db_gettext_lazy(
+                "administration.admin_col_widok_wpisow", "Einträge anzeigen"
+            )
+        )
+        return format_html('<a href="{}">{}</a>', url, label)
 
     @admin.display(
         description=db_gettext_lazy(
-            "administration.admin_col_pacjenci_dnia", "Pacjenci dnia"
+            "administration.admin_col_pacjenci_dnia", "Patienten des Tages"
         )
     )
     def view_day_patients(self, obj):
@@ -362,7 +367,12 @@ class DailyQueueAdmin(CogitomedicaModelAdmin):
             "daily_queue__queue_date__exact": obj.queue_date.isoformat(),
         }
         url = f"{reverse('admin:reception_queueentry_changelist')}?{urlencode(params)}"
-        return format_html('<a href="{}">Pacjenci na ten dzień</a>', url)
+        label = str(
+            db_gettext_lazy(
+                "administration.admin_col_pacjenci_dnia", "Patienten des Tages"
+            )
+        )
+        return format_html('<a href="{}">{}</a>', url, label)
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
