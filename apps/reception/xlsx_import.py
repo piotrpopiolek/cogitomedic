@@ -38,6 +38,7 @@ from apps.reception.models import (
 from apps.reception.phone_utils import normalize_phone_for_patient_storage
 from apps.reception.patient_identity import (
     find_patient_for_import,
+    normalize_email_for_storage,
     patient_identity_key,
     stale_anonymized_patient_blocks_phone,
     validate_patient_names_for_import,
@@ -410,7 +411,7 @@ def _normalize_row(
             f"Row {row_index}: invalid or missing phone: {phone_raw!r}",
         )
 
-    email = _cell("email").strip()
+    email = normalize_email_for_storage(_cell("email"))
     if not email:
         raise XlsxImportFailure(
             XlsxImportErrorCode.MISSING_REQUIRED_FIELD,
