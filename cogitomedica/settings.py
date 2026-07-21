@@ -80,6 +80,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 DEBUG = ENVIRONMENT != "prod" and os.environ.get("DEBUG", "1") == "1"
 
 PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
+SCHEDULER_METRICS_PORT = int(os.environ.get("SCHEDULER_METRICS_PORT", "8001"))
 
 # Hosty dozwolone w nagłówku Host. W prod MUSI być ustawione ALLOWED_HOSTS (np. twojadomena.com).
 # Domyślnie puste – w dev ustaw w .env (np. ALLOWED_HOSTS=localhost,127.0.0.1).

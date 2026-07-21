@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -30,6 +31,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Enqueue only retention task every interval.",
         )
+        parser.add_argument(
+            "--metrics-port",
+            type=int,
+            default=None,
+            help=(
+                "HTTP port for Prometheus runtime metrics "
+                "(default: SCHEDULER_METRICS_PORT; 0 disables)."
+            ),
+        )
 
     def handle(self, *args, **options) -> None:
         interval = options["interval_seconds"]
@@ -38,6 +48,19 @@ class Command(BaseCommand):
 
         skip_import = options["skip_import"]
         retention_only = options["retention_only"]
+        metrics_port = options["metrics_port"]
+        if metrics_port is None:
+            metrics_port = int(getattr(settings, "SCHEDULER_METRICS_PORT", 8001) or 0)
+        if metrics_port > 0:
+            from apps.operations.metrics_server import start_scheduler_metrics_server
+
+            start_scheduler_metrics_server(port=metrics_port)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Prometheus runtime metrics on 0.0.0.0:{metrics_port}"
+                    "/api/v1/observability/metrics"
+                )
+            )
 
         self.stdout.write(
             self.style.SUCCESS(

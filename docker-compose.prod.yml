@@ -103,6 +103,7 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       OTEL_SERVICE_NAME: cogitomedica-scheduler
+      SCHEDULER_METRICS_PORT: "8001"
     entrypoint: ["python", "manage.py"]
     command:
       [
@@ -113,6 +114,8 @@ services:
       ]
     volumes:
       - media_data:/app/media
+    expose:
+      - "8001"
     depends_on:
       db:
         condition: service_healthy
@@ -166,6 +169,8 @@ services:
     depends_on:
       web:
         condition: service_healthy
+      scheduler:
+        condition: service_started
       postgres_exporter:
         condition: service_started
       node_exporter:
@@ -177,6 +182,7 @@ services:
       - otel-collector:otelcollector
       - node_exporter:node_exporter
       - postgres_exporter:postgres_exporter
+      - scheduler:scheduler
 
   alertmanager:
     profiles: [observability]

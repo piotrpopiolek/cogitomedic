@@ -81,10 +81,13 @@ services:
       SMSAPI_USE_MOCK: "1"
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: cogitomedica-scheduler
+      SCHEDULER_METRICS_PORT: "8001"
     command: >
       sh -c "python manage.py run_periodic_tasks --interval-seconds 30 --skip-import"
     volumes:
       - .:/app
+    expose:
+      - "8001"
     depends_on:
       db:
         condition: service_healthy
@@ -183,6 +186,8 @@ services:
     depends_on:
       web:
         condition: service_started
+      scheduler:
+        condition: service_started
       postgres_exporter:
         condition: service_started
       node_exporter:
@@ -193,6 +198,7 @@ services:
       - otel-collector:otelcollector
       - node_exporter:node_exporter
       - postgres_exporter:postgres_exporter
+      - scheduler:scheduler
 
   alertmanager:
     image: prom/alertmanager:latest
