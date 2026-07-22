@@ -3,6 +3,7 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from apps.core.constants import DEFAULT_LIST_LIMIT
 from apps.core.list_pagination import (
     build_page_size_query,
+    clamp_page_to_total,
     effective_default_page_size,
     page_size_switch_items,
     parse_page_size,
@@ -39,6 +40,21 @@ class ParsePageSizeTests(SimpleTestCase):
     @override_settings(LIST_PAGE_SIZE_DEFAULT=25)
     def test_settings_invalid_ignored(self) -> None:
         self.assertEqual(effective_default_page_size(), DEFAULT_LIST_LIMIT)
+
+
+class ClampPageToTotalTests(SimpleTestCase):
+    def test_clamps_beyond_last_page(self) -> None:
+        self.assertEqual(clamp_page_to_total(99, page_size=10, total=25), 3)
+        self.assertEqual(clamp_page_to_total(2, page_size=10, total=5), 1)
+
+    def test_keeps_valid_page(self) -> None:
+        self.assertEqual(clamp_page_to_total(2, page_size=10, total=25), 2)
+
+    def test_empty_total_returns_page_one(self) -> None:
+        self.assertEqual(clamp_page_to_total(5, page_size=10, total=0), 1)
+
+    def test_page_below_one_becomes_one(self) -> None:
+        self.assertEqual(clamp_page_to_total(0, page_size=10, total=25), 1)
 
 
 class PageSizeQueryTests(SimpleTestCase):

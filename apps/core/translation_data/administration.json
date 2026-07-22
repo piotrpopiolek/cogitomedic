@@ -1025,9 +1025,9 @@
     "pl": "Wiersze: pierwsza ważna publikacja Befundu wg daty badania. Korekty nie tworzą nowej pozycji; po cofnięciu publikacji liczy się kolejna publikacja."
   },
   "administration.accounting_report_hint_attended": {
-    "de": "Zeilen: Patienten mit ausgefülltem Fragebogen nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich.",
-    "en": "Rows: patients with a completed questionnaire by examination date; excludes cancelled entries and import no-shows. Befund not required.",
-    "pl": "Wiersze: pacjenci z wypełnioną ankietą wg daty badania; bez anulowanych wpisów i bez no-show z importu. Befund nie jest wymagany."
+    "de": "Zeilen: Patienten mit ausgefülltem Fragebogen oder abgeschlossenem Paper-Intake nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich.",
+    "en": "Rows: patients with a completed questionnaire or completed paper intake by examination date; excludes cancelled entries and import no-shows. Befund not required.",
+    "pl": "Wiersze: pacjenci z wypełnioną ankietą lub zakończonym paper intake wg daty badania; bez anulowanych wpisów i bez no-show z importu. Befund nie jest wymagany."
   },
   "administration.accounting_report_mode": {
     "de": "Berichtsvariante",
@@ -1065,9 +1065,9 @@
     "pl": "Tak"
   },
   "administration.accounting_report_hint_ausfall": {
-    "de": "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen nicht ausgefüllt). Ohne Stornierte. Liste für die Forderungstabelle.",
-    "en": "Rows: patients from the daily list who did not complete the visit (no-show, refused, or questionnaire not completed). Excludes cancelled. List for debt collection.",
-    "pl": "Wiersze: pacjenci z kolejki, którzy nie zrealizowali wizyty (nie przyszli, odmówili lub nie wypełnili ankiety). Bez anulowanych. Lista do windykacji."
+    "de": "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen/Paper-Intake nicht abgeschlossen). Ohne Stornierte. Liste für die Forderungstabelle.",
+    "en": "Rows: patients from the daily list who did not complete the visit (no-show, refused, or questionnaire/paper intake not completed). Excludes cancelled. List for debt collection.",
+    "pl": "Wiersze: pacjenci z kolejki, którzy nie zrealizowali wizyty (nie przyszli, odmówili lub nie zakończyli ankiety/paper intake). Bez anulowanych. Lista do windykacji."
   },
   "administration.accounting_report_empty_ausfall": {
     "de": "Keine Patienten für Ausfallhonorar im gewählten Zeitraum.",
@@ -1080,9 +1080,9 @@
     "pl": "Wiersze per lekarz"
   },
   "administration.accounting_report_empty_attended": {
-    "de": "Keine Patienten mit ausgefülltem Fragebogen im gewählten Zeitraum.",
-    "en": "No patients with completed intake in the selected date range.",
-    "pl": "Brak pacjentów ze złożoną ankietą w wybranym zakresie dat."
+    "de": "Keine erschienen Patienten (Fragebogen oder Paper-Intake) im gewählten Zeitraum.",
+    "en": "No attended patients (questionnaire or paper intake) in the selected date range.",
+    "pl": "Brak pacjentów, którzy stawili się (ankieta lub paper intake) w wybranym zakresie dat."
   },
   "administration.accounting_report_rows_total": {
     "de": "Zeilen im Zeitraum.",

@@ -508,6 +508,53 @@ class AccountingReportServiceTests(AccountingReportBase):
         )
         self.assertEqual(localized.rows[0].ausfallhonorar, "Tak")
 
+    def test_paper_intake_completed_in_attended_not_ausfall(self) -> None:
+        """Paper path (no digital intake) counts as attended, never Ausfallhonorar."""
+        paper_patient = Patient.objects.create(
+            first_name="Paper",
+            last_name="Weber",
+            date_of_birth=date(1990, 2, 2),
+            phone="48500999888",
+            email="paper@example.com",
+            street="Papierstr. 2",
+            postal_code="10117",
+            city="Berlin",
+        )
+        paper_entry = QueueEntry.objects.create(
+            daily_queue=self.daily_queue,
+            patient=paper_patient,
+            entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED,
+            position_no=2,
+            created_by_user=self.doctor,
+        )
+        paper_doc = MedicalDocument.objects.create(
+            queue_entry=paper_entry,
+            intake_form=None,
+            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
+            status=MedicalDocStatus.DRAFT,
+            current_version_no=0,
+            created_by_user=self.doctor,
+        )
+
+        attended = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        attended_names = {row.last_name for row in attended.rows}
+        self.assertIn("Kowalska", attended_names)
+        self.assertIn("Weber", attended_names)
+        paper_row = next(row for row in attended.rows if row.last_name == "Weber")
+        self.assertEqual(paper_row.medical_document_id, paper_doc.id)
+        self.assertEqual(paper_row.doctor_name, "")
+
+        ausfall = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertNotIn("Weber", {row.last_name for row in ausfall.rows})
+
     def test_ausfall_excludes_cancelled(self) -> None:
         self.intake.form_status = IntakeStatus.IN_PROGRESS
         self.intake.save(update_fields=["form_status"])
@@ -1090,6 +1137,147 @@ class AccountingReportViewTests(AccountingReportBase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["pagination"]["page_size"], 50)
+
+    def test_pagination_uses_admin_session_page_size(self) -> None:
+        """Same resolve path as ModelAdmin: GET → session → default."""
+        from apps.core.admin_list_page_size import ADMIN_LIST_PAGE_SIZE_SESSION_KEY
+
+        for index in range(15):
+            patient = Patient.objects.create(
+                first_name=f"S{index}",
+                last_name="Session",
+                date_of_birth=date(1980, 1, 1),
+                phone=f"48501{index:06d}",
+                email=f"s{index}@example.com",
+            )
+            entry = QueueEntry.objects.create(
+                daily_queue=self.daily_queue,
+                patient=patient,
+                entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+                position_no=50 + index,
+                created_by_user=self.doctor,
+            )
+            session = PatientFormSession.objects.create(
+                queue_entry=entry,
+                form_locale="de-DE",
+                expires_at=timezone.now() + timedelta(hours=1),
+                created_by_user=self.doctor,
+            )
+            intake = PatientIntakeForm.objects.create(
+                queue_entry=entry,
+                session=session,
+                form_status=IntakeStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+                signature_sha256="e" * 64,
+            )
+            doc = MedicalDocument.objects.create(
+                queue_entry=entry,
+                intake_form=intake,
+                status=MedicalDocStatus.PUBLISHED,
+                current_version_no=1,
+                created_by_user=self.doctor,
+            )
+            self._make_published_version(
+                doc,
+                published_at=datetime(
+                    2026, 3, 11, 8, index, tzinfo=ZoneInfo("Europe/Warsaw")
+                ),
+            )
+
+        self.client.force_login(self.accounting_user)
+        session = self.client.session
+        session[ADMIN_LIST_PAGE_SIZE_SESSION_KEY] = 10
+        session.save()
+
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {"date_from": "2026-03-10", "date_to": "2026-03-16"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["pagination"]["page_size"], 10)
+        self.assertEqual(len(response.context["items"]), 10)
+        active = [opt for opt in response.context["page_size_options"] if opt["active"]]
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0]["size"], 10)
+
+    def test_pagination_persists_page_size_to_admin_session(self) -> None:
+        from apps.core.admin_list_page_size import ADMIN_LIST_PAGE_SIZE_SESSION_KEY
+
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "page_size": "20",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["pagination"]["page_size"], 20)
+        self.assertEqual(self.client.session.get(ADMIN_LIST_PAGE_SIZE_SESSION_KEY), 20)
+
+    def test_pagination_clamps_page_beyond_last(self) -> None:
+        for index in range(5):
+            patient = Patient.objects.create(
+                first_name=f"C{index}",
+                last_name="Clamp",
+                date_of_birth=date(1980, 1, 1),
+                phone=f"48502{index:06d}",
+                email=f"c{index}@example.com",
+            )
+            entry = QueueEntry.objects.create(
+                daily_queue=self.daily_queue,
+                patient=patient,
+                entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+                position_no=80 + index,
+                created_by_user=self.doctor,
+            )
+            session = PatientFormSession.objects.create(
+                queue_entry=entry,
+                form_locale="de-DE",
+                expires_at=timezone.now() + timedelta(hours=1),
+                created_by_user=self.doctor,
+            )
+            intake = PatientIntakeForm.objects.create(
+                queue_entry=entry,
+                session=session,
+                form_status=IntakeStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+                signature_sha256="f" * 64,
+            )
+            doc = MedicalDocument.objects.create(
+                queue_entry=entry,
+                intake_form=intake,
+                status=MedicalDocStatus.PUBLISHED,
+                current_version_no=1,
+                created_by_user=self.doctor,
+            )
+            self._make_published_version(
+                doc,
+                published_at=datetime(
+                    2026, 3, 11, 7, index, tzinfo=ZoneInfo("Europe/Warsaw")
+                ),
+            )
+
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "page": "99",
+                "page_size": "10",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["report_total_rows"], 5)
+        self.assertEqual(response.context["pagination"]["total"], 5)
+        self.assertEqual(response.context["pagination"]["page"], 1)
+        self.assertEqual(len(response.context["items"]), 5)
+        self.assertNotIn(
+            "Keine Veröffentlichungen",
+            response.content.decode(),
+        )
 
     def test_query_params_defaults_and_resolved_week(self) -> None:
         query = AccountingReportQueryParams.model_validate({})

@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from django.db.models import Min, OuterRef, Prefetch, QuerySet, Subquery
+from django.db.models import Min, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus
@@ -34,6 +34,16 @@ REPORT_MODE_AUSFALL: ReportMode = "ausfall"
 ACCOUNTING_REPORT_MODES: frozenset[str] = frozenset(
     {REPORT_MODE_PUBLISHED, REPORT_MODE_ATTENDED, REPORT_MODE_AUSFALL}
 )
+
+_ATTENDED_INTAKE_STATUSES = (IntakeStatus.SUBMITTED, IntakeStatus.REOPENED)
+
+
+def _accounting_attended_q() -> Q:
+    """Digital intake submitted/reopened, or paper-intake path completed."""
+    return Q(entry_status=QueueEntryStatus.PAPER_INTAKE_COMPLETED) | Q(
+        intake_form__form_status__in=_ATTENDED_INTAKE_STATUSES
+    )
+
 
 AUSFALLHONORAR_YES_DEFAULT = "Ja"
 AUSFALLHONORAR_YES_KEY = "administration.accounting_ausfallhonorar_yes"
@@ -288,10 +298,11 @@ def accounting_report_attended_qs(
     scoped_clinic_site_ids: list[UUID] | None = None,
 ) -> QuerySet[QueueEntry]:
     """
-    Queue entries for patients who completed intake in the date range.
+    Queue entries for patients who completed the visit path in the date range.
 
-    Excludes cancelled entries and no-shows (import rows without SUBMITTED/REOPENED
-    intake). Does not require a published Befund.
+    Includes digital intake ``SUBMITTED``/``REOPENED`` and paper path
+    ``PAPER_INTAKE_COMPLETED``. Excludes cancelled entries and import no-shows.
+    Does not require a published Befund.
     """
     first_pub = Prefetch(
         "medical_document__versions",
@@ -307,11 +318,8 @@ def accounting_report_attended_qs(
         QueueEntry.objects.filter(
             daily_queue__queue_date__gte=date_from,
             daily_queue__queue_date__lte=date_to,
-            intake_form__form_status__in=(
-                IntakeStatus.SUBMITTED,
-                IntakeStatus.REOPENED,
-            ),
         )
+        .filter(_accounting_attended_q())
         .exclude(entry_status=QueueEntryStatus.CANCELLED)
         .select_related(
             "patient",
@@ -335,7 +343,8 @@ def accounting_report_ausfall_qs(
     """
     Queue entries in range that did not complete the visit path.
 
-    = entries on the day minus attended (SUBMITTED/REOPENED), excluding cancelled.
+    = entries on the day minus attended (digital SUBMITTED/REOPENED or
+    PAPER_INTAKE_COMPLETED), excluding cancelled.
     One bucket for accounting: no-show, refused exam, incomplete consents/intake.
     """
     qs = (
@@ -344,12 +353,7 @@ def accounting_report_ausfall_qs(
             daily_queue__queue_date__lte=date_to,
         )
         .exclude(entry_status=QueueEntryStatus.CANCELLED)
-        .exclude(
-            intake_form__form_status__in=(
-                IntakeStatus.SUBMITTED,
-                IntakeStatus.REOPENED,
-            )
-        )
+        .exclude(_accounting_attended_q())
         .select_related("patient", "daily_queue", "medical_document")
         .order_by("daily_queue__queue_date", "position_no", "id")
     )
