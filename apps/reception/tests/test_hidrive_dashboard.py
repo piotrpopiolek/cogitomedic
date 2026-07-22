@@ -71,13 +71,13 @@ class ReceptionDashboardRbacTests(TestCase):
             self.assertEqual(response.status_code, 403, group)
 
     def test_dashboard_includes_dark_mode_classes(self) -> None:
+        """Shell/card classes are always rendered; optional HiDrive banners are not."""
         user = self._staff("dash-dark-mode", "Reception")
         self.client.force_login(user)
         response = self.client.get(self.url)
         content = response.content.decode()
         self.assertIn("cogito-reception-dashboard", content)
         self.assertIn("cogito-reception-muted", content)
-        self.assertIn("cogito-reception-banner--info", content)
         self.assertIn("dark:text-base-300", content)
         self.assertIn("dark:bg-base-900", content)
         self.assertIn("dark:bg-base-800", content)
