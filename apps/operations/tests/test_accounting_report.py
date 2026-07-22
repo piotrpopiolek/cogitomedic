@@ -57,6 +57,7 @@ from apps.reception.models import (
     PatientFormSession,
     QueueEntry,
     QueueEntryStatus,
+    QueueShift,
     QueueStatus,
 )
 from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
@@ -290,15 +291,74 @@ class AccountingReportServiceTests(AccountingReportBase):
         )
         self.assertEqual(report.rows, [])
 
-    def test_out_of_range_excluded(self) -> None:
-        doc = self._make_doc()
-        published_at = datetime(2026, 2, 1, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
-        self._make_published_version(doc, published_at=published_at)
+    def test_out_of_range_queue_date_excluded(self) -> None:
+        """Exam day outside the selected week is excluded even if published inside it."""
+        other_queue = DailyQueue.objects.create(
+            clinic_site=self.clinic_site,
+            consulting_room=self.consulting_room,
+            queue_date=date(2026, 2, 1),
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.doctor,
+            shift_code=QueueShift.MORNING,
+        )
+        patient = Patient.objects.create(
+            first_name="Out",
+            last_name="OfRange",
+            date_of_birth=date(1990, 1, 1),
+            phone="48500999001",
+            email="outofrange@example.com",
+        )
+        entry = QueueEntry.objects.create(
+            daily_queue=other_queue,
+            patient=patient,
+            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
+            position_no=1,
+            created_by_user=self.doctor,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.doctor,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.SUBMITTED,
+            submitted_at=timezone.now(),
+            signature_sha256="c" * 64,
+        )
+        doc = MedicalDocument.objects.create(
+            queue_entry=entry,
+            intake_form=intake,
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            created_by_user=self.doctor,
+        )
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
         report = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
         )
         self.assertEqual(report.rows, [])
+
+    def test_includes_when_published_after_exam_week(self) -> None:
+        """Visit in selected week, publish later → still in report (queue_date filter)."""
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 4, 1, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].exam_date, "10.03.2026")
 
     def test_doctor_counts_aggregate_documents(self) -> None:
         doc1 = self._make_doc()
