@@ -39,7 +39,7 @@ class AccountingReportQueryParams(OffsetPaginationQueryParams):
     @field_validator("report_mode", mode="before")
     @classmethod
     def normalize_report_mode(cls, value: object) -> str:
-        if value is None:
+        if value is None or (isinstance(value, str) and not value.strip()):
             return parse_report_mode(None)
         return parse_report_mode(str(value))
 
