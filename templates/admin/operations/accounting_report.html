@@ -1,5 +1,5 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n static cogitomedica_i18n %}
+{% load i18n static static_versioned cogitomedica_i18n %}
 
 {% block breadcrumbs %}
     <div class="px-4 py-3 sm:px-8">
@@ -155,5 +155,5 @@
         {% endif %}
     </div>
 </div>
-<script src="{% static 'cogitomedica/js/accounting-report-form.js' %}" defer></script>
+<script src="{% static_v 'cogitomedica/js/accounting-report-form.js' %}" defer></script>
 {% endblock %}

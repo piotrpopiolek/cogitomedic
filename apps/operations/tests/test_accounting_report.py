@@ -678,11 +678,29 @@ class AccountingReportViewTests(AccountingReportBase):
         content = response.content.decode()
         self.assertIn('id="accounting-report-form"', content)
         self.assertIn("accounting-report-form.js", content)
+        self.assertRegex(content, r"accounting-report-form\.js\?v=\d+")
         self.assertIn("data-export-csv-url", content)
         self.assertIn("data-export-csv", content)
         self.assertIn("data-export-xlsx", content)
         self.assertIn('name="report_mode"', content)
         self.assertIn('id="report_mode"', content)
+
+    def test_auto_submit_script_listens_for_report_mode_change(self) -> None:
+        from pathlib import Path
+
+        from django.conf import settings
+
+        script = (
+            Path(settings.BASE_DIR)
+            / "static"
+            / "cogitomedica"
+            / "js"
+            / "accounting-report-form.js"
+        )
+        source = script.read_text(encoding="utf-8")
+        self.assertIn('target.name === "report_mode"', source)
+        self.assertIn('target.name === "date_from"', source)
+        self.assertIn("requestSubmit", source)
 
     def test_attended_mode_lists_submitted_intake(self) -> None:
         self.client.force_login(self.accounting_user)

@@ -44,27 +44,34 @@
     }
   }
 
-  function scheduleAutoSubmit() {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(function () {
-      updateExportLinks();
-      if (typeof form.requestSubmit === "function") {
-        form.requestSubmit();
-      } else {
-        form.submit();
-      }
-    }, debounceMs);
+  function submitForm() {
+    updateExportLinks();
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
   }
 
-  if (dateFrom) {
-    dateFrom.addEventListener("change", scheduleAutoSubmit);
+  function scheduleAutoSubmit() {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(submitForm, debounceMs);
   }
-  if (dateTo) {
-    dateTo.addEventListener("change", scheduleAutoSubmit);
-  }
-  if (reportMode) {
-    reportMode.addEventListener("change", scheduleAutoSubmit);
-  }
+
+  form.addEventListener("change", function (event) {
+    const target = event.target;
+    if (!target || !target.name) {
+      return;
+    }
+    if (target.name === "report_mode") {
+      window.clearTimeout(timer);
+      submitForm();
+      return;
+    }
+    if (target.name === "date_from" || target.name === "date_to") {
+      scheduleAutoSubmit();
+    }
+  });
 
   updateExportLinks();
 })();
