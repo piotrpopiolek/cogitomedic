@@ -15,7 +15,7 @@ Zrzuty są w katalogu `docs/manual/assets/screenshots/` i w Markdown są podlink
 
 ### Eksport do PDF (rozdziały 00–06 + ścieżka papierowa)
 
-Tak — można zbudować **jeden plik PDF** z plików `00-przeglad.md` … `08-ksiegowosc-raport.md` … `05-pacjent-wyniki.md` oraz `04-administrator-paper-intake.md`, `paper_intake_flow.md` i `07-wgranie-zewnetrznego-badania.md` (bez checklisty zrzutów; kolejność jak w `scripts/build_manual_pdf.py`).
+Tak — można zbudować **jeden plik PDF** z plików `00-przeglad.md` … `08-ksiegowosc-raport.md` … `05-pacjent-wyniki.md` oraz `04-administrator-paper-intake.md`, `paper_intake_flow.md`, `07-wgranie-zewnetrznego-badania.md` i `scenariusze.md` (bez checklisty zrzutów; kolejność jak w `scripts/build_manual_pdf.py`).
 
 1. Zainstaluj **[Pandoc](https://pandoc.org/installing.html)** oraz dystrybucję LaTeX z **`xelatex`** (np. [TeX Live](https://tug.org/texlive/) lub [MiKTeX](https://miktex.org/) — potrzebne do polskich znaków i osadzania obrazów).  
    **Windows (winget):** `winget install -e JohnMacFarlane.Pandoc` oraz `winget install -e MiKTeX.MiKTeX`. Po instalacji **otwórz nowy terminal** (lub zrestartuj Cursor), żeby zaktualizować `PATH` — inaczej `pandoc` / `xelatex` mogą być „niewidoczne”.
@@ -27,7 +27,7 @@ Tak — można zbudować **jeden plik PDF** z plików `00-przeglad.md` … `08-k
 
 3. Plik wynikowy (domyślnie): `docs/manual/_build/Cogitomedica-Instrukcje.pdf` (katalog `_build/` jest w `.gitignore`).
 
-Skrypt składa rozdziały **00, 01, 06, 02–05** oraz **uzupełnienia o ścieżkę papierową** w jednym pliku PDF. Zamienia ścieżki obrazów z formy `/docs/manual/assets/...` na względne wobec korzenia projektu, żeby Pandoc poprawnie wstawił PNG.
+Skrypt składa rozdziały **00, 01, 06, 02–05**, **uzupełnienia o ścieżkę papierową** oraz **scenariusze (FAQ)** w jednym pliku PDF. Zamienia ścieżki obrazów z formy `/docs/manual/assets/...` na względne wobec korzenia projektu, żeby Pandoc poprawnie wstawił PNG.
 
 **Inaczej (bez skryptu):** rozszerzenie VS Code/Cursor **„Markdown PDF”** — eksport plik po pliku; przy ścieżkach od roota repo otwórz folder **`cogitomedica`** jako workspace. **HTML → druk do PDF:** `pandoc docs/manual/01-rejestracja.md -o manual.html --resource-path=.` (z korzenia repo), potem otwórz `manual.html` w przeglądarce i drukuj do PDF.
 
