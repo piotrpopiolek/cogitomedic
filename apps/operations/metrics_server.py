@@ -33,13 +33,33 @@ def build_runtime_metrics_payload() -> bytes:
     Process-local Counters/Histograms only (no ORM Gauges).
 
     Avoids double-counting DB snapshot gauges when both ``web`` and ``scheduler``
-    are scraped.
+    are scraped. Does not call ``generate_latest`` on the shared registry that may
+    already include ``_OrmMetricsCollector`` (e.g. after web scrape / other tests).
     """
-    from prometheus_client import generate_latest
+    from prometheus_client import CollectorRegistry, generate_latest
 
-    from apps.operations.prom_metrics import _registry
+    from apps.operations.prom_metrics import (
+        IMPORT_BATCH_DURATION,
+        IMPORT_BATCHES_COMPLETED,
+        OUTBOX_EXECUTIONS,
+        OUTBOX_PUBLISH_TO_PROCESSED,
+    )
 
-    return generate_latest(_registry)
+    runtime_metrics = (
+        OUTBOX_EXECUTIONS,
+        OUTBOX_PUBLISH_TO_PROCESSED,
+        IMPORT_BATCHES_COMPLETED,
+        IMPORT_BATCH_DURATION,
+    )
+
+    class _RuntimeOnlyCollector:
+        def collect(self):
+            for metric in runtime_metrics:
+                yield from metric.collect()
+
+    registry = CollectorRegistry(auto_describe=False)
+    registry.register(_RuntimeOnlyCollector())
+    return generate_latest(registry)
 
 
 def _bearer_authorized(authorization: str | None) -> bool:
