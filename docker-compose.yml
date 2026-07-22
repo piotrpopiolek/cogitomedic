@@ -53,6 +53,7 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       SMSAPI_USE_MOCK: "1"
+      HIDRIVE_USE_MOCK: "1"
       # Domyślnie puste — bez działającego otel-collector eksport OTLP timeoutuje i zaśmieca logi (np. przy nagraniach manual).
       # Włącz: dopisz do .env OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces i uruchom `otel-collector` (+ tempo).
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -155,6 +156,40 @@ services:
           sleep 2
         done
         exec python scripts/record_manual_videos.py --base-url http://web:8000 --role all --out-dir /app/docs/manual/assets/videos
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  # One-off: filmy SC-001–SC-027 (shared HiDrive mock JSON + web)
+  # docker compose --profile scenario-videos run --rm scenario-videos
+  scenario-videos:
+    build:
+      context: .
+      dockerfile: Dockerfile.screenshots
+    profiles:
+      - scenario-videos
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      SMSAPI_USE_MOCK: "1"
+      CAPTCHA_VERIFY_SKIP: "1"
+      HIDRIVE_USE_MOCK: "1"
+      HIDRIVE_INCOMING_PATH: ${HIDRIVE_INCOMING_PATH:-/public/incoming}
+      SCREENSHOT_SKIP_DJANGO: "1"
+    command:
+      - sh
+      - -c
+      - |
+        python scripts/manual_demo/seed_scenarios.py --all --write-ctx &&
+        python scripts/manual_demo/seed_import_troubleshooting.py &&
+        exec python scripts/record_scenario_videos.py --all --base-url http://web:8000 --slow-mo 500 \
+          --out-dir /app/docs/manual/assets/videos/scenariusze
     volumes:
       - .:/app
     depends_on:

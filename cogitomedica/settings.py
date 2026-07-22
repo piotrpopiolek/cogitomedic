@@ -948,6 +948,17 @@ HIDRIVE_DASHBOARD_PAGE_TIMEOUT_SECONDS = int(
 )
 HIDRIVE_INCOMING_PATH = os.environ.get("HIDRIVE_INCOMING_PATH", "/incoming")
 HIDRIVE_PROCESSED_PATH = os.environ.get("HIDRIVE_PROCESSED_PATH", "/processed")
+# Shared JSON state for _MockHiDriveAdapter across processes (demo videos / screenshots).
+# Empty string disables disk sync (in-memory ClassVar only). Non-prod default:
+# docs/manual/_build/hidrive-mock-state.json (gitignored).
+_HIDRIVE_MOCK_STATE_DEFAULT = (
+    ""
+    if (os.environ.get("ENVIRONMENT", "dev") or "dev").strip().lower() == "prod"
+    else str(BASE_DIR / "docs" / "manual" / "_build" / "hidrive-mock-state.json")
+)
+HIDRIVE_MOCK_STATE_PATH = os.environ.get(
+    "HIDRIVE_MOCK_STATE_PATH", _HIDRIVE_MOCK_STATE_DEFAULT
+)
 # Logical root for Befund/intake PDFs (same resolution as incoming/processed: /users/<alias><prefix>/…).
 HIDRIVE_PATIENTS_DIR_PREFIX = os.environ.get("HIDRIVE_PATIENTS_DIR_PREFIX", "/patients")
 # Optional API root: absolute path starting with /users/… (no trailing slash). When set, logical paths
