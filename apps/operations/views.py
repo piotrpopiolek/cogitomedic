@@ -14,9 +14,13 @@ from django.http import (
 )
 from django.template.response import TemplateResponse
 
-from apps.core.admin_list_page_size import changelist_page_size_context
+from apps.core.admin_list_page_size import (
+    changelist_page_size_context,
+    persist_admin_list_page_size,
+    resolve_admin_list_page_size,
+)
 from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
-from apps.core.list_pagination import parse_page_size
+from apps.core.list_pagination import clamp_page_to_total
 from apps.core.translation_service import (
     format_administration_message,
     get_admin_translation,
@@ -67,7 +71,7 @@ def _parse_pagination(request: HttpRequest) -> tuple[int, int]:
         default=1,
         maximum=10_000,
     )
-    page_size = parse_page_size(request.GET.get("page_size"))
+    page_size = resolve_admin_list_page_size(request)
     return page, page_size
 
 
@@ -89,6 +93,7 @@ def _parse_report_mode_param(
 
 
 def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
+    persist_admin_list_page_size(request)
     date_from, date_to = resolve_report_date_range(
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
@@ -103,6 +108,7 @@ def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
     )
     page, page_size = _parse_pagination(request)
     total = len(report.rows)
+    page = clamp_page_to_total(page, page_size=page_size, total=total)
     start = (page - 1) * page_size
     end = start + page_size
     page_rows = report.rows[start:end]

@@ -1,4 +1,5 @@
-# Accounting report hint: filter by queue_date (examination day), not published_at.
+# Accounting report i18n updates (queue_date hint, attended/ausfall/paper, M8, mode labels).
+# Squashed former seeds 0115–0122 into this single migration (not yet on production).
 
 from pathlib import Path
 

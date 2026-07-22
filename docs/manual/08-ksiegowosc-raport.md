@@ -33,14 +33,16 @@ Przełącznik **Wariant raportu** w formularzu:
 
 ### Stawili się (`report_mode=attended`)
 
-- Pacjenci z wpisem w kolejce w zakresie dat, którzy **wypełnili ankietę** (`PatientIntakeForm.form_status` w `{SUBMITTED, REOPENED}`).
-- **Bez** wpisów anulowanych (`entry_status=CANCELLED`) i **bez** no-show z importu (brak złożonej ankiety).
-- **Nie** wymaga opublikowanego Befundu — pacjent może być w raporcie zaraz po złożeniu formularza.
+- Pacjenci z wpisem w kolejce w zakresie dat, którzy **zrealizowali ścieżkę wizyty**:
+  - wypełnili ankietę cyfrową (`PatientIntakeForm.form_status` w `{SUBMITTED, REOPENED}`), **albo**
+  - przeszli **paper intake** (`entry_status=PAPER_INTAKE_COMPLETED`, bez ankiety cyfrowej).
+- **Bez** wpisów anulowanych (`entry_status=CANCELLED`) i **bez** no-show z importu (brak złożonej ankiety i brak paper path).
+- **Nie** wymaga opublikowanego Befundu — pacjent może być w raporcie zaraz po złożeniu formularza / zamknięciu paper path.
 - Kolumna **Befund-Arzt**: lekarz pierwszej nieunieważnionej publikacji, jeśli istnieje; **bez** publikacji kolumna jest pusta (nie używamy `assigned_doctor` z kolejki).
 
 ### Ausfallhonorar (`report_mode=ausfall`)
 
-- Pacjenci z wpisem w kolejce w zakresie dat, którzy **nie zrealizowali wizyty**: brak złożonej ankiety (no-show, odmowa, niepełne zgody / ankieta w toku).
+- Pacjenci z wpisem w kolejce w zakresie dat, którzy **nie zrealizowali wizyty**: brak złożonej ankiety i brak `PAPER_INTAKE_COMPLETED` (no-show, odmowa, niepełne zgody / ankieta w toku).
 - Technicznie: kolejka w zakresie **minus** wariant „Stawili się”; **bez** `CANCELLED`.
 - Jedna kategoria do windykacji — bez podziału na przyczyny.
 - Kolumna **Ausfallhonorar** w podglądzie i eksporcie = stała wartość `Ja`. Kolumna **Befund-Arzt** pusta. Sekcja agregatu per lekarz — ukryta.

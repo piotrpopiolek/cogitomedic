@@ -63,9 +63,9 @@
 
     <p class="text-sm text-gray-600 dark:text-base-300 mb-6">
         {% if report_mode == report_mode_attended %}
-        {% admin_trans "administration.accounting_report_hint_attended" "Zeilen: Patienten mit ausgefülltem Fragebogen nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich." %}
+        {% admin_trans "administration.accounting_report_hint_attended" "Zeilen: Patienten mit ausgefülltem Fragebogen oder abgeschlossenem Paper-Intake nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich." %}
         {% elif report_mode == report_mode_ausfall %}
-        {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen nicht ausgefüllt). Ohne Stornierte. Liste für die Forderungstabelle." %}
+        {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen/Paper-Intake nicht abgeschlossen). Ohne Stornierte. Liste für die Forderungstabelle." %}
         {% else %}
         {% admin_trans "administration.accounting_report_hint" "Zeilen: erste gültige Befund-Veröffentlichung nach Untersuchungsdatum. Nachkorrekturen erzeugen keine neue Position; nach Widerruf zählt die nächste Veröffentlichung." %}
         {% endif %}
@@ -145,7 +145,7 @@
         {% else %}
         <p class="px-4 py-8 text-sm text-gray-500 dark:text-base-400 italic">
             {% if report_mode == report_mode_attended %}
-            {% admin_trans "administration.accounting_report_empty_attended" "Keine Patienten mit ausgefülltem Fragebogen im gewählten Zeitraum." %}
+            {% admin_trans "administration.accounting_report_empty_attended" "Keine erschienen Patienten (Fragebogen oder Paper-Intake) im gewählten Zeitraum." %}
             {% elif report_mode == report_mode_ausfall %}
             {% admin_trans "administration.accounting_report_empty_ausfall" "Keine Patienten für Ausfallhonorar im gewählten Zeitraum." %}
             {% else %}

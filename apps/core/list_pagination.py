@@ -92,6 +92,16 @@ def coerce_page_number(value: object, *, maximum: int = 10_000) -> int:
     return parsed
 
 
+def clamp_page_to_total(page: int, *, page_size: int, total: int) -> int:
+    """Clamp ``page`` into ``[1, last_page]`` for the given result total (empty → 1)."""
+    if page < 1:
+        page = 1
+    if total <= 0 or page_size <= 0:
+        return 1
+    last_page = (total + page_size - 1) // page_size
+    return min(page, last_page)
+
+
 def coerce_allowed_page_size(value: object) -> int:
     """Normalize ``page_size`` / ``limit`` for Pydantic (strict; raises on invalid input)."""
     return validate_allowed_page_size(value)
