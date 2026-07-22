@@ -20,7 +20,7 @@ Recepcja, lekarz i tablet — **403 Forbidden**.
 
 ## Zakres raportu
 
-- **Pierwsza publikacja** Befundu (`version_no = 1`, status `PUBLISHED`) z datą `published_at` w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`).
+- **Pierwsza publikacja** Befundu (`version_no = 1`, status `PUBLISHED`), której **data badania** (`DailyQueue.queue_date`) mieści się w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`). **Nie** filtrujemy po dniu publikacji (`published_at`) — lekarz może opisać wynik później; wiersz i tak trafia do tygodnia wizyty.
 - **Rewizje** (kolejne wersje opublikowane po poprawce) **nie** tworzą nowej pozycji rozliczeniowej.
 - Publikacje z modułu „Zewnętrzne badanie” (`EXTERNAL_UPLOAD`) — poza tym raportem w MVP.
 - Wiersze unieważnionych wersji (`revoked_at` ustawione) — wykluczone.

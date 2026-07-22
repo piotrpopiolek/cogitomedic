@@ -1020,9 +1020,9 @@
     "pl": "Eksport XLSX"
   },
   "administration.accounting_report_hint": {
-    "de": "Zeilen: erste Befund-Veröffentlichung nach published_at. Revisionen erzeugen keine neue Position.",
-    "en": "Rows: first Befund publication by published_at date. Revisions do not create a new line item.",
-    "pl": "Wiersze: pierwsza publikacja Befundu wg daty published_at. Rewizje nie tworzą nowej pozycji."
+    "de": "Zeilen: erste Befund-Veröffentlichung nach Untersuchungsdatum. Revisionen erzeugen keine neue Position.",
+    "en": "Rows: first Befund publication by examination date. Revisions do not create a new line item.",
+    "pl": "Wiersze: pierwsza publikacja Befundu wg daty badania. Rewizje nie tworzą nowej pozycji."
   },
   "administration.accounting_report_rows_total": {
     "de": "Zeilen im Zeitraum.",

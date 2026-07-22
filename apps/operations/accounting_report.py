@@ -133,7 +133,7 @@ def resolve_report_date_range(
 
 
 def published_at_range_utc(date_from: date, date_to: date) -> tuple[datetime, datetime]:
-    """Inclusive local dates → ``[start, end)`` in UTC for ``published_at``."""
+    """Inclusive local dates → ``[start, end)`` in UTC (legacy helper for datetime filters)."""
     tz = _local_tz()
     start_local = datetime.combine(date_from, time.min, tzinfo=tz)
     end_local = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=tz)
@@ -197,14 +197,19 @@ def accounting_report_versions_qs(
     date_to: date,
     scoped_clinic_site_ids: list[UUID] | None = None,
 ) -> QuerySet[MedicalDocumentVersion]:
-    start_utc, end_utc = published_at_range_utc(date_from, date_to)
+    """
+    First non-revoked publication (``version_no=1``) whose exam day
+    (``DailyQueue.queue_date``) falls in ``[date_from, date_to]`` inclusive.
+
+    Date range follows the visit day, not ``published_at`` (doctor may publish later).
+    """
     qs = (
         MedicalDocumentVersion.objects.filter(
             version_status=DocVersionStatus.PUBLISHED,
             version_no=1,
-            published_at__gte=start_utc,
-            published_at__lt=end_utc,
             revoked_at__isnull=True,
+            medical_document__queue_entry__daily_queue__queue_date__gte=date_from,
+            medical_document__queue_entry__daily_queue__queue_date__lte=date_to,
         )
         .exclude(
             medical_document__source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD,
@@ -214,7 +219,11 @@ def accounting_report_versions_qs(
             "medical_document__queue_entry__patient",
             "medical_document__queue_entry__daily_queue",
         )
-        .order_by("published_at", "id")
+        .order_by(
+            "medical_document__queue_entry__daily_queue__queue_date",
+            "published_at",
+            "id",
+        )
     )
     if scoped_clinic_site_ids is not None:
         qs = qs.filter(
