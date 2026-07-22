@@ -1044,6 +1044,36 @@
     "en": "Attended",
     "pl": "Stawili się"
   },
+  "administration.accounting_report_mode_ausfall": {
+    "de": "Ausfallhonorar",
+    "en": "Ausfallhonorar",
+    "pl": "Ausfallhonorar"
+  },
+  "administration.accounting_report_mode_invalid": {
+    "de": "Ungültiger report_mode. Erlaubt: {allowed}.",
+    "en": "Invalid report_mode. Allowed: {allowed}.",
+    "pl": "Nieprawidłowy report_mode. Dozwolone: {allowed}."
+  },
+  "administration.accounting_col_ausfallhonorar": {
+    "de": "Ausfallhonorar",
+    "en": "Ausfallhonorar",
+    "pl": "Ausfallhonorar"
+  },
+  "administration.accounting_ausfallhonorar_yes": {
+    "de": "Ja",
+    "en": "Yes",
+    "pl": "Tak"
+  },
+  "administration.accounting_report_hint_ausfall": {
+    "de": "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen nicht ausgefüllt). Ohne Stornierte. Liste für die Forderungstabelle.",
+    "en": "Rows: patients from the daily list who did not complete the visit (no-show, refused, or questionnaire not completed). Excludes cancelled. List for debt collection.",
+    "pl": "Wiersze: pacjenci z kolejki, którzy nie zrealizowali wizyty (nie przyszli, odmówili lub nie wypełnili ankiety). Bez anulowanych. Lista do windykacji."
+  },
+  "administration.accounting_report_empty_ausfall": {
+    "de": "Keine Patienten für Ausfallhonorar im gewählten Zeitraum.",
+    "en": "No Ausfallhonorar patients in the selected date range.",
+    "pl": "Brak pacjentów do Ausfallhonorar w wybranym zakresie dat."
+  },
   "administration.accounting_doctor_counts_attended": {
     "de": "Zeilen pro Arzt",
     "en": "Rows per doctor",

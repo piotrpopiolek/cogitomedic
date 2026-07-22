@@ -7,7 +7,7 @@
     {% elif pagination.total %}
     <p class="text-sm text-base-600 dark:text-base-300 m-0">
       <span class="font-semibold tabular-nums text-base-900 dark:text-base-100">{{ pagination.total }}</span>
-      {% admin_trans "administration.pagination_total" "łącznie" %}
+      {% admin_trans "administration.pagination_total" "insgesamt" %}
       {% if pagination.total > pagination.page_size %}
       <span class="text-base-400 dark:text-base-500"> · {{ pagination.page }}{% if items_on_page %} ({{ items_on_page }}){% endif %}</span>
       {% endif %}
@@ -16,15 +16,15 @@
 
     {% if pagination.total > pagination.page_size %}
     {% if previous_page_url or next_page_url %}
-    <nav class="inline-flex items-center gap-1 rounded-default border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 p-0.5 shadow-xs" aria-label="{% admin_trans 'administration.pagination_nav' 'Nawigacja stron' %}">
+    <nav class="inline-flex items-center gap-1 rounded-default border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 p-0.5 shadow-xs" aria-label="{% admin_trans 'administration.pagination_nav' 'Seitennavigation' %}">
       {% if previous_page_url %}
       <a href="{{ previous_page_url }}" class="inline-flex h-8 items-center rounded-[calc(var(--radius-default,0.375rem)-2px)] px-3 text-sm font-medium text-base-700 dark:text-base-200 hover:bg-base-50 dark:hover:bg-base-800 hover:text-primary-600 dark:hover:text-primary-400">
-        {% admin_trans "administration.link_previous" "← Poprzednia" %}
+        {% admin_trans "administration.link_previous" "← Zurück" %}
       </a>
       {% endif %}
       {% if next_page_url %}
       <a href="{{ next_page_url }}" class="inline-flex h-8 items-center rounded-[calc(var(--radius-default,0.375rem)-2px)] px-3 text-sm font-medium text-base-700 dark:text-base-200 hover:bg-base-50 dark:hover:bg-base-800 hover:text-primary-600 dark:hover:text-primary-400">
-        {% admin_trans "administration.link_next" "Następna →" %}
+        {% admin_trans "administration.link_next" "Weiter →" %}
       </a>
       {% endif %}
     </nav>
@@ -35,7 +35,7 @@
   {% if page_size_options %}
   <div class="shrink-0 self-end sm:self-auto sm:ml-auto">
     {% if not page_size_label %}
-    {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
+    {% admin_trans "administration.pagination_page_size" "Einträge pro Seite:" as page_size_label %}
     {% endif %}
     {% include "includes/list_page_size_selector.html" %}
   </div>

@@ -51,7 +51,7 @@ def changelist_page_size_context(request: HttpRequest) -> dict[str, Any]:
         "page_size_label": get_admin_translation(
             request,
             "administration.pagination_page_size",
-            "Wierszy na stronę:",
+            "Einträge pro Seite:",
         ),
     }
 

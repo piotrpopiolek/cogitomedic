@@ -66,6 +66,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "administration.paper_intake_admin_earliest_hint": ["hours"],
     "administration.hidrive_hours_waiting": ["hours"],
     "administration.intake_document_detail_title": ["patient_name"],
+    "administration.accounting_report_mode_invalid": ["allowed"],
     "other.domain.paper_intake_authorization_too_early": ["hours"],
     "other.domain.paper_intake_earliest_after_appointment": ["hours"],
 }

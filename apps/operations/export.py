@@ -14,8 +14,10 @@ from apps.operations.accounting_report import (
 )
 
 
-def accounting_report_row_values(row: AccountingReportRow) -> list[str]:
-    return [
+def accounting_report_row_values(
+    row: AccountingReportRow, *, include_ausfallhonorar: bool = False
+) -> list[str]:
+    values = [
         str(row.row_no),
         row.first_name,
         row.last_name,
@@ -25,12 +27,16 @@ def accounting_report_row_values(row: AccountingReportRow) -> list[str]:
         row.doctor_name,
         row.exam_date,
     ]
+    if include_ausfallhonorar:
+        values.append(row.ausfallhonorar)
+    return values
 
 
 def render_accounting_report_csv(
     rows: Iterable[AccountingReportRow],
     *,
     headers: Sequence[str] | None = None,
+    include_ausfallhonorar: bool = False,
 ) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
@@ -41,7 +47,11 @@ def render_accounting_report_csv(
     )
     writer.writerow(hdr)
     for row in rows:
-        writer.writerow(accounting_report_row_values(row))
+        writer.writerow(
+            accounting_report_row_values(
+                row, include_ausfallhonorar=include_ausfallhonorar
+            )
+        )
     return buffer.getvalue().encode("utf-8")
 
 
@@ -50,6 +60,7 @@ def render_accounting_report_xlsx(
     *,
     headers: Sequence[str] | None = None,
     sheet_title: str = "Patientendaten",
+    include_ausfallhonorar: bool = False,
 ) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
@@ -61,7 +72,11 @@ def render_accounting_report_xlsx(
     )
     sheet.append(list(hdr))
     for row in rows:
-        sheet.append(accounting_report_row_values(row))
+        sheet.append(
+            accounting_report_row_values(
+                row, include_ausfallhonorar=include_ausfallhonorar
+            )
+        )
     out = io.BytesIO()
     workbook.save(out)
     return out.getvalue()

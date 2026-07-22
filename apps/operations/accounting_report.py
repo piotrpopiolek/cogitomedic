@@ -1,4 +1,4 @@
-"""Weekly accounting report (Befund publications + attended visits)."""
+"""Weekly accounting report (publications, attended visits, Ausfallhonorar)."""
 
 from __future__ import annotations
 
@@ -26,13 +26,19 @@ if TYPE_CHECKING:
 
 ACCOUNTING_PAYMENT_COLUMNS_ENABLED = False
 
-ReportMode = Literal["published", "attended"]
+ReportMode = Literal["published", "attended", "ausfall"]
 
 REPORT_MODE_PUBLISHED: ReportMode = "published"
 REPORT_MODE_ATTENDED: ReportMode = "attended"
+REPORT_MODE_AUSFALL: ReportMode = "ausfall"
 ACCOUNTING_REPORT_MODES: frozenset[str] = frozenset(
-    {REPORT_MODE_PUBLISHED, REPORT_MODE_ATTENDED}
+    {REPORT_MODE_PUBLISHED, REPORT_MODE_ATTENDED, REPORT_MODE_AUSFALL}
 )
+
+AUSFALLHONORAR_YES_DEFAULT = "Ja"
+AUSFALLHONORAR_YES_KEY = "administration.accounting_ausfallhonorar_yes"
+# Backward-compatible alias (DE fallback for cell value).
+AUSFALLHONORAR_LABEL = AUSFALLHONORAR_YES_DEFAULT
 
 ACCOUNTING_REPORT_EXPORT_HEADER_SPECS: tuple[tuple[str, str], ...] = (
     ("administration.accounting_col_nr", "Nr"),
@@ -45,6 +51,11 @@ ACCOUNTING_REPORT_EXPORT_HEADER_SPECS: tuple[tuple[str, str], ...] = (
     ("administration.accounting_col_exam_date", "Untersuchungsdatum"),
 )
 
+ACCOUNTING_REPORT_AUSFALL_HEADER_SPEC: tuple[str, str] = (
+    "administration.accounting_col_ausfallhonorar",
+    "Ausfallhonorar",
+)
+
 # Backward-compatible alias for tests and default export headers (DE canonical).
 ACCOUNTING_REPORT_HEADERS_DE = tuple(
     default for _, default in ACCOUNTING_REPORT_EXPORT_HEADER_SPECS
@@ -55,13 +66,16 @@ def accounting_report_export_headers_default() -> tuple[str, ...]:
     return ACCOUNTING_REPORT_HEADERS_DE
 
 
-def resolve_accounting_report_export_headers(request) -> tuple[str, ...]:
+def resolve_accounting_report_export_headers(
+    request, *, report_mode: ReportMode | str | None = REPORT_MODE_PUBLISHED
+) -> tuple[str, ...]:
     from apps.core.translation_service import get_admin_translation
 
-    return tuple(
-        get_admin_translation(request, key, default)
-        for key, default in ACCOUNTING_REPORT_EXPORT_HEADER_SPECS
-    )
+    mode = parse_report_mode(report_mode)
+    specs = list(ACCOUNTING_REPORT_EXPORT_HEADER_SPECS)
+    if mode == REPORT_MODE_AUSFALL:
+        specs.append(ACCOUNTING_REPORT_AUSFALL_HEADER_SPEC)
+    return tuple(get_admin_translation(request, key, default) for key, default in specs)
 
 
 def resolve_accounting_report_export_sheet_title(request) -> str:
@@ -71,6 +85,17 @@ def resolve_accounting_report_export_sheet_title(request) -> str:
         request,
         "administration.accounting_export_sheet_title",
         "Patientendaten",
+    )
+
+
+def resolve_accounting_ausfallhonorar_yes(request) -> str:
+    """Localized Yes/Ja/Tak for Ausfallhonorar column cells (UI + export)."""
+    from apps.core.translation_service import get_admin_translation
+
+    return get_admin_translation(
+        request,
+        AUSFALLHONORAR_YES_KEY,
+        AUSFALLHONORAR_YES_DEFAULT,
     )
 
 
@@ -86,6 +111,7 @@ class AccountingReportRow:
     exam_date: str
     medical_document_id: UUID | None
     doctor_user_id: UUID | None
+    ausfallhonorar: str = ""
 
 
 @dataclass(frozen=True)
@@ -285,6 +311,38 @@ def accounting_report_attended_qs(
     return qs
 
 
+def accounting_report_ausfall_qs(
+    *,
+    date_from: date,
+    date_to: date,
+    scoped_clinic_site_ids: list[UUID] | None = None,
+) -> QuerySet[QueueEntry]:
+    """
+    Queue entries in range that did not complete the visit path.
+
+    = entries on the day minus attended (SUBMITTED/REOPENED), excluding cancelled.
+    One bucket for accounting: no-show, refused exam, incomplete consents/intake.
+    """
+    qs = (
+        QueueEntry.objects.filter(
+            daily_queue__queue_date__gte=date_from,
+            daily_queue__queue_date__lte=date_to,
+        )
+        .exclude(entry_status=QueueEntryStatus.CANCELLED)
+        .exclude(
+            intake_form__form_status__in=(
+                IntakeStatus.SUBMITTED,
+                IntakeStatus.REOPENED,
+            )
+        )
+        .select_related("patient", "daily_queue", "medical_document")
+        .order_by("daily_queue__queue_date", "position_no", "id")
+    )
+    if scoped_clinic_site_ids is not None:
+        qs = qs.filter(daily_queue__clinic_site_id__in=scoped_clinic_site_ids)
+    return qs
+
+
 def _row_from_version(
     version: MedicalDocumentVersion, *, row_no: int
 ) -> AccountingReportRow:
@@ -347,6 +405,32 @@ def _row_from_attended_entry(entry: QueueEntry, *, row_no: int) -> AccountingRep
     )
 
 
+def _row_from_ausfall_entry(
+    entry: QueueEntry,
+    *,
+    row_no: int,
+    ausfallhonorar_yes: str = AUSFALLHONORAR_YES_DEFAULT,
+) -> AccountingReportRow:
+    patient = entry.patient
+    daily_queue = entry.daily_queue
+    medical_document = _medical_document_for_entry(entry)
+    return AccountingReportRow(
+        row_no=row_no,
+        first_name=(patient.first_name or "").strip(),
+        last_name=(patient.last_name or "").strip(),
+        street=format_patient_street(patient),
+        postal_city=format_patient_postal_city(patient),
+        email=(patient.email or "").strip(),
+        doctor_name="",
+        exam_date=format_exam_date_display(
+            daily_queue.queue_date if daily_queue else None
+        ),
+        medical_document_id=medical_document.id if medical_document else None,
+        doctor_user_id=None,
+        ausfallhonorar=ausfallhonorar_yes,
+    )
+
+
 def doctor_publication_counts(
     rows: list[AccountingReportRow],
 ) -> list[DoctorPublicationCount]:
@@ -375,8 +459,14 @@ def build_accounting_report(
     date_to: date,
     scoped_clinic_site_ids: list[UUID] | None = None,
     report_mode: ReportMode | str | None = REPORT_MODE_PUBLISHED,
+    ausfallhonorar_yes: str | None = None,
 ) -> AccountingReportResult:
     mode = parse_report_mode(report_mode)
+    yes_label = (
+        ausfallhonorar_yes
+        if ausfallhonorar_yes is not None
+        else AUSFALLHONORAR_YES_DEFAULT
+    )
     if mode == REPORT_MODE_ATTENDED:
         entries = list(
             accounting_report_attended_qs(
@@ -387,6 +477,18 @@ def build_accounting_report(
         )
         rows = [
             _row_from_attended_entry(entry, row_no=index)
+            for index, entry in enumerate(entries, start=1)
+        ]
+    elif mode == REPORT_MODE_AUSFALL:
+        entries = list(
+            accounting_report_ausfall_qs(
+                date_from=date_from,
+                date_to=date_to,
+                scoped_clinic_site_ids=scoped_clinic_site_ids,
+            )
+        )
+        rows = [
+            _row_from_ausfall_entry(entry, row_no=index, ausfallhonorar_yes=yes_label)
             for index, entry in enumerate(entries, start=1)
         ]
     else:
