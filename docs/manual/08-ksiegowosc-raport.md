@@ -47,7 +47,7 @@ Przełącznik **Wariant raportu** w formularzu:
 ## Podgląd w panelu
 
 - Formularz **Data od** / **Data do** — opcjonalnie; bez parametrów stosowany jest bieżący tydzień.
-- Po zmianie daty w polu **Von** / **Bis** raport **odświeża się automatycznie** (bez konieczności klikania „Pokaż raport”); przycisk pozostaje jako fallback. Zmiana daty resetuje podgląd do **strony 1**; wybrany rozmiar strony (`page_size`) jest zachowany.
+- Po zmianie **wariantu raportu** lub daty (**Von** / **Bis**) raport **odświeża się automatycznie** (bez konieczności klikania „Pokaż raport”); przycisk pozostaje jako fallback. Zmiana resetuje podgląd do **strony 1**; wybrany rozmiar strony (`page_size`) jest zachowany.
 - Linki **Eksport CSV** / **Eksport XLSX** zawsze wskazują bieżąco wybrane daty (aktualizowane przy zmianie pól dat).
 - Tabela wierszy z paginacją (`page`, `page_size`; domyślnie **50**, dozwolone **10 / 20 / 50 / 100**). W **ciemnym motywie** Unfold tekst tabeli, hint i stopka paginacji używają klas `dark:` (kontrast `base-100` / `base-300` na `base-900`).
 - Sekcja **Liczba publikacji per lekarz** — agregat z tego samego zestawu wierszy (ukryta w wariancie Ausfallhonorar).
