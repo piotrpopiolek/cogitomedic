@@ -24,7 +24,9 @@ Interfejs pod adresem **`/tablet/`** służy do wyboru **dzisiejszej kolejki**, 
 **Typowe problemy**
 
 - „Brak dostępu” — konto nie ma grupy Tablet/Reception/Admin albo jest nieaktywne.  
-- Pusta lista kolejek po zalogowaniu — sprawdź z administratorem przypisanie tabletu do placówki.
+- Pusta lista kolejek po zalogowaniu — sprawdź z administratorem przypisanie tabletu do placówki → [SC-018](scenariusze.md#sc-018).
+- Pomyłka przy wyborze pacjenta (cudza ankieta) → [SC-019](scenariusze.md#sc-019) (zawsze weryfikuj kartę tożsamości w kroku 1).
+- Pełna lista FAQ: [scenariusze.md](scenariusze.md).
 
 ---
 

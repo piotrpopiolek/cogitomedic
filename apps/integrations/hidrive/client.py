@@ -69,29 +69,130 @@ class _MockHiDriveAdapter:
     ``_dir_listings`` maps logical remote directory paths to file entries:
     each entry is ``{"name": str, "path": str, "size": int, "mtime": str|None}``.
     ``_file_contents`` maps logical file ``path`` to bytes for ``download``.
+
+    When ``settings.HIDRIVE_MOCK_STATE_PATH`` is set, state is also persisted to that
+    JSON file so a separate ``web`` process (Docker) can see seeds written by demo
+    scripts. ``list_dir_error`` forces ``HiDriveTimeoutError`` (dashboard outage banner).
     """
 
     _dir_listings: ClassVar[dict[str, list[dict[str, Any]]]] = {}
     _file_contents: ClassVar[dict[str, bytes]] = {}
+    _list_dir_error: ClassVar[str | None] = None
+    _state_mtime_ns: ClassVar[int | None] = None
+
+    @classmethod
+    def _state_path(cls) -> Path | None:
+        raw = str(getattr(settings, "HIDRIVE_MOCK_STATE_PATH", "") or "").strip()
+        if not raw:
+            return None
+        return Path(raw)
+
+    @classmethod
+    def _load_state_from_disk(cls) -> None:
+        """Reload mock state from the shared JSON file.
+
+        Always re-reads when the file exists. Docker Desktop on Windows often
+        keeps coarse ``mtime`` (1s), so a mtime short-circuit would miss
+        mid-recording updates from the host Playwright process.
+        """
+        import base64
+        import json
+
+        path = cls._state_path()
+        if path is None or not path.is_file():
+            return
+        try:
+            raw = path.read_text(encoding="utf-8")
+            mtime_ns = path.stat().st_mtime_ns
+        except OSError:
+            return
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return
+        listings = data.get("listings") or {}
+        cls._dir_listings = {
+            str(k): [dict(e) for e in (v or [])] for k, v in listings.items()
+        }
+        files_b64 = data.get("files_b64") or {}
+        decoded: dict[str, bytes] = {}
+        for k, v in files_b64.items():
+            try:
+                decoded[str(k)] = base64.b64decode(v)
+            except (ValueError, TypeError):
+                continue
+        cls._file_contents = decoded
+        err = data.get("list_dir_error")
+        cls._list_dir_error = str(err) if err else None
+        cls._state_mtime_ns = mtime_ns
+
+    @classmethod
+    def _persist_state(cls) -> None:
+        import base64
+        import json
+
+        path = cls._state_path()
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "listings": cls._dir_listings,
+                "files_b64": {
+                    k: base64.b64encode(v).decode("ascii")
+                    for k, v in cls._file_contents.items()
+                },
+                "list_dir_error": cls._list_dir_error,
+            }
+            path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            cls._state_mtime_ns = path.stat().st_mtime_ns
+        except OSError:
+            logger.warning(
+                "[MOCK HIDRIVE] could not persist state to %s", path, exc_info=True
+            )
 
     @classmethod
     def reset_test_state(cls) -> None:
         cls._dir_listings.clear()
         cls._file_contents.clear()
+        cls._list_dir_error = None
+        cls._state_mtime_ns = None
+        path = cls._state_path()
+        if path is not None and path.is_file():
+            try:
+                path.unlink()
+            except OSError:
+                cls._persist_state()
 
     @classmethod
     def seed_listing(cls, remote_dir: str, files: list[dict[str, Any]]) -> None:
-        """Register mock directory listing (tests)."""
+        """Register mock directory listing (tests / demo)."""
+        cls._load_state_from_disk()
         norm = _normalize_remote_path(remote_dir)
         cls._dir_listings[norm] = list(files)
+        cls._list_dir_error = None
+        cls._persist_state()
 
     @classmethod
     def seed_file(cls, remote_file: str, content: bytes) -> None:
-        """Register mock file bytes (tests)."""
+        """Register mock file bytes (tests / demo)."""
+        cls._load_state_from_disk()
         norm = _normalize_remote_path(remote_file)
         cls._file_contents[norm] = content
+        cls._persist_state()
+
+    @classmethod
+    def seed_list_dir_error(cls, message: str | None) -> None:
+        """Force ``list_dir`` to raise ``HiDriveTimeoutError`` (demo SC-027)."""
+        cls._load_state_from_disk()
+        cls._list_dir_error = (message or "").strip() or None
+        cls._persist_state()
 
     def upload(self, *, remote_path: str, local_path: Path) -> None:
+        self._load_state_from_disk()
         logger.info(
             "[MOCK HIDRIVE] upload path=%s local=%s — not sent to cloud; set HIDRIVE_USE_MOCK=0 + OAuth to use real HiDrive",
             remote_path,
@@ -100,8 +201,10 @@ class _MockHiDriveAdapter:
         norm = _normalize_remote_path(remote_path)
         if local_path.exists() and local_path.is_file():
             self._file_contents[norm] = local_path.read_bytes()
+            self._persist_state()
 
     def download(self, *, remote_path: str) -> bytes:
+        self._load_state_from_disk()
         norm = _normalize_remote_path(remote_path)
         logger.info("[MOCK HIDRIVE] download path=%s", norm)
         if norm not in self._file_contents:
@@ -116,11 +219,15 @@ class _MockHiDriveAdapter:
         total_timeout_seconds: float | None = None,
     ) -> list[dict[str, Any]]:
         del timeout_seconds, total_timeout_seconds
+        self._load_state_from_disk()
+        if self._list_dir_error:
+            raise HiDriveTimeoutError(self._list_dir_error)
         norm = _normalize_remote_path(remote_path)
         logger.info("[MOCK HIDRIVE] list_dir path=%s", norm)
         return list(self._dir_listings.get(norm, []))
 
     def move_file(self, *, source_path: str, dest_path: str) -> None:
+        self._load_state_from_disk()
         src = _normalize_remote_path(source_path)
         dst = _normalize_remote_path(dest_path)
         logger.info("[MOCK HIDRIVE] move_file %s -> %s", src, dst)
@@ -146,6 +253,7 @@ class _MockHiDriveAdapter:
                     new_entries.append(e)
             if changed:
                 self._dir_listings[dir_path] = new_entries
+        self._persist_state()
 
 
 class _HiDriveAdapter:

@@ -165,3 +165,5 @@ Z [widoku master-detail kolejek](01-rejestracja.md) przejdź przez link **Pacjen
 ---
 
 Lista użytych zrzutów ekranu znajduje się tutaj: [screenshot-checklist.md](screenshot-checklist.md).
+
+**Scenariusze:** [SC-025](scenariusze.md#sc-025) (skutki dla portalu i HiDrive), [SC-008](scenariusze.md#sc-008), [SC-009](scenariusze.md#sc-009).

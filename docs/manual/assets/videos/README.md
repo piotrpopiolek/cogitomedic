@@ -1,13 +1,13 @@
 # Filmy instruktażowe (WebM)
 
-Nagrania ekranu generuje skrypt [`scripts/record_manual_videos.py`](../../../../scripts/record_manual_videos.py) (Playwright + te same dane demo co [zrzuty PNG](../screenshots/README.md): konta `screenshot_*`, fikcyjni pacjenci).
+Nagrania ekranu generuje Playwright + te same dane demo co [zrzuty PNG](../screenshots/README.md): konta `screenshot_*`, fikcyjni pacjenci (RODO).
 
 ## Wymagania
 
-- Działająca aplikacja i baza (migrate), zmienne jak przy zrzutach: `CAPTCHA_VERIFY_SKIP=1` itd.
-- `pip install -r requirements.txt` (Playwright jest w projekcie) oraz `playwright install chromium`.
+- Działająca aplikacja i baza (`docker compose` → usługa `web`), zmienne jak przy zrzutach: `CAPTCHA_VERIFY_SKIP=1`, `SMSAPI_USE_MOCK=1`, itd.
+- Obraz `manual-videos` / `screenshots` (Playwright + Chromium) **albo** lokalnie: `pip install -r requirements.txt` oraz `playwright install chromium`.
 
-## Lokalnie (z korzenia repozytorium)
+## Filmy per rola (01–05)
 
 ```bash
 python manage.py runserver 127.0.0.1:8000
@@ -15,63 +15,152 @@ python manage.py runserver 127.0.0.1:8000
 python scripts/record_manual_videos.py --base-url http://127.0.0.1:8000 --role all
 ```
 
-Pliki trafiają do tego katalogu, np. `reception/reception.webm`, `tablet/tablet.webm`. Rozszerzenia `.webm` i `.mp4` są w `.gitignore` (duże binaria — generuj lokalnie, nie commituj).
+| Plik | Rola |
+|------|------|
+| `reception.webm` | [01-rejestracja.md](../../01-rejestracja.md) |
+| `tablet.webm` | [02-tablet.md](../../02-tablet.md) |
+| `doctor.webm` | [03-doktor.md](../../03-doktor.md) |
+| `admin.webm` | [04-administrator.md](../../04-administrator.md) |
+| `patient.webm` | [05-pacjent-wyniki.md](../../05-pacjent-wyniki.md) |
 
-### Parametry przydatne w pracy
+### Parametry
 
 | Opcja | Znaczenie |
 |-------|-----------|
 | `--role reception` | Jedna rola zamiast `all` |
 | `--slow-mo 300` | Wolniejsze akcje (ms) |
-| `--video-width` / `--video-height` | Rozdzielczość desktop/pacjent (domyślnie 1280×720) |
-| `--tablet-width` / `--tablet-height` | Widok tabletu (domyślnie 900×1200) |
+| `--video-width` / `--video-height` | Rozdzielczość (domyślnie 1280×720) |
 | `--out-dir` | Inny katalog wyjściowy |
 
-## Docker
+Docker:
 
 ```bash
 docker compose --profile manual-videos run --rm manual-videos
 ```
 
-Wyniki są na volume `./docs/manual/assets/videos` (host).
+## Scenariusze operacyjne (SC-001–SC-027)
 
-## Konwersja do MP4 (opcjonalnie, lokalnie)
+Opisy: [scenariusze.md](../../scenariusze.md). Pliki w `scenariusze/` (poza SC-007).
 
-MP4 **nie trafia do gita** — tylko WebM z Playwright. Jeśli potrzebujesz MP4 (np. do LMS), wygeneruj ffmpeg z katalogu `docs/manual/assets/videos/`:
+### Widoczny kursor (symulacja użytkownika)
 
-```bash
-ffmpeg -i reception/reception.webm -c:v libx264 -crf 23 -c:a aac reception/reception.mp4
+Playwright **nie nagrywa** systemowego kursora OS. Recorder scenariuszy
+(`record_scenario_videos.py` oraz `record_import_troubleshooting_video.py`)
+wstrzykuje żółty overlay DOM (`scripts/manual_demo/cursor_overlay.py`): śledzi
+`mousemove` / kliknięcia, reinject po nawigacji i HTMX. Ruchy idą przez
+`mouse.move(..., steps=28)` + krótkie pauzy przed/po kliknięciu. Włączane
+automatycznie przy nagraniu — nie ma osobnej flagi CLI. Zalecane `--slow-mo 500`
+(minimum ~400–500).
+
+### Seed + nagranie (Windows / Docker)
+
+```powershell
+# Seed (w kontenerze web — wymaga PYTHONPATH)
+docker compose exec -w /app -e PYTHONPATH=/app web `
+  python scripts/manual_demo/seed_scenarios.py --all --write-ctx
+
+# Nagranie (obraz Playwright)
+docker compose --profile manual-videos run --rm --no-deps `
+  -e PYTHONPATH=/app -e SCREENSHOT_SKIP_DJANGO=1 `
+  manual-videos python scripts/record_scenario_videos.py `
+  --all --base-url http://web:8000 --slow-mo 500
 ```
 
-## Treść vs dokumentacja
+Pojedynczy scenariusz / priorytet:
 
-| Plik | Rola |
-|------|------|
-| `reception.webm` | [01-rejestracja.md](../../01-rejestracja.md) |
-| `tablet.webm` | [02-tablet.md](../../02-tablet.md) (skrócony flow formularza) |
-| `doctor.webm` | [03-doktor.md](../../03-doktor.md) |
-| `admin.webm` | [04-administrator.md](../../04-administrator.md) |
-| `patient.webm` | [05-pacjent-wyniki.md](../../05-pacjent-wyniki.md) |
-| `reception/import-troubleshooting.webm` | Zgłoszenie klienta: po imporcie XLSX widać tylko jednego pacjenta — weryfikacja i ręczne dopisanie do kolejki. Narracja: [import-troubleshooting-narration.pl.md](reception/import-troubleshooting-narration.pl.md) |
-
-### Film: brakujący pacjent po imporcie
-
-```bash
-python manage.py runserver 127.0.0.1:8000
-# drugi terminal:
-python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000
+```powershell
+python scripts/record_scenario_videos.py --scenario sc-001 --slow-mo 500
+python scripts/record_scenario_videos.py --priority high --slow-mo 500
 ```
 
-Opcjonalnie MP4: `ffmpeg -i reception/import-troubleshooting.webm -c:v libx264 -crf 23 -pix_fmt yuv420p reception/import-troubleshooting.mp4`
+Na hoście z `SCREENSHOT_SKIP_DJANGO=1` skrypt czyta JSON z `docs/manual/_build/scenario-ctx/`.
 
-Na Windows (seed w Dockerze, nagranie na hoście):
+**SC-011 / SC-012 / SC-027:** mock HiDrive jest współdzielony z `web` przez
+`docs/manual/_build/hidrive-mock-state.json` (volume `.:/app`). Nagranie ustawia
+stan na starcie każdego scenariusza; ustaw też `HIDRIVE_INCOMING_PATH` jak w `.env`
+web (domyślnie `/public/incoming`). Przykład:
 
-```bash
-docker compose exec web python scripts/manual_demo/seed_import_troubleshooting.py
-set SCREENSHOT_SKIP_DJANGO=1
-python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000
+```powershell
+foreach ($s in 'sc-011','sc-012','sc-027') {
+  docker compose exec -w /app -e PYTHONPATH=/app web `
+    python scripts/manual_demo/seed_scenarios.py --scenario $s --write-ctx
+}
+docker compose --profile manual-videos run --rm --no-deps `
+  -e PYTHONPATH=/app -e SCREENSHOT_SKIP_DJANGO=1 `
+  -e HIDRIVE_INCOMING_PATH=/public/incoming `
+  manual-videos python scripts/record_scenario_videos.py `
+  --scenario sc-011 --scenario sc-012 --scenario sc-027 `
+  --base-url http://web:8000 --slow-mo 500
 ```
 
-**Pacjent:** scenariusz używa wstępnie utworzonej sesji (cookie), żeby pokazać ekrany `/otp/` i `/documents/` bez mocka SMS — to nie jest pełny „request OTP z formularza”. Lektor / napisy wyjaśniają krok z kodem SMS.
+### Lista filmów scenariuszy
 
-**Lektor:** Playwright nie generuje mowy; narracja to osobna warstwa (nagranie, TTS lub napisy w edytorze wideo).
+| Plik | Scenariusz |
+|------|------------|
+| `scenariusze/sc-001-anulowany-wpis.webm` | SC-001 Anulowany wpis na liście lekarza |
+| `scenariusze/sc-002-usuniety-szkic.webm` | SC-002 Usunięty szkic — status „—” |
+| `scenariusze/sc-003-porzuc-rewizje.webm` | SC-003 Porzucenie rewizji |
+| `scenariusze/sc-004-raport-ksiegowosci.webm` | SC-004 Raport tygodniowy księgowości |
+| `scenariusze/sc-005-brak-pdf-hidrive.webm` | SC-005 Brak PDF z laboratorium |
+| `scenariusze/sc-006-sms-outbox.webm` | SC-006 Powtórka SMS ze skrzynki wyjściowej |
+| `reception/import-troubleshooting.webm` | SC-007 Brakujący pacjent po imporcie XLSX |
+| `scenariusze/sc-008-portal-login.webm` | SC-008 Portal — błędny telefon / data urodzenia |
+| `scenariusze/sc-009-wspolny-telefon.webm` | SC-009 Wspólny numer w rodzinie |
+| `scenariusze/sc-010-otp-portal.webm` | SC-010 Brak kodu OTP do portalu |
+| `scenariusze/sc-011-homonim-pdf.webm` | SC-011 Niejednoznaczna nazwa PDF |
+| `scenariusze/sc-012-rejected-pdf.webm` | SC-012 Plik `rejected_` |
+| `scenariusze/sc-013-outbox-pdf-hidrive.webm` | SC-013 Błąd PDF/HiDrive — Ponów |
+| `scenariusze/sc-014-blokada-dokumentu.webm` | SC-014 Blokada edycji dokumentu |
+| `scenariusze/sc-015-revoke-publikacji.webm` | SC-015 Cofnięcie publikacji |
+| `scenariusze/sc-016-papier-po-tablecie.webm` | SC-016 Papier unieważniony po tablecie |
+| `scenariusze/sc-017-paper-intake-t1.webm` | SC-017 Autoryzacja papierowa T1 |
+| `scenariusze/sc-018-tablet-bez-placowki.webm` | SC-018 Tablet bez placówki |
+| `scenariusze/sc-019-zla-ankieta.webm` | SC-019 Pomyłka pacjenta na tablecie |
+| `scenariusze/sc-020-external-upload.webm` | SC-020 Zewnętrzne badanie (PDF) |
+| `scenariusze/sc-021-brak-ankiety.webm` | SC-021 Brak ukończonej ankiety |
+| `scenariusze/sc-022-pusta-lista-dokumentow.webm` | SC-022 Pusta lista w portalu |
+| `scenariusze/sc-023-okno-60-dni.webm` | SC-023 Okno 60 dni dostępu |
+| `scenariusze/sc-024-smsapi-saldo.webm` | SC-024 Awaria / saldo SMS |
+| `scenariusze/sc-025-korekta-danych.webm` | SC-025 Korekta danych pacjenta |
+| `scenariusze/sc-026-dead-letter.webm` | SC-026 Dead letter w skrzynce |
+| `scenariusze/sc-027-baner-hidrive.webm` | SC-027 Baner awarii HiDrive |
+
+Narracje (tekst lektora): pliki `scenariusze/*-narration.pl.md` obok filmów.
+
+### HiDrive mock (SC-011 / SC-012 / SC-027)
+
+Przy `HIDRIVE_USE_MOCK=1` adapter zapisuje stan do współdzielonego pliku JSON
+(`docs/manual/_build/hidrive-mock-state.json`, gitignore), żeby proces `web` widział
+listingi/`rejected_`/timeout z seeda i z recordera (osobny kontener Playwright).
+
+- `settings.HIDRIVE_MOCK_STATE_PATH` — ścieżka (domyślnie włączona poza `prod`)
+- Seed: `seed_mock_incoming(...)` / `seed_mock_hidrive_timeout()` w `scenario_helpers.py`
+- Recorder na starcie SC-011/012/027 nadpisuje ten plik, potem pokazuje problem → poprawkę → reload dashboardu
+
+Ścieżka listingu musi zgadzać się z `HIDRIVE_INCOMING_PATH` (u Was często `/public/incoming`).
+
+### Film SC-007 (import)
+
+```bash
+python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000 --slow-mo 500
+```
+
+Na Windows (seed w Dockerze):
+
+```powershell
+docker compose exec -w /app -e PYTHONPATH=/app web python scripts/manual_demo/seed_import_troubleshooting.py
+$env:SCREENSHOT_SKIP_DJANGO='1'
+python scripts/record_import_troubleshooting_video.py --base-url http://127.0.0.1:8000 --slow-mo 500
+```
+
+## Uwagi
+
+- Rozszerzenia `.webm` / `.mp4` są w `.gitignore` — generuj lokalnie, nie commituj binariów.
+- Playwright nie generuje mowy; lektor / napisy to osobna warstwa.
+- Portal pacjenta w filmach ról: krok OTP często używa wstępnie utworzonej sesji (cookie), jak przy zrzutach PNG.
+
+### Konwersja do MP4 (opcjonalnie)
+
+```bash
+ffmpeg -i scenariusze/sc-001-anulowany-wpis.webm -c:v libx264 -crf 23 -pix_fmt yuv420p scenariusze/sc-001-anulowany-wpis.mp4
+```

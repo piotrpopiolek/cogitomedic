@@ -70,3 +70,4 @@ Po publikacji uruchamia się ten sam **łańcuch outbox** co dla Befundu: genero
 - [hidrive_incoming_reception.md](hidrive_incoming_reception.md) — wrzutki „gołym” PDF do `/incoming/` pod kątem dopasowania do pacjenta (lab).
 - [01-rejestracja.md](01-rejestracja.md) — recepcja, kolejki, wpisy.
 - [03-doktor.md](03-doktor.md) — panel lekarza (Befund); dokument `EXTERNAL_UPLOAD` w panelu lekarza może być tylko do odczytu — szczegóły zależą od wdrożenia UI.
+- Scenariusz filmowy: [SC-020](scenariusze.md#sc-020).

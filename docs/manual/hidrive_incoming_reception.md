@@ -79,3 +79,5 @@ Jeśli w bazie jest więcej niż jeden pacjent pasujący do **krótkiej** nazwy 
 
 - PDF wysłany do pacjenta to **nowy dokument**; podpisy cyfrowe z PDF laboratorium nie są zachowywane.
 - Folder **`/processed/`** zawiera pliki już powiązane z opublikowanym dokumentem — nie usuwaj ich ręcznie bez uzgodnienia z działem IT.
+
+**Scenariusze:** [SC-005](scenariusze.md#sc-005), [SC-011](scenariusze.md#sc-011) (podobne nazwiska), [SC-012](scenariusze.md#sc-012) (plik odrzucony), [SC-027](scenariusze.md#sc-027).

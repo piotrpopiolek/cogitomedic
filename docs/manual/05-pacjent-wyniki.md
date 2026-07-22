@@ -82,10 +82,10 @@ Język strony zależy od ustawień systemu i przeglądarki. W razie potrzeby pla
 
 | Problem | Co zrobić |
 |---------|-----------|
-| Brak SMS z kodem | Sprawdź zasięg sieci; poczekaj chwilę; poproś ponownie o kod; zadzwoń do recepcji. |
-| „Nieprawidłowe dane” przy logowaniu | Upewnij się, że numer i data zgadzają się z danymi podanymi w placówce. |
-| Pusta lista dokumentów | Możliwe opóźnienie publikacji; wycofanie przez lekarza; skontaktuj się z placówką. |
-| Błąd pobrania / „dokument niedostępny” po dłuższym czasie | Minęło okno dostępu (zwykle **60 dni** od publikacji). Zadzwoń do recepcji — placówka może udostępnić kopię z archiwum. |
+| Brak SMS z kodem | Sprawdź zasięg sieci; poczekaj chwilę; poproś ponownie o kod; zadzwoń do recepcji. Personel: [SC-010](scenariusze.md#sc-010), [SC-024](scenariusze.md#sc-024). |
+| „Nieprawidłowe dane” przy logowaniu | Upewnij się, że numer i data zgadzają się z danymi podanymi w placówce. Recepcja: [SC-008](scenariusze.md#sc-008), wspólny telefon [SC-009](scenariusze.md#sc-009). |
+| Pusta lista dokumentów | Możliwe opóźnienie publikacji; wycofanie przez lekarza; skontaktuj się z placówką. Personel: [SC-022](scenariusze.md#sc-022), [SC-015](scenariusze.md#sc-015). |
+| Błąd pobrania / „dokument niedostępny” po dłuższym czasie | Minęło okno dostępu (zwykle **60 dni** od publikacji). Zadzwoń do recepcji — placówka może udostępnić kopię z archiwum. [SC-023](scenariusze.md#sc-023). |
 | Błąd captcha | Odśwież stronę; spróbuj innej przeglądarki; wyłącz VPN jeśli blokuje Turnstile. |
 
-Powiązane u personelu: [Przegląd](00-przeglad.md), [Lekarz — publikacja](03-doktor.md).
+Powiązane u personelu: [Przegląd](00-przeglad.md), [Lekarz — publikacja](03-doktor.md), [scenariusze.md](scenariusze.md).

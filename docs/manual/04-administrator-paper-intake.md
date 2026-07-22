@@ -73,6 +73,8 @@ Dostępne **tylko dopóki nie utworzono dokumentu medycznego** (brak T2).
 
 Personel powinien **nie planować** równoległej pracy „papier + tablet” na ten sam wpis — system rozstrzyga na korzyść **danych cyfrowych**, gdy się pojawią.
 
+**Scenariusze:** [SC-016](scenariusze.md#sc-016) (autoryzacja znika po ankiecie z tableta), [SC-017](scenariusze.md#sc-017) (brak autoryzacji papierowej na liście lekarza).
+
 ---
 
 ## 7. Obowiązki poza systemem (procedura placówki)

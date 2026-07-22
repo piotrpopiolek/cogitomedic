@@ -37,6 +37,8 @@ Strona pokazuje m.in.:
 
 **Kiedy tu zaglądać:** codziennie na początku zmiany oraz gdy lekarz zgłasza **blokadę Befundu (brak PDF z laboratorium)** lub pacjent zgłasza brak SMS — aby szybko zobaczyć brakujące dopasowania HiDrive i zablokowane zadania outbox.
 
+**Powiązane scenariusze:** [SC-005](scenariusze.md#sc-005) (brak PDF), [SC-006](scenariusze.md#sc-006) / [SC-013](scenariusze.md#sc-013) / [SC-026](scenariusze.md#sc-026) (skrzynka wyjściowa), [SC-011](scenariusze.md#sc-011)–[SC-012](scenariusze.md#sc-012) (HiDrive), [SC-027](scenariusze.md#sc-027) (baner awarii).
+
 ![Dashboard recepcji — zaległe zdarzenia i importy](/docs/manual/assets/screenshots/reception-02-reception-dashboard.png)
 
 ---
@@ -181,3 +183,14 @@ Zgłaszaj:
 - problemy z importem plików (załącznik z błędem lub numer batcha).
 
 Powiązane dokumenty: [Przegląd](00-przeglad.md), [Tablet](02-tablet.md) (współpraca recepcja–tablet), [Administrator](04-administrator.md).
+
+## Typowe problemy (scenariusze)
+
+| Objaw | Scenariusz |
+|-------|------------|
+| Po imporcie XLSX widać za mało pacjentów | [SC-007](scenariusze.md#sc-007) |
+| Pacjent nie dostał SMS po Befundzie | [SC-006](scenariusze.md#sc-006) |
+| Anulowany wpis / szkic a lista lekarza | [SC-001](scenariusze.md#sc-001), [SC-002](scenariusze.md#sc-002) |
+| Zewnętrzny PDF wyniku | [SC-020](scenariusze.md#sc-020) |
+| Korekta danych → portal / HiDrive | [SC-025](scenariusze.md#sc-025), [SC-008](scenariusze.md#sc-008) |
+| Pełna lista | [scenariusze.md](scenariusze.md) |

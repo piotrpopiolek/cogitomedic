@@ -104,6 +104,7 @@ Z poziomu listy **Daily queues** dostępny jest **Import pacjentów z pliku XLSX
 
 - W razie statusów błędów sprawdź szczegóły i skontaktuj się z działem IT.
 - Dashboard recepcji (`/admin/reception-dashboard/`) — skrót dla personelu; administrator może używać tego samego + pełnych widoków modeli.
+- Scenariusze: [SC-006](scenariusze.md#sc-006), [SC-013](scenariusze.md#sc-013), [SC-024](scenariusze.md#sc-024), [SC-026](scenariusze.md#sc-026), [SC-027](scenariusze.md#sc-027); indeks: [scenariusze.md](scenariusze.md).
 
 ---
 
@@ -143,4 +144,4 @@ Grupa **Accounting** służy wyłącznie do odczytu raportu rozliczeniowego Befu
 - Zakres danych: **wszystkie placówki** (jak u administratora). Manager widzi ten sam raport, ale tylko dla przypisanych placówek.
 - Szczegóły kolumn, filtrów dat i eksportu: [08-ksiegowosc-raport.md](08-ksiegowosc-raport.md).
 
-Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md), [Raport księgowości](08-ksiegowosc-raport.md), [Ścieżka papierowa — procedura](04-administrator-paper-intake.md), [Ścieżka papierowa — diagram](paper_intake_flow.md).
+Powiązane: [Przegląd (m.in. tabela ról)](00-przeglad.md), [Recepcja](01-rejestracja.md), [Lekarz](03-doktor.md), [Raport księgowości](08-ksiegowosc-raport.md), [Ścieżka papierowa — procedura](04-administrator-paper-intake.md), [Ścieżka papierowa — diagram](paper_intake_flow.md), [Scenariusze operacyjne](scenariusze.md).

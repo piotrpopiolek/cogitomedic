@@ -152,3 +152,15 @@ Użyj opcji wylogowania w panelu lekarza. Kolejne wejście do panelu będzie wym
 - Przy wielu grupach zmian pilnuj spójności **numerów zmian** z wideodermatoskopu.
 
 Powiązane: [Przegląd](00-przeglad.md), [Administrator](04-administrator.md), [Autoryzacja ścieżki papierowej — szczegóły](04-administrator-paper-intake.md), [Diagram przepływu papierowego](paper_intake_flow.md), [Pacjent — portal wyników](05-pacjent-wyniki.md).
+
+## Typowe problemy (scenariusze)
+
+| Objaw | Scenariusz |
+|-------|------------|
+| Anulowany wpis nadal na liście / status „—” | [SC-001](scenariusze.md#sc-001), [SC-002](scenariusze.md#sc-002) |
+| Porzucenie otwartej rewizji | [SC-003](scenariusze.md#sc-003) |
+| Brak PDF labu / HTTP 424 | [SC-005](scenariusze.md#sc-005) |
+| Blokada edycji przez kolegę | [SC-014](scenariusze.md#sc-014) |
+| Cofnięcie publikacji | [SC-015](scenariusze.md#sc-015) |
+| Brak ukończonej ankiety / brak autoryzacji papierowej | [SC-021](scenariusze.md#sc-021), [SC-017](scenariusze.md#sc-017) |
+| Pełna lista | [scenariusze.md](scenariusze.md) |

@@ -71,6 +71,7 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 
 - Wymagania produktu: [`.ai/prd.md`](../../.ai/prd.md)
 - Dokumentacja dla działu IT: [`.ai/api-plan-pl.md`](../../.ai/api-plan-pl.md)
+- **Scenariusze operacyjne (FAQ + filmy):** [scenariusze.md](scenariusze.md) — m.in. anulowanie wpisu ([SC-001](scenariusze.md#sc-001)), SMS / skrzynka wyjściowa ([SC-006](scenariusze.md#sc-006)), portal ([SC-008](scenariusze.md#sc-008)–[SC-010](scenariusze.md#sc-010)), HiDrive ([SC-005](scenariusze.md#sc-005), [SC-027](scenariusze.md#sc-027)).
 
 ## Indeks instrukcji
 
@@ -84,3 +85,4 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 - [Administrator / Manager — autoryzacja ścieżki papierowej (T1, T1′)](04-administrator-paper-intake.md)
 - [Ścieżka papierowa — diagram procesu (T1 / T2)](paper_intake_flow.md)
 - [Pacjent — portal wyników](05-pacjent-wyniki.md)
+- [Scenariusze operacyjne — FAQ i filmy](scenariusze.md)

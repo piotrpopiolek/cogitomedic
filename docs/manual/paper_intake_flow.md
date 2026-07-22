@@ -63,4 +63,4 @@ W obu przypadkach nie opieraj dalszej pracy na ścieżce papierowej. Odśwież l
 
 CogitoMedica zapisuje informację o decyzji (kto, kiedy, powód, powiązanie z wpisem i dokumentem). Nie przechowuje skanu ani treści papierowej ankiety — sposób przechowywania papieru opisuje regulamin placówki.
 
-Powiązane: [04-administrator-paper-intake.md](04-administrator-paper-intake.md), [03-doktor.md](03-doktor.md), [04-administrator.md](04-administrator.md).
+Powiązane: [04-administrator-paper-intake.md](04-administrator-paper-intake.md), [03-doktor.md](03-doktor.md), [04-administrator.md](04-administrator.md), scenariusze [SC-016](scenariusze.md#sc-016) / [SC-017](scenariusze.md#sc-017).
