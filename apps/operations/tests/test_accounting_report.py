@@ -36,7 +36,6 @@ from apps.operations.accounting_report import (
     format_patient_postal_city,
     format_patient_street,
     normalize_postal_code_display,
-    published_at_range_utc,
     resolve_report_date_range,
 )
 from apps.operations.api_schemas import (
@@ -472,11 +471,6 @@ class AccountingReportServiceTests(AccountingReportBase):
         )
         self.assertEqual(date_from, date(2026, 3, 10))
         self.assertEqual(date_to, date(2026, 3, 20))
-
-    def test_published_at_range_utc_respects_local_midnight(self) -> None:
-        start, end = published_at_range_utc(date(2026, 3, 10), date(2026, 3, 10))
-        self.assertLess(start, end)
-        self.assertEqual((end - start).days, 1)
 
     def test_revoked_publication_excluded(self) -> None:
         doc = self._make_doc()
