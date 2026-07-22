@@ -27,6 +27,7 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.operations.accounting_report import (
+    REPORT_MODE_ATTENDED,
     AccountingReportResult,
     AccountingReportRow,
     DoctorPublicationCount,
@@ -359,6 +360,57 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(len(report.rows), 1)
         self.assertEqual(report.rows[0].exam_date, "10.03.2026")
 
+    def test_attended_includes_submitted_without_publication(self) -> None:
+        """v2: completed intake in range appears even without published Befund."""
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].first_name, "Anna")
+        self.assertEqual(report.rows[0].exam_date, "10.03.2026")
+        self.assertIsNone(report.rows[0].medical_document_id)
+        self.assertEqual(report.rows[0].doctor_name, "Hans Müller")
+        self.assertEqual(report.report_mode, REPORT_MODE_ATTENDED)
+
+    def test_attended_excludes_in_progress_and_cancelled(self) -> None:
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+        empty = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        self.assertEqual(empty.rows, [])
+
+        self.intake.form_status = IntakeStatus.SUBMITTED
+        self.intake.save(update_fields=["form_status"])
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status"])
+        cancelled = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        self.assertEqual(cancelled.rows, [])
+
+    def test_attended_uses_published_doctor_when_available(self) -> None:
+        doc = self._make_doc()
+        self._make_published_version(
+            doc,
+            published_at=datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw")),
+            published_by_user=self.doctor2,
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].doctor_name, "Eva Schmidt")
+        self.assertEqual(report.rows[0].medical_document_id, doc.id)
+
     def test_doctor_counts_aggregate_documents(self) -> None:
         doc1 = self._make_doc()
         self._make_published_version(
@@ -565,6 +617,24 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertIn("data-export-csv-url", content)
         self.assertIn("data-export-csv", content)
         self.assertIn("data-export-xlsx", content)
+        self.assertIn('name="report_mode"', content)
+        self.assertIn('id="report_mode"', content)
+
+    def test_attended_mode_lists_submitted_intake(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "report_mode": "attended",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["report_mode"], "attended")
+        self.assertEqual(response.context["pagination"]["total"], 1)
+        self.assertEqual(response.context["items"][0].last_name, "Kowalska")
+        self.assertIn("report_mode=attended", response.context["export_querystring"])
 
     def test_export_querystring_omits_page_and_keeps_dates(self) -> None:
         self.client.force_login(self.accounting_user)
@@ -580,7 +650,7 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.context["export_querystring"],
-            "?date_from=2026-03-10&date_to=2026-03-16",
+            "?date_from=2026-03-10&date_to=2026-03-16&report_mode=published",
         )
 
     def test_date_range_get_without_page_returns_first_page(self) -> None:
@@ -729,6 +799,11 @@ class AccountingReportViewTests(AccountingReportBase):
         assert ev is not None
         self.assertEqual(ev.metadata.get("format"), "csv")
         self.assertEqual(ev.metadata.get("row_count"), 1)
+        self.assertEqual(ev.metadata.get("report_mode"), "published")
+        self.assertIn(
+            "accounting_report_published_",
+            response["Content-Disposition"],
+        )
 
     def test_export_xlsx_writes_audit_event(self) -> None:
         doc = self._make_doc()
@@ -889,6 +964,7 @@ class AccountingReportViewTests(AccountingReportBase):
         payload = response.model_dump(mode="json")
         self.assertEqual(payload["date_from"], "2026-03-10")
         self.assertEqual(payload["date_to"], "2026-03-16")
+        self.assertEqual(payload["report_mode"], "published")
         self.assertEqual(payload["report_total_rows"], 3)
         self.assertEqual(payload["pagination"], {"page": 2, "page_size": 2, "total": 3})
         self.assertEqual(len(payload["items"]), 1)

@@ -26,6 +26,17 @@
         data-auto-submit-debounce-ms="300"
     >
         <div>
+            <label for="report_mode" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_report_mode" "Wariant raportu" %}</label>
+            <select id="report_mode" name="report_mode" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
+                <option value="{{ report_mode_published }}" {% if report_mode == report_mode_published %}selected{% endif %}>
+                    {% admin_trans "administration.accounting_report_mode_published" "v1 — opublikowane Befundy" %}
+                </option>
+                <option value="{{ report_mode_attended }}" {% if report_mode == report_mode_attended %}selected{% endif %}>
+                    {% admin_trans "administration.accounting_report_mode_attended" "v2 — stawili się" %}
+                </option>
+            </select>
+        </div>
+        <div>
             <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_date_from" "Od" %}</label>
             <input type="date" id="date_from" name="date_from" value="{{ date_from }}" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
         </div>
@@ -48,14 +59,24 @@
     </form>
 
     <p class="text-sm text-gray-600 dark:text-base-300 mb-6">
-        {% admin_trans "administration.accounting_report_hint" "Wiersze: pierwsza publikacja Befundu (version 1) wg daty badania (queue_date). Rewizje nie tworzą nowej pozycji." %}
+        {% if report_mode == report_mode_attended %}
+        {% admin_trans "administration.accounting_report_hint_attended" "Wiersze: pacjenci z wypełnioną ankietą wg daty badania; bez anulowanych wpisów i bez no-show z importu. Befund nie jest wymagany." %}
+        {% else %}
+        {% admin_trans "administration.accounting_report_hint" "Wiersze: pierwsza publikacja Befundu wg daty badania. Rewizje nie tworzą nowej pozycji." %}
+        {% endif %}
         <span class="font-medium text-gray-900 dark:text-base-100">{{ report_total_rows }}</span>
         {% admin_trans "administration.accounting_report_rows_total" "wierszy w zakresie." %}
     </p>
 
     {% if doctor_counts %}
     <div class="mb-8 bg-white dark:bg-base-900 rounded-md shadow border border-gray-200 dark:border-base-800 p-6">
-        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-base-100">{% admin_trans "administration.accounting_doctor_counts" "Publikacje per lekarz" %}</h2>
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-base-100">
+            {% if report_mode == report_mode_attended %}
+            {% admin_trans "administration.accounting_doctor_counts_attended" "Wiersze per lekarz" %}
+            {% else %}
+            {% admin_trans "administration.accounting_doctor_counts" "Publikacje per lekarz" %}
+            {% endif %}
+        </h2>
         <table class="min-w-full divide-y divide-gray-200 dark:divide-base-800 text-sm">
             <thead>
                 <tr>
@@ -111,7 +132,13 @@
         {% include "includes/list_pagination_footer.html" with items_on_page=items|length %}
         {% endif %}
         {% else %}
-        <p class="px-4 py-8 text-sm text-gray-500 dark:text-base-400 italic">{% admin_trans "administration.accounting_report_empty" "Brak publikacji w wybranym zakresie dat." %}</p>
+        <p class="px-4 py-8 text-sm text-gray-500 dark:text-base-400 italic">
+            {% if report_mode == report_mode_attended %}
+            {% admin_trans "administration.accounting_report_empty_attended" "Brak pacjentów ze złożoną ankietą w wybranym zakresie dat." %}
+            {% else %}
+            {% admin_trans "administration.accounting_report_empty" "Brak publikacji w wybranym zakresie dat." %}
+            {% endif %}
+        </p>
         {% endif %}
     </div>
 </div>

@@ -20,10 +20,22 @@ Recepcja, lekarz i tablet — **403 Forbidden**.
 
 ## Zakres raportu
 
+Przełącznik **Wariant raportu** w formularzu:
+
+### v1 — opublikowane Befundy (`report_mode=published`, domyślnie)
+
 - **Pierwsza publikacja** Befundu (`version_no = 1`, status `PUBLISHED`), której **data badania** (`DailyQueue.queue_date`) mieści się w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`). **Nie** filtrujemy po dniu publikacji (`published_at`) — lekarz może opisać wynik później; wiersz i tak trafia do tygodnia wizyty.
 - **Rewizje** (kolejne wersje opublikowane po poprawce) **nie** tworzą nowej pozycji rozliczeniowej.
-- Publikacje z modułu „Zewnętrzne badanie” (`EXTERNAL_UPLOAD`) — poza tym raportem w MVP.
+- Publikacje z modułu „Zewnętrzne badanie” (`EXTERNAL_UPLOAD`) — poza tym wariantem w MVP.
 - Wiersze unieważnionych wersji (`revoked_at` ustawione) — wykluczone.
+- Kolumna **Befund-Arzt** = lekarz pierwszej publikacji (`published_by_user`).
+
+### v2 — stawili się (`report_mode=attended`)
+
+- Pacjenci z wpisem w kolejce w zakresie dat, którzy **wypełnili ankietę** (`PatientIntakeForm.form_status` w `{SUBMITTED, REOPENED}`).
+- **Bez** wpisów anulowanych (`entry_status=CANCELLED`) i **bez** no-show z importu (brak złożonej ankiety).
+- **Nie** wymaga opublikowanego Befundu — pacjent może być w raporcie zaraz po złożeniu formularza.
+- Kolumna **Befund-Arzt**: lekarz pierwszej nieunieważnionej publikacji, jeśli istnieje; inaczej `assigned_doctor` z kolejki dziennej (może być pusty).
 
 ## Podgląd w panelu
 
@@ -52,14 +64,14 @@ Kolumny płatności (Rechnungsbetrag, Überweisung, Kartenzahlung) — planowane
 
 ## Eksport i audyt
 
-Przyciski **Eksport CSV** / **Eksport XLSX** pobierają **pełny** zestaw wierszy z wybranego zakresu dat (bez paginacji). Nazwa pliku: `accounting_report_{date_from}_{date_to}.csv` lub `.xlsx`.
+Przyciski **Eksport CSV** / **Eksport XLSX** pobierają **pełny** zestaw wierszy z wybranego zakresu dat i **wariantu** (bez paginacji). Nazwa pliku: `accounting_report_{published|attended}_{date_from}_{date_to}.csv` lub `.xlsx`.
 
 Adresy eksportu:
 
 - `/admin/accounting/report/export.csv`
 - `/admin/accounting/report/export.xlsx`
 
-Każdy eksport zapisuje zdarzenie audytu `ACCOUNTING_REPORT_EXPORT` (zakres dat, format, liczba wierszy — **bez** danych pacjentów w metadanych).
+Każdy eksport zapisuje zdarzenie audytu `ACCOUNTING_REPORT_EXPORT` (zakres dat, format, `report_mode`, liczba wierszy — **bez** danych pacjentów w metadanych).
 
 ## API REST (przygotowanie)
 

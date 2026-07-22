@@ -1,27 +1,38 @@
-"""Weekly accounting report (Befund first publications)."""
+"""Weekly accounting report (Befund publications + attended visits)."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 from django.utils import timezone
 
+from apps.intake.models import IntakeStatus
 from apps.medical.models import (
     DocVersionStatus,
+    MedicalDocument,
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
+from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.display import staff_user_display_name
 
 if TYPE_CHECKING:
     from apps.reception.models import Patient
 
 ACCOUNTING_PAYMENT_COLUMNS_ENABLED = False
+
+ReportMode = Literal["published", "attended"]
+
+REPORT_MODE_PUBLISHED: ReportMode = "published"
+REPORT_MODE_ATTENDED: ReportMode = "attended"
+ACCOUNTING_REPORT_MODES: frozenset[str] = frozenset(
+    {REPORT_MODE_PUBLISHED, REPORT_MODE_ATTENDED}
+)
 
 ACCOUNTING_REPORT_EXPORT_HEADER_SPECS: tuple[tuple[str, str], ...] = (
     ("administration.accounting_col_nr", "Nr"),
@@ -73,7 +84,7 @@ class AccountingReportRow:
     email: str
     doctor_name: str
     exam_date: str
-    medical_document_id: UUID
+    medical_document_id: UUID | None
     doctor_user_id: UUID | None
 
 
@@ -90,6 +101,14 @@ class AccountingReportResult:
     doctor_counts: list[DoctorPublicationCount]
     date_from: date
     date_to: date
+    report_mode: ReportMode = REPORT_MODE_PUBLISHED
+
+
+def parse_report_mode(value: str | None) -> ReportMode:
+    raw = (value or "").strip().lower()
+    if raw == REPORT_MODE_ATTENDED:
+        return REPORT_MODE_ATTENDED
+    return REPORT_MODE_PUBLISHED
 
 
 def default_report_week_range(*, today: date | None = None) -> tuple[date, date]:
@@ -218,6 +237,51 @@ def accounting_report_versions_qs(
     return qs
 
 
+def accounting_report_attended_qs(
+    *,
+    date_from: date,
+    date_to: date,
+    scoped_clinic_site_ids: list[UUID] | None = None,
+) -> QuerySet[QueueEntry]:
+    """
+    Queue entries for patients who completed intake in the date range.
+
+    Excludes cancelled entries and no-shows (import rows without SUBMITTED/REOPENED
+    intake). Does not require a published Befund.
+    """
+    first_pub = Prefetch(
+        "medical_document__versions",
+        queryset=MedicalDocumentVersion.objects.filter(
+            version_status=DocVersionStatus.PUBLISHED,
+            version_no=1,
+            revoked_at__isnull=True,
+        ).select_related("published_by_user"),
+        to_attr="_accounting_first_publications",
+    )
+    qs = (
+        QueueEntry.objects.filter(
+            daily_queue__queue_date__gte=date_from,
+            daily_queue__queue_date__lte=date_to,
+            intake_form__form_status__in=(
+                IntakeStatus.SUBMITTED,
+                IntakeStatus.REOPENED,
+            ),
+        )
+        .exclude(entry_status=QueueEntryStatus.CANCELLED)
+        .select_related(
+            "patient",
+            "daily_queue",
+            "daily_queue__assigned_doctor",
+            "medical_document",
+        )
+        .prefetch_related(first_pub)
+        .order_by("daily_queue__queue_date", "position_no", "id")
+    )
+    if scoped_clinic_site_ids is not None:
+        qs = qs.filter(daily_queue__clinic_site_id__in=scoped_clinic_site_ids)
+    return qs
+
+
 def _row_from_version(
     version: MedicalDocumentVersion, *, row_no: int
 ) -> AccountingReportRow:
@@ -237,6 +301,48 @@ def _row_from_version(
             daily_queue.queue_date if daily_queue else None
         ),
         medical_document_id=version.medical_document_id,
+        doctor_user_id=doctor.id if doctor else None,
+    )
+
+
+def _medical_document_for_entry(entry: QueueEntry) -> MedicalDocument | None:
+    try:
+        return entry.medical_document
+    except MedicalDocument.DoesNotExist:
+        return None
+
+
+def _doctor_for_attended_entry(entry: QueueEntry):
+    medical_document = _medical_document_for_entry(entry)
+    if medical_document is not None:
+        versions = (
+            getattr(medical_document, "_accounting_first_publications", None) or []
+        )
+        if versions:
+            doctor = versions[0].published_by_user
+            if doctor is not None:
+                return doctor
+    daily_queue = entry.daily_queue
+    return daily_queue.assigned_doctor if daily_queue else None
+
+
+def _row_from_attended_entry(entry: QueueEntry, *, row_no: int) -> AccountingReportRow:
+    patient = entry.patient
+    daily_queue = entry.daily_queue
+    doctor = _doctor_for_attended_entry(entry)
+    medical_document = _medical_document_for_entry(entry)
+    return AccountingReportRow(
+        row_no=row_no,
+        first_name=(patient.first_name or "").strip(),
+        last_name=(patient.last_name or "").strip(),
+        street=format_patient_street(patient),
+        postal_city=format_patient_postal_city(patient),
+        email=(patient.email or "").strip(),
+        doctor_name=format_doctor_name(doctor),
+        exam_date=format_exam_date_display(
+            daily_queue.queue_date if daily_queue else None
+        ),
+        medical_document_id=medical_document.id if medical_document else None,
         doctor_user_id=doctor.id if doctor else None,
     )
 
@@ -268,21 +374,39 @@ def build_accounting_report(
     date_from: date,
     date_to: date,
     scoped_clinic_site_ids: list[UUID] | None = None,
+    report_mode: ReportMode | str | None = REPORT_MODE_PUBLISHED,
 ) -> AccountingReportResult:
-    versions = list(
-        accounting_report_versions_qs(
-            date_from=date_from,
-            date_to=date_to,
-            scoped_clinic_site_ids=scoped_clinic_site_ids,
-        )
+    mode = parse_report_mode(
+        report_mode if isinstance(report_mode, str) else REPORT_MODE_PUBLISHED
     )
-    rows = [
-        _row_from_version(version, row_no=index)
-        for index, version in enumerate(versions, start=1)
-    ]
+    if mode == REPORT_MODE_ATTENDED:
+        entries = list(
+            accounting_report_attended_qs(
+                date_from=date_from,
+                date_to=date_to,
+                scoped_clinic_site_ids=scoped_clinic_site_ids,
+            )
+        )
+        rows = [
+            _row_from_attended_entry(entry, row_no=index)
+            for index, entry in enumerate(entries, start=1)
+        ]
+    else:
+        versions = list(
+            accounting_report_versions_qs(
+                date_from=date_from,
+                date_to=date_to,
+                scoped_clinic_site_ids=scoped_clinic_site_ids,
+            )
+        )
+        rows = [
+            _row_from_version(version, row_no=index)
+            for index, version in enumerate(versions, start=1)
+        ]
     return AccountingReportResult(
         rows=rows,
         doctor_counts=doctor_publication_counts(rows),
         date_from=date_from,
         date_to=date_to,
+        report_mode=mode,
     )
