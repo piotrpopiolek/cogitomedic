@@ -339,6 +339,7 @@ def accounting_report_ausfall_qs(
     date_from: date,
     date_to: date,
     scoped_clinic_site_ids: list[UUID] | None = None,
+    as_of: date | None = None,
 ) -> QuerySet[QueueEntry]:
     """
     Queue entries in range that did not complete the visit path.
@@ -346,11 +347,18 @@ def accounting_report_ausfall_qs(
     = entries on the day minus attended (digital SUBMITTED/REOPENED or
     PAPER_INTAKE_COMPLETED), excluding cancelled.
     One bucket for accounting: no-show, refused exam, incomplete consents/intake.
+
+    Only days on or before ``as_of`` (default: today in ``TIME_ZONE``) — future
+    appointments in the selected week must not appear as Ausfallhonorar.
     """
+    today = as_of if as_of is not None else timezone.localdate()
+    effective_to = min(date_to, today)
+    if date_from > effective_to:
+        return QueueEntry.objects.none()
     qs = (
         QueueEntry.objects.filter(
             daily_queue__queue_date__gte=date_from,
-            daily_queue__queue_date__lte=date_to,
+            daily_queue__queue_date__lte=effective_to,
         )
         .exclude(entry_status=QueueEntryStatus.CANCELLED)
         .exclude(_accounting_attended_q())
@@ -479,6 +487,7 @@ def build_accounting_report(
     scoped_clinic_site_ids: list[UUID] | None = None,
     report_mode: ReportMode | str | None = REPORT_MODE_PUBLISHED,
     ausfallhonorar_yes: str | None = None,
+    as_of: date | None = None,
 ) -> AccountingReportResult:
     mode = parse_report_mode(report_mode)
     yes_label = (
@@ -504,6 +513,7 @@ def build_accounting_report(
                 date_from=date_from,
                 date_to=date_to,
                 scoped_clinic_site_ids=scoped_clinic_site_ids,
+                as_of=as_of,
             )
         )
         rows = [

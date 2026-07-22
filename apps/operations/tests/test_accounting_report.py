@@ -474,6 +474,7 @@ class AccountingReportServiceTests(AccountingReportBase):
 
     def test_ausfall_is_queue_minus_attended(self) -> None:
         """Submitted intake → attended only; no-show (no completed intake) → ausfall."""
+        as_of = date(2026, 3, 16)
         attended = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
@@ -483,6 +484,7 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
+            as_of=as_of,
         )
         self.assertEqual(len(attended.rows), 1)
         self.assertEqual(ausfall.rows, [])
@@ -493,6 +495,7 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
+            as_of=as_of,
         )
         self.assertEqual(len(ausfall_after.rows), 1)
         self.assertEqual(ausfall_after.rows[0].last_name, "Kowalska")
@@ -505,8 +508,47 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
             ausfallhonorar_yes="Tak",
+            as_of=as_of,
         )
         self.assertEqual(localized.rows[0].ausfallhonorar, "Tak")
+
+    def test_ausfall_excludes_future_queue_dates(self) -> None:
+        """Future WAITING appointments must not be billed as Ausfallhonorar."""
+        future_queue = DailyQueue.objects.create(
+            clinic_site=self.clinic_site,
+            consulting_room=self.consulting_room,
+            queue_date=date(2026, 3, 14),
+            status=QueueStatus.OPEN,
+            assigned_doctor=self.doctor,
+            created_by_user=self.doctor,
+        )
+        future_patient = Patient.objects.create(
+            first_name="Future",
+            last_name="Termin",
+            date_of_birth=date(1992, 4, 4),
+            phone="48500333444",
+            email="future@example.com",
+        )
+        QueueEntry.objects.create(
+            daily_queue=future_queue,
+            patient=future_patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=1,
+            created_by_user=self.doctor,
+        )
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+
+        as_of = date(2026, 3, 12)
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+            as_of=as_of,
+        )
+        names = {row.last_name for row in report.rows}
+        self.assertIn("Kowalska", names)
+        self.assertNotIn("Termin", names)
 
     def test_paper_intake_completed_in_attended_not_ausfall(self) -> None:
         """Paper path (no digital intake) counts as attended, never Ausfallhonorar."""
@@ -564,6 +606,7 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
+            as_of=date(2026, 3, 16),
         )
         self.assertEqual(report.rows, [])
 

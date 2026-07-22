@@ -1065,9 +1065,9 @@
     "pl": "Tak"
   },
   "administration.accounting_report_hint_ausfall": {
-    "de": "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen/Paper-Intake nicht abgeschlossen). Ohne Stornierte. Liste für die Forderungstabelle.",
-    "en": "Rows: patients from the daily list who did not complete the visit (no-show, refused, or questionnaire/paper intake not completed). Excludes cancelled. List for debt collection.",
-    "pl": "Wiersze: pacjenci z kolejki, którzy nie zrealizowali wizyty (nie przyszli, odmówili lub nie zakończyli ankiety/paper intake). Bez anulowanych. Lista do windykacji."
+    "de": "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen/Paper-Intake nicht abgeschlossen). Ohne Stornierte. Nur Untersuchungstage bis heute — zukünftige Termine fehlen. Liste für die Forderungstabelle.",
+    "en": "Rows: patients from the daily list who did not complete the visit (no-show, refused, or questionnaire/paper intake not completed). Excludes cancelled. Only exam days up to today — future appointments are omitted. List for debt collection.",
+    "pl": "Wiersze: pacjenci z kolejki, którzy nie zrealizowali wizyty (nie przyszli, odmówili lub nie zakończyli ankiety/paper intake). Bez anulowanych. Tylko dni badania do dziś — przyszłe terminy pominięte. Lista do windykacji."
   },
   "administration.accounting_report_empty_ausfall": {
     "de": "Keine Patienten für Ausfallhonorar im gewählten Zeitraum.",
