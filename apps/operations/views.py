@@ -6,7 +6,12 @@ from typing import Literal
 
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+)
 from django.template.response import TemplateResponse
 
 from apps.core.admin_list_page_size import changelist_page_size_context
@@ -17,6 +22,7 @@ from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
     REPORT_MODE_ATTENDED,
     REPORT_MODE_PUBLISHED,
+    ReportMode,
     build_accounting_report,
     parse_report_mode,
     resolve_accounting_report_export_headers,
@@ -59,12 +65,20 @@ def _parse_pagination(request: HttpRequest) -> tuple[int, int]:
     return page, page_size
 
 
-def _report_context(request: HttpRequest) -> dict:
+def _parse_report_mode_param(
+    request: HttpRequest,
+) -> ReportMode | HttpResponseBadRequest:
+    try:
+        return parse_report_mode(request.GET.get("report_mode"))
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
+
+
+def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
     date_from, date_to = resolve_report_date_range(
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
     )
-    report_mode = parse_report_mode(request.GET.get("report_mode"))
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
     report = build_accounting_report(
         date_from=date_from,
@@ -127,10 +141,13 @@ def _report_context(request: HttpRequest) -> dict:
 def accounting_report_dashboard_view(request: HttpRequest) -> HttpResponse:
     if not accounting_report_access_ok(request.user):
         return _accounting_report_forbidden_response(request)
+    report_mode = _parse_report_mode_param(request)
+    if isinstance(report_mode, HttpResponseBadRequest):
+        return report_mode
     return TemplateResponse(
         request,
         "admin/operations/accounting_report.html",
-        _report_context(request),
+        _report_context(request, report_mode=report_mode),
     )
 
 
@@ -141,11 +158,13 @@ def _export_filename(date_from: str, date_to: str, report_mode: str, ext: str) -
 def _build_export_response(
     request: HttpRequest, export_format: ExportFormat
 ) -> HttpResponse:
+    report_mode = _parse_report_mode_param(request)
+    if isinstance(report_mode, HttpResponseBadRequest):
+        return report_mode
     date_from, date_to = resolve_report_date_range(
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
     )
-    report_mode = parse_report_mode(request.GET.get("report_mode"))
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
     report = build_accounting_report(
         date_from=date_from,

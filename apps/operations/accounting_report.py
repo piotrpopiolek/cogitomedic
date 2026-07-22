@@ -105,10 +105,14 @@ class AccountingReportResult:
 
 
 def parse_report_mode(value: str | None) -> ReportMode:
+    """Return report mode; ``None``/blank → ``published``. Unknown values raise ``ValueError``."""
     raw = (value or "").strip().lower()
-    if raw == REPORT_MODE_ATTENDED:
-        return REPORT_MODE_ATTENDED
-    return REPORT_MODE_PUBLISHED
+    if not raw:
+        return REPORT_MODE_PUBLISHED
+    if raw in ACCOUNTING_REPORT_MODES:
+        return raw  # type: ignore[return-value]
+    allowed = ", ".join(sorted(ACCOUNTING_REPORT_MODES))
+    raise ValueError(f"Invalid report_mode. Allowed: {allowed}.")
 
 
 def default_report_week_range(*, today: date | None = None) -> tuple[date, date]:
@@ -372,9 +376,7 @@ def build_accounting_report(
     scoped_clinic_site_ids: list[UUID] | None = None,
     report_mode: ReportMode | str | None = REPORT_MODE_PUBLISHED,
 ) -> AccountingReportResult:
-    mode = parse_report_mode(
-        report_mode if isinstance(report_mode, str) else REPORT_MODE_PUBLISHED
-    )
+    mode = parse_report_mode(report_mode)
     if mode == REPORT_MODE_ATTENDED:
         entries = list(
             accounting_report_attended_qs(

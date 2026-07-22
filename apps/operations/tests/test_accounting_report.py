@@ -28,6 +28,7 @@ from apps.medical.models import (
 )
 from apps.operations.accounting_report import (
     REPORT_MODE_ATTENDED,
+    REPORT_MODE_PUBLISHED,
     AccountingReportResult,
     AccountingReportRow,
     DoctorPublicationCount,
@@ -37,6 +38,7 @@ from apps.operations.accounting_report import (
     format_patient_postal_city,
     format_patient_street,
     normalize_postal_code_display,
+    parse_report_mode,
     resolve_report_date_range,
 )
 from apps.operations.api_schemas import (
@@ -247,6 +249,17 @@ class AccountingReportBase(TestCase):
 
 
 class AccountingReportServiceTests(AccountingReportBase):
+    def test_parse_report_mode_defaults_and_rejects_unknown(self) -> None:
+        self.assertEqual(parse_report_mode(None), REPORT_MODE_PUBLISHED)
+        self.assertEqual(parse_report_mode(""), REPORT_MODE_PUBLISHED)
+        self.assertEqual(parse_report_mode("  "), REPORT_MODE_PUBLISHED)
+        self.assertEqual(parse_report_mode("published"), REPORT_MODE_PUBLISHED)
+        self.assertEqual(parse_report_mode("ATTENDED"), REPORT_MODE_ATTENDED)
+        with self.assertRaises(ValueError):
+            parse_report_mode("all")
+        with self.assertRaises(ValueError):
+            parse_report_mode("draft")
+
     def test_includes_first_publication_in_range(self) -> None:
         doc = self._make_doc()
         published_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
@@ -637,6 +650,25 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.context["items"][0].last_name, "Kowalska")
         self.assertIn("report_mode=attended", response.context["export_querystring"])
 
+    def test_invalid_report_mode_returns_400(self) -> None:
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "report_mode": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"Invalid report_mode", response.content)
+
+        export = self.client.get(
+            reverse("admin_accounting_report_export_csv"),
+            {"report_mode": "all"},
+        )
+        self.assertEqual(export.status_code, 400)
+
     def test_export_querystring_omits_page_and_keeps_dates(self) -> None:
         self.client.force_login(self.accounting_user)
         response = self.client.get(
@@ -927,6 +959,14 @@ class AccountingReportViewTests(AccountingReportBase):
     def test_query_params_rejects_invalid_date(self) -> None:
         with self.assertRaises(ValidationError):
             AccountingReportQueryParams.model_validate({"date_from": "not-a-date"})
+
+    def test_query_params_rejects_invalid_report_mode(self) -> None:
+        with self.assertRaises(ValidationError):
+            AccountingReportQueryParams.model_validate({"report_mode": "all"})
+
+    def test_query_params_accepts_attended_report_mode(self) -> None:
+        query = AccountingReportQueryParams.model_validate({"report_mode": "attended"})
+        self.assertEqual(query.report_mode, "attended")
 
     def test_query_params_rejects_extra_fields(self) -> None:
         with self.assertRaises(ValidationError):
