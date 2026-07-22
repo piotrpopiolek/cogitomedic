@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
-from django.conf import settings
 from django.db.models import QuerySet
 from django.utils import timezone
 
@@ -94,10 +92,6 @@ class AccountingReportResult:
     date_to: date
 
 
-def _local_tz() -> ZoneInfo:
-    return ZoneInfo(settings.TIME_ZONE)
-
-
 def default_report_week_range(*, today: date | None = None) -> tuple[date, date]:
     """Current calendar week Monday–Sunday in ``settings.TIME_ZONE``."""
     if today is None:
@@ -130,14 +124,6 @@ def resolve_report_date_range(
     if date_to < date_from:
         date_from, date_to = date_to, date_from
     return date_from, date_to
-
-
-def published_at_range_utc(date_from: date, date_to: date) -> tuple[datetime, datetime]:
-    """Inclusive local dates → ``[start, end)`` in UTC (legacy helper for datetime filters)."""
-    tz = _local_tz()
-    start_local = datetime.combine(date_from, time.min, tzinfo=tz)
-    end_local = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=tz)
-    return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
 def normalize_postal_code_display(code: str | None) -> str:
