@@ -37,13 +37,20 @@ Przełącznik **Wariant raportu** w formularzu:
 - **Nie** wymaga opublikowanego Befundu — pacjent może być w raporcie zaraz po złożeniu formularza.
 - Kolumna **Befund-Arzt**: lekarz pierwszej nieunieważnionej publikacji, jeśli istnieje; **bez** publikacji kolumna jest pusta (nie używamy `assigned_doctor` z kolejki).
 
+### Ausfallhonorar (`report_mode=ausfall`)
+
+- Pacjenci z wpisem w kolejce w zakresie dat, którzy **nie zrealizowali wizyty**: brak złożonej ankiety (no-show, odmowa, niepełne zgody / ankieta w toku).
+- Technicznie: kolejka w zakresie **minus** wariant „Stawili się”; **bez** `CANCELLED`.
+- Jedna kategoria do windykacji — bez podziału na przyczyny.
+- Kolumna **Ausfallhonorar** w podglądzie i eksporcie = stała wartość `Ja`. Kolumna **Befund-Arzt** pusta. Sekcja agregatu per lekarz — ukryta.
+
 ## Podgląd w panelu
 
 - Formularz **Data od** / **Data do** — opcjonalnie; bez parametrów stosowany jest bieżący tydzień.
 - Po zmianie daty w polu **Von** / **Bis** raport **odświeża się automatycznie** (bez konieczności klikania „Pokaż raport”); przycisk pozostaje jako fallback. Zmiana daty resetuje podgląd do **strony 1**; wybrany rozmiar strony (`page_size`) jest zachowany.
 - Linki **Eksport CSV** / **Eksport XLSX** zawsze wskazują bieżąco wybrane daty (aktualizowane przy zmianie pól dat).
 - Tabela wierszy z paginacją (`page`, `page_size`; domyślnie **50**, dozwolone **10 / 20 / 50 / 100**). W **ciemnym motywie** Unfold tekst tabeli, hint i stopka paginacji używają klas `dark:` (kontrast `base-100` / `base-300` na `base-900`).
-- Sekcja **Liczba publikacji per lekarz** — agregat z tego samego zestawu wierszy.
+- Sekcja **Liczba publikacji per lekarz** — agregat z tego samego zestawu wierszy (ukryta w wariancie Ausfallhonorar).
 - Brakujące dane pacjenta (np. adres, email) — pusty tekst w eksporcie i podglądzie.
 
 ## Kolumny eksportu (CSV / XLSX)
@@ -57,14 +64,15 @@ Nagłówki w eksporcie są w języku niemieckim (kanoniczne nazwy kolumn); w UI 
 | Straße | ulica (`patient.street`) |
 | PLZ/Ort | kod pocztowy + miejscowość (`postal_code` + `city`, format np. `10115 Berlin`) |
 | Email | pacjent |
-| Befund-Arzt | lekarz pierwszej publikacji (`published_by_user`) |
+| Befund-Arzt | lekarz pierwszej publikacji (`published_by_user`); pusta w Ausfallhonorar |
 | Untersuchungsdatum | data kolejki (`queue_date`), format `DD.MM.RRRR` |
+| Ausfallhonorar | tylko w wariancie `ausfall`: stała wartość `Ja` |
 
 Kolumny płatności (Rechnungsbetrag, Überweisung, Kartenzahlung) — planowane w kolejnej fazie (`ACCOUNTING_PAYMENT_COLUMNS_ENABLED = False`).
 
 ## Eksport i audyt
 
-Przyciski **Eksport CSV** / **Eksport XLSX** pobierają **pełny** zestaw wierszy z wybranego zakresu dat i **wariantu** (bez paginacji). Nazwa pliku: `accounting_report_{published|attended}_{date_from}_{date_to}.csv` lub `.xlsx`.
+Przyciski **Eksport CSV** / **Eksport XLSX** pobierają **pełny** zestaw wierszy z wybranego zakresu dat i **wariantu** (bez paginacji). Nazwa pliku: `accounting_report_{published|attended|ausfall}_{date_from}_{date_to}.csv` lub `.xlsx`.
 
 Adresy eksportu:
 

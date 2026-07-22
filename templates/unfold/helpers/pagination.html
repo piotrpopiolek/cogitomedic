@@ -10,7 +10,7 @@
     {% if page_size_options %}
     <div class="shrink-0 self-end sm:self-auto sm:ml-auto">
       {% if not page_size_label %}
-      {% admin_trans "administration.pagination_page_size" "Wierszy na stronę:" as page_size_label %}
+      {% admin_trans "administration.pagination_page_size" "Einträge pro Seite:" as page_size_label %}
       {% endif %}
       {% include "includes/list_page_size_selector.html" %}
     </div>

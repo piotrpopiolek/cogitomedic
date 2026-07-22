@@ -28,6 +28,7 @@ from apps.medical.models import (
 )
 from apps.operations.accounting_report import (
     REPORT_MODE_ATTENDED,
+    REPORT_MODE_AUSFALL,
     REPORT_MODE_PUBLISHED,
     AccountingReportResult,
     AccountingReportRow,
@@ -255,6 +256,7 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(parse_report_mode("  "), REPORT_MODE_PUBLISHED)
         self.assertEqual(parse_report_mode("published"), REPORT_MODE_PUBLISHED)
         self.assertEqual(parse_report_mode("ATTENDED"), REPORT_MODE_ATTENDED)
+        self.assertEqual(parse_report_mode("ausfall"), REPORT_MODE_AUSFALL)
         with self.assertRaises(ValueError):
             parse_report_mode("all")
         with self.assertRaises(ValueError):
@@ -424,6 +426,54 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(len(report.rows), 1)
         self.assertEqual(report.rows[0].doctor_name, "Eva Schmidt")
         self.assertEqual(report.rows[0].medical_document_id, doc.id)
+
+    def test_ausfall_is_queue_minus_attended(self) -> None:
+        """Submitted intake → attended only; no-show (no completed intake) → ausfall."""
+        attended = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        ausfall = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual(len(attended.rows), 1)
+        self.assertEqual(ausfall.rows, [])
+
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+        ausfall_after = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual(len(ausfall_after.rows), 1)
+        self.assertEqual(ausfall_after.rows[0].last_name, "Kowalska")
+        self.assertEqual(ausfall_after.rows[0].ausfallhonorar, "Ja")
+        self.assertEqual(ausfall_after.rows[0].doctor_name, "")
+        self.assertEqual(ausfall_after.report_mode, REPORT_MODE_AUSFALL)
+
+        localized = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+            ausfallhonorar_yes="Tak",
+        )
+        self.assertEqual(localized.rows[0].ausfallhonorar, "Tak")
+
+    def test_ausfall_excludes_cancelled(self) -> None:
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status"])
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual(report.rows, [])
 
     def test_doctor_counts_aggregate_documents(self) -> None:
         doc1 = self._make_doc()
@@ -650,6 +700,26 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.context["items"][0].last_name, "Kowalska")
         self.assertIn("report_mode=attended", response.context["export_querystring"])
 
+    def test_ausfall_mode_lists_incomplete_intake(self) -> None:
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "report_mode": "ausfall",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["report_mode"], "ausfall")
+        self.assertEqual(response.context["pagination"]["total"], 1)
+        self.assertEqual(response.context["items"][0].ausfallhonorar, "Ja")
+        content = response.content.decode()
+        self.assertIn("Ausfallhonorar", content)
+        self.assertIn("report_mode=ausfall", response.context["export_querystring"])
+
     def test_invalid_report_mode_returns_400(self) -> None:
         self.client.force_login(self.accounting_user)
         response = self.client.get(
@@ -661,7 +731,13 @@ class AccountingReportViewTests(AccountingReportBase):
             },
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn(b"Invalid report_mode", response.content)
+        body = response.content.decode()
+        self.assertIn("report_mode", body)
+        self.assertTrue(
+            "Invalid report_mode" in body
+            or "Ungültiger report_mode" in body
+            or "Nieprawidłowy report_mode" in body
+        )
 
         export = self.client.get(
             reverse("admin_accounting_report_export_csv"),
@@ -838,6 +914,29 @@ class AccountingReportViewTests(AccountingReportBase):
             response["Content-Disposition"],
         )
 
+    def test_export_csv_ausfall_includes_label_column(self) -> None:
+        self.intake.form_status = IntakeStatus.IN_PROGRESS
+        self.intake.save(update_fields=["form_status"])
+        self.client.force_login(self.accounting_user)
+        response = self.client.get(
+            reverse("admin_accounting_report_export_csv"),
+            {
+                "date_from": "2026-03-10",
+                "date_to": "2026-03-16",
+                "report_mode": "ausfall",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8-sig")
+        self.assertIn("Ausfallhonorar", body.splitlines()[0])
+        self.assertTrue(any(line.endswith(",Ja") for line in body.splitlines()[1:]))
+        self.assertIn("accounting_report_ausfall_", response["Content-Disposition"])
+        ev = AuditEvent.objects.filter(event_type="ACCOUNTING_REPORT_EXPORT").first()
+        self.assertIsNotNone(ev)
+        assert ev is not None
+        self.assertEqual(ev.metadata.get("report_mode"), "ausfall")
+        self.assertEqual(ev.metadata.get("row_count"), 1)
+
     def test_export_xlsx_writes_audit_event(self) -> None:
         doc = self._make_doc()
         self._make_published_version(
@@ -967,6 +1066,10 @@ class AccountingReportViewTests(AccountingReportBase):
     def test_query_params_accepts_attended_report_mode(self) -> None:
         query = AccountingReportQueryParams.model_validate({"report_mode": "attended"})
         self.assertEqual(query.report_mode, "attended")
+
+    def test_query_params_accepts_ausfall_report_mode(self) -> None:
+        query = AccountingReportQueryParams.model_validate({"report_mode": "ausfall"})
+        self.assertEqual(query.report_mode, "ausfall")
 
     def test_query_params_rejects_extra_fields(self) -> None:
         with self.assertRaises(ValidationError):

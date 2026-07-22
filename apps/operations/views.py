@@ -17,14 +17,20 @@ from django.template.response import TemplateResponse
 from apps.core.admin_list_page_size import changelist_page_size_context
 from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
 from apps.core.list_pagination import parse_page_size
-from apps.core.translation_service import get_admin_translation, resolve_other_message
+from apps.core.translation_service import (
+    format_administration_message,
+    get_admin_translation,
+)
 from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
+    ACCOUNTING_REPORT_MODES,
     REPORT_MODE_ATTENDED,
+    REPORT_MODE_AUSFALL,
     REPORT_MODE_PUBLISHED,
     ReportMode,
     build_accounting_report,
     parse_report_mode,
+    resolve_accounting_ausfallhonorar_yes,
     resolve_accounting_report_export_headers,
     resolve_accounting_report_export_sheet_title,
     resolve_report_date_range,
@@ -47,10 +53,10 @@ def _accounting_report_forbidden_response(
     request: HttpRequest,
 ) -> HttpResponseForbidden:
     return HttpResponseForbidden(
-        resolve_other_message(
+        get_admin_translation(
             request,
             "administration.accounting_access_forbidden",
-            "You do not have permission to access the accounting report.",
+            "Keine Berechtigung für den Buchhaltungsbericht.",
         )
     )
 
@@ -70,8 +76,16 @@ def _parse_report_mode_param(
 ) -> ReportMode | HttpResponseBadRequest:
     try:
         return parse_report_mode(request.GET.get("report_mode"))
-    except ValueError as exc:
-        return HttpResponseBadRequest(str(exc))
+    except ValueError:
+        allowed = ", ".join(sorted(ACCOUNTING_REPORT_MODES))
+        return HttpResponseBadRequest(
+            format_administration_message(
+                "administration.accounting_report_mode_invalid",
+                "Ungültiger report_mode. Erlaubt: {allowed}.",
+                request,
+                allowed=allowed,
+            )
+        )
 
 
 def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
@@ -85,6 +99,7 @@ def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
         date_to=date_to,
         scoped_clinic_site_ids=scoped_clinic_site_ids,
         report_mode=report_mode,
+        ausfallhonorar_yes=resolve_accounting_ausfallhonorar_yes(request),
     )
     page, page_size = _parse_pagination(request)
     total = len(report.rows)
@@ -115,13 +130,14 @@ def _report_context(request: HttpRequest, *, report_mode: ReportMode) -> dict:
         "title": get_admin_translation(
             request,
             "administration.accounting_report_title",
-            "Accounting report",
+            "Buchhaltungsbericht",
         ),
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "report_mode": report_mode,
         "report_mode_published": REPORT_MODE_PUBLISHED,
         "report_mode_attended": REPORT_MODE_ATTENDED,
+        "report_mode_ausfall": REPORT_MODE_AUSFALL,
         "doctor_counts": report.doctor_counts,
         "items": page_rows,
         "pagination": {
@@ -171,6 +187,7 @@ def _build_export_response(
         date_to=date_to,
         scoped_clinic_site_ids=scoped_clinic_site_ids,
         report_mode=report_mode,
+        ausfallhonorar_yes=resolve_accounting_ausfallhonorar_yes(request),
     )
     create_audit_event(
         event_type="ACCOUNTING_REPORT_EXPORT",
@@ -183,14 +200,20 @@ def _build_export_response(
             "report_mode": report_mode,
         },
     )
-    headers = resolve_accounting_report_export_headers(request)
+    headers = resolve_accounting_report_export_headers(request, report_mode=report_mode)
+    include_ausfall = report_mode == REPORT_MODE_AUSFALL
     if export_format == "csv":
-        body = render_accounting_report_csv(report.rows, headers=headers)
+        body = render_accounting_report_csv(
+            report.rows,
+            headers=headers,
+            include_ausfallhonorar=include_ausfall,
+        )
     else:
         body = render_accounting_report_xlsx(
             report.rows,
             headers=headers,
             sheet_title=resolve_accounting_report_export_sheet_title(request),
+            include_ausfallhonorar=include_ausfall,
         )
     response = HttpResponse(body, content_type=_EXPORT_CONTENT_TYPES[export_format])
     response["Content-Disposition"] = (

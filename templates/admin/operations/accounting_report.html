@@ -26,62 +26,67 @@
         data-auto-submit-debounce-ms="300"
     >
         <div>
-            <label for="report_mode" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_report_mode" "Wariant raportu" %}</label>
+            <label for="report_mode" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_report_mode" "Berichtsvariante" %}</label>
             <select id="report_mode" name="report_mode" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
                 <option value="{{ report_mode_published }}" {% if report_mode == report_mode_published %}selected{% endif %}>
-                    {% admin_trans "administration.accounting_report_mode_published" "Opublikowane Befundy" %}
+                    {% admin_trans "administration.accounting_report_mode_published" "Veröffentlichte Befunde" %}
                 </option>
                 <option value="{{ report_mode_attended }}" {% if report_mode == report_mode_attended %}selected{% endif %}>
-                    {% admin_trans "administration.accounting_report_mode_attended" "Stawili się" %}
+                    {% admin_trans "administration.accounting_report_mode_attended" "Erschienen" %}
+                </option>
+                <option value="{{ report_mode_ausfall }}" {% if report_mode == report_mode_ausfall %}selected{% endif %}>
+                    {% admin_trans "administration.accounting_report_mode_ausfall" "Ausfallhonorar" %}
                 </option>
             </select>
         </div>
         <div>
-            <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_date_from" "Od" %}</label>
+            <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_date_from" "Von" %}</label>
             <input type="date" id="date_from" name="date_from" value="{{ date_from }}" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
         </div>
         <div>
-            <label for="date_to" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_date_to" "Do" %}</label>
+            <label for="date_to" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_date_to" "Bis" %}</label>
             <input type="date" id="date_to" name="date_to" value="{{ date_to }}" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
         </div>
         {% if pagination.page_size %}
         <input type="hidden" name="page_size" value="{{ pagination.page_size }}">
         {% endif %}
         <button type="submit" class="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600">
-            {% admin_trans "administration.accounting_apply_range" "Pokaż raport" %}
+            {% admin_trans "administration.accounting_apply_range" "Bericht anzeigen" %}
         </button>
         <a href="{% url 'admin_accounting_report_export_csv' %}{{ export_querystring }}" data-export-csv class="inline-flex items-center rounded-md border border-gray-300 dark:border-base-700 bg-white dark:bg-base-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-base-200 hover:bg-gray-50 dark:hover:bg-base-800">
-            {% admin_trans "administration.accounting_export_csv" "Eksport CSV" %}
+            {% admin_trans "administration.accounting_export_csv" "CSV exportieren" %}
         </a>
         <a href="{% url 'admin_accounting_report_export_xlsx' %}{{ export_querystring }}" data-export-xlsx class="inline-flex items-center rounded-md border border-gray-300 dark:border-base-700 bg-white dark:bg-base-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-base-200 hover:bg-gray-50 dark:hover:bg-base-800">
-            {% admin_trans "administration.accounting_export_xlsx" "Eksport XLSX" %}
+            {% admin_trans "administration.accounting_export_xlsx" "XLSX exportieren" %}
         </a>
     </form>
 
     <p class="text-sm text-gray-600 dark:text-base-300 mb-6">
         {% if report_mode == report_mode_attended %}
-        {% admin_trans "administration.accounting_report_hint_attended" "Wiersze: pacjenci z wypełnioną ankietą wg daty badania; bez anulowanych wpisów i bez no-show z importu. Befund nie jest wymagany." %}
+        {% admin_trans "administration.accounting_report_hint_attended" "Zeilen: Patienten mit ausgefülltem Fragebogen nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich." %}
+        {% elif report_mode == report_mode_ausfall %}
+        {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen nicht ausgefüllt). Ohne Stornierte. Liste für die Forderungstabelle." %}
         {% else %}
-        {% admin_trans "administration.accounting_report_hint" "Wiersze: pierwsza publikacja Befundu wg daty badania. Rewizje nie tworzą nowej pozycji." %}
+        {% admin_trans "administration.accounting_report_hint" "Zeilen: erste Befund-Veröffentlichung nach Untersuchungsdatum. Revisionen erzeugen keine neue Position." %}
         {% endif %}
         <span class="font-medium text-gray-900 dark:text-base-100">{{ report_total_rows }}</span>
-        {% admin_trans "administration.accounting_report_rows_total" "wierszy w zakresie." %}
+        {% admin_trans "administration.accounting_report_rows_total" "Zeilen im Zeitraum." %}
     </p>
 
-    {% if doctor_counts %}
+    {% if doctor_counts and report_mode != report_mode_ausfall %}
     <div class="mb-8 bg-white dark:bg-base-900 rounded-md shadow border border-gray-200 dark:border-base-800 p-6">
         <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-base-100">
             {% if report_mode == report_mode_attended %}
-            {% admin_trans "administration.accounting_doctor_counts_attended" "Wiersze per lekarz" %}
+            {% admin_trans "administration.accounting_doctor_counts_attended" "Zeilen pro Arzt" %}
             {% else %}
-            {% admin_trans "administration.accounting_doctor_counts" "Publikacje per lekarz" %}
+            {% admin_trans "administration.accounting_doctor_counts" "Veröffentlichungen pro Arzt" %}
             {% endif %}
         </h2>
         <table class="min-w-full divide-y divide-gray-200 dark:divide-base-800 text-sm">
             <thead>
                 <tr>
-                    <th class="px-4 py-2 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_doctor" "Lekarz" %}</th>
-                    <th class="px-4 py-2 text-right font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_count" "Liczba" %}</th>
+                    <th class="px-4 py-2 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_doctor" "Arzt" %}</th>
+                    <th class="px-4 py-2 text-right font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_count" "Anzahl" %}</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-base-800">
@@ -107,9 +112,12 @@
                         <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_last_name" "Nachname" %}</th>
                         <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_street" "Straße" %}</th>
                         <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_postal_city" "PLZ/Ort" %}</th>
-                        <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_email" "Email" %}</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_email" "E-Mail" %}</th>
                         <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_befund_doctor" "Befund-Arzt" %}</th>
                         <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_exam_date" "Untersuchungsdatum" %}</th>
+                        {% if report_mode == report_mode_ausfall %}
+                        <th class="px-4 py-3 text-left font-medium text-gray-500 dark:text-base-300">{% admin_trans "administration.accounting_col_ausfallhonorar" "Ausfallhonorar" %}</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-base-800">
@@ -123,6 +131,9 @@
                         <td class="px-4 py-3 text-gray-900 dark:text-base-100">{{ row.email }}</td>
                         <td class="px-4 py-3 text-gray-900 dark:text-base-100">{{ row.doctor_name }}</td>
                         <td class="px-4 py-3 text-gray-900 dark:text-base-100">{{ row.exam_date }}</td>
+                        {% if report_mode == report_mode_ausfall %}
+                        <td class="px-4 py-3 text-gray-900 dark:text-base-100">{{ row.ausfallhonorar }}</td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -134,9 +145,11 @@
         {% else %}
         <p class="px-4 py-8 text-sm text-gray-500 dark:text-base-400 italic">
             {% if report_mode == report_mode_attended %}
-            {% admin_trans "administration.accounting_report_empty_attended" "Brak pacjentów ze złożoną ankietą w wybranym zakresie dat." %}
+            {% admin_trans "administration.accounting_report_empty_attended" "Keine Patienten mit ausgefülltem Fragebogen im gewählten Zeitraum." %}
+            {% elif report_mode == report_mode_ausfall %}
+            {% admin_trans "administration.accounting_report_empty_ausfall" "Keine Patienten für Ausfallhonorar im gewählten Zeitraum." %}
             {% else %}
-            {% admin_trans "administration.accounting_report_empty" "Brak publikacji w wybranym zakresie dat." %}
+            {% admin_trans "administration.accounting_report_empty" "Keine Veröffentlichungen im gewählten Datumsbereich." %}
             {% endif %}
         </p>
         {% endif %}

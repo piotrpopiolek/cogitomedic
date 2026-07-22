@@ -109,6 +109,7 @@ class AccountingReportRowResponse(BaseModel):
     exam_date: str
     medical_document_id: UUID | None = None
     doctor_user_id: UUID | None = None
+    ausfallhonorar: str = ""
 
 
 class DoctorPublicationCountResponse(BaseModel):
