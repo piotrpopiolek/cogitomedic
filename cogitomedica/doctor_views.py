@@ -67,6 +67,76 @@ from apps.core.translation_service import (
 logger = logging.getLogger(__name__)
 
 
+def _external_pdf_gate_for_doctor_detail(
+    *,
+    doc: MedicalDocument,
+    patient: Patient,
+    ui: dict[str, Any],
+) -> GateResult:
+    """
+    Resolve HiDrive lab-PDF gate for the doctor document detail page.
+
+    - ``EXTERNAL_UPLOAD`` / published without revision: skip listing and sync.
+    - ``DRAFT`` (intake path): hard gate — failure blocks the page (HTTP 424).
+    - ``PUBLISHED`` with ``has_pending_revision``: soft rescan — when files match,
+      sync ``MATCHED`` attachments so a renamed PDF after mistaken reject is
+      available for v2; never block the page (historical ``ACCEPTED`` may still
+      republish). Empty match must not call sync (would prune remaining MATCHED).
+    """
+    if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        return GateResult(
+            passed=True,
+            matched_files=(),
+            error_message=None,
+            skip_attachment_sync=True,
+        )
+
+    if doc.status == MedicalDocStatus.DRAFT:
+        return check_external_pdf_gate(
+            patient,
+            error_no_file=ui["external_pdf_gate_no_file"],
+            error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
+            error_ambiguous=ui["external_pdf_gate_ambiguous"],
+            error_hidrive=ui["external_pdf_gate_hidrive_error"],
+        )
+
+    if doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision:
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file=ui["external_pdf_gate_no_file"],
+            error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
+            error_ambiguous=ui["external_pdf_gate_ambiguous"],
+            error_hidrive=ui["external_pdf_gate_hidrive_error"],
+        )
+        if gate.skip_attachment_sync:
+            return GateResult(
+                passed=True,
+                matched_files=(),
+                error_message=gate.error_message,
+                skip_attachment_sync=True,
+            )
+        if gate.passed and gate.matched_files:
+            return GateResult(
+                passed=True,
+                matched_files=gate.matched_files,
+                error_message=None,
+                skip_attachment_sync=False,
+            )
+        return GateResult(
+            passed=True,
+            matched_files=(),
+            error_message=None,
+            skip_attachment_sync=True,
+        )
+
+    return GateResult(
+        passed=True,
+        matched_files=(),
+        error_message=None,
+        skip_attachment_sync=True,
+    )
+
+
 def _render_doctor(
     request: HttpRequest,
     template_name: str,
@@ -705,21 +775,7 @@ def doctor_document_detail_view(
         if patient is None:
             raise ObjectDoesNotExist()
         external_readonly = doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
-        if doc.status == MedicalDocStatus.PUBLISHED or external_readonly:
-            gate = GateResult(
-                passed=True,
-                matched_files=(),
-                error_message=None,
-                skip_attachment_sync=True,
-            )
-        else:
-            gate = check_external_pdf_gate(
-                patient,
-                error_no_file=ui["external_pdf_gate_no_file"],
-                error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
-                error_ambiguous=ui["external_pdf_gate_ambiguous"],
-                error_hidrive=ui["external_pdf_gate_hidrive_error"],
-            )
+        gate = _external_pdf_gate_for_doctor_detail(doc=doc, patient=patient, ui=ui)
         if not gate.passed:
             # 424: zależność zewnętrzna (HiDrive / PDF w folderze). Odróżnia od 422 przy
             # DomainError (np. brak snapshotu audytu papieru) — ten sam widok, inna przyczyna.

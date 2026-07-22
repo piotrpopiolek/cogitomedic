@@ -73,6 +73,7 @@ Jeśli w bazie jest więcej niż jeden pacjent pasujący do **krótkiej** nazwy 
 
 - Po odrzuceniu pliku w panelu lekarza nazwa na HiDrive dostaje przedrostek **`rejected_`** (np. `rejected_Kowalski_Jan.pdf`).
 - Takie pliki są ignorowane przy dopasowaniu — recepcja widzi, że nazwa lub treść wymaga korekty.
+- Po usunięciu prefixu `rejected_` (lub wgraniu nowego PDF pod poprawną nazwą): przy **szkicu** otwórz kartę ponownie; przy **opublikowanym** dokumencie uruchom rewizję i otwórz kartę ponownie — system wtedy ponownie skanuje `/incoming/` i podpina plik jako `MATCHED`.
 
 ## Uwagi
 

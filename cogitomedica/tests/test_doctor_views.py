@@ -18,7 +18,7 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxStatus
-from apps.medical.external_pdf_service import GateResult
+from apps.medical.external_pdf_service import GateResult, MatchedIncomingFile
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -1301,6 +1301,85 @@ class DoctorDetailHappyPathTests(TestCase):
         resp = self.client.get(f"/doctor/{self.doc.id}/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("HiDrive folder read failed (test).", resp.content.decode())
+
+    def _publish_doc_for_detail(self, *, has_pending_revision: bool = False) -> None:
+        now = timezone.now()
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+            pdf_local_path="/media/befund/rescan-test.pdf",
+            publish_request_id=uuid4(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor,
+        )
+        MedicalDocument.objects.filter(pk=self.doc.pk).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=has_pending_revision,
+            last_published_at=now,
+        )
+        self.doc.refresh_from_db()
+
+    @patch("cogitomedica.doctor_views.create_attachment_records")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_published_without_revision_skips_hidrive_rescan(
+        self, mock_gate: MagicMock, mock_sync: MagicMock
+    ) -> None:
+        self._publish_doc_for_detail(has_pending_revision=False)
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        mock_gate.assert_not_called()
+        mock_sync.assert_not_called()
+
+    @patch("cogitomedica.doctor_views.create_attachment_records")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_pending_revision_rescans_and_syncs_matched_pdf(
+        self, mock_gate: MagicMock, mock_sync: MagicMock
+    ) -> None:
+        self._publish_doc_for_detail(has_pending_revision=True)
+        matched = MatchedIncomingFile(
+            name="Cohen_Yaakov_CMBER2026FR272_20260721023036.pdf",
+            path="/incoming/Cohen_Yaakov_CMBER2026FR272_20260721023036.pdf",
+        )
+        mock_gate.return_value = GateResult(
+            True,
+            (matched,),
+            None,
+            skip_attachment_sync=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        mock_gate.assert_called_once()
+        mock_sync.assert_called_once()
+        synced_doc, synced_files = mock_sync.call_args[0]
+        self.assertEqual(synced_doc.id, self.doc.id)
+        self.assertEqual(synced_files, (matched,))
+
+    @patch("cogitomedica.doctor_views.create_attachment_records")
+    @patch("cogitomedica.doctor_views.check_external_pdf_gate")
+    def test_pending_revision_gate_miss_does_not_block_or_prune(
+        self, mock_gate: MagicMock, mock_sync: MagicMock
+    ) -> None:
+        self._publish_doc_for_detail(has_pending_revision=True)
+        mock_gate.return_value = GateResult(
+            False,
+            (),
+            "No matching PDF",
+            skip_attachment_sync=False,
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        mock_gate.assert_called_once()
+        mock_sync.assert_not_called()
 
     def test_detail_panel_includes_body_map_image_url_and_stored_points(self):
         self.client.force_login(self.doctor)
