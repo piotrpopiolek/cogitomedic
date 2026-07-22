@@ -14,6 +14,7 @@ Wynik: docs/manual/_build/Cogitomedica-Instrukcje.pdf (tymczasowe pliki w _build
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -24,7 +25,7 @@ MANUAL = ROOT / "docs" / "manual"
 BUILD = MANUAL / "_build"
 
 # Kolejność rozdziałów (bez screenshot-checklist — lista techniczna).
-# Po §04-administrator wstawione: procedura papieru + diagram, potem pacjent.
+# Po §04-administrator: procedura papieru + diagram; na końcu FAQ (scenariusze).
 CHAPTERS: tuple[str, ...] = (
     "00-przeglad.md",
     "01-rejestracja.md",
@@ -37,6 +38,7 @@ CHAPTERS: tuple[str, ...] = (
     "07-wgranie-zewnetrznego-badania.md",
     "08-ksiegowosc-raport.md",
     "05-pacjent-wyniki.md",
+    "scenariusze.md",
 )
 
 # Ścieżki obrazów w MD są pod edytor (od root repo: /docs/manual/...).
@@ -46,6 +48,35 @@ IMG_PREFIX_PANDOC = "](docs/manual/assets/screenshots/"
 
 PAGE_BREAK = "\n\n```{=latex}\n\\newpage\n```\n\n"
 
+# Znaki spoza Latin Modern (domyślna czcionka xelatex) — zamiana ASCII.
+_UNICODE_SAFE = str.maketrans(
+    {
+        "\u2032": "'",  # ′ (prime, np. T1′)
+        "\u2264": "<=",  # ≤
+        "\u2265": ">=",  # ≥
+        "\u2260": "!=",  # ≠
+    }
+)
+
+# Kotwice HTML ze scenariuszy → atrybuty Pandoc przy nagłówku (działające linki PDF).
+_ANCHOR_BEFORE_HEADING = re.compile(
+    r'<a\s+id="([^"]+)"\s*></a>\s*\n(#{2,6}\s+[^\n]+)',
+    re.MULTILINE,
+)
+
+
+def _prepare_chapter(text: str) -> str:
+    text = text.replace(IMG_PREFIX_REPO, IMG_PREFIX_PANDOC)
+    text = text.translate(_UNICODE_SAFE)
+
+    def _attach_anchor(match: re.Match[str]) -> str:
+        anchor, heading = match.group(1), match.group(2)
+        if "{#" in heading:
+            return f"{heading}\n"
+        return f"{heading} {{#{anchor}}}\n"
+
+    return _ANCHOR_BEFORE_HEADING.sub(_attach_anchor, text)
+
 
 def _merge_chapters() -> str:
     parts: list[str] = []
@@ -53,8 +84,7 @@ def _merge_chapters() -> str:
         path = MANUAL / name
         if not path.is_file():
             raise FileNotFoundError(f"Brak pliku: {path}")
-        text = path.read_text(encoding="utf-8")
-        text = text.replace(IMG_PREFIX_REPO, IMG_PREFIX_PANDOC)
+        text = _prepare_chapter(path.read_text(encoding="utf-8"))
         parts.append(text.rstrip())
     return PAGE_BREAK.join(parts)
 
