@@ -1024,6 +1024,36 @@
     "en": "Rows: first Befund publication by examination date. Revisions do not create a new line item.",
     "pl": "Wiersze: pierwsza publikacja Befundu wg daty badania. Rewizje nie tworzą nowej pozycji."
   },
+  "administration.accounting_report_hint_attended": {
+    "de": "Zeilen: Patienten mit ausgefülltem Fragebogen nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich.",
+    "en": "Rows: patients with a completed questionnaire by examination date; excludes cancelled entries and import no-shows. Befund not required.",
+    "pl": "Wiersze: pacjenci z wypełnioną ankietą wg daty badania; bez anulowanych wpisów i bez no-show z importu. Befund nie jest wymagany."
+  },
+  "administration.accounting_report_mode": {
+    "de": "Berichtsvariante",
+    "en": "Report variant",
+    "pl": "Wariant raportu"
+  },
+  "administration.accounting_report_mode_published": {
+    "de": "v1 — veröffentlichte Befunde",
+    "en": "v1 — published Befunds",
+    "pl": "v1 — opublikowane Befundy"
+  },
+  "administration.accounting_report_mode_attended": {
+    "de": "v2 — erschienen",
+    "en": "v2 — attended",
+    "pl": "v2 — stawili się"
+  },
+  "administration.accounting_doctor_counts_attended": {
+    "de": "Zeilen pro Arzt",
+    "en": "Rows per doctor",
+    "pl": "Wiersze per lekarz"
+  },
+  "administration.accounting_report_empty_attended": {
+    "de": "Keine Patienten mit ausgefülltem Fragebogen im gewählten Zeitraum.",
+    "en": "No patients with completed intake in the selected date range.",
+    "pl": "Brak pacjentów ze złożoną ankietą w wybranym zakresie dat."
+  },
   "administration.accounting_report_rows_total": {
     "de": "Zeilen im Zeitraum.",
     "en": "rows in range.",

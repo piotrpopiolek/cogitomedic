@@ -6,6 +6,7 @@
 
   const dateFrom = form.querySelector("#date_from");
   const dateTo = form.querySelector("#date_to");
+  const reportMode = form.querySelector("#report_mode");
   const csvLink = form.querySelector("[data-export-csv]");
   const xlsxLink = form.querySelector("[data-export-xlsx]");
   const csvBase = form.dataset.exportCsvUrl || "";
@@ -17,6 +18,9 @@
 
   function buildQueryString() {
     const params = new URLSearchParams();
+    if (reportMode && reportMode.value) {
+      params.set("report_mode", reportMode.value);
+    }
     if (dateFrom && dateFrom.value) {
       params.set("date_from", dateFrom.value);
     }
@@ -57,6 +61,9 @@
   }
   if (dateTo) {
     dateTo.addEventListener("change", scheduleAutoSubmit);
+  }
+  if (reportMode) {
+    reportMode.addEventListener("change", scheduleAutoSubmit);
   }
 
   updateExportLinks();

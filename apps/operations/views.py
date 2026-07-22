@@ -15,7 +15,10 @@ from apps.core.list_pagination import parse_page_size
 from apps.core.translation_service import get_admin_translation, resolve_other_message
 from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
+    REPORT_MODE_ATTENDED,
+    REPORT_MODE_PUBLISHED,
     build_accounting_report,
+    parse_report_mode,
     resolve_accounting_report_export_headers,
     resolve_accounting_report_export_sheet_title,
     resolve_report_date_range,
@@ -61,11 +64,13 @@ def _report_context(request: HttpRequest) -> dict:
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
     )
+    report_mode = parse_report_mode(request.GET.get("report_mode"))
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
     report = build_accounting_report(
         date_from=date_from,
         date_to=date_to,
         scoped_clinic_site_ids=scoped_clinic_site_ids,
+        report_mode=report_mode,
     )
     page, page_size = _parse_pagination(request)
     total = len(report.rows)
@@ -84,6 +89,7 @@ def _report_context(request: HttpRequest) -> dict:
         q = get_copy.copy()
         q.pop("page", None)
         q.pop("page_size", None)
+        q["report_mode"] = report_mode
         encoded = q.urlencode()
         return f"?{encoded}" if encoded else ""
 
@@ -99,6 +105,9 @@ def _report_context(request: HttpRequest) -> dict:
         ),
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
+        "report_mode": report_mode,
+        "report_mode_published": REPORT_MODE_PUBLISHED,
+        "report_mode_attended": REPORT_MODE_ATTENDED,
         "doctor_counts": report.doctor_counts,
         "items": page_rows,
         "pagination": {
@@ -125,8 +134,8 @@ def accounting_report_dashboard_view(request: HttpRequest) -> HttpResponse:
     )
 
 
-def _export_filename(date_from: str, date_to: str, ext: str) -> str:
-    return f"accounting_report_{date_from}_{date_to}.{ext}"
+def _export_filename(date_from: str, date_to: str, report_mode: str, ext: str) -> str:
+    return f"accounting_report_{report_mode}_{date_from}_{date_to}.{ext}"
 
 
 def _build_export_response(
@@ -136,11 +145,13 @@ def _build_export_response(
         date_from_raw=request.GET.get("date_from"),
         date_to_raw=request.GET.get("date_to"),
     )
+    report_mode = parse_report_mode(request.GET.get("report_mode"))
     scoped_clinic_site_ids = get_scoped_clinic_site_ids(request.user)
     report = build_accounting_report(
         date_from=date_from,
         date_to=date_to,
         scoped_clinic_site_ids=scoped_clinic_site_ids,
+        report_mode=report_mode,
     )
     create_audit_event(
         event_type="ACCOUNTING_REPORT_EXPORT",
@@ -150,6 +161,7 @@ def _build_export_response(
             "date_to": date_to.isoformat(),
             "format": export_format,
             "row_count": len(report.rows),
+            "report_mode": report_mode,
         },
     )
     headers = resolve_accounting_report_export_headers(request)
@@ -163,7 +175,8 @@ def _build_export_response(
         )
     response = HttpResponse(body, content_type=_EXPORT_CONTENT_TYPES[export_format])
     response["Content-Disposition"] = (
-        f'attachment; filename="{_export_filename(date_from.isoformat(), date_to.isoformat(), export_format)}"'
+        'attachment; filename="'
+        f'{_export_filename(date_from.isoformat(), date_to.isoformat(), report_mode, export_format)}"'
     )
     return response
 

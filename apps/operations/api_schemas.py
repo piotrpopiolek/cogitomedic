@@ -12,6 +12,7 @@ from apps.operations.accounting_report import (
     AccountingReportResult,
     AccountingReportRow,
     DoctorPublicationCount,
+    parse_report_mode,
     resolve_report_date_range,
 )
 
@@ -21,6 +22,7 @@ class AccountingReportQueryParams(OffsetPaginationQueryParams):
 
     date_from: date | None = None
     date_to: date | None = None
+    report_mode: str | None = None
 
     @field_validator("date_from", "date_to", mode="before")
     @classmethod
@@ -33,6 +35,13 @@ class AccountingReportQueryParams(OffsetPaginationQueryParams):
             return date.fromisoformat(value.strip()[:10])
         except ValueError as exc:
             raise ValueError("Invalid date format. Use YYYY-MM-DD.") from exc
+
+    @field_validator("report_mode", mode="before")
+    @classmethod
+    def normalize_report_mode(cls, value: object) -> str:
+        if value is None:
+            return parse_report_mode(None)
+        return parse_report_mode(str(value))
 
     def resolved_date_range(self) -> tuple[date, date]:
         return resolve_report_date_range(
@@ -98,7 +107,7 @@ class AccountingReportRowResponse(BaseModel):
     email: str
     doctor_name: str
     exam_date: str
-    medical_document_id: UUID
+    medical_document_id: UUID | None = None
     doctor_user_id: UUID | None = None
 
 
@@ -125,6 +134,7 @@ class AccountingReportResponse(BaseModel):
 
     date_from: date
     date_to: date
+    report_mode: str
     doctor_counts: list[DoctorPublicationCountResponse]
     items: list[AccountingReportRowResponse]
     pagination: AccountingReportPagination
@@ -154,6 +164,7 @@ def build_accounting_report_response(
     return AccountingReportResponse(
         date_from=report.date_from,
         date_to=report.date_to,
+        report_mode=report.report_mode,
         doctor_counts=[
             _doctor_count_to_response(item) for item in report.doctor_counts
         ],
