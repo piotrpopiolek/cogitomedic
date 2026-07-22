@@ -44,6 +44,7 @@ Przełącznik **Wariant raportu** w formularzu:
 
 - Pacjenci z wpisem w kolejce w zakresie dat, którzy **nie zrealizowali wizyty**: brak złożonej ankiety i brak `PAPER_INTAKE_COMPLETED` (no-show, odmowa, niepełne zgody / ankieta w toku).
 - Technicznie: kolejka w zakresie **minus** wariant „Stawili się”; **bez** `CANCELLED`.
+- **Tylko dni ≤ dziś** (`queue_date <= today` w `TIME_ZONE`) — przyszłe terminy w wybranym tygodniu **nie** wchodzą na listę windykacyjną.
 - Jedna kategoria do windykacji — bez podziału na przyczyny.
 - Kolumna **Ausfallhonorar** w podglądzie i eksporcie = stała wartość `Ja`. Kolumna **Befund-Arzt** pusta. Sekcja agregatu per lekarz — ukryta.
 
