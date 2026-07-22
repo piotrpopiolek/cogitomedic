@@ -271,7 +271,6 @@ def accounting_report_attended_qs(
         .select_related(
             "patient",
             "daily_queue",
-            "daily_queue__assigned_doctor",
             "medical_document",
         )
         .prefetch_related(first_pub)
@@ -313,17 +312,14 @@ def _medical_document_for_entry(entry: QueueEntry) -> MedicalDocument | None:
 
 
 def _doctor_for_attended_entry(entry: QueueEntry):
+    """Befund author only — no DailyQueue.assigned_doctor fallback without a publication."""
     medical_document = _medical_document_for_entry(entry)
-    if medical_document is not None:
-        versions = (
-            getattr(medical_document, "_accounting_first_publications", None) or []
-        )
-        if versions:
-            doctor = versions[0].published_by_user
-            if doctor is not None:
-                return doctor
-    daily_queue = entry.daily_queue
-    return daily_queue.assigned_doctor if daily_queue else None
+    if medical_document is None:
+        return None
+    versions = getattr(medical_document, "_accounting_first_publications", None) or []
+    if not versions:
+        return None
+    return versions[0].published_by_user
 
 
 def _row_from_attended_entry(entry: QueueEntry, *, row_no: int) -> AccountingReportRow:

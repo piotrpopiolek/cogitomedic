@@ -371,7 +371,8 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(report.rows[0].first_name, "Anna")
         self.assertEqual(report.rows[0].exam_date, "10.03.2026")
         self.assertIsNone(report.rows[0].medical_document_id)
-        self.assertEqual(report.rows[0].doctor_name, "Hans Müller")
+        self.assertEqual(report.rows[0].doctor_name, "")
+        self.assertIsNone(report.rows[0].doctor_user_id)
         self.assertEqual(report.report_mode, REPORT_MODE_ATTENDED)
 
     def test_attended_excludes_in_progress_and_cancelled(self) -> None:
