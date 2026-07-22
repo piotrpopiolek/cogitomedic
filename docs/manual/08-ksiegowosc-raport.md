@@ -22,7 +22,7 @@ Recepcja, lekarz i tablet — **403 Forbidden**.
 
 Przełącznik **Wariant raportu** w formularzu:
 
-### v1 — opublikowane Befundy (`report_mode=published`, domyślnie)
+### Opublikowane Befundy (`report_mode=published`, domyślnie)
 
 - **Pierwsza publikacja** Befundu (`version_no = 1`, status `PUBLISHED`), której **data badania** (`DailyQueue.queue_date`) mieści się w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`). **Nie** filtrujemy po dniu publikacji (`published_at`) — lekarz może opisać wynik później; wiersz i tak trafia do tygodnia wizyty.
 - **Rewizje** (kolejne wersje opublikowane po poprawce) **nie** tworzą nowej pozycji rozliczeniowej.
@@ -30,12 +30,12 @@ Przełącznik **Wariant raportu** w formularzu:
 - Wiersze unieważnionych wersji (`revoked_at` ustawione) — wykluczone.
 - Kolumna **Befund-Arzt** = lekarz pierwszej publikacji (`published_by_user`).
 
-### v2 — stawili się (`report_mode=attended`)
+### Stawili się (`report_mode=attended`)
 
 - Pacjenci z wpisem w kolejce w zakresie dat, którzy **wypełnili ankietę** (`PatientIntakeForm.form_status` w `{SUBMITTED, REOPENED}`).
 - **Bez** wpisów anulowanych (`entry_status=CANCELLED`) i **bez** no-show z importu (brak złożonej ankiety).
 - **Nie** wymaga opublikowanego Befundu — pacjent może być w raporcie zaraz po złożeniu formularza.
-- Kolumna **Befund-Arzt**: lekarz pierwszej nieunieważnionej publikacji, jeśli istnieje; inaczej `assigned_doctor` z kolejki dziennej (może być pusty).
+- Kolumna **Befund-Arzt**: lekarz pierwszej nieunieważnionej publikacji, jeśli istnieje; **bez** publikacji kolumna jest pusta (nie używamy `assigned_doctor` z kolejki).
 
 ## Podgląd w panelu
 

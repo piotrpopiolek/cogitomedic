@@ -1035,14 +1035,14 @@
     "pl": "Wariant raportu"
   },
   "administration.accounting_report_mode_published": {
-    "de": "v1 — veröffentlichte Befunde",
-    "en": "v1 — published Befunds",
-    "pl": "v1 — opublikowane Befundy"
+    "de": "Veröffentlichte Befunde",
+    "en": "Published Befunds",
+    "pl": "Opublikowane Befundy"
   },
   "administration.accounting_report_mode_attended": {
-    "de": "v2 — erschienen",
-    "en": "v2 — attended",
-    "pl": "v2 — stawili się"
+    "de": "Erschienen",
+    "en": "Attended",
+    "pl": "Stawili się"
   },
   "administration.accounting_doctor_counts_attended": {
     "de": "Zeilen pro Arzt",

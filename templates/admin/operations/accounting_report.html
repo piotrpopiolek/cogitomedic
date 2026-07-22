@@ -29,10 +29,10 @@
             <label for="report_mode" class="block text-sm font-medium text-gray-700 dark:text-base-200 mb-1">{% admin_trans "administration.accounting_report_mode" "Wariant raportu" %}</label>
             <select id="report_mode" name="report_mode" class="border border-gray-300 dark:border-base-700 dark:bg-base-900 dark:text-base-100 rounded-md px-3 py-2 text-sm">
                 <option value="{{ report_mode_published }}" {% if report_mode == report_mode_published %}selected{% endif %}>
-                    {% admin_trans "administration.accounting_report_mode_published" "v1 — opublikowane Befundy" %}
+                    {% admin_trans "administration.accounting_report_mode_published" "Opublikowane Befundy" %}
                 </option>
                 <option value="{{ report_mode_attended }}" {% if report_mode == report_mode_attended %}selected{% endif %}>
-                    {% admin_trans "administration.accounting_report_mode_attended" "v2 — stawili się" %}
+                    {% admin_trans "administration.accounting_report_mode_attended" "Stawili się" %}
                 </option>
             </select>
         </div>
