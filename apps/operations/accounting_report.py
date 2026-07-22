@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Min, OuterRef, Prefetch, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus
@@ -233,16 +233,30 @@ def accounting_report_versions_qs(
     scoped_clinic_site_ids: list[UUID] | None = None,
 ) -> QuerySet[MedicalDocumentVersion]:
     """
-    First non-revoked publication (``version_no=1``) whose exam day
-    (``DailyQueue.queue_date``) falls in ``[date_from, date_to]`` inclusive.
+    One row per document: the earliest non-revoked ``PUBLISHED`` version
+    (lowest ``version_no``) whose exam day (``DailyQueue.queue_date``) falls in
+    ``[date_from, date_to]`` inclusive.
 
-    Date range follows the visit day, not ``published_at`` (doctor may publish later).
+    Normal amend (v1 kept, v2 published) still bills on v1. After revoke of v1
+    and republish as v2, v2 is used so the visit is not dropped from billing.
+    Date range follows the visit day, not ``published_at``.
     """
+    earliest_non_revoked_version_no = (
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=OuterRef("medical_document_id"),
+            version_status=DocVersionStatus.PUBLISHED,
+            revoked_at__isnull=True,
+        )
+        .order_by()
+        .values("medical_document_id")
+        .annotate(min_version_no=Min("version_no"))
+        .values("min_version_no")[:1]
+    )
     qs = (
         MedicalDocumentVersion.objects.filter(
             version_status=DocVersionStatus.PUBLISHED,
-            version_no=1,
             revoked_at__isnull=True,
+            version_no=Subquery(earliest_non_revoked_version_no),
             medical_document__queue_entry__daily_queue__queue_date__gte=date_from,
             medical_document__queue_entry__daily_queue__queue_date__lte=date_to,
         )
@@ -283,9 +297,10 @@ def accounting_report_attended_qs(
         "medical_document__versions",
         queryset=MedicalDocumentVersion.objects.filter(
             version_status=DocVersionStatus.PUBLISHED,
-            version_no=1,
             revoked_at__isnull=True,
-        ).select_related("published_by_user"),
+        )
+        .order_by("version_no", "published_at", "id")
+        .select_related("published_by_user"),
         to_attr="_accounting_first_publications",
     )
     qs = (
@@ -374,7 +389,7 @@ def _medical_document_for_entry(entry: QueueEntry) -> MedicalDocument | None:
 
 
 def _doctor_for_attended_entry(entry: QueueEntry):
-    """Befund author only — no DailyQueue.assigned_doctor fallback without a publication."""
+    """Earliest non-revoked publication author — no assigned_doctor fallback."""
     medical_document = _medical_document_for_entry(entry)
     if medical_document is None:
         return None

@@ -296,6 +296,51 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(len(report.rows), 1)
         self.assertEqual(report.rows[0].doctor_name, "Hans Müller")
 
+    def test_revoke_v1_then_publish_v2_still_in_report(self) -> None:
+        """M8: after revoke of v1, republished v2 must still bill one row."""
+        doc = self._make_doc()
+        v1_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        v2_at = datetime(2026, 3, 12, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(
+            doc,
+            version_no=1,
+            published_at=v1_at,
+            revoked_at=v1_at + timedelta(hours=2),
+        )
+        self._make_published_version(
+            doc, version_no=2, published_at=v2_at, published_by_user=self.doctor2
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].doctor_name, "Eva Schmidt")
+        self.assertEqual(report.rows[0].last_name, "Kowalska")
+
+    def test_attended_doctor_uses_v2_when_v1_revoked(self) -> None:
+        doc = self._make_doc()
+        v1_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+        self._make_published_version(
+            doc,
+            version_no=1,
+            published_at=v1_at,
+            revoked_at=v1_at + timedelta(hours=1),
+        )
+        self._make_published_version(
+            doc,
+            version_no=2,
+            published_at=v1_at + timedelta(hours=3),
+            published_by_user=self.doctor2,
+        )
+        report = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].doctor_name, "Eva Schmidt")
+
     def test_external_upload_excluded(self) -> None:
         doc = self._make_doc(source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD)
         published_at = datetime(2026, 3, 11, 10, 0, tzinfo=ZoneInfo("Europe/Warsaw"))

@@ -24,11 +24,12 @@ Przełącznik **Wariant raportu** w formularzu:
 
 ### Opublikowane Befundy (`report_mode=published`, domyślnie)
 
-- **Pierwsza publikacja** Befundu (`version_no = 1`, status `PUBLISHED`), której **data badania** (`DailyQueue.queue_date`) mieści się w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`). **Nie** filtrujemy po dniu publikacji (`published_at`) — lekarz może opisać wynik później; wiersz i tak trafia do tygodnia wizyty.
-- **Rewizje** (kolejne wersje opublikowane po poprawce) **nie** tworzą nowej pozycji rozliczeniowej.
+- **Pierwsza nieunieważniona publikacja** Befundu (status `PUBLISHED`, `revoked_at` puste, najniższy `version_no`), której **data badania** (`DailyQueue.queue_date`) mieści się w wybranym zakresie kalendarzowym (domyślnie bieżący tydzień **poniedziałek–niedziela** w strefie `TIME_ZONE`, np. `Europe/Warsaw`). **Nie** filtrujemy po dniu publikacji (`published_at`) — lekarz może opisać wynik później; wiersz i tak trafia do tygodnia wizyty.
+- Zwykła **rewizja** (v1 zostaje, powstaje v2) **nie** tworzy nowej pozycji — rozliczenie pozostaje na pierwszej ważnej publikacji (zwykle v1).
+- Po **cofnięciu publikacji (revoke)** v1 i ponownej publikacji jako v2 wiersz **nadal wchodzi** do raportu (v2 jako pierwsza nieunieważniona).
 - Publikacje z modułu „Zewnętrzne badanie” (`EXTERNAL_UPLOAD`) — poza tym wariantem w MVP.
-- Wiersze unieważnionych wersji (`revoked_at` ustawione) — wykluczone.
-- Kolumna **Befund-Arzt** = lekarz pierwszej publikacji (`published_by_user`).
+- Wiersze bez żadnej nieunieważnionej publikacji — wykluczone.
+- Kolumna **Befund-Arzt** = lekarz tej publikacji rozliczeniowej (`published_by_user`).
 
 ### Stawili się (`report_mode=attended`)
 
@@ -64,7 +65,7 @@ Nagłówki w eksporcie są w języku niemieckim (kanoniczne nazwy kolumn); w UI 
 | Straße | ulica (`patient.street`) |
 | PLZ/Ort | kod pocztowy + miejscowość (`postal_code` + `city`, format np. `10115 Berlin`) |
 | Email | pacjent |
-| Befund-Arzt | lekarz pierwszej publikacji (`published_by_user`); pusta w Ausfallhonorar |
+| Befund-Arzt | lekarz pierwszej nieunieważnionej publikacji (`published_by_user`); pusta w Ausfallhonorar |
 | Untersuchungsdatum | data kolejki (`queue_date`), format `DD.MM.RRRR` |
 | Ausfallhonorar | tylko w wariancie `ausfall`: stała wartość `Ja` |
 

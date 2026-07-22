@@ -67,7 +67,7 @@
         {% elif report_mode == report_mode_ausfall %}
         {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen nicht ausgefüllt). Ohne Stornierte. Liste für die Forderungstabelle." %}
         {% else %}
-        {% admin_trans "administration.accounting_report_hint" "Zeilen: erste Befund-Veröffentlichung nach Untersuchungsdatum. Revisionen erzeugen keine neue Position." %}
+        {% admin_trans "administration.accounting_report_hint" "Zeilen: erste gültige Befund-Veröffentlichung nach Untersuchungsdatum. Nachkorrekturen erzeugen keine neue Position; nach Widerruf zählt die nächste Veröffentlichung." %}
         {% endif %}
         <span class="font-medium text-gray-900 dark:text-base-100">{{ report_total_rows }}</span>
         {% admin_trans "administration.accounting_report_rows_total" "Zeilen im Zeitraum." %}

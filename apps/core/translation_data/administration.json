@@ -1020,9 +1020,9 @@
     "pl": "Eksport XLSX"
   },
   "administration.accounting_report_hint": {
-    "de": "Zeilen: erste Befund-Veröffentlichung nach Untersuchungsdatum. Revisionen erzeugen keine neue Position.",
-    "en": "Rows: first Befund publication by examination date. Revisions do not create a new line item.",
-    "pl": "Wiersze: pierwsza publikacja Befundu wg daty badania. Rewizje nie tworzą nowej pozycji."
+    "de": "Zeilen: erste gültige Befund-Veröffentlichung nach Untersuchungsdatum. Nachkorrekturen erzeugen keine neue Position; nach Widerruf zählt die nächste Veröffentlichung.",
+    "en": "Rows: first valid Befund publication by examination date. Corrections do not create a new line item; after revoke the next publication counts.",
+    "pl": "Wiersze: pierwsza ważna publikacja Befundu wg daty badania. Korekty nie tworzą nowej pozycji; po cofnięciu publikacji liczy się kolejna publikacja."
   },
   "administration.accounting_report_hint_attended": {
     "de": "Zeilen: Patienten mit ausgefülltem Fragebogen nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich.",
