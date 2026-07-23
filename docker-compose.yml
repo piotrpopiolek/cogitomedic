@@ -107,6 +107,7 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       SMSAPI_USE_MOCK: "1"
+      HIDRIVE_USE_MOCK: "1"
       CAPTCHA_VERIFY_SKIP: "1"
       SCREENSHOT_BASE_URL: http://web:8000
     # Inline sh (bez pliku .sh z Windows CRLF, który psuje `set -e` w kontenerze)

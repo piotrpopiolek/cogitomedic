@@ -84,12 +84,12 @@ Personel powinien **nie planować** równoległej pracy „papier + tablet” na
 
 ---
 
-## 8. Miejsca na zrzuty ekranu (opcjonalnie)
+## 8. Zrzuty ekranu (demo)
 
-Przy aktualizacji [screenshot-checklist.md](screenshot-checklist.md) można dodać:
+![Hub autoryzacji ścieżki papierowej](/docs/manual/assets/screenshots/paper-intake-01-hub.png)
 
-- hub `/admin/paper-intake/` — lista,
-- strona wpisu — formularz T1 z wypełnionym `reason`,
-- ten sam ekran — widoczna akcja T1′.
+![Formularz T1 — powód autoryzacji](/docs/manual/assets/screenshots/paper-intake-02-entry-authorize.png)
 
-Na razie dokument jest **tekstowy**; obrazki wstawia się tak jak w pozostałych rozdziałach manuala (ścieżki od root repozytorium, patrz [README](README.md)).
+![Aktywna autoryzacja — formularz cofnięcia T1′](/docs/manual/assets/screenshots/paper-intake-03-entry-revoke.png)
+
+Nazwy plików: [screenshot-checklist.md](screenshot-checklist.md). Generowanie: [assets/screenshots/README.md](assets/screenshots/README.md).

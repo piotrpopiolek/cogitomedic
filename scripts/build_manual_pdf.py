@@ -9,6 +9,10 @@ Uruchom z korzenia repozytorium:
     python scripts/build_manual_pdf.py
 
 Wynik: docs/manual/_build/Cogitomedica-Instrukcje.pdf (tymczasowe pliki w _build/).
+
+PDF to wersja dla użytkownika końcowego: przy merge filtr usuwa treść maintainerską
+(scenariusze: szablony, backlog filmów, Docelowo/Film, linki .ai/ itd.). Źródła w
+docs/manual/ pozostają pełne dla autorów.
 """
 
 from __future__ import annotations
@@ -64,8 +68,186 @@ _ANCHOR_BEFORE_HEADING = re.compile(
     re.MULTILINE,
 )
 
+# Linki / ścieżki maintainerskie — nie dla PDF użytkownika.
+_MAINTAINER_REF = re.compile(
+    r"(?:"
+    r"\.ai/"
+    r"|TODO\.md"
+    r"|scripts/"
+    r"|assets/videos"
+    r"|runbooks?/"
+    r"|INTEGRATION_ERROR"
+    r"|OUTBOX_BACKLOG"
+    r"|runbook-patient-"
+    r"|\.webm"
+    r"|gitignore"
+    r"|kotwic"
+    r")",
+    re.IGNORECASE,
+)
 
-def _prepare_chapter(text: str) -> str:
+_SCENARIO_META_ROW = re.compile(
+    r"^\|\s*\*\*(?:Film|Docelowo)\*\*\s*\|[^\n]*\|[ \t]*\n?",
+    re.MULTILINE,
+)
+
+_SECTION_JAK_DOPISYWAC = re.compile(
+    r"^## Jak dopisywać nowy scenariusz\n.*?(?=^## |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+_SECTION_BACKLOG_FILMOW = re.compile(
+    r"^## Backlog filmów\n.*\Z",
+    re.MULTILINE | re.DOTALL,
+)
+
+_INDEX_FILM_NOTE = re.compile(
+    r"^>\s*Kolumna \*\*Film\*\*.*\n?",
+    re.MULTILINE,
+)
+
+_INDEX_KOTWICE_NOTE = re.compile(
+    r"^Kotwice w indeksie.*\n?",
+    re.MULTILINE,
+)
+
+_POWIĄZANE_INTRO = re.compile(
+    r"^Powiązane:\s*.*$",
+    re.MULTILINE,
+)
+
+_FILM_SENTENCE = re.compile(
+    r"\s*Film:\s*`[^`]*\.webm`\.?",
+    re.IGNORECASE,
+)
+
+_LINE_WITH_MAINTAINER = re.compile(
+    r"^.*(?:\.ai/|TODO\.md|scripts/).*$",
+    re.MULTILINE,
+)
+
+
+def _drop_table_column(table_md: str, col_index: int) -> str:
+    """Usuń kolumnę o podanym indeksie (0-based) z tabeli Markdown."""
+    lines_out: list[str] = []
+    for line in table_md.strip("\n").splitlines():
+        if not line.strip().startswith("|"):
+            lines_out.append(line)
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if col_index < 0 or col_index >= len(cells):
+            lines_out.append(line)
+            continue
+        del cells[col_index]
+        lines_out.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines_out)
+
+
+def _filter_powiazane_cell(cell: str) -> str | None:
+    """Zostaw odnośniki do rozdziałów manuala / SC-NNN; usuń maintainerskie."""
+    parts = [p.strip() for p in cell.split(",")]
+    kept: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if _MAINTAINER_REF.search(part):
+            continue
+        kept.append(part)
+    if not kept:
+        return None
+    return ", ".join(kept)
+
+
+def _filter_powiazane_rows(text: str) -> str:
+    def _repl(match: re.Match[str]) -> str:
+        cell = match.group(1)
+        filtered = _filter_powiazane_cell(cell)
+        if filtered is None:
+            return ""
+        return f"| **Powiązane** | {filtered} |\n"
+
+    return re.sub(
+        r"^\|\s*\*\*Powiązane\*\*\s*\|\s*(.*?)\s*\|[ \t]*\n?",
+        _repl,
+        text,
+        flags=re.MULTILINE,
+    )
+
+
+def _simplify_scenariusze_intro(text: str) -> str:
+    text = re.sub(
+        r"^# Scenariusze operacyjne — FAQ i materiały wideo\s*$",
+        "# Scenariusze operacyjne — FAQ",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    text = re.sub(
+        r"(Zbiór \*\*codziennych sytuacji\*\* z pracy placówki, opisanych tak, "
+        r"żeby recepcja, lekarz i manager szybko znaleźli rozwiązanie\.)"
+        r"\s*Przy wielu scenariuszach jest też krótki filmik \(WebM\)\.",
+        r"\1",
+        text,
+        count=1,
+    )
+    text = _POWIĄZANE_INTRO.sub("", text, count=1)
+    # Usuń osierocone puste linie po wycięciu „Powiązane: …”.
+    text = re.sub(r"\n{3,}", "\n\n", text, count=1)
+    return text
+
+
+def _filter_scenariusze_index(text: str) -> str:
+    def _repl(match: re.Match[str]) -> str:
+        table = match.group(0)
+        # Kolumna Film jest ostatnia (indeks 3).
+        simplified = _drop_table_column(table, 3)
+        return simplified
+
+    return re.sub(
+        r"(?m)^\| ID \| Tytuł \| Role \| Film \|.*?^(?=\n|>|Kotwice|---|## |\Z)",
+        _repl,
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+
+def filter_scenariusze_for_user_pdf(text: str) -> str:
+    """Usuń treść maintainerską ze scenariuszy — tylko FAQ operacyjne dla PDF."""
+    text = _simplify_scenariusze_intro(text)
+    text = _SECTION_JAK_DOPISYWAC.sub("", text)
+    text = _SECTION_BACKLOG_FILMOW.sub("", text)
+    text = _filter_scenariusze_index(text)
+    text = _INDEX_FILM_NOTE.sub("", text)
+    text = _INDEX_KOTWICE_NOTE.sub("", text)
+    text = _SCENARIO_META_ROW.sub("", text)
+    text = _filter_powiazane_rows(text)
+    # Kotwice HTML: _prepare_chapter przeniesie je na nagłówki; tu zostawiamy.
+    # Posprzątaj wielokrotne puste linie powstałe po wycięciach.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip() + "\n"
+
+
+def filter_chapter_maintainer_refs(text: str) -> str:
+    """Usuń oczywiste odniesienia IT/agent (.ai/, .webm, scripts/) z innych rozdziałów."""
+    text = _FILM_SENTENCE.sub("", text)
+    text = _LINE_WITH_MAINTAINER.sub("", text)
+    # Puste sekcje typu „## 10. Dokumentacja techniczna” + same --- / puste linie.
+    text = re.sub(
+        r"(?m)^(#{2,6}\s+[^\n]+)\n+(?:---\n+)*(?=#{2,6}\s|\Z)",
+        "",
+        text,
+    )
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text
+
+
+def _prepare_chapter(name: str, text: str) -> str:
+    if name == "scenariusze.md":
+        text = filter_scenariusze_for_user_pdf(text)
+    else:
+        text = filter_chapter_maintainer_refs(text)
+
     text = text.replace(IMG_PREFIX_REPO, IMG_PREFIX_PANDOC)
     text = text.translate(_UNICODE_SAFE)
 
@@ -84,7 +266,7 @@ def _merge_chapters() -> str:
         path = MANUAL / name
         if not path.is_file():
             raise FileNotFoundError(f"Brak pliku: {path}")
-        text = _prepare_chapter(path.read_text(encoding="utf-8"))
+        text = _prepare_chapter(name, path.read_text(encoding="utf-8"))
         parts.append(text.rstrip())
     return PAGE_BREAK.join(parts)
 
@@ -101,7 +283,7 @@ def _find_pandoc() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Buduje jeden PDF z rozdziałów docs/manual/."
+        description="Buduje jeden PDF z rozdziałów docs/manual/ (wersja użytkownika)."
     )
     parser.add_argument(
         "-o",
@@ -121,6 +303,25 @@ def main() -> None:
     BUILD.mkdir(parents=True, exist_ok=True)
     combined = BUILD / "_combined.md"
     combined.write_text(merged, encoding="utf-8")
+
+    # Szybka asercja: po filtrze nie powinno być typowej treści maintainerskiej.
+    forbidden = (
+        "TODO.md",
+        "Jak dopisywać",
+        ".webm",
+        "gitignore",
+        "kotwic",
+        "Backlog filmów",
+        ".ai/",
+    )
+    lower = merged.lower()
+    hits = [f for f in forbidden if f.lower() in lower]
+    if hits:
+        sys.stderr.write(
+            "Ostrzeżenie: w złączonym Markdown nadal widać treść maintainerską: "
+            + ", ".join(hits)
+            + f"\nSprawdź {combined}\n"
+        )
 
     pandoc = _find_pandoc()
     cmd = [

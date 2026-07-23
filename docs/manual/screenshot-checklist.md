@@ -15,6 +15,7 @@ Pełny zestaw plików z poniższej tabeli jest **generowany automatycznie** prze
 | 6   | `reception-06-import-xlsx.png`            | Import XLSX                   |
 | 7   | `reception-07-intake-documents-list.png`  | `/admin/intake-documents/`    |
 | 8   | `reception-08-intake-document-detail.png` | Szczegóły intake + PDF        |
+| 9   | `reception-hidrive-01-missing-results.png` | Dashboard — sekcja brakujących PDF HiDrive |
 
 
 ## Wgranie zewnętrznego badania (`07-wgranie-zewnetrznego-badania`)
@@ -83,13 +84,23 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 | 3   | `admin-03-import-xlsx.png` | Import XLSX (admin/recepcja) |
 
 
+## Ścieżka papierowa (`04-administrator-paper-intake`)
+
+
+| #   | Plik | Ekran / uwagi |
+| --- | ---- | ------------- |
+| 1   | `paper-intake-01-hub.png` | `/admin/paper-intake/` — hub wyboru wpisu |
+| 2   | `paper-intake-02-entry-authorize.png` | Strona wpisu — formularz T1 (powód wypełniony) |
+| 3   | `paper-intake-03-entry-revoke.png` | Ten sam ekran po T1 — widoczna akcja T1′ (cofnięcie) |
+
+
 ## Księgowość (`08-ksiegowosc-raport`)
 
 
 | #   | Plik | Ekran / uwagi |
 | --- | ---- | ------------- |
 | 1   | `accounting-01-report-light.png` | `/admin/accounting/report/` — tryb jasny, tabela z danymi |
-| 2   | `accounting-02-report-dark.png` | Ten sam ekran — **tryb ciemny** Unfold (kontrast tabeli, hint, paginacja) |
+| 2   | `accounting-02-report-dark.png` | Ten sam ekran — **tryb ciemny** Unfold (kontrast tabeli, hint, paginacja). Capture wymusza `html.dark` po załadowaniu (produkt ma `unfold-force-light.js`). |
 
 
 ## Pacjent (`05-pacjent-wyniki`)
@@ -108,5 +119,4 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 | #   | Plik                              | Uwagi                                                  |
 | --- | --------------------------------- | ------------------------------------------------------ |
 | 1   | `overview-01-process-diagram.png` | Opcjonalny diagram (np. eksport z Mermaid lub draw.io) |
-
 

@@ -6,6 +6,10 @@ Moduł **Raport tygodniowy** w panelu administracyjnym (`/admin/accounting/repor
 
 Wejście z menu Unfold: sekcja **Księgowość** → **Raport tygodniowy**.
 
+![Raport księgowości — tryb jasny](/docs/manual/assets/screenshots/accounting-01-report-light.png)
+
+![Raport księgowości — tryb ciemny Unfold](/docs/manual/assets/screenshots/accounting-02-report-dark.png)
+
 ## Kto ma dostęp
 
 - rola **Accounting** (`ACCOUNTING`) — wyłącznie ten moduł (brak list pacjentów i innych ekranów ModelAdmin)

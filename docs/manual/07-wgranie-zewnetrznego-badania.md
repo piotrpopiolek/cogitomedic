@@ -11,6 +11,18 @@ Recepcja / admin / manager mogą przejść całą ścieżkę **bez wywoływania 
 3. **Hub** — `GET /admin/external-upload/`: filtr statusu ankiety (`SUBMITTED` / `REOPENED` / oba), wybór wpisu kolejki, przejście do ekranu wpisu.
 4. **Ekran wpisu** — `GET /admin/external-upload/<queue_entry_id>/`: tożsamość, lista załączników (`MATCHED` / `ACCEPTED`), upload PDF, wybór załącznika, podgląd, publikacja z drugim potwierdzeniem i opcjonalnym `resend_sms`, start rewizji po publikacji.
 
+![Sidebar — sekcja Zewnętrzne badanie](/docs/manual/assets/screenshots/reception-external-upload-00-sidebar.png)
+
+![Hub external upload — filtr i wybór wpisu](/docs/manual/assets/screenshots/reception-external-upload-01-hub.png)
+
+![Ekran wpisu — tożsamość pacjenta i wizyty](/docs/manual/assets/screenshots/reception-external-upload-02-entry-identity.png)
+
+![Upload PDF i lista załączników](/docs/manual/assets/screenshots/reception-external-upload-03-entry-upload-select.png)
+
+![Podgląd PDF (link w nowej karcie)](/docs/manual/assets/screenshots/reception-external-upload-04-preview.png)
+
+![Publikacja — locale, SMS, drugie potwierdzenie](/docs/manual/assets/screenshots/reception-external-upload-05-publish-confirm.png)
+
 ## Kiedy można wgrać plik
 
 - Dla wpisu kolejki musi istnieć **ankieta** (`PatientIntakeForm`) w stanie **wysłana** lub **ponownie otwarta do korekt** (`SUBMITTED` albo `REOPENED`).

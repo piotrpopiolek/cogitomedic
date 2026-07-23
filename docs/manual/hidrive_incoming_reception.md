@@ -6,6 +6,10 @@ Recepcja może wgrywać PDF przez **aplikację** — wtedy plik trafia pod
 **`/incoming/external-upload/{queue_entry_id}/...`** (nie mieszać z ręcznym wrzutem labu do katalogu głównego `/incoming/`).  
 Przy **bramce dopasowania plików labu do pacjenta** (panel lekarza) ścieżki z prefiksem `external-upload/` są **ignorowane**, żeby wynik z recepcji nie wszedł do listy „PDF z laboratorium” dla Befundu. Szczegóły procesu: [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md).
 
+Recepcja widzi brakujące dopasowania PDF na **dashboardzie** (`/admin/reception-dashboard/` — sekcja „Missing HiDrive laboratory results” / odpowiednik w PL).
+
+![Dashboard — brakujące wyniki HiDrive](/docs/manual/assets/screenshots/reception-hidrive-01-missing-results.png)
+
 ## Gdzie wrzucać pliki
 
 - Katalog na HiDrive: **`/incoming/`** (domyślnie) — bez podfolderów, bezpośrednio pliki PDF.

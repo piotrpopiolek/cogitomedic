@@ -41,6 +41,8 @@ Strona pokazuje m.in.:
 
 ![Dashboard recepcji — zaległe zdarzenia i importy](/docs/manual/assets/screenshots/reception-02-reception-dashboard.png)
 
+![Dashboard recepcji — brakujące wyniki HiDrive](/docs/manual/assets/screenshots/reception-hidrive-01-missing-results.png)
+
 ---
 
 ## 3. Kolejki dzienne (Daily queue)

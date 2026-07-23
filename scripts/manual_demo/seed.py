@@ -8,6 +8,22 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 
+def _delete_medical_docs_for_queue(queue) -> None:
+    """Drop medical docs for a daily queue, clearing PROTECT FKs first."""
+    from apps.medical.models import (
+        ExternalPdfAttachment,
+        MedicalDocument,
+        MedicalDocumentVersion,
+    )
+
+    docs = MedicalDocument.objects.filter(queue_entry__daily_queue=queue)
+    MedicalDocumentVersion.objects.filter(medical_document__in=docs).update(
+        external_selected_attachment=None
+    )
+    ExternalPdfAttachment.objects.filter(medical_document__in=docs).delete()
+    docs.delete()
+
+
 def seed_manual_demo(ctx: dict) -> None:
     from django.contrib.sessions.backends.db import SessionStore
     from django.utils import timezone
@@ -19,7 +35,6 @@ def seed_manual_demo(ctx: dict) -> None:
         IntakeStatus,
         PatientIntakeForm,
     )
-    from apps.medical.models import MedicalDocument
     from apps.medical.services import (
         create_or_get_medical_document,
         save_draft_document_version,
@@ -100,7 +115,7 @@ def seed_manual_demo(ctx: dict) -> None:
     queue.status = QueueStatus.OPEN
     queue.save(update_fields=["assigned_doctor", "status", "updated_at"])
 
-    MedicalDocument.objects.filter(queue_entry__daily_queue=queue).delete()
+    _delete_medical_docs_for_queue(queue)
     QueueEntry.objects.filter(daily_queue=queue, position_no__in=(1, 2, 3)).delete()
 
     # Pacjent pod zrzuty manual/06: stabilny reset po adresie e-mail (zrzuty zmieniają m.in. telefon).
@@ -313,3 +328,109 @@ def seed_manual_demo(ctx: dict) -> None:
             "portal_dob": "2000-03-20",
         }
     )
+    seed_manual_screenshot_extras(ctx)
+
+
+def seed_manual_screenshot_extras(ctx: dict) -> None:
+    """Extra demo rows for accounting / external-upload / paper / HiDrive screenshots."""
+    from django.utils import timezone
+
+    from apps.medical.models import (
+        ExternalPdfAttachment,
+        MedicalDocument,
+        MedicalDocumentVersion,
+        PaperIntakeAuthorization,
+    )
+    from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
+    from scripts.manual_demo.scenario_helpers import (
+        create_draft_document,
+        create_submitted_entry,
+        ensure_accounting_user,
+        ensure_manager_user,
+        force_publish,
+        next_position,
+        seed_mock_incoming,
+        upsert_patient,
+    )
+
+    ensure_accounting_user(ctx)
+    ensure_manager_user(ctx)
+
+    clinic = ctx["clinic"]
+    queue = ctx["queue"]
+    reception = ctx["reception"]
+
+    demo_emails = (
+        "hans.accountingdemo@example.invalid",
+        "walter.externaldemo@example.invalid",
+        "tina.needpapert1@example.invalid",
+        "iris.nopdfdemo@example.invalid",
+    )
+    demo_patients = Patient.objects.filter(email__in=demo_emails)
+    demo_entries = QueueEntry.objects.filter(
+        daily_queue=queue, patient__in=demo_patients
+    )
+    PaperIntakeAuthorization.objects.filter(queue_entry__in=demo_entries).delete()
+    docs = MedicalDocument.objects.filter(queue_entry__in=demo_entries)
+    MedicalDocumentVersion.objects.filter(medical_document__in=docs).update(
+        external_selected_attachment=None
+    )
+    ExternalPdfAttachment.objects.filter(medical_document__in=docs).delete()
+    docs.delete()
+    demo_entries.delete()
+
+    p_acc = upsert_patient(
+        phone="491111000004",
+        first_name="Hans",
+        last_name="AccountingDemo",
+        dob=date(1969, 2, 14),
+        email="hans.accountingdemo@example.invalid",
+        clinic=clinic,
+    )
+    entry_acc, intake_acc = create_submitted_entry(ctx, patient=p_acc)
+    md_acc = create_draft_document(ctx, entry_acc, intake_acc)
+    force_publish(ctx, md_acc)
+    ctx["accounting_entry_id"] = str(entry_acc.id)
+
+    p_ext = upsert_patient(
+        phone="491111000021",
+        first_name="Walter",
+        last_name="ExternalDemo",
+        dob=date(1979, 2, 28),
+        email="walter.externaldemo@example.invalid",
+        clinic=clinic,
+    )
+    entry_ext, _intake_ext = create_submitted_entry(ctx, patient=p_ext)
+    ctx["external_upload_entry_id"] = str(entry_ext.id)
+
+    p_paper = upsert_patient(
+        phone="491111000018",
+        first_name="Tina",
+        last_name="NeedPaperT1",
+        dob=date(1965, 6, 15),
+        email="tina.needpapert1@example.invalid",
+        clinic=clinic,
+    )
+    entry_paper = QueueEntry.objects.create(
+        daily_queue=queue,
+        patient=p_paper,
+        position_no=next_position(queue),
+        entry_status=QueueEntryStatus.WAITING,
+        appointment_time=timezone.now() - timedelta(hours=6),
+        created_by_user=reception,
+    )
+    ctx["paper_intake_entry_id"] = str(entry_paper.id)
+
+    # Empty /incoming so draft Befunds without lab PDF appear on reception dashboard.
+    seed_mock_incoming([])
+    p_hd = upsert_patient(
+        phone="491111000005",
+        first_name="Iris",
+        last_name="NoPdfDemo",
+        dob=date(1991, 6, 8),
+        email="iris.nopdfdemo@example.invalid",
+        clinic=clinic,
+    )
+    entry_hd, intake_hd = create_submitted_entry(ctx, patient=p_hd)
+    create_draft_document(ctx, entry_hd, intake_hd)
+    ctx["hidrive_missing_entry_id"] = str(entry_hd.id)
