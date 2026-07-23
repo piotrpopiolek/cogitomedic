@@ -447,6 +447,20 @@ def main() -> int:
         capture_accounting_screenshots(page, base, pwd)
 
         # --- Doctor ---
+        # Restore a matching lab PDF so DRAFT detail passes the HiDrive gate
+        # (extras seed clears /incoming for the missing-results dashboard shot).
+        # Avoid Django ORM here — Playwright sync API sets an async context.
+        from scripts.manual_demo.scenario_helpers import (
+            minimal_demo_pdf_bytes,
+            seed_mock_incoming,
+        )
+
+        anna_name = ctx.get("anna_demo_incoming_pdf") or "Demo_Anna.pdf"
+        seed_mock_incoming(
+            [{"name": anna_name}],
+            file_bytes=minimal_demo_pdf_bytes(title="Demo lab Anna"),
+        )
+
         page.context.clear_cookies()
         login_doctor(page, base, pwd)
         page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
@@ -462,10 +476,43 @@ def main() -> int:
             f"{base}/doctor/{ctx['medical_document_id']}/?lang=de",
             wait_until="networkidle",
         )
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(2000)
+        # Fallback: if lab gate still blocks draft, use open-revision demo (rich payload).
+        if page.locator("#btn-save-draft").count() == 0:
+            rev_fallback = ctx.get("revision_demo_doc_id")
+            if rev_fallback:
+                page.goto(
+                    f"{base}/doctor/{rev_fallback}/?lang=de",
+                    wait_until="networkidle",
+                )
+                page.wait_for_timeout(1800)
+        # Scroll to lesion groups so the filled Befund is visible.
+        page.evaluate("""() => {
+              const markers = document.querySelectorAll(
+                '#lesion-groups, [data-lesion-group], .lesion-group, textarea'
+              );
+              for (const g of markers) {
+                if (g.closest('form') || g.id === 'lesion-groups') {
+                  g.scrollIntoView({ block: 'center' });
+                  break;
+                }
+              }
+              window.scrollBy(0, 180);
+            }""")
+        page.wait_for_timeout(600)
         _shot(page, "doctor-04-befund-section.png")
 
+        # Action bar: save draft / publish / preview (draft).
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(500)
+        _shot(page, "doctor-05-actions-draft.png")
+
         # Preview PDF (WeasyPrint) + published doc with COMPLETED mock PDF status.
+        page.goto(
+            f"{base}/doctor/{ctx['medical_document_id']}/?lang=de",
+            wait_until="networkidle",
+        )
+        page.wait_for_timeout(1000)
         preview = page.locator("#btn-preview-pdf").first
         if preview.count():
             try:
@@ -490,7 +537,10 @@ def main() -> int:
                 f"{base}/doctor/{portal_doc}/?lang=de",
                 wait_until="networkidle",
             )
-            page.wait_for_timeout(1200)
+            page.wait_for_timeout(1500)
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(400)
+            _shot(page, "doctor-06-published-status.png")
             pub_preview = page.locator(
                 "a[href*='preview-pdf'][href*='source=published'], "
                 "#btn-preview-pdf, a[href*='preview-pdf']"
@@ -505,6 +555,42 @@ def main() -> int:
                     pdf_page.close()
                 except Exception:
                     pass
+
+        # Open revision + resend SMS checkbox.
+        rev_doc = ctx.get("revision_demo_doc_id")
+        if rev_doc:
+            page.goto(f"{base}/doctor/{rev_doc}/?lang=de", wait_until="networkidle")
+            page.wait_for_timeout(1800)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(500)
+            resend = page.locator("#resend_sms").first
+            if resend.count():
+                try:
+                    resend.check(force=True)
+                except Exception:
+                    pass
+            page.wait_for_timeout(400)
+            _shot(page, "doctor-07-revision-resend-sms.png")
+
+        # Revoke confirmation modal.
+        revoke_doc = ctx.get("revoke_demo_doc_id") or portal_doc
+        if revoke_doc:
+            page.goto(f"{base}/doctor/{revoke_doc}/?lang=de", wait_until="networkidle")
+            page.wait_for_timeout(1800)
+            btn = page.locator("#btn-revoke-publication").first
+            if btn.count():
+                page.evaluate(
+                    "el => { el.hidden = false; el.classList.remove('hidden'); }",
+                    btn.element_handle(),
+                )
+                page.wait_for_timeout(300)
+                btn.click()
+                page.wait_for_timeout(800)
+                _shot(page, "doctor-08-revoke-modal.png")
+                cancel = page.locator("#revision-modal-cancel").first
+                if cancel.count():
+                    cancel.click()
+                    page.wait_for_timeout(400)
 
         # --- Tablet unassigned ---
         tpage.context.clear_cookies()

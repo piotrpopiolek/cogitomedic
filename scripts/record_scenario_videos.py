@@ -1,5 +1,5 @@
 """
-Nagrywa wolne filmy WebM dla scenariuszy operacyjnych SC-001–SC-027.
+Nagrywa wolne filmy WebM dla scenariuszy operacyjnych SC-001–SC-028.
 
 Dane pacjentów: wyłącznie fikcyjne (seed scripts/manual_demo/seed_scenarios.py).
 SC-007 korzysta z istniejącego record_import_troubleshooting_video.py.
@@ -86,6 +86,7 @@ FILENAMES: dict[str, str] = {
     "SC-025": "sc-025-korekta-danych.webm",
     "SC-026": "sc-026-dead-letter.webm",
     "SC-027": "sc-027-baner-hidrive.webm",
+    "SC-028": "sc-028-rewizja-resend-sms.webm",
 }
 
 PRIORITY_HIGH = [
@@ -106,6 +107,7 @@ PRIORITY_MEDIUM = [
     "SC-015",
     "SC-017",
     "SC-020",
+    "SC-028",
 ]
 PRIORITY_LOW = [
     sid for sid in FILENAMES if sid not in PRIORITY_HIGH and sid not in PRIORITY_MEDIUM
@@ -412,6 +414,8 @@ def steps_sc_003(page, base: str, ctx: dict) -> None:
     page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
     page.wait_for_timeout(2000)
+    human_wheel(page, 500, steps=5, pause_ms=400)
+    _pause(page, 1200)
     # Published PDF available via source=published; default preview is pending draft.
     _show_doctor_pdf_preview(page, base, doc_id, source="published")
     page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
@@ -420,11 +424,19 @@ def steps_sc_003(page, base: str, ctx: dict) -> None:
     btn = page.locator("#btn-discard-revision")
     if btn.count():
         page.evaluate(
-            "el => { el.hidden = false; el.classList.remove('hidden'); }",
+            "el => { el.hidden = false; el.classList.remove('hidden'); el.disabled = false; }",
             btn.element_handle(),
         )
-        _pause(page, 1500)
-        human_hover(page, btn, pause_ms=2000)
+        _pause(page, 1000)
+        human_click(page, btn, pause_after_ms=800)
+        modal = page.locator("#revision-modal")
+        if modal.count():
+            page.wait_for_timeout(800)
+            ensure_cursor_alive(page)
+            _pause(page, 2200)
+            cancel = page.locator("#revision-modal-cancel").first
+            if cancel.count():
+                human_hover(page, cancel, pause_ms=1200)
 
 
 def steps_sc_004(page, base: str, ctx: dict) -> None:
@@ -764,6 +776,7 @@ def steps_sc_015(page, base: str, ctx: dict) -> None:
     )
     ensure_cursor_alive(page)
     page.wait_for_timeout(2000)
+    human_wheel(page, 400, steps=4, pause_ms=350)
     _show_doctor_pdf_preview(page, base, doc_id, source="published")
     page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
@@ -774,7 +787,41 @@ def steps_sc_015(page, base: str, ctx: dict) -> None:
             "el => { el.hidden = false; el.classList.remove('hidden'); }",
             btn.element_handle(),
         )
-        human_hover(page, btn, pause_ms=2200)
+        human_click(page, btn, pause_after_ms=800)
+        modal = page.locator("#revision-modal")
+        if modal.count():
+            page.wait_for_timeout(800)
+            ensure_cursor_alive(page)
+            _pause(page, 2500)
+            cancel = page.locator("#revision-modal-cancel").first
+            if cancel.count():
+                human_hover(page, cancel, pause_ms=1400)
+
+
+def steps_sc_028(page, base: str, ctx: dict) -> None:
+    """Open revision: check resend SMS, hover republish."""
+    pwd = ctx["password"]
+    doc_id = ctx["sc028_doc_id"]
+    login_doctor(page, base, pwd)
+    page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 1800)
+    page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    page.wait_for_timeout(2000)
+    human_wheel(page, 600, steps=6, pause_ms=350)
+    _pause(page, 1500)
+    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    ensure_cursor_alive(page)
+    _pause(page, 1200)
+    resend = page.locator("#resend_sms").first
+    if resend.count():
+        human_click(page, resend, pause_after_ms=1000)
+        _pause(page, 1500)
+    publish = page.locator("#btn-publish").first
+    if publish.count():
+        human_hover(page, publish, pause_ms=2200)
+    _pause(page, 1800)
 
 
 def steps_sc_016(page, base: str, ctx: dict) -> None:
@@ -984,6 +1031,7 @@ STEP_HANDLERS: dict[str, Callable] = {
     "SC-025": steps_sc_025,
     "SC-026": steps_sc_026,
     "SC-027": steps_sc_027,
+    "SC-028": steps_sc_028,
 }
 
 
@@ -1107,7 +1155,7 @@ def record_one(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Nagrywa WebM scenariuszy SC-001–SC-027 (wolne akcje demo)."
+        description="Nagrywa WebM scenariuszy SC-001–SC-028 (wolne akcje demo)."
     )
     parser.add_argument(
         "--base-url",

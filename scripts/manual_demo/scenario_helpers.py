@@ -10,18 +10,113 @@ from pathlib import Path
 from typing import Any
 
 DEMO_PASSWORD = "ScreenshotDemo2026!"
+
+# Rich medical_payload v1 for doctor screenshots / videos (fictional DE demo only).
+# Several lesion groups + dermatoscopy + assessment so the Befund UI looks complete.
 DEMO_PAYLOAD = {
     "schema_version": 1,
     "authoring_locale": "de-DE",
-    "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+    "examination_scope": [
+        "INTIMATE_AREA_NOT_EXAMINED",
+        "ORAL_MUCOSA_NOT_EXAMINED",
+    ],
     "fitzpatrick_type": "TYPE_III",
-    "overall_image_assessment": "NO_CONTROL_NEEDED",
-    "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+    "overall_image_assessment": "CONTROL_NEEDED",
+    "recommendations": [
+        "FOLLOWUP_6_MONTHS",
+        "PROMPT_VISIT_ON_CHANGE",
+    ],
     "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-    "lesions": [],
-    "summary_generated_text": "Zusammenfassung Demo Szenario.",
-    "summary_edited_text": "Zusammenfassung Demo Szenario.",
+    "lesions": [
+        {
+            "lesion_numbers": [2, 3],
+            "dermatoscopic_features": [
+                "ASYMMETRY",
+                "IRREGULAR_BORDER",
+                "INHOMOGENEOUS_PIGMENTATION",
+            ],
+            "clinical_assessment": "SLIGHTLY_ATYPICAL",
+            "malignancy_risk": "LOW_SUSPICION",
+            "generated_text": (
+                "Läsionen Nr. 2 und 3 (Rücken): leichte Asymmetrie und unregelmäßige "
+                "Begrenzung bei inhomogener Pigmentierung. Klinisch leicht atypisch."
+            ),
+            "edited_text": (
+                "Läsionen Nr. 2 und 3 (Rücken): leichte Asymmetrie und unregelmäßige "
+                "Begrenzung bei inhomogener Pigmentierung. Klinisch leicht atypisch; "
+                "Kontrolluntersuchung in 6 Monaten empfohlen."
+            ),
+        },
+        {
+            "lesion_numbers": [7],
+            "dermatoscopic_features": [
+                "ATYPICAL_PIGMENT_NETWORK",
+                "IRREGULAR_GLOBULES",
+                "MULTICOLOR",
+            ],
+            "clinical_assessment": "CONTROL_NEEDED",
+            "malignancy_risk": "CANNOT_EXCLUDE",
+            "generated_text": (
+                "Läsion Nr. 7 (rechter Oberarm): atypisches Pigmentnetz, unregelmäßige "
+                "Globuli und Mehrfarbigkeit. Klinische Kontrolle erforderlich."
+            ),
+            "edited_text": (
+                "Läsion Nr. 7 (rechter Oberarm): atypisches Pigmentnetz, unregelmäßige "
+                "Globuli und Mehrfarbigkeit. Malignität kann nicht ausgeschlossen werden; "
+                "bei Veränderung umgehende Vorstellung."
+            ),
+        },
+        {
+            "lesion_numbers": [11, 12, 14],
+            "dermatoscopic_features": ["STRUCTURELESS_AREAS"],
+            "clinical_assessment": "UNREMARKABLE",
+            "malignancy_risk": "NO_SUSPICION",
+            "generated_text": (
+                "Läsionen Nr. 11, 12 und 14 (Unterschenkel): strukturlose Areale ohne "
+                "weitere verdächtige dermatoskopische Merkmale. Unauffällig."
+            ),
+            "edited_text": (
+                "Läsionen Nr. 11, 12 und 14 (Unterschenkel): strukturlose Areale ohne "
+                "weitere verdächtige dermatoskopische Merkmale. Unauffällig, kein "
+                "Verdacht auf Malignität."
+            ),
+        },
+    ],
+    "summary_generated_text": (
+        "Gesamteinschätzung: Kontrollbedarf bei ausgewählten Läsionen. "
+        "Hauttyp Fitzpatrick III. Intimbereich und Mundschleimhaut nicht untersucht."
+    ),
+    "summary_edited_text": (
+        "Zusammenfassung (Demo): Mehrere Läsionsgruppen dokumentiert. "
+        "Bei Läsion 7 Kontrollbedarf; übrige Befunde unauffällig bis leicht atypisch. "
+        "Wiedervorstellung in 6 Monaten bzw. bei Veränderung umgehend. "
+        "Kein hochgradiger Malignitätsverdacht in der Gesamtschau."
+    ),
 }
+
+
+def rich_revision_payload(*, summary_note: str | None = None) -> dict:
+    """Copy of DEMO_PAYLOAD with a short revision marker in the summary."""
+    import copy
+
+    payload = copy.deepcopy(DEMO_PAYLOAD)
+    note = summary_note or (
+        "Revision (Demo): Text der Läsion 7 und Zusammenfassung angepasst."
+    )
+    base = (payload.get("summary_edited_text") or "").rstrip()
+    payload["summary_edited_text"] = f"{base}\n\n{note}"
+    if payload.get("lesions"):
+        lesion = (
+            payload["lesions"][1]
+            if len(payload["lesions"]) > 1
+            else payload["lesions"][0]
+        )
+        edited = (lesion.get("edited_text") or "").rstrip()
+        lesion["edited_text"] = (
+            f"{edited} Nach Revision: engmaschigere Kontrolle empfohlen."
+        )
+    return payload
+
 
 # Valid 1-page PDF (~515 B). Used when pypdf is unavailable (e.g. stale
 # Playwright image) so HiDrive mock / MEDIA seeds still pass PdfReader.

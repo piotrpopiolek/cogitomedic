@@ -31,6 +31,9 @@ def main() -> int:
         "portal_phone": ctx.get("portal_phone"),
         "portal_dob": ctx.get("portal_dob"),
         "portal_published_doc_id": ctx.get("portal_published_doc_id"),
+        "revision_demo_doc_id": ctx.get("revision_demo_doc_id"),
+        "revoke_demo_doc_id": ctx.get("revoke_demo_doc_id"),
+        "anna_demo_incoming_pdf": ctx.get("anna_demo_incoming_pdf"),
     }
     path = _REPO / "docs" / "manual" / "_build" / "manual-video-ctx.json"
     path.parent.mkdir(parents=True, exist_ok=True)
