@@ -23,6 +23,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
+from io import BytesIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +36,7 @@ from scripts.manual_demo import (
     login_admin,
     login_doctor,
     login_reception,
+    login_staff,
     login_tablet,
     seed_manual_demo,
     setup_django,
@@ -72,6 +75,52 @@ def _shot(page, name: str) -> None:
     path = OUTPUT_DIR / name
     path.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(path), full_page=True)
+
+
+def _shot_locator(locator, name: str) -> None:
+    path = OUTPUT_DIR / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    locator.screenshot(path=str(path))
+
+
+def _minimal_pdf_path() -> Path:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    writer.write(buf)
+    path = Path(tempfile.gettempdir()) / "cogito-manual-external-demo.pdf"
+    path.write_bytes(buf.getvalue())
+    return path
+
+
+def _set_unfold_theme(page, theme: str) -> None:
+    """Apply light/dark on the live page.
+
+    Product ships ``unfold-force-light.js`` (resets theme on every load), so dark
+    shots must mutate the DOM **after** load — do not reload afterwards.
+    """
+    page.evaluate(
+        """(theme) => {
+          const root = document.documentElement;
+          try {
+            localStorage.setItem('theme', theme);
+            localStorage.setItem('unfold.theme', theme);
+            localStorage.setItem('color-theme', theme);
+          } catch (e) {}
+          root.setAttribute('data-theme', theme);
+          root.setAttribute('data-color-scheme', theme);
+          root.style.colorScheme = theme;
+          if (theme === 'dark') {
+            root.classList.add('dark');
+          } else {
+            root.classList.remove('dark');
+          }
+        }""",
+        theme,
+    )
+    page.wait_for_timeout(400)
 
 
 def capture_reception_patient_personal_data_screenshots(
@@ -124,6 +173,157 @@ def capture_reception_patient_personal_data_screenshots(
     page.wait_for_load_state("networkidle")
 
 
+def capture_external_upload_screenshots(page, base: str, pwd: str, ctx: dict) -> None:
+    entry_id = ctx.get("external_upload_entry_id")
+    if not entry_id:
+        print("WARN: skip external-upload shots (no entry id)", file=sys.stderr)
+        return
+
+    page.context.clear_cookies()
+    login_reception(page, base, pwd)
+    page.goto(f"{base}/admin/", wait_until="networkidle")
+    link = page.locator("a[href*='/admin/external-upload']").first
+    if link.count():
+        try:
+            link.scroll_into_view_if_needed(timeout=5000)
+            page.wait_for_timeout(300)
+        except Exception:
+            pass
+        container = (
+            page.locator("nav, aside, [data-sidebar]")
+            .filter(has=page.locator("a[href*='/admin/external-upload']"))
+            .first
+        )
+        try:
+            if container.count():
+                _shot_locator(container, "reception-external-upload-00-sidebar.png")
+            else:
+                _shot_locator(link, "reception-external-upload-00-sidebar.png")
+        except Exception:
+            _shot(page, "reception-external-upload-00-sidebar.png")
+    else:
+        _shot(page, "reception-external-upload-00-sidebar.png")
+
+    page.goto(f"{base}/admin/external-upload/", wait_until="networkidle")
+    _shot(page, "reception-external-upload-01-hub.png")
+
+    page.goto(f"{base}/admin/external-upload/{entry_id}/", wait_until="networkidle")
+    _shot(page, "reception-external-upload-02-entry-identity.png")
+
+    pdf_path = _minimal_pdf_path()
+    file_input = page.locator("#id_pdf_file")
+    if file_input.count():
+        file_input.set_input_files(str(pdf_path))
+        page.wait_for_timeout(200)
+        upload_form = page.locator('form:has(input[name="action"][value="upload"])')
+        upload_form.locator('button[type="submit"]').click()
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(800)
+    _shot(page, "reception-external-upload-03-entry-upload-select.png")
+
+    preview = page.locator("a[href*='preview-pdf'], a[target='_blank']").filter(
+        has_text="PDF"
+    )
+    if preview.count() == 0:
+        preview = page.locator("a[href*='preview-pdf']")
+    if preview.count():
+        try:
+            preview.first.scroll_into_view_if_needed(timeout=5000)
+            page.wait_for_timeout(200)
+        except Exception:
+            pass
+    _shot(page, "reception-external-upload-04-preview.png")
+
+    publish_action = page.locator('input[name="action"][value="publish"]')
+    if publish_action.count():
+        try:
+            publish_action.first.scroll_into_view_if_needed(timeout=5000)
+            page.wait_for_timeout(200)
+        except Exception:
+            pass
+    ack = page.locator('input[name="verification_ack"]')
+    if ack.count():
+        try:
+            ack.check(timeout=3000)
+        except Exception:
+            pass
+    _shot(page, "reception-external-upload-05-publish-confirm.png")
+
+
+def capture_accounting_screenshots(page, base: str, pwd: str) -> None:
+    page.context.clear_cookies()
+    login_staff(page, base, pwd, username="screenshot_accounting")
+    page.goto(f"{base}/admin/accounting/report/", wait_until="networkidle")
+    _set_unfold_theme(page, "light")
+    _shot(page, "accounting-01-report-light.png")
+    _set_unfold_theme(page, "dark")
+    _shot(page, "accounting-02-report-dark.png")
+    _set_unfold_theme(page, "light")
+
+
+def capture_paper_intake_screenshots(page, base: str, pwd: str, ctx: dict) -> None:
+    entry_id = ctx.get("paper_intake_entry_id")
+    if not entry_id:
+        print("WARN: skip paper-intake shots (no entry id)", file=sys.stderr)
+        return
+
+    page.context.clear_cookies()
+    login_staff(page, base, pwd, username="screenshot_admin")
+    page.goto(f"{base}/admin/paper-intake/", wait_until="networkidle")
+    _shot(page, "paper-intake-01-hub.png")
+
+    page.goto(f"{base}/admin/paper-intake/{entry_id}/", wait_until="networkidle")
+    reason = page.locator("#id_reason_auth").first
+    if reason.count() == 0:
+        reason = page.locator("textarea").first
+    if reason.count():
+        reason.fill("Demo: awaria tabletu — ścieżka papierowa (fikcyjna)")
+        page.wait_for_timeout(200)
+    _shot(page, "paper-intake-02-entry-authorize.png")
+
+    auth_form = page.locator("form").filter(has=page.locator("#id_reason_auth"))
+    if auth_form.count() == 0:
+        auth_form = page.locator("form").filter(
+            has=page.locator('input[name="action"][value="authorize"]')
+        )
+    if auth_form.count():
+        try:
+            auth_form.locator('button[type="submit"]').first.click(timeout=10000)
+            page.wait_for_load_state("networkidle")
+        except Exception as exc:
+            print(f"WARN: paper-intake authorize submit failed: {exc}", file=sys.stderr)
+    page.wait_for_timeout(400)
+    revoke_reason = page.locator("#id_reason_revoke").first
+    if revoke_reason.count():
+        revoke_reason.fill("Demo: cofnięcie autoryzacji (fikcyjne)")
+        page.wait_for_timeout(200)
+    _shot(page, "paper-intake-03-entry-revoke.png")
+
+
+def capture_hidrive_dashboard_screenshot(page, base: str, pwd: str) -> None:
+    page.context.clear_cookies()
+    login_reception(page, base, pwd)
+    page.goto(f"{base}/admin/reception-dashboard/", wait_until="networkidle")
+    section = page.locator("text=HiDrive").first
+    if section.count():
+        section.scroll_into_view_if_needed()
+        page.wait_for_timeout(400)
+    # Prefer the missing-results card/table if present.
+    table = (
+        page.locator("table")
+        .filter(has_text="NoPdfDemo")
+        .or_(page.locator("table").filter(has_text="HiDrive"))
+    )
+    if table.count():
+        card = table.first.locator(
+            "xpath=ancestor::div[contains(@class,'rounded') or contains(@class,'border')][1]"
+        )
+        if card.count():
+            _shot_locator(card, "reception-hidrive-01-missing-results.png")
+            return
+    _shot(page, "reception-hidrive-01-missing-results.png")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -146,9 +346,10 @@ def main() -> int:
     )
     if skip_django:
         pwd = os.environ.get("SCREENSHOT_DEMO_PASSWORD", "ScreenshotDemo2026!")
+        ctx: dict = {}
     else:
         setup_django()
-        ctx: dict = {}
+        ctx = {}
         seed_manual_demo(ctx)
         pwd = ctx["password"]
 
@@ -237,6 +438,18 @@ def main() -> int:
 
         # --- Reception: zmiana danych pacjenta (docs/manual/06-zmiana-danych-pacjenta.md) ---
         capture_reception_patient_personal_data_screenshots(page, base, pwd, _shot)
+
+        # --- External upload hub (07) ---
+        capture_external_upload_screenshots(page, base, pwd, ctx)
+
+        # --- HiDrive missing-results section on reception dashboard ---
+        capture_hidrive_dashboard_screenshot(page, base, pwd)
+
+        # --- Paper intake (admin) ---
+        capture_paper_intake_screenshots(page, base, pwd, ctx)
+
+        # --- Accounting report (08) ---
+        capture_accounting_screenshots(page, base, pwd)
 
         # --- Doctor ---
         page.context.clear_cookies()
