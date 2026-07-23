@@ -71,7 +71,11 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 | 1   | `doctor-01-login.png`           | `/doctor/login/`                  |
 | 2   | `doctor-02-list-filters.png`    | `/doctor/` z filtrami             |
 | 3   | `doctor-03-error-no-intake.png` | (opcjonalnie) błąd brak ankiety   |
-| 4   | `doctor-04-befund-section.png`  | `/doctor/<uuid>/` fragment Befund |
+| 4   | `doctor-04-befund-section.png`  | `/doctor/<uuid>/` — wypełniony Befund (grupy zmian) |
+| 5   | `doctor-05-actions-draft.png`   | Pasek: szkic / podgląd / publikacja |
+| 6   | `doctor-06-published-status.png`| Dokument opublikowany — statusy PDF/HiDrive/SMS |
+| 7   | `doctor-07-revision-resend-sms.png` | Otwarta rewizja + checkbox Wyślij SMS ponownie |
+| 8   | `doctor-08-revoke-modal.png`    | Okno potwierdzenia cofnięcia publikacji |
 
 
 ## Administrator (`04-administrator`)

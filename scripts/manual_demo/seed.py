@@ -194,32 +194,17 @@ def seed_manual_demo(ctx: dict) -> None:
         },
     )
 
+    from scripts.manual_demo.scenario_helpers import DEMO_PAYLOAD
+
     md = create_or_get_medical_document(
         queue_entry_id=entry_done.id,
         intake_form_id=intake_done.id,
         created_by_user_id=doctor.id,
     )
-    medical_payload_v1 = {
-        "schema_version": 1,
-        "authoring_locale": "de-DE",
-        "overall_image_assessment": "NO_CONTROL_NEEDED",
-        "lesions": [
-            {
-                "lesion_numbers": [2, 3],
-                "dermatoscopic_features": [],
-                "clinical_assessment": "UNREMARKABLE",
-                "malignancy_risk": "NO_SUSPICION",
-                "generated_text": "Demo-Läsionen Nr. 2, 3.",
-                "edited_text": "Demo-Läsionen Nr. 2, 3.",
-            }
-        ],
-        "summary_generated_text": "Zusammenfassung Demo.",
-        "summary_edited_text": "Zusammenfassung Demo.",
-    }
     save_draft_document_version(
         medical_document_id=md.id,
         updated_by_user_id=doctor.id,
-        medical_payload=medical_payload_v1,
+        medical_payload=DEMO_PAYLOAD,
         diagnosis_code="DEMO",
         procedure_code="DEMO",
     )
@@ -336,6 +321,9 @@ def seed_manual_demo(ctx: dict) -> None:
             "portal_dob": "2000-03-20",
         }
     )
+    from apps.medical.incoming_pdf_scan import suggest_incoming_pdf_filename
+
+    ctx["anna_demo_incoming_pdf"] = suggest_incoming_pdf_filename(p_done)
     seed_manual_screenshot_extras(ctx)
 
 
@@ -350,6 +338,7 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         PaperIntakeAuthorization,
     )
     from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
+    from apps.medical.services import save_draft_document_version
     from scripts.manual_demo.scenario_helpers import (
         create_draft_document,
         create_submitted_entry,
@@ -357,6 +346,7 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         ensure_manager_user,
         force_publish,
         next_position,
+        rich_revision_payload,
         seed_mock_incoming,
         upsert_patient,
     )
@@ -373,6 +363,8 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         "walter.externaldemo@example.invalid",
         "tina.needpapert1@example.invalid",
         "iris.nopdfdemo@example.invalid",
+        "greta.revisionshot@example.invalid",
+        "rita.revokeshot@example.invalid",
     )
     demo_patients = Patient.objects.filter(email__in=demo_emails)
     demo_entries = QueueEntry.objects.filter(
@@ -456,3 +448,38 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         force_publish(ctx, md_portal, pdf_label="portal_demo")
         ctx["portal_published_doc_id"] = str(md_portal.id)
         ctx["portal_published_entry_id"] = str(entry_portal.id)
+
+    # Published + open revision (doctor-07 revision / resend SMS screenshots).
+    p_rev = upsert_patient(
+        phone="491111000029",
+        first_name="Greta",
+        last_name="RevisionShot",
+        dob=date(1982, 11, 21),
+        email="greta.revisionshot@example.invalid",
+        clinic=clinic,
+    )
+    entry_rev, intake_rev = create_submitted_entry(ctx, patient=p_rev)
+    md_rev = create_draft_document(ctx, entry_rev, intake_rev)
+    force_publish(ctx, md_rev, pdf_label="revision_shot")
+    save_draft_document_version(
+        medical_document_id=md_rev.id,
+        updated_by_user_id=ctx["doctor"].id,
+        medical_payload=rich_revision_payload(),
+        intent="amend",
+    )
+    md_rev.refresh_from_db()
+    ctx["revision_demo_doc_id"] = str(md_rev.id)
+
+    # Separate published doc for revoke modal (doctor-08) — delivery complete.
+    p_revoke = upsert_patient(
+        phone="491111000015",
+        first_name="Rita",
+        last_name="RevokeShot",
+        dob=date(1975, 9, 9),
+        email="rita.revokeshot@example.invalid",
+        clinic=clinic,
+    )
+    entry_revoke, intake_revoke = create_submitted_entry(ctx, patient=p_revoke)
+    md_revoke = create_draft_document(ctx, entry_revoke, intake_revoke)
+    force_publish(ctx, md_revoke, pdf_label="revoke_shot")
+    ctx["revoke_demo_doc_id"] = str(md_revoke.id)

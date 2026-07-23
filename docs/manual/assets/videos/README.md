@@ -38,7 +38,7 @@ Docker:
 docker compose --profile manual-videos run --rm manual-videos
 ```
 
-## Scenariusze operacyjne (SC-001–SC-027)
+## Scenariusze operacyjne (SC-001–SC-028)
 
 Opisy: [scenariusze.md](../../scenariusze.md). Pliki w `scenariusze/` (poza SC-007).
 
@@ -124,6 +124,7 @@ docker compose --profile manual-videos run --rm --no-deps `
 | `scenariusze/sc-025-korekta-danych.webm` | SC-025 Korekta danych pacjenta |
 | `scenariusze/sc-026-dead-letter.webm` | SC-026 Dead letter w skrzynce |
 | `scenariusze/sc-027-baner-hidrive.webm` | SC-027 Baner awarii HiDrive |
+| `scenariusze/sc-028-rewizja-resend-sms.webm` | SC-028 Rewizja + Wyślij SMS ponownie |
 
 Narracje (tekst lektora): pliki `scenariusze/*-narration.pl.md` obok filmów.
 

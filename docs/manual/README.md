@@ -39,7 +39,7 @@ Skrypt składa rozdziały **00, 01, 06, 02–05**, **uzupełnienia o ścieżkę 
 | [01-rejestracja.md](01-rejestracja.md) | Recepcja |
 | [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md) | Recepcja / Administrator / Manager — edycja danych osobowych pacjenta |
 | [02-tablet.md](02-tablet.md) | Tablet poczekalni (także recepcja/admin na `/tablet/`) |
-| [03-doktor.md](03-doktor.md) | Lekarz w panelu medycznym; także widok dla administratora i managera |
+| [03-doktor.md](03-doktor.md) | Lekarz w panelu medycznym: Befund, publikacja, rewizja, revoke, ponowny SMS; także widok dla administratora i managera |
 | [04-administrator.md](04-administrator.md) | Administrator systemu |
 | [04-administrator-paper-intake.md](04-administrator-paper-intake.md) | Administrator / Manager — procedura ścieżki papierowej |
 | [paper_intake_flow.md](paper_intake_flow.md) | Wszyscy — diagram ścieżki papierowej i cyfrowej |

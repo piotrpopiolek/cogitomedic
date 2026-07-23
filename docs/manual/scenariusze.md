@@ -60,10 +60,11 @@ Pisz dla osób nietechnicznych: nazwy z menu zamiast adresów URL, bez żargonu 
 | [SC-025](#sc-025) | Korekta danych pacjenta — skutki dla portalu i HiDrive | Recepcja | `scenariusze/sc-025-korekta-danych.webm` |
 | [SC-026](#sc-026) | Skrzynka wyjściowa: zablokowane po wielu błędach | Recepcja, Administrator | `scenariusze/sc-026-dead-letter.webm` |
 | [SC-027](#sc-027) | Baner awarii HiDrive na dashboardzie recepcji | Recepcja, Administrator | `scenariusze/sc-027-baner-hidrive.webm` |
+| [SC-028](#sc-028) | Rewizja Befundu + Wyślij SMS ponownie | Lekarz | `scenariusze/sc-028-rewizja-resend-sms.webm` |
 
 > Kolumna **Film** = ścieżka względem `docs/manual/assets/videos/`. Pliki `.webm` nie są w gicie — generuj lokalnie (patrz backlog / [README filmów](assets/videos/README.md)).
 
-Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
+Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
 
 ---
 
@@ -111,7 +112,7 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML 
 | **Czego nie robić** | Nie publikuj pustej korekty „żeby zniknęło”. Nie usuwaj wersji ręcznie w panelu admina. |
 | **Docelowo** | Już obsłużone w produkcie. |
 | **Film** | `scenariusze/sc-003-porzuc-rewizje.webm` — *„Jak anulować rozpoczętą korektę Befundu”* |
-| **Powiązane** | [03-doktor.md](03-doktor.md) |
+| **Powiązane** | [03-doktor.md](03-doktor.md) (sekcja 6), SC-028 |
 
 ---
 
@@ -157,7 +158,7 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML 
 | **Przyczyna** | SMS idzie osobnym krokiem po publikacji. Może się nie udać (zły numer, problem firmy wysyłającej SMS) albo trzeba go wysłać ponownie. **Administrator nie może „opublikować ponownie” za lekarza.** |
 | **Co zrobić dziś** | 1) Sprawdź **numer telefonu** pacjenta w karcie pacjenta. 2) Wejdź w **Skrzynka wyjściowa → Zdarzenia**. 3) Znajdź zdarzenie **Wysyłka SMS** dla tej publikacji. 4) Przy błędzie: na dashboardzie recepcji kliknij **Ponów** albo w szczegółach zdarzenia ustaw status na **Oczekuje**. 5) Gdy status to już **Przetworzono**, a SMS trzeba wysłać jeszcze raz — ustaw z powrotem **Oczekuje** (po konsultacji z IT). 6) Odczekaj chwilę na ponowną wysyłkę. |
 | **Czego nie robić** | **Nie** proś lekarza o ponowną publikację tylko po to, by wymusić SMS. Nie zmieniaj statusów zdarzeń PDF/HiDrive bez potrzeby. Nie wysyłaj treści medycznej SMS-em poza systemem. |
-| **Docelowo** | Osobny przycisk „wyślij SMS ponownie” — backlog [`.ai/TODO.md`](../../.ai/TODO.md). |
+| **Docelowo** | Przy republish lekarz ma checkbox **Wyślij SMS ponownie** ([SC-028](scenariusze.md#sc-028)). Ponów z skrzynki wyjściowej — jak wyżej. |
 | **Film** | `scenariusze/sc-006-sms-outbox.webm` — *„Pacjent nie dostał SMS — powtórka ze skrzynki wyjściowej”* |
 | **Powiązane** | [01-rejestracja.md](01-rejestracja.md), [04-administrator.md](04-administrator.md), [05-pacjent-wyniki.md](05-pacjent-wyniki.md) |
 
@@ -298,12 +299,12 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML 
 |------|--------|
 | **Role** | Lekarz |
 | **Objaw** | Opublikowano **błędny** Befund; pacjent mógł już dostać SMS. Trzeba **wycofać dostęp** do PDF w portalu. |
-| **Przyczyna** | **Cofnięcie publikacji** oznacza, że pacjent po zalogowaniu **nie zobaczy** tej wersji wyniku. |
-| **Co zrobić dziś** | 1) Wejdź w szczegóły Befundu. 2) Kliknij **Cofnij publikację** i potwierdź. 3) Poinformuj recepcję, jeśli pacjent dzwoni. 4) Po korekcie — **opublikuj ponownie**; rozważ ponowny SMS wg procedury placówki (SC-006). |
-| **Czego nie robić** | Nie usuwaj wersji ręcznie w panelu admina. Administrator **nie** cofa publikacji za lekarza. SMS „sam się nie cofnie” — pacjent mógł już zobaczyć powiadomienie. |
+| **Przyczyna** | **Cofnięcie publikacji** oznacza, że pacjent po zalogowaniu **nie zobaczy** tej wersji wyniku na liście dokumentów. |
+| **Co zrobić dziś** | 1) Na liście `/doctor/` otwórz **opublikowany** dokument (bez otwartej rewizji). 2) Upewnij się, że statusy PDF / HiDrive / SMS są zakończone (przycisk cofnięcia pojawia się dopiero wtedy). 3) Kliknij **Cofnij publikację** i potwierdź w oknie. 4) Poinformuj recepcję, jeśli pacjent dzwoni. 5) Po korekcie — **opublikuj ponownie**; jeśli pacjent ma dostać nowe powiadomienie, zaznacz **Wyślij SMS ponownie** (SC-028). |
+| **Czego nie robić** | Nie usuwaj wersji ręcznie w panelu admina. Administrator **nie** cofa publikacji za lekarza. SMS „sam się nie cofnie” — pacjent mógł już zobaczyć powiadomienie. Nie zaczynaj rewizji zamiast revoke, jeśli celem jest natychmiastowe ukrycie błędnego PDF. |
 | **Docelowo** | Funkcja jest w UI lekarza. |
 | **Film** | `scenariusze/sc-015-revoke-publikacji.webm` — *„Cofnięcie publikacji — pacjent nie zobaczy błędnego PDF”* |
-| **Powiązane** | [03-doktor.md](03-doktor.md), [05-pacjent-wyniki.md](05-pacjent-wyniki.md) |
+| **Powiązane** | [03-doktor.md](03-doktor.md) (sekcja 8), [05-pacjent-wyniki.md](05-pacjent-wyniki.md), SC-022, SC-028 |
 
 ---
 
@@ -499,6 +500,22 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML 
 
 ---
 
+<a id="sc-028"></a>
+### SC-028 — Rewizja Befundu + Wyślij SMS ponownie
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Lekarz |
+| **Objaw** | Opublikowany wynik wymaga **korekty**; po nowej publikacji pacjent ma dostać **kolejne powiadomienie SMS** (logistyczne). |
+| **Przyczyna** | Przy republish system domyślnie **nie** wysyła SMS ponownie — trzeba zaznaczyć **Wyślij SMS ponownie**. |
+| **Co zrobić dziś** | 1) Otwórz opublikowany Befund → **Rozpocznij rewizję**. 2) Popraw treść (grupy zmian, oceny, teksty). 3) **Podgląd PDF** rewizji. 4) Zaznacz checkbox **Wyślij SMS ponownie**. 5) Opublikuj ponownie. 6) Na liście sprawdź status SMS. |
+| **Czego nie robić** | Nie myl z SC-006 (ponów SMS z skrzynki wyjściowej bez nowej publikacji). Nie zaznaczaj checkboxa „na zapas”, jeśli placówka nie chce ponownego kontaktu. Nie publikuj bez podglądu. |
+| **Docelowo** | Już w UI lekarza. |
+| **Film** | `scenariusze/sc-028-rewizja-resend-sms.webm` — *„Rewizja i ponowny SMS po publikacji”* |
+| **Powiązane** | [03-doktor.md](03-doktor.md) (sekcje 6–7), SC-003, SC-006, SC-015 |
+
+---
+
 ## Backlog filmów
 
 | Priorytet | SC | Czas ~ | Odbiorca | Status |
@@ -518,6 +535,7 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-027` (stabilne znaczniki HTML 
 | Średni | SC-015 | 2 min | Lekarz | **Nagrany** `scenariusze/sc-015-revoke-publikacji.webm` |
 | Średni | SC-017 | 3 min | Admin + lekarz | **Nagrany** `scenariusze/sc-017-paper-intake-t1.webm` |
 | Średni | SC-020 | 3–4 min | Recepcja | **Nagrany** `scenariusze/sc-020-external-upload.webm` |
+| Średni | SC-028 | 2 min | Lekarz | **Nagrany** `scenariusze/sc-028-rewizja-resend-sms.webm` |
 | Niski | SC-009, SC-012, SC-014, SC-016, SC-018, SC-021–SC-027 | 1–3 min | Różne | **Nagrane** — ścieżki w indeksie powyżej |
 
 ### Ponowne nagranie

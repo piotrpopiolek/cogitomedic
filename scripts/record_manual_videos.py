@@ -163,6 +163,21 @@ def _record_doctor(
             record_video_size={"width": vw, "height": vh},
         )
         page = context.new_page()
+        # Matching lab PDF so DRAFT Befund detail opens (seed may clear /incoming).
+        # No Django ORM here — Playwright sync API runs under an async loop.
+        try:
+            from scripts.manual_demo.scenario_helpers import (
+                minimal_demo_pdf_bytes,
+                seed_mock_incoming,
+            )
+
+            anna_name = ctx.get("anna_demo_incoming_pdf") or "Demo_Anna.pdf"
+            seed_mock_incoming(
+                [{"name": anna_name}],
+                file_bytes=minimal_demo_pdf_bytes(title="Demo lab Anna"),
+            )
+        except Exception:
+            pass
         page.goto(f"{base}/doctor/login/", wait_until="networkidle")
         _pause(page)
         login_doctor(page, base, pwd)
@@ -178,6 +193,12 @@ def _record_doctor(
             wait_until="networkidle",
         )
         page.wait_for_timeout(2000)
+        _pause(page, 1200)
+        # Walk rich Befund sections (lesions → recommendations → actions).
+        for _ in range(4):
+            page.mouse.wheel(0, 350)
+            _pause(page, 700)
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         _pause(page, 1500)
         preview = page.locator("#btn-preview-pdf").first
         if preview.count():
@@ -202,6 +223,31 @@ def _record_doctor(
                 wait_until="networkidle",
             )
             _pause(page, 1800)
+            start_rev = page.locator("#btn-start-revision").first
+            if start_rev.count() and start_rev.is_visible():
+                start_rev.hover()
+                _pause(page, 1200)
+            revoke = page.locator("#btn-revoke-publication").first
+            if revoke.count() and revoke.is_visible():
+                revoke.hover()
+                _pause(page, 1400)
+        rev_doc = ctx.get("revision_demo_doc_id")
+        if rev_doc:
+            page.goto(f"{base}/doctor/{rev_doc}/?lang=de", wait_until="networkidle")
+            page.wait_for_timeout(1500)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            _pause(page, 1000)
+            resend = page.locator("#resend_sms").first
+            if resend.count():
+                try:
+                    resend.check(force=True)
+                except Exception:
+                    pass
+                _pause(page, 1400)
+            publish = page.locator("#btn-publish").first
+            if publish.count():
+                publish.hover()
+                _pause(page, 1600)
         context.close()
         browser.close()
 

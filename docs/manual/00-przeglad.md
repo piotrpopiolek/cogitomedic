@@ -20,7 +20,7 @@ Uprawnienia personelu wynikają z roli przypisanej do konta: `Reception`, `Docto
 |--------------|----------------|
 | **Reception** | Panel administracyjny (`/admin/`) — kolejki dzienne, pacjenci, wpisy kolejki, importy, podgląd PDF, dashboard recepcji |
 | **Tablet** | Interfejs `/tablet/` — wybór kolejki i pacjenta, uruchomienie formularza dla pacjenta |
-| **Doctor** | Panel `/doctor/` — kolejka pracy medycznej, formularz Befund, szkic / publikacja |
+| **Doctor** | Panel `/doctor/` — kolejka pracy medycznej, formularz Befund, szkic / publikacja / rewizja / revoke / ponowny SMS |
 | **Manager** | Panel administracyjny i dashboard recepcji (kolejki, pacjenci, urządzenia, import, dokumenty) + panel `/doctor/` do nadzoru operacyjnego; raport księgowości (zakres przypisanych placówek) |
 | **Accounting** | Panel administracyjny — wyłącznie **Raport księgowości** (`/admin/accounting/report/`) i eksport CSV/XLSX; brak dostępu do list pacjentów i innych modułów admina |
 | **Admin** | Pełny panel administracyjny + te same panele co lekarz i (w razie potrzeby) recepcja/tablet |
@@ -47,7 +47,7 @@ Dokładne ścieżki mogą być poprzedzone domeną produkcyjną (np. portal wyni
 
 1. **Recepcja** tworzy lub importuje **kolejkę dzienną** i wpisy pacjentów dla wybranej placówki, gabinetu i zmiany.
 2. **Tablet** (lub personel na tablecie): wybór **dzisiejszej** kolejki → pacjenta → uruchomienie **sesji formularza** (ankieta, zgody, schemat ciała, podpis). Po wysłaniu formularz ma status zakończenia po stronie pacjenta; wpis kolejki przechodzi w stan wskazujący na ukończenie przez pacjenta.
-3. **Lekarz** otwiera dokument medyczny powiązany z wizytą, uzupełnia **Befund**, zapisuje **szkic** lub **publikuje**. Publikacja uruchamia w tle generowanie PDF, upload do archiwum i SMS logistyczny do pacjenta.
+3. **Lekarz** otwiera dokument medyczny powiązany z wizytą, uzupełnia **Befund**, zapisuje **szkic** lub **publikuje**. Publikacja uruchamia w tle generowanie PDF, upload do archiwum i SMS logistyczny do pacjenta. Po publikacji możliwe są: **rewizja** (nowa wersja), **Wyślij SMS ponownie** oraz **cofnięcie publikacji** (pacjent nie zobaczy wycofanej wersji). Szczegóły: [03-doktor.md](03-doktor.md).
 4. **Pacjent** (poza sesją placówki) otrzymuje SMS bez treści medycznej, loguje się na portal wyników, podaje OTP i pobiera PDF.
 
 ## Stany wpisu kolejki
@@ -71,7 +71,7 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 
 - Wymagania produktu: [`.ai/prd.md`](../../.ai/prd.md)
 - Dokumentacja dla działu IT: [`.ai/api-plan-pl.md`](../../.ai/api-plan-pl.md)
-- **Scenariusze operacyjne (FAQ + filmy):** [scenariusze.md](scenariusze.md) — m.in. anulowanie wpisu ([SC-001](scenariusze.md#sc-001)), SMS / skrzynka wyjściowa ([SC-006](scenariusze.md#sc-006)), portal ([SC-008](scenariusze.md#sc-008)–[SC-010](scenariusze.md#sc-010)), HiDrive ([SC-005](scenariusze.md#sc-005), [SC-027](scenariusze.md#sc-027)).
+- **Scenariusze operacyjne (FAQ + filmy):** [scenariusze.md](scenariusze.md) — m.in. anulowanie wpisu ([SC-001](scenariusze.md#sc-001)), SMS / skrzynka wyjściowa ([SC-006](scenariusze.md#sc-006)), portal ([SC-008](scenariusze.md#sc-008)–[SC-010](scenariusze.md#sc-010)), HiDrive ([SC-005](scenariusze.md#sc-005), [SC-027](scenariusze.md#sc-027)), lekarz: rewizja / revoke / ponowny SMS ([SC-003](scenariusze.md#sc-003), [SC-015](scenariusze.md#sc-015), [SC-028](scenariusze.md#sc-028)).
 
 ## Indeks instrukcji
 

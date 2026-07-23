@@ -1,4 +1,4 @@
-"""Scenario-specific demo seeds for SC-001–SC-027 (fictional data only)."""
+"""Scenario-specific demo seeds for SC-001–SC-028 (fictional data only)."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def seed_sc_003(ctx: dict) -> None:
     """Published + pending revision for discard-revision demo."""
     seed_base(ctx)
     from apps.medical.services import save_draft_document_version
-    from scripts.manual_demo.scenario_helpers import DEMO_PAYLOAD
+    from scripts.manual_demo.scenario_helpers import rich_revision_payload
 
     p = upsert_patient(
         phone="491111000003",
@@ -85,7 +85,9 @@ def seed_sc_003(ctx: dict) -> None:
     save_draft_document_version(
         medical_document_id=md.id,
         updated_by_user_id=ctx["doctor"].id,
-        medical_payload={**DEMO_PAYLOAD, "summary_edited_text": "Rewizja demo."},
+        medical_payload=rich_revision_payload(
+            summary_note="Revision Demo SC-003: Korrektur vor Verwerfen."
+        ),
         intent="amend",
     )
     md.refresh_from_db()
@@ -393,6 +395,38 @@ def seed_sc_015(ctx: dict) -> None:
     force_publish(ctx, md, pdf_label="sc015_revoke")
     ctx["sc015_doc_id"] = str(md.id)
     ctx["sc015_patient_last"] = p.last_name
+
+
+def seed_sc_028(ctx: dict) -> None:
+    """Published + open revision — resend SMS on republish demo."""
+    seed_base(ctx)
+    from apps.medical.services import save_draft_document_version
+    from scripts.manual_demo.scenario_helpers import rich_revision_payload
+
+    p = upsert_patient(
+        phone="491111000028",
+        first_name="Otto",
+        last_name="ResendSmsDemo",
+        dob=date(1971, 4, 12),
+        email="otto.resendsmsdemo@example.invalid",
+        clinic=ctx["clinic"],
+    )
+    entry, intake = create_submitted_entry(ctx, patient=p)
+    md = create_draft_document(ctx, entry, intake)
+    force_publish(ctx, md, pdf_label="sc028_resend")
+    save_draft_document_version(
+        medical_document_id=md.id,
+        updated_by_user_id=ctx["doctor"].id,
+        medical_payload=rich_revision_payload(
+            summary_note=(
+                "Revision SC-028: Nach Korrektur erneut veröffentlichen und SMS senden."
+            )
+        ),
+        intent="amend",
+    )
+    md.refresh_from_db()
+    ctx["sc028_doc_id"] = str(md.id)
+    ctx["sc028_patient_last"] = p.last_name
 
 
 def seed_sc_016(ctx: dict) -> None:
@@ -789,6 +823,7 @@ SCENARIO_SEEDERS: dict[str, Callable[[dict], None]] = {
     "SC-025": seed_sc_025,
     "SC-026": seed_sc_026,
     "SC-027": seed_sc_027,
+    "SC-028": seed_sc_028,
 }
 
 
