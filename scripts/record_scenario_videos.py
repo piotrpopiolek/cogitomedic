@@ -133,9 +133,16 @@ def _write_hidrive_mock_state(
 
     Incoming dir must match ``HIDRIVE_INCOMING_PATH`` used by ``web``
     (this repo's docker ``.env`` uses ``/public/incoming``).
+    File bodies are valid minimal PDFs (PdfReader / external-upload preview).
     """
     import base64
     import time
+
+    from scripts.manual_demo.scenario_helpers import minimal_demo_pdf_bytes
+
+    demo_pdf = minimal_demo_pdf_bytes(title="Demo HiDrive incoming")
+    demo_pdf_b64 = base64.b64encode(demo_pdf).decode("ascii")
+    demo_pdf_size = len(demo_pdf)
 
     # Match docker .env default; override via env if needed.
     inc = (
@@ -162,9 +169,11 @@ def _write_hidrive_mock_state(
             path = str(entry.get("path") or "")
             if name and (not path or "/incoming/" in path):
                 path = f"{inc}/{name}"
-            normalized.append({**entry, "name": name, "path": path})
+            normalized.append(
+                {**entry, "name": name, "path": path, "size": demo_pdf_size}
+            )
             if path:
-                files_b64[path] = base64.b64encode(b"%PDF-1.4 demo").decode("ascii")
+                files_b64[path] = demo_pdf_b64
         listings[inc] = normalized
     else:
         # Keep prior listing for this incoming dir when only toggling list_dir_error.
@@ -224,6 +233,46 @@ def _safe_click(locator, page, pause_ms: int = 800) -> bool:
         pause_after_ms=pause_ms,
         wait_network=True,
     )
+
+
+def _show_doctor_pdf_preview(page, base: str, doc_id: str, *, source: str = "") -> None:
+    """Hover + open doctor preview-pdf (new tab) so the video shows a real PDF."""
+    preview = page.locator("#btn-preview-pdf").first
+    if not preview.count():
+        preview = page.locator("a[href*='preview-pdf']").first
+    if preview.count():
+        human_hover(page, preview, pause_ms=1200)
+        try:
+            with page.context.expect_page(timeout=8000) as new_page_info:
+                human_click(page, preview, pause_after_ms=400, wait_network=False)
+            pdf_page = new_page_info.value
+            try:
+                pdf_page.wait_for_load_state("domcontentloaded", timeout=10000)
+            except Exception:
+                pass
+            _pause(pdf_page, 2200)
+            pdf_page.close()
+            ensure_cursor_alive(page)
+            _pause(page, 800)
+            return
+        except Exception:
+            pass
+    # Fallback: fetch via API (Chromium often aborts page.goto on application/pdf).
+    qs = f"?source={source}" if source else ""
+    url = f"{base}/api/v1/medical-documents/{doc_id}/preview-pdf{qs}"
+    try:
+        resp = page.request.get(url)
+        ok = resp.ok and "pdf" in (resp.headers.get("content-type") or "").lower()
+        # Brief hover on preview control again so the video still shows intent.
+        if preview.count():
+            human_hover(page, preview, pause_ms=1500)
+        if not ok:
+            page.goto(url, wait_until="commit")
+            _pause(page, 1500)
+    except Exception:
+        pass
+    ensure_cursor_alive(page)
+    _pause(page, 800)
 
 
 def _new_context(browser, folder: Path, *, width: int, height: int, slow_mo: int):
@@ -362,7 +411,12 @@ def steps_sc_003(page, base: str, ctx: dict) -> None:
     _pause(page, 2000)
     page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(2000)
+    # Published PDF available via source=published; default preview is pending draft.
+    _show_doctor_pdf_preview(page, base, doc_id, source="published")
+    page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 1500)
     btn = page.locator("#btn-discard-revision")
     if btn.count():
         page.evaluate(
@@ -699,16 +753,21 @@ def steps_sc_014(page, base: str, ctx: dict) -> None:
 
 def steps_sc_015(page, base: str, ctx: dict) -> None:
     pwd = ctx["password"]
+    doc_id = ctx["sc015_doc_id"]
     login_doctor(page, base, pwd)
     page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
     _pause(page, 1800)
     page.goto(
-        f"{base}/doctor/{ctx['sc015_doc_id']}/?lang=de",
+        f"{base}/doctor/{doc_id}/?lang=de",
         wait_until="networkidle",
     )
     ensure_cursor_alive(page)
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(2000)
+    _show_doctor_pdf_preview(page, base, doc_id, source="published")
+    page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 1200)
     btn = page.locator("#btn-revoke-publication").first
     if btn.count():
         page.evaluate(

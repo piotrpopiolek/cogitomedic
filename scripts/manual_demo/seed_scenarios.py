@@ -81,7 +81,7 @@ def seed_sc_003(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    force_publish(ctx, md)
+    force_publish(ctx, md, pdf_label="sc003_rev")
     save_draft_document_version(
         medical_document_id=md.id,
         updated_by_user_id=ctx["doctor"].id,
@@ -146,7 +146,25 @@ def seed_sc_006(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    published = force_publish(ctx, md, mark_outbox_processed=True)
+    # PDF ready; SMS outbox FAILED (do not mark sms_sent on version).
+    published = force_publish(
+        ctx,
+        md,
+        mark_outbox_processed=True,
+        with_pdf=True,
+        mark_delivered=False,
+        pdf_label="sc006_sms",
+    )
+    from django.utils import timezone
+
+    from apps.medical.models import MedicalDocumentVersion
+
+    MedicalDocumentVersion.objects.filter(id=published.id).update(
+        hidrive_sent=True,
+        hidrive_sent_at=timezone.now(),
+        hidrive_path=f"/public/patients/demo/sc006_v{published.version_no}.pdf",
+    )
+    published.refresh_from_db()
     ev = create_outbox_event(
         published,
         event_type=OutboxEventType.SMS_SEND,
@@ -318,7 +336,8 @@ def seed_sc_013(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    published = force_publish(ctx, md, mark_outbox_processed=False)
+    # No mock PDF — status stays PENDING so FAILED GENERATE_PDF is the story.
+    published = force_publish(ctx, md, mark_outbox_processed=False, with_pdf=False)
     from apps.outbox.models import OutboxEvent
 
     OutboxEvent.objects.filter(medical_document_version=published).delete()
@@ -371,7 +390,7 @@ def seed_sc_015(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    force_publish(ctx, md)
+    force_publish(ctx, md, pdf_label="sc015_revoke")
     ctx["sc015_doc_id"] = str(md.id)
     ctx["sc015_patient_last"] = p.last_name
 
@@ -605,10 +624,12 @@ def seed_sc_021(ctx: dict) -> None:
 
 
 def seed_sc_022(ctx: dict) -> None:
-    """Verified portal session, empty documents list."""
+    """Verified portal session, empty documents list (after revoke)."""
     seed_base(ctx)
     from django.contrib.sessions.backends.db import SessionStore
     from django.utils import timezone
+
+    from apps.medical.services import revoke_document_version
 
     p = upsert_patient(
         phone="17699990022",
@@ -618,6 +639,13 @@ def seed_sc_022(ctx: dict) -> None:
         email="yvonne.emptydocs@example.invalid",
         clinic=ctx["clinic"],
     )
+    entry, intake = create_submitted_entry(ctx, patient=p)
+    md = create_draft_document(ctx, entry, intake)
+    force_publish(ctx, md, pdf_label="sc022_revoked")
+    revoke_document_version(
+        medical_document_id=md.id,
+        revoked_by_user_id=ctx["doctor"].id,
+    )
     s = SessionStore()
     s.create()
     s["patient_results_patient_id"] = str(p.id)
@@ -625,6 +653,7 @@ def seed_sc_022(ctx: dict) -> None:
     s.save()
     ctx["sc022_session_doc"] = s.session_key
     ctx["sc022_patient_last"] = p.last_name
+    ctx["sc022_doc_id"] = str(md.id)
 
 
 def seed_sc_023(ctx: dict) -> None:
@@ -687,7 +716,15 @@ def seed_sc_026(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    published = force_publish(ctx, md, mark_outbox_processed=False)
+    # PDF generated locally, but HiDrive upload failed → DEAD_LETTER.
+    published = force_publish(
+        ctx,
+        md,
+        mark_outbox_processed=False,
+        with_pdf=True,
+        mark_delivered=False,
+        pdf_label="sc026_dead",
+    )
     from apps.outbox.models import OutboxEvent
 
     OutboxEvent.objects.filter(medical_document_version=published).delete()

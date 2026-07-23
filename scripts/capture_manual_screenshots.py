@@ -24,7 +24,6 @@ import argparse
 import os
 import sys
 import tempfile
-from io import BytesIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -84,14 +83,10 @@ def _shot_locator(locator, name: str) -> None:
 
 
 def _minimal_pdf_path() -> Path:
-    from pypdf import PdfWriter
+    from scripts.manual_demo.scenario_helpers import minimal_demo_pdf_bytes
 
-    writer = PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    buf = BytesIO()
-    writer.write(buf)
     path = Path(tempfile.gettempdir()) / "cogito-manual-external-demo.pdf"
-    path.write_bytes(buf.getvalue())
+    path.write_bytes(minimal_demo_pdf_bytes(title="Demo external upload"))
     return path
 
 
@@ -469,6 +464,47 @@ def main() -> int:
         )
         page.wait_for_timeout(1500)
         _shot(page, "doctor-04-befund-section.png")
+
+        # Preview PDF (WeasyPrint) + published doc with COMPLETED mock PDF status.
+        preview = page.locator("#btn-preview-pdf").first
+        if preview.count():
+            try:
+                with page.expect_popup(timeout=8000) as popup_info:
+                    preview.click()
+                pdf_page = popup_info.value
+                pdf_page.wait_for_load_state("domcontentloaded")
+                pdf_page.wait_for_timeout(1200)
+                pdf_page.close()
+            except Exception:
+                page.goto(
+                    f"{base}/api/v1/medical-documents/{ctx['medical_document_id']}/preview-pdf",
+                    wait_until="load",
+                )
+                page.wait_for_timeout(800)
+
+        portal_doc = ctx.get("portal_published_doc_id")
+        if portal_doc:
+            page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
+            page.wait_for_timeout(800)
+            page.goto(
+                f"{base}/doctor/{portal_doc}/?lang=de",
+                wait_until="networkidle",
+            )
+            page.wait_for_timeout(1200)
+            pub_preview = page.locator(
+                "a[href*='preview-pdf'][href*='source=published'], "
+                "#btn-preview-pdf, a[href*='preview-pdf']"
+            ).first
+            if pub_preview.count():
+                try:
+                    with page.expect_popup(timeout=8000) as popup_info:
+                        pub_preview.click()
+                    pdf_page = popup_info.value
+                    pdf_page.wait_for_load_state("domcontentloaded")
+                    pdf_page.wait_for_timeout(1000)
+                    pdf_page.close()
+                except Exception:
+                    pass
 
         # --- Tablet unassigned ---
         tpage.context.clear_cookies()

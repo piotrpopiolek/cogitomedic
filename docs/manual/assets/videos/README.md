@@ -139,6 +139,54 @@ listingi/`rejected_`/timeout z seeda i z recordera (osobny kontener Playwright).
 
 Ścieżka listingu musi zgadzać się z `HIDRIVE_INCOMING_PATH` (u Was często `/public/incoming`).
 
+### Mock PDF (Befund / portal / lab)
+
+Seedy **nie** uruchamiają pełnego WeasyPrint + outbox workera. Zamiast tego
+`force_publish(..., with_pdf=True)` (domyślnie) woła
+`attach_demo_published_pdf()` w `scenario_helpers.py`:
+
+- zapisuje **poprawny** minimalny PDF (kilka KB, `pypdf`) pod `MEDIA_ROOT/demo_befund/`
+- ustawia `pdf_generation_status=COMPLETED`, checksum, opcjonalnie flagi HiDrive/SMS
+  (żeby revoke i lista w portalu działały jak po pełnej dostawie)
+- mock HiDrive dostaje te same bajty na ścieżce archiwum / `/incoming/` (SC-011/012)
+
+Wyjątki: SC-013 (`with_pdf=False` — FAILED `GENERATE_PDF`), SC-006 (PDF bez
+`sms_sent`), SC-026 (PDF bez pełnego delivery). SC-022: publikacja + revoke →
+pusta lista w portalu.
+
+Doctor **preview** (`/preview-pdf`) nadal generuje PDF na żywo (WeasyPrint);
+mock MEDIA jest dla statusu COMPLETED, portalu i pobrania.
+
+```powershell
+# Seed PDF-heavy scenarios + nagranie
+foreach ($s in 'sc-003','sc-011','sc-012','sc-015','sc-022') {
+  docker compose exec -w /app -e PYTHONPATH=/app web `
+    python scripts/manual_demo/seed_scenarios.py --scenario $s --write-ctx
+}
+docker compose --profile manual-videos run --rm --no-deps `
+  -e PYTHONPATH=/app -e SCREENSHOT_SKIP_DJANGO=1 `
+  -e HIDRIVE_INCOMING_PATH=/public/incoming `
+  manual-videos python scripts/record_scenario_videos.py `
+  --scenario sc-003 --scenario sc-011 --scenario sc-012 `
+  --scenario sc-015 --scenario sc-022 `
+  --base-url http://web:8000 --slow-mo 500
+```
+
+Film roli lekarz (podgląd PDF) przy przestarzałym obrazie Playwright:
+
+```powershell
+docker compose exec -w /app -e PYTHONPATH=/app web `
+  python scripts/manual_demo/write_manual_video_ctx.py
+docker compose --profile manual-videos run --rm --no-deps `
+  -e PYTHONPATH=/app -e SCREENSHOT_SKIP_DJANGO=1 `
+  manual-videos python scripts/record_manual_videos.py `
+  --role doctor --base-url http://web:8000 --slow-mo 400
+```
+
+`minimal_demo_pdf_bytes()` ma wbudowany fallback PDF (bez `pypdf`), więc recorder
+HiDrive działa nawet gdy obraz `Dockerfile.screenshots` jest nieaktualny.
+Zalecane okresowe: `docker compose build screenshots manual-videos`.
+
 ### Film SC-007 (import)
 
 ```bash

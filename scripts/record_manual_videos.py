@@ -179,6 +179,29 @@ def _record_doctor(
         )
         page.wait_for_timeout(2000)
         _pause(page, 1500)
+        preview = page.locator("#btn-preview-pdf").first
+        if preview.count():
+            try:
+                with page.expect_popup(timeout=8000) as popup_info:
+                    preview.click()
+                pdf_page = popup_info.value
+                pdf_page.wait_for_load_state("domcontentloaded")
+                _pause(pdf_page, 2000)
+                pdf_page.close()
+            except Exception:
+                page.goto(
+                    f"{base}/api/v1/medical-documents/"
+                    f"{ctx['medical_document_id']}/preview-pdf",
+                    wait_until="load",
+                )
+                _pause(page, 1800)
+        portal_doc = ctx.get("portal_published_doc_id")
+        if portal_doc:
+            page.goto(
+                f"{base}/doctor/{portal_doc}/?lang=de",
+                wait_until="networkidle",
+            )
+            _pause(page, 1800)
         context.close()
         browser.close()
 
@@ -345,9 +368,29 @@ def main() -> int:
         )
         return 1
 
-    setup_django()
-    ctx: dict = {}
-    seed_manual_demo(ctx)
+    skip_django = os.environ.get("SCREENSHOT_SKIP_DJANGO", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    ctx_path = REPO_ROOT / "docs" / "manual" / "_build" / "manual-video-ctx.json"
+    if skip_django:
+        if not ctx_path.is_file():
+            print(
+                f"Brak {ctx_path.name} — najpierw w kontenerze web:\n"
+                "  docker compose exec -w /app -e PYTHONPATH=/app web "
+                "python scripts/manual_demo/write_manual_video_ctx.py",
+                file=sys.stderr,
+            )
+            return 1
+        import json
+
+        ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+        ctx.setdefault("password", "ScreenshotDemo2026!")
+    else:
+        setup_django()
+        ctx = {}
+        seed_manual_demo(ctx)
 
     roles = list(ROLE_HANDLERS.keys()) if args.role == "all" else [args.role]
     out_dir = args.out_dir.resolve()

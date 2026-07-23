@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import date, timedelta
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 DEMO_PASSWORD = "ScreenshotDemo2026!"
@@ -19,6 +22,107 @@ DEMO_PAYLOAD = {
     "summary_generated_text": "Zusammenfassung Demo Szenario.",
     "summary_edited_text": "Zusammenfassung Demo Szenario.",
 }
+
+# Valid 1-page PDF (~515 B). Used when pypdf is unavailable (e.g. stale
+# Playwright image) so HiDrive mock / MEDIA seeds still pass PdfReader.
+_MINIMAL_PDF_B64 = (
+    "JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgKENvZ2l0b21lZGljYSBtYW51YWwgZGVtbykK"
+    "L1RpdGxlIChDb2dpdG8gRGVtbyBCZWZ1bmQpCi9DcmVhdG9yIChzY3JpcHRzXDA1Nm1hbnVhbFwxMzdkZW1v"
+    "KQo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0NvdW50IDEKL0tpZHMgWyA0IDAgUiBdCj4+"
+    "CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9DYXRhbG9nCi9QYWdlcyAyIDAgUgo+PgplbmRvYmoKNCAwIG9i"
+    "ago8PAovVHlwZSAvUGFnZQovUmVzb3VyY2VzIDw8Cj4+Ci9NZWRpYUJveCBbIDAuMCAwLjAgNTk1IDg0MiBd"
+    "Ci9QYXJlbnQgMiAwIFIKPj4KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAx"
+    "NSAwMDAwMCBuIAowMDAwMDAwMTM4IDAwMDAwIG4gCjAwMDAwMDAxOTcgMDAwMDAgbiAKMDAwMDAwMDI0NiAw"
+    "MDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDUKL1Jvb3QgMyAwIFIKL0luZm8gMSAwIFIKPj4Kc3RhcnR4cmVm"
+    "CjM0MAolJUVPRgo="
+)
+
+
+def minimal_demo_pdf_bytes(*, title: str = "Cogito Demo Befund") -> bytes:
+    """Return a few-KB valid PDF (pypdf / PdfReader / browser preview).
+
+    Used for MEDIA seeds, HiDrive mock ``download``, and external-upload demos.
+    Prefers ``pypdf`` when installed; otherwise returns a baked-in valid PDF.
+    """
+    import base64
+
+    try:
+        from pypdf import PdfWriter
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=595, height=842)  # A4
+        writer.add_metadata(
+            {
+                "/Title": title,
+                "/Producer": "Cogitomedica manual demo",
+                "/Creator": "scripts.manual_demo",
+            }
+        )
+        buf = BytesIO()
+        writer.write(buf)
+        return buf.getvalue()
+    except ImportError:
+        return base64.b64decode(_MINIMAL_PDF_B64)
+
+
+def attach_demo_published_pdf(
+    version,
+    *,
+    label: str = "demo",
+    mark_delivered: bool = True,
+    seed_hidrive_archive: bool = True,
+) -> Path:
+    """Write minimal PDF under MEDIA_ROOT and mark version COMPLETED.
+
+    When ``mark_delivered`` is True, also sets HiDrive/SMS delivery flags so
+    revoke UI / portal list behave like a finished outbox chain.
+    """
+    from django.conf import settings
+    from django.utils import timezone
+
+    from apps.medical.models import PdfStatus
+
+    pdf_bytes = minimal_demo_pdf_bytes(title=f"Demo Befund {label}")
+    rel = f"demo_befund/{label}_{version.id}.pdf"
+    full = Path(settings.MEDIA_ROOT) / rel
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_bytes(pdf_bytes)
+
+    version.pdf_generation_status = PdfStatus.COMPLETED
+    version.pdf_local_path = rel.replace("\\", "/")
+    version.pdf_checksum_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    update_fields = [
+        "pdf_generation_status",
+        "pdf_local_path",
+        "pdf_checksum_sha256",
+    ]
+
+    hidrive_path = f"/public/patients/demo/{label}_v{version.version_no}.pdf"
+    if mark_delivered:
+        now = timezone.now()
+        version.hidrive_sent = True
+        version.hidrive_sent_at = now
+        version.hidrive_path = hidrive_path
+        version.sms_sent = True
+        version.sms_sent_at = now
+        update_fields.extend(
+            [
+                "hidrive_sent",
+                "hidrive_sent_at",
+                "hidrive_path",
+                "sms_sent",
+                "sms_sent_at",
+            ]
+        )
+
+    version.save(update_fields=update_fields)
+
+    if seed_hidrive_archive and mark_delivered:
+        from apps.integrations.hidrive import client as hidrive_client
+
+        hidrive_client._MockHiDriveAdapter.seed_file(hidrive_path, pdf_bytes)
+
+    return full
 
 
 def assert_demo_seed_dev_only() -> None:
@@ -206,8 +310,22 @@ def create_draft_document(ctx: dict, entry, intake):
     return md
 
 
-def force_publish(ctx: dict, md, *, mark_outbox_processed: bool = True):
-    """Publish draft and optionally mark outbox PROCESSED (avoids worker noise)."""
+def force_publish(
+    ctx: dict,
+    md,
+    *,
+    mark_outbox_processed: bool = True,
+    with_pdf: bool = True,
+    mark_delivered: bool = True,
+    pdf_label: str | None = None,
+):
+    """Publish draft and optionally attach a mock PDF + mark outbox PROCESSED.
+
+    ``with_pdf=True`` (default) writes a valid minimal PDF under MEDIA and sets
+    ``pdf_generation_status=COMPLETED`` so doctor list / portal / revoke demos
+    see real UI. Set ``with_pdf=False`` for GENERATE_PDF failure scenarios
+    (e.g. SC-013).
+    """
     from apps.medical.services import publish_document_version
     from apps.outbox.models import OutboxEvent, OutboxStatus
 
@@ -221,6 +339,14 @@ def force_publish(ctx: dict, md, *, mark_outbox_processed: bool = True):
         OutboxEvent.objects.filter(medical_document_version=published).update(
             status=OutboxStatus.PROCESSED
         )
+    if with_pdf:
+        label = pdf_label or f"pub_{str(published.id)[:8]}"
+        attach_demo_published_pdf(
+            published,
+            label=label,
+            mark_delivered=mark_delivered,
+        )
+        published.refresh_from_db()
     md.refresh_from_db()
     return published
 
@@ -250,11 +376,21 @@ def seed_mock_incoming(
     files: list[dict],
     *,
     remote_dir: str | None = None,
-    file_bytes: bytes | None = b"%PDF-1.4 demo",
+    file_bytes: bytes | None = None,
 ) -> None:
-    """Seed mock /incoming listing visible to the ``web`` process (shared JSON state)."""
+    """Seed mock /incoming listing visible to the ``web`` process (shared JSON state).
+
+    Default ``file_bytes`` is a valid minimal PDF so ``download_external_pdf`` /
+    PdfReader accept mock lab files (SC-011/012 and external-upload previews).
+    Pass ``file_bytes=b""`` only when you need empty content; pass ``None`` to
+    use the default valid PDF (or skip seeding file bodies when ``files`` is empty).
+    """
     from apps.integrations.hidrive import client as hidrive_client
     from apps.medical.incoming_pdf_scan import hidrive_incoming_dir
+
+    if file_bytes is None:
+        file_bytes = minimal_demo_pdf_bytes(title="Demo lab incoming PDF")
+    pdf_size = len(file_bytes)
 
     inc = remote_dir or hidrive_incoming_dir()
     # Rewrite relative paths to the configured incoming dir (e.g. /public/incoming).
@@ -264,7 +400,8 @@ def seed_mock_incoming(
         path = str(entry.get("path") or "")
         if name and (not path or path.startswith("/incoming/")):
             path = f"{inc.rstrip('/')}/{name}"
-        normalized_files.append({**entry, "name": name, "path": path})
+        # Prefer real byte length so dashboard / matching UI show plausible sizes.
+        normalized_files.append({**entry, "name": name, "path": path, "size": pdf_size})
 
     adapter = hidrive_client._MockHiDriveAdapter
     adapter._load_state_from_disk()
@@ -277,7 +414,7 @@ def seed_mock_incoming(
     adapter._dir_listings[inc] = normalized_files
     adapter._list_dir_error = None
     adapter._persist_state()
-    if file_bytes is not None:
+    if file_bytes is not None and normalized_files:
         for entry in normalized_files:
             path = str(entry.get("path") or "")
             if path:

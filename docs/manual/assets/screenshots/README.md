@@ -31,4 +31,17 @@ Skrypt [`scripts/capture_manual_screenshots.py`](../../../scripts/capture_manual
 2. **Spójność:** ta sama rozdzielczość dla paneli web (np. 1920×1080); tablet — orientacja landscape, typowa rozdzielczość urządzenia.
 3. **Nazwy:** `rola-NN-opis-krotki.png` (np. `doctor-04-befund-form.png`).
 
+### Mock PDF (Befund / portal)
+
+Skrypt seeda (`scripts/manual_demo/seed.py` + `scenario_helpers.attach_demo_published_pdf`)
+zapisuje **prawidłowe** minimalne PDF-y pod `MEDIA` i w mocku HiDrive
+(`HIDRIVE_USE_MOCK=1`, stan w `docs/manual/_build/hidrive-mock-state.json`). Dzięki temu:
+
+- lista lekarza pokazuje status PDF `COMPLETED` dla opublikowanych dem
+- portal (`patient-03-documents.png`) ma wpis do pobrania
+- bramka lab PDF / external-upload używa bajtów akceptowanych przez `PdfReader`
+
+Podgląd w panelu lekarza (`preview-pdf`) jest generowany na żywo (WeasyPrint);
+mock MEDIA nie zastępuje tego endpointu.
+
 Jeśli plik jeszcze nie istnieje, w przeglądarce dokumentacji obraz się nie wyświetli — uzupełnij zrzuty na środowisku staging przed publikacją PDF/wiki.
