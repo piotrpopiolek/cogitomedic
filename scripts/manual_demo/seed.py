@@ -9,14 +9,22 @@ from datetime import date, timedelta
 
 
 def _delete_medical_docs_for_queue(queue) -> None:
-    """Drop medical docs for a daily queue, clearing PROTECT FKs first."""
+    """Drop medical docs for fixed screenshot rows (positions 1–3) only.
+
+    Scenario seeds share the same daily queue; wiping *all* docs would destroy
+    previously seeded SC-* medical documents when batch-seeding ``--all``.
+    """
     from apps.medical.models import (
         ExternalPdfAttachment,
         MedicalDocument,
         MedicalDocumentVersion,
     )
+    from apps.reception.models import QueueEntry
 
-    docs = MedicalDocument.objects.filter(queue_entry__daily_queue=queue)
+    entry_ids = QueueEntry.objects.filter(
+        daily_queue=queue, position_no__in=(1, 2, 3)
+    ).values_list("id", flat=True)
+    docs = MedicalDocument.objects.filter(queue_entry_id__in=entry_ids)
     MedicalDocumentVersion.objects.filter(medical_document__in=docs).update(
         external_selected_attachment=None
     )
@@ -434,3 +442,17 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
     entry_hd, intake_hd = create_submitted_entry(ctx, patient=p_hd)
     create_draft_document(ctx, entry_hd, intake_hd)
     ctx["hidrive_missing_entry_id"] = str(entry_hd.id)
+
+    # Portal patient (session_doc_key): published Befund + mock PDF for documents list.
+    from apps.reception.models import Patient as PatientModel
+
+    p_portal = PatientModel.objects.filter(
+        email="portal.patient@example.invalid"
+    ).first()
+    if p_portal is not None:
+        p_portal.clinic_sites.add(clinic)
+        entry_portal, intake_portal = create_submitted_entry(ctx, patient=p_portal)
+        md_portal = create_draft_document(ctx, entry_portal, intake_portal)
+        force_publish(ctx, md_portal, pdf_label="portal_demo")
+        ctx["portal_published_doc_id"] = str(md_portal.id)
+        ctx["portal_published_entry_id"] = str(entry_portal.id)
