@@ -32,15 +32,24 @@ Szkice i wpisy oczekujące na pierwsze utworzenie dokumentu są widoczne dla os�
 
 Tabela pokazuje m.in.:
 
-- **Pacjent** (nazwisko, imię),
+- **Pacjent** (nazwisko, imię) — przy szkicu dodatkowo kto **aktualnie edytuje** albo kto **ostatnio** zapisał szkic,
 - **Data** kolejki,
-- **Status dokumentu** — np. szkic lub opublikowany (oraz etykieta **Rewizja**, gdy trwa korekta),
+- **Status dokumentu** — np. szkic lub opublikowany (oraz etykieta **W edycji** przy aktywnym semaforze, **Rewizja**, gdy trwa korekta),
 - **PDF** — status przygotowania pliku PDF,
 - **HiDrive** — status zapisu do archiwum,
 - **SMS** — status wysyłki powiadomienia logistycznego,
 - Kolumna akcji: **Otwórz**.
 
-**Blokada edycji:** jeśli dokument jest aktualnie edytowany przez inną osobę, zobaczysz oznaczenie blokady i nie otworzysz edycji do czasu jej zwolnienia.  
+### Kolory wierszy (legenda)
+
+| Kolor | Znaczenie |
+| --- | --- |
+| **Zielony** | Dokument **opublikowany** i pipeline wychodzący zakończony (PDF / HiDrive / SMS). |
+| **Żółty** | Szkic (`ENTWURF`) z **aktywną blokadą edycji** — ktoś właśnie pracuje nad Befundem. W kolumnie Status widać chip **W edycji**; pod nazwiskiem pacjenta: **Edytuje: …** (także gdy to Ty). Przycisk **Otwórz** jest zablokowany tylko gdy edytuje **inna** osoba. |
+| **Różowy** | Wpis oczekuje na publikację (okno SLA) — im intensywniejszy odcień, tym bliżej limitu czasu. |
+
+Blokada edycji wygasa po ok. **6 godzinach** bezczynności. Po wygaśnięciu wiersz przestaje być żółty, ale przy szkicu nadal widać **Ostatnio edytował: …** (bez blokady otwarcia) — żeby zaległe ENTWURF nie wyglądały jak „niczyje”.
+
 Zielone podświetlenie oznacza dokument opublikowany i zakończone przetwarzanie.
 
 ### Filtry (formularz nad tabelą)

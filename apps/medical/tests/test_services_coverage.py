@@ -2355,7 +2355,10 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertIn("row_has_edit_semaphore", item)
         self.assertIn("row_is_fully_delivered", item)
         self.assertFalse(item["is_locked_by_other"])
+        self.assertTrue(item["is_locked_by_self"])
         self.assertTrue(item["row_has_edit_semaphore"])
+        self.assertEqual(item["editor_activity"], "active")
+        self.assertTrue(item["editor_username"])
         self.assertFalse(item["row_is_fully_delivered"])
 
     def test_work_queue_locked_by_other(self):
@@ -2377,7 +2380,42 @@ class DocumentLockTests(ServicesCoverageBase):
         found = [i for i in items if i["document_id"] == str(doc.id)]
         self.assertEqual(len(found), 1)
         self.assertTrue(found[0]["is_locked_by_other"])
+        self.assertFalse(found[0]["is_locked_by_self"])
         self.assertTrue(found[0]["row_has_edit_semaphore"])
+        self.assertEqual(found[0]["editor_activity"], "active")
+        self.assertTrue(found[0]["editor_username"])
+
+    def test_work_queue_expired_lock_shows_last_editor(self):
+        other = self._other_doctor("wq-last")
+        doc = self._make_draft_doc()
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        doc.locked_by_user = other
+        doc.locked_at = timezone.now() - timedelta(
+            hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1
+        )
+        doc.updated_by_user = other
+        doc.current_version_no = 1
+        doc.save(
+            update_fields=[
+                "locked_by_user",
+                "locked_at",
+                "updated_by_user",
+                "current_version_no",
+            ]
+        )
+        items, total = list_doctor_work_queue(user=self.doctor)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertFalse(found[0]["row_has_edit_semaphore"])
+        self.assertFalse(found[0]["is_locked_by_other"])
+        self.assertEqual(found[0]["editor_activity"], "last")
+        self.assertTrue(found[0]["editor_username"])
 
     def test_work_queue_row_fully_delivered_when_pipeline_complete(self):
         doc = self._make_medical_doc()

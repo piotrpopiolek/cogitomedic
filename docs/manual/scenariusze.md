@@ -282,11 +282,11 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML 
 | Pole | Treść |
 |------|--------|
 | **Role** | Lekarz, Manager |
-| **Objaw** | Na liście lekarza widać **blokadę**; przy wejściu komunikat, że dokument edytuje **inna osoba**. Nie da się zapisać szkicu. |
-| **Przyczyna** | Tylko **jedna osoba** naraz może edytować szkic. Blokada trwa do zamknięcia karty / publikacji albo max. ok. **24 h**. |
-| **Co zrobić dziś** | 1) Poproś kolegę/koleżankę o **zapisanie i zamknięcie** karty albo o publikację. 2) Po 24 h blokada wygasa sama. 3) W nagłych przypadkach — IT. |
+| **Objaw** | Na liście `/doctor/` wiersz jest **żółty**, w Statusie chip **W edycji / In Bearbeitung**, pod pacjentem **Edytuje: …**; przycisk **Otwórz** zablokowany, gdy edytuje **inna** osoba. Przy wejściu w szczegóły — komunikat o blokadzie. |
+| **Przyczyna** | Tylko **jedna osoba** naraz może edytować szkic. Blokada trwa do zamknięcia karty / publikacji albo max. ok. **6 h** (`DOCUMENT_LOCK_TIMEOUT_HOURS`). |
+| **Co zrobić dziś** | 1) Poproś kolegę/koleżankę o **zapisanie i zamknięcie** karty albo o publikację. 2) Po ok. 6 h blokada wygasa sama — wiersz przestaje być żółty; może zostać etykieta **Ostatnio edytował: …** (otwarcie dozwolone). 3) W nagłych przypadkach — IT. |
 | **Czego nie robić** | Nie pracuj na tym samym szkicu w dwóch kartach przeglądarki jednocześnie. |
-| **Docelowo** | Rozszerzenie blokady przy korektach — backlog. |
+| **Docelowo** | Funkcja listy (chip + legenda) — wdrożona; rozszerzenie blokady przy korektach PUBLISHED — backlog M7. |
 | **Film** | `scenariusze/sc-014-blokada-dokumentu.webm` — *„Dokument zablokowany — kolega ma otwarty szkic”* |
 | **Powiązane** | [03-doktor.md](03-doktor.md) |
 

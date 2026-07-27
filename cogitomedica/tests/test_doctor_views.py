@@ -163,6 +163,11 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIn("dark:text-base-300", html)
         self.assertIn("dark:border-base-700", html)
 
+    def test_list_includes_row_color_legend(self) -> None:
+        self._login_doctor()
+        html = self.client.get("/doctor/").content.decode()
+        self.assertIn('role="note"', html)
+
     def test_list_hides_oversight_filters_for_doctor(self) -> None:
         self._login_doctor()
         resp = self.client.get("/doctor/")

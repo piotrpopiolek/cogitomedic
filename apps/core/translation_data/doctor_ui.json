@@ -1034,6 +1034,31 @@
     "en": "Edited by",
     "pl": "Edytuje"
   },
+  "doctor.list_status_in_editing": {
+    "de": "In Bearbeitung",
+    "en": "In progress",
+    "pl": "W edycji"
+  },
+  "doctor.list_last_edited_by_prefix": {
+    "de": "Zuletzt bearbeitet von",
+    "en": "Last edited by",
+    "pl": "Ostatnio edytował"
+  },
+  "doctor.list_last_edited_tooltip": {
+    "de": "Sperre abgelaufen oder nicht aktiv — Entwurf kann geöffnet werden.",
+    "en": "Lock expired or inactive — draft can be opened.",
+    "pl": "Blokada wygasła lub nieaktywna — szkic można otworzyć."
+  },
+  "doctor.list_editing_self_tooltip": {
+    "de": "Sie bearbeiten diesen Entwurf gerade.",
+    "en": "You are currently editing this draft.",
+    "pl": "Aktualnie edytujesz ten szkic."
+  },
+  "doctor.list_row_color_legend": {
+    "de": "Farben: grün = veröffentlicht und zugestellt; gelb = Entwurf wird gerade bearbeitet; rosa = wartet auf Veröffentlichung.",
+    "en": "Colors: green = published and delivered; yellow = draft currently being edited; pink = waiting for publication.",
+    "pl": "Kolory: zielony = opublikowany i dostarczony; żółty = szkic w trakcie edycji; różowy = oczekuje na publikację."
+  },
   "doctor.unlock": {
     "de": "Freigeben",
     "en": "Unlock",
