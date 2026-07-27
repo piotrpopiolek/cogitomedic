@@ -2773,7 +2773,7 @@ def list_doctor_work_queue(
     queue_entry_ids = [entry.id for entry in entries]
     docs = (
         MedicalDocument.objects.filter(queue_entry_id__in=queue_entry_ids)
-        .select_related("locked_by_user")
+        .select_related("locked_by_user", "updated_by_user")
         .prefetch_related(
             Prefetch(
                 "versions",
@@ -2918,10 +2918,29 @@ def _serialize_doctor_work_queue_row(
         and doc.locked_by_user_id != getattr(user, "id", None)
         and not _is_admin_or_manager_medical_oversight(user)
     )
+    is_locked_by_self = bool(
+        doc and locked_eff and doc.locked_by_user_id == getattr(user, "id", None)
+    )
     # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT.
     row_has_edit_semaphore = bool(
         doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
     )
+    # Active lock → who holds it (self or other). Expired lock / idle DRAFT →
+    # last draft editor so stale ENTWURF rows are not "ownerless".
+    editor_activity: str | None = None
+    editor_username: str | None = None
+    if doc and doc.status == MedicalDocStatus.DRAFT:
+        if locked_eff and locked_name:
+            editor_activity = "active"
+            editor_username = locked_name
+        else:
+            updater = getattr(doc, "updated_by_user", None)
+            if updater is None and doc.updated_by_user_id:
+                updater = StaffUser.objects.filter(id=doc.updated_by_user_id).first()
+            last_name = staff_user_display_name(updater) if updater else ""
+            if last_name:
+                editor_activity = "last"
+                editor_username = last_name
     # Green row = published and outbound pipeline finished (same rules as list columns).
     row_is_fully_delivered = bool(
         doc
@@ -2970,6 +2989,9 @@ def _serialize_doctor_work_queue_row(
         "locked_by_username": locked_name,
         "locked_at": locked_at.isoformat() if locked_at else None,
         "is_locked_by_other": is_locked_by_other,
+        "is_locked_by_self": is_locked_by_self,
+        "editor_activity": editor_activity,
+        "editor_username": editor_username,
         "row_is_published": is_published,
         "row_has_edit_semaphore": row_has_edit_semaphore,
         "row_is_fully_delivered": row_is_fully_delivered,

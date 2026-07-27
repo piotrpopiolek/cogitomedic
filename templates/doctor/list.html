@@ -7,7 +7,8 @@
 {% endblock %}
 {% block title %}{{ ui.list_title }}{% endblock %}
 {% block content_inner %}
-<h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-6">{{ ui.list_title }}</h1>
+<h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-2">{{ ui.list_title }}</h1>
+<p class="text-sm text-base-600 dark:text-base-300 mb-6" role="note">{{ ui.list_row_color_legend }}</p>
 
 <form method="get" class="mb-6 p-4 bg-white dark:bg-base-900 rounded-default border border-base-200 dark:border-base-700 shadow-xs">
   {% for name, value in list_query_hidden.items %}
@@ -93,12 +94,18 @@
       {% for item in items %}
       <tr class="doctor-queue-row {% if item.row_is_fully_delivered %}doctor-queue-row--delivered{% elif item.row_has_edit_semaphore %}doctor-queue-row--semaphore{% elif item.row_unpublished_sla_active %}doctor-queue-row--unpublished-sla{% else %}hover:bg-base-50 dark:hover:bg-base-800/50{% endif %}"{% if item.row_unpublished_sla_active %} style="--sla-urgency: {% localize off %}{{ item.row_unpublished_urgency }}{% endlocalize %};"{% endif %}>
         <td class="px-4 py-3 text-base-900 dark:text-base-100">
-          <span class="inline-flex flex-wrap items-center gap-2">
-            <span>{{ item.patient.last_name }}, {{ item.patient.first_name }}</span>
-            {% if item.is_locked_by_other and item.locked_by_username %}
-            <span class="inline-flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200" title="{{ ui.list_open_locked_tooltip }}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              <span>{{ ui.list_locked_by_prefix }}: {{ item.locked_by_username }}</span>
+          <span class="inline-flex flex-col gap-1">
+            <span class="inline-flex flex-wrap items-center gap-2">
+              <span>{{ item.patient.last_name }}, {{ item.patient.first_name }}</span>
+            </span>
+            {% if item.editor_activity == "active" and item.editor_username %}
+            <span class="doctor-queue-editor-active inline-flex items-center gap-1 text-xs font-medium text-amber-900 dark:text-amber-100" title="{% if item.is_locked_by_other %}{{ ui.list_open_locked_tooltip }}{% else %}{{ ui.list_editing_self_tooltip }}{% endif %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              <span>{{ ui.list_locked_by_prefix }}: {{ item.editor_username }}</span>
+            </span>
+            {% elif item.editor_activity == "last" and item.editor_username %}
+            <span class="doctor-queue-editor-last text-xs text-base-500 dark:text-base-400" title="{{ ui.list_last_edited_tooltip }}">
+              {{ ui.list_last_edited_by_prefix }}: {{ item.editor_username }}
             </span>
             {% endif %}
           </span>
@@ -110,6 +117,9 @@
               {% if item.status == 'PUBLISHED' %}bg-primary-600 text-white dark:bg-primary-500
               {% elif item.status == 'DRAFT' %}bg-base-200 text-base-800 dark:bg-base-700 dark:text-base-200
               {% else %}bg-base-100 text-base-700 dark:bg-base-800 dark:text-base-300{% endif %}">{{ item.status_display|default:item.status }}</span>
+            {% if item.row_has_edit_semaphore %}
+            <span class="doctor-queue-editing-chip inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium tracking-wide bg-amber-200 text-amber-950 dark:bg-amber-800/60 dark:text-amber-50" title="{% if item.is_locked_by_other %}{{ ui.list_open_locked_tooltip }}{% else %}{{ ui.list_editing_self_tooltip }}{% endif %}">{{ ui.list_status_in_editing }}</span>
+            {% endif %}
             {% if item.has_pending_revision %}
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100">{{ ui.list_status_in_revision }}</span>
             {% endif %}
