@@ -1,0 +1,63 @@
+# promtool unit test for OutboxDeadLetterPresent.
+# Run (from repo root):
+#   docker run --rm --entrypoint promtool -v "$PWD:/work" -w /work prom/prometheus:v2.55.1 \
+#     test rules deploy/prometheus/tests/outbox_dead_letter_alert_test.yml
+
+rule_files:
+  - ../alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    name: dead letter absent — no alert
+    input_series:
+      - series: 'cogitomedica_outbox_events_total{event_type="SMS_SEND",status="PENDING"}'
+        values: "3+0x10"
+      - series: 'cogitomedica_outbox_events_total{event_type="SMS_SEND",status="DEAD_LETTER"}'
+        values: "0+0x10"
+      - series: 'cogitomedica_intake_outbox_events_total{event_type="HIDRIVE_UPLOAD_INTAKE_PDF",status="DEAD_LETTER"}'
+        values: "0+0x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OutboxDeadLetterPresent
+        exp_alerts: []
+
+  - interval: 1m
+    name: "medical dead letter — fires after for 5m"
+    input_series:
+      - series: 'cogitomedica_outbox_events_total{event_type="SMS_SEND",status="DEAD_LETTER"}'
+        values: "1+0x10"
+      - series: 'cogitomedica_intake_outbox_events_total{event_type="HIDRIVE_UPLOAD_INTAKE_PDF",status="DEAD_LETTER"}'
+        values: "0+0x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: OutboxDeadLetterPresent
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: OutboxDeadLetterPresent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: outbox
+            exp_annotations:
+              summary: "Medical or intake outbox has DEAD_LETTER events (stuck after max retries)."
+              description: "Co najmniej jedno zdarzenie outbox ma status DEAD_LETTER — nie wznawia się automatycznie. Dashboard recepcji /admin/reception-dashboard/ lub /admin/outbox/outboxevent/; Ponów po usunięciu przyczyny. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md §DEAD_LETTER."
+
+  - interval: 1m
+    name: intake dead letter alone — fires
+    input_series:
+      - series: 'cogitomedica_outbox_events_total{event_type="SMS_SEND",status="DEAD_LETTER"}'
+        values: "0+0x10"
+      - series: 'cogitomedica_intake_outbox_events_total{event_type="HIDRIVE_UPLOAD_INTAKE_PDF",status="DEAD_LETTER"}'
+        values: "2+0x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OutboxDeadLetterPresent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: outbox
+            exp_annotations:
+              summary: "Medical or intake outbox has DEAD_LETTER events (stuck after max retries)."
+              description: "Co najmniej jedno zdarzenie outbox ma status DEAD_LETTER — nie wznawia się automatycznie. Dashboard recepcji /admin/reception-dashboard/ lub /admin/outbox/outboxevent/; Ponów po usunięciu przyczyny. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md §DEAD_LETTER."
