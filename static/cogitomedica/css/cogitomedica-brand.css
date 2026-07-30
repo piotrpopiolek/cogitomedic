@@ -269,3 +269,11 @@ html.dark tr.doctor-queue-row--unpublished-sla > td .bg-amber-200 {
 .doctor-queue-editor-last {
   max-width: 22rem;
 }
+
+.doctor-queue-lock-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
