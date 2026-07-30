@@ -26,3 +26,5 @@ class PrometheusAlertsYamlTests(SimpleTestCase):
                     alert_names.add(rule["alert"])
         for threshold in (50, 60, 70, 80, 90):
             self.assertIn(f"DiskUsageAbove{threshold}Percent", alert_names)
+        self.assertIn("OutboxDeadLetterPresent", alert_names)
+        self.assertIn("OutboxBacklogTooOld", alert_names)

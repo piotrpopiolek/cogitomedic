@@ -98,7 +98,22 @@ groups:
           severity: critical
         annotations:
           summary: "Medical or intake outbox pending age exceeds 15 minutes."
-          description: "Zaległe zdarzenie asynchroniczne od 15 minut. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md — dla PRD (tylko godziny pracy) dodaj mute/route w Alertmanagerze."
+          description: "Zaległe zdarzenie asynchroniczne od 15 minut (tylko PENDING/FAILED). DEAD_LETTER nie wchodzi w ten gauge — patrz OutboxDeadLetterPresent. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md — dla PRD (tylko godziny pracy) dodaj mute/route w Alertmanagerze."
+
+      # DEAD_LETTER is excluded from *_pending_age_seconds (PENDING|FAILED only). Without this
+      # rule, backlog age can drop to 0 while documents remain stuck after max_retries.
+      - alert: OutboxDeadLetterPresent
+        expr: |
+          max(cogitomedica_outbox_events_total{status="DEAD_LETTER"}) > 0
+          or
+          max(cogitomedica_intake_outbox_events_total{status="DEAD_LETTER"}) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: outbox
+        annotations:
+          summary: "Medical or intake outbox has DEAD_LETTER events (stuck after max retries)."
+          description: "Co najmniej jedno zdarzenie outbox ma status DEAD_LETTER — nie wznawia się automatycznie. Dashboard recepcji /admin/reception-dashboard/ lub /admin/outbox/outboxevent/; Ponów po usunięciu przyczyny. Runbook: docs/runbooks/OUTBOX_BACKLOG_AGE.md §DEAD_LETTER."
 
       - alert: IntegrationErrorSpike
         expr: |
