@@ -476,12 +476,15 @@ def retry_outbox_event(
         )
 
     event.status = OutboxStatus.PENDING
+
+    event.retry_count = 0
     event.available_at = timezone.now()
     event.locked_at = None
     event.error_message = None
     event.save(
         update_fields=[
             "status",
+            "retry_count",
             "available_at",
             "locked_at",
             "error_message",
