@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q, QuerySet
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -22,7 +22,13 @@ except ImportError:
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 
-from apps.core.translation_service import db_gettext_lazy
+from apps.core.exceptions import DomainError
+from apps.core.translation_service import (
+    db_gettext_lazy,
+    format_administration_message,
+    resolve_other_message,
+)
+from apps.outbox.result_available_sms import enqueue_result_available_sms_for_patient
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -36,6 +42,18 @@ from apps.reception.models import (
 )
 from apps.reception.xlsx_import import enqueue_patient_xlsx_import
 from apps.users.models import StaffUser, StaffUserPreferredLocale
+
+
+def _user_may_send_result_available_sms(user) -> bool:
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and (
+            getattr(user, "is_superuser", False)
+            or getattr(user, "is_admin_role", False)
+            or getattr(user, "is_manager", False)
+            or getattr(user, "is_reception", False)
+        )
+    )
 
 
 class PatientXlsxImportAdminForm(forms.Form):
@@ -53,6 +71,8 @@ class PatientXlsxImportAdminForm(forms.Form):
 
 @admin.register(Patient)
 class PatientAdmin(CogitomedicaModelAdmin):
+    change_form_template = "admin/reception/patient/change_form.html"
+    actions = ("send_result_available_sms",)
     list_display = (
         "last_name",
         "first_name",
@@ -79,6 +99,117 @@ class PatientAdmin(CogitomedicaModelAdmin):
                 | Q(queue_entries__daily_queue__assigned_doctor=request.user)
             ).distinct()
         return qs
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<path:object_id>/send-result-available-sms/",
+                self.admin_site.admin_view(self.send_result_available_sms_view),
+                name="reception_patient_send_result_available_sms",
+            ),
+        ]
+        return custom + urls
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        if _user_may_send_result_available_sms(request.user):
+            extra_context["send_result_available_sms_url"] = reverse(
+                "admin:reception_patient_send_result_available_sms",
+                args=[object_id],
+            )
+        return super().change_view(
+            request, object_id, form_url, extra_context=extra_context
+        )
+
+    def send_result_available_sms_view(
+        self, request: HttpRequest, object_id: str
+    ) -> HttpResponse:
+        if request.method != "POST":
+            return redirect(reverse("admin:reception_patient_change", args=[object_id]))
+        if not _user_may_send_result_available_sms(request.user):
+            raise PermissionDenied
+        patient = self.get_object(request, object_id)
+        if patient is None:
+            raise PermissionDenied
+        try:
+            enqueue_result_available_sms_for_patient(
+                patient_id=patient.id,
+                actor_user_id=request.user.id,
+            )
+            self.message_user(
+                request,
+                format_administration_message(
+                    "administration.admin_send_result_sms_detail_ok",
+                    "“Result available” SMS was queued.",
+                    request=request,
+                ),
+                level=messages.SUCCESS,
+            )
+        except DomainError as exc:
+            self.message_user(
+                request,
+                resolve_other_message(
+                    request,
+                    exc.api_message_key or "",
+                    str(exc),
+                    **(exc.api_message_params or {}),
+                ),
+                level=messages.ERROR,
+            )
+        return redirect(reverse("admin:reception_patient_change", args=[object_id]))
+
+    @admin.action(
+        description=db_gettext_lazy(
+            "administration.admin_action_send_result_available_sms",
+            "SMS: Ergebnis verfügbar",
+        )
+    )
+    def send_result_available_sms(self, request, queryset):
+        if not _user_may_send_result_available_sms(request.user):
+            self.message_user(
+                request,
+                format_administration_message(
+                    "administration.admin_send_result_sms_permission_denied",
+                    "You do not have permission to send “result available” SMS "
+                    "(Reception/Manager/Admin).",
+                    request=request,
+                ),
+                level=messages.ERROR,
+            )
+            return
+        ok = 0
+        failed = 0
+        last_error = ""
+        for patient in queryset:
+            try:
+                enqueue_result_available_sms_for_patient(
+                    patient_id=patient.id,
+                    actor_user_id=request.user.id,
+                )
+                ok += 1
+            except DomainError as exc:
+                failed += 1
+                last_error = resolve_other_message(
+                    request,
+                    exc.api_message_key or "",
+                    str(exc),
+                    **(exc.api_message_params or {}),
+                )
+        summary = format_administration_message(
+            "administration.admin_send_result_sms_result",
+            "“Result available” SMS: {ok} queued; {failed} failed.",
+            request=request,
+            ok=ok,
+            failed=failed,
+        )
+        if failed and last_error:
+            summary = f"{summary} {last_error}"
+        self.message_user(
+            request,
+            summary,
+            level=messages.WARNING if failed else messages.SUCCESS,
+        )
 
 
 def _set_created_by_user(request, obj, change: bool) -> None:

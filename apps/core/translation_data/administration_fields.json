@@ -1008,5 +1008,25 @@
     "de": "{reopened} Intake-Formular(e) wieder geöffnet; {skipped} übersprungen.",
     "en": "Reopened {reopened} intake form(s); skipped {skipped}.",
     "pl": "Ponownie otwarto {reopened} formularz(y) intake; pominięto {skipped}."
+  },
+  "administration.admin_action_send_result_available_sms": {
+    "de": "SMS: Ergebnis verfügbar",
+    "en": "SMS: result available",
+    "pl": "SMS: wynik dostępny"
+  },
+  "administration.admin_send_result_sms_permission_denied": {
+    "de": "Keine Berechtigung, SMS „Ergebnis verfügbar“ zu senden.",
+    "en": "You do not have permission to send “result available” SMS.",
+    "pl": "Brak uprawnień do wysyłki SMS „wynik dostępny”."
+  },
+  "administration.admin_send_result_sms_result": {
+    "de": "SMS „Ergebnis verfügbar“: {ok} erfolgreich in die Warteschlange; {failed} fehlgeschlagen.",
+    "en": "“Result available” SMS: {ok} queued; {failed} failed.",
+    "pl": "SMS „wynik dostępny”: {ok} w kolejce; {failed} nieudane."
+  },
+  "administration.admin_send_result_sms_detail_ok": {
+    "de": "SMS „Ergebnis verfügbar“ wurde in die Warteschlange gestellt.",
+    "en": "“Result available” SMS was queued.",
+    "pl": "SMS „wynik dostępny” został dodany do kolejki."
   }
 }

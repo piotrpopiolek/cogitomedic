@@ -61,10 +61,11 @@ Pisz dla osób nietechnicznych: nazwy z menu zamiast adresów URL, bez żargonu 
 | [SC-026](#sc-026) | Skrzynka wyjściowa: zablokowane po wielu błędach | Recepcja, Administrator | `scenariusze/sc-026-dead-letter.webm` |
 | [SC-027](#sc-027) | Baner awarii HiDrive na dashboardzie recepcji | Recepcja, Administrator | `scenariusze/sc-027-baner-hidrive.webm` |
 | [SC-028](#sc-028) | Rewizja Befundu + Wyślij SMS ponownie | Lekarz | `scenariusze/sc-028-rewizja-resend-sms.webm` |
+| [SC-029](#sc-029) | SMS „wynik dostępny” po korekcie telefonu (bez republish) | Recepcja, Manager, Administrator | — |
 
 > Kolumna **Film** = ścieżka względem `docs/manual/assets/videos/`. Pliki `.webm` nie są w gicie — generuj lokalnie (patrz backlog / [README filmów](assets/videos/README.md)).
 
-Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
+Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
 
 ---
 
@@ -156,11 +157,11 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML 
 | **Role** | Recepcja, Manager, Administrator |
 | **Objaw** | Befund jest **opublikowany**, a pacjent **nie dostał SMS-a** z dostępem do portalu — albo w systemie widać błąd wysyłki SMS. |
 | **Przyczyna** | SMS idzie osobnym krokiem po publikacji. Może się nie udać (zły numer, problem firmy wysyłającej SMS) albo trzeba go wysłać ponownie. **Administrator nie może „opublikować ponownie” za lekarza.** |
-| **Co zrobić dziś** | 1) Sprawdź **numer telefonu** pacjenta w karcie pacjenta. 2) Wejdź w **Skrzynka wyjściowa → Zdarzenia**. 3) Znajdź zdarzenie **Wysyłka SMS** dla tej publikacji. 4) Przy błędzie: na dashboardzie recepcji kliknij **Ponów** albo w szczegółach zdarzenia ustaw status na **Oczekuje**. 5) Gdy status to już **Przetworzono**, a SMS trzeba wysłać jeszcze raz — ustaw z powrotem **Oczekuje** (po konsultacji z IT). 6) Odczekaj chwilę na ponowną wysyłkę. |
+| **Co zrobić dziś** | 1) Sprawdź **numer telefonu** pacjenta w karcie pacjenta. 2) Jeśli numer był zły — popraw go i użyj akcji **SMS: Ergebnis verfügbar** ([SC-029](scenariusze.md#sc-029)). 3) Albo wejdź w **Skrzynka wyjściowa → Zdarzenia**. 4) Znajdź zdarzenie **Wysyłka SMS** dla tej publikacji. 5) Przy błędzie: na dashboardzie recepcji kliknij **Ponów** albo w szczegółach zdarzenia ustaw status na **Oczekuje**. 6) Odczekaj chwilę na ponowną wysyłkę. |
 | **Czego nie robić** | **Nie** proś lekarza o ponowną publikację tylko po to, by wymusić SMS. Nie zmieniaj statusów zdarzeń PDF/HiDrive bez potrzeby. Nie wysyłaj treści medycznej SMS-em poza systemem. |
-| **Docelowo** | Przy republish lekarz ma checkbox **Wyślij SMS ponownie** ([SC-028](scenariusze.md#sc-028)). Ponów z skrzynki wyjściowej — jak wyżej. |
+| **Docelowo** | Akcja w module Patienten (SC-029). Przy republish lekarz ma checkbox **Wyślij SMS ponownie** ([SC-028](scenariusze.md#sc-028)). |
 | **Film** | `scenariusze/sc-006-sms-outbox.webm` — *„Pacjent nie dostał SMS — powtórka ze skrzynki wyjściowej”* |
-| **Powiązane** | [01-rejestracja.md](01-rejestracja.md), [04-administrator.md](04-administrator.md), [05-pacjent-wyniki.md](05-pacjent-wyniki.md) |
+| **Powiązane** | [01-rejestracja.md](01-rejestracja.md), [04-administrator.md](04-administrator.md), [05-pacjent-wyniki.md](05-pacjent-wyniki.md), SC-029 |
 
 ---
 
@@ -190,7 +191,7 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML 
 | **Przyczyna** | Portal sprawdza **telefon + datę urodzenia** tak, jak są zapisane w systemie. Literówka, stary numer albo pomyłka w dacie blokuje logowanie. |
 | **Co zrobić dziś** | 1) Wejdź w **Recepcja → Pacjenci** i znajdź pacjenta. 2) Porównaj telefon i **datę urodzenia** z tym, co podaje pacjent (najlepiej z dokumentem tożsamości). 3) Popraw dane wg [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md). 4) **Powiedz pacjentowi ustnie obie** poprawione wartości. 5) Poproś o ponowną próbę logowania. |
 | **Czego nie robić** | Nie dawaj pacjentowi hasła do konta personelu. Nie zmieniaj danych „na oko” — sprawdź dokument tożsamości. |
-| **Docelowo** | Akcja „wymuś dostęp” z dłuższym kodem — backlog. |
+| **Docelowo** | Akcja **SMS: Ergebnis verfügbar** po korekcie telefonu ([SC-029](scenariusze.md#sc-029)). Dłuższy kod „wymuś dostęp” — backlog. |
 | **Film** | `scenariusze/sc-008-portal-login.webm` — *„Pacjent nie może wejść na portal — poprawa telefonu i daty urodzenia”* |
 | **Powiązane** | [05-pacjent-wyniki.md](05-pacjent-wyniki.md), [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md) |
 
@@ -460,11 +461,11 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML 
 | **Role** | Recepcja |
 | **Objaw** | Po zmianie imienia, nazwiska, telefonu lub daty urodzenia pacjent nie loguje się **albo** lekarz traci dopasowanie PDF z laboratorium. |
 | **Przyczyna** | Portal i dopasowanie plików z laboratorium korzystają z tych samych danych pacjenta. |
-| **Co zrobić dziś** | 1) Edytuj dane wg [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md). 2) Po zapisie powiedz pacjentowi nowe dane do logowania. 3) Jeśli trzeba — popraw nazwę pliku z laboratorium wg [hidrive_incoming_reception.md](hidrive_incoming_reception.md). |
+| **Co zrobić dziś** | 1) Edytuj dane wg [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md). 2) Po zapisie powiedz pacjentowi nowe dane do logowania. 3) Po korekcie telefonu przy opublikowanym wyniku — **SMS: Ergebnis verfügbar** ([SC-029](scenariusze.md#sc-029)). 4) Jeśli trzeba — popraw nazwę pliku z laboratorium wg [hidrive_incoming_reception.md](hidrive_incoming_reception.md). |
 | **Czego nie robić** | Nie zmieniaj danych „dla wygody” bez weryfikacji tożsamości. |
-| **Docelowo** | Procedura operacyjna. |
+| **Docelowo** | Procedura operacyjna + akcja SMS (SC-029). |
 | **Film** | `scenariusze/sc-025-korekta-danych.webm` — *„Zmiana nazwiska — portal, SMS i plik z laboratorium”* |
-| **Powiązane** | [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md), SC-008, SC-011 |
+| **Powiązane** | [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md), SC-008, SC-011, SC-029 |
 
 ---
 
@@ -512,7 +513,23 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-028` (stabilne znaczniki HTML 
 | **Czego nie robić** | Nie myl z SC-006 (ponów SMS z skrzynki wyjściowej bez nowej publikacji). Nie zaznaczaj checkboxa „na zapas”, jeśli placówka nie chce ponownego kontaktu. Nie publikuj bez podglądu. |
 | **Docelowo** | Już w UI lekarza. |
 | **Film** | `scenariusze/sc-028-rewizja-resend-sms.webm` — *„Rewizja i ponowny SMS po publikacji”* |
-| **Powiązane** | [03-doktor.md](03-doktor.md) (sekcje 6–7), SC-003, SC-006, SC-015 |
+| **Powiązane** | [03-doktor.md](03-doktor.md) (sekcje 6–7), SC-003, SC-006, SC-015, SC-029 |
+
+---
+
+<a id="sc-029"></a>
+### SC-029 — SMS „wynik dostępny” po korekcie telefonu (bez republish)
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Recepcja, Manager, Administrator |
+| **Objaw** | Befund jest **opublikowany**, pacjent miał **zły numer** — po poprawie w kartotece trzeba wysłać SMS z dostępem do portalu, **bez** ponownego opisu / publikacji. |
+| **Przyczyna** | SMS po publikacji poszedł na stary numer albo wcale. Numer w systemie jest już poprawiony; pacjent ma sam wejść na portal. |
+| **Co zrobić dziś** | 1) Popraw telefon wg [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md). 2) Na karcie pacjenta (lub na liście — akcja masowa) kliknij **SMS: Ergebnis verfügbar**. 3) Odczekaj na wysyłkę (scheduler / skrzynka wyjściowa). 4) Poproś pacjenta o sprawdzenie SMS i logowanie do portalu. |
+| **Czego nie robić** | Nie proś lekarza o republish tylko dla SMS. Nie myl z kodem OTP do logowania (SC-010) ani z checkboxem lekarza przy rewizji (SC-028). |
+| **Docelowo** | Już w module Patienten. |
+| **Film** | — (manual wystarczy; nagranie opcjonalne) |
+| **Powiązane** | [06-zmiana-danych-pacjenta.md](06-zmiana-danych-pacjenta.md), SC-006, SC-008, SC-025 |
 
 ---
 

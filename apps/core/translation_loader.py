@@ -63,6 +63,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
         "allowed",
     ],
     "administration.admin_paper_intake_revoke_result": ["ok", "failed"],
+    "administration.admin_send_result_sms_result": ["ok", "failed"],
     "administration.paper_intake_admin_earliest_hint": ["hours"],
     "administration.hidrive_hours_waiting": ["hours"],
     "administration.intake_document_detail_title": ["patient_name"],

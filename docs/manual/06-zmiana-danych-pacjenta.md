@@ -129,6 +129,23 @@ Przewiń do dołu formularza i kliknij przycisk zapisu.
 
 ---
 
+## Po zmianie telefonu — SMS „wynik dostępny”
+
+Gdy **wynik jest już opublikowany**, a pacjent miał **zły numer**, po korekcie w kartotece:
+
+1. Zapisz nowy telefon (Krok 5–6).
+2. Na formularzu pacjenta kliknij **SMS: Ergebnis verfügbar** (albo na liście zaznacz pacjenta → akcja o tej samej nazwie).
+3. System **nie** publikuje ponownie Befundu — tylko ustawia w skrzynce wyjściowej wysyłkę SMS z linkiem do portalu (jak po publikacji).
+4. Po chwili pacjent dostaje SMS na **nowy** numer i sam loguje się do portalu ([05-pacjent-wyniki.md](05-pacjent-wyniki.md)).
+
+**Warunki:** jest opublikowany wynik w oknie dostępu (domyślnie 60 dni), numer z obsługiwanego kraju SMS, konto **Recepcja / Manager / Administrator**.
+
+**Czego nie robić:** nie proś lekarza o ponowną publikację tylko po to, by wymusić SMS (to robi ta akcja). Nie myl z kodem OTP do logowania (SC-010) — tu chodzi o SMS „wynik dostępny” po Befundzie.
+
+**Scenariusz:** [SC-029](scenariusze.md#sc-029).
+
+---
+
 ## Pozostałe pola formularza (skrót)
 
 | Pole | Uwagi |
@@ -166,4 +183,4 @@ Z [widoku master-detail kolejek](01-rejestracja.md) przejdź przez link **Pacjen
 
 Lista użytych zrzutów ekranu znajduje się tutaj: [screenshot-checklist.md](screenshot-checklist.md).
 
-**Scenariusze:** [SC-025](scenariusze.md#sc-025) (skutki dla portalu i HiDrive), [SC-008](scenariusze.md#sc-008), [SC-009](scenariusze.md#sc-009).
+**Scenariusze:** [SC-025](scenariusze.md#sc-025) (skutki dla portalu i HiDrive), [SC-029](scenariusze.md#sc-029) (SMS po korekcie telefonu), [SC-008](scenariusze.md#sc-008), [SC-009](scenariusze.md#sc-009).

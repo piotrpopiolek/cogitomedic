@@ -1,0 +1,17 @@
+{% extends "admin/change_form.html" %}
+{% load i18n unfold cogitomedica_i18n %}
+
+{% block object-tools-items %}
+    {% if send_result_available_sms_url %}
+    <li>
+        <form method="post" action="{{ send_result_available_sms_url }}" style="display:inline;">
+            {% csrf_token %}
+            {% component "unfold/components/button.html" with submit=1 variant="default" %}
+                <span class="material-symbols-outlined">sms</span>
+                {% admin_trans "administration.admin_action_send_result_available_sms" "SMS: Ergebnis verfügbar" %}
+            {% endcomponent %}
+        </form>
+    </li>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}
