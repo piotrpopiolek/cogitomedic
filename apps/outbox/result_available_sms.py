@@ -147,6 +147,8 @@ def enqueue_result_available_sms_for_patient(
         merged.update(payload)
         event.payload = merged
         event.status = OutboxStatus.PENDING
+
+        event.retry_count = 0
         event.available_at = timezone.now()
         event.locked_at = None
         event.error_message = None
@@ -155,6 +157,7 @@ def enqueue_result_available_sms_for_patient(
             update_fields=[
                 "payload",
                 "status",
+                "retry_count",
                 "available_at",
                 "locked_at",
                 "error_message",

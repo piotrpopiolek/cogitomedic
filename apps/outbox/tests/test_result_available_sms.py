@@ -198,6 +198,57 @@ class ResultAvailableSmsServiceTests(TestCase):
         event.refresh_from_db()
         self.assertEqual(event.status, OutboxStatus.PENDING)
         self.assertEqual(event.error_message, None)
+        self.assertEqual(event.retry_count, 0)
+
+    @override_settings(
+        SMSAPI_USE_MOCK="1", PATIENT_RESULTS_BASE_URL="https://ergebnisse.test"
+    )
+    @patch("apps.outbox.services.get_sms_adapter")
+    def test_requeue_dead_letter_then_fail_does_not_integrity_error(
+        self, mock_get_adapter: MagicMock
+    ) -> None:
+        """SC-029/SC-006: DL → fix phone / Ponów → process fails again → FAILED, not IntegrityError."""
+        mock_adapter = MagicMock()
+        mock_adapter.send_sms.side_effect = RuntimeError("account balance is low")
+        mock_get_adapter.return_value = mock_adapter
+
+        version = self._publish_completed_version()
+        OutboxEvent.objects.filter(medical_document_version=version).delete()
+        OutboxEvent.objects.create(
+            medical_document_version=version,
+            event_type=OutboxEventType.SMS_SEND,
+            aggregate_id=version.id,
+            payload_schema_version=1,
+            payload={"resend_sms": False},
+            status=OutboxStatus.DEAD_LETTER,
+            retry_count=3,
+            max_retries=3,
+            error_message="previous failure",
+        )
+
+        event = enqueue_result_available_sms_for_patient(
+            patient_id=self.patient.id,
+            actor_user_id=self.reception.id,
+        )
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.PENDING)
+        self.assertEqual(event.retry_count, 0)
+
+        OutboxEvent.objects.filter(
+            medical_document_version=version,
+            event_type__in=[
+                OutboxEventType.GENERATE_PDF,
+                OutboxEventType.HIDRIVE_UPLOAD,
+            ],
+        ).delete()
+
+        result = process_outbox_events(batch_size=10)
+        self.assertEqual(result.processed, 0)
+        self.assertEqual(result.failed, 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.FAILED)
+        self.assertEqual(event.retry_count, 1)
+        self.assertIn("account balance is low", event.error_message or "")
 
     def test_no_published_result_raises(self) -> None:
         with self.assertRaises(DomainError) as ctx:
