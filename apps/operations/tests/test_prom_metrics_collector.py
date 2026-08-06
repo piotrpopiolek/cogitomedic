@@ -41,6 +41,8 @@ class OrmMetricsCollectorEmptyTablesTests(TestCase):
         self.assertIn("cogitomedica_outbox_events_total", names)
         self.assertIn("cogitomedica_intake_outbox_events_total", names)
         self.assertIn("cogitomedica_import_batches_total", names)
+        self.assertIn("cogitomedica_active_users", names)
+        self.assertIn("cogitomedica_doctors_editing", names)
 
     def test_build_metrics_payload_second_call_returns_bytes(self) -> None:
         first = build_metrics_payload()

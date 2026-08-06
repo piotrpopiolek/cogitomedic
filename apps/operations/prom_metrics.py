@@ -26,6 +26,14 @@ _components_registered = False
 OUTBOX_EVENT_TYPES = ("GENERATE_PDF", "HIDRIVE_UPLOAD", "SMS_SEND")
 INTAKE_OUTBOX_EVENT_TYPES = ("GENERATE_INTAKE_PDF", "HIDRIVE_UPLOAD_INTAKE_PDF")
 
+# Usage gauges (ORM scrape on web) — counts only, no PHI / no user ids in labels.
+ACTIVE_USER_WINDOWS_MINUTES: tuple[tuple[str, int], ...] = (("15m", 15), ("60m", 60))
+PATIENT_PORTAL_ACTIVITY_EVENT_TYPES: tuple[str, ...] = (
+    "PATIENT_RESULTS_OTP_VERIFY",
+    "PATIENT_RESULTS_DOCUMENTS_LISTED",
+    "PATIENT_RESULTS_PDF_DOWNLOAD",
+)
+
 OUTBOX_EXECUTIONS = Counter(
     "cogitomedica_outbox_executions_total",
     "Outbox worker completions (success, failed, dead_letter) per stream and event type.",
@@ -319,6 +327,87 @@ class _OrmMetricsCollector:
         g_hid.add_metric(["attempt"], float(refresh_stats.get("attempt", 0.0)))
         g_hid.add_metric(["error"], float(refresh_stats.get("error", 0.0)))
         yield g_hid
+
+        # --- Active doctors / patients (usage; no PHI in labels) ---
+        yield from _collect_active_usage_gauges(now)
+
+
+def _collect_active_usage_gauges(now):
+    """Snapshot gauges for Grafana usage panels (doctors working, portal patients)."""
+    from datetime import timedelta
+
+    from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
+    from apps.medical.models import MedicalDocument
+    from apps.operations.models import AuditEvent
+    from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
+
+    doctor_group = ROLE_GROUP_NAME_MAP["DOCTOR"]
+
+    g_active = GaugeMetricFamily(
+        "cogitomedica_active_users",
+        "Distinct active users in a time window (no PHI). "
+        "channel=doctor: Doctor-group staff with last_login or AuditEvent as actor; "
+        "channel=patient_portal: patients with successful portal activity audits.",
+        labels=["channel", "window"],
+    )
+
+    for window_label, minutes in ACTIVE_USER_WINDOWS_MINUTES:
+        since = now - timedelta(minutes=minutes)
+
+        doctor_ids = set(
+            StaffUser.objects.filter(
+                groups__name=doctor_group,
+                is_active=True,
+                last_login__gte=since,
+            ).values_list("id", flat=True)
+        )
+        doctor_ids.update(
+            AuditEvent.objects.filter(
+                event_time__gte=since,
+                actor_user_id__isnull=False,
+                actor_user__is_active=True,
+                actor_user__groups__name=doctor_group,
+            )
+            .values_list("actor_user_id", flat=True)
+            .distinct()
+        )
+        g_active.add_metric(["doctor", window_label], float(len(doctor_ids)))
+
+        patient_count = (
+            AuditEvent.objects.filter(
+                event_time__gte=since,
+                patient_id__isnull=False,
+                event_type__in=PATIENT_PORTAL_ACTIVITY_EVENT_TYPES,
+            )
+            .values("patient_id")
+            .distinct()
+            .count()
+        )
+        g_active.add_metric(["patient_portal", window_label], float(patient_count))
+
+    yield g_active
+
+    lock_since = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
+    editing = (
+        MedicalDocument.objects.filter(
+            locked_by_user_id__isnull=False,
+            locked_at__isnull=False,
+            locked_at__gte=lock_since,
+            locked_by_user__is_active=True,
+            locked_by_user__groups__name=doctor_group,
+        )
+        .values("locked_by_user_id")
+        .distinct()
+        .count()
+    )
+    g_editing = GaugeMetricFamily(
+        "cogitomedica_doctors_editing",
+        "Distinct Doctor-group staff currently holding a medical document lock "
+        f"(locked_at within {DOCUMENT_LOCK_TIMEOUT_HOURS}h).",
+        labels=[],
+    )
+    g_editing.add_metric([], float(editing))
+    yield g_editing
 
 
 def _ensure_components_registered() -> None:
