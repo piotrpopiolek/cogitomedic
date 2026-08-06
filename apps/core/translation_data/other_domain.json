@@ -174,6 +174,21 @@
     "en": "Patient has no phone number; cannot send SMS.",
     "pl": "Pacjent nie ma numeru telefonu; nie można wysłać SMS."
   },
+  "other.domain.patient_phone_not_supported_for_sms": {
+    "de": "Die Telefonnummer ist ungültig oder liegt außerhalb der unterstützten SMS-Länder.",
+    "en": "Phone number is invalid or outside supported SMS regions.",
+    "pl": "Numer telefonu jest nieprawidłowy lub poza obsługiwanymi krajami SMS."
+  },
+  "other.domain.patient_no_published_result_for_sms": {
+    "de": "Kein veröffentlichter Befund im Zugangsfenster — SMS „Ergebnis verfügbar“ nicht möglich.",
+    "en": "No published result within the access window — cannot send “result available” SMS.",
+    "pl": "Brak opublikowanego wyniku w oknie dostępu — nie można wysłać SMS „wynik dostępny”."
+  },
+  "other.domain.sms_send_already_processing": {
+    "de": "SMS-Versand für diesen Befund läuft gerade — bitte kurz warten und erneut versuchen.",
+    "en": "SMS send for this result is already in progress — wait briefly and try again.",
+    "pl": "Wysyłka SMS dla tego wyniku już trwa — poczekaj chwilę i spróbuj ponownie."
+  },
   "other.domain.retention_days_positive": {
     "de": "older_than_days muss positiv sein.",
     "en": "older_than_days must be positive.",
