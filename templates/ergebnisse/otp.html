@@ -12,5 +12,5 @@
     </div>
     <button type="submit">{{ ergebnisse_ui.submit_btn|default:"Bestätigen" }}</button>
   </form>
-  <p class="portal-actions"><a href="{% url 'ergebnisse:login' %}" class="btn secondary">{{ ergebnisse_ui.back_to_login|default:"Zurück zur Anmeldung" }}</a></p>
+  <p class="portal-actions"><a href="{% url 'ergebnisse:login' %}{% if ergebnisse_locale and ergebnisse_locale != 'de' %}?locale={{ ergebnisse_locale }}{% endif %}" class="btn secondary">{{ ergebnisse_ui.back_to_login|default:"Zurück zur Anmeldung" }}</a></p>
 {% endblock %}

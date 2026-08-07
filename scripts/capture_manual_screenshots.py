@@ -13,6 +13,8 @@ Optional .env for patient portal flow during seed:
 
 Usage (from repo root):
   python scripts/capture_manual_screenshots.py --base-url http://127.0.0.1:8000
+  # Tylko portal pacjenta (login / OTP / dokumenty):
+  python scripts/capture_manual_screenshots.py --only=patient-portal --base-url http://127.0.0.1:8000
   # Tylko zrzuty docs/manual/06 (bez pełnego importu Django na hoście — najpierw seed w docelowej bazie):
   SCREENSHOT_SKIP_DJANGO=1 python scripts/capture_manual_screenshots.py \\
     --only=reception-patient-personal-data --base-url http://127.0.0.1:8000
@@ -327,9 +329,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--only",
-        choices=("all", "reception-patient-personal-data"),
+        choices=("all", "patient-portal", "reception-patient-personal-data"),
         default="all",
-        help="Domyślnie pełny zestaw z checklisty; wąski tryb tylko dla rozdz. 06.",
+        help=(
+            "Domyślnie pełny zestaw z checklisty; "
+            "patient-portal = login/OTP/dokumenty; "
+            "reception-patient-personal-data = rozdz. 06."
+        ),
     )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
@@ -370,6 +376,42 @@ def main() -> int:
             capture_reception_patient_personal_data_screenshots(page, base, pwd, _shot)
             browser.close()
             print(f"Done (reception-patient-personal-data). PNG in {OUTPUT_DIR}")
+            return 0
+
+        if args.only == "patient-portal":
+            page.goto(f"{base}/?locale=pl", wait_until="networkidle")
+            _shot(page, "patient-01-login.png")
+            ck_host = cookie_domain(base)
+            page.context.clear_cookies()
+            page.goto(f"{base}/")
+            page.context.add_cookies(
+                [
+                    {
+                        "name": "sessionid",
+                        "value": ctx["session_otp_key"],
+                        "domain": ck_host,
+                        "path": "/",
+                    }
+                ]
+            )
+            page.goto(f"{base}/otp/?locale=pl", wait_until="networkidle")
+            _shot(page, "patient-02-otp.png")
+            page.context.clear_cookies()
+            page.goto(f"{base}/")
+            page.context.add_cookies(
+                [
+                    {
+                        "name": "sessionid",
+                        "value": ctx["session_doc_key"],
+                        "domain": ck_host,
+                        "path": "/",
+                    }
+                ]
+            )
+            page.goto(f"{base}/documents/?locale=pl", wait_until="networkidle")
+            _shot(page, "patient-03-documents.png")
+            browser.close()
+            print(f"Done (patient-portal). PNG in {OUTPUT_DIR}")
             return 0
 
         page.goto(f"{base}/admin/login/", wait_until="networkidle")
