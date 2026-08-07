@@ -31,6 +31,7 @@ def _gauge_samples(name: str) -> dict[tuple[str, ...], float]:
         if family.name != name:
             continue
         for sample in family.samples:
+            key: tuple[str, ...]
             if name == "cogitomedica_active_users":
                 key = (sample.labels["channel"], sample.labels["window"])
             else:
