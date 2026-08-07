@@ -112,9 +112,11 @@ Zrzuty z **UI huba** (Unfold): sidebar „Zewnętrzne badanie”, dashboard rece
 
 | #   | Plik                       | Ekran         |
 | --- | -------------------------- | ------------- |
-| 1   | `patient-01-login.png`     | `/` login     |
-| 2   | `patient-02-otp.png`       | `/otp/`       |
-| 3   | `patient-03-documents.png` | `/documents/` |
+| 1   | `patient-01-login.png`     | `/` login — logo, przełącznik DE/EN/PL, telefon + data urodzenia (`?locale=pl`) |
+| 2   | `patient-02-otp.png`       | `/otp/` — kod SMS + Potwierdź / Powrót (`?locale=pl`) |
+| 3   | `patient-03-documents.png` | `/documents/` — lista + Pobierz PDF (`?locale=pl`) |
+
+Odświeżenie tylko tych trzech: `docker compose --profile screenshots run --rm screenshots python scripts/capture_manual_screenshots.py --only=patient-portal --base-url http://web:8000` (wymaga działającego `web` + DB; seed demo w skrypcie).
 
 
 ## Przegląd (`00-przeglad`)

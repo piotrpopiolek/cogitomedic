@@ -10,7 +10,7 @@ Dokumentacja dla **pacjenta**, który ma pobrać dokumentację medyczną po otrz
 
 1. Otwórz przeglądarkę na telefonie lub komputerze.
 2. Wpisz adres portalu wyników podany przez placówkę (np. strona główna domeny).
-3. Zobaczysz formularz z prośbą o **numer telefonu** i **datę urodzenia** (czasem także o **nazwisko** — patrz niżej).
+3. Zobaczysz stronę z logo **CogitoMedica**, przełącznikiem języka (**DE / EN / PL**) oraz formularzem **numer telefonu** i **data urodzenia** (czasem także **nazwisko** — patrz niżej).
 
 ![Ekran logowania portalu wyników](/docs/manual/assets/screenshots/patient-01-login.png)
 
@@ -28,10 +28,10 @@ Jeśli jej nie widzisz, ta funkcja może być czasowo wyłączona.
 
 ## Krok 2: Żądanie kodu SMS (OTP)
 
-1. Wpisz **numer telefonu** w formacie akceptowanym przez formularz (np. bez spacji lub ze spacjami — zgodnie z polem).
-2. Wybierz **datę urodzenia** w kalendarzu lub wpisz ją ręcznie.
+1. Wpisz **numer telefonu** (możesz użyć spacji — formularz akceptuje typowe zapisy, np. `176 1234567`).
+2. Wybierz **datę urodzenia** w kalendarzu przeglądarki (pole „Data urodzenia” / „Geburtsdatum”). Data z przyszłości nie jest przyjmowana.
 3. Jeśli formularz pokazuje pole **nazwisko**, uzupełnij je (wymagane przy wspólnym numerze i tej samej dacie urodzenia u dwóch osób).
-4. Kliknij przycisk w stylu **„Poproś o kod SMS”** / „Code per SMS anfordern” (tekst zależy od języka interfejsu).
+4. Kliknij **„Poproś o kod SMS”** (DE: „Code per SMS anfordern”, EN: zależnie od tłumaczenia).
 5. Po poprawnym wysłaniu formularza przejdziesz do strony wpisywania kodu.
 
 **Uwaga:** Jeśli pojawi się komunikat błędu — sprawdź, czy numer i data są poprawne; jeśli nadal nie działa, skontaktuj się z **recepcją placówki** (nie podawaj danych wrażliwych osobom postronnym).
@@ -40,20 +40,21 @@ Jeśli jej nie widzisz, ta funkcja może być czasowo wyłączona.
 
 ## Krok 3: Wpis kodu OTP
 
-1. Na stronie **`/otp/`** wpisz **6-cyfrowy kod** otrzymany SMS-em na podany numer.
-2. Kod jest ważny przez **krótki czas** (zwykle około 15 minut).
+1. Na stronie kodu SMS wpisz **6-cyfrowy kod** otrzymany SMS-em na podany numer (pole **„Kod SMS”**).
+2. Kliknij **„Potwierdź”**.
+3. Kod jest ważny przez **krótki czas** (zwykle około 15 minut).
 
 ![Ekran wpisywania kodu OTP](/docs/manual/assets/screenshots/patient-02-otp.png)
 
-Jeśli kod wygasł, wróć do kroku 1 i **poproś ponownie** o kod.
+Jeśli kod wygasł lub chcesz zacząć od nowa, użyj **„Powrót do logowania”** i **poproś ponownie** o kod.
 
 ---
 
 ## Krok 4: Lista dokumentów i pobranie PDF
 
-Po poprawnym OTP zobaczysz stronę **`/documents/`** z listą dostępnych plików do pobrania.
+Po poprawnym OTP zobaczysz listę dostępnych plików (**„Twoje dokumenty”**).
 
-1. Wybierz dokument (link **Pobierz** / „Download” — zależnie od tłumaczenia).
+1. Przy wybranym wyniku kliknij **„Pobierz PDF”** (DE/EN — zależnie od języka).
 2. Plik pobierze się przez **HTTPS** — zapisz go w bezpiecznym miejscu.
 
 ![Lista dokumentów PDF](/docs/manual/assets/screenshots/patient-03-documents.png)
@@ -66,7 +67,7 @@ Po poprawnym OTP zobaczysz stronę **`/documents/`** z listą dostępnych plikó
 
 ## Język interfejsu
 
-Język strony zależy od ustawień systemu i przeglądarki. W razie potrzeby placówka może pomóc przełączyć właściwy język.
+Nad formularzem jest przełącznik **DE / EN / PL**. Domyślnie strona startuje po **niemiecku**; wybór języka nie zależy od ustawień przeglądarki. Zrzuty w tej instrukcji są w **języku polskim**.
 
 ---
 

@@ -284,6 +284,16 @@ class ErgebnisseOtpPostTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="error"')
 
+    def test_otp_back_to_login_preserves_locale(self) -> None:
+        self._prime_login_session()
+        en = self.client.get(f"{OTP_URL}?locale=en")
+        self.assertEqual(en.status_code, 200)
+        self.assertContains(en, 'href="/?locale=en"')
+        de = self.client.get(OTP_URL)
+        self.assertEqual(de.status_code, 200)
+        self.assertContains(de, 'href="/"')
+        self.assertNotContains(de, 'href="/?locale=')
+
     @patch("apps.patient_results.services.get_sms_adapter")
     def test_otp_post_success_clears_staging_session(self, mock_get_adapter) -> None:
         mock_get_adapter.return_value.send_sms = lambda *a, **k: None
