@@ -40,6 +40,26 @@ class ErgebnisseViewSmokeTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
 
+    def test_login_locale_switcher_marks_active_language(self):
+        de = self.client.get(LOGIN_URL)
+        self.assertEqual(de.status_code, 200)
+        self.assertContains(de, 'aria-current="true"', html=False)
+        self.assertContains(de, ">DE</span>")
+        self.assertContains(de, "?locale=en")
+        self.assertNotContains(de, ">EN</span>")
+
+        en = self.client.get(f"{LOGIN_URL}?locale=en")
+        self.assertEqual(en.status_code, 200)
+        self.assertContains(en, ">EN</span>")
+        self.assertContains(en, "?locale=de")
+        self.assertNotContains(en, ">DE</span>")
+
+        pl = self.client.get(f"{LOGIN_URL}?locale=pl")
+        self.assertEqual(pl.status_code, 200)
+        self.assertContains(pl, ">PL</span>")
+        self.assertContains(pl, "?locale=de")
+        self.assertNotContains(pl, ">DE</span>")
+
     def test_login_post_invalid_data_stays_on_page(self):
         resp = self.client.post(
             LOGIN_URL,

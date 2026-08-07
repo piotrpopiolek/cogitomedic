@@ -26,16 +26,21 @@ from apps.patient_results.services import (
     verify_otp,
 )
 
+_PORTAL_LOCALE_SHORT = {"de-DE": "de", "en-GB": "en", "pl-PL": "pl"}
+
 
 def _get_locale(request) -> str:
-    """Get locale from ?locale= query param, default de.
+    """Get short portal locale (de/en/pl) from ?locale=, default de.
 
     Language is chosen explicitly by the user via the DE/EN/PL switcher
     (which sets ?locale=). We intentionally ignore Accept-Language so the
     page always starts in German for the majority of users.
+
+    Returns short codes so templates and redirects can compare against
+    ``de`` / ``en`` / ``pl`` (``normalize_language_code`` yields de-DE etc.).
     """
     locale = request.GET.get("locale") or ""
-    return normalize_language_code(locale or "de")
+    return _PORTAL_LOCALE_SHORT[normalize_language_code(locale or "de")]
 
 
 def _ergebnisse_context(request, **extra):
@@ -58,6 +63,8 @@ def _parse_dob(value: str) -> str | None:
             dt = datetime.strptime(s[:10], "%Y-%m-%d")
         else:
             dt = datetime.strptime(s[:10], "%d.%m.%Y")
+        if dt.date() > date.today():
+            return None
         return dt.strftime("%Y-%m-%d")
     except ValueError:
         return None

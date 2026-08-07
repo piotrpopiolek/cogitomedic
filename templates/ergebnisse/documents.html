@@ -3,16 +3,15 @@
 {% block content %}
   <h1>{{ ergebnisse_ui.documents_title|default:"Ihre Dokumente" }}</h1>
   {% if items %}
-    <ul>
+    <ul class="portal-doc-list">
       {% for item in items %}
         <li>
           <strong>{{ ergebnisse_ui.document_date_prefix|default:"Befund vom" }} {{ item.queue_date }}</strong>
-          <br>
           <a href="{% url 'patient-results-download' version_id=item.version_id %}" class="btn">{{ ergebnisse_ui.download_btn|default:"PDF herunterladen" }}</a>
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>{{ ergebnisse_ui.no_documents|default:"Es sind keine Dokumente verfügbar." }}</p>
+    <p class="portal-lede">{{ ergebnisse_ui.no_documents|default:"Es sind keine Dokumente verfügbar." }}</p>
   {% endif %}
 {% endblock %}

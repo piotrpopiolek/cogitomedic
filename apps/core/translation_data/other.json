@@ -25,14 +25,14 @@
     "pl": "np. +48 123 456789"
   },
   "other.ergebnisse.dob_label": {
-    "de": "Geburtsdatum (TT.MM.JJJJ)",
-    "en": "Date of birth (DD.MM.YYYY)",
-    "pl": "Data urodzenia (DD.MM.RRRR)"
+    "de": "Geburtsdatum",
+    "en": "Date of birth",
+    "pl": "Data urodzenia"
   },
   "other.ergebnisse.dob_placeholder": {
-    "de": "TT.MM.JJJJ",
-    "en": "DD.MM.YYYY",
-    "pl": "DD.MM.RRRR"
+    "de": "Geburtsdatum",
+    "en": "Date of birth",
+    "pl": "Data urodzenia"
   },
   "other.ergebnisse.request_code_btn": {
     "de": "Code per SMS anfordern",
