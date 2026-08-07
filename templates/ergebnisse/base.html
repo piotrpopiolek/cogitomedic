@@ -5,39 +5,46 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ ergebnisse_ui.page_title|default:"Ergebnisse – CogitoMed" }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
-  <style>
-    body { max-width: 480px; margin: 0 auto; padding: 1rem; }
-    h1 { font-size: 1.25rem; }
-    a.btn { display: inline-block; padding: 0.75rem 1.25rem; margin: 0.5rem 0; text-align: center; font-size: 1rem; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { margin: 0.25rem 0; }
-    input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; box-sizing: border-box; font-size: 1rem; }
-    input[type="date"] { min-height: 2.75rem; }
-    .ergebnisse-lang-nav a,
-    .ergebnisse-lang-nav span { text-decoration: none; }
-    button { width: 100%; padding: 1rem; margin-top: 0.5rem; font-size: 1rem; }
-  </style>
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/ergebnisse-portal.css' %}" />
   {% block head %}{% endblock %}
 </head>
-<body class="cm-portal">
-  {% if ergebnisse_ui %}
-  <nav class="ergebnisse-lang-nav" aria-label="{% db_trans 'other.ergebnisse.choose_language' 'Choose language' %}" style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:1.5rem;line-height:1">
-    {% if ergebnisse_locale == 'en' %}
-      <a href="{{ request.path }}?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</a>
-      <span title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</span>
-      <a href="{{ request.path }}?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</a>
-    {% elif ergebnisse_locale == 'pl' %}
-      <a href="{{ request.path }}?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</a>
-      <a href="{{ request.path }}?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</a>
-      <span title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</span>
-    {% else %}
-      <span title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</span>
-      <a href="{{ request.path }}?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</a>
-      <a href="{{ request.path }}?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</a>
-    {% endif %}
-  </nav>
-  {% endif %}
-  {% block content %}{% endblock %}
+<body class="cm-portal cm-portal-ergebnisse">
+  <div class="portal-shell">
+    <header class="portal-brand">
+      <a href="https://cogitomedica.de/" class="portal-brand-link">
+        <img
+          class="portal-brand-logo"
+          src="{% static 'lab/logo-transparent.png' %}"
+          alt="CogitoMedica"
+          width="340"
+          height="228"
+        />
+      </a>
+      {% if ergebnisse_ui %}
+      <nav class="ergebnisse-lang-nav" aria-label="{% db_trans 'other.ergebnisse.choose_language' 'Choose language' %}">
+        {% if ergebnisse_locale == 'en' %}
+          <a href="{{ request.path }}?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</a>
+          <span aria-current="true" title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</span>
+          <a href="{{ request.path }}?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</a>
+        {% elif ergebnisse_locale == 'pl' %}
+          <a href="{{ request.path }}?locale=de" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</a>
+          <a href="{{ request.path }}?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</a>
+          <span aria-current="true" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</span>
+        {% else %}
+          <span aria-current="true" title="{{ ergebnisse_ui.lang_de|default:'Deutsch' }}">DE</span>
+          <a href="{{ request.path }}?locale=en" title="{{ ergebnisse_ui.lang_en|default:'English' }}">EN</a>
+          <a href="{{ request.path }}?locale=pl" title="{{ ergebnisse_ui.lang_pl|default:'Polski' }}">PL</a>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </header>
+    <main class="portal-panel">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </body>
 </html>
