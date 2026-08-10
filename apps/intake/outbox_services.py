@@ -147,165 +147,202 @@ def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
     _execute_intake_outbox_event(event, now=now)
 
 
-@transaction.atomic
 def process_intake_outbox_events(
     *,
     batch_size: int | None = None,
     now: datetime | None = None,
 ) -> IntakeOutboxProcessingResult:
+    """Process pending/failed intake outbox events (commit-per-event)."""
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
-    events = list(
-        IntakeOutboxEvent.objects.select_for_update(
-            skip_locked=True,
-            of=("self",),
-        )
-        .select_related("intake_document_version")
-        .filter(
-            status__in=[IntakeOutboxStatus.PENDING, IntakeOutboxStatus.FAILED],
-            available_at__lte=effective_now,
-        )
-        .order_by("available_at", "created_at")[:effective_batch]
-    )
 
     processed = 0
     failed = 0
     dead_lettered = 0
+    claimed_ids: set[uuid.UUID] = set()
 
-    for event in events:
-        event.status = IntakeOutboxStatus.PROCESSING
-        event.locked_at = effective_now
-        event.error_message = None
-        event.save(update_fields=["status", "locked_at", "error_message", "updated_at"])
-
-        version = event.intake_document_version
-        patient_id = version.intake_form.queue_entry.patient_id
+    for _ in range(effective_batch):
         intake_processed_ok = False
-        version_created_at = version.created_at
-        intake_event_type = event.event_type
-        try:
-            with transaction.atomic():
-                _execute_event(event, now=effective_now)
-            event.status = IntakeOutboxStatus.PROCESSED
-            event.processed_at = effective_now
-            event.locked_at = None
-            event.error_message = None
-            event.save(
-                update_fields=[
-                    "status",
-                    "processed_at",
-                    "locked_at",
-                    "error_message",
-                    "updated_at",
-                ]
-            )
-            create_audit_event(
-                event_type="INTAKE_OUTBOX_EVENT_PROCESSED",
-                patient_id=patient_id,
-                context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
-                metadata={
-                    "intake_document_version_id": str(version.id),
-                    "intake_outbox_event_id": str(event.id),
-                    "event_type": event.event_type,
-                    "retry_count": event.retry_count,
-                },
-            )
-            logger.info(
-                "intake_outbox_event_processed",
-                extra={
-                    "intake_outbox_event_id": str(event.id),
-                    "intake_document_version_id": str(version.id),
-                    "event_type": event.event_type,
-                    "patient_id": str(patient_id),
-                },
-            )
-            processed += 1
-            intake_processed_ok = True
-        except Exception as exc:
-            if event.event_type == IntakeOutboxEventType.GENERATE_INTAKE_PDF:
-                IntakeDocumentVersion.objects.filter(
-                    id=event.intake_document_version_id
-                ).update(pdf_generation_status=IntakePdfStatus.FAILED)
-            event.retry_count += 1
-            event.locked_at = None
-            event.error_message = str(exc)
-            if event.retry_count >= event.max_retries:
-                event.status = IntakeOutboxStatus.DEAD_LETTER
-                dead_lettered += 1
-            else:
-                event.status = IntakeOutboxStatus.FAILED
-                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
-                    2 ** (event.retry_count - 1)
+        version_created_at = None
+        intake_event_type = None
+        event_id = None
+        with transaction.atomic():
+            qs = (
+                IntakeOutboxEvent.objects.select_for_update(
+                    skip_locked=True,
+                    of=("self",),
                 )
-                event.available_at = effective_now + timedelta(seconds=backoff)
-                failed += 1
-            event.save(
-                update_fields=[
-                    "status",
-                    "retry_count",
-                    "locked_at",
-                    "error_message",
-                    "available_at",
-                    "updated_at",
-                ]
-            )
-            create_audit_event(
-                event_type=(
-                    "INTAKE_OUTBOX_EVENT_DEAD_LETTERED"
-                    if event.status == IntakeOutboxStatus.DEAD_LETTER
-                    else "INTAKE_OUTBOX_EVENT_FAILED"
-                ),
-                patient_id=patient_id,
-                context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
-                metadata={
-                    "intake_document_version_id": str(version.id),
-                    "intake_outbox_event_id": str(event.id),
-                    "event_type": event.event_type,
-                    "retry_count": event.retry_count,
-                    "error_message": event.error_message or "",
-                },
-            )
-            if event.status == IntakeOutboxStatus.DEAD_LETTER:
-                logger.warning(
-                    "intake_outbox_event_dead_lettered",
-                    extra={
-                        "intake_outbox_event_id": str(event.id),
-                        "intake_document_version_id": str(version.id),
-                        "event_type": event.event_type,
-                        "retry_count": event.retry_count,
-                        "error_message": event.error_message or "",
-                        "patient_id": str(patient_id),
-                    },
+                .select_related(
+                    "intake_document_version",
+                    "intake_document_version__intake_form",
+                    "intake_document_version__intake_form__queue_entry",
+                    "intake_document_version__intake_form__queue_entry__daily_queue",
                 )
-            else:
-                logger.warning(
-                    "intake_outbox_event_failed",
-                    extra={
-                        "intake_outbox_event_id": str(event.id),
-                        "intake_document_version_id": str(version.id),
-                        "event_type": event.event_type,
-                        "retry_count": event.retry_count,
-                        "error_message": event.error_message or "",
-                        "patient_id": str(patient_id),
-                    },
+                .filter(
+                    status__in=[
+                        IntakeOutboxStatus.PENDING,
+                        IntakeOutboxStatus.FAILED,
+                    ],
+                    available_at__lte=effective_now,
                 )
+                .order_by("available_at", "created_at")
+            )
+            if claimed_ids:
+                qs = qs.exclude(id__in=claimed_ids)
+            event = qs.first()
+            if event is None:
+                break
+
+            event_id = event.id
+            claimed_ids.add(event_id)
+            version = event.intake_document_version
+            patient_id = version.intake_form.queue_entry.patient_id
+            version_created_at = version.created_at
+            intake_event_type = event.event_type
+            sid = transaction.savepoint()
             try:
-                record_outbox_execution(
-                    stream="intake",
-                    event_type=event.event_type,
-                    result=(
-                        "dead_letter"
-                        if event.status == IntakeOutboxStatus.DEAD_LETTER
-                        else "failed"
+                event.status = IntakeOutboxStatus.PROCESSING
+                event.locked_at = effective_now
+                event.error_message = None
+                event.save(
+                    update_fields=[
+                        "status",
+                        "locked_at",
+                        "error_message",
+                        "updated_at",
+                    ]
+                )
+                _execute_event(event, now=effective_now)
+                event.status = IntakeOutboxStatus.PROCESSED
+                event.processed_at = effective_now
+                event.locked_at = None
+                event.error_message = None
+                event.save(
+                    update_fields=[
+                        "status",
+                        "processed_at",
+                        "locked_at",
+                        "error_message",
+                        "updated_at",
+                    ]
+                )
+                create_audit_event(
+                    event_type="INTAKE_OUTBOX_EVENT_PROCESSED",
+                    patient_id=patient_id,
+                    context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
+                    metadata={
+                        "intake_document_version_id": str(version.id),
+                        "intake_outbox_event_id": str(event.id),
+                        "event_type": event.event_type,
+                        "retry_count": event.retry_count,
+                    },
+                )
+                logger.info(
+                    "intake_outbox_event_processed",
+                    extra={
+                        "intake_outbox_event_id": str(event.id),
+                        "intake_document_version_id": str(version.id),
+                        "event_type": event.event_type,
+                        "patient_id": str(patient_id),
+                    },
+                )
+                transaction.savepoint_commit(sid)
+                intake_processed_ok = True
+                processed += 1
+            except Exception as exc:
+                transaction.savepoint_rollback(sid)
+                ev = IntakeOutboxEvent.objects.select_related(
+                    "intake_document_version",
+                    "intake_document_version__intake_form",
+                    "intake_document_version__intake_form__queue_entry",
+                    "intake_document_version__intake_form__queue_entry__daily_queue",
+                ).get(pk=event_id)
+                version = ev.intake_document_version
+                patient_id = version.intake_form.queue_entry.patient_id
+                if ev.event_type == IntakeOutboxEventType.GENERATE_INTAKE_PDF:
+                    IntakeDocumentVersion.objects.filter(
+                        id=ev.intake_document_version_id
+                    ).update(pdf_generation_status=IntakePdfStatus.FAILED)
+                ev.retry_count += 1
+                ev.locked_at = None
+                ev.error_message = str(exc)
+                if ev.retry_count >= ev.max_retries:
+                    ev.status = IntakeOutboxStatus.DEAD_LETTER
+                    dead_lettered += 1
+                else:
+                    ev.status = IntakeOutboxStatus.FAILED
+                    backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
+                        2 ** (ev.retry_count - 1)
+                    )
+                    ev.available_at = effective_now + timedelta(seconds=backoff)
+                    failed += 1
+                ev.save(
+                    update_fields=[
+                        "status",
+                        "retry_count",
+                        "locked_at",
+                        "error_message",
+                        "available_at",
+                        "updated_at",
+                    ]
+                )
+                create_audit_event(
+                    event_type=(
+                        "INTAKE_OUTBOX_EVENT_DEAD_LETTERED"
+                        if ev.status == IntakeOutboxStatus.DEAD_LETTER
+                        else "INTAKE_OUTBOX_EVENT_FAILED"
                     ),
-                    start_ts=None,
-                    end_ts=None,
+                    patient_id=patient_id,
+                    context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
+                    metadata={
+                        "intake_document_version_id": str(version.id),
+                        "intake_outbox_event_id": str(ev.id),
+                        "event_type": ev.event_type,
+                        "retry_count": ev.retry_count,
+                        "error_message": ev.error_message or "",
+                    },
                 )
-            except Exception:
-                logger.exception(
-                    "record_outbox_execution failed after failed intake outbox event %s",
-                    event.id,
-                )
+                if ev.status == IntakeOutboxStatus.DEAD_LETTER:
+                    logger.warning(
+                        "intake_outbox_event_dead_lettered",
+                        extra={
+                            "intake_outbox_event_id": str(ev.id),
+                            "intake_document_version_id": str(version.id),
+                            "event_type": ev.event_type,
+                            "retry_count": ev.retry_count,
+                            "error_message": ev.error_message or "",
+                            "patient_id": str(patient_id),
+                        },
+                    )
+                else:
+                    logger.warning(
+                        "intake_outbox_event_failed",
+                        extra={
+                            "intake_outbox_event_id": str(ev.id),
+                            "intake_document_version_id": str(version.id),
+                            "event_type": ev.event_type,
+                            "retry_count": ev.retry_count,
+                            "error_message": ev.error_message or "",
+                            "patient_id": str(patient_id),
+                        },
+                    )
+                try:
+                    record_outbox_execution(
+                        stream="intake",
+                        event_type=ev.event_type,
+                        result=(
+                            "dead_letter"
+                            if ev.status == IntakeOutboxStatus.DEAD_LETTER
+                            else "failed"
+                        ),
+                        start_ts=None,
+                        end_ts=None,
+                    )
+                except Exception:
+                    logger.exception(
+                        "record_outbox_execution failed after failed intake outbox event %s",
+                        ev.id,
+                    )
 
         if intake_processed_ok:
             try:
@@ -319,7 +356,7 @@ def process_intake_outbox_events(
             except Exception:
                 logger.exception(
                     "record_outbox_execution failed after successful intake outbox event %s",
-                    event.id,
+                    event_id,
                 )
 
     logger.info(
@@ -328,7 +365,7 @@ def process_intake_outbox_events(
             "processed": processed,
             "failed": failed,
             "dead_lettered": dead_lettered,
-            "batch_size": len(events),
+            "batch_size": len(claimed_ids),
         },
     )
     return IntakeOutboxProcessingResult(
