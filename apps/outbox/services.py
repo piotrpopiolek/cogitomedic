@@ -241,6 +241,9 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
                 version.save(update_fields=["sms_sent", "sms_sent_at"])
                 return
 
+        if not resend_sms and version.sms_sent:
+            return
+
         patient = version.medical_document.queue_entry.patient
         if not (patient.phone or "").strip():
             raise DomainError(
@@ -269,173 +272,190 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
     raise RuntimeError(f"Unsupported outbox event type: {event.event_type}")
 
 
-@transaction.atomic
 def process_outbox_events(
     *, batch_size: int | None = None, now: datetime | None = None
 ) -> OutboxProcessingResult:
-    """Process pending/failed outbox events available for execution."""
+    """Process pending/failed outbox events available for execution.
+
+    Each event runs in its own DB transaction (commit-per-event) so a crash or
+    deploy kill after an external side-effect (SMS / HiDrive) cannot roll back
+    earlier events in the same batch.
+    """
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
-
-    events = list(
-        OutboxEvent.objects.select_for_update(
-            skip_locked=True,
-            of=("self",),
-        )
-        .select_related("medical_document_version")
-        .filter(
-            status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED],
-            available_at__lte=effective_now,
-        )
-        .order_by("available_at", "created_at")[:effective_batch]
-    )
 
     processed = 0
     failed = 0
     dead_lettered = 0
+    # Avoid re-claiming the same row in one run when backoff is 0 (available_at
+    # stays <= now after FAILED). Matches previous "fixed batch snapshot" semantics.
+    claimed_ids: set[uuid.UUID] = set()
 
-    for event in events:
-        event_id = event.id
-        sid = transaction.savepoint()
+    for _ in range(effective_batch):
+        event_id = None
+        event_type = None
         success_committed = False
         pub_at = None
-        try:
-            event.status = OutboxStatus.PROCESSING
-            event.locked_at = effective_now
-            event.error_message = None
-            event.save(
-                update_fields=[
-                    "status",
-                    "locked_at",
-                    "error_message",
-                    "updated_at",
-                ]
-            )
-            _execute_event(event, now=effective_now)
-            event.status = OutboxStatus.PROCESSED
-            event.processed_at = effective_now
-            event.locked_at = None
-            event.error_message = None
-            event.save(
-                update_fields=[
-                    "status",
-                    "processed_at",
-                    "locked_at",
-                    "error_message",
-                    "updated_at",
-                ]
-            )
-            doc = event.medical_document_version.medical_document
-            create_audit_event(
-                event_type="OUTBOX_EVENT_PROCESSED",
-                patient_id=doc.queue_entry.patient_id,
-                medical_document_id=doc.id,
-                outbox_event_id=event.id,
-                context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
-                metadata={
-                    "event_type": event.event_type,
-                    "retry_count": event.retry_count,
-                },
-            )
-            pub_at = event.medical_document_version.published_at
-            transaction.savepoint_commit(sid)
-            success_committed = True
-        except Exception as exc:
-            transaction.savepoint_rollback(sid)
-            if isinstance(exc, AllExternalPdfDownloadsFailed):
-                for meta in exc.failed_download_metadata:
-                    att_id = meta.get("external_pdf_attachment_id")
-                    if (
-                        att_id
-                        and AuditEvent.objects.filter(
-                            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-                            outbox_event_id=event_id,
-                            medical_document_id=exc.medical_document_id,
-                            metadata__external_pdf_attachment_id=att_id,
-                        ).exists()
-                    ):
-                        continue
-                    create_audit_event(
-                        event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-                        patient_id=exc.patient_id,
-                        medical_document_id=exc.medical_document_id,
-                        outbox_event_id=event_id,
-                        metadata=meta,
-                    )
-            ev = OutboxEvent.objects.get(pk=event_id)
-            if ev.event_type == OutboxEventType.GENERATE_PDF:
-                MedicalDocumentVersion.objects.filter(
-                    id=ev.medical_document_version_id
-                ).update(pdf_generation_status=PdfStatus.FAILED)
-            ev.retry_count += 1
-            if (
-                isinstance(exc, DomainError)
-                and exc.api_message_key in _NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS
-                and ev.event_type == OutboxEventType.GENERATE_PDF
-            ):
-                ev.retry_count = max(ev.retry_count, ev.max_retries)
-            ev.locked_at = None
-            ev.error_message = str(exc)
-            if ev.retry_count >= ev.max_retries:
-                ev.status = OutboxStatus.DEAD_LETTER
-                dead_lettered += 1
-            else:
-                ev.status = OutboxStatus.FAILED
-                backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
-                    2 ** (ev.retry_count - 1)
+        with transaction.atomic():
+            qs = (
+                OutboxEvent.objects.select_for_update(
+                    skip_locked=True,
+                    of=("self",),
                 )
-                ev.available_at = effective_now + timedelta(seconds=backoff)
-                failed += 1
-            ev.save(
-                update_fields=[
-                    "status",
-                    "retry_count",
-                    "locked_at",
-                    "error_message",
-                    "available_at",
-                    "updated_at",
-                ]
+                .select_related("medical_document_version")
+                .filter(
+                    status__in=[OutboxStatus.PENDING, OutboxStatus.FAILED],
+                    available_at__lte=effective_now,
+                )
+                .order_by("available_at", "created_at")
             )
-            doc = ev.medical_document_version.medical_document
-            create_audit_event(
-                event_type=(
-                    "OUTBOX_EVENT_DEAD_LETTERED"
-                    if ev.status == OutboxStatus.DEAD_LETTER
-                    else "OUTBOX_EVENT_FAILED"
-                ),
-                patient_id=doc.queue_entry.patient_id,
-                medical_document_id=doc.id,
-                outbox_event_id=ev.id,
-                context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
-                metadata={
-                    "event_type": ev.event_type,
-                    "retry_count": ev.retry_count,
-                    "error_message": ev.error_message or "",
-                },
-            )
+            if claimed_ids:
+                qs = qs.exclude(id__in=claimed_ids)
+            event = qs.first()
+            if event is None:
+                break
+
+            event_id = event.id
+            claimed_ids.add(event_id)
+            event_type = event.event_type
+            sid = transaction.savepoint()
             try:
-                record_outbox_execution(
-                    stream="befund",
-                    event_type=ev.event_type,
-                    result=(
-                        "dead_letter"
+                event.status = OutboxStatus.PROCESSING
+                event.locked_at = effective_now
+                event.error_message = None
+                event.save(
+                    update_fields=[
+                        "status",
+                        "locked_at",
+                        "error_message",
+                        "updated_at",
+                    ]
+                )
+                _execute_event(event, now=effective_now)
+                event.status = OutboxStatus.PROCESSED
+                event.processed_at = effective_now
+                event.locked_at = None
+                event.error_message = None
+                event.save(
+                    update_fields=[
+                        "status",
+                        "processed_at",
+                        "locked_at",
+                        "error_message",
+                        "updated_at",
+                    ]
+                )
+                doc = event.medical_document_version.medical_document
+                create_audit_event(
+                    event_type="OUTBOX_EVENT_PROCESSED",
+                    patient_id=doc.queue_entry.patient_id,
+                    medical_document_id=doc.id,
+                    outbox_event_id=event.id,
+                    context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+                    metadata={
+                        "event_type": event.event_type,
+                        "retry_count": event.retry_count,
+                    },
+                )
+                pub_at = event.medical_document_version.published_at
+                transaction.savepoint_commit(sid)
+                success_committed = True
+            except Exception as exc:
+                transaction.savepoint_rollback(sid)
+                if isinstance(exc, AllExternalPdfDownloadsFailed):
+                    for meta in exc.failed_download_metadata:
+                        att_id = meta.get("external_pdf_attachment_id")
+                        if (
+                            att_id
+                            and AuditEvent.objects.filter(
+                                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                                outbox_event_id=event_id,
+                                medical_document_id=exc.medical_document_id,
+                                metadata__external_pdf_attachment_id=att_id,
+                            ).exists()
+                        ):
+                            continue
+                        create_audit_event(
+                            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                            patient_id=exc.patient_id,
+                            medical_document_id=exc.medical_document_id,
+                            outbox_event_id=event_id,
+                            metadata=meta,
+                        )
+                ev = OutboxEvent.objects.get(pk=event_id)
+                if ev.event_type == OutboxEventType.GENERATE_PDF:
+                    MedicalDocumentVersion.objects.filter(
+                        id=ev.medical_document_version_id
+                    ).update(pdf_generation_status=PdfStatus.FAILED)
+                ev.retry_count += 1
+                if (
+                    isinstance(exc, DomainError)
+                    and exc.api_message_key in _NON_RETRYABLE_GENERATE_PDF_DOMAIN_KEYS
+                    and ev.event_type == OutboxEventType.GENERATE_PDF
+                ):
+                    ev.retry_count = max(ev.retry_count, ev.max_retries)
+                ev.locked_at = None
+                ev.error_message = str(exc)
+                if ev.retry_count >= ev.max_retries:
+                    ev.status = OutboxStatus.DEAD_LETTER
+                    dead_lettered += 1
+                else:
+                    ev.status = OutboxStatus.FAILED
+                    backoff = settings.OUTBOX_BASE_BACKOFF_SECONDS * (
+                        2 ** (ev.retry_count - 1)
+                    )
+                    ev.available_at = effective_now + timedelta(seconds=backoff)
+                    failed += 1
+                ev.save(
+                    update_fields=[
+                        "status",
+                        "retry_count",
+                        "locked_at",
+                        "error_message",
+                        "available_at",
+                        "updated_at",
+                    ]
+                )
+                doc = ev.medical_document_version.medical_document
+                create_audit_event(
+                    event_type=(
+                        "OUTBOX_EVENT_DEAD_LETTERED"
                         if ev.status == OutboxStatus.DEAD_LETTER
-                        else "failed"
+                        else "OUTBOX_EVENT_FAILED"
                     ),
-                    start_ts=None,
-                    end_ts=None,
+                    patient_id=doc.queue_entry.patient_id,
+                    medical_document_id=doc.id,
+                    outbox_event_id=ev.id,
+                    context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+                    metadata={
+                        "event_type": ev.event_type,
+                        "retry_count": ev.retry_count,
+                        "error_message": ev.error_message or "",
+                    },
                 )
-            except Exception:
-                logger.exception(
-                    "record_outbox_execution failed after failed outbox event %s",
-                    event_id,
-                )
+                try:
+                    record_outbox_execution(
+                        stream="befund",
+                        event_type=ev.event_type,
+                        result=(
+                            "dead_letter"
+                            if ev.status == OutboxStatus.DEAD_LETTER
+                            else "failed"
+                        ),
+                        start_ts=None,
+                        end_ts=None,
+                    )
+                except Exception:
+                    logger.exception(
+                        "record_outbox_execution failed after failed outbox event %s",
+                        event_id,
+                    )
 
         if success_committed:
             try:
                 record_outbox_execution(
                     stream="befund",
-                    event_type=event.event_type,
+                    event_type=event_type,
                     result="success",
                     start_ts=pub_at,
                     end_ts=effective_now,
