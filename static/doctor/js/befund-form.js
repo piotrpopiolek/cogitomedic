@@ -237,6 +237,7 @@
     if (authExpiredHandled) return;
     authExpiredHandled = true;
     alertMsg("warning", message || UI.msgSessionExpired || "Session expired.");
+    markIntentionalLeaveForLockRelease();
     window.setTimeout(function () {
       window.location.href = buildDoctorLoginUrl();
     }, 300);
@@ -481,7 +482,15 @@
   var publishedVersionNo = publishedVersionNoEarly;
   var hasPendingRevision = hasPendingRevisionEarly;
 
-  function releaseEditLockOnLeave() {
+  /**
+   * Release edit lock only on intentional leave (list / logout / publish / auth redirect).
+   * Do NOT unlock on bare pagehide (tab switch, mobile background, bfcache) — that was
+   * releasing the semaphore while the form stayed in memory (parallel-edit data loss).
+   */
+  var releaseLockOnNextPageHide = false;
+  var befundFormDirty = false;
+
+  function releaseEditLockBestEffort() {
     if (!isDraftAuthoring()) return;
     var token = getCsrfToken();
     if (!token) return;
@@ -499,7 +508,88 @@
       }).catch(function () {});
     } catch (e) {}
   }
-  window.addEventListener("pagehide", releaseEditLockOnLeave);
+
+  function markIntentionalLeaveForLockRelease() {
+    if (!isDraftAuthoring()) return;
+    releaseLockOnNextPageHide = true;
+    // If beforeunload is cancelled, pagehide never runs — clear the flag.
+    window.setTimeout(function () {
+      releaseLockOnNextPageHide = false;
+    }, 2000);
+  }
+
+  function isLeavingDocumentEditAnchor(anchor) {
+    if (!anchor || anchor.target === "_blank") return false;
+    if (anchor.hasAttribute("download")) return false;
+    var href = anchor.getAttribute("href");
+    if (!href || href.charAt(0) === "#") return false;
+    var url;
+    try {
+      url = new URL(href, window.location.href);
+    } catch (e) {
+      return false;
+    }
+    if (url.origin !== window.location.origin) return true;
+    var cur = (window.location.pathname || "").replace(/\/$/, "");
+    var next = (url.pathname || "").replace(/\/$/, "");
+    return next !== cur;
+  }
+
+  window.addEventListener(
+    "click",
+    function (ev) {
+      var a =
+        ev.target &&
+        ev.target.closest &&
+        ev.target.closest("a[href]");
+      if (!a || !isDraftAuthoring()) return;
+      if (
+        a.classList.contains("js-release-document-lock") ||
+        isLeavingDocumentEditAnchor(a)
+      ) {
+        markIntentionalLeaveForLockRelease();
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "submit",
+    function (ev) {
+      var form = ev.target;
+      if (!form || !isDraftAuthoring()) return;
+      var action = (form.getAttribute("action") || "").toLowerCase();
+      if (
+        form.classList.contains("js-release-document-lock") ||
+        action.indexOf("logout") !== -1
+      ) {
+        markIntentionalLeaveForLockRelease();
+      }
+    },
+    true
+  );
+
+  window.addEventListener("pagehide", function () {
+    if (!releaseLockOnNextPageHide) return;
+    releaseLockOnNextPageHide = false;
+    releaseEditLockBestEffort();
+  });
+
+  var befundFormEl = el("befund-form");
+  if (befundFormEl) {
+    befundFormEl.addEventListener("input", function () {
+      befundFormDirty = true;
+    });
+    befundFormEl.addEventListener("change", function () {
+      befundFormDirty = true;
+    });
+  }
+  window.addEventListener("beforeunload", function (e) {
+    if (!isDraftAuthoring() || !befundFormDirty) return;
+    // Warning only — must not call unlock (tab switch / refresh must keep the lock).
+    e.preventDefault();
+    e.returnValue = "";
+  });
 
   function renderPaperIntakeMeta() {
     const metaEl = el("paper-intake-meta");
@@ -1911,6 +2001,9 @@
           if (res.ok) {
             alertMsg("success", UI.msgPublishSuccess);
             publishBtn.disabled = true;
+            befundFormDirty = false;
+            // Server publish clears the lock; still release client-side before leave.
+            releaseEditLockBestEffort();
             var listUrl =
               (PANEL && PANEL.listUrl) ||
               (function () {

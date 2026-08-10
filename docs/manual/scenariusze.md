@@ -284,9 +284,9 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML 
 |------|--------|
 | **Role** | Lekarz, Manager |
 | **Objaw** | Na liście `/doctor/` wiersz jest **żółty**, w Statusie chip **W edycji / In Bearbeitung**, pod pacjentem **Edytuje: …**; przycisk **Otwórz** zablokowany, gdy edytuje **inna** osoba. Przy wejściu w szczegóły — komunikat o blokadzie. |
-| **Przyczyna** | Tylko **jedna osoba** naraz może edytować szkic. Blokada trwa do zamknięcia karty / publikacji albo max. ok. **6 h** (`DOCUMENT_LOCK_TIMEOUT_HOURS`). |
-| **Co zrobić dziś** | 1) Poproś kolegę/koleżankę o **zapisanie i zamknięcie** karty albo o publikację. 2) Po ok. 6 h blokada wygasa sama — wiersz przestaje być żółty; może zostać etykieta **Ostatnio edytował: …** (otwarcie dozwolone). 3) W nagłych przypadkach — IT. |
-| **Czego nie robić** | Nie pracuj na tym samym szkicu w dwóch kartach przeglądarki jednocześnie. |
+| **Przyczyna** | Tylko **jedna osoba** naraz może edytować szkic. Blokada jest brana przy **otwarciu** dokumentu i zwalniana przy **świadomym wyjściu** (powrót do listy, wylogowanie, publikacja) albo po max. ok. **6 h** (`DOCUMENT_LOCK_TIMEOUT_HOURS`). **Nie** jest zwalniana przy samym przełączeniu karty / tle mobilnym — semafor zostaje przy otwartym formularzu w pamięci. |
+| **Co zrobić dziś** | 1) Poproś kolegę/koleżankę o **zapisanie i powrót do listy** albo o publikację (nie wystarczy przełączyć kartę). 2) Po ok. 6 h blokada wygasa sama — wiersz przestaje być żółty; może zostać etykieta **Ostatnio edytował: …** (otwarcie dozwolone). 3) W nagłych przypadkach — IT (Admin/Manager mogą zwolnić lock). |
+| **Czego nie robić** | Nie pracuj na tym samym szkicu w dwóch kartach jednocześnie. Nie zakładaj, że „zminimalizowanie” karty oddaje dokument koleżance — nadal jesteś właścicielem blokady. |
 | **Docelowo** | Funkcja listy (chip + legenda) — wdrożona; rozszerzenie blokady przy korektach PUBLISHED — backlog M7. |
 | **Film** | `scenariusze/sc-014-blokada-dokumentu.webm` — *„Dokument zablokowany — kolega ma otwarty szkic”* |
 | **Powiązane** | [03-doktor.md](03-doktor.md) |

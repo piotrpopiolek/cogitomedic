@@ -93,7 +93,16 @@ Gdy z przyczyn operacyjnych pacjent **nie** wypełnia ankiety na tablecie, a pra
 
 ## 3. Wypełnienie Befundu (krok po kroku)
 
-Przy wejściu do szkicu system zakłada blokadę edycji. Jeśli dokument edytuje inna osoba, zobaczysz komunikat i nie wejdziesz do edycji.
+Przy wejściu do szkicu system zakłada **blokadę edycji** (semafor). Jeśli dokument edytuje inna osoba, zobaczysz komunikat i nie wejdziesz do edycji.
+
+**Co zwalnia blokadę**
+
+- Świadome wyjście: **Wróć do listy** / link panelu lekarza, **wylogowanie**, zmiana języka (nawigacja na listę), **udana publikacja**.
+- Timeout serwerowy: ok. **6 godzin** (`DOCUMENT_LOCK_TIMEOUT_HOURS`) — porzucona sesja zwolni się sama.
+
+**Czego blokada nie robi:** przełączenie karty przeglądarki, przejście aplikacji w tło (mobile) ani przywrócenie z bfcache **nie** oddaje semafora. Formularz w pamięci nadal „trzyma” dokument — druga osoba nie wejdzie w edycję, dopóki pierwsza świadomie nie wyjdzie albo nie minie timeout. Przy niezapisanych zmianach przeglądarka może ostrzec przed zamknięciem karty; to ostrzeżenie **nie** zwalnia blokady.
+
+Szczegóły operacyjne: [SC-014](scenariusze.md#sc-014).
 
 ### 3.1 Co zawiera ekran
 

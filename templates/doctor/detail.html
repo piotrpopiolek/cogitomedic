@@ -68,7 +68,7 @@
 {{ panel_data|json_script:"doctor-panel-data" }}
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
   <h1 class="text-2xl font-bold text-base-900 dark:text-base-100 mb-0">{{ ui.detail_patient_heading }} <span id="patient-name"></span></h1>
-  <a href="{% url 'doctor-list' %}" class="inline-flex items-center justify-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800 shrink-0">{{ ui.back_to_list }}</a>
+  <a href="{% url 'doctor-list' %}" class="js-release-document-lock inline-flex items-center justify-center rounded-default border border-base-300 px-3 py-1.5 text-sm font-medium text-base-700 hover:bg-base-100 dark:border-base-600 dark:text-base-200 dark:hover:bg-base-800 shrink-0">{{ ui.back_to_list }}</a>
 </div>
 
 <div id="alert-placeholder" class="sticky top-0 z-30 mb-4 empty:hidden"></div>
