@@ -62,6 +62,16 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         self.assertNotIn("releaseEditLock", chunk)
         self.assertNotIn("/unlock", chunk)
 
+    def test_draft_save_clears_dirty_flag(self) -> None:
+        src = self._js_source()
+        # Successful save-draft path must clear dirty so beforeunload is not shown.
+        marker = (
+            "previewSeenSinceLastSave = false;\n"
+            "            befundFormDirty = false;\n"
+            "            applyRevisionStateFromResponse"
+        )
+        self.assertIn(marker, src)
+
 
 class DocumentLockWithoutPagehideReleaseTests(TestCase):
     """A keeps the lock without client unlock (tab in background / bfcache); B cannot acquire."""
