@@ -1495,6 +1495,7 @@
         }
         applyRevisionStateFromResponse(getResJson(res));
         previewSeenSinceLastSave = false;
+        befundFormDirty = false;
         setPublishEnabledFromPreviewFlag();
         alertMsg("success", UI.msgRevisionStarted);
       })
@@ -1720,6 +1721,7 @@
           if (isAuthExpiredResponse(res)) return;
           if (res.ok) {
             previewSeenSinceLastSave = false;
+            befundFormDirty = false;
             applyRevisionStateFromResponse(getResJson(res));
             setPublishEnabledFromPreviewFlag();
             alertMsg("success", UI.msgSaveSuccess);
@@ -1894,6 +1896,7 @@
             return;
           }
           applyRevisionStateFromResponse(getResJson(res));
+          befundFormDirty = false;
           return openPreviewBlobInTab(
             previewTab,
             btn,
@@ -1982,6 +1985,7 @@
             );
             return;
           }
+          befundFormDirty = false;
           return apiFetch(
             docUrl("/publish"),
             {
