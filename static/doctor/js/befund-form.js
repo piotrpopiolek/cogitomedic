@@ -237,7 +237,9 @@
     if (authExpiredHandled) return;
     authExpiredHandled = true;
     alertMsg("warning", message || UI.msgSessionExpired || "Session expired.");
-    markIntentionalLeaveForLockRelease();
+    if (typeof releaseEditLockBestEffort === "function") {
+      releaseEditLockBestEffort();
+    }
     window.setTimeout(function () {
       window.location.href = buildDoctorLoginUrl();
     }, 300);
@@ -483,11 +485,11 @@
   var hasPendingRevision = hasPendingRevisionEarly;
 
   /**
-   * Release edit lock only on intentional leave (list / logout / publish / auth redirect).
-   * Do NOT unlock on bare pagehide (tab switch, mobile background, bfcache) — that was
-   * releasing the semaphore while the form stayed in memory (parallel-edit data loss).
+   * Edit lock release:
+   * - Intentional leave (list / logout / publish / auth): unlock immediately (no timer).
+   * - Real unload (Back, close tab, hard navigation): unlock on pagehide when NOT bfcache.
+   * - Tab switch / mobile freeze into bfcache (pagehide.persisted): keep the lock (P0).
    */
-  var releaseLockOnNextPageHide = false;
   var befundFormDirty = false;
 
   function releaseEditLockBestEffort() {
@@ -509,13 +511,11 @@
     } catch (e) {}
   }
 
-  function markIntentionalLeaveForLockRelease() {
-    if (!isDraftAuthoring()) return;
-    releaseLockOnNextPageHide = true;
-    // If beforeunload is cancelled, pagehide never runs — clear the flag.
-    window.setTimeout(function () {
-      releaseLockOnNextPageHide = false;
-    }, 2000);
+  function releaseEditLockOnIntentionalLeave() {
+    // If the form is dirty, browser beforeunload may still cancel navigation —
+    // defer unlock to pagehide (!persisted) so cancel keeps the semaphore.
+    if (befundFormDirty) return;
+    releaseEditLockBestEffort();
   }
 
   function isLeavingDocumentEditAnchor(anchor) {
@@ -535,7 +535,7 @@
     return next !== cur;
   }
 
-  window.addEventListener(
+  document.addEventListener(
     "click",
     function (ev) {
       var a =
@@ -547,7 +547,7 @@
         a.classList.contains("js-release-document-lock") ||
         isLeavingDocumentEditAnchor(a)
       ) {
-        markIntentionalLeaveForLockRelease();
+        releaseEditLockOnIntentionalLeave();
       }
     },
     true
@@ -563,15 +563,17 @@
         form.classList.contains("js-release-document-lock") ||
         action.indexOf("logout") !== -1
       ) {
-        markIntentionalLeaveForLockRelease();
+        // Logout POST can be slow — unlock immediately (do not wait for pagehide).
+        releaseEditLockBestEffort();
+        befundFormDirty = false;
       }
     },
     true
   );
 
-  window.addEventListener("pagehide", function () {
-    if (!releaseLockOnNextPageHide) return;
-    releaseLockOnNextPageHide = false;
+  window.addEventListener("pagehide", function (e) {
+    // bfcache / freeze: keep lock. Back, close, navigate away: release.
+    if (e && e.persisted) return;
     releaseEditLockBestEffort();
   });
 
@@ -586,7 +588,7 @@
   }
   window.addEventListener("beforeunload", function (e) {
     if (!isDraftAuthoring() || !befundFormDirty) return;
-    // Warning only — must not call unlock (tab switch / refresh must keep the lock).
+    // Warning only — unlock happens on pagehide when navigation is not cancelled.
     e.preventDefault();
     e.returnValue = "";
   });
