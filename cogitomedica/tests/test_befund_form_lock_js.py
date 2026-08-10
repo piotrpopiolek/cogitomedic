@@ -10,7 +10,11 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentSourceType
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocument,
+    MedicalDocumentSourceType,
+)
 from apps.medical.services import acquire_document_lock, release_document_lock
 from apps.reception.models import (
     ClinicSite,
@@ -33,7 +37,9 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         src = self._js_source()
         self.assertNotIn("releaseLockOnNextPageHide", src)
         self.assertNotIn("markIntentionalLeaveForLockRelease", src)
-        self.assertNotRegex(src, r"setTimeout\(\s*function\s*\(\)\s*\{[^}]{0,80}releaseLock")
+        self.assertNotRegex(
+            src, r"setTimeout\(\s*function\s*\(\)\s*\{[^}]{0,80}releaseLock"
+        )
 
     def test_pagehide_skips_bfcache_but_unlocks_real_unload(self) -> None:
         src = self._js_source()
@@ -140,9 +146,7 @@ class DocumentLockWithoutPagehideReleaseTests(TestCase):
     def test_explicit_unlock_allows_second_doctor_acquire(self) -> None:
         acquire_document_lock(medical_document_id=self.doc.id, user=self.doctor_a)
         self.assertTrue(
-            release_document_lock(
-                medical_document_id=self.doc.id, user=self.doctor_a
-            )
+            release_document_lock(medical_document_id=self.doc.id, user=self.doctor_a)
         )
         granted_b, _ = acquire_document_lock(
             medical_document_id=self.doc.id, user=self.doctor_b
