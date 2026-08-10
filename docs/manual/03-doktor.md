@@ -97,10 +97,10 @@ Przy wejściu do szkicu system zakłada **blokadę edycji** (semafor). Jeśli do
 
 **Co zwalnia blokadę**
 
-- Świadome wyjście: **Wróć do listy** / link panelu lekarza, **wylogowanie**, zmiana języka (nawigacja na listę), **udana publikacja**.
+- Świadome wyjście: **Wróć do listy** / link panelu lekarza, **wylogowanie**, zmiana języka (nawigacja na listę), **udana publikacja**, przycisk **Wstecz** przeglądarki / zamknięcie karty (rzeczywiste opuszczenie strony).
 - Timeout serwerowy: ok. **6 godzin** (`DOCUMENT_LOCK_TIMEOUT_HOURS`) — porzucona sesja zwolni się sama.
 
-**Czego blokada nie robi:** przełączenie karty przeglądarki, przejście aplikacji w tło (mobile) ani przywrócenie z bfcache **nie** oddaje semafora. Formularz w pamięci nadal „trzyma” dokument — druga osoba nie wejdzie w edycję, dopóki pierwsza świadomie nie wyjdzie albo nie minie timeout. Przy niezapisanych zmianach przeglądarka może ostrzec przed zamknięciem karty; to ostrzeżenie **nie** zwalnia blokady.
+**Czego blokada nie robi:** przełączenie karty przeglądarki oraz przejście aplikacji w tło z **bfcache** (strona „zamrożona” w pamięci) **nie** oddaje semafora. Formularz w pamięci nadal „trzyma” dokument — druga osoba nie wejdzie w edycję, dopóki pierwsza świadomie nie wyjdzie, nie użyje Wstecz/zamknięcia karty, albo nie minie timeout. Przy niezapisanych zmianach przeglądarka może ostrzec przed opuszczeniem strony; anulowanie ostrzeżenia **nie** zwalnia blokady.
 
 Szczegóły operacyjne: [SC-014](scenariusze.md#sc-014).
 

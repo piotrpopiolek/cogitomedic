@@ -1,4 +1,4 @@
-"""Static contract: doctor befund-form.js must not unlock on bare pagehide (P0)."""
+"""Static contract: doctor befund-form.js edit-lock release policy (P0 + review fixes)."""
 
 from __future__ import annotations
 
@@ -29,26 +29,33 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         path = Path(settings.BASE_DIR) / "static" / "doctor" / "js" / "befund-form.js"
         return path.read_text(encoding="utf-8")
 
-    def test_pagehide_does_not_unconditionally_unlock(self) -> None:
+    def test_no_two_second_flag_clear_timer(self) -> None:
         src = self._js_source()
-        self.assertIn("releaseLockOnNextPageHide", src)
+        self.assertNotIn("releaseLockOnNextPageHide", src)
+        self.assertNotIn("markIntentionalLeaveForLockRelease", src)
+        self.assertNotRegex(src, r"setTimeout\(\s*function\s*\(\)\s*\{[^}]{0,80}releaseLock")
+
+    def test_pagehide_skips_bfcache_but_unlocks_real_unload(self) -> None:
+        src = self._js_source()
         self.assertIn('window.addEventListener("pagehide"', src)
-        # Guard: unlock on pagehide only when intentional-leave flag is set.
-        self.assertIn("if (!releaseLockOnNextPageHide) return;", src)
-        self.assertNotRegex(
-            src,
-            r'addEventListener\(\s*"pagehide"\s*,\s*releaseEditLock',
-        )
+        self.assertIn("e.persisted", src)
+        self.assertIn("if (e && e.persisted) return;", src)
+        # Must still call unlock on non-persisted pagehide (Back / close / navigate).
+        pagehide_idx = src.index('window.addEventListener("pagehide"')
+        chunk = src[pagehide_idx : pagehide_idx + 280]
+        self.assertIn("releaseEditLockBestEffort", chunk)
 
     def test_no_visibilitychange_unlock(self) -> None:
         src = self._js_source()
         self.assertNotIn("visibilitychange", src)
 
-    def test_conscious_exit_hooks_present(self) -> None:
+    def test_conscious_exit_unlocks_immediately(self) -> None:
         src = self._js_source()
         self.assertIn("js-release-document-lock", src)
-        self.assertIn("markIntentionalLeaveForLockRelease", src)
+        self.assertIn("releaseEditLockOnIntentionalLeave", src)
         self.assertIn("releaseEditLockBestEffort", src)
+        # Logout path must unlock immediately (slow POST must not wait on pagehide).
+        self.assertIn("Logout POST can be slow", src)
         self.assertIn('addEventListener("beforeunload"', src)
         beforeunload_idx = src.index('addEventListener("beforeunload"')
         chunk = src[beforeunload_idx : beforeunload_idx + 350]
@@ -57,7 +64,7 @@ class BefundFormLockJsContractTests(SimpleTestCase):
 
 
 class DocumentLockWithoutPagehideReleaseTests(TestCase):
-    """A keeps the lock without client unlock (tab in background); B cannot acquire."""
+    """A keeps the lock without client unlock (tab in background / bfcache); B cannot acquire."""
 
     def setUp(self) -> None:
         self.doctor_a = StaffUser.objects.create_user(
@@ -114,7 +121,6 @@ class DocumentLockWithoutPagehideReleaseTests(TestCase):
         )
         self.assertTrue(granted_a)
 
-        # No release — models "tab still open in background" (P0: no pagehide unlock).
         granted_b, holder = acquire_document_lock(
             medical_document_id=self.doc.id, user=self.doctor_b
         )
