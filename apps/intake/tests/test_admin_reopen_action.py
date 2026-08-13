@@ -244,9 +244,7 @@ class PatientIntakeFormAdminReceptionNoteTests(TestCase):
     def test_admin_change_view_posts_reception_note_with_empty_body_map(self) -> None:
         client = Client()
         client.force_login(self.superuser)
-        url = reverse(
-            "admin:intake_patientintakeform_change", args=[self.intake.pk]
-        )
+        url = reverse("admin:intake_patientintakeform_change", args=[self.intake.pk])
         note = "Empfangsnotiz für den Arzt"
         submitted = timezone.localtime(self.intake.submitted_at)
         response = client.post(
