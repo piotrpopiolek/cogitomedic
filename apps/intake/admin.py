@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
 from apps.core.exceptions import StateTransitionError
@@ -141,6 +142,10 @@ class PatientIntakeFormAdmin(CogitomedicaModelAdmin):
         "updated_at",
         "reception_note_updated_at",
         "reception_note_updated_by",
+        "body_map_schema_version",
+        "body_map_data",
+        "anamnesis_schema_version",
+        "anamnesis_payload",
     )
     date_hierarchy = "created_at"
     fieldsets = (
@@ -158,15 +163,46 @@ class PatientIntakeFormAdmin(CogitomedicaModelAdmin):
                 )
             },
         ),
-        ("Mapa ciała", {"fields": ("body_map_schema_version", "body_map_data")}),
-        ("Wywiad", {"fields": ("anamnesis_schema_version", "anamnesis_payload")}),
-        ("Podpis", {"fields": ("signature_file_path", "signature_sha256")}),
-        ("Metadane", {"fields": ("id", "created_at", "updated_at")}),
+        (
+            db_gettext_lazy(
+                "administration.fieldset_body_map",
+                "Körperschema",
+            ),
+            {"fields": ("body_map_schema_version", "body_map_data")},
+        ),
+        (
+            db_gettext_lazy(
+                "administration.fieldset_anamnesis",
+                "Anamnese",
+            ),
+            {"fields": ("anamnesis_schema_version", "anamnesis_payload")},
+        ),
+        (
+            db_gettext_lazy(
+                "administration.fieldset_signature",
+                "Unterschrift",
+            ),
+            {"fields": ("signature_file_path", "signature_sha256")},
+        ),
+        (
+            db_gettext_lazy(
+                "administration.fieldset_metadata",
+                "Metadaten",
+            ),
+            {"fields": ("id", "created_at", "updated_at")},
+        ),
     )
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related("queue_entry", "queue_entry__patient", "session")
+
+    def save_model(self, request, obj, form, change):
+        if "reception_note" in form.changed_data:
+            obj.reception_note = (obj.reception_note or "").strip()
+            obj.reception_note_updated_at = timezone.now()
+            obj.reception_note_updated_by = request.user
+        super().save_model(request, obj, form, change)
 
     @admin.action(
         description=db_gettext_lazy(

@@ -371,6 +371,7 @@ class PatientIntakeForm(models.Model):
     )
     body_map_data = models.JSONField(
         default=list,
+        blank=True,
         verbose_name=db_gettext_lazy(
             "administration.field_body_map_data", "Body map data"
         ),
@@ -383,6 +384,7 @@ class PatientIntakeForm(models.Model):
     )
     anamnesis_payload = models.JSONField(
         default=dict,
+        blank=True,
         verbose_name=db_gettext_lazy(
             "administration.field_anamnesis_payload", "Anamnesis payload"
         ),
