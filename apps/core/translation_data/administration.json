@@ -44,6 +44,26 @@
     "en": "Save and continue editing",
     "pl": "Zapisz i kontynuuj edycję"
   },
+  "administration.fieldset_anamnesis": {
+    "de": "Anamnese",
+    "en": "Anamnesis",
+    "pl": "Wywiad"
+  },
+  "administration.fieldset_body_map": {
+    "de": "Körperschema",
+    "en": "Body map",
+    "pl": "Mapa ciała"
+  },
+  "administration.fieldset_metadata": {
+    "de": "Metadaten",
+    "en": "Metadata",
+    "pl": "Metadane"
+  },
+  "administration.fieldset_signature": {
+    "de": "Unterschrift",
+    "en": "Signature",
+    "pl": "Podpis"
+  },
   "administration.model_clinicsite": {
     "de": "Standort",
     "en": "Clinic site",
