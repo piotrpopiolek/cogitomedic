@@ -78,6 +78,16 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         )
         self.assertIn(marker, src)
 
+    def test_intake_summary_renders_reception_note_after_anamnesis(self) -> None:
+        src = self._js_source()
+        anamnesis_idx = src.index("intakeAnamnesisHeading")
+        note_idx = src.index("intakeReceptionNoteHeading")
+        body_map_idx = src.index("renderReadonlyBodyMapHtml(bodyMapPts")
+        self.assertLess(anamnesis_idx, note_idx)
+        self.assertLess(note_idx, body_map_idx)
+        self.assertIn("CTX.intake_summary.reception_note", src)
+        self.assertIn("whitespace-pre-wrap", src)
+
 
 class DocumentLockWithoutPagehideReleaseTests(TestCase):
     """A keeps the lock without client unlock (tab in background / bfcache); B cannot acquire."""

@@ -145,6 +145,21 @@ class MedicalServicesTests(TestCase):
             MedicalDocumentSourceType.DIGITAL_INTAKE,
         )
 
+    def test_get_medical_document_context_includes_stripped_reception_note(
+        self,
+    ) -> None:
+        self.intake_form.reception_note = "  Bitte Geburtsdatum prüfen  "
+        self.intake_form.save(update_fields=["reception_note", "updated_at"])
+        ctx = get_medical_document_context(
+            medical_document_id=self.medical_document.id,
+            form_locale="de-DE",
+            user=self.doctor_user,
+        )
+        self.assertEqual(
+            ctx["intake_summary"]["reception_note"],
+            "Bitte Geburtsdatum prüfen",
+        )
+
     def test_medical_document_consistency_constraint_blocks_paper_with_intake(
         self,
     ) -> None:
@@ -258,6 +273,7 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(paper["reason"], _PAPER_AUTH_REASON)
         self.assertEqual(paper["authorized_by_user_id"], str(self.admin_user.id))
         p = ctx["intake_summary"]["patient"]
+        self.assertEqual(ctx["intake_summary"]["reception_note"], "")
         self.assertEqual(
             set(p.keys()),
             {"id", "first_name", "last_name", "date_of_birth", "phone", "email"},

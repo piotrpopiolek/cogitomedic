@@ -365,6 +365,7 @@ class MedicalApiTests(TestCase):
         self.assertIsNone(data.get("paper_intake_authorization"))
         self.assertIn("intake_summary", data)
         self.assertIn("patient", data["intake_summary"])
+        self.assertEqual(data["intake_summary"].get("reception_note"), "")
         self.assertIn("current_version", data)
         self.assertIsNone(data["current_version"])  # no version yet before first draft
 
@@ -642,6 +643,7 @@ class MedicalApiTests(TestCase):
         self.assertTrue((paper.get("authorized_by_username") or "").strip())
         self.assertEqual(payload["intake_summary"]["consents"], [])
         self.assertEqual(payload["intake_summary"]["anamnesis_questions"], [])
+        self.assertEqual(payload["intake_summary"]["reception_note"], "")
         self.assertEqual(
             payload["intake_summary"]["patient"]["id"],
             str(self.queue_entry.patient_id),

@@ -519,6 +519,11 @@
     "en": "Anamnesis",
     "pl": "Ankieta"
   },
+  "doctor.intake_summary_reception_note_heading": {
+    "de": "Empfangsnotiz",
+    "en": "Reception note",
+    "pl": "Notatka recepcji"
+  },
   "doctor.lang_de": {
     "de": "DE",
     "en": "DE",

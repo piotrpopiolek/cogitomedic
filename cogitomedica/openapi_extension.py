@@ -819,7 +819,8 @@ COGITO_PATHS = {
                 "`intake_summary.patient` uses the same keys for digital intake and paper "
                 "fallback (`id`, `first_name`, `last_name`, `date_of_birth` ISO string or null, "
                 "`phone`, `email`); digital rows come from intake context, paper from "
-                "`queue_entry.patient`."
+                "`queue_entry.patient`. `intake_summary.reception_note` is the reception "
+                "Empfangsnotiz (empty string when missing or for paper intake)."
             ),
             "tags": ["Medical"],
             "parameters": [

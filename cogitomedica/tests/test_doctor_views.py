@@ -1404,6 +1404,26 @@ class DoctorDetailHappyPathTests(TestCase):
         pts = panel["context"]["intake_summary"]["body_map_data"]
         self.assertEqual(len(pts), 2)
         self.assertEqual(pts[0]["side"], "front")
+        self.assertEqual(panel["context"]["intake_summary"]["reception_note"], "")
+        self.assertIn("intake_summary_reception_note_heading", panel["ui"])
+
+    def test_detail_panel_includes_reception_note_below_anamnesis_payload(self):
+        note = "Patient besorgt wegen Stellen auf der Kopfhaut."
+        PatientIntakeForm.objects.filter(pk=self.doc.intake_form_id).update(
+            reception_note=note
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        assert m is not None, "expected doctor-panel-data script in HTML"
+        panel = json.loads(m.group(1))
+        self.assertEqual(panel["context"]["intake_summary"]["reception_note"], note)
 
     @patch(
         "cogitomedica.doctor_views.acquire_document_lock",

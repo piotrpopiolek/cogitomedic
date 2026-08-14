@@ -3052,6 +3052,11 @@ def get_medical_document_context(
     latest_version = doc.versions.all()[:1]
     current_version = latest_version[0] if latest_version else None
 
+    intake_form = getattr(doc, "intake_form", None)
+    reception_note = (
+        (intake_form.reception_note or "").strip() if intake_form is not None else ""
+    )
+
     intake_summary: dict[str, Any]
     if doc.intake_form_id is None:
         patient = doc.queue_entry.patient
@@ -3060,6 +3065,7 @@ def get_medical_document_context(
             "body_map_data": [],
             "anamnesis_questions": [],
             "anamnesis_answers": [],
+            "reception_note": "",
             "patient": {
                 "id": str(patient.id),
                 "first_name": patient.first_name,
@@ -3085,6 +3091,7 @@ def get_medical_document_context(
             "consents": intake_context.get("consents", []),
             "body_map_data": intake_context.get("body_map_data", []),
             "anamnesis_questions": anamnesis_questions,
+            "reception_note": reception_note,
             "anamnesis_answers": [
                 {
                     "question_code": q.get("question_code"),
