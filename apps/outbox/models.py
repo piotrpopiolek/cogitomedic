@@ -4,7 +4,7 @@ import uuid
 
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from apps.core.translation_service import db_gettext_lazy
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
 
 from apps.outbox.constants import outbox_max_retries_default
@@ -183,4 +183,10 @@ class OutboxEvent(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_event_type_display()} – wersja {self.medical_document_version} ({self.get_status_display()})"
+        return format_administration_message(
+            "administration.str_outbox_event",
+            "{event_type} – Version {version} ({status})",
+            event_type=self.get_event_type_display(),
+            version=self.medical_document_version,
+            status=self.get_status_display(),
+        )

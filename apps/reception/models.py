@@ -8,7 +8,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.core.translation_service import db_gettext_lazy
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.name_normalize import compute_incoming_pdf_name_keys
 from django.db.models import F, Q
 from django.utils import timezone
@@ -668,7 +668,13 @@ class QueueEntry(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.patient} – poz. {self.position_no} ({self.get_entry_status_display()})"
+        return format_administration_message(
+            "administration.str_queue_entry",
+            "{patient} – Pos. {position} ({status})",
+            patient=self.patient,
+            position=self.position_no,
+            status=self.get_entry_status_display(),
+        )
 
 
 class TabletDevice(models.Model):
@@ -800,7 +806,12 @@ class PatientFormSession(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Sesja formularza: {self.queue_entry} ({self.created_at.strftime('%d.%m.%Y')})"
+        return format_administration_message(
+            "administration.str_patient_form_session",
+            "Formularsitzung: {entry} ({date})",
+            entry=self.queue_entry,
+            date=self.created_at.strftime("%d.%m.%Y"),
+        )
 
     @classmethod
     def create_session(
@@ -927,7 +938,13 @@ class PatientImportBatch(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Import: {self.source_file_name} ({self.created_at.strftime('%d.%m.%Y')}, {self.get_status_display()})"
+        return format_administration_message(
+            "administration.str_queue_import_batch",
+            "Import: {filename} ({date}, {status})",
+            filename=self.source_file_name,
+            date=self.created_at.strftime("%d.%m.%Y"),
+            status=self.get_status_display(),
+        )
 
 
 class PatientImportError(models.Model):
@@ -982,6 +999,17 @@ class PatientImportError(models.Model):
         msg = (self.error_message or "")[:50]
         if len(self.error_message or "") > 50:
             msg += "…"
-        return f"Wiersz {self.row_number}: {self.error_code}" + (
-            f" – {msg}" if msg else ""
+        if msg:
+            return format_administration_message(
+                "administration.str_queue_import_error_detail",
+                "Zeile {row}: {code} – {message}",
+                row=self.row_number,
+                code=self.error_code,
+                message=msg,
+            )
+        return format_administration_message(
+            "administration.str_queue_import_error",
+            "Zeile {row}: {code}",
+            row=self.row_number,
+            code=self.error_code,
         )

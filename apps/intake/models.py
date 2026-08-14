@@ -5,7 +5,7 @@ import uuid
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from apps.core.translation_service import db_gettext_lazy
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
 
 from apps.outbox.constants import outbox_max_retries_default
@@ -489,7 +489,12 @@ class PatientIntakeForm(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Ankieta: {self.queue_entry.patient} ({self.get_form_status_display()})"
+        return format_administration_message(
+            "administration.str_intake_form",
+            "Fragebogen: {patient} ({status})",
+            patient=self.queue_entry.patient,
+            status=self.get_form_status_display(),
+        )
 
 
 class PatientIntakeConsent(models.Model):
@@ -557,7 +562,16 @@ class PatientIntakeConsent(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.consent_definition} – {'Tak' if self.accepted else 'Nie'}"
+        yes_no = format_administration_message(
+            "administration.str_yes" if self.accepted else "administration.str_no",
+            "Ja" if self.accepted else "Nein",
+        )
+        return format_administration_message(
+            "administration.str_intake_consent",
+            "{consent} – {yes_no}",
+            consent=self.consent_definition,
+            yes_no=yes_no,
+        )
 
 
 class IntakeDocumentVersion(models.Model):
@@ -702,7 +716,13 @@ class IntakeDocumentVersion(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Wersja {self.version_no} ankiety {self.intake_form} ({self.get_pdf_generation_status_display()})"
+        return format_administration_message(
+            "administration.str_intake_document_version",
+            "Version {version_no} des Fragebogens {form} ({status})",
+            version_no=self.version_no,
+            form=self.intake_form,
+            status=self.get_pdf_generation_status_display(),
+        )
 
 
 class IntakeOutboxEvent(models.Model):

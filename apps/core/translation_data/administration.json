@@ -219,6 +219,71 @@
     "en": "Medical document",
     "pl": "Dokument medyczny"
   },
+  "administration.str_medical_document": {
+    "de": "Medizinisches Dokument: {patient} ({status})",
+    "en": "Medical document: {patient} ({status})",
+    "pl": "Dokument medyczny: {patient} ({status})"
+  },
+  "administration.str_medical_document_version": {
+    "de": "Version {version_no} – {document} ({status})",
+    "en": "Version {version_no} – {document} ({status})",
+    "pl": "Wersja {version_no} – {document} ({status})"
+  },
+  "administration.str_yes": {
+    "de": "Ja",
+    "en": "Yes",
+    "pl": "Tak"
+  },
+  "administration.str_no": {
+    "de": "Nein",
+    "en": "No",
+    "pl": "Nie"
+  },
+  "administration.str_intake_form": {
+    "de": "Fragebogen: {patient} ({status})",
+    "en": "Intake form: {patient} ({status})",
+    "pl": "Ankieta: {patient} ({status})"
+  },
+  "administration.str_intake_consent": {
+    "de": "{consent} – {yes_no}",
+    "en": "{consent} – {yes_no}",
+    "pl": "{consent} – {yes_no}"
+  },
+  "administration.str_intake_document_version": {
+    "de": "Version {version_no} des Fragebogens {form} ({status})",
+    "en": "Version {version_no} of intake {form} ({status})",
+    "pl": "Wersja {version_no} ankiety {form} ({status})"
+  },
+  "administration.str_queue_entry": {
+    "de": "{patient} – Pos. {position} ({status})",
+    "en": "{patient} – pos. {position} ({status})",
+    "pl": "{patient} – poz. {position} ({status})"
+  },
+  "administration.str_patient_form_session": {
+    "de": "Formularsitzung: {entry} ({date})",
+    "en": "Form session: {entry} ({date})",
+    "pl": "Sesja formularza: {entry} ({date})"
+  },
+  "administration.str_queue_import_batch": {
+    "de": "Import: {filename} ({date}, {status})",
+    "en": "Import: {filename} ({date}, {status})",
+    "pl": "Import: {filename} ({date}, {status})"
+  },
+  "administration.str_queue_import_error": {
+    "de": "Zeile {row}: {code}",
+    "en": "Row {row}: {code}",
+    "pl": "Wiersz {row}: {code}"
+  },
+  "administration.str_queue_import_error_detail": {
+    "de": "Zeile {row}: {code} – {message}",
+    "en": "Row {row}: {code} – {message}",
+    "pl": "Wiersz {row}: {code} – {message}"
+  },
+  "administration.str_outbox_event": {
+    "de": "{event_type} – Version {version} ({status})",
+    "en": "{event_type} – version {version} ({status})",
+    "pl": "{event_type} – wersja {version} ({status})"
+  },
   "administration.model_medicaldocument_plural": {
     "de": "Medizinische Dokumente",
     "en": "Medical documents",
