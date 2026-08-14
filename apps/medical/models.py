@@ -7,7 +7,7 @@ from django.db import models
 from django.db.models import Q
 from django.contrib.postgres.indexes import GinIndex
 
-from apps.core.translation_service import db_gettext_lazy
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.users.models import StaffUserPreferredLocale
 
 
@@ -200,7 +200,12 @@ class MedicalDocument(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Dokument medyczny: {self.queue_entry.patient} ({self.get_status_display()})"
+        return format_administration_message(
+            "administration.str_medical_document",
+            "Medizinisches Dokument: {patient} ({status})",
+            patient=self.queue_entry.patient,
+            status=self.get_status_display(),
+        )
 
 
 class PaperIntakeAuthorization(models.Model):
@@ -575,7 +580,13 @@ class MedicalDocumentVersion(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Wersja {self.version_no} – {self.medical_document} ({self.get_version_status_display()})"
+        return format_administration_message(
+            "administration.str_medical_document_version",
+            "Version {version_no} – {document} ({status})",
+            version_no=self.version_no,
+            document=self.medical_document,
+            status=self.get_version_status_display(),
+        )
 
 
 class DoctorTextTemplate(models.Model):
