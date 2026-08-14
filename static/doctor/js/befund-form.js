@@ -710,36 +710,43 @@
       }
       const summaryEl = el("intake-summary");
       if (summaryEl) summaryEl.innerHTML = html;
-      const noteSlot = el("intake-reception-note");
-      const noteTextEl = el("intake-reception-note-text");
+      const bodyMapPts = CTX.intake_summary.body_map_data;
+      const bodyMapUrl = PANEL.bodyMapImageUrl || "";
+      if (summaryEl && CTX.source_type !== "PAPER_INTAKE") {
+        summaryEl.insertAdjacentHTML(
+          "beforeend",
+          renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl)
+        );
+      }
       var receptionNote = String(
         (CTX.intake_summary && CTX.intake_summary.reception_note) || ""
       ).trim();
+      var noteSlot = el("intake-reception-note");
+      var noteTextEl = el("intake-reception-note-text");
       if (!receptionNote && noteTextEl) {
         receptionNote = String(noteTextEl.textContent || "").trim();
       }
-      if (noteSlot) {
-        if (receptionNote) {
-          if (noteTextEl) noteTextEl.textContent = receptionNote;
-          noteSlot.hidden = false;
-          noteSlot.removeAttribute("hidden");
-          if (summaryEl) summaryEl.appendChild(noteSlot);
-        } else {
-          noteSlot.hidden = true;
+      if (receptionNote && !noteSlot) {
+        var banner = document.createElement("section");
+        banner.id = "intake-reception-note";
+        banner.className =
+          "mb-4 rounded-default border border-amber-400 bg-amber-50 px-4 py-3 text-sm dark:border-amber-600 dark:bg-amber-950/50";
+        banner.setAttribute("role", "note");
+        banner.innerHTML =
+          '<div class="mb-1 font-semibold text-amber-950 dark:text-amber-100">' +
+          escapeHtml(UI.intakeReceptionNoteHeading) +
+          "</div>" +
+          '<p id="intake-reception-note-text" class="mb-0 whitespace-pre-wrap text-base-900 dark:text-base-100">' +
+          escapeHtml(receptionNote) +
+          "</p>";
+        var intakeSection = el("doctor-intake-section-title");
+        if (intakeSection && intakeSection.parentNode) {
+          intakeSection.parentNode.parentNode.insertBefore(
+            banner,
+            intakeSection.parentNode
+          );
         }
-      } else if (summaryEl && receptionNote) {
-        summaryEl.insertAdjacentHTML(
-          "beforeend",
-          '<div id="intake-reception-note" class="mt-3 rounded-default border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950/40" role="note">' +
-            '<div class="mb-1 font-medium text-amber-950 dark:text-amber-100">' +
-            escapeHtml(UI.intakeReceptionNoteHeading) +
-            "</div>" +
-            '<p id="intake-reception-note-text" class="mb-0 whitespace-pre-wrap text-base-900 dark:text-base-100">' +
-            escapeHtml(receptionNote) +
-            "</p></div>"
-        );
       }
-      const bodyMapPts = CTX.intake_summary.body_map_data;
       const bodyMapUrl = PANEL.bodyMapImageUrl || "";
       if (summaryEl && CTX.source_type !== "PAPER_INTAKE") {
         summaryEl.insertAdjacentHTML(
