@@ -1406,6 +1406,7 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertEqual(pts[0]["side"], "front")
         self.assertEqual(panel["context"]["intake_summary"]["reception_note"], "")
         self.assertIn("intake_summary_reception_note_heading", panel["ui"])
+        self.assertNotIn('id="intake-reception-note"', html)
 
     def test_detail_panel_includes_reception_note_below_anamnesis_payload(self):
         note = "Patient besorgt wegen Stellen auf der Kopfhaut."
@@ -1424,6 +1425,41 @@ class DoctorDetailHappyPathTests(TestCase):
         assert m is not None, "expected doctor-panel-data script in HTML"
         panel = json.loads(m.group(1))
         self.assertEqual(panel["context"]["intake_summary"]["reception_note"], note)
+        self.assertIn('id="intake-reception-note"', html)
+        self.assertIn(note, html)
+
+    def test_pending_revision_detail_panel_includes_reception_note(self):
+        note = "Patient besorgt wegen Stellen auf der Kopfhaut."
+        PatientIntakeForm.objects.filter(pk=self.doc.intake_form_id).update(
+            reception_note=note
+        )
+        self._publish_doc_for_detail(has_pending_revision=True)
+        MedicalDocumentVersion.objects.create(
+            medical_document=self.doc,
+            version_no=2,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1, "authoring_locale": "de-DE"},
+        )
+        self.client.force_login(self.doctor)
+        resp = self.client.get(f"/doctor/{self.doc.id}/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('id="intake-summary"', html)
+        self.assertIn('id="befund-form"', html)
+        m = re.search(
+            r'<script[^>]*id="doctor-panel-data"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        assert m is not None, "expected doctor-panel-data script in HTML"
+        panel = json.loads(m.group(1))
+        self.assertTrue(panel["context"]["has_pending_revision"])
+        self.assertEqual(panel["context"]["status"], MedicalDocStatus.PUBLISHED)
+        self.assertEqual(panel["context"]["intake_summary"]["reception_note"], note)
+        self.assertTrue((panel["ui"].get("intake_summary_reception_note_heading") or "").strip())
+        self.assertIn('id="intake-reception-note"', html)
+        self.assertIn(note, html)
 
     @patch(
         "cogitomedica.doctor_views.acquire_document_lock",

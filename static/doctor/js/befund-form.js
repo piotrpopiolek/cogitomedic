@@ -708,25 +708,20 @@
             "</span></p>";
         });
       }
-      const receptionNote = String(
-        CTX.intake_summary.reception_note || ""
-      ).trim();
-      if (receptionNote) {
-        html +=
-          '<p class="mb-2 mt-2"><strong>' +
-          escapeHtml(UI.intakeReceptionNoteHeading) +
-          "</strong></p>" +
-          '<p class="small mb-1 whitespace-pre-wrap text-muted">' +
-          escapeHtml(receptionNote) +
-          "</p>";
+      const summaryEl = el("intake-summary");
+      if (summaryEl) summaryEl.innerHTML = html;
+      const noteSlot = el("intake-reception-note");
+      if (noteSlot && summaryEl) {
+        summaryEl.appendChild(noteSlot);
       }
       const bodyMapPts = CTX.intake_summary.body_map_data;
       const bodyMapUrl = PANEL.bodyMapImageUrl || "";
-      if (CTX.source_type !== "PAPER_INTAKE") {
-        html += renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl);
+      if (summaryEl && CTX.source_type !== "PAPER_INTAKE") {
+        summaryEl.insertAdjacentHTML(
+          "beforeend",
+          renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl)
+        );
       }
-      const summaryEl = el("intake-summary");
-      if (summaryEl) summaryEl.innerHTML = html;
     }
   }
 

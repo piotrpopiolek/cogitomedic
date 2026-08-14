@@ -1260,6 +1260,30 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         ).first()
         self.assertIsNotNone(revision_started)
 
+    def test_context_during_pending_revision_includes_reception_note(self) -> None:
+        note = "Patient besorgt wegen Stellen auf der Kopfhaut."
+        self.intake_form.reception_note = note
+        self.intake_form.save(update_fields=["reception_note", "updated_at"])
+        self._publish_initial_version()
+        save_draft_document_version(
+            medical_document_id=self.medical_document.id,
+            updated_by_user_id=self.doctor_user.id,
+            medical_payload={"authoring_locale": "de-DE", "version": 2},
+            intent="amend",
+        )
+        self.medical_document.refresh_from_db()
+        self.assertTrue(self.medical_document.has_pending_revision)
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+
+        ctx = get_medical_document_context(
+            medical_document_id=self.medical_document.id,
+            form_locale="de-DE",
+            user=self.doctor_user,
+        )
+        self.assertTrue(ctx["has_pending_revision"])
+        self.assertEqual(ctx["status"], MedicalDocStatus.PUBLISHED)
+        self.assertEqual(ctx["intake_summary"]["reception_note"], note)
+
     def test_save_draft_amend_updates_existing_pending_revision_in_place(self) -> None:
         self._publish_initial_version()
         first = save_draft_document_version(
