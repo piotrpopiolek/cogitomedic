@@ -913,5 +913,8 @@ def doctor_document_detail_view(
             "doctor_external_upload_has_pending_revision": bool(
                 external_readonly and doc.has_pending_revision
             ),
+            "reception_note": (
+                ((context.get("intake_summary") or {}).get("reception_note") or "")
+            ).strip(),
         },
     )

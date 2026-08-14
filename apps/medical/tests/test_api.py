@@ -2220,6 +2220,32 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         self.assertEqual(body["version_no"], 2)
         self.assertEqual(body["version_status"], "DRAFT")
 
+    def test_get_during_pending_revision_includes_reception_note(self) -> None:
+        note = "Bitte Geburtsdatum prüfen"
+        self.intake_form.reception_note = note
+        self.intake_form.save(update_fields=["reception_note", "updated_at"])
+        medical_document_id = self._create_published_document()
+        amend = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": self.VALID_PAYLOAD,
+                    "intent": "amend",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(amend.status_code, 200)
+        self.assertTrue(amend.json()["has_pending_revision"])
+
+        detail = self.client.get(f"/api/v1/medical-documents/{medical_document_id}")
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        self.assertTrue(payload["has_pending_revision"])
+        self.assertEqual(payload["status"], MedicalDocStatus.PUBLISHED)
+        self.assertEqual(payload["intake_summary"]["reception_note"], note)
+
     def test_discard_revision_clears_pending_state(self) -> None:
         medical_document_id = self._create_published_document()
         amend_response = self.client.put(
