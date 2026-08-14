@@ -65,6 +65,7 @@
     lesionHeader: uiText("lesion_header"),
     patientLabel: uiText("patient_label"),
     intakeAnamnesisHeading: uiText("intake_summary_anamnesis_heading"),
+    intakeReceptionNoteHeading: uiText("intake_summary_reception_note_heading"),
     templateNameFallback: uiText("template_name_fallback"),
     externalPdfRejectBtn: uiText("external_pdf_reject_btn"),
     externalPdfStatusMatched: uiText("external_pdf_status_matched"),
@@ -706,6 +707,18 @@
             escapeHtml(answerText || "—") +
             "</span></p>";
         });
+      }
+      const receptionNote = String(
+        CTX.intake_summary.reception_note || ""
+      ).trim();
+      if (receptionNote) {
+        html +=
+          '<p class="mb-2 mt-2"><strong>' +
+          escapeHtml(UI.intakeReceptionNoteHeading) +
+          "</strong></p>" +
+          '<p class="small mb-1 whitespace-pre-wrap text-muted">' +
+          escapeHtml(receptionNote) +
+          "</p>";
       }
       const bodyMapPts = CTX.intake_summary.body_map_data;
       const bodyMapUrl = PANEL.bodyMapImageUrl || "";
