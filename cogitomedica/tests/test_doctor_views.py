@@ -1457,7 +1457,9 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertTrue(panel["context"]["has_pending_revision"])
         self.assertEqual(panel["context"]["status"], MedicalDocStatus.PUBLISHED)
         self.assertEqual(panel["context"]["intake_summary"]["reception_note"], note)
-        self.assertTrue((panel["ui"].get("intake_summary_reception_note_heading") or "").strip())
+        self.assertTrue(
+            (panel["ui"].get("intake_summary_reception_note_heading") or "").strip()
+        )
         self.assertIn('id="intake-reception-note"', html)
         self.assertIn(note, html)
 
