@@ -747,13 +747,6 @@
           );
         }
       }
-      const bodyMapUrl = PANEL.bodyMapImageUrl || "";
-      if (summaryEl && CTX.source_type !== "PAPER_INTAKE") {
-        summaryEl.insertAdjacentHTML(
-          "beforeend",
-          renderReadonlyBodyMapHtml(bodyMapPts, bodyMapUrl)
-        );
-      }
     }
   }
 
