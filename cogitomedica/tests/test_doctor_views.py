@@ -1406,7 +1406,8 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertEqual(pts[0]["side"], "front")
         self.assertEqual(panel["context"]["intake_summary"]["reception_note"], "")
         self.assertIn("intake_summary_reception_note_heading", panel["ui"])
-        self.assertNotIn('id="intake-reception-note"', html)
+        self.assertIn('id="intake-reception-note"', html)
+        self.assertRegex(html, r'id="intake-reception-note"[^>]*\bhidden\b')
 
     def test_detail_panel_includes_reception_note_below_anamnesis_payload(self):
         note = "Patient besorgt wegen Stellen auf der Kopfhaut."

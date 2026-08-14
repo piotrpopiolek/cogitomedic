@@ -88,6 +88,7 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         self.assertLess(anamnesis_idx, note_idx)
         self.assertLess(note_idx, body_map_idx)
         self.assertIn("whitespace-pre-wrap", src)
+        self.assertIn("CTX.intake_summary && CTX.intake_summary.reception_note", src)
 
     def test_intake_summary_reception_note_not_gated_on_revision_or_draft(self) -> None:
         """Empfangsnotiz is painted from CTX on load, including pending revision."""
