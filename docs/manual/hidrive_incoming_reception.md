@@ -1,9 +1,11 @@
 # HiDrive: PDF z laboratorium w `/incoming/` (recepcja)
 
+**Także w tym pliku:** [Folder pacjenta na HiDrive](#folder-pacjenta-na-hidrive) — jak odnaleźć archiwum Befund po **Id** pacjenta (gdy wynik zniknął z portalu).
+
 ## Oddzielnie: wgranie zewnętrznego badania przez aplikację
 
 Recepcja może wgrywać PDF przez **aplikację** — wtedy plik trafia pod  
-**`/incoming/external-upload/{queue_entry_id}/...`** (nie mieszać z ręcznym wrzutem labu do katalogu głównego `/incoming/`).  
+`/incoming/external-upload/{queue_entry_id}/...` (nie mieszać z ręcznym wrzutem labu do katalogu głównego `/incoming/`).  
 Przy **bramce dopasowania plików labu do pacjenta** (panel lekarza) ścieżki z prefiksem `external-upload/` są **ignorowane**, żeby wynik z recepcji nie wszedł do listy „PDF z laboratorium” dla Befundu. Szczegóły procesu: [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md).
 
 Recepcja widzi brakujące dopasowania PDF na **dashboardzie** (`/admin/reception-dashboard/` — sekcja „Missing HiDrive laboratory results” / odpowiednik w PL).
@@ -12,10 +14,12 @@ Recepcja widzi brakujące dopasowania PDF na **dashboardzie** (`/admin/reception
 
 ## Gdzie wrzucać pliki
 
-- Katalog na HiDrive: **`/incoming/`** (domyślnie) — bez podfolderów, bezpośrednio pliki PDF.
-- Dokumenty pacjenta trafiają do folderu pacjenta (np. `/patients/...`).
-- Po poprawnej publikacji system przenosi użyte pliki do folderu archiwum (np. `/processed/`), niedostępnego dla pacjenta.
+- Katalog na HiDrive: `/incoming/` (domyślnie) — bez podfolderów, bezpośrednio pliki PDF.
+- Dokumenty pacjenta (opublikowany Befund / ankieta) trafiają do **osobnego** katalogu pacjentów — patrz [Folder pacjenta na HiDrive](#folder-pacjenta-na-hidrive) (nazwa folderu = identyfikator, **nie** nazwisko).
+- Po poprawnej publikacji system przenosi użyte pliki labu do folderu archiwum (np. `/processed/`), niedostępnego dla pacjenta.
 - Jeśli nie masz pewności, jaka ścieżka jest poprawna w Waszej placówce, skontaktuj się z działem IT.
+
+
 
 ## Nazwy plików (separator `_`, bez polskich znaków w nazwie pliku)
 
@@ -36,22 +40,28 @@ System porównuje nazwę pliku z danymi pacjenta w rejestracji: pole **imię** i
 
 ### Zasada dla recepcji
 
-| W rejestracji (pole) | W nazwie pliku na HiDrive |
-| --- | --- |
-| Wszystkie człony **imienia** w polu *Imię* | Te same człony, połączone `_` |
-| Wszystkie człony **nazwiska** w polu *Nazwisko* (w tym „von …”, nazwisko dwuczłonowe) | Te same człony, połączone `_` |
-| Kolejność | `Imie_…_Nazwisko.pdf` **lub** `Nazwisko_…_Imie.pdf` (oba warianty działają) |
+
+| W rejestracji (pole)                                                                  | W nazwie pliku na HiDrive                                                   |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Wszystkie człony **imienia** w polu *Imię*                                            | Te same człony, połączone `_`                                               |
+| Wszystkie człony **nazwiska** w polu *Nazwisko* (w tym „von …”, nazwisko dwuczłonowe) | Te same człony, połączone `_`                                               |
+| Kolejność                                                                             | `Imie_…_Nazwisko.pdf` **lub** `Nazwisko_…_Imie.pdf` (oba warianty działają) |
+
+
+
 
 ### Przykłady, które **działają**
 
-| Imię w systemie | Nazwisko w systemie | Przykładowa nazwa pliku |
-| --- | --- | --- |
-| Jean Christophe | Scheider | `Jean_Christophe_Scheider.pdf` lub `Scheider_Jean_Christophe.pdf` |
-| Hans Peter | Müller | `Muller_Hans_Peter.pdf` lub `Hans_Peter_Muller.pdf` |
-| Anna | Müller-Schmidt | `Muller_Schmidt_Anna.pdf` (myślnik → `_`) |
-| Klaus | von Stauffenberg | `von_Stauffenberg_Klaus.pdf` |
-| Luis | García Hernández | `Garcia_Hernandez_Luis.pdf` |
-| Jean-Pierre | Müller | `Muller_Jean-Pierre.pdf` |
+
+| Imię w systemie | Nazwisko w systemie | Przykładowa nazwa pliku                                           |
+| --------------- | ------------------- | ----------------------------------------------------------------- |
+| Jean Christophe | Scheider            | `Jean_Christophe_Scheider.pdf` lub `Scheider_Jean_Christophe.pdf` |
+| Hans Peter      | Müller              | `Muller_Hans_Peter.pdf` lub `Hans_Peter_Muller.pdf`               |
+| Anna            | Müller-Schmidt      | `Muller_Schmidt_Anna.pdf` (myślnik → `_`)                         |
+| Klaus           | von Stauffenberg    | `von_Stauffenberg_Klaus.pdf`                                      |
+| Luis            | García Hernández    | `Garcia_Hernandez_Luis.pdf`                                       |
+| Jean-Pierre     | Müller              | `Muller_Jean-Pierre.pdf`                                          |
+
 
 Przy ryzyku, że w bazie są **dwaj pacjenci** o podobnym imieniu i nazwisku, dopisz **datę urodzenia** do nazwy pliku, np. `Muller_Hans_Peter_1985_03_12.pdf`.
 
@@ -59,13 +69,15 @@ Przy ryzyku, że w bazie są **dwaj pacjenci** o podobnym imieniu i nazwisku, do
 
 System **nie zgaduje** skróconych ani niepełnych nazw — plik musi odpowiadać temu, co jest w rejestracji.
 
-| Problem | Przykład |
-| --- | --- |
-| W bazie pełne imię, w pliku skrót | Baza: imię „Hans **Peter**”, nazwisko „Müller” — plik: `Muller_Hans.pdf` (**brak** „Peter”) |
-| W bazie nazwisko złożone, w pliku jeden człon | Baza: „Müller-**Schmidt**” — plik: `Schmidt_Anna.pdf` (**brak** „Muller”) |
-| W bazie człon „von”, w pliku pominięty | Baza: „von Stauffenberg” — plik: `Stauffenberg_Klaus.pdf` (**brak** „von”) |
-| Tylko nazwisko lub tylko imię w pliku | `Muller.pdf` przy pacjencie „Hans” / „Müller” |
-| Zła data urodzenia w nazwie | `Muller_Hans_1999_01_01.pdf` przy innej dacie w kartotece |
+
+| Problem                                       | Przykład                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| W bazie pełne imię, w pliku skrót             | Baza: imię „Hans **Peter**”, nazwisko „Müller” — plik: `Muller_Hans.pdf` (**brak** „Peter”) |
+| W bazie nazwisko złożone, w pliku jeden człon | Baza: „Müller-**Schmidt**” — plik: `Schmidt_Anna.pdf` (**brak** „Muller”)                   |
+| W bazie człon „von”, w pliku pominięty        | Baza: „von Stauffenberg” — plik: `Stauffenberg_Klaus.pdf` (**brak** „von”)                  |
+| Tylko nazwisko lub tylko imię w pliku         | `Muller.pdf` przy pacjencie „Hans” / „Müller”                                               |
+| Zła data urodzenia w nazwie                   | `Muller_Hans_1999_01_01.pdf` przy innej dacie w kartotece                                   |
+
 
 **Co zrobić:** popraw nazwę pliku tak, aby zawierała **wszystkie człony** imienia i nazwiska jak w systemie (albo uzupełnij dane pacjenta w rejestracji, jeśli plik z labu jest wzorcem). Po zmianie imienia lub nazwiska pacjenta w systemie zapisz kartę — klucze dopasowania odświeżają się automatycznie.
 
@@ -75,13 +87,58 @@ Jeśli w bazie jest więcej niż jeden pacjent pasujący do **krótkiej** nazwy 
 
 ## Pliki odrzucone przez lekarza
 
-- Po odrzuceniu pliku w panelu lekarza nazwa na HiDrive dostaje przedrostek **`rejected_`** (np. `rejected_Kowalski_Jan.pdf`).
+- Po odrzuceniu pliku w panelu lekarza nazwa na HiDrive dostaje przedrostek `rejected_` (np. `rejected_Kowalski_Jan.pdf`).
 - Takie pliki są ignorowane przy dopasowaniu — recepcja widzi, że nazwa lub treść wymaga korekty.
 - Po usunięciu prefixu `rejected_` (lub wgraniu nowego PDF pod poprawną nazwą): przy **szkicu** otwórz kartę ponownie; przy **opublikowanym** dokumencie uruchom rewizję i otwórz kartę ponownie — system wtedy ponownie skanuje `/incoming/` i podpina plik jako `MATCHED`.
+
+
 
 ## Uwagi
 
 - PDF wysłany do pacjenta to **nowy dokument**; podpisy cyfrowe z PDF laboratorium nie są zachowywane.
-- Folder **`/processed/`** zawiera pliki już powiązane z opublikowanym dokumentem — nie usuwaj ich ręcznie bez uzgodnienia z działem IT.
+- Folder `/processed/` zawiera pliki już powiązane z opublikowanym dokumentem — nie usuwaj ich ręcznie bez uzgodnienia z działem IT.
 
-**Scenariusze:** [SC-005](scenariusze.md#sc-005), [SC-011](scenariusze.md#sc-011) (podobne nazwiska), [SC-012](scenariusze.md#sc-012) (plik odrzucony), [SC-027](scenariusze.md#sc-027).
+**Scenariusze:** [SC-005](scenariusze.md#sc-005), [SC-011](scenariusze.md#sc-011) (podobne nazwiska), [SC-012](scenariusze.md#sc-012) (plik odrzucony), [SC-023](scenariusze.md#sc-023) / [SC-030](scenariusze.md#sc-030) (kopia z archiwum pacjenta), [SC-027](scenariusze.md#sc-027).
+
+---
+
+
+
+## Folder pacjenta na HiDrive (archiwum Befund — nie `/incoming/`)
+
+Ta sekcja dotyczy sytuacji: **wynik jest już niedostępny w portalu pacjenta** (np. minęło okno **60 dni** — [SC-023](scenariusze.md#sc-023), albo publikacja została cofnięta), a placówka musi odnaleźć **kopię archiwalną** na HiDrive.
+
+### Dlaczego nie widać imion i nazwisk?
+
+Foldery w katalogu pacjentów mają nazwy w postaci długiego **identyfikatora** (UUID), np. `a1b2c3d4-e5f6-7890-abcd-ef1234567890`.  
+To **nie znaczy**, że pliki PDF są „zaszyfrowane” albo nieczytelne — po otwarciu PDF jest normalny. Chodzi o to, że **w nazwie folderu nie ma danych osobowych**, żeby nie przeglądać archiwum po nazwiskach. W HiDrive **nie ma filtra** „znajdź Kowalską” — trzeba najpierw wziąć identyfikator z systemu CogitoMedica.
+
+### Krok po kroku (recepcja / manager)
+
+1. Zaloguj się do **panelu administracyjnego** (`/admin/`).
+2. Wejdź w **Rejestracja→** Pacjenci.
+3. Wyszukaj osobę po **imieniu, nazwisku lub telefonie** (albo dacie urodzenia w filtrach / polach, jeśli widoczne).
+4. Otwórz kartę pacjenta.
+5. Skopiuj pole **Id** — to jest identyfikator folderu.
+  *Wskazówka:* ten sam ciąg jest też w adresie przeglądarki przy otwartej karcie.
+6. Otwórz HiDrive (konto placówki) i przejdź do katalogu **pacjentów**:
+  - `/public/patients/`
+7. Wejdź do folderu o nazwie **identycznej** ze skopiowanym Id.
+8. W folderze znajdziesz m.in.:
+  - `Befund_v1.pdf`, `Befund_v2.pdf`, … — kolejne wersje opisu lekarza (wyższa liczba = nowsza wersja),
+  - `Intake_v1.pdf`, … — PDF ankiety (jeśli był archiwizowany).
+9. Pobierz właściwy plik i przekaż pacjentowi **zgodnie z procedurą RODO** placówki (nie wysyłaj „prywatnym” kanałem poza regulaminem).
+
+
+
+### Czego nie mylić
+
+
+| Katalog na HiDrive        | Do czego służy                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `incoming` (przychodzące) | PDF z **laboratorium** wrzucane ręcznie — nazwy z imieniem/nazwiskiem (ta instrukcja powyżej).        |
+| `patients` (pacjenci)     | Archiwum **opublikowanych** dokumentów pacjenta — foldery po **Id**, pliki `Befund_v…` / `Intake_v…`. |
+| `processed`               | Pliki labu **już powiązane** z publikacją — nie usuwać bez IT.                                        |
+
+
+**Scenariusz:** [SC-030](scenariusze.md#sc-030). Okno 60 dni w portalu: [SC-023](scenariusze.md#sc-023), [05-pacjent-wyniki.md](05-pacjent-wyniki.md).

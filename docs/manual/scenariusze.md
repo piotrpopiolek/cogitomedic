@@ -62,10 +62,11 @@ Pisz dla osób nietechnicznych: nazwy z menu zamiast adresów URL, bez żargonu 
 | [SC-027](#sc-027) | Baner awarii HiDrive na dashboardzie recepcji | Recepcja, Administrator | `scenariusze/sc-027-baner-hidrive.webm` |
 | [SC-028](#sc-028) | Rewizja Befundu + Wyślij SMS ponownie | Lekarz | `scenariusze/sc-028-rewizja-resend-sms.webm` |
 | [SC-029](#sc-029) | SMS „wynik dostępny” po korekcie telefonu (bez republish) | Recepcja, Manager, Administrator | — |
+| [SC-030](#sc-030) | HiDrive: jak znaleźć folder pacjenta (identyfikator zamiast nazwiska) | Recepcja, Manager, Administrator | — |
 
 > Kolumna **Film** = ścieżka względem `docs/manual/assets/videos/`. Pliki `.webm` nie są w gicie — generuj lokalnie (patrz backlog / [README filmów](assets/videos/README.md)).
 
-Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
+Kotwice w indeksie to krótkie `#sc-001` … `#sc-030` (stabilne znaczniki HTML przy każdym scenariuszu — nie zależą od tytułu).
 
 ---
 
@@ -429,11 +430,11 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML 
 | **Role** | Recepcja, Manager |
 | **Objaw** | Pacjent loguje się poprawnie, ale wynik jest **niedostępny** — minęło **ponad 60 dni** od publikacji. |
 | **Przyczyna** | Lokalna kopia PDF na serwerze jest usuwana po 60 dniach. Archiwum na HiDrive może nadal istnieć. |
-| **Co zrobić dziś** | 1) Potwierdź datę publikacji. 2) Manager / IT: pobierz kopię z HiDrive (folder pacjentów) lub z archiwum placówki. 3) Udostępnij pacjentowi **zgodnie z procedurą RODO**. |
-| **Czego nie robić** | Nie obiecuj stałego dostępu przez portal powyżej 60 dni. Nie używaj prywatnego Dysku Google. |
-| **Docelowo** | Runbook awaryjny — backlog. |
+| **Co zrobić dziś** | 1) Potwierdź datę publikacji. 2) Znajdź folder pacjenta na HiDrive wg [SC-030](#sc-030) (identyfikator z karty pacjenta, nie nazwisko). 3) Pobierz odpowiedni PDF (np. `Befund_v…`) i udostępnij pacjentowi **zgodnie z procedurą RODO**. |
+| **Czego nie robić** | Nie obiecuj stałego dostępu przez portal powyżej 60 dni. Nie używaj prywatnego Dysku Google. Nie szukaj folderu po imieniu i nazwisku na HiDrive — foldery mają identyfikatory (SC-030). |
+| **Docelowo** | Procedura awaryjna: SC-030 + [hidrive_incoming_reception.md](hidrive_incoming_reception.md) (sekcja folderu pacjenta). |
 | **Film** | `scenariusze/sc-023-okno-60-dni.webm` — *„Wynik po 2 miesiącach — skąd wziąć kopię z archiwum”* |
-| **Powiązane** | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) |
+| **Powiązane** | [05-pacjent-wyniki.md](05-pacjent-wyniki.md), SC-030, [hidrive_incoming_reception.md](hidrive_incoming_reception.md) |
 
 ---
 
@@ -533,6 +534,22 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML 
 
 ---
 
+<a id="sc-030"></a>
+### SC-030 — HiDrive: jak znaleźć folder pacjenta (identyfikator zamiast nazwiska)
+
+| Pole | Treść |
+|------|--------|
+| **Role** | Recepcja, Manager, Administrator |
+| **Objaw** | Pacjent chce opis / PDF, którego **już nie ma w portalu** (np. po 60 dniach — SC-023, albo po cofnięciu publikacji). Na HiDrive widać „dziwne” nazwy folderów (ciągi liter i cyfr) — **nie ma filtrów po imieniu i nazwisku**. Personel ma wrażenie, że „wszystko jest zaszyfrowane”. |
+| **Przyczyna** | To **nie jest szyfrowanie plików** (PDF po otwarciu są normalne). Ze względów prywatności foldery pacjentów na HiDrive nazywają się **identyfikatorem** (UUID) z systemu — **bez imienia i nazwiska** w ścieżce. Bez skopiowania tego identyfikatora z karty pacjenta nie da się „przeszukać” archiwum po nazwisku. |
+| **Co zrobić dziś** | 1) W panelu admina: **Reception → Patients** — wyszukaj pacjenta (imię, nazwisko, telefon). 2) Otwórz rekord. 3) Skopiuj pole **Id** (długi identyfikator, wygląda jak `a1b2c3d4-…`). Alternatywa: ten sam ciąg jest w **adresie przeglądarki** przy otwartej karcie. 4) Wejdź na HiDrive do katalogu pacjentów (zwykle **`patients`** / ścieżka uzgodniona z IT — często `/patients` lub `/public/patients`). 5) Otwórz folder o **dokładnie takiej samej nazwie** jak skopiowane Id. 6) W folderze szukaj plików typu **`Befund_v1.pdf`**, **`Befund_v2.pdf`** (kolejne wersje opisu) oraz ewentualnie **`Intake_v….pdf`** (ankieta). 7) Pobierz właściwy plik i przekaż pacjentowi **zgodnie z procedurą RODO** placówki. Pełna lista kroków: [hidrive_incoming_reception.md](hidrive_incoming_reception.md#folder-pacjenta-na-hidrive). |
+| **Czego nie robić** | Nie szukaj folderu po nazwisku — go tam nie będzie. Nie myl katalogu **przychodzących wyników z laboratorium** (`incoming`) z folderem **pacjentów** (`patients`). Nie wysyłaj pliku prywatnym mailem / komunikatorem poza procedurą placówki. |
+| **Docelowo** | Procedura w manualu; opcjonalnie później wyszukiwarka w aplikacji. |
+| **Film** | `nie nagrany` |
+| **Powiązane** | SC-023, [05-pacjent-wyniki.md](05-pacjent-wyniki.md), [hidrive_incoming_reception.md](hidrive_incoming_reception.md), [01-rejestracja.md](01-rejestracja.md), [04-administrator.md](04-administrator.md) |
+
+---
+
 ## Backlog filmów
 
 | Priorytet | SC | Czas ~ | Odbiorca | Status |
@@ -554,6 +571,7 @@ Kotwice w indeksie to krótkie `#sc-001` … `#sc-029` (stabilne znaczniki HTML 
 | Średni | SC-020 | 3–4 min | Recepcja | **Nagrany** `scenariusze/sc-020-external-upload.webm` |
 | Średni | SC-028 | 2 min | Lekarz | **Nagrany** `scenariusze/sc-028-rewizja-resend-sms.webm` |
 | Niski | SC-009, SC-012, SC-014, SC-016, SC-018, SC-021–SC-027 | 1–3 min | Różne | **Nagrane** — ścieżki w indeksie powyżej |
+| Niski | SC-030 | 2–3 min | Recepcja / manager | **Nie nagrany** — wystarczy manual + SC-023 |
 
 ### Ponowne nagranie
 

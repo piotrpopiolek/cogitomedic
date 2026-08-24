@@ -112,6 +112,8 @@ Wymagane są m.in.:
 
 Skrót: **Reception → Patients** → wyszukaj pacjenta → otwórz rekord → popraw pola → **Save**. **Lekarz** w standardowej konfiguracji nie edytuje tu danych tożsamości/kontaktu — zleć recepcji lub administratorowi. Po zmianie **telefonu** lub **daty urodzenia** poinformuj pacjenta przed logowaniem do [portalu wyników](05-pacjent-wyniki.md).
 
+**Archiwum na HiDrive:** gdy pacjent prosi o wynik **już niedostępny w portalu**, nie szukaj folderu po nazwisku — skopiuj **Id** z karty pacjenta i wejdź w katalog pacjentów na HiDrive. Procedura: [hidrive_incoming_reception.md — Folder pacjenta](hidrive_incoming_reception.md#folder-pacjenta-na-hidrive), scenariusze [SC-023](scenariusze.md#sc-023) / [SC-030](scenariusze.md#sc-030).
+
 ### 4.2 Wpis kolejki
 
 **Reception → Queue entries** — wpis łączy **pacjenta** z **kolejką dzienną**, ma pozycję (`position_no`), status (`entry_status`), opcjonalnie godzinę wizyty.
@@ -195,4 +197,5 @@ Powiązane dokumenty: [Przegląd](00-przeglad.md), [Tablet](02-tablet.md) (wspó
 | Anulowany wpis / szkic a lista lekarza | [SC-001](scenariusze.md#sc-001), [SC-002](scenariusze.md#sc-002) |
 | Zewnętrzny PDF wyniku | [SC-020](scenariusze.md#sc-020) |
 | Korekta danych → portal / HiDrive | [SC-025](scenariusze.md#sc-025), [SC-008](scenariusze.md#sc-008) |
+| Wynik niedostępny w portalu (60 dni) — kopia z HiDrive | [SC-023](scenariusze.md#sc-023), [SC-030](scenariusze.md#sc-030), [hidrive_incoming_reception.md](hidrive_incoming_reception.md#folder-pacjenta-na-hidrive) |
 | Pełna lista | [scenariusze.md](scenariusze.md) |

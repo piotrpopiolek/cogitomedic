@@ -44,6 +44,7 @@ Skrypt składa rozdziały **00, 01, 06, 02–05**, **uzupełnienia o ścieżkę 
 | [04-administrator-paper-intake.md](04-administrator-paper-intake.md) | Administrator / Manager — procedura ścieżki papierowej |
 | [paper_intake_flow.md](paper_intake_flow.md) | Wszyscy — diagram ścieżki papierowej i cyfrowej |
 | [07-wgranie-zewnetrznego-badania.md](07-wgranie-zewnetrznego-badania.md) | Recepcja / Admin / Manager — PDF wyniku spoza panelu Befund (external upload) |
+| [hidrive_incoming_reception.md](hidrive_incoming_reception.md) | Recepcja — nazwy PDF labu w `/incoming/` oraz **folder pacjenta** na HiDrive (archiwum po Id) |
 | [08-ksiegowosc-raport.md](08-ksiegowosc-raport.md) | Księgowość / Administrator / Manager — raport tygodniowy Befund, eksport CSV/XLSX |
 | [05-pacjent-wyniki.md](05-pacjent-wyniki.md) | Pacjent — pobieranie dokumentacji po SMS |
 | [scenariusze.md](scenariusze.md) | Wszyscy — FAQ operacyjne, przypadki brzegowe (materiały wideo) |

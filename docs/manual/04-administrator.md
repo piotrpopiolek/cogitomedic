@@ -41,6 +41,7 @@ Na liście użytkowników możesz filtrować konta według roli.
 - **Consulting room** — gabinet przypisany do placówki.
 - **Kolejka dzienna / wpis kolejki** — jak w instrukcji recepcji; administrator zwykle widzi pełny zakres danych.
 - **Pacjent — korekta danych osobowych** (imię, nazwisko, telefon, data urodzenia, adres, placówki itd.): procedura krok po kroku i skutki dla portalu wyników / PDF z laboratorium — [01-rejestracja.md § 4.1](01-rejestracja.md).
+- **Wynik niedostępny w portalu — kopia z HiDrive:** foldery pacjentów mają **identyfikator (Id)**, nie nazwisko. Procedura: [hidrive_incoming_reception.md — Folder pacjenta](hidrive_incoming_reception.md#folder-pacjenta-na-hidrive), [SC-030](scenariusze.md#sc-030) (powiązane z oknem 60 dni: [SC-023](scenariusze.md#sc-023)).
 
 ---
 
@@ -104,7 +105,7 @@ Z poziomu listy **Daily queues** dostępny jest **Import pacjentów z pliku XLSX
 
 - W razie statusów błędów sprawdź szczegóły i skontaktuj się z działem IT.
 - Dashboard recepcji (`/admin/reception-dashboard/`) — skrót dla personelu; administrator może używać tego samego + pełnych widoków modeli.
-- Scenariusze: [SC-006](scenariusze.md#sc-006), [SC-013](scenariusze.md#sc-013), [SC-024](scenariusze.md#sc-024), [SC-026](scenariusze.md#sc-026), [SC-027](scenariusze.md#sc-027); indeks: [scenariusze.md](scenariusze.md).
+- Scenariusze: [SC-006](scenariusze.md#sc-006), [SC-013](scenariusze.md#sc-013), [SC-023](scenariusze.md#sc-023) / [SC-030](scenariusze.md#sc-030) (archiwum HiDrive), [SC-024](scenariusze.md#sc-024), [SC-026](scenariusze.md#sc-026), [SC-027](scenariusze.md#sc-027); indeks: [scenariusze.md](scenariusze.md).
 
 ---
 

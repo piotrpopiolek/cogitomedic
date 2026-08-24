@@ -71,7 +71,7 @@ Po publikacji dokumentu medycznego system wykonuje kolejne kroki: generowanie PD
 
 - Wymagania produktu: [`.ai/prd.md`](../../.ai/prd.md)
 - Dokumentacja dla działu IT: [`.ai/api-plan-pl.md`](../../.ai/api-plan-pl.md)
-- **Scenariusze operacyjne (FAQ + filmy):** [scenariusze.md](scenariusze.md) — m.in. anulowanie wpisu ([SC-001](scenariusze.md#sc-001)), SMS / skrzynka wyjściowa ([SC-006](scenariusze.md#sc-006)), portal ([SC-008](scenariusze.md#sc-008)–[SC-010](scenariusze.md#sc-010)), HiDrive ([SC-005](scenariusze.md#sc-005), [SC-027](scenariusze.md#sc-027)), lekarz: rewizja / revoke / ponowny SMS ([SC-003](scenariusze.md#sc-003), [SC-015](scenariusze.md#sc-015), [SC-028](scenariusze.md#sc-028)).
+- **Scenariusze operacyjne (FAQ + filmy):** [scenariusze.md](scenariusze.md) — m.in. anulowanie wpisu ([SC-001](scenariusze.md#sc-001)), SMS / skrzynka wyjściowa ([SC-006](scenariusze.md#sc-006)), portal ([SC-008](scenariusze.md#sc-008)–[SC-010](scenariusze.md#sc-010)), HiDrive ([SC-005](scenariusze.md#sc-005), [SC-027](scenariusze.md#sc-027), archiwum pacjenta [SC-030](scenariusze.md#sc-030)), lekarz: rewizja / revoke / ponowny SMS ([SC-003](scenariusze.md#sc-003), [SC-015](scenariusze.md#sc-015), [SC-028](scenariusze.md#sc-028)).
 
 ## Indeks instrukcji
 
