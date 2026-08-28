@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.conf import settings
 from django.db import connection
 from django.db.models import Q
 from django.db.utils import Error as DatabaseError
@@ -20,6 +19,7 @@ from apps.core.api_utils import (
 )
 from apps.operations.api_schemas import AuditEventsListQueryParams
 from apps.operations.metrics import build_metrics_payload
+from apps.operations.metrics_server import _bearer_authorized
 from apps.operations.models import AuditEvent
 
 
@@ -133,8 +133,7 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
 def _observability_authorized(request: HttpRequest) -> bool:
     """True if request is authorized for detailed observability (Bearer token or ADMIN)."""
-    token = getattr(settings, "PROMETHEUS_METRICS_TOKEN", None)
-    if token and request.headers.get("Authorization") == f"Bearer {token}":
+    if _bearer_authorized(request.headers.get("Authorization")):
         return True
     if (
         request.user.is_authenticated

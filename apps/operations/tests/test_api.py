@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from uuid import uuid4
 
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -135,6 +135,30 @@ class ObservabilityHealthApiTests(TestCase):
     def test_health_anonymous_returns_minimal_payload(self) -> None:
         anonymous = Client()
         response = anonymous.get("/api/v1/observability/health")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertNotIn("checks", payload)
+
+    @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
+    def test_health_anonymous_with_bearer_returns_checks(self) -> None:
+        anonymous = Client()
+        response = anonymous.get(
+            "/api/v1/observability/health",
+            headers={"Authorization": "Bearer secret-token"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("checks", payload)
+
+    @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
+    def test_health_anonymous_with_wrong_bearer_returns_minimal_payload(self) -> None:
+        anonymous = Client()
+        response = anonymous.get(
+            "/api/v1/observability/health",
+            headers={"Authorization": "Bearer other-token"},
+        )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
