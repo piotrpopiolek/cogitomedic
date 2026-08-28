@@ -67,6 +67,15 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    _effective_lock_holder_id,
+    doctor_befund_edit_lock_applies,
+    document_locked_by_other_for_user,
+    is_doctor_befund_source_type,
+    release_doctor_edit_session_lock,
+    start_doctor_edit_session,
+)
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
@@ -264,22 +273,6 @@ def _audit_queue_entry_access_denied(
     )
 
 
-def _is_doctor_befund_source_type(doc: MedicalDocument) -> bool:
-    return doc.source_type in (
-        MedicalDocumentSourceType.DIGITAL_INTAKE,
-        MedicalDocumentSourceType.PAPER_INTAKE,
-    )
-
-
-def doctor_befund_edit_lock_applies(doc: MedicalDocument) -> bool:
-    """Whether the doctor Befund edit semaphore applies (not EXTERNAL_UPLOAD)."""
-    if not _is_doctor_befund_source_type(doc):
-        return False
-    if doc.status == MedicalDocStatus.DRAFT:
-        return True
-    return (
-        doc.status == MedicalDocStatus.PUBLISHED and bool(doc.has_pending_revision)
-    )
 
 
 def _assert_staff_user_may_publish_medical_document(*, actor: StaffUser) -> None:
@@ -315,90 +308,83 @@ def acquire_document_lock(
     *, medical_document_id: uuid.UUID, user: Any
 ) -> tuple[bool, str | None]:
     """
-    Acquire or refresh edit lock for a DRAFT document. Published documents are not locked.
+    Legacy acquire wrapper around :func:`start_doctor_edit_session`.
 
-    Returns (granted, current_holder_display_name_if_denied).
-    Admin may take over an active lock held by another user.
+    Doctor-only; auto-confirms reclaim when the caller already holds the document.
     """
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if doc.status != MedicalDocStatus.DRAFT:
+    if not getattr(user, "is_doctor", False):
+        return False, None
+    doc = MedicalDocument.objects.get(id=medical_document_id)
+    if not doctor_befund_edit_lock_applies(doc):
         return True, None
 
-    now = timezone.now()
-    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
-    locked = (
-        doc.locked_by_user_id is not None
-        and doc.locked_at is not None
-        and doc.locked_at >= cutoff
-    )
-
-    if locked:
-        if doc.locked_by_user_id == user.id:
-            doc.locked_at = now
-            doc.save(update_fields=["locked_at", "updated_at"])
-            return True, None
-        if _is_admin_or_manager_medical_oversight(user):
-            doc.locked_by_user_id = user.id
-            doc.locked_at = now
-            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-            return True, None
-        holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-        return False, staff_user_display_name(holder)
-
-    doc.locked_by_user_id = user.id
-    doc.locked_at = now
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-    return True, None
+    base_kwargs = {
+        "medical_document_id": medical_document_id,
+        "user": user,
+        "purpose": "edit",
+    }
+    try:
+        start_doctor_edit_session(**base_kwargs)
+        return True, None
+    except EditSessionResponseError as exc:
+        if exc.error_key == "document_locked_by_other":
+            return False, exc.payload.get("locked_by_username")
+        if exc.error_key == "edit_session_reclaim_confirmation_required":
+            try:
+                start_doctor_edit_session(
+                    **base_kwargs,
+                    reclaim_confirmed=True,
+                    expected_edit_session_revision=int(
+                        exc.payload["edit_session_revision"]
+                    ),
+                )
+                return True, None
+            except EditSessionResponseError as retry_exc:
+                if retry_exc.error_key == "document_locked_by_other":
+                    return False, retry_exc.payload.get("locked_by_username")
+                raise
+        if exc.error_key == "doctor_lock_limit_reached":
+            return False, None
+        raise
 
 
 @transaction.atomic
 def release_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
-    """
-    Clear edit lock if the user holds it, or if the user is admin.
-    Returns True if the lock row was cleared or there was nothing to release.
-    """
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if not doc.locked_by_user_id:
-        return True
-    if doc.locked_by_user_id != user.id and not _is_admin_or_manager_medical_oversight(
-        user
-    ):
-        return False
-    doc.locked_by_user_id = None
-    doc.locked_at = None
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-    return True
+    """Clear edit lock for the doctor holder only."""
+    return release_doctor_edit_session_lock(
+        medical_document_id=medical_document_id, user=user
+    )
 
 
 @transaction.atomic
 def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     """
-    Refresh ``locked_at`` for the current holder (or acquire if lock is free/expired).
-    Returns False if another user holds an effective lock (and caller is not admin).
+    Refresh ``locked_at`` for the current doctor holder.
+    Returns False if another doctor holds an effective lock.
     """
+    if not getattr(user, "is_doctor", False):
+        return False
     doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if doc.status != MedicalDocStatus.DRAFT:
+    if not doctor_befund_edit_lock_applies(doc):
         return True
 
     now = timezone.now()
-    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
-    locked = (
-        doc.locked_by_user_id is not None
-        and doc.locked_at is not None
-        and doc.locked_at >= cutoff
-    )
-
-    if locked and doc.locked_by_user_id != user.id:
-        if _is_admin_or_manager_medical_oversight(user):
-            doc.locked_by_user_id = user.id
-            doc.locked_at = now
-            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    holder_id = _effective_lock_holder_id(doc, now=now)
+    if holder_id is None:
+        try:
+            start_doctor_edit_session(
+                medical_document_id=medical_document_id,
+                user=user,
+                purpose="edit",
+            )
             return True
+        except EditSessionResponseError:
+            return False
+    if holder_id != user.id:
         return False
 
-    doc.locked_by_user_id = user.id
     doc.locked_at = now
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    doc.save(update_fields=["locked_at", "updated_at"])
     return True
 
 
