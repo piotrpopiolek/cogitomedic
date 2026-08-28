@@ -155,6 +155,64 @@ class MedicalDocument(models.Model):
         null=True,
         verbose_name=db_gettext_lazy("administration.field_locked_at", "Locked at"),
     )
+    edit_session_token = models.UUIDField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_edit_session_token", "Edit session token"
+        ),
+    )
+    edit_session_revision = models.PositiveBigIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_edit_session_revision", "Edit session revision"
+        ),
+    )
+    draft_revision = models.PositiveBigIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_draft_revision", "Draft revision"
+        ),
+    )
+    last_previewed_draft_revision = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_previewed_draft_revision",
+            "Last previewed draft revision",
+        ),
+    )
+    last_draft_request_id = models.UUIDField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_draft_request_id", "Last draft request ID"
+        ),
+    )
+    last_draft_request_base_revision = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_draft_request_base_revision",
+            "Last draft request base revision",
+        ),
+    )
+    last_draft_request_result_revision = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_draft_request_result_revision",
+            "Last draft request result revision",
+        ),
+    )
+    last_edit_session_request_id = models.UUIDField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_last_edit_session_request_id",
+            "Last edit session request ID",
+        ),
+    )
 
     class Meta:
         db_table = "medical_document"
@@ -196,6 +254,10 @@ class MedicalDocument(models.Model):
             models.Index(
                 fields=["status", "has_pending_revision", "-updated_at"],
                 name="med_doc_status_rev_idx",
+            ),
+            models.Index(
+                fields=["locked_by_user", "locked_at"],
+                name="med_doc_locked_by_at_idx",
             ),
         ]
 
