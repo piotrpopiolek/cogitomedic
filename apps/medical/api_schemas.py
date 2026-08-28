@@ -79,17 +79,20 @@ class SaveDraftMedicalDocumentRequest(BaseModel):
     medical_payload: MedicalPayloadMinimal
     diagnosis_code: str | None = None
     procedure_code: str | None = None
-    # explicit "amend" intent is required to start a revision of an
-    # already PUBLISHED document. ``edit`` is the legacy DRAFT-only behaviour.
+    edit_session_token: UUID
+    expected_draft_revision: int = Field(ge=0)
+    draft_save_request_id: UUID
+    # explicit "amend" intent is required when a pending revision is already open.
+    # Starting a revision on clean PUBLISHED requires POST …/edit-session purpose=amend.
     # Wire type is ``str`` so invalid values reach ``save_draft_document_version`` and
     # produce ``other.api.invalid_save_draft_intent`` (distinct from amend guardrail).
     intent: str = Field(
         default="edit",
         description=(
-            'Save intent: must be exactly "edit" or "amend". Use "amend" only when the '
-            "document is already PUBLISHED and the user confirms starting a revision. "
-            "Any other string yields HTTP 400 with `error_key` "
-            "`other.api.invalid_save_draft_intent`."
+            'Save intent: must be exactly "edit" or "amend". Use "amend" when saving '
+            "an open pending revision on a PUBLISHED document. Starting a revision "
+            "requires POST …/edit-session with purpose=amend. Any other string yields "
+            "HTTP 400 with `error_key` `other.api.invalid_save_draft_intent`."
         ),
     )
 
@@ -103,6 +106,15 @@ class PublishMedicalDocumentRequest(BaseModel):
     publish_locale: str = Field(
         min_length=2, max_length=10, pattern=r"^(de|en|pl)(-[A-Z]{2})?$"
     )
+    edit_session_token: UUID
+    expected_draft_revision: int = Field(ge=0)
+
+
+class DiscardRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edit_session_token: UUID
+    expected_draft_revision: int = Field(ge=0)
 
 
 class ExternalUploadSelectAttachmentRequest(BaseModel):

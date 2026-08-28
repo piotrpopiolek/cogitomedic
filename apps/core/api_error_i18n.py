@@ -84,6 +84,18 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
         "Start a revision via POST …/edit-session with purpose=amend before saving "
         "draft changes on a published document."
     ),
+    "other.api.draft_revision_conflict": (
+        "The draft revision does not match the server. Reload the document and retry."
+    ),
+    "other.api.draft_request_id_reused": (
+        "This draft_save_request_id was already used with a different base revision."
+    ),
+    "other.api.publish_preview_revision_stale": (
+        "Preview the current draft PDF again before publishing."
+    ),
+    "other.api.revision_in_progress": (
+        "A pending revision or active edit lock is open; finish or discard it first."
+    ),
     "other.api.no_pending_revision_to_discard": (
         "No pending revision to discard for this document."
     ),
