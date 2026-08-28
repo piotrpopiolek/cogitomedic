@@ -2244,6 +2244,9 @@ def publish_document_version(
     medical_document.updated_by_user_id = published_by_user_id
     medical_document.locked_by_user_id = None
     medical_document.locked_at = None
+    medical_document.edit_session_token = None
+    medical_document.last_edit_session_request_id = None
+    medical_document.last_previewed_draft_revision = None
     medical_document.save(
         update_fields=[
             "status",
@@ -2255,6 +2258,9 @@ def publish_document_version(
             "updated_at",
             "locked_by_user",
             "locked_at",
+            "edit_session_token",
+            "last_edit_session_request_id",
+            "last_previewed_draft_revision",
         ]
     )
 
