@@ -25,6 +25,10 @@ class BearerAuthTests(SimpleTestCase):
         self.assertFalse(_bearer_authorized("Bearer other-token"))
 
     @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
+    def test_rejects_different_length(self) -> None:
+        self.assertFalse(_bearer_authorized("Bearer secret-toke"))
+
+    @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
     def test_rejects_missing_header(self) -> None:
         self.assertFalse(_bearer_authorized(None))
 
