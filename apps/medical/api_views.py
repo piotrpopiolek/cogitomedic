@@ -4,6 +4,7 @@ import logging
 from json import JSONDecodeError
 from pathlib import Path
 from uuid import UUID
+from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
@@ -57,6 +58,7 @@ from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.core.translation_service import resolve_other_message
 from apps.medical.edit_session import (
     EditSessionResponseError,
+    doctor_befund_edit_lock_applies,
     start_doctor_edit_session,
 )
 from apps.medical.models import (
@@ -122,6 +124,14 @@ class _MedicalDocumentEditLocked(Exception):
     def __init__(self, locked_by_username: str | None) -> None:
         super().__init__()
         self.locked_by_username = locked_by_username
+
+
+def _ensure_befund_not_locked_by_other(doc: MedicalDocument, user: Any) -> None:
+    if not doctor_befund_edit_lock_applies(doc):
+        return
+    eff, holder_name, _ = get_document_lock_state(doc)
+    if eff and doc.locked_by_user_id != user.id:
+        raise _MedicalDocumentEditLocked(holder_name)
 
 
 def _json_document_locked(
@@ -1077,14 +1087,7 @@ def medical_document_draft_view(
             check_doctor_document_access(
                 doc, request.user, audit_context=_doctor_access_audit_context(request)
             )
-            if doc.status == MedicalDocStatus.DRAFT:
-                eff, holder_name, _ = get_document_lock_state(doc)
-                if (
-                    eff
-                    and doc.locked_by_user_id != request.user.id
-                    and not _is_admin_or_manager_medical_oversight(request.user)
-                ):
-                    raise _MedicalDocumentEditLocked(holder_name)
+            _ensure_befund_not_locked_by_other(doc, request.user)
 
             version = save_draft_document_version(
                 medical_document_id=medical_document_id,
@@ -1097,7 +1100,7 @@ def medical_document_draft_view(
             )
             doc.refresh_from_db()
 
-            if doc.status == MedicalDocStatus.DRAFT:
+            if doctor_befund_edit_lock_applies(doc):
                 if not refresh_document_lock(
                     medical_document_id=medical_document_id, user=request.user
                 ):
@@ -1113,7 +1116,10 @@ def medical_document_draft_view(
     except DomainError as exc:
         # 409 specifically for the amend-intent guardrail so the UI can show a
         # confirmation modal instead of a generic validation toast.
-        if exc.api_message_key == "other.api.amend_intent_required":
+        if exc.api_message_key in (
+            "other.api.amend_intent_required",
+            "other.api.amend_requires_edit_session",
+        ):
             return json_domain_error(exc, status=409)
         return json_domain_error(exc, status=400)
 
@@ -1158,10 +1164,22 @@ def medical_document_discard_revision_view(
         return json_error("other.api.medical_document_not_found", status=404)
 
     try:
-        doc = discard_pending_revision(
-            medical_document_id=medical_document_id,
-            actor_user_id=request.user.id,
-        )
+        with transaction.atomic():
+            doc = (
+                MedicalDocument.objects.select_for_update()
+                .select_related("queue_entry__daily_queue")
+                .get(id=medical_document_id)
+            )
+            check_doctor_document_access(
+                doc, request.user, audit_context=_doctor_access_audit_context(request)
+            )
+            _ensure_befund_not_locked_by_other(doc, request.user)
+            doc = discard_pending_revision(
+                medical_document_id=medical_document_id,
+                actor_user_id=request.user.id,
+            )
+    except _MedicalDocumentEditLocked as exc:
+        return _json_document_locked(request, exc.locked_by_username)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
@@ -1324,10 +1342,7 @@ def medical_document_publish_view(
                 doc, request.user, audit_context=_doctor_access_audit_context(request)
             )
 
-            if doc.status == MedicalDocStatus.DRAFT:
-                eff, holder_name, _ = get_document_lock_state(doc)
-                if eff and doc.locked_by_user_id != request.user.id:
-                    raise _MedicalDocumentEditLocked(holder_name)
+            _ensure_befund_not_locked_by_other(doc, request.user)
 
             version = publish_document_version(
                 medical_document_id=medical_document_id,
