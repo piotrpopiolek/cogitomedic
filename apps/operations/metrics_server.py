@@ -8,13 +8,12 @@ alone never sees those increments.
 
 from __future__ import annotations
 
-import hmac
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import TYPE_CHECKING
 
-from django.conf import settings
+from apps.operations.observability_auth import bearer_authorized
 
 if TYPE_CHECKING:
     from socketserver import BaseServer
@@ -62,16 +61,6 @@ def build_runtime_metrics_payload() -> bytes:
     return generate_latest(registry)
 
 
-def _bearer_authorized(authorization: str | None) -> bool:
-    token = getattr(settings, "PROMETHEUS_METRICS_TOKEN", None)
-    if not token or not authorization:
-        return False
-    expected = f"Bearer {token}"
-    if len(authorization) != len(expected):
-        return False
-    return hmac.compare_digest(authorization, expected)
-
-
 class _MetricsHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:  # noqa: A003
         logger.debug("scheduler-metrics: " + format, *args)
@@ -80,7 +69,7 @@ class _MetricsHandler(BaseHTTPRequestHandler):
         if self.path.split("?", 1)[0] != _METRICS_PATH:
             self.send_error(404, "Not Found")
             return
-        if not _bearer_authorized(self.headers.get("Authorization")):
+        if not bearer_authorized(self.headers.get("Authorization")):
             self.send_response(401)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()

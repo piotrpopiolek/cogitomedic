@@ -9,32 +9,32 @@ from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.operations.metrics_server import (
     _MetricsHandler,
-    _bearer_authorized,
     build_runtime_metrics_payload,
 )
+from apps.operations.observability_auth import bearer_authorized
 from apps.operations.prom_metrics import build_metrics_payload, record_outbox_execution
 
 
 class BearerAuthTests(SimpleTestCase):
     @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
     def test_accepts_matching_bearer(self) -> None:
-        self.assertTrue(_bearer_authorized("Bearer secret-token"))
+        self.assertTrue(bearer_authorized("Bearer secret-token"))
 
     @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
     def test_rejects_wrong_token(self) -> None:
-        self.assertFalse(_bearer_authorized("Bearer other-token"))
+        self.assertFalse(bearer_authorized("Bearer other-token"))
 
     @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
     def test_rejects_different_length(self) -> None:
-        self.assertFalse(_bearer_authorized("Bearer secret-toke"))
+        self.assertFalse(bearer_authorized("Bearer secret-toke"))
 
     @override_settings(PROMETHEUS_METRICS_TOKEN="secret-token")
     def test_rejects_missing_header(self) -> None:
-        self.assertFalse(_bearer_authorized(None))
+        self.assertFalse(bearer_authorized(None))
 
     @override_settings(PROMETHEUS_METRICS_TOKEN=None)
     def test_rejects_when_token_unset(self) -> None:
-        self.assertFalse(_bearer_authorized("Bearer anything"))
+        self.assertFalse(bearer_authorized("Bearer anything"))
 
 
 class RuntimeMetricsPayloadTests(SimpleTestCase):
