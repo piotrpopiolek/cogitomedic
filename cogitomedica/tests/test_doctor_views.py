@@ -375,7 +375,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIn(f"/doctor/{ext_doc.id}/", resp.url)
         self.assertIn("lang=en", resp.url)
 
-    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.document_locked_by_other_for_user")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
     def test_external_upload_document_detail_skips_gate_and_lock(
         self,
@@ -388,7 +388,7 @@ class DoctorViewsSmokeTests(TestCase):
             "check_external_pdf_gate must not run for EXTERNAL_UPLOAD draft detail"
         )
         lock_mock.side_effect = AssertionError(
-            "acquire_document_lock must not run for EXTERNAL_UPLOAD draft detail"
+            "document_locked_by_other_for_user must not run for EXTERNAL_UPLOAD draft detail"
         )
 
         self._login_doctor()
@@ -451,7 +451,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertTrue(panel.get("externalUploadReadOnly"))
         self.assertNotIn('id="befund-form"', resp.content.decode("utf-8"))
 
-    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.document_locked_by_other_for_user")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
     def test_external_upload_readonly_draft_detail_hides_preview_until_published(
         self,
@@ -530,7 +530,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertNotIn('id="btn-preview-published-external"', html)
 
     @patch("apps.medical.services.get_hidrive_adapter")
-    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.document_locked_by_other_for_user")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
     def test_external_upload_readonly_published_detail_links_standard_preview(
         self,
@@ -623,7 +623,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertIn('id="btn-preview-pdf"', html)
 
     @patch("apps.medical.services.get_hidrive_adapter")
-    @patch("cogitomedica.doctor_views.acquire_document_lock")
+    @patch("cogitomedica.doctor_views.document_locked_by_other_for_user")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
     def test_external_upload_pending_revision_without_attachment_links_published_preview(
         self,
@@ -1468,8 +1468,8 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertIn(note, html)
 
     @patch(
-        "cogitomedica.doctor_views.acquire_document_lock",
-        return_value=(True, None),
+        "cogitomedica.doctor_views.document_locked_by_other_for_user",
+        return_value=(False, None),
     )
     def test_detail_panel_current_version_includes_hidrive_sms_flags(
         self,
@@ -1516,8 +1516,8 @@ class DoctorDetailHappyPathTests(TestCase):
         self.assertIsNone(cv.get("revoked_at"))
 
     @patch(
-        "cogitomedica.doctor_views.acquire_document_lock",
-        return_value=(True, None),
+        "cogitomedica.doctor_views.document_locked_by_other_for_user",
+        return_value=(False, None),
     )
     def test_detail_panel_current_version_includes_revoked_at_when_revoked(
         self,

@@ -2217,16 +2217,16 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertFalse(granted)
         self.assertIsNotNone(holder)
 
-    def test_acquire_admin_takes_over(self):
+    def test_acquire_admin_cannot_take_over(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         granted, holder = acquire_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(granted)
+        self.assertFalse(granted)
         doc.refresh_from_db()
-        self.assertEqual(doc.locked_by_user_id, admin.id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     def test_acquire_expired_lock_grants(self):
         doc = self._make_draft_doc()
@@ -2275,16 +2275,16 @@ class DocumentLockTests(ServicesCoverageBase):
         result = release_document_lock(medical_document_id=doc.id, user=other)
         self.assertFalse(result)
 
-    def test_release_admin_releases_other_lock(self):
+    def test_release_admin_cannot_release_other_lock(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         result = release_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(result)
+        self.assertFalse(result)
         doc.refresh_from_db()
-        self.assertIsNone(doc.locked_by_user_id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     # -- refresh_document_lock --
     def test_refresh_own_lock(self):
@@ -2298,12 +2298,13 @@ class DocumentLockTests(ServicesCoverageBase):
         doc.refresh_from_db()
         self.assertGreater(doc.locked_at, old_time)
 
-    def test_refresh_free_lock_acquires(self):
+    def test_refresh_free_lock_acquires_via_edit_session(self):
         doc = self._make_draft_doc()
         result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
         self.assertTrue(result)
         doc.refresh_from_db()
         self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+        self.assertIsNotNone(doc.edit_session_token)
 
     def test_refresh_other_lock_denied(self):
         doc = self._make_draft_doc()
@@ -2314,16 +2315,16 @@ class DocumentLockTests(ServicesCoverageBase):
         result = refresh_document_lock(medical_document_id=doc.id, user=other)
         self.assertFalse(result)
 
-    def test_refresh_admin_takes_over(self):
+    def test_refresh_admin_cannot_take_over(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         result = refresh_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(result)
+        self.assertFalse(result)
         doc.refresh_from_db()
-        self.assertEqual(doc.locked_by_user_id, admin.id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     def test_refresh_on_published_doc_returns_true(self):
         doc = self._make_medical_doc()

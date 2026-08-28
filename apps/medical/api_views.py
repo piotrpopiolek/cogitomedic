@@ -31,6 +31,7 @@ from apps.core.exceptions import (
     InvalidRequestBodyEncoding,
 )
 from apps.medical.api_schemas import (
+    EditSessionRequest,
     CreateMedicalDocumentRequest,
     CreateMedicalDocumentWithoutIntakeRequest,
     PaperIntakeAuthorizationRequest,
@@ -54,6 +55,10 @@ from apps.medical.pdf_builder import (
 )
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.core.translation_service import resolve_other_message
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    start_doctor_edit_session,
+)
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -1172,6 +1177,77 @@ def medical_document_discard_revision_view(
             "current_version_no": doc.current_version_no,
             "published_version_no": doc.published_version_no,
             "has_pending_revision": doc.has_pending_revision,
+        },
+        status=200,
+    )
+
+
+def _json_edit_session_error(
+    request: HttpRequest, exc: EditSessionResponseError
+) -> JsonResponse:
+    payload: dict[str, object] = {"error_key": exc.error_key, **exc.payload}
+    if exc.error_key == "document_locked_by_other":
+        holder = exc.payload.get("locked_by_username")
+        payload["error"] = resolve_other_message(
+            request,
+            "doctor.document_locked_error",
+            "This document is being edited by {username}. Please try again later.",
+            username=holder or "—",
+        )
+        payload["locked_by_username"] = holder
+    return JsonResponse(payload, status=exc.http_status)
+
+
+@require_auth
+def medical_document_edit_session_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    """POST: acquire, resume, or reclaim a doctor Befund edit session."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR"})
+    if role_error:
+        return role_error
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = EditSessionRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    try:
+        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
+            id=medical_document_id
+        )
+        check_doctor_document_access(
+            doc, request.user, audit_context=_doctor_access_audit_context(request)
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.medical_document_not_found", status=404)
+
+    try:
+        result = start_doctor_edit_session(
+            medical_document_id=medical_document_id,
+            user=request.user,
+            purpose=body.purpose,
+            edit_session_token=body.edit_session_token,
+            edit_session_request_id=body.edit_session_request_id,
+            expected_edit_session_revision=body.expected_edit_session_revision,
+            reclaim_confirmed=body.reclaim_confirmed,
+        )
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
+    except DomainError as exc:
+        return json_domain_error(exc, status=422)
+
+    return JsonResponse(
+        {
+            "mode": result.mode,
+            "edit_session_token": str(result.edit_session_token),
+            "edit_session_revision": result.edit_session_revision,
+            "draft_revision": result.draft_revision,
         },
         status=200,
     )

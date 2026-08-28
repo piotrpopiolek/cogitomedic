@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.core.api_schemas import OffsetPaginationQueryParams
@@ -57,6 +59,16 @@ class PaperIntakeAuthorizationRequest(BaseModel):
             "it is not a body-less delete."
         ),
     )
+
+
+class EditSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    purpose: Literal["edit", "amend"] = "edit"
+    edit_session_token: UUID | None = None
+    edit_session_request_id: UUID | None = None
+    expected_edit_session_revision: int | None = Field(default=None, ge=0)
+    reclaim_confirmed: bool = False
 
 
 class SaveDraftMedicalDocumentRequest(BaseModel):

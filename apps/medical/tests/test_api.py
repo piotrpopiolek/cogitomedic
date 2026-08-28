@@ -1447,7 +1447,7 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(ok.status_code, 200)
 
-    def test_draft_manager_bypasses_lock_when_other_doctor_blocked(self) -> None:
+    def test_draft_manager_cannot_bypass_lock_when_other_doctor_blocked(self) -> None:
         other = StaffUser.objects.create_user(
             username="api-doc-lock-mgr",
             email="api.doc.lock.mgr@example.com",
@@ -1516,7 +1516,8 @@ class MedicalApiTests(TestCase):
             data=json.dumps(draft_body),
             content_type="application/json",
         )
-        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok.status_code, 423)
+        self.assertIn("locked_by_username", ok.json())
 
     def test_publish_423_when_locked_by_other_doctor(self) -> None:
         other = StaffUser.objects.create_user(
@@ -1744,7 +1745,7 @@ class MedicalApiTests(TestCase):
         self.assertEqual(resp.status_code, 404)
         self.assertIn("error", resp.json())
 
-    def test_admin_can_override_lock_on_draft_save(self) -> None:
+    def test_admin_cannot_override_lock_on_draft_save(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1779,7 +1780,8 @@ class MedicalApiTests(TestCase):
             data=json.dumps(draft_body),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 423)
+        self.assertIn("locked_by_username", resp.json())
 
     def test_admin_cannot_publish_medical_document(self) -> None:
         create_resp = self.client.post(
@@ -1870,7 +1872,7 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(resp.status_code, 403)
 
-    def test_admin_can_unlock_another_users_lock(self) -> None:
+    def test_admin_cannot_unlock_another_users_lock(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1892,8 +1894,8 @@ class MedicalApiTests(TestCase):
             data=json.dumps({}),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.json()["released"])
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(resp.json().get("released"))
 
     def test_list_includes_lock_fields(self) -> None:
         self.client.post(
