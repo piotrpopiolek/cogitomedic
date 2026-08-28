@@ -19,7 +19,7 @@ from apps.core.api_utils import (
 )
 from apps.operations.api_schemas import AuditEventsListQueryParams
 from apps.operations.metrics import build_metrics_payload
-from apps.operations.metrics_server import _bearer_authorized
+from apps.operations.observability_auth import bearer_authorized
 from apps.operations.models import AuditEvent
 
 
@@ -133,7 +133,7 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
 def _observability_authorized(request: HttpRequest) -> bool:
     """True if request is authorized for detailed observability (Bearer token or ADMIN)."""
-    if _bearer_authorized(request.headers.get("Authorization")):
+    if bearer_authorized(request.headers.get("Authorization")):
         return True
     if (
         request.user.is_authenticated
