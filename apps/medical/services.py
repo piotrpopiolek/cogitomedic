@@ -43,6 +43,7 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.constants import (
     DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
+    DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
     EXTERNAL_UPLOAD_MAX_BYTES,
     PAPER_INTAKE_AUTH_REASON_MAX_LEN,
@@ -260,6 +261,24 @@ def _audit_queue_entry_access_denied(
             "queue_entry_id": str(queue_entry.id),
             "client_ip": audit_context.client_ip if audit_context else None,
         },
+    )
+
+
+def _is_doctor_befund_source_type(doc: MedicalDocument) -> bool:
+    return doc.source_type in (
+        MedicalDocumentSourceType.DIGITAL_INTAKE,
+        MedicalDocumentSourceType.PAPER_INTAKE,
+    )
+
+
+def doctor_befund_edit_lock_applies(doc: MedicalDocument) -> bool:
+    """Whether the doctor Befund edit semaphore applies (not EXTERNAL_UPLOAD)."""
+    if not _is_doctor_befund_source_type(doc):
+        return False
+    if doc.status == MedicalDocStatus.DRAFT:
+        return True
+    return (
+        doc.status == MedicalDocStatus.PUBLISHED and bool(doc.has_pending_revision)
     )
 
 
