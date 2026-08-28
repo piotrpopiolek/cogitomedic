@@ -214,12 +214,6 @@ def start_doctor_edit_session(
     doctor = _assert_doctor_actor(user)
     now = timezone.now()
 
-    if purpose == "amend":
-        raise DomainError(
-            domain_message("other.domain.edit_session_amend_not_implemented"),
-            api_message_key="other.domain.edit_session_amend_not_implemented",
-        )
-
     doc = (
         MedicalDocument.objects.select_for_update()
         .select_related("queue_entry__daily_queue", "queue_entry__patient")
@@ -232,7 +226,23 @@ def start_doctor_edit_session(
             api_message_key="other.domain.edit_session_not_applicable",
         )
 
-    if not doctor_befund_edit_lock_applies(doc):
+    if purpose == "amend":
+        if doc.status != MedicalDocStatus.PUBLISHED or doc.has_pending_revision:
+            raise DomainError(
+                domain_message("other.domain.edit_session_document_read_only"),
+                api_message_key="other.domain.edit_session_document_read_only",
+            )
+        from apps.medical.services import (
+            begin_pending_revision_from_published,
+            user_may_start_amend_revision,
+        )
+
+        if not user_may_start_amend_revision(doc, doctor.id):
+            raise DomainError(
+                domain_message("other.domain.amend_publisher_only"),
+                api_message_key="other.domain.amend_publisher_only",
+            )
+    elif not doctor_befund_edit_lock_applies(doc):
         raise DomainError(
             domain_message("other.domain.edit_session_document_read_only"),
             api_message_key="other.domain.edit_session_document_read_only",
@@ -252,6 +262,13 @@ def start_doctor_edit_session(
             http_status=423,
             payload={"locked_by_username": staff_user_display_name(holder)},
         )
+
+    if purpose == "amend":
+        begin_pending_revision_from_published(
+            medical_document=doc,
+            actor_user_id=doctor.id,
+        )
+        doc.refresh_from_db()
 
     if holder_id == doctor.id:
         if (

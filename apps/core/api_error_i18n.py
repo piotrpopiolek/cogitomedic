@@ -80,6 +80,10 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
         "This document is already published. To make changes, confirm starting a "
         "revision (intent=amend)."
     ),
+    "other.api.amend_requires_edit_session": (
+        "Start a revision via POST …/edit-session with purpose=amend before saving "
+        "draft changes on a published document."
+    ),
     "other.api.no_pending_revision_to_discard": (
         "No pending revision to discard for this document."
     ),

@@ -2199,10 +2199,43 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
             response.json().get("error_key"), "other.api.invalid_save_draft_intent"
         )
 
-    def test_draft_on_published_with_amend_intent_returns_200_pending_revision(
+    def test_draft_on_published_with_amend_intent_returns_409_requires_edit_session(
         self,
     ) -> None:
         medical_document_id = self._create_published_document()
+        response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": self.VALID_PAYLOAD,
+                    "intent": "amend",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
+        body = response.json()
+        self.assertEqual(
+            body.get("error_key") or body.get("api_message_key"),
+            "other.api.amend_requires_edit_session",
+        )
+
+    def _start_amend_via_edit_session(self, medical_document_id: str) -> dict:
+        response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/edit-session",
+            data=json.dumps({"purpose": "amend"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def test_amend_via_edit_session_then_draft_save_returns_pending_revision(
+        self,
+    ) -> None:
+        medical_document_id = self._create_published_document()
+        session = self._start_amend_via_edit_session(medical_document_id)
+        self.assertEqual(session["mode"], "acquired")
         response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
@@ -2227,6 +2260,7 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         self.intake_form.reception_note = note
         self.intake_form.save(update_fields=["reception_note", "updated_at"])
         medical_document_id = self._create_published_document()
+        self._start_amend_via_edit_session(medical_document_id)
         amend = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
@@ -2250,6 +2284,7 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
 
     def test_discard_revision_clears_pending_state(self) -> None:
         medical_document_id = self._create_published_document()
+        self._start_amend_via_edit_session(medical_document_id)
         amend_response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
@@ -3063,23 +3098,24 @@ class DoctorRbacIdorMatrixTests(TestCase):
         )
         self.assertEqual(draft.status_code, 200)
 
-    def test_doctor_b_can_amend_when_pending_revision(self) -> None:
-        """P2: published + pending revision is tier-0 shared work."""
+    def test_doctor_b_sees_shared_revision_but_draft_without_lock_returns_423(self) -> None:
+        """P2: published + pending revision is shared work, but writes need holder."""
         mid = self._publish_as_doctor_a()
         self.client.force_login(self.doctor_user)
-        amend = self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(self._draft_put_body(intent="amend")),
+        self.client.post(
+            f"/api/v1/medical-documents/{mid}/edit-session",
+            data=json.dumps({"purpose": "amend"}),
             content_type="application/json",
         )
-        self.assertEqual(amend.status_code, 200)
         self._login_doctor_b()
+        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
+        self.assertEqual(detail.status_code, 200)
         draft = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
             data=json.dumps(self._draft_put_body(intent="amend")),
             content_type="application/json",
         )
-        self.assertEqual(draft.status_code, 200, draft.content)
+        self.assertEqual(draft.status_code, 423, draft.content)
 
     def test_doctor_b_can_preview_own_published_document(self) -> None:
         """P3: doctor B sees own published result."""

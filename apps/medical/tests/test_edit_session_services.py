@@ -16,7 +16,7 @@ from apps.medical.edit_session import (
     start_doctor_edit_session,
 )
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.medical.models import MedicalDocStatus, MedicalDocument, DocVersionStatus, MedicalDocumentVersion
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.operations.models import AuditEvent
 from apps.reception.models import PatientFormSession, QueueEntryStatus
@@ -228,8 +228,66 @@ class StartDoctorEditSessionTests(EditSessionTestMixin, ServicesCoverageBase):
             DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
         )
 
-    def test_amend_purpose_not_implemented_yet(self) -> None:
+    def _make_published_doc(self) -> MedicalDocument:
         doc = self._make_isolated_draft_doc()
+        doc.status = MedicalDocStatus.PUBLISHED
+        doc.save(update_fields=["status", "updated_at"])
+        self._make_published_version(doc, version_no=1, published_by_user=self.doctor)
+        doc.refresh_from_db()
+        return doc
+
+    def test_amend_purpose_creates_pending_revision_and_lock(self) -> None:
+        doc = self._make_published_doc()
+        result = start_doctor_edit_session(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            purpose="amend",
+        )
+        doc.refresh_from_db()
+        self.assertEqual(result.mode, "acquired")
+        self.assertTrue(doc.has_pending_revision)
+        self.assertEqual(doc.draft_revision, 1)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+        self.assertIsNotNone(doc.edit_session_token)
+        pending = MedicalDocumentVersion.objects.get(
+            medical_document_id=doc.id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        self.assertEqual(pending.version_no, 2)
+        published = MedicalDocumentVersion.objects.get(
+            medical_document_id=doc.id,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+        )
+        self.assertEqual(
+            pending.medical_payload,
+            published.medical_payload,
+        )
+
+    def test_amend_purpose_rejects_non_publisher(self) -> None:
+        doc = self._make_published_doc()
+        other = self._other_doctor("amend-np")
+        with self.assertRaises(DomainError) as ctx:
+            start_doctor_edit_session(
+                medical_document_id=doc.id,
+                user=other,
+                purpose="amend",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.amend_publisher_only",
+        )
+        doc.refresh_from_db()
+        self.assertFalse(doc.has_pending_revision)
+
+    def test_amend_purpose_rejects_when_revision_already_open(self) -> None:
+        doc = self._make_published_doc()
+        start_doctor_edit_session(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            purpose="amend",
+        )
+        doc.refresh_from_db()
         with self.assertRaises(DomainError):
             start_doctor_edit_session(
                 medical_document_id=doc.id,

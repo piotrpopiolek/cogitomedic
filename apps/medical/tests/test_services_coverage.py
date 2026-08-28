@@ -901,6 +901,8 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
 class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
     @freeze_time("2026-03-10T12:00:00Z")
     def test_republish_after_retention_raises(self):
+        from apps.medical.services import begin_pending_revision_from_published
+
         doc = self._make_medical_doc()
         self._make_published_version(
             doc,
@@ -911,11 +913,9 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
             local_pdf_deleted_at=timezone.now(),
         )
         with self.assertRaises(DomainError) as ctx:
-            save_draft_document_version(
-                medical_document_id=doc.id,
-                updated_by_user_id=self.doctor.id,
-                medical_payload={"authoring_locale": "de-DE"},
-                intent="amend",
+            begin_pending_revision_from_published(
+                medical_document=doc,
+                actor_user_id=self.doctor.id,
             )
         self.assertIn(
             "republish_after_retention_not_allowed",
@@ -2416,6 +2416,29 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertFalse(found[0]["row_has_edit_semaphore"])
         self.assertFalse(found[0]["is_locked_by_other"])
         self.assertEqual(found[0]["editor_activity"], "last")
+        self.assertTrue(found[0]["editor_username"])
+
+    def test_work_queue_pending_revision_with_lock_shows_semaphore(self):
+        doc = self._make_medical_doc()
+        doc.status = MedicalDocStatus.PUBLISHED
+        doc.has_pending_revision = True
+        doc.save(update_fields=["status", "has_pending_revision", "updated_at"])
+        self._make_published_version(doc, version_no=1)
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=2,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        items, total = list_doctor_work_queue(user=self.doctor)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["row_has_edit_semaphore"])
+        self.assertEqual(found[0]["editor_activity"], "active")
         self.assertTrue(found[0]["editor_username"])
 
     def test_work_queue_row_fully_delivered_when_pipeline_complete(self):
