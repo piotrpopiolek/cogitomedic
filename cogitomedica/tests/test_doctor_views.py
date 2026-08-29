@@ -1905,6 +1905,8 @@ class DoctorRbacIdorHtmlTests(TestCase):
         )
 
     def _publish_as_doctor_a(self) -> str:
+        from unittest.mock import patch
+
         payload = {
             "schema_version": 1,
             "authoring_locale": "de-DE",
@@ -1926,20 +1928,51 @@ class DoctorRbacIdorHtmlTests(TestCase):
             content_type="application/json",
         )
         mid = create_resp.json()["medical_document_id"]
-        self.client.put(
+        sess = self.client.post(
+            f"/api/v1/medical-documents/{mid}/edit-session",
+            data=json.dumps({"purpose": "edit"}),
+            content_type="application/json",
+        )
+        self.assertEqual(sess.status_code, 200, sess.content)
+        session = sess.json()
+        draft = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
             data=json.dumps(
-                {"medical_payload_schema_version": 1, "medical_payload": payload}
+                {
+                    "medical_payload_schema_version": 1,
+                    "medical_payload": payload,
+                    "edit_session_token": session["edit_session_token"],
+                    "expected_draft_revision": session["draft_revision"],
+                    "draft_save_request_id": str(uuid4()),
+                }
             ),
             content_type="application/json",
         )
-        self.client.post(
+        self.assertEqual(draft.status_code, 200, draft.content)
+        rev = draft.json()["draft_revision"]
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes",
+            return_value=(b"%PDF-1.4", None),
+        ):
+            preview = self.client.get(
+                f"/api/v1/medical-documents/{mid}/preview-pdf"
+                f"?source=draft&expected_draft_revision={rev}",
+                HTTP_X_EDIT_SESSION_TOKEN=session["edit_session_token"],
+            )
+        self.assertEqual(preview.status_code, 200, preview.content)
+        pub = self.client.post(
             f"/api/v1/medical-documents/{mid}/publish",
             data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
+                {
+                    "publish_request_id": str(uuid4()),
+                    "publish_locale": "de-DE",
+                    "edit_session_token": session["edit_session_token"],
+                    "expected_draft_revision": rev,
+                }
             ),
             content_type="application/json",
         )
+        self.assertEqual(pub.status_code, 200, pub.content)
         return mid
 
     def test_h1_doctor_b_document_detail_returns_404(self) -> None:

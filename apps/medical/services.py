@@ -3347,6 +3347,12 @@ def get_medical_document_context(
         "current_version_no": doc.current_version_no,
         "published_version_no": doc.published_version_no,
         "has_pending_revision": doc.has_pending_revision,
+        "draft_revision": int(doc.draft_revision or 0),
+        "last_previewed_draft_revision": (
+            int(doc.last_previewed_draft_revision)
+            if doc.last_previewed_draft_revision is not None
+            else None
+        ),
         "last_published_at": (
             doc.last_published_at.isoformat() if doc.last_published_at else None
         ),

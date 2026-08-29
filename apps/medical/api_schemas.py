@@ -110,6 +110,19 @@ class PublishMedicalDocumentRequest(BaseModel):
     expected_draft_revision: int = Field(ge=0)
 
 
+class ExternalUploadPublishRequest(BaseModel):
+    """Publish body for EXTERNAL_UPLOAD (no doctor edit-session token)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    publish_request_id: UUID
+    published_by_user_id: UUID | None = None
+    resend_sms: bool = False
+    publish_locale: str = Field(
+        min_length=2, max_length=10, pattern=r"^(de|en|pl)(-[A-Z]{2})?$"
+    )
+
+
 class DiscardRevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
