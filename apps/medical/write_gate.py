@@ -23,6 +23,7 @@ from apps.medical.edit_session import (
 )
 from apps.medical.models import (
     DocVersionStatus,
+    MedicalDocStatus,
     MedicalDocument,
     MedicalDocumentVersion,
 )
@@ -177,10 +178,13 @@ def mutate_doctor_save_draft(
     """Save draft under the write gate.
 
     Increments ``draft_revision`` only when DRAFT content changes. Identical
-    payload/schema/codes leave the revision (and preview marker) intact so a
-    pre-publish save after an unchanged preview does not force re-preview.
+    payload/schema/codes leave the revision (and preview marker) intact, skip
+    ``DOCUMENT_DRAFT_SAVED`` / lock-refresh audit and avoid bumping
+    ``updated_at``, while still recording request-id keys and refreshing
+    ``locked_at`` so autosave does not flood the audit trail.
     """
     from apps.medical.services import (
+        SAVE_DRAFT_INTENT_AMEND,
         check_doctor_document_access,
         save_draft_document_version,
     )
@@ -266,6 +270,39 @@ def mutate_doctor_save_draft(
     )
 
     base_revision = doc.draft_revision
+
+    # Identical content: keep revision/preview markers, skip DOCUMENT_DRAFT_SAVED
+    # and document ``updated_at`` (autosave would otherwise flood audit + timestamps).
+    # Still record request-id idempotency keys and refresh ``locked_at``.
+    if content_unchanged:
+        assert existing_draft is not None
+        if (
+            doc.status == MedicalDocStatus.PUBLISHED
+            and intent != SAVE_DRAFT_INTENT_AMEND
+        ):
+            raise DomainError(
+                domain_message("other.api.amend_intent_required"),
+                api_message_key="other.api.amend_intent_required",
+            )
+        doc.last_draft_request_id = draft_save_request_id
+        doc.last_draft_request_base_revision = base_revision
+        doc.last_draft_request_result_revision = base_revision
+        doc.locked_at = now
+        doc.save(
+            update_fields=[
+                "last_draft_request_id",
+                "last_draft_request_base_revision",
+                "last_draft_request_result_revision",
+                "locked_at",
+            ]
+        )
+        return DraftMutationResult(
+            version=existing_draft,
+            document=doc,
+            draft_revision=base_revision,
+            replayed=False,
+        )
+
     version = save_draft_document_version(
         medical_document_id=medical_document_id,
         updated_by_user_id=doctor.id,
@@ -276,7 +313,7 @@ def mutate_doctor_save_draft(
         intent=intent,
     )
     doc.refresh_from_db()
-    result_revision = base_revision if content_unchanged else base_revision + 1
+    result_revision = base_revision + 1
     doc.draft_revision = result_revision
     doc.last_draft_request_id = draft_save_request_id
     doc.last_draft_request_base_revision = base_revision

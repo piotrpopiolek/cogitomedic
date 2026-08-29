@@ -245,6 +245,16 @@ class WriteGateServiceTests(ServicesCoverageBase):
             medical_payload=payload,
         )
         self.assertEqual(first.draft_revision, 1)
+        doc.refresh_from_db()
+        updated_at_after_first = doc.updated_at
+        draft_saved_after_first = AuditEvent.objects.filter(
+            event_type="DOCUMENT_DRAFT_SAVED",
+            medical_document_id=doc.id,
+        ).count()
+        lock_refresh_after_first = AuditEvent.objects.filter(
+            event_type="DOCUMENT_LOCK_REFRESHED_ON_SAVE",
+            medical_document_id=doc.id,
+        ).count()
 
         second = mutate_doctor_save_draft(
             medical_document_id=doc.id,
@@ -259,6 +269,21 @@ class WriteGateServiceTests(ServicesCoverageBase):
         self.assertEqual(second.draft_revision, 1)
         doc.refresh_from_db()
         self.assertEqual(doc.draft_revision, 1)
+        self.assertEqual(doc.updated_at, updated_at_after_first)
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="DOCUMENT_DRAFT_SAVED",
+                medical_document_id=doc.id,
+            ).count(),
+            draft_saved_after_first,
+        )
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="DOCUMENT_LOCK_REFRESHED_ON_SAVE",
+                medical_document_id=doc.id,
+            ).count(),
+            lock_refresh_after_first,
+        )
 
     def test_publish_after_preview_survives_noop_pre_publish_save(self) -> None:
         """Regression: pre-publish PUT with unchanged payload must not stale preview."""
@@ -416,6 +441,15 @@ class WriteGateApiTests(WriteGateServiceTests):
         """Gate failure must not emit MEDICAL_DOCUMENT_PDF_PREVIEWED."""
         doc, sess = self._make_locked_draft()
         mid = str(doc.id)
+        saved = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=sess["draft_revision"],
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(),
+        )
         before = AuditEvent.objects.filter(
             event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
             medical_document_id=doc.id,
@@ -433,14 +467,13 @@ class WriteGateApiTests(WriteGateServiceTests):
             medical_document_id=doc.id,
         ).count()
         self.assertEqual(after, before)
-        # Successful gated preview still audits once.
         with patch(
             "apps.medical.api_views.build_merged_preview_pdf_bytes",
             return_value=(b"%PDF-1.4", None),
         ):
             ok = self.client.get(
                 f"/api/v1/medical-documents/{mid}/preview-pdf"
-                f"?source=draft&expected_draft_revision={sess['draft_revision']}",
+                f"?source=draft&expected_draft_revision={saved.draft_revision}",
                 HTTP_X_EDIT_SESSION_TOKEN=str(sess["edit_session_token"]),
             )
         self.assertEqual(ok.status_code, 200, ok.content)

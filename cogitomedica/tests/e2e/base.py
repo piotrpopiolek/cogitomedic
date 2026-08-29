@@ -179,6 +179,18 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
         page.wait_for_selector("#revision-modal:not(.hidden)", timeout=15_000)
         page.click("#revision-modal-confirm")
 
+    def discard_pending_revision(self, page: Page) -> dict:
+        page.wait_for_selector("#btn-discard-revision:not([disabled])", timeout=20_000)
+        with page.expect_response(
+            lambda r: "/discard-revision" in r.url
+            and r.request.method == "POST"
+            and r.ok,
+            timeout=45_000,
+        ) as info:
+            page.click("#btn-discard-revision")
+            self.confirm_revision_modal(page)
+        return info.value.json()
+
     def start_amend_revision(self, page: Page) -> dict:
         page.wait_for_selector("#btn-start-revision", timeout=20_000)
         with page.expect_response(
