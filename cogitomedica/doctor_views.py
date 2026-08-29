@@ -10,6 +10,7 @@ UI strings and error messages use the ``doctor`` translation category (see
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 from uuid import UUID
 
@@ -906,6 +907,9 @@ def doctor_document_detail_view(
         "befundReadOnly": befund_readonly,
         "staffUserId": str(request.user.id),
     }
+    autosave_ms_raw = os.environ.get("E2E_AUTOSAVE_MS", "").strip()
+    if autosave_ms_raw.isdigit():
+        panel_data["autosaveIntervalMs"] = int(autosave_ms_raw)
     return _render_doctor(
         request,
         "doctor/detail.html",

@@ -118,7 +118,7 @@ jobs:
         run: python manage.py check_translations_completeness
 
       - name: Run pytest (coverage gate from pyproject)
-        run: python -m pytest -q --tb=short --cov --cov-report=xml --cov-report=term-missing
+        run: python -m pytest -q --tb=short -m "not e2e" --cov --cov-report=xml --cov-report=term-missing
         timeout-minutes: 30
 
       - name: Mutmut smoke (name_normalize pilot)
@@ -133,6 +133,104 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+          retention-days: 7
+
+  e2e-playwright:
+    name: E2E Playwright (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, msedge]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cogitomedica
+          POSTGRES_USER: cogito_user
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SECRET_KEY: ci-secret-key-for-testing-only
+      DB_NAME: cogitomedica
+      DB_USER: cogito_user
+      DB_PASSWORD: ci-password
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_TIME_ZONE: Europe/Warsaw
+      PROMETHEUS_METRICS_TOKEN: ci-metrics-token
+      PATIENT_RESULTS_BASE_URL: http://localhost:8000
+      PATIENT_RESULTS_OTP_PEPPER: ci-test-pepper
+      SMSAPI_USE_MOCK: "1"
+      HIDRIVE_USE_MOCK: "1"
+      CAPTCHA_VERIFY_SKIP: "1"
+      E2E_BROWSER: ${{ matrix.browser }}
+      E2E_AUTOSAVE_MS: "2000"
+      E2E_HEADLESS: "1"
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system dependencies (WeasyPrint + gettext + libpq)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2 \
+            libglib2.0-0 \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libgdk-pixbuf-2.0-0 \
+            libffi-dev \
+            shared-mime-info \
+            fonts-dejavu-core \
+            libpq-dev \
+            gettext
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ matrix.browser }}-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Migrate
+        run: python manage.py migrate
+
+      - name: Load default translations
+        run: python manage.py load_default_translations
+
+      - name: Run Playwright E2E
+        run: python -m pytest cogitomedica/tests/e2e/ -q --tb=short -m e2e
+
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-${{ matrix.browser }}
+          path: artifacts/e2e/
+          if-no-files-found: ignore
           retention-days: 7
 
   docker-build:

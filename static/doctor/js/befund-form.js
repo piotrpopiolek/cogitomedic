@@ -513,7 +513,10 @@
   var lastSuccessfulSaveAt = null;
   var sessionReady = false;
   var editBlocked = false;
-  var AUTOSAVE_MS = 10 * 60 * 1000;
+  var AUTOSAVE_MS =
+    typeof PANEL.autosaveIntervalMs === "number" && PANEL.autosaveIntervalMs > 0
+      ? PANEL.autosaveIntervalMs
+      : 10 * 60 * 1000;
   var autosaveTimerId = null;
   var editBroadcast = null;
 

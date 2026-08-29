@@ -52,11 +52,9 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
 
     def test_autosave_constant(self) -> None:
         src = self._js_source()
-        has_label = "AUTOSAVE" in src
-        has_ms = "600000" in src
-        self.assertTrue(
-            has_label or has_ms, "Expected AUTOSAVE_MS constant or 600000 literal"
-        )
+        self.assertIn("AUTOSAVE_MS", src)
+        self.assertIn("autosaveIntervalMs", src)
+        self.assertIn("10 * 60 * 1000", src)
 
     def test_reclaim_support(self) -> None:
         src = self._js_source()
