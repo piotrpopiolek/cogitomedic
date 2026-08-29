@@ -12,7 +12,10 @@ from django.utils import timezone
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
-from apps.medical.edit_session import EditSessionResponseError, start_doctor_edit_session
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    start_doctor_edit_session,
+)
 from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.medical.write_gate import (
@@ -173,8 +176,7 @@ class WriteGateServiceTests(ServicesCoverageBase):
     def test_expired_lock_returns_edit_session_expired(self) -> None:
         doc, sess = self._make_locked_draft()
         MedicalDocument.objects.filter(pk=doc.pk).update(
-            locked_at=timezone.now()
-            - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
+            locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
         )
         with self.assertRaises(EditSessionResponseError) as ctx:
             mutate_doctor_save_draft(
