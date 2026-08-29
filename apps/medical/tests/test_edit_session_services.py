@@ -16,7 +16,12 @@ from apps.medical.edit_session import (
     start_doctor_edit_session,
 )
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import MedicalDocStatus, MedicalDocument, DocVersionStatus, MedicalDocumentVersion
+from apps.medical.models import (
+    MedicalDocStatus,
+    MedicalDocument,
+    DocVersionStatus,
+    MedicalDocumentVersion,
+)
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.operations.models import AuditEvent
 from apps.reception.models import PatientFormSession, QueueEntryStatus
@@ -24,7 +29,7 @@ from apps.users.models import StaffUser
 from django.test import Client
 
 
-class EditSessionTestMixin:
+class EditSessionTestMixin(ServicesCoverageBase):
     def _make_isolated_draft_doc(self) -> MedicalDocument:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),
@@ -62,7 +67,7 @@ class EditSessionTestMixin:
         return user
 
 
-class StartDoctorEditSessionTests(EditSessionTestMixin, ServicesCoverageBase):
+class StartDoctorEditSessionTests(EditSessionTestMixin):
     def test_acquire_free_lock_issues_token(self) -> None:
         doc = self._make_isolated_draft_doc()
         result = start_doctor_edit_session(
@@ -311,7 +316,7 @@ class StartDoctorEditSessionTests(EditSessionTestMixin, ServicesCoverageBase):
         self.assertEqual(after, before + 1)
 
 
-class EditSessionApiTests(EditSessionTestMixin, ServicesCoverageBase):
+class EditSessionApiTests(EditSessionTestMixin):
     def setUp(self):
         super().setUp()
         self.client.force_login(self.doctor)

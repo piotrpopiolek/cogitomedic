@@ -42,9 +42,7 @@ def doctor_befund_edit_lock_applies(doc: MedicalDocument) -> bool:
         return False
     if doc.status == MedicalDocStatus.DRAFT:
         return True
-    return (
-        doc.status == MedicalDocStatus.PUBLISHED and bool(doc.has_pending_revision)
-    )
+    return doc.status == MedicalDocStatus.PUBLISHED and bool(doc.has_pending_revision)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +150,9 @@ def list_doctor_active_lock_summaries(
     return summaries
 
 
-def _effective_lock_holder_id(doc: MedicalDocument, *, now: datetime) -> uuid.UUID | None:
+def _effective_lock_holder_id(
+    doc: MedicalDocument, *, now: datetime
+) -> uuid.UUID | None:
     if not doc.locked_by_user_id or not doc.locked_at:
         return None
     if doc.locked_at < _lock_cutoff(now=now):
@@ -360,7 +360,9 @@ def start_doctor_edit_session(
     doc.save(update_fields=_session_lock_update_fields())
 
     event_type = (
-        "DOCUMENT_LOCK_EXPIRED_REPLACED" if had_expired_lock else "DOCUMENT_LOCK_ACQUIRED"
+        "DOCUMENT_LOCK_EXPIRED_REPLACED"
+        if had_expired_lock
+        else "DOCUMENT_LOCK_ACQUIRED"
     )
     _audit_edit_session_event(
         event_type=event_type,
@@ -396,9 +398,7 @@ def _reclaim_edit_session(
     doc.last_previewed_draft_revision = None
     doc.save(update_fields=_session_lock_update_fields(include_holder=False))
 
-    previous_prefix = (
-        str(previous_token)[:8] if previous_token is not None else None
-    )
+    previous_prefix = str(previous_token)[:8] if previous_token is not None else None
     _audit_edit_session_event(
         event_type="DOCUMENT_LOCK_RECLAIMED",
         doc=doc,

@@ -1250,15 +1250,15 @@ class MedicalApiTests(TestCase):
         draft_missing_doc = self.client.put(
             f"/api/v1/medical-documents/{missing_doc_id}/draft",
             data=json.dumps(
-                self._draft_session_body(
-                    {"schema_version": 1}, session=fake_session
-                )
+                self._draft_session_body({"schema_version": 1}, session=fake_session)
             ),
             content_type="application/json",
         )
         self.assertEqual(draft_missing_doc.status_code, 404)
 
-        publish_missing_doc = self._publish_with_session(str(missing_doc_id), fake_session)
+        publish_missing_doc = self._publish_with_session(
+            str(missing_doc_id), fake_session
+        )
         self.assertEqual(publish_missing_doc.status_code, 404)
 
     def test_retry_processing_endpoint_allows_admin_and_rejects_doctor(self) -> None:
@@ -2970,7 +2970,9 @@ class DoctorRbacIdorMatrixTests(MedicalApiTests):
         # Doctor B is not the lock holder → 423.
         self.assertEqual(draft.status_code, 423)
 
-    def test_doctor_b_sees_shared_revision_but_draft_without_lock_returns_423(self) -> None:
+    def test_doctor_b_sees_shared_revision_but_draft_without_lock_returns_423(
+        self,
+    ) -> None:
         """P2: published + pending revision is shared work, but writes need holder."""
         mid = self._publish_as_doctor_a()
         self.client.force_login(self.doctor_user)

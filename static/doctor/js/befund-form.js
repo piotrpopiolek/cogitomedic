@@ -744,7 +744,7 @@
           if (res.status === 409 && errorKey === "doctor_lock_limit_reached") {
             var msg = UI.msgDoctorLockLimit;
             if (json && json.locked_documents && json.locked_documents.length) {
-              msg += " " + json.locked_documents.map(function (d) { return d.title || d.id; }).join(", ");
+              msg += " " + json.locked_documents.map(function (d) { return d.patient_display || d.id; }).join(", ");
             }
             alertMsg("warning", msg);
             return;

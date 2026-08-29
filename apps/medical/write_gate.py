@@ -108,7 +108,9 @@ def assert_active_doctor_edit_session(
     Does not auto-acquire or silently refresh an expired lock.
     """
     doctor = _assert_doctor_actor(user)
-    if not is_doctor_befund_source_type(doc) or not doctor_befund_edit_lock_applies(doc):
+    if not is_doctor_befund_source_type(doc) or not doctor_befund_edit_lock_applies(
+        doc
+    ):
         raise DomainError(
             domain_message("other.domain.edit_session_document_read_only"),
             api_message_key="other.domain.edit_session_document_read_only",
@@ -142,7 +144,9 @@ def assert_active_doctor_edit_session(
     return doctor
 
 
-def _refresh_lock_on_mutation(doc: MedicalDocument, *, now: datetime, doctor: StaffUser) -> None:
+def _refresh_lock_on_mutation(
+    doc: MedicalDocument, *, now: datetime, doctor: StaffUser
+) -> None:
     doc.locked_at = now
     doc.save(update_fields=["locked_at", "updated_at"])
     _audit_edit_session_event(
@@ -215,7 +219,9 @@ def mutate_doctor_save_draft(
                     domain_message("other.api.no_draft_before_publish"),
                     api_message_key="other.api.no_draft_before_publish",
                 )
-            result_rev = int(doc.last_draft_request_result_revision or doc.draft_revision)
+            result_rev = int(
+                doc.last_draft_request_result_revision or doc.draft_revision
+            )
             return DraftMutationResult(
                 version=version,
                 document=doc,
@@ -429,9 +435,7 @@ def mark_doctor_draft_previewed(
     )
     doc.last_previewed_draft_revision = doc.draft_revision
     doc.locked_at = now
-    doc.save(
-        update_fields=["last_previewed_draft_revision", "locked_at", "updated_at"]
-    )
+    doc.save(update_fields=["last_previewed_draft_revision", "locked_at", "updated_at"])
     return doc
 
 

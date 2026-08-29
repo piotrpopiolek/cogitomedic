@@ -195,9 +195,7 @@ def _document_is_doctor_shared_work(doc: MedicalDocument) -> bool:
     return bool(doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision)
 
 
-def user_may_start_amend_revision(
-    doc: MedicalDocument, user_id: uuid.UUID
-) -> bool:
+def user_may_start_amend_revision(doc: MedicalDocument, user_id: uuid.UUID) -> bool:
     """Whether a doctor may start a pending revision on clean PUBLISHED."""
     return _user_is_publisher_of_record_version(doc, user_id)
 
@@ -275,8 +273,6 @@ def _audit_queue_entry_access_denied(
             "client_ip": audit_context.client_ip if audit_context else None,
         },
     )
-
-
 
 
 def _assert_staff_user_may_publish_medical_document(*, actor: StaffUser) -> None:
@@ -3049,10 +3045,7 @@ def _serialize_doctor_work_queue_row(
         doc
         and (
             doc.status == MedicalDocStatus.DRAFT
-            or (
-                doc.status == MedicalDocStatus.PUBLISHED
-                and doc.has_pending_revision
-            )
+            or (doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision)
         )
     )
     # Doctor list row tint: yellow = active edit lock on DRAFT or open revision.
@@ -3061,7 +3054,7 @@ def _serialize_doctor_work_queue_row(
     # last draft editor so stale ENTWURF rows are not "ownerless".
     editor_activity: str | None = None
     editor_username: str | None = None
-    if row_has_open_befund_edit:
+    if row_has_open_befund_edit and doc is not None:
         if locked_eff and locked_name:
             editor_activity = "active"
             editor_username = locked_name

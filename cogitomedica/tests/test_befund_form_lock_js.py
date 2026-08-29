@@ -54,7 +54,9 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
         src = self._js_source()
         has_label = "AUTOSAVE" in src
         has_ms = "600000" in src
-        self.assertTrue(has_label or has_ms, "Expected AUTOSAVE_MS constant or 600000 literal")
+        self.assertTrue(
+            has_label or has_ms, "Expected AUTOSAVE_MS constant or 600000 literal"
+        )
 
     def test_reclaim_support(self) -> None:
         src = self._js_source()
@@ -64,7 +66,9 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
         src = self._js_source()
         has_bc = "BroadcastChannel" in src
         has_locks = "navigator.locks" in src
-        self.assertTrue(has_bc or has_locks, "Expected BroadcastChannel or navigator.locks")
+        self.assertTrue(
+            has_bc or has_locks, "Expected BroadcastChannel or navigator.locks"
+        )
 
     # ── Dirty warning kept but no unlock ───────────────────────────────
 
