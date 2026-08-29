@@ -56,7 +56,6 @@ from apps.medical.services import (
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
-    save_draft_document_version,
     upload_external_pdf_to_incoming,
     work_queue_row_outbound_complete,
 )

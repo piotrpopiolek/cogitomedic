@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,6 +38,51 @@ class DraftMutationResult:
     document: MedicalDocument
     draft_revision: int
     replayed: bool
+
+
+def _draft_content_fingerprint(
+    *,
+    medical_payload_schema_version: int,
+    medical_payload: dict[str, Any] | None,
+    diagnosis_code: str | None,
+    procedure_code: str | None,
+) -> tuple[int, str, str | None, str | None]:
+    """Canonical snapshot of draft fields that affect publish preview freshness."""
+    payload = medical_payload if isinstance(medical_payload, dict) else {}
+    return (
+        int(medical_payload_schema_version),
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+        diagnosis_code or None,
+        procedure_code or None,
+    )
+
+
+def _existing_draft_content_matches(
+    existing: MedicalDocumentVersion | None,
+    *,
+    medical_payload_schema_version: int,
+    medical_payload: dict[str, Any],
+    diagnosis_code: str | None,
+    procedure_code: str | None,
+) -> bool:
+    """True when an in-place DRAFT update would not change preview-relevant content."""
+    if existing is None or existing.version_status != DocVersionStatus.DRAFT:
+        return False
+    return _draft_content_fingerprint(
+        medical_payload_schema_version=existing.medical_payload_schema_version,
+        medical_payload=(
+            existing.medical_payload
+            if isinstance(existing.medical_payload, dict)
+            else {}
+        ),
+        diagnosis_code=existing.diagnosis_code,
+        procedure_code=existing.procedure_code,
+    ) == _draft_content_fingerprint(
+        medical_payload_schema_version=medical_payload_schema_version,
+        medical_payload=medical_payload,
+        diagnosis_code=diagnosis_code,
+        procedure_code=procedure_code,
+    )
 
 
 def _raise_locked_by_other(holder_id: uuid.UUID) -> None:
@@ -124,7 +170,12 @@ def mutate_doctor_save_draft(
     procedure_code: str | None = None,
     intent: str = "edit",
 ) -> DraftMutationResult:
-    """Save draft under the write gate; increments ``draft_revision`` on new saves."""
+    """Save draft under the write gate.
+
+    Increments ``draft_revision`` only when DRAFT content changes. Identical
+    payload/schema/codes leave the revision (and preview marker) intact so a
+    pre-publish save after an unchanged preview does not force re-preview.
+    """
     from apps.medical.services import (
         check_doctor_document_access,
         save_draft_document_version,
@@ -185,6 +236,23 @@ def mutate_doctor_save_draft(
         require_revision=expected_draft_revision,
     )
 
+    existing_draft = (
+        MedicalDocumentVersion.objects.select_for_update()
+        .filter(
+            medical_document_id=doc.id,
+            version_status=DocVersionStatus.DRAFT,
+        )
+        .order_by("-version_no")
+        .first()
+    )
+    content_unchanged = _existing_draft_content_matches(
+        existing_draft,
+        medical_payload_schema_version=medical_payload_schema_version,
+        medical_payload=medical_payload,
+        diagnosis_code=diagnosis_code,
+        procedure_code=procedure_code,
+    )
+
     base_revision = doc.draft_revision
     version = save_draft_document_version(
         medical_document_id=medical_document_id,
@@ -196,10 +264,11 @@ def mutate_doctor_save_draft(
         intent=intent,
     )
     doc.refresh_from_db()
-    doc.draft_revision = base_revision + 1
+    result_revision = base_revision if content_unchanged else base_revision + 1
+    doc.draft_revision = result_revision
     doc.last_draft_request_id = draft_save_request_id
     doc.last_draft_request_base_revision = base_revision
-    doc.last_draft_request_result_revision = doc.draft_revision
+    doc.last_draft_request_result_revision = result_revision
     doc.save(
         update_fields=[
             "draft_revision",

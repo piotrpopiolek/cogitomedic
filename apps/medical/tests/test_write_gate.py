@@ -13,7 +13,7 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
 from apps.medical.edit_session import EditSessionResponseError, start_doctor_edit_session
-from apps.medical.models import MedicalDocStatus, MedicalDocument, MedicalDocumentVersion
+from apps.medical.models import MedicalDocStatus, MedicalDocument
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.medical.write_gate import (
     mark_doctor_draft_previewed,
@@ -228,6 +228,111 @@ class WriteGateServiceTests(ServicesCoverageBase):
         doc.refresh_from_db()
         self.assertIsNone(doc.edit_session_token)
         self.assertIsNone(doc.locked_by_user_id)
+
+    def test_identical_payload_does_not_bump_draft_revision(self) -> None:
+        doc, sess = self._make_locked_draft()
+        payload = self._payload(note="stable")
+        first = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=0,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=payload,
+        )
+        self.assertEqual(first.draft_revision, 1)
+
+        second = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=1,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=dict(payload),
+        )
+        self.assertFalse(second.replayed)
+        self.assertEqual(second.draft_revision, 1)
+        doc.refresh_from_db()
+        self.assertEqual(doc.draft_revision, 1)
+
+    def test_publish_after_preview_survives_noop_pre_publish_save(self) -> None:
+        """Regression: pre-publish PUT with unchanged payload must not stale preview."""
+        doc, sess = self._make_locked_draft()
+        payload = self._payload(note="preview-ok")
+        saved = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=0,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=payload,
+        )
+        mark_doctor_draft_previewed(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=saved.draft_revision,
+        )
+        noop = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=saved.draft_revision,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=dict(payload),
+        )
+        self.assertEqual(noop.draft_revision, saved.draft_revision)
+        published = mutate_doctor_publish(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=noop.draft_revision,
+            publish_request_id=uuid.uuid4(),
+            publish_locale="de-DE",
+        )
+        self.assertEqual(published.version_status, "PUBLISHED")
+
+    def test_changed_payload_after_preview_still_stales_publish(self) -> None:
+        doc, sess = self._make_locked_draft()
+        saved = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=0,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(note="before"),
+        )
+        mark_doctor_draft_previewed(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=saved.draft_revision,
+        )
+        changed = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess["edit_session_token"],
+            expected_draft_revision=saved.draft_revision,
+            draft_save_request_id=uuid.uuid4(),
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(note="after"),
+        )
+        self.assertEqual(changed.draft_revision, saved.draft_revision + 1)
+        with self.assertRaises(EditSessionResponseError) as ctx:
+            mutate_doctor_publish(
+                medical_document_id=doc.id,
+                user=self.doctor,
+                edit_session_token=sess["edit_session_token"],
+                expected_draft_revision=changed.draft_revision,
+                publish_request_id=uuid.uuid4(),
+                publish_locale="de-DE",
+            )
+        self.assertEqual(ctx.exception.error_key, "publish_preview_revision_stale")
 
 
 class WriteGateApiTests(WriteGateServiceTests):

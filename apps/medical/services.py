@@ -43,7 +43,6 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.medical.constants import (
     DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
-    DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
     EXTERNAL_UPLOAD_MAX_BYTES,
     PAPER_INTAKE_AUTH_REASON_MAX_LEN,
@@ -71,8 +70,6 @@ from apps.medical.edit_session import (
     EditSessionResponseError,
     _effective_lock_holder_id,
     doctor_befund_edit_lock_applies,
-    document_locked_by_other_for_user,
-    is_doctor_befund_source_type,
     release_doctor_edit_session_lock,
     start_doctor_edit_session,
 )
