@@ -222,6 +222,12 @@ def mutate_doctor_save_draft(
             result_rev = int(
                 doc.last_draft_request_result_revision or doc.draft_revision
             )
+            try:
+                from apps.operations.prom_metrics import record_draft_idempotency_replay
+
+                record_draft_idempotency_replay()
+            except Exception:
+                pass
             return DraftMutationResult(
                 version=version,
                 document=doc,
@@ -364,6 +370,16 @@ def mutate_doctor_publish(
         resend_sms=resend_sms,
         now=now,
     )
+    _audit_edit_session_event(
+        event_type="DOCUMENT_LOCK_RELEASED",
+        doc=doc,
+        actor_user_id=doctor.id,
+        metadata={
+            "reason": "publish",
+            "draft_revision": expected_draft_revision,
+            "publish_request_id_prefix": str(publish_request_id)[:8],
+        },
+    )
     return version
 
 
@@ -396,10 +412,20 @@ def mutate_doctor_discard_revision(
         now=now,
         require_revision=expected_draft_revision,
     )
-    return discard_pending_revision(
+    result = discard_pending_revision(
         medical_document_id=medical_document_id,
         actor_user_id=doctor.id,
     )
+    _audit_edit_session_event(
+        event_type="DOCUMENT_LOCK_RELEASED",
+        doc=doc,
+        actor_user_id=doctor.id,
+        metadata={
+            "reason": "discard_revision",
+            "draft_revision": expected_draft_revision,
+        },
+    )
+    return result
 
 
 @transaction.atomic

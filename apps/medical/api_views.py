@@ -92,7 +92,6 @@ from apps.medical.services import (
     list_doctor_work_queue,
     parse_doctor_work_queue_list_params,
     publish_external_upload_version,
-    release_document_lock,
     revoke_document_version,
     revoke_paper_intake_authorization,
     retry_latest_document_processing,
@@ -1244,42 +1243,21 @@ def medical_document_edit_session_view(
 def medical_document_unlock_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    """POST: release edit lock (session holder or admin). Used on page unload from doctor panel."""
-    role_error = require_user_role(
-        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
-    )
-    if role_error:
-        return role_error
+    """POST: retired. Edit locks are released only by publish, discard, or TTL."""
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
-    try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
-            id=medical_document_id
-        )
-        check_doctor_document_access(
-            doc, request.user, audit_context=_doctor_access_audit_context(request)
-        )
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
-    try:
-        released = release_document_lock(
-            medical_document_id=medical_document_id, user=request.user
-        )
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
-    if not released:
-        return JsonResponse(
-            {
-                "released": False,
-                "error": resolve_other_message(
-                    request,
-                    "doctor.document_unlock_forbidden",
-                    "You cannot release this document lock.",
-                ),
-            },
-            status=403,
-        )
-    return JsonResponse({"released": True}, status=200)
+    return JsonResponse(
+        {
+            "error_key": "other.api.unlock_gone",
+            "error": resolve_other_message(
+                request,
+                "other.api.unlock_gone",
+                "Document unlock via API is no longer available. "
+                "Locks clear on publish, discard-revision, or TTL expiry.",
+            ),
+        },
+        status=410,
+    )
 
 
 @require_auth

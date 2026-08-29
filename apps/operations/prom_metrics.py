@@ -78,6 +78,30 @@ IMPORT_BATCH_DURATION = Histogram(
     registry=_registry,
 )
 
+BEFUND_EDIT_CONFLICTS = Counter(
+    "cogitomedica_befund_edit_conflicts_total",
+    "Doctor Befund edit-session / write-gate denials (no document or user ids).",
+    labelnames=["reason"],
+    registry=_registry,
+)
+
+DRAFT_IDEMPOTENCY_REPLAYS = Counter(
+    "cogitomedica_draft_idempotency_replays_total",
+    "Successful draft save replays for the same draft_save_request_id + base revision.",
+    labelnames=[],
+    registry=_registry,
+)
+
+
+def record_befund_edit_conflict(*, reason: str) -> None:
+    """Increment conflict counter; ``reason`` must be a stable short key (no PHI)."""
+    key = (reason or "unknown").strip()[:64] or "unknown"
+    BEFUND_EDIT_CONFLICTS.labels(reason=key).inc()
+
+
+def record_draft_idempotency_replay() -> None:
+    DRAFT_IDEMPOTENCY_REPLAYS.inc()
+
 
 def record_outbox_execution(
     *,
@@ -388,6 +412,10 @@ def _collect_active_usage_gauges(now):
     yield g_active
 
     lock_since = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
+    from django.db.models import Q
+
+    from apps.medical.models import MedicalDocumentSourceType
+
     editing = (
         MedicalDocument.objects.filter(
             locked_by_user_id__isnull=False,
@@ -395,6 +423,14 @@ def _collect_active_usage_gauges(now):
             locked_at__gte=lock_since,
             locked_by_user__is_active=True,
             locked_by_user__groups__name=doctor_group,
+            source_type__in=(
+                MedicalDocumentSourceType.DIGITAL_INTAKE,
+                MedicalDocumentSourceType.PAPER_INTAKE,
+            ),
+        )
+        .filter(
+            Q(status="DRAFT")
+            | Q(status="PUBLISHED", has_pending_revision=True)
         )
         .values("locked_by_user_id")
         .distinct()

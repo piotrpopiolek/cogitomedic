@@ -6,7 +6,6 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import Client, TestCase
@@ -1333,7 +1332,7 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    def test_draft_423_when_locked_by_other_doctor_unlock_releases(self) -> None:
+    def test_draft_423_when_locked_by_other_doctor(self) -> None:
         other = StaffUser.objects.create_user(
             username="api-doc-lock-2",
             email="api.doc.lock2@example.com",
@@ -1388,19 +1387,6 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(blocked.status_code, 423)
         self.assertIn("locked_by_username", blocked.json())
-
-        self.client.force_login(self.doctor_user)
-        unlocked = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(unlocked.status_code, 200)
-        self.assertTrue(unlocked.json().get("released"))
-
-        self.client.force_login(other)
-        ok, _ = self._put_draft_with_session(mid, payload)
-        self.assertEqual(ok.status_code, 200)
 
     def test_draft_manager_cannot_bypass_lock_when_other_doctor_blocked(self) -> None:
         other = StaffUser.objects.create_user(
@@ -1566,14 +1552,7 @@ class MedicalApiTests(TestCase):
         self.assertIsNone(doc.locked_by_user_id)
         self.assertIsNone(doc.locked_at)
 
-    def test_unlock_returns_403_when_non_holder_non_admin(self) -> None:
-        other = StaffUser.objects.create_user(
-            username="api-doc-unlock-403",
-            email="api.doc.unlock403@example.com",
-            password="safe-password",
-            is_staff=True,
-        )
-        assign_group_to_test_user(other, "Doctor")
+    def test_unlock_returns_410_gone(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1589,24 +1568,28 @@ class MedicalApiTests(TestCase):
         MedicalDocument.objects.filter(id=mid).update(
             locked_by_user_id=self.doctor_user.id,
             locked_at=timezone.now(),
+            edit_session_token=uuid4(),
         )
-        self.client.force_login(other)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertFalse(resp.json()["released"])
-        self.assertIn("error", resp.json())
+        for user in (self.doctor_user, self.admin_user, self.reception_user):
+            self.client.force_login(user)
+            resp = self.client.post(
+                f"/api/v1/medical-documents/{mid}/unlock",
+                data=json.dumps({}),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 410, msg=f"role={user.username}")
+            self.assertEqual(resp.json().get("error_key"), "other.api.unlock_gone")
+        doc = MedicalDocument.objects.get(id=mid)
+        self.assertEqual(doc.locked_by_user_id, self.doctor_user.id)
 
-    def test_unlock_returns_404_for_missing_document(self) -> None:
+    def test_unlock_returns_410_for_missing_document(self) -> None:
         resp = self.client.post(
             f"/api/v1/medical-documents/{uuid4()}/unlock",
             data=json.dumps({}),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 410)
+        self.assertEqual(resp.json().get("error_key"), "other.api.unlock_gone")
 
     def test_unlock_returns_405_for_get(self) -> None:
         create_resp = self.client.post(
@@ -1622,51 +1605,6 @@ class MedicalApiTests(TestCase):
         mid = create_resp.json()["medical_document_id"]
         resp = self.client.get(f"/api/v1/medical-documents/{mid}/unlock")
         self.assertEqual(resp.status_code, 405)
-
-    def test_unlock_returns_403_for_reception_role(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        self.client.force_login(self.reception_user)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertIn("error", resp.json())
-
-    def test_unlock_returns_404_when_release_raises_not_found(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        with patch(
-            "apps.medical.api_views.release_document_lock",
-            side_effect=ObjectDoesNotExist(),
-        ):
-            resp = self.client.post(
-                f"/api/v1/medical-documents/{mid}/unlock",
-                data=json.dumps({}),
-                content_type="application/json",
-            )
-        self.assertEqual(resp.status_code, 404)
-        self.assertIn("error", resp.json())
 
     def test_admin_cannot_override_lock_on_draft_save(self) -> None:
         create_resp = self.client.post(
@@ -1776,31 +1714,6 @@ class MedicalApiTests(TestCase):
         resp = self._publish_with_session(mid, session)
         self.assertEqual(resp.status_code, 403)
 
-    def test_admin_cannot_unlock_another_users_lock(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=timezone.now(),
-        )
-        self.client.force_login(self.admin_user)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertFalse(resp.json().get("released"))
-
     def test_list_includes_lock_fields(self) -> None:
         self.client.post(
             "/api/v1/medical-documents",
@@ -1860,26 +1773,6 @@ class MedicalApiTests(TestCase):
         self.assertIn("locked_by_username", data)
         self.assertIn("locked_at", data)
         self.assertIsNone(data["locked_by_user_id"])
-
-    def test_unlock_on_already_unlocked_document(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.json()["released"])
 
     def test_draft_save_by_lock_holder_succeeds_and_refreshes(self) -> None:
         create_resp = self.client.post(
@@ -2884,7 +2777,7 @@ class DoctorRbacIdorMatrixTests(MedicalApiTests):
                 404,
             ),
             ("POST", f"/api/v1/medical-documents/{mid}/revoke", {}, 404),
-            ("POST", f"/api/v1/medical-documents/{mid}/unlock", {}, 404),
+            ("POST", f"/api/v1/medical-documents/{mid}/unlock", {}, 410),
             ("GET", f"/api/v1/medical-documents/{mid}/external-pdfs", None, 404),
             (
                 "GET",
