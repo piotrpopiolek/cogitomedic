@@ -77,6 +77,13 @@ class EditSessionResponseError(Exception):
         self.error_key = error_key
         self.http_status = http_status
         self.payload = payload or {}
+        if http_status in (409, 423):
+            try:
+                from apps.operations.prom_metrics import record_befund_edit_conflict
+
+                record_befund_edit_conflict(reason=error_key)
+            except Exception:
+                pass
 
 
 def _assert_doctor_actor(user: Any) -> StaffUser:

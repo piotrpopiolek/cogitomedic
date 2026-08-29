@@ -45,7 +45,7 @@ Tabela pokazuje m.in.:
 | Kolor | Znaczenie |
 | --- | --- |
 | **Zielony** | Dokument **opublikowany** i pipeline wychodzący zakończony (PDF / HiDrive / SMS). |
-| **Żółty** | Szkic (`ENTWURF`) z **aktywną blokadą edycji** — ktoś właśnie pracuje nad Befundem. W kolumnie Status widać chip **W edycji**; pod nazwiskiem pacjenta: **Edytuje: …** (także gdy to Ty). Przycisk **Otwórz** jest zablokowany tylko gdy edytuje **inna** osoba. |
+| **Żółty** | Szkic (`ENTWURF`) **lub** opublikowany dokument z **otwartą rewizją** i **aktywną blokadą edycji** — ktoś właśnie pracuje nad Befundem. W kolumnie Status widać chip **W edycji**; pod nazwiskiem pacjenta: **Edytuje: …** (także gdy to Ty). Przycisk **Otwórz** jest zablokowany tylko gdy edytuje **inna** osoba. |
 | **Różowy** | Wpis oczekuje na publikację (okno SLA) — im intensywniejszy odcień, tym bliżej limitu czasu. |
 
 Blokada edycji wygasa po ok. **6 godzinach** bezczynności. Po wygaśnięciu wiersz przestaje być żółty, ale przy szkicu nadal widać **Ostatnio edytował: …** (bez blokady otwarcia) — żeby zaległe ENTWURF nie wyglądały jak „niczyje”.
@@ -93,14 +93,15 @@ Gdy z przyczyn operacyjnych pacjent **nie** wypełnia ankiety na tablecie, a pra
 
 ## 3. Wypełnienie Befundu (krok po kroku)
 
-Przy wejściu do szkicu system zakłada **blokadę edycji** (semafor). Jeśli dokument edytuje inna osoba, zobaczysz komunikat i nie wejdziesz do edycji.
+Przy wejściu do edycji (szkic lub poprawka opublikowanego wyniku) panel lekarza zakłada **sesję edycji** z semaforem. Jeśli dokument edytuje inna osoba, zobaczysz komunikat i nie wejdziesz do edycji (ew. potwierdzenie przejęcia po wygaśnięciu / reclaim).
 
 **Co zwalnia blokadę**
 
-- Świadome wyjście: **Wróć do listy** / link panelu lekarza, **wylogowanie**, zmiana języka (nawigacja na listę), **udana publikacja**, przycisk **Wstecz** przeglądarki / zamknięcie karty (rzeczywiste opuszczenie strony).
-- Timeout serwerowy: ok. **6 godzin** (`DOCUMENT_LOCK_TIMEOUT_HOURS`) — porzucona sesja zwolni się sama.
+- **Udana publikacja** albo **odrzucenie rewizji** (discard).
+- Timeout serwerowy: ok. **6 godzin** (`DOCUMENT_LOCK_TIMEOUT_HOURS`) — porzucona sesja zwolni się sama (kolejny lekarz może wtedy przejąć dokument).
+- Świadome wyjście z formularza (**Wróć do listy**, wylogowanie, zamknięcie karty) **nie** wywołuje już `POST …/unlock` — semafor zostaje do publikacji/discard/TTL, żeby inne karty / bfcache nie „kradły” dokumentu.
 
-**Czego blokada nie robi:** przełączenie karty przeglądarki oraz przejście aplikacji w tło z **bfcache** (strona „zamrożona” w pamięci) **nie** oddaje semafora. Formularz w pamięci nadal „trzyma” dokument — druga osoba nie wejdzie w edycję, dopóki pierwsza świadomie nie wyjdzie, nie użyje Wstecz/zamknięcia karty, albo nie minie timeout. Przy niezapisanych zmianach przeglądarka może ostrzec przed opuszczeniem strony; anulowanie ostrzeżenia **nie** zwalnia blokady.
+**Czego blokada nie robi:** przełączenie karty przeglądarki oraz bfcache **nie** oddają semafora. Przy niezapisanych zmianach przeglądarka może ostrzec przed opuszczeniem strony. Admin/Manager widzą panel w trybie tylko do odczytu — nie startują sesji edycji ani nie publikują w imieniu lekarza.
 
 Szczegóły operacyjne: [SC-014](scenariusze.md#sc-014).
 

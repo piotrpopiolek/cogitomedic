@@ -1375,14 +1375,12 @@ COGITO_PATHS = {
         "put": {
             "summary": "Save draft",
             "description": (
-                "DOCTOR, ADMIN, or MANAGER. Persists Befund payload. For a document already in "
-                '**PUBLISHED** status, the client must send `"intent": "amend"` to start or '
-                "continue a revision; otherwise the API returns **409** with "
-                "`error_key` = `other.api.amend_intent_required`. While a revision is open, "
-                "the document row stays `PUBLISHED` and `has_pending_revision` is true until "
-                "publish or discard. Invalid `intent` strings (not `edit` or `amend`) yield **400** "
-                "with `error_key` = `other.api.invalid_save_draft_intent`. ADMIN and MANAGER "
-                "bypass the DRAFT edit-lock held by another user (same semantics as lock service)."
+                "**DOCTOR only.** Persists Befund payload under an active edit session "
+                "(`edit_session_token`, `expected_draft_revision`, `draft_save_request_id`). "
+                "Amend of a clean **PUBLISHED** document must start via "
+                "`POST …/edit-session` with `purpose=amend` (not via this PUT). "
+                "Successful saves increment `draft_revision`. Idempotent replay of the same "
+                "`draft_save_request_id` with the same base revision returns the prior result."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -1401,23 +1399,24 @@ COGITO_PATHS = {
                 "200": {
                     "description": (
                         "Saved version plus document revision flags (`document_status`, "
-                        "`has_pending_revision`, `published_version_no`)."
+                        "`has_pending_revision`, `published_version_no`, `draft_revision`)."
                     )
                 },
                 "400": {
                     "description": (
-                        "Validation or domain error; body includes `error` and usually `error_key` "
-                        "(e.g. `other.api.invalid_save_draft_intent`)."
+                        "Validation or domain error; body includes `error` and usually `error_key`."
                     ),
                     "content": {
                         "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
                     },
                 },
+                "403": {"description": "Caller is not a doctor"},
                 "404": {"description": "Not found"},
                 "409": {
                     "description": (
-                        "Published document requires explicit revision intent (`intent=amend`); "
-                        "`error_key` = `other.api.amend_intent_required`."
+                        "Optimistic concurrency / idempotency conflict "
+                        "(`draft_revision_conflict`, `draft_request_id_reused`, "
+                        "`other.api.amend_requires_edit_session`, …)."
                     ),
                     "content": {
                         "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
@@ -1425,8 +1424,9 @@ COGITO_PATHS = {
                 },
                 "423": {
                     "description": (
-                        "Edit lock held by another user (DRAFT document only); JSON includes "
-                        "`locked_by_username` (not the same shape as ApiLocalizedErrorBody)."
+                        "Edit session stale/expired or lock held by another doctor; "
+                        "JSON may include `locked_by_username` or `error_key` "
+                        "`edit_session_stale` / `edit_session_expired`."
                     )
                 },
             },
@@ -1436,10 +1436,11 @@ COGITO_PATHS = {
         "post": {
             "summary": "Discard pending revision",
             "description": (
-                "DOCTOR, ADMIN, or MANAGER. Deletes the latest **DRAFT** version on a **PUBLISHED** "
-                "document that has `has_pending_revision=true`, clears the flag, and clears the "
-                "edit lock. Returns **409** with `error_key` = `other.api.no_pending_revision_to_discard` "
-                "when there is nothing to discard."
+                "**DOCTOR only.** Requires active edit session (`edit_session_token`, "
+                "`expected_draft_revision`). Deletes the latest **DRAFT** version on a "
+                "**PUBLISHED** document with `has_pending_revision=true`, clears the flag "
+                "and the edit lock. Returns **409** with `error_key` = "
+                "`other.api.no_pending_revision_to_discard` when there is nothing to discard."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -1450,26 +1451,82 @@ COGITO_PATHS = {
                     "schema": {"type": "string", "format": "uuid"},
                 }
             ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
             "responses": {
                 "200": {
                     "description": "Pending revision discarded; document flags updated."
                 },
+                "403": {"description": "Caller is not a doctor"},
                 "404": {"description": "Medical document not found"},
                 "409": {
-                    "description": "No pending revision (`error_key`: `other.api.no_pending_revision_to_discard`).",
+                    "description": (
+                        "No pending revision or draft revision conflict "
+                        "(`other.api.no_pending_revision_to_discard`, "
+                        "`draft_revision_conflict`, …)."
+                    ),
                     "content": {
                         "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
                     },
+                },
+                "423": {
+                    "description": "Edit session stale/expired or lock held by another doctor."
+                },
+            },
+        },
+    },
+    f"{PREFIX}/medical-documents/{{medical_document_id}}/edit-session": {
+        "post": {
+            "summary": "Start, resume, or reclaim doctor edit session",
+            "description": (
+                "**DOCTOR only.** Acquires (or resumes) an edit lock with opaque "
+                "`edit_session_token`. Use `purpose=edit` for DRAFT and `purpose=amend` "
+                "to open a pending revision on clean PUBLISHED (atomic clone + lock). "
+                "Reclaim of another doctor's live session requires `reclaim_confirmed` "
+                "and matching `expected_edit_session_revision`. Max 3 active locks per doctor."
+            ),
+            "tags": ["Medical"],
+            "parameters": [
+                {
+                    "name": "medical_document_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "format": "uuid"},
+                }
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": {"type": "object"}}},
+            },
+            "responses": {
+                "200": {
+                    "description": (
+                        "`edit_session_token`, `edit_session_revision`, `draft_revision`, `mode`."
+                    )
+                },
+                "403": {"description": "Caller is not a doctor"},
+                "404": {"description": "Not found"},
+                "409": {
+                    "description": (
+                        "Reclaim confirmation required, lock limit, or conflict "
+                        "(`edit_session_reclaim_confirmation_required`, …)."
+                    )
+                },
+                "423": {
+                    "description": "Document locked by another doctor without reclaim."
                 },
             },
         },
     },
     f"{PREFIX}/medical-documents/{{medical_document_id}}/unlock": {
         "post": {
-            "summary": "Release edit lock",
+            "summary": "Release edit lock (retired)",
             "description": (
-                "Clears edit lock when the caller holds the lock or has ADMIN/MANAGER oversight. "
-                "Intended for page unload from the doctor panel."
+                "**Gone.** Hard cutover: edit locks are released only by publish, "
+                "discard-revision, or TTL expiry. Always returns **410** with "
+                "`error_key` = `other.api.unlock_gone` (any authenticated caller)."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -1481,9 +1538,13 @@ COGITO_PATHS = {
                 }
             ],
             "responses": {
-                "200": {"description": "released: true"},
-                "403": {"description": "Caller cannot release this lock"},
-                "404": {"description": "Not found"},
+                "410": {
+                    "description": "Endpoint retired (`other.api.unlock_gone`).",
+                    "content": {
+                        "application/json": {"schema": _API_LOCALIZED_ERROR_SCHEMA}
+                    },
+                },
+                "405": {"description": "Method not allowed (GET etc.)"},
             },
         },
     },
@@ -1491,8 +1552,11 @@ COGITO_PATHS = {
         "post": {
             "summary": "Publish document",
             "description": (
-                "**DOCTOR only.** Publishes the latest DRAFT (or completes a revision). "
-                "DRAFT edit-lock: only the lock holder may publish; ADMIN/MANAGER receive 403 on this endpoint."
+                "**DOCTOR only.** Publishes the latest DRAFT (or completes a revision) "
+                "under an active edit session (`edit_session_token`, `expected_draft_revision`, "
+                "`publish_request_id`). Requires a fresh draft preview "
+                "(`last_previewed_draft_revision == draft_revision`). "
+                "EXTERNAL_UPLOAD publish uses a separate request schema without edit-session fields."
             ),
             "tags": ["Medical"],
             "parameters": [
@@ -1513,10 +1577,16 @@ COGITO_PATHS = {
                 "403": {"description": "Caller is not a doctor"},
                 "404": {"description": "Not found"},
                 "409": {
-                    "description": "Idempotency conflict (e.g. publish_request_id reused with different publish_locale)"
+                    "description": (
+                        "Idempotency / preview / revision conflict "
+                        "(`publish_preview_revision_stale`, "
+                        "`other.api.publish_request_id_locale_conflict`, …)."
+                    )
                 },
                 "423": {
-                    "description": "Edit lock held by another user while document is DRAFT (same as PUT …/draft)."
+                    "description": (
+                        "Edit session stale/expired or lock held by another doctor."
+                    )
                 },
             },
         },

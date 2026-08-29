@@ -146,6 +146,10 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.template_not_found": "Template not found.",
     "other.api.too_many_requests": "Too many requests. Try again later.",
     "other.api.unauthorized": "Unauthorized.",
+    "other.api.unlock_gone": (
+        "Document unlock via API is no longer available. Locks clear on publish, "
+        "discard-revision, or TTL expiry."
+    ),
     "other.api.username_or_email_exists": "Username or email already exists.",
 }
 

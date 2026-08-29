@@ -479,6 +479,21 @@
     "en": "The selected external PDF is corrupt or empty; PDF generation cannot proceed.",
     "pl": "Wybrany zewnętrzny plik PDF jest uszkodzony lub pusty — generowanie PDF nie może być kontynuowane."
   },
+  "other.domain.medical_document_edit_doctor_role_required": {
+    "de": "Nur Ärzte können eine Befund-Bearbeitungssitzung starten oder speichern.",
+    "en": "Only doctors can start or mutate a Befund edit session.",
+    "pl": "Tylko lekarze mogą rozpocząć lub zapisywać sesję edycji Befundu."
+  },
+  "other.domain.edit_session_not_applicable": {
+    "de": "Für diesen Dokumenttyp ist keine Bearbeitungssitzung vorgesehen.",
+    "en": "Edit session does not apply to this document type.",
+    "pl": "Sesja edycji nie dotyczy tego typu dokumentu."
+  },
+  "other.domain.edit_session_document_read_only": {
+    "de": "Dieses Dokument ist derzeit schreibgeschützt. Starten Sie zuerst eine Bearbeitungssitzung.",
+    "en": "This document is read-only right now. Start an edit session first.",
+    "pl": "Ten dokument jest teraz tylko do odczytu. Najpierw rozpocznij sesję edycji."
+  },
   "other.domain.error": {
     "de": "Ein Fehler ist aufgetreten.",
     "en": "An error occurred.",
