@@ -207,5 +207,12 @@ yarn-error.log*
 # learning
 learning/
 
-# Local-only planning notes
-.ai/TODO.md
+# Local-only / not for public GitHub (RODO, ops, internal planning)
+_local_private/
+.ai/
+.cursor/plans/
+CogitoMedica Zalozenia.docx
+CogitoMedica-Zalozenia.md
+docs/SECURITY_AUDIT.md
+docs/runbooks/
+docs/observability-setup.md
