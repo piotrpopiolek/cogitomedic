@@ -398,9 +398,9 @@ def _pdf_signoff_footer_lines(
     """Mit freundlichen Grüßen + optionaler Titel + Vorname Nachname + Facharzt/Fachärztin + Teledermatologie.
 
     Specialty line: explicit ``FEMALE`` / ``MALE`` from ``StaffUser.gender``. If gender is still
-    ``UNSPECIFIED`` (legacy accounts), we use the **male** German line — Klaudia's spec avoids the
-    slash form ``Facharzt/-in`` on patient-facing PDFs; female doctors should set gender to
-    *Weiblich* in admin for ``Fachärztin``.
+    ``UNSPECIFIED`` (legacy accounts), we use the **male** German line — patient-facing PDFs
+    avoid the slash form ``Facharzt/-in``; female doctors should set gender to *Weiblich* in
+    admin for ``Fachärztin``.
     """
     signoff_name = (_staff_user_pdf_signoff_name(staff) or "").strip()
     if not signoff_name:
@@ -414,7 +414,7 @@ def _pdf_signoff_footer_lines(
     if gender_val == StaffUserGender.FEMALE:
         spec = (labels.get("specialty_female") or "").strip()
     else:
-        # MALE or UNSPECIFIED: same German wording as Klaudia for Antczak / Rubens et al.
+        # MALE or UNSPECIFIED: male specialty label (no Facharzt/-in slash form).
         spec = (labels.get("specialty_male") or "").strip()
     tele = (labels.get("teledermatology_line") or "").strip()
     greeting = (labels.get("signoff_greeting") or "").strip()

@@ -5,6 +5,8 @@
 .env.production
 .cursor
 .ai
+docs
+_local_private
 venv
 __pycache__
 *.pyc
