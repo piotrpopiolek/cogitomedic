@@ -52,7 +52,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
     """One Playwright browser per test class; fresh context per test."""
 
     host = "localhost"
-    password = "e2e-pass"
+    password = "x"
 
     playwright: Playwright
     browser: Browser

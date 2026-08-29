@@ -28,7 +28,7 @@ from apps.reception.models import (
 from apps.users.models import StaffUser
 
 
-def create_doctor(*, username: str, password: str = "e2e-pass") -> StaffUser:
+def create_doctor(*, username: str, password: str = "x") -> StaffUser:
     user = StaffUser.objects.create_user(
         username=username,
         email=f"{username}@example.com",

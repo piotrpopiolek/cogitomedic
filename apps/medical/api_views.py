@@ -900,28 +900,9 @@ def medical_document_preview_pdf_view(
             version, authoring_locale_override=authoring_locale_override
         )
 
-    audit_metadata = {
-        "client_ip": get_client_ip(request),
-        "version_no": version.version_no,
-        "source": source,
-        "document_status": doc.status,
-        "has_pending_revision": doc.has_pending_revision,
-        **assigned_doctor_audit_metadata(doc),
-    }
-    if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
-        audit_metadata["external_upload_raw_lab_preview"] = True
-
-    create_audit_event(
-        event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
-        actor_user_id=request.user.id,
-        patient_id=doc.queue_entry.patient_id,
-        medical_document_id=doc.id,
-        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
-        metadata=audit_metadata,
-    )
-
     # Doctor Befund draft preview: record last_previewed_draft_revision after PDF
-    # generation (short re-check under select_for_update).
+    # generation (short re-check under select_for_update). Audit only after this
+    # gate succeeds so failed token/revision checks do not emit PDF_PREVIEWED.
     if (
         getattr(request.user, "is_doctor", False)
         and is_doctor_befund_source_type(doc)
@@ -954,6 +935,26 @@ def medical_document_preview_pdf_view(
             return json_error("other.api.medical_document_not_found", status=404)
         except DomainError as exc:
             return json_domain_error(exc, status=400)
+
+    audit_metadata = {
+        "client_ip": get_client_ip(request),
+        "version_no": version.version_no,
+        "source": source,
+        "document_status": doc.status,
+        "has_pending_revision": doc.has_pending_revision,
+        **assigned_doctor_audit_metadata(doc),
+    }
+    if doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD:
+        audit_metadata["external_upload_raw_lab_preview"] = True
+
+    create_audit_event(
+        event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+        actor_user_id=request.user.id,
+        patient_id=doc.queue_entry.patient_id,
+        medical_document_id=doc.id,
+        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+        metadata=audit_metadata,
+    )
 
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     preview_filename = (

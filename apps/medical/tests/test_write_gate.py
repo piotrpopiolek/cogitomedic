@@ -23,6 +23,7 @@ from apps.medical.write_gate import (
     mutate_doctor_publish,
     mutate_doctor_save_draft,
 )
+from apps.operations.models import AuditEvent
 from apps.reception.models import PatientFormSession, QueueEntryStatus
 from apps.users.models import StaffUser
 
@@ -410,6 +411,46 @@ class WriteGateApiTests(WriteGateServiceTests):
             content_type="application/json",
         )
         self.assertEqual(publish.status_code, 200, publish.content)
+
+    def test_failed_draft_preview_gate_does_not_audit_previewed(self) -> None:
+        """Gate failure must not emit MEDICAL_DOCUMENT_PDF_PREVIEWED."""
+        doc, sess = self._make_locked_draft()
+        mid = str(doc.id)
+        before = AuditEvent.objects.filter(
+            event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+            medical_document_id=doc.id,
+        ).count()
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes",
+            return_value=(b"%PDF-1.4", None),
+        ):
+            preview = self.client.get(
+                f"/api/v1/medical-documents/{mid}/preview-pdf?source=draft",
+            )
+        self.assertEqual(preview.status_code, 423)
+        after = AuditEvent.objects.filter(
+            event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+            medical_document_id=doc.id,
+        ).count()
+        self.assertEqual(after, before)
+        # Successful gated preview still audits once.
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes",
+            return_value=(b"%PDF-1.4", None),
+        ):
+            ok = self.client.get(
+                f"/api/v1/medical-documents/{mid}/preview-pdf"
+                f"?source=draft&expected_draft_revision={sess['draft_revision']}",
+                HTTP_X_EDIT_SESSION_TOKEN=str(sess["edit_session_token"]),
+            )
+        self.assertEqual(ok.status_code, 200, ok.content)
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
+                medical_document_id=doc.id,
+            ).count(),
+            before + 1,
+        )
 
     def test_admin_cannot_put_draft(self) -> None:
         doc, sess = self._make_locked_draft()
