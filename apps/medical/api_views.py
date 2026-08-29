@@ -4,11 +4,9 @@ import logging
 from json import JSONDecodeError
 from pathlib import Path
 from uuid import UUID
-from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from pydantic import ValidationError
@@ -90,19 +88,14 @@ from apps.medical.services import (
     create_external_upload_pdf_and_bind_draft,
     create_medical_document_without_intake,
     create_or_get_medical_document,
-    discard_pending_revision,
-    get_document_lock_state,
     get_medical_document_context,
     list_doctor_work_queue,
     parse_doctor_work_queue_list_params,
-    publish_document_version,
     publish_external_upload_version,
-    refresh_document_lock,
     release_document_lock,
     revoke_document_version,
     revoke_paper_intake_authorization,
     retry_latest_document_processing,
-    save_draft_document_version,
     select_external_upload_attachment_for_draft,
     start_external_upload_revision,
 )
@@ -123,41 +116,6 @@ logger = logging.getLogger(__name__)
 
 _PREVIEW_FILENAME_BEFUND_MERGED = "Befund preview.pdf"
 _PREVIEW_FILENAME_LABORATORY_REPORT = "External preview.pdf"
-
-
-class _MedicalDocumentEditLocked(Exception):
-    """Raised inside ``transaction.atomic`` to roll back and return HTTP 423."""
-
-    __slots__ = ("locked_by_username",)
-
-    def __init__(self, locked_by_username: str | None) -> None:
-        super().__init__()
-        self.locked_by_username = locked_by_username
-
-
-def _ensure_befund_not_locked_by_other(doc: MedicalDocument, user: Any) -> None:
-    if not doctor_befund_edit_lock_applies(doc):
-        return
-    eff, holder_name, _ = get_document_lock_state(doc)
-    if eff and doc.locked_by_user_id != user.id:
-        raise _MedicalDocumentEditLocked(holder_name)
-
-
-def _json_document_locked(
-    request: HttpRequest, locked_by_username: str | None
-) -> JsonResponse:
-    holder = locked_by_username or "—"
-    default = "This document is being edited by {username}. Please try again later."
-    msg = resolve_other_message(
-        request,
-        "doctor.document_locked_error",
-        default,
-        username=holder,
-    )
-    return JsonResponse(
-        {"error": msg, "locked_by_username": locked_by_username},
-        status=423,
-    )
 
 
 def _doctor_access_audit_context(request: HttpRequest) -> DoctorAccessAuditContext:
