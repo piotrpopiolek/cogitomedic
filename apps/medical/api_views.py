@@ -39,6 +39,7 @@ from apps.medical.api_schemas import (
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
     PublishMedicalDocumentRequest,
+    ExternalUploadPublishRequest,
     ExternalUploadRevisionStartRequest,
     ExternalUploadSelectAttachmentRequest,
     RetryProcessingRequest,
@@ -584,7 +585,7 @@ def medical_external_upload_publish_view(
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
+        body = ExternalUploadPublishRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding as exc:

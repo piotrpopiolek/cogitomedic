@@ -901,8 +901,10 @@ def doctor_document_detail_view(
         "externalUploadReadOnly": external_readonly,
         "externalUploadLoadAttachmentPanel": external_upload_load_attachment_panel,
         "editSessionRequired": not external_readonly
-        and getattr(request.user, "is_doctor", False),
+        and getattr(request.user, "is_doctor", False)
+        and not befund_readonly,
         "befundReadOnly": befund_readonly,
+        "staffUserId": str(request.user.id),
     }
     return _render_doctor(
         request,

@@ -113,6 +113,18 @@
     paperAuthByLabel: uiText("detail_paper_auth_by_label"),
     paperAuthAtLabel: uiText("detail_paper_auth_at_label"),
     paperAuthReasonLabel: uiText("detail_paper_auth_reason_label"),
+    msgEditSessionStale: uiText("msg_edit_session_stale"),
+    msgEditSessionExpired: uiText("msg_edit_session_expired"),
+    msgEditSessionLockedOther: uiText("msg_edit_session_locked_other"),
+    msgAutosaveSuccess: uiText("msg_autosave_success"),
+    msgAutosavePreviewAgain: uiText("msg_autosave_preview_again"),
+    msgDoctorLockLimit: uiText("msg_doctor_lock_limit"),
+    modalReclaimTitle: uiText("modal_reclaim_title"),
+    modalReclaimBody: uiText("modal_reclaim_body"),
+    modalReclaimConfirm: uiText("modal_reclaim_confirm"),
+    modalLocalTabTitle: uiText("modal_local_tab_title"),
+    modalLocalTabBody: uiText("modal_local_tab_body"),
+    modalLocalTabConfirm: uiText("modal_local_tab_confirm"),
   });
 
   function el(id) {
@@ -238,9 +250,6 @@
     if (authExpiredHandled) return;
     authExpiredHandled = true;
     alertMsg("warning", message || UI.msgSessionExpired || "Session expired.");
-    if (typeof releaseEditLockBestEffort === "function") {
-      releaseEditLockBestEffort();
-    }
     window.setTimeout(function () {
       window.location.href = buildDoctorLoginUrl();
     }, 300);
@@ -297,7 +306,14 @@
       ? CTX.published_version_no
       : null;
   var hasPendingRevisionEarly = !!(CTX && CTX.has_pending_revision);
-  var previewSeenSinceLastSave = docStatusEarly !== "DRAFT";
+  var previewSeenSinceLastSave = (function () {
+    if (docStatusEarly === "DRAFT" || hasPendingRevisionEarly) {
+      var dr = (CTX && CTX.draft_revision) || 0;
+      var lpdr = (CTX && CTX.last_previewed_draft_revision) || 0;
+      return dr > 0 && lpdr >= dr;
+    }
+    return true;
+  })();
 
   function hasPublishedHistory() {
     return docStatus === "PUBLISHED" || publishedVersionNo != null;
@@ -485,111 +501,301 @@
   var publishedVersionNo = publishedVersionNoEarly;
   var hasPendingRevision = hasPendingRevisionEarly;
 
-  /**
-   * Edit lock release:
-   * - Intentional leave (list / logout / publish / auth): unlock immediately (no timer).
-   * - Real unload (Back, close tab, hard navigation): unlock on pagehide when NOT bfcache.
-   * - Tab switch / mobile freeze into bfcache (pagehide.persisted): keep the lock (P0).
-   */
+  /* ── Edit-session state ─────────────────────────────────────────────── */
   var befundFormDirty = false;
+  var befundFormDirtyGen = 0;
+  var editSessionToken = null;
+  var editSessionRevision = 0;
+  var draftRevision = (CTX && CTX.draft_revision) || 0;
+  var lastPreviewedDraftRevision = (CTX && CTX.last_previewed_draft_revision) || 0;
+  var writeInFlight = false;
+  var autosaveRequestId = null;
+  var lastSuccessfulSaveAt = null;
+  var sessionReady = false;
+  var editBlocked = false;
+  var AUTOSAVE_MS = 10 * 60 * 1000;
+  var autosaveTimerId = null;
+  var editBroadcast = null;
 
-  function releaseEditLockBestEffort() {
-    if (!isDraftAuthoring()) return;
-    var token = getCsrfToken();
-    if (!token) return;
-    var url = docUrl("/unlock");
+  function newUuid() {
+    return crypto.randomUUID
+      ? crypto.randomUUID()
+      : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+          var r = (Math.random() * 16) | 0;
+          return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+        });
+  }
+
+  function sessionStorageKey() {
+    return "befundEditSession:" + (PANEL.staffUserId || "anon") + ":" + DOC_ID;
+  }
+
+  function persistSessionLocally() {
     try {
-      fetch(url, {
-        method: "POST",
-        credentials: "same-origin",
-        keepalive: true,
-        headers: {
-          "X-CSRFToken": token,
-          "Content-Type": "application/json",
-        },
-        body: "{}",
-      }).catch(function () {});
+      sessionStorage.setItem(
+        sessionStorageKey(),
+        JSON.stringify({
+          token: editSessionToken,
+          editSessionRevision: editSessionRevision,
+          draftRevision: draftRevision,
+        })
+      );
     } catch (e) {}
   }
 
-  function releaseEditLockOnIntentionalLeave() {
-    // If the form is dirty, browser beforeunload may still cancel navigation —
-    // defer unlock to pagehide (!persisted) so cancel keeps the semaphore.
-    if (befundFormDirty) return;
-    releaseEditLockBestEffort();
-  }
-
-  function isLeavingDocumentEditAnchor(anchor) {
-    if (!anchor || anchor.target === "_blank") return false;
-    if (anchor.hasAttribute("download")) return false;
-    var href = anchor.getAttribute("href");
-    if (!href || href.charAt(0) === "#") return false;
-    var url;
+  function loadPersistedSession() {
     try {
-      url = new URL(href, window.location.href);
+      var raw = sessionStorage.getItem(sessionStorageKey());
+      return raw ? JSON.parse(raw) : null;
     } catch (e) {
-      return false;
+      return null;
     }
-    if (url.origin !== window.location.origin) return true;
-    var cur = (window.location.pathname || "").replace(/\/$/, "");
-    var next = (url.pathname || "").replace(/\/$/, "");
-    return next !== cur;
   }
 
-  document.addEventListener(
-    "click",
-    function (ev) {
-      var a =
-        ev.target &&
-        ev.target.closest &&
-        ev.target.closest("a[href]");
-      if (!a || !isDraftAuthoring()) return;
-      if (
-        a.classList.contains("js-release-document-lock") ||
-        isLeavingDocumentEditAnchor(a)
-      ) {
-        releaseEditLockOnIntentionalLeave();
+  function clearPersistedSession() {
+    try {
+      sessionStorage.removeItem(sessionStorageKey());
+    } catch (e) {}
+  }
+
+  function attachDraftSessionFields(body) {
+    body.edit_session_token = editSessionToken;
+    body.expected_draft_revision = draftRevision;
+    body.draft_save_request_id = autosaveRequestId || newUuid();
+    return body;
+  }
+
+  function attachPublishSessionFields(body) {
+    body.edit_session_token = editSessionToken;
+    body.expected_draft_revision = draftRevision;
+    return body;
+  }
+
+  function buildDraftPreviewUrl(source) {
+    var url = buildPreviewUrl(source);
+    if (source === "draft") {
+      url += "&expected_draft_revision=" + draftRevision;
+    }
+    return url;
+  }
+
+  function fetchDraftPreview(url) {
+    var hdrs = { Accept: "application/pdf" };
+    if (editSessionToken) hdrs["X-Edit-Session-Token"] = editSessionToken;
+    return fetch(url, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: hdrs,
+    });
+  }
+
+  function disableWriteButtons() {
+    ["btn-save-draft", "btn-preview-pdf", "btn-publish"].forEach(function (id) {
+      var b = el(id);
+      if (b) b.disabled = true;
+    });
+  }
+
+  function enableWriteButtons() {
+    var s = el("btn-save-draft");
+    var p = el("btn-preview-pdf");
+    if (s) s.disabled = false;
+    if (p) p.disabled = false;
+    setPublishEnabledFromPreviewFlag();
+  }
+
+  function stopAutosave() {
+    if (autosaveTimerId) { clearInterval(autosaveTimerId); autosaveTimerId = null; }
+    document.removeEventListener("visibilitychange", onVisibilityChangeAutosave);
+  }
+
+  function setEditBlocked(message) {
+    editBlocked = true;
+    sessionReady = false;
+    stopAutosave();
+    disableWriteButtons();
+    if (message) alertMsg("warning", message);
+  }
+
+  function handleSessionErrorResponse(res) {
+    var json = getResJson(res);
+    var errorKey = json && (json.error_key || json.api_message_key);
+    if (res.status === 423 || res.status === 409) {
+      if (errorKey === "edit_session_stale") { setEditBlocked(UI.msgEditSessionStale); return true; }
+      if (errorKey === "edit_session_expired") { setEditBlocked(UI.msgEditSessionExpired); return true; }
+      if (errorKey === "document_locked_by_other") {
+        var who = (json && json.locked_by_username) || "";
+        setEditBlocked(who ? formatUiPlaceholders(UI.msgEditSessionLockedOther, { username: who }) : UI.msgEditSessionStale);
+        return true;
       }
-    },
-    true
-  );
-
-  document.addEventListener(
-    "submit",
-    function (ev) {
-      var form = ev.target;
-      if (!form || !isDraftAuthoring()) return;
-      var action = (form.getAttribute("action") || "").toLowerCase();
-      if (
-        form.classList.contains("js-release-document-lock") ||
-        action.indexOf("logout") !== -1
-      ) {
-        // Logout POST can be slow — unlock immediately (do not wait for pagehide).
-        releaseEditLockBestEffort();
-        befundFormDirty = false;
+      if (errorKey === "draft_revision_conflict" || errorKey === "draft_request_id_reused") {
+        setEditBlocked(UI.msgEditSessionStale);
+        return true;
       }
-    },
-    true
-  );
+    }
+    return false;
+  }
 
-  window.addEventListener("pagehide", function (e) {
-    // bfcache / freeze: keep lock. Back, close, navigate away: release.
-    if (e && e.persisted) return;
-    releaseEditLockBestEffort();
-  });
+  try {
+    editBroadcast = new BroadcastChannel("befund-edit-" + DOC_ID);
+    editBroadcast.onmessage = function (ev) {
+      if (ev.data && ev.data.type === "invalidate" && ev.data.docId === DOC_ID) {
+        setEditBlocked(UI.msgEditSessionStale);
+      }
+    };
+  } catch (eBc) {}
 
+  /* ── Autosave helpers ───────────────────────────────────────────────── */
+  function onVisibilityChangeAutosave() {
+    if (document.visibilityState === "visible") tryAutosave();
+  }
+
+  function startAutosave() {
+    stopAutosave();
+    autosaveTimerId = setInterval(tryAutosave, AUTOSAVE_MS);
+    document.addEventListener("visibilitychange", onVisibilityChangeAutosave);
+  }
+
+  function tryAutosave() {
+    if (!befundFormDirty || !sessionReady || editBlocked || writeInFlight) return;
+    if (document.visibilityState !== "visible") return;
+    if (lastSuccessfulSaveAt && (Date.now() - lastSuccessfulSaveAt) < AUTOSAVE_MS) return;
+    var built = buildDraftPayloadBody();
+    if (built.error) return;
+    if (!autosaveRequestId) autosaveRequestId = newUuid();
+    writeInFlight = true;
+    var genAtStart = befundFormDirtyGen;
+    var btn = el("btn-save-draft");
+    if (btn) btn.disabled = true;
+    apiFetch(docUrl("/draft"), { method: "PUT", body: JSON.stringify(built.body) })
+      .then(function (res) {
+        writeInFlight = false;
+        if (btn) btn.disabled = false;
+        if (isAuthExpiredResponse(res)) return;
+        if (handleSessionErrorResponse(res)) return;
+        if (!res.ok) return;
+        var json = getResJson(res);
+        if (json && typeof json.draft_revision === "number") draftRevision = json.draft_revision;
+        persistSessionLocally();
+        lastSuccessfulSaveAt = Date.now();
+        autosaveRequestId = null;
+        if (befundFormDirtyGen === genAtStart) befundFormDirty = false;
+        previewSeenSinceLastSave = false;
+        setPublishEnabledFromPreviewFlag();
+        applyRevisionStateFromResponse(json);
+        alertMsg("success", UI.msgAutosaveSuccess);
+      })
+      .catch(function () {
+        writeInFlight = false;
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  /* ── Init edit session ──────────────────────────────────────────────── */
+  function initEditSession() {
+    if (!PANEL.editSessionRequired || !isDraftAuthoring()) return;
+    disableWriteButtons();
+
+    function proceedWithEditSession(forceReclaim, reclaimRevisionHint) {
+      var persisted = loadPersistedSession();
+      var reqBody = { purpose: "edit" };
+      if (persisted && persisted.token) reqBody.edit_session_token = persisted.token;
+      if (forceReclaim) {
+        reqBody.reclaim_confirmed = true;
+        reqBody.edit_session_request_id = newUuid();
+        if (typeof reclaimRevisionHint === "number") {
+          reqBody.expected_edit_session_revision = reclaimRevisionHint;
+        } else if (persisted && typeof persisted.editSessionRevision === "number") {
+          reqBody.expected_edit_session_revision = persisted.editSessionRevision;
+        }
+      }
+      apiFetch(docUrl("/edit-session"), { method: "POST", body: JSON.stringify(reqBody) })
+        .then(function (res) {
+          if (isAuthExpiredResponse(res)) return;
+          var json = getResJson(res);
+          if (res.ok) {
+            editSessionToken = json.edit_session_token || json.token;
+            editSessionRevision = json.edit_session_revision || 0;
+            if (typeof json.draft_revision === "number") draftRevision = json.draft_revision;
+            persistSessionLocally();
+            sessionReady = true;
+            editBlocked = false;
+            enableWriteButtons();
+            startAutosave();
+            return;
+          }
+          var errorKey = json && (json.error_key || json.api_message_key);
+          if (res.status === 409 && errorKey === "edit_session_reclaim_confirmation_required") {
+            var reclaimRev =
+              json && typeof json.edit_session_revision === "number"
+                ? json.edit_session_revision
+                : null;
+            showRevisionModal({
+              title: UI.modalReclaimTitle,
+              body: UI.modalReclaimBody,
+              confirm: UI.modalReclaimConfirm,
+              cancel: UI.modalStartRevisionCancel,
+            }).then(function (ok) {
+              if (!ok) return;
+              proceedWithEditSession(true, reclaimRev);
+            });
+            return;
+          }
+          if (res.status === 409 && errorKey === "doctor_lock_limit_reached") {
+            var msg = UI.msgDoctorLockLimit;
+            if (json && json.locked_documents && json.locked_documents.length) {
+              msg += " " + json.locked_documents.map(function (d) { return d.title || d.id; }).join(", ");
+            }
+            alertMsg("warning", msg);
+            return;
+          }
+          if (res.status === 423 && errorKey === "document_locked_by_other") {
+            var who = (json && json.locked_by_username) || "";
+            alertMsg("warning", who ? formatUiPlaceholders(UI.msgEditSessionLockedOther, { username: who }) : UI.msgEditSessionStale);
+            return;
+          }
+          alertMsg("danger", responseErrorMessage(res, UI.msgError + " " + res.status));
+        })
+        .catch(function () { alertMsg("danger", UI.msgNetwork); });
+    }
+
+    if (navigator.locks) {
+      navigator.locks.request("befund-doc-" + DOC_ID, { ifAvailable: true }, function (lock) {
+        if (lock) {
+          proceedWithEditSession(false);
+          return new Promise(function () {});
+        }
+        showRevisionModal({
+          title: UI.modalLocalTabTitle,
+          body: UI.modalLocalTabBody,
+          confirm: UI.modalLocalTabConfirm,
+          cancel: UI.modalStartRevisionCancel,
+        }).then(function (ok) {
+          if (!ok) return;
+          if (editBroadcast) editBroadcast.postMessage({ type: "invalidate", docId: DOC_ID });
+          proceedWithEditSession(true);
+        });
+        return undefined;
+      });
+    } else {
+      proceedWithEditSession(false);
+    }
+  }
+
+  /* ── Form dirty tracking ────────────────────────────────────────────── */
   var befundFormEl = el("befund-form");
   if (befundFormEl) {
     befundFormEl.addEventListener("input", function () {
       befundFormDirty = true;
+      befundFormDirtyGen++;
     });
     befundFormEl.addEventListener("change", function () {
       befundFormDirty = true;
+      befundFormDirtyGen++;
     });
   }
   window.addEventListener("beforeunload", function (e) {
     if (!isDraftAuthoring() || !befundFormDirty) return;
-    // Warning only — unlock happens on pagehide when navigation is not cancelled.
     e.preventDefault();
     e.returnValue = "";
   });
@@ -1496,40 +1702,38 @@
     });
   }
 
-  function performStartRevisionAndSave() {
-    var payload = buildPayload();
-    var validationErr = validatePayloadForSubmit(payload);
-    if (validationErr) {
-      alertMsg("danger", validationErr);
-      return;
-    }
+  function performStartRevision() {
     var saveBtn = el("btn-save-draft");
     var startBtn = el("btn-start-revision");
     if (saveBtn) saveBtn.disabled = true;
     if (startBtn) startBtn.disabled = true;
-    apiFetch(docUrl("/draft"), {
-      method: "PUT",
-      body: JSON.stringify({
-        medical_payload_schema_version: 1,
-        medical_payload: payload,
-        intent: "amend",
-      }),
+    apiFetch(docUrl("/edit-session"), {
+      method: "POST",
+      body: JSON.stringify({ purpose: "amend" }),
     })
       .then(function (res) {
         if (saveBtn) saveBtn.disabled = false;
         if (startBtn) startBtn.disabled = false;
         if (isAuthExpiredResponse(res)) return;
         if (!res.ok) {
-          alertMsg(
-            "danger",
-            responseErrorMessage(res, UI.msgError + " " + res.status)
-          );
+          if (handleSessionErrorResponse(res)) return;
+          alertMsg("danger", responseErrorMessage(res, UI.msgError + " " + res.status));
           return;
         }
-        applyRevisionStateFromResponse(getResJson(res));
+        var json = getResJson(res);
+        editSessionToken = json.edit_session_token || json.token;
+        editSessionRevision = json.edit_session_revision || 0;
+        if (typeof json.draft_revision === "number") draftRevision = json.draft_revision;
+        hasPendingRevision = true;
+        persistSessionLocally();
+        sessionReady = true;
+        editBlocked = false;
+        enableWriteButtons();
+        startAutosave();
         previewSeenSinceLastSave = false;
         befundFormDirty = false;
         setPublishEnabledFromPreviewFlag();
+        refreshRevisionUi();
         alertMsg("success", UI.msgRevisionStarted);
       })
       .catch(function () {
@@ -1544,7 +1748,7 @@
     startRevisionBtn.addEventListener("click", function () {
       confirmStartRevision().then(function (confirmed) {
         if (!confirmed) return;
-        performStartRevisionAndSave();
+        performStartRevision();
       });
     });
   }
@@ -1557,7 +1761,10 @@
         discardRevisionBtn.disabled = true;
         apiFetch(docUrl("/discard-revision"), {
           method: "POST",
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            edit_session_token: editSessionToken,
+            expected_draft_revision: draftRevision,
+          }),
         })
           .then(function (res) {
             discardRevisionBtn.disabled = false;
@@ -1588,6 +1795,10 @@
               );
               return;
             }
+            clearPersistedSession();
+            editSessionToken = null;
+            sessionReady = false;
+            stopAutosave();
             applyRevisionStateFromResponse(getResJson(res));
             previewSeenSinceLastSave = true;
             setPublishEnabledFromPreviewFlag();
@@ -1603,6 +1814,7 @@
 
   refreshRevisionUi();
   setPublishEnabledFromPreviewFlag();
+  initEditSession();
 
   function statusClass(status) {
     if (status === "COMPLETED") return "bg-success";
@@ -1695,10 +1907,13 @@
   }
 
   function buildDraftPayloadBody() {
-    const payload = buildPayload();
-    const err = validatePayloadForSubmit(payload);
+    if (!editSessionToken) {
+      return { error: UI.msgEditSessionExpired || "Edit session expired." };
+    }
+    var payload = buildPayload();
+    var err = validatePayloadForSubmit(payload);
     if (err) return { error: err };
-    const body = {
+    var body = {
       medical_payload_schema_version: 1,
       medical_payload: payload,
     };
@@ -1707,6 +1922,7 @@
     } else {
       body.intent = "edit";
     }
+    attachDraftSessionFields(body);
     return { body: body };
   }
 
@@ -1728,34 +1944,44 @@
     return res && res.json ? res.json : null;
   }
 
-  const saveDraftBtn = el("btn-save-draft");
+  var saveDraftBtn = el("btn-save-draft");
   if (saveDraftBtn) {
     saveDraftBtn.addEventListener("click", function () {
       if (isPublishedReadOnly()) {
         confirmStartRevision().then(function (confirmed) {
           if (!confirmed) return;
-          performStartRevisionAndSave();
+          performStartRevision();
         });
         return;
       }
-      const built = buildDraftPayloadBody();
+      if (writeInFlight) return;
+      var built = buildDraftPayloadBody();
       if (built.error) {
         alertMsg("danger", built.error);
         return;
       }
-      const btn = this;
+      var btn = this;
       btn.disabled = true;
+      writeInFlight = true;
+      var genAtStart = befundFormDirtyGen;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
         body: JSON.stringify(built.body),
       })
         .then(function (res) {
+          writeInFlight = false;
           btn.disabled = false;
           if (isAuthExpiredResponse(res)) return;
+          if (handleSessionErrorResponse(res)) return;
           if (res.ok) {
+            var json = getResJson(res);
+            if (json && typeof json.draft_revision === "number") draftRevision = json.draft_revision;
+            persistSessionLocally();
+            lastSuccessfulSaveAt = Date.now();
+            autosaveRequestId = null;
+            if (befundFormDirtyGen === genAtStart) befundFormDirty = false;
             previewSeenSinceLastSave = false;
-            befundFormDirty = false;
-            applyRevisionStateFromResponse(getResJson(res));
+            applyRevisionStateFromResponse(json);
             setPublishEnabledFromPreviewFlag();
             alertMsg("success", UI.msgSaveSuccess);
             return;
@@ -1783,6 +2009,7 @@
           );
         })
         .catch(function () {
+          writeInFlight = false;
           btn.disabled = false;
           alertMsg("danger", UI.msgNetwork);
         });
@@ -1819,10 +2046,12 @@
   }
 
   function openPreviewBlobInTab(previewTab, btn, previewUrl, opts) {
+    var hdrs = { Accept: "application/pdf" };
+    if (editSessionToken) hdrs["X-Edit-Session-Token"] = editSessionToken;
     return fetch(previewUrl, {
       method: "GET",
       credentials: "same-origin",
-      headers: { Accept: "application/pdf" },
+      headers: hdrs,
     }).then(function (pdfRes) {
       if (btn) btn.disabled = false;
       if (pdfRes.status === 401) {
@@ -1859,11 +2088,11 @@
     });
   }
 
-  const previewPdfBtn = el("btn-preview-pdf");
+  var previewPdfBtn = el("btn-preview-pdf");
   if (previewPdfBtn) {
     previewPdfBtn.addEventListener("click", function (event) {
       if (event && event.preventDefault) event.preventDefault();
-      const btn = this;
+      var btn = this;
       if (PANEL.externalUploadReadOnly) {
         var extPreviewSource = null;
         if (isPublishedReadOnly()) {
@@ -1883,19 +2112,28 @@
         openPdfPreviewByFullNavigation(buildPreviewUrl("published"));
         return;
       }
-      const built = buildDraftPayloadBody();
+      if (writeInFlight) return;
+      var built = buildDraftPayloadBody();
       if (built.error) {
         alertMsg("danger", built.error);
         return;
       }
-      const previewTab = window.open("", "_blank");
+      var previewTab = window.open("", "_blank");
       btn.disabled = true;
+      writeInFlight = true;
+      var genAtStart = befundFormDirtyGen;
       apiFetch(docUrl("/draft"), {
         method: "PUT",
         body: JSON.stringify(built.body),
       })
         .then(function (res) {
+          writeInFlight = false;
           if (isAuthExpiredResponse(res)) {
+            btn.disabled = false;
+            if (previewTab) previewTab.close();
+            return;
+          }
+          if (handleSessionErrorResponse(res)) {
             btn.disabled = false;
             if (previewTab) previewTab.close();
             return;
@@ -1928,16 +2166,22 @@
             if (previewTab) previewTab.close();
             return;
           }
-          applyRevisionStateFromResponse(getResJson(res));
-          befundFormDirty = false;
+          var draftJson = getResJson(res);
+          if (draftJson && typeof draftJson.draft_revision === "number") draftRevision = draftJson.draft_revision;
+          persistSessionLocally();
+          lastSuccessfulSaveAt = Date.now();
+          autosaveRequestId = null;
+          applyRevisionStateFromResponse(draftJson);
+          if (befundFormDirtyGen === genAtStart) befundFormDirty = false;
           return openPreviewBlobInTab(
             previewTab,
             btn,
-            buildPreviewUrl("draft"),
+            buildDraftPreviewUrl("draft"),
             { markPreviewSeen: true }
           );
         })
         .catch(function () {
+          writeInFlight = false;
           btn.disabled = false;
           if (previewTab) previewTab.close();
           alertMsg("danger", UI.msgNetwork);
@@ -1960,39 +2204,42 @@
     });
   }
 
-  const publishBtn = el("btn-publish");
+  var publishBtn = el("btn-publish");
   if (publishBtn) {
     publishBtn.addEventListener("click", function () {
-      if (isPublishedReadOnly()) {
-        return;
-      }
+      if (isPublishedReadOnly()) return;
       if (!previewSeenSinceLastSave) {
         alertMsg("warning", UI.msgPublishPreviewRequired);
         return;
       }
-      const built = buildDraftPayloadBody();
+      if (writeInFlight) return;
+      var built = buildDraftPayloadBody();
       if (built.error) {
         alertMsg("danger", built.error);
         return;
       }
-      const resendSmsEl = el("resend_sms");
-      const resendSms = resendSmsEl ? resendSmsEl.checked : false;
+      var resendSmsEl = el("resend_sms");
+      var resendSms = resendSmsEl ? resendSmsEl.checked : false;
       publishBtn.disabled = true;
-      const publishId = crypto.randomUUID
-        ? crypto.randomUUID()
-        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/x/g, function () {
-            return (Math.random() * 16 | 0).toString(16);
-          });
+      writeInFlight = true;
+      var publishId = newUuid();
       apiFetch(docUrl("/draft"), {
         method: "PUT",
         body: JSON.stringify(built.body),
       })
         .then(function (res) {
           if (isAuthExpiredResponse(res)) {
+            writeInFlight = false;
+            publishBtn.disabled = false;
+            return;
+          }
+          if (handleSessionErrorResponse(res)) {
+            writeInFlight = false;
             publishBtn.disabled = false;
             return;
           }
           if (!res.ok) {
+            writeInFlight = false;
             if (res.status === 409) {
               var json409pub = getResJson(res);
               publishBtn.disabled = false;
@@ -2018,20 +2265,22 @@
             );
             return;
           }
+          var draftJson = getResJson(res);
+          if (draftJson && typeof draftJson.draft_revision === "number") draftRevision = draftJson.draft_revision;
           befundFormDirty = false;
-          return apiFetch(
-            docUrl("/publish"),
-            {
-              method: "POST",
-              body: JSON.stringify({
-                publish_request_id: publishId,
-                resend_sms: resendSms,
-                publish_locale: authoringLocale,
-              }),
-            }
-          );
+          var publishBody = {
+            publish_request_id: publishId,
+            resend_sms: resendSms,
+            publish_locale: authoringLocale,
+          };
+          attachPublishSessionFields(publishBody);
+          return apiFetch(docUrl("/publish"), {
+            method: "POST",
+            body: JSON.stringify(publishBody),
+          });
         })
         .then(function (res) {
+          writeInFlight = false;
           if (!res) return;
           if (isAuthExpiredResponse(res)) {
             publishBtn.disabled = false;
@@ -2041,8 +2290,10 @@
             alertMsg("success", UI.msgPublishSuccess);
             publishBtn.disabled = true;
             befundFormDirty = false;
-            // Server publish clears the lock; still release client-side before leave.
-            releaseEditLockBestEffort();
+            clearPersistedSession();
+            editSessionToken = null;
+            sessionReady = false;
+            stopAutosave();
             var listUrl =
               (PANEL && PANEL.listUrl) ||
               (function () {
@@ -2062,6 +2313,7 @@
           }
         })
         .catch(function () {
+          writeInFlight = false;
           publishBtn.disabled = false;
           alertMsg("danger", UI.msgNetwork);
         });
