@@ -81,7 +81,6 @@ from apps.medical.models import (
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
     DoctorAccessAuditContext,
-    _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
     authorize_paper_intake,
     check_doctor_document_access,
