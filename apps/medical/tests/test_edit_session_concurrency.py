@@ -361,3 +361,80 @@ class EditSessionConcurrencyTests(TransactionTestCase):
         self.assertEqual(len(events), 1)
         doc.refresh_from_db()
         self.assertEqual(doc.locked_by_user_id, self.doctor_b.id)
+
+    def test_parallel_amend_creates_one_pending_and_one_holder(self) -> None:
+        doc = self._make_draft()
+        now = timezone.now()
+        from apps.medical.models import (
+            DocVersionStatus,
+            MedicalDocStatus,
+            MedicalDocumentVersion,
+            PdfStatus,
+        )
+
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=1,
+            version_status=DocVersionStatus.PUBLISHED,
+            pdf_generation_status=PdfStatus.COMPLETED,
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(),
+            published_at=now,
+            publish_locale="de-DE",
+            published_by_user=self.doctor_a,
+            publish_request_id=uuid.uuid4(),
+            pdf_local_path="/media/befund/parallel-amend.pdf",
+            hidrive_sent=True,
+            hidrive_sent_at=now,
+            sms_sent=True,
+            sms_sent_at=now,
+        )
+        MedicalDocument.objects.filter(id=doc.id).update(
+            status=MedicalDocStatus.PUBLISHED,
+            current_version_no=1,
+            published_version_no=1,
+            has_pending_revision=False,
+            created_by_user=self.doctor_a,
+        )
+        # Publisher-only amend: doctor_a is publisher.
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=doc.id, version_no=1
+        ).update(published_by_user=self.doctor_a)
+
+        ok: list[str] = []
+        errors: list[str] = []
+        barrier = threading.Barrier(2)
+        lock = threading.Lock()
+
+        def amend(user: StaffUser) -> None:
+            try:
+                barrier.wait(timeout=15)
+                start_doctor_edit_session(
+                    medical_document_id=doc.id, user=user, purpose="amend"
+                )
+                with lock:
+                    ok.append(str(user.id))
+            except Exception as exc:
+                with lock:
+                    errors.append(type(exc).__name__ + ":" + str(getattr(exc, "error_key", getattr(exc, "api_message_key", exc))))
+            finally:
+                connection.close()
+
+        # Same publisher racing itself (two tabs).
+        t1 = threading.Thread(target=amend, args=(self.doctor_a,))
+        t2 = threading.Thread(target=amend, args=(self.doctor_a,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        self.assertEqual(len(ok), 1, msg=f"ok={ok} errors={errors}")
+        self.assertEqual(len(errors), 1, msg=f"ok={ok} errors={errors}")
+        doc.refresh_from_db()
+        self.assertTrue(doc.has_pending_revision)
+        self.assertEqual(doc.locked_by_user_id, self.doctor_a.id)
+        pending = MedicalDocumentVersion.objects.filter(
+            medical_document_id=doc.id,
+            version_status=DocVersionStatus.DRAFT,
+        ).count()
+        self.assertEqual(pending, 1)
