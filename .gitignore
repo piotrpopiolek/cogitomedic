@@ -206,3 +206,6 @@ yarn-error.log*
 
 # learning
 learning/
+
+# Local-only planning notes
+.ai/TODO.md
