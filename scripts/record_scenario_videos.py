@@ -1,5 +1,5 @@
 """
-Nagrywa wolne filmy WebM dla scenariuszy operacyjnych SC-001–SC-028.
+Nagrywa wolne filmy WebM dla scenariuszy operacyjnych SC-001–SC-034.
 
 Dane pacjentów: wyłącznie fikcyjne (seed scripts/manual_demo/seed_scenarios.py).
 SC-007 korzysta z istniejącego record_import_troubleshooting_video.py.
@@ -87,6 +87,10 @@ FILENAMES: dict[str, str] = {
     "SC-026": "sc-026-dead-letter.webm",
     "SC-027": "sc-027-baner-hidrive.webm",
     "SC-028": "sc-028-rewizja-resend-sms.webm",
+    "SC-031": "sc-031-przywracanie-wlasnej-sesji.webm",
+    "SC-032": "sc-032-limit-trzech-blokad.webm",
+    "SC-033": "sc-033-druga-karta.webm",
+    "SC-034": "sc-034-wygasniecie-blokady.webm",
 }
 
 PRIORITY_HIGH = [
@@ -781,6 +785,138 @@ def steps_sc_014(page, base: str, ctx: dict) -> None:
     _pause(page, 2800)
 
 
+def steps_sc_031(page, base: str, ctx: dict) -> None:
+    """Own yellow lock → reclaim confirmation modal → continue editing."""
+    pwd = ctx["password"]
+    doc_id = ctx["sc031_doc_id"]
+    last = ctx.get("sc031_patient_last") or "ReclaimDemo"
+    login_doctor(page, base, pwd)
+    page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    if search.count():
+        human_fill(page, search, last, pause_after_ms=800)
+        form = search.locator("xpath=ancestor::form[1]")
+        if form.count():
+            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+        else:
+            search.press("Enter")
+            page.wait_for_load_state("networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 1800)
+    row = page.locator("tr", has_text=last).first
+    if row.count():
+        human_hover(page, row, pause_ms=1400)
+    page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    modal = page.locator("#revision-modal")
+    try:
+        modal.wait_for(state="visible", timeout=12000)
+    except Exception:
+        _pause(page, 2500)
+        return
+    _pause(page, 1600)
+    confirm = page.locator("#revision-modal-confirm").first
+    if confirm.count():
+        human_click(page, confirm, pause_after_ms=1800)
+    ensure_cursor_alive(page)
+    _pause(page, 2200)
+
+
+def steps_sc_032(page, base: str, ctx: dict) -> None:
+    """Fourth document blocked by doctor lock limit screen with links."""
+    pwd = ctx["password"]
+    fourth_id = ctx["sc032_fourth_doc_id"]
+    login_doctor(page, base, pwd)
+    page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 1600)
+    page.goto(f"{base}/doctor/{fourth_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    limit = page.locator("#lock-limit-screen")
+    try:
+        limit.wait_for(state="visible", timeout=12000)
+    except Exception:
+        _pause(page, 2500)
+        return
+    human_hover(page, limit, pause_ms=1400)
+    link = page.locator("#lock-limit-screen a.lock-limit-link").first
+    if link.count():
+        human_hover(page, link, pause_ms=1600)
+    _pause(page, 2200)
+
+
+def steps_sc_033(page, base: str, ctx: dict) -> None:
+    """Same browser: second tab shows local takeover modal (Trotzdem öffnen)."""
+    pwd = ctx["password"]
+    doc_id = ctx["sc033_doc_id"]
+    login_doctor(page, base, pwd)
+    page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    # Wait for edit-session acquire on first tab
+    page.wait_for_timeout(3500)
+    ensure_cursor_alive(page)
+    _pause(page, 1200)
+
+    page2 = page.context.new_page()
+    install_cursor(page2)
+    page2.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page2)
+    modal = page2.locator("#revision-modal")
+    try:
+        modal.wait_for(state="visible", timeout=12000)
+    except Exception:
+        _pause(page2, 2500)
+        page2.close()
+        return
+    _pause(page2, 1600)
+    confirm = page2.locator("#revision-modal-confirm").first
+    if confirm.count():
+        human_click(page2, confirm, pause_after_ms=2000)
+    ensure_cursor_alive(page2)
+    _pause(page2, 2200)
+    # Leave page2 open so its video is the latest finalize candidate, then close first.
+    try:
+        page.close()
+    except Exception:
+        pass
+    _pause(page2, 1200)
+
+
+def steps_sc_034(page, base: str, ctx: dict) -> None:
+    """Expired lock: list is not yellow; Open works; document can be entered."""
+    pwd = ctx["password"]
+    last = ctx.get("sc034_patient_last") or "ExpiredLock"
+    doc_id = ctx["sc034_doc_id"]
+    login_doctor(page, base, pwd)
+    page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    if search.count():
+        human_fill(page, search, last, pause_after_ms=800)
+        form = search.locator("xpath=ancestor::form[1]")
+        if form.count():
+            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+        else:
+            search.press("Enter")
+            page.wait_for_load_state("networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 2000)
+    row = page.locator("tr", has_text=last).first
+    if row.count():
+        human_hover(page, row, pause_ms=1600)
+        open_btn = row.locator("a").first
+        if open_btn.count():
+            human_hover(page, open_btn, pause_ms=1200)
+            human_click(page, open_btn, pause_after_ms=1800)
+        else:
+            page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    else:
+        page.goto(f"{base}/doctor/{doc_id}/?lang=de", wait_until="networkidle")
+    ensure_cursor_alive(page)
+    _pause(page, 2500)
+
+
 def steps_sc_015(page, base: str, ctx: dict) -> None:
     pwd = ctx["password"]
     doc_id = ctx["sc015_doc_id"]
@@ -1050,6 +1186,10 @@ STEP_HANDLERS: dict[str, Callable] = {
     "SC-026": steps_sc_026,
     "SC-027": steps_sc_027,
     "SC-028": steps_sc_028,
+    "SC-031": steps_sc_031,
+    "SC-032": steps_sc_032,
+    "SC-033": steps_sc_033,
+    "SC-034": steps_sc_034,
 }
 
 
@@ -1072,6 +1212,10 @@ def _serialize_ctx(ctx: dict) -> dict:
                 out["queue_id"] = str(v.id)
             continue
         if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        elif isinstance(v, list) and all(
+            isinstance(x, (str, int, float, bool)) or x is None for x in v
+        ):
             out[k] = v
         else:
             out[k] = str(v)
@@ -1173,7 +1317,7 @@ def record_one(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Nagrywa WebM scenariuszy SC-001–SC-028 (wolne akcje demo)."
+        description="Nagrywa WebM scenariuszy SC-001–SC-034 (wolne akcje demo)."
     )
     parser.add_argument(
         "--base-url",

@@ -1,4 +1,4 @@
-"""Scenario-specific demo seeds for SC-001–SC-028 (fictional data only)."""
+"""Scenario-specific demo seeds for SC-001–SC-034 (fictional data only)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ if str(_REPO) not in sys.path:
 
 from scripts.manual_demo.scenario_helpers import (
     DEMO_PASSWORD,
+    apply_doctor_edit_lock,
     assert_demo_seed_dev_only,
+    clear_doctor_edit_locks,
     create_draft_document,
     create_outbox_event,
     create_submitted_entry,
@@ -69,8 +71,10 @@ def seed_sc_002(ctx: dict) -> None:
 def seed_sc_003(ctx: dict) -> None:
     """Published + pending revision for discard-revision demo."""
     seed_base(ctx)
-    from apps.medical.services import save_draft_document_version
-    from scripts.manual_demo.scenario_helpers import rich_revision_payload
+    from scripts.manual_demo.scenario_helpers import (
+        open_demo_pending_revision,
+        rich_revision_payload,
+    )
 
     p = upsert_patient(
         phone="491111000003",
@@ -83,13 +87,12 @@ def seed_sc_003(ctx: dict) -> None:
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
     force_publish(ctx, md, pdf_label="sc003_rev")
-    save_draft_document_version(
-        medical_document_id=md.id,
-        updated_by_user_id=ctx["doctor"].id,
+    open_demo_pending_revision(
+        ctx,
+        md,
         medical_payload=rich_revision_payload(
             summary_note="Revision Demo SC-003: Korrektur vor Verwerfen."
         ),
-        intent="amend",
     )
     md.refresh_from_db()
     ctx["sc003_doc_id"] = str(md.id)
@@ -114,9 +117,9 @@ def seed_sc_004(ctx: dict) -> None:
 
 
 def seed_sc_005(ctx: dict) -> None:
-    """Candidate for missing HiDrive PDF (empty incoming listing → NO_FILE)."""
+    """Candidate for missing HiDrive PDF (no matching file → NO_FILE on dashboard)."""
     seed_base(ctx)
-    seed_mock_incoming([])
+    # Keep other patients' lab PDFs; Iris simply has no matching filename.
     p = upsert_patient(
         phone="491111000005",
         first_name="Iris",
@@ -126,7 +129,7 @@ def seed_sc_005(ctx: dict) -> None:
         clinic=ctx["clinic"],
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
-    create_draft_document(ctx, entry, intake)
+    create_draft_document(ctx, entry, intake, seed_incoming_pdf=False)
     ctx["sc005_entry_id"] = str(entry.id)
     ctx["sc005_patient_last"] = p.last_name
     ctx["sc005_suggested"] = (
@@ -357,12 +360,7 @@ def seed_sc_013(ctx: dict) -> None:
 def seed_sc_014(ctx: dict) -> None:
     """Draft locked by another doctor (Admin/Manager never hold the Befund semaphore)."""
     seed_base(ctx)
-    from uuid import uuid4
-
-    from django.utils import timezone
-
     from apps.core.api_utils import assign_group_to_test_user
-    from apps.medical.models import MedicalDocument
     from apps.users.models import StaffUser
 
     pwd = ctx.get("password") or DEMO_PASSWORD
@@ -394,16 +392,151 @@ def seed_sc_014(ctx: dict) -> None:
     )
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
-    MedicalDocument.objects.filter(id=md.id).update(
-        locked_by_user=holder,
-        locked_at=timezone.now(),
-        edit_session_token=uuid4(),
-        edit_session_revision=1,
-    )
+    apply_doctor_edit_lock(md, holder=holder)
     ctx["sc014_doc_id"] = str(md.id)
     ctx["sc014_entry_id"] = str(entry.id)
     ctx["sc014_patient_last"] = p.last_name
     ctx["sc014_holder_username"] = holder.username
+
+
+def _ensure_doctor_b(ctx: dict):
+    from apps.core.api_utils import assign_group_to_test_user
+    from apps.users.models import StaffUser
+
+    pwd = ctx.get("password") or DEMO_PASSWORD
+    holder, _ = StaffUser.objects.get_or_create(
+        username="screenshot_doctor_b",
+        defaults={
+            "email": "screenshot_doctor_b@example.invalid",
+            "first_name": "Screenshot",
+            "last_name": "Kollege",
+            "is_staff": True,
+            "is_active": True,
+        },
+    )
+    holder.set_password(pwd)
+    holder.is_staff = True
+    holder.is_active = True
+    holder.save()
+    holder.groups.clear()
+    assign_group_to_test_user(holder, "Doctor")
+    holder.clinic_sites.add(ctx["clinic"])
+    return holder
+
+
+def seed_sc_031(ctx: dict) -> None:
+    """Own lock without browser session token → reclaim confirmation modal."""
+    seed_base(ctx)
+    doctor = ctx["doctor"]
+    clear_doctor_edit_locks(doctor)
+    p = upsert_patient(
+        phone="491111000031",
+        first_name="Nora",
+        last_name="ReclaimDemo",
+        dob=date(1987, 2, 14),
+        email="nora.reclaimdemo@example.invalid",
+        clinic=ctx["clinic"],
+    )
+    entry, intake = create_submitted_entry(ctx, patient=p)
+    md = create_draft_document(ctx, entry, intake)
+    apply_doctor_edit_lock(md, holder=doctor, edit_session_revision=2)
+    ctx["sc031_doc_id"] = str(md.id)
+    ctx["sc031_entry_id"] = str(entry.id)
+    ctx["sc031_patient_last"] = p.last_name
+
+
+def seed_sc_032(ctx: dict) -> None:
+    """Three active locks for screenshot_doctor + a free fourth draft."""
+    seed_base(ctx)
+    doctor = ctx["doctor"]
+    clear_doctor_edit_locks(doctor)
+    held_ids: list[str] = []
+    held_last: list[str] = []
+    for i, (first, last, phone) in enumerate(
+        (
+            ("Adam", "SlotOne", "491111000032"),
+            ("Berta", "SlotTwo", "491111000033"),
+            ("Carl", "SlotThree", "491111000034"),
+        ),
+        start=1,
+    ):
+        p = upsert_patient(
+            phone=phone,
+            first_name=first,
+            last_name=last,
+            dob=date(1980 + i, i, 10 + i),
+            email=f"{first.lower()}.{last.lower()}@example.invalid",
+            clinic=ctx["clinic"],
+        )
+        entry, intake = create_submitted_entry(ctx, patient=p)
+        md = create_draft_document(ctx, entry, intake)
+        apply_doctor_edit_lock(md, holder=doctor, edit_session_revision=i)
+        held_ids.append(str(md.id))
+        held_last.append(p.last_name)
+
+    p4 = upsert_patient(
+        phone="491111000035",
+        first_name="Dana",
+        last_name="SlotFour",
+        dob=date(1991, 6, 6),
+        email="dana.slotfour@example.invalid",
+        clinic=ctx["clinic"],
+    )
+    entry4, intake4 = create_submitted_entry(ctx, patient=p4)
+    md4 = create_draft_document(ctx, entry4, intake4)
+    ctx["sc032_held_doc_ids"] = held_ids
+    ctx["sc032_held_patient_lasts"] = held_last
+    ctx["sc032_fourth_doc_id"] = str(md4.id)
+    ctx["sc032_fourth_patient_last"] = p4.last_name
+
+
+def seed_sc_033(ctx: dict) -> None:
+    """Unlocked draft for same-browser second-tab demo (acquire live in recorder)."""
+    seed_base(ctx)
+    clear_doctor_edit_locks(ctx["doctor"])
+    p = upsert_patient(
+        phone="491111000036",
+        first_name="Eva",
+        last_name="TabDemo",
+        dob=date(1989, 9, 9),
+        email="eva.tabdemo@example.invalid",
+        clinic=ctx["clinic"],
+    )
+    entry, intake = create_submitted_entry(ctx, patient=p)
+    md = create_draft_document(ctx, entry, intake)
+    ctx["sc033_doc_id"] = str(md.id)
+    ctx["sc033_entry_id"] = str(entry.id)
+    ctx["sc033_patient_last"] = p.last_name
+
+
+def seed_sc_034(ctx: dict) -> None:
+    """Expired lock (>6h): list no longer yellow; Open available again."""
+    seed_base(ctx)
+    from django.utils import timezone
+
+    from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
+
+    holder = _ensure_doctor_b(ctx)
+    p = upsert_patient(
+        phone="491111000037",
+        first_name="Finn",
+        last_name="ExpiredLock",
+        dob=date(1985, 12, 1),
+        email="finn.expiredlock@example.invalid",
+        clinic=ctx["clinic"],
+    )
+    entry, intake = create_submitted_entry(ctx, patient=p)
+    md = create_draft_document(ctx, entry, intake)
+    apply_doctor_edit_lock(
+        md,
+        holder=holder,
+        locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1),
+        edit_session_revision=1,
+    )
+    ctx["sc034_doc_id"] = str(md.id)
+    ctx["sc034_entry_id"] = str(entry.id)
+    ctx["sc034_patient_last"] = p.last_name
+    ctx["sc034_holder_username"] = holder.username
 
 
 def seed_sc_015(ctx: dict) -> None:
@@ -427,8 +560,10 @@ def seed_sc_015(ctx: dict) -> None:
 def seed_sc_028(ctx: dict) -> None:
     """Published + open revision — resend SMS on republish demo."""
     seed_base(ctx)
-    from apps.medical.services import save_draft_document_version
-    from scripts.manual_demo.scenario_helpers import rich_revision_payload
+    from scripts.manual_demo.scenario_helpers import (
+        open_demo_pending_revision,
+        rich_revision_payload,
+    )
 
     p = upsert_patient(
         phone="491111000028",
@@ -441,15 +576,14 @@ def seed_sc_028(ctx: dict) -> None:
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
     force_publish(ctx, md, pdf_label="sc028_resend")
-    save_draft_document_version(
-        medical_document_id=md.id,
-        updated_by_user_id=ctx["doctor"].id,
+    open_demo_pending_revision(
+        ctx,
+        md,
         medical_payload=rich_revision_payload(
             summary_note=(
                 "Revision SC-028: Nach Korrektur erneut veröffentlichen und SMS senden."
             )
         ),
-        intent="amend",
     )
     md.refresh_from_db()
     ctx["sc028_doc_id"] = str(md.id)
@@ -851,6 +985,10 @@ SCENARIO_SEEDERS: dict[str, Callable[[dict], None]] = {
     "SC-026": seed_sc_026,
     "SC-027": seed_sc_027,
     "SC-028": seed_sc_028,
+    "SC-031": seed_sc_031,
+    "SC-032": seed_sc_032,
+    "SC-033": seed_sc_033,
+    "SC-034": seed_sc_034,
 }
 
 
@@ -885,6 +1023,10 @@ def _serialize_ctx(ctx: dict) -> dict:
                 out["queue_id"] = str(v.id)
             continue
         if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        elif isinstance(v, list) and all(
+            isinstance(x, (str, int, float, bool)) or x is None for x in v
+        ):
             out[k] = v
         else:
             out[k] = str(v)

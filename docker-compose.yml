@@ -55,6 +55,8 @@ services:
       DB_PORT: "5432"
       SMSAPI_USE_MOCK: "1"
       HIDRIVE_USE_MOCK: "1"
+      # Match scenario-videos / typical .env Common-space path; seed uses hidrive_incoming_dir().
+      HIDRIVE_INCOMING_PATH: ${HIDRIVE_INCOMING_PATH:-/public/incoming}
       # Domyślnie puste — bez działającego otel-collector eksport OTLP timeoutuje i zaśmieca logi (np. przy nagraniach manual).
       # Włącz: dopisz do .env OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces i uruchom `otel-collector` (+ tempo).
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
