@@ -760,12 +760,14 @@ def steps_sc_014(page, base: str, ctx: dict) -> None:
     page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
     last = ctx.get("sc014_patient_last") or "LockDemo"
-    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    search = page.locator('#id_patient_search, input[name="patient_search"]').first
     if search.count():
         human_fill(page, search, last, pause_after_ms=800)
         form = search.locator("xpath=ancestor::form[1]")
         if form.count():
-            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+            human_click(
+                page, form.locator('button[type="submit"]').first, pause_after_ms=1200
+            )
         else:
             search.press("Enter")
             page.wait_for_load_state("networkidle")
@@ -793,12 +795,14 @@ def steps_sc_031(page, base: str, ctx: dict) -> None:
     login_doctor(page, base, pwd)
     page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
-    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    search = page.locator('#id_patient_search, input[name="patient_search"]').first
     if search.count():
         human_fill(page, search, last, pause_after_ms=800)
         form = search.locator("xpath=ancestor::form[1]")
         if form.count():
-            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+            human_click(
+                page, form.locator('button[type="submit"]').first, pause_after_ms=1200
+            )
         else:
             search.press("Enter")
             page.wait_for_load_state("networkidle")
@@ -891,12 +895,14 @@ def steps_sc_034(page, base: str, ctx: dict) -> None:
     login_doctor(page, base, pwd)
     page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
-    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    search = page.locator('#id_patient_search, input[name="patient_search"]').first
     if search.count():
         human_fill(page, search, last, pause_after_ms=800)
         form = search.locator("xpath=ancestor::form[1]")
         if form.count():
-            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+            human_click(
+                page, form.locator('button[type="submit"]').first, pause_after_ms=1200
+            )
         else:
             search.press("Enter")
             page.wait_for_load_state("networkidle")

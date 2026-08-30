@@ -234,8 +234,7 @@ class EditSessionDenialSideEffectTests(_DenialMatrixMixin):
     def test_expired_lock_save_has_no_side_effects(self) -> None:
         doc, sess = self._make_locked_draft()
         MedicalDocument.objects.filter(pk=doc.pk).update(
-            locked_at=timezone.now()
-            - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
+            locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
         )
         before = self._snapshot(doc)
         with self.assertRaises(EditSessionResponseError) as ctx:
@@ -430,7 +429,10 @@ class WriteGateArchitectureTests(ServicesCoverageBase):
                 names = {alias.name for alias in node.names}
                 if mod.endswith("medical.services") or mod == "apps.medical.services":
                     imported_from_services |= names
-                if mod.endswith("medical.write_gate") or mod == "apps.medical.write_gate":
+                if (
+                    mod.endswith("medical.write_gate")
+                    or mod == "apps.medical.write_gate"
+                ):
                     imported_from_write_gate |= names
             if isinstance(node, ast.Call):
                 func = node.func

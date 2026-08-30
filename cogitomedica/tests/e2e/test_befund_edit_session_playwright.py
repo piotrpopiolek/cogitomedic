@@ -114,7 +114,8 @@ class BefundEditSessionPlaywrightTests(PlaywrightDoctorE2EBase):
 
         self.mark_form_dirty(self.page, "stale tab text must survive")
         with self.page.expect_response(
-            lambda r: r.url.rstrip("/").endswith("/draft") and r.request.method == "PUT",
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT",
             timeout=30_000,
         ) as save_info:
             self.page.click("#btn-save-draft")
@@ -333,9 +334,7 @@ class BefundEditSessionPlaywrightTests(PlaywrightDoctorE2EBase):
         self.page.route("**/api/v1/medical-documents/**", fail_draft)
         self.mark_form_dirty(self.page, "must survive http 500")
         self.page.wait_for_timeout(3500)
-        self.assertIn(
-            "must survive http 500", self.page.input_value("#summary_text")
-        )
+        self.assertIn("must survive http 500", self.page.input_value("#summary_text"))
         self.assertTrue(self.page.is_enabled("#summary_text"))
 
     def test_autosave_offline_keeps_form_text(self) -> None:
@@ -370,8 +369,7 @@ class BefundEditSessionPlaywrightTests(PlaywrightDoctorE2EBase):
             "apps.medical.api_views.mutate_doctor_save_draft", side_effect=slow_save
         ):
             with self.page.expect_request(
-                lambda r: r.url.rstrip("/").endswith("/draft")
-                and r.method == "PUT",
+                lambda r: r.url.rstrip("/").endswith("/draft") and r.method == "PUT",
                 timeout=20_000,
             ):
                 self.mark_form_dirty(self.page, "first draft")
@@ -537,9 +535,7 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
             timeout=20_000,
         )
         self.mark_form_dirty(self.page, "blocked after broadcast")
-        self.assertIn(
-            "blocked after broadcast", self.page.input_value("#summary_text")
-        )
+        self.assertIn("blocked after broadcast", self.page.input_value("#summary_text"))
 
     def test_session_storage_survives_navigation_and_resume(self) -> None:
         first = self.open_document_acquiring_session(self.page, self.doc.id)
@@ -592,16 +588,14 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
         )
         self.page.go_back(wait_until="domcontentloaded")
         # Simulate pageshow from bfcache restore (PageTransitionEvent may be missing).
-        self.page.evaluate(
-            """() => {
+        self.page.evaluate("""() => {
               try {
                 const ev = new PageTransitionEvent('pageshow', { persisted: true });
                 window.dispatchEvent(ev);
               } catch (e) {
                 window.dispatchEvent(new Event('pageshow'));
               }
-            }"""
-        )
+            }""")
         self.page.wait_for_selector("#befund-form", timeout=30_000)
         self.assertEqual(unlock_hits, [])
         self.doc.refresh_from_db()
@@ -724,16 +718,14 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
             return_value=(_MIN_PDF, None),
         ):
             # Overlapping clicks: writeInFlight must keep concurrent mutators out.
-            self.page.evaluate(
-                """() => {
+            self.page.evaluate("""() => {
                   const save = document.querySelector('#btn-save-draft');
                   const preview = document.querySelector('#btn-preview-pdf');
                   const publish = document.querySelector('#btn-publish');
                   if (save) save.click();
                   if (preview) preview.click();
                   if (publish) publish.click();
-                }"""
-            )
+                }""")
             self.page.wait_for_timeout(4000)
 
         self.assertLessEqual(in_flight_peak["n"], 1)
@@ -802,9 +794,7 @@ _MSG_PUBLISH_PREVIEW_REQUIRED = (
     "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen."
 )
 _MSG_AUTOSAVE_SUCCESS = "Entwurf automatisch gespeichert"
-_MSG_AUTOSAVE_PREVIEW_AGAIN = (
-    "Nach dem automatischen Speichern bitte erneut Vorschau prüfen vor dem Veröffentlichen."
-)
+_MSG_AUTOSAVE_PREVIEW_AGAIN = "Nach dem automatischen Speichern bitte erneut Vorschau prüfen vor dem Veröffentlichen."
 _MSG_RECLAIM_TITLE = "Eigene Sitzung wiederherstellen?"
 _MSG_LOCAL_TAB_TITLE = "Bereits in einem anderen Tab geöffnet"
 
@@ -887,16 +877,14 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
         deadline = time.time() + 40
 
         def state(page) -> dict:
-            return page.evaluate(
-                """() => {
+            return page.evaluate("""() => {
                   const save = document.querySelector('#btn-save-draft');
                   const modal = document.querySelector('#revision-modal');
                   return {
                     saveEnabled: !!(save && !save.disabled),
                     modalOpen: !!(modal && !modal.classList.contains('hidden')),
                   };
-                }"""
-            )
+                }""")
 
         s1 = s2 = {"saveEnabled": False, "modalOpen": False}
         while time.time() < deadline:
@@ -1029,8 +1017,7 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
                 }""",
                 {"text": text, "caret": caret},
             )
-        after = self.page.evaluate(
-            """() => {
+        after = self.page.evaluate("""() => {
               const el = document.querySelector('#summary_text');
               return {
                 active: document.activeElement === el,
@@ -1038,8 +1025,7 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
                 end: el.selectionEnd,
                 value: el.value,
               };
-            }"""
-        )
+            }""")
         self.assertEqual(after["value"], text)
         self.assertTrue(after["active"])
         self.assertEqual(after["start"], caret)
@@ -1201,14 +1187,12 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
                 puts.append(req.url)
 
         self.page.on("request", on_request)
-        self.page.evaluate(
-            """() => {
+        self.page.evaluate("""() => {
               Object.defineProperty(navigator, 'onLine', {
                 configurable: true,
                 get: () => false,
               });
-            }"""
-        )
+            }""")
         self.page.context.set_offline(True)
         self.mark_form_dirty(self.page, "reconnect then save")
         self.page.wait_for_timeout(3500)
@@ -1220,15 +1204,13 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
             and r.ok,
             timeout=20_000,
         ):
-            self.page.evaluate(
-                """() => {
+            self.page.evaluate("""() => {
                   Object.defineProperty(navigator, 'onLine', {
                     configurable: true,
                     get: () => true,
                   });
                   window.dispatchEvent(new Event('online'));
-                }"""
-            )
+                }""")
         self.assertIn("reconnect then save", self.page.input_value("#summary_text"))
         self.assertIn(_MSG_AUTOSAVE_SUCCESS, self.alert_text(self.page))
 
@@ -1267,4 +1249,3 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
             page2.click("#btn-save-draft")
         self.doc.refresh_from_db()
         self.assertGreaterEqual(self.doc.draft_revision, 1)
-

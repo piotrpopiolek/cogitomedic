@@ -428,10 +428,7 @@ def _collect_active_usage_gauges(now):
                 MedicalDocumentSourceType.PAPER_INTAKE,
             ),
         )
-        .filter(
-            Q(status="DRAFT")
-            | Q(status="PUBLISHED", has_pending_revision=True)
-        )
+        .filter(Q(status="DRAFT") | Q(status="PUBLISHED", has_pending_revision=True))
         .values("locked_by_user_id")
         .distinct()
         .count()

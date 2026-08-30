@@ -127,7 +127,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         )
         self.assertEqual(resp.status_code, 409)
         body = resp.json()
-        self.assertEqual(body["error_key"], "edit_session_reclaim_confirmation_required")
+        self.assertEqual(
+            body["error_key"], "edit_session_reclaim_confirmation_required"
+        )
         self.assertNotIn("edit_session_token", body)
         rev = body["edit_session_revision"]
         reclaim = self.client.post(
@@ -231,8 +233,7 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         doc2 = self._make_draft()
         sess2 = self._start(doc2)
         MedicalDocument.objects.filter(id=doc2.id).update(
-            locked_at=timezone.now()
-            - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
+            locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
         )
         expired = self.client.put(
             f"/api/v1/medical-documents/{doc2.id}/draft",
@@ -260,7 +261,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         self.assertEqual(resp.status_code, 409)
         body = resp.json()
         self.assertEqual(body["error_key"], "doctor_lock_limit_reached")
-        self.assertEqual(len(body["locked_documents"]), DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS)
+        self.assertEqual(
+            len(body["locked_documents"]), DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
+        )
         self.assertNotIn("edit_session_token", body)
         self.assertNotIn("edit_session_token", json.dumps(body))
         fourth.refresh_from_db()

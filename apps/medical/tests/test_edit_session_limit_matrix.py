@@ -121,9 +121,7 @@ class DoctorLockLimitMatrixTests(ServicesCoverageBase):
         return user
 
     def test_slots_zero_through_three_then_block(self) -> None:
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 0
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 0)
         held = []
         for i in range(DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS):
             doc = self._make_draft()
@@ -182,8 +180,7 @@ class DoctorLockLimitMatrixTests(ServicesCoverageBase):
                 medical_document_id=doc.id, user=self.doctor, purpose="edit"
             )
         MedicalDocument.objects.filter(id=docs[0].id).update(
-            locked_at=timezone.now()
-            - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
+            locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
         )
         self.assertEqual(
             count_doctor_active_document_locks(user_id=self.doctor.id),
@@ -241,18 +238,14 @@ class DoctorLockLimitMatrixTests(ServicesCoverageBase):
         sess = start_doctor_edit_session(
             medical_document_id=pub.id, user=self.doctor, purpose="amend"
         )
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 3
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 3)
         mutate_doctor_discard_revision(
             medical_document_id=pub.id,
             user=self.doctor,
             edit_session_token=sess.edit_session_token,
             expected_draft_revision=sess.draft_revision,
         )
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 2
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 2)
 
         target = drafts[0]
         target.refresh_from_db()
@@ -281,16 +274,12 @@ class DoctorLockLimitMatrixTests(ServicesCoverageBase):
             publish_request_id=uuid.uuid4(),
             publish_locale="de-DE",
         )
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 1
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 1)
         freed = self._make_draft()
         start_doctor_edit_session(
             medical_document_id=freed.id, user=self.doctor, purpose="edit"
         )
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 2
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 2)
 
     def test_two_doctors_have_independent_limits(self) -> None:
         other = self._other_doctor("indep")
@@ -363,9 +352,7 @@ class DoctorLockLimitMatrixTests(ServicesCoverageBase):
                 locked_by_user=self.doctor,
                 locked_at=timezone.now(),
             )
-        self.assertEqual(
-            count_doctor_active_document_locks(user_id=self.doctor.id), 0
-        )
+        self.assertEqual(count_doctor_active_document_locks(user_id=self.doctor.id), 0)
         for _ in range(DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS):
             doc = self._make_draft()
             start_doctor_edit_session(

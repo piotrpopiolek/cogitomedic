@@ -43,9 +43,7 @@ def create_doctor(*, username: str, password: str = "x") -> StaffUser:
 
 def create_clinic_queue(*, doctor: StaffUser, code: str = "E2E") -> DailyQueue:
     clinic = ClinicSite.objects.create(code=code, name=f"Clinic {code}")
-    room = ConsultingRoom.objects.create(
-        clinic_site=clinic, code="R1", name="Room 1"
-    )
+    room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="Room 1")
     return DailyQueue.objects.create(
         queue_date=date.today(),
         clinic_site=clinic,

@@ -384,9 +384,7 @@ def create_submitted_entry(
     return entry, intake
 
 
-def create_draft_document(
-    ctx: dict, entry, intake, *, seed_incoming_pdf: bool = True
-):
+def create_draft_document(ctx: dict, entry, intake, *, seed_incoming_pdf: bool = True):
     from apps.medical.services import (
         create_or_get_medical_document,
         save_draft_document_version,

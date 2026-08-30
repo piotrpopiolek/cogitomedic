@@ -244,9 +244,7 @@ class PublishOutboxLockOrderConcurrencyTests(TransactionTestCase):
         )
         assign_group_to_test_user(self.doctor, "Doctor")
         clinic = ClinicSite.objects.create(code="POX", name="Pub Outbox")
-        room = ConsultingRoom.objects.create(
-            clinic_site=clinic, code="R1", name="R1"
-        )
+        room = ConsultingRoom.objects.create(clinic_site=clinic, code="R1", name="R1")
         self.queue = DailyQueue.objects.create(
             queue_date=date.today(),
             clinic_site=clinic,

@@ -12,7 +12,13 @@ from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
 from django.test import override_settings
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    sync_playwright,
+)
 
 from apps.medical.external_pdf_service import GateResult
 
@@ -130,7 +136,9 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
             pass
 
     def login_doctor(self, page: Page, *, username: str) -> None:
-        page.goto(f"{self.live_server_url}/doctor/login/", wait_until="domcontentloaded")
+        page.goto(
+            f"{self.live_server_url}/doctor/login/", wait_until="domcontentloaded"
+        )
         page.fill('input[name="username"]', username)
         page.fill('input[name="password"]', self.password)
         page.click('form button[type="submit"]')
@@ -147,9 +155,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
 
     def open_document_acquiring_session(self, page: Page, document_id) -> dict:
         with page.expect_response(
-            lambda r: "/edit-session" in r.url
-            and r.request.method == "POST"
-            and r.ok,
+            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
             timeout=45_000,
         ) as info:
             self.open_document(page, document_id)
@@ -194,8 +200,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
 
     def set_control_needed_without_lesions(self, page: Page) -> None:
         """Force client-side validation failure used by autosave/save."""
-        page.evaluate(
-            """() => {
+        page.evaluate("""() => {
               const ctrl = document.querySelector(
                 'input[name="overall_image_assessment"][value="CONTROL_NEEDED"]'
               );
@@ -203,8 +208,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
                 ctrl.checked = true;
                 ctrl.dispatchEvent(new Event('change', { bubbles: true }));
               }
-            }"""
-        )
+            }""")
 
     def click_logout(self, page: Page) -> None:
         page.get_by_role("button", name="Abmelden").click()
@@ -229,9 +233,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
     def start_amend_revision(self, page: Page) -> dict:
         page.wait_for_selector("#btn-start-revision", timeout=20_000)
         with page.expect_response(
-            lambda r: "/edit-session" in r.url
-            and r.request.method == "POST"
-            and r.ok,
+            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
             timeout=45_000,
         ) as info:
             page.click("#btn-start-revision")
@@ -265,7 +267,9 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
             hidden,
         )
 
-    def wait_for_publish_enabled(self, page: Page, *, enabled: bool, timeout: int = 15_000) -> None:
+    def wait_for_publish_enabled(
+        self, page: Page, *, enabled: bool, timeout: int = 15_000
+    ) -> None:
         if enabled:
             page.wait_for_function(
                 "() => { const b = document.querySelector('#btn-publish');"
@@ -281,8 +285,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
 
     def add_no_locks_no_broadcast_init(self) -> None:
         """Force BroadcastChannel/storage fallback (no Web Locks, no BC)."""
-        self.context.add_init_script(
-            """
+        self.context.add_init_script("""
             Object.defineProperty(navigator, 'locks', {
               configurable: true,
               get: () => undefined,
@@ -290,8 +293,7 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
             window.BroadcastChannel = function () {
               throw new Error('E2E BroadcastChannel disabled');
             };
-            """
-        )
+            """)
 
     def alert_text(self, page: Page) -> str:
         loc = page.locator('#alert-placeholder [role="alert"]').first
@@ -300,14 +302,12 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
 
     def dispatch_publish_click(self, page: Page) -> None:
         """Fire the Publish handler even when the button is disabled."""
-        page.evaluate(
-            """() => {
+        page.evaluate("""() => {
               const b = document.querySelector('#btn-publish');
               if (b) {
                 b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
               }
-            }"""
-        )
+            }""")
 
     def click_preview_pdf(self, page: Page) -> None:
         with page.expect_popup(timeout=45_000) as popup_info:
