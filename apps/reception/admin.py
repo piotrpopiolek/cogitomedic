@@ -593,9 +593,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         try:
-            return super().changeform_view(
-                request, object_id, form_url, extra_context
-            )
+            return super().changeform_view(request, object_id, form_url, extra_context)
         except DomainError:
             # Flag write failed after message_user ERROR; skip admin "saved successfully".
             return redirect(request.get_full_path())

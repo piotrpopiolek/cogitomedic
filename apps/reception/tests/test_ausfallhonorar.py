@@ -31,7 +31,9 @@ from apps.reception.services import update_queue_entry
 from apps.users.models import StaffUser
 
 
-def _request_with_messages(user: StaffUser, *, path: str = "/admin/reception/queueentry/"):
+def _request_with_messages(
+    user: StaffUser, *, path: str = "/admin/reception/queueentry/"
+):
     request = RequestFactory().post(path)
     request.user = user
     SessionMiddleware(lambda r: None).process_request(request)
@@ -471,9 +473,7 @@ class AusfallhonorarFlagTests(TestCase):
         self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
         self.assertEqual(other.ausfallhonorar_set_by_id, self.reception.id)
         self.assertEqual(self._ausfall_audit_count(), 2)
-        self.assertTrue(
-            any(m.level == messages.SUCCESS for m in request._messages)
-        )
+        self.assertTrue(any(m.level == messages.SUCCESS for m in request._messages))
 
         request = _request_with_messages(self.reception)
         admin_inst.clear_ausfallhonorar(request, qs)
@@ -592,6 +592,4 @@ class AusfallhonorarFlagTests(TestCase):
         ):
             response = self._model_admin().changeform_view(request)
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(
-            any(m.level == messages.SUCCESS for m in request._messages)
-        )
+        self.assertFalse(any(m.level == messages.SUCCESS for m in request._messages))
