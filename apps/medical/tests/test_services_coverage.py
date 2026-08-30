@@ -911,6 +911,7 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
             sms_sent_at=timezone.now(),
             local_pdf_deleted_at=timezone.now(),
         )
+        doc.refresh_from_db()
         with self.assertRaises(DomainError) as ctx:
             begin_pending_revision_from_published(
                 medical_document=doc,

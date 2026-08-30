@@ -125,6 +125,27 @@ class Tests(TestCase):
     def _doc_url(self, suffix: str = "") -> str:
         return f"{BASE}medical-documents/{self.medical_doc.id}{suffix}"
 
+    def _start_edit_session(self) -> dict:
+        self._login_doctor()
+        response = self.client.post(
+            self._doc_url("/edit-session"),
+            data=json.dumps({"purpose": "edit"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def _preview_draft_pdf(self, *, query: str = "") -> object:
+        sess = self._start_edit_session()
+        q = (
+            f"?source=draft&expected_draft_revision={sess['draft_revision']}"
+            + (f"&{query.lstrip('?&')}" if query else "")
+        )
+        return self.client.get(
+            self._doc_url("/preview-pdf") + q,
+            HTTP_X_EDIT_SESSION_TOKEN=sess["edit_session_token"],
+        )
+
     # =============================================================
     # 1. medical_document_revoke_view  (POST …/<uuid>/revoke)
     # =============================================================
@@ -411,8 +432,7 @@ class Tests(TestCase):
                 "final_assessment": "NO_HIGH_GRADE_SUSPICION",
             },
         )
-        self._login_doctor()
-        r = self.client.get(self._doc_url("/preview-pdf"))
+        r = self._preview_draft_pdf()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", r.content[:8])
@@ -435,8 +455,7 @@ class Tests(TestCase):
                 "final_assessment": "NO_HIGH_GRADE_SUSPICION",
             },
         )
-        self._login_doctor()
-        r = self.client.get(self._doc_url("/preview-pdf") + "?form_locale=en-GB")
+        r = self._preview_draft_pdf(query="form_locale=en-GB")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
 
@@ -469,8 +488,7 @@ class Tests(TestCase):
             original_filename="x.pdf",
             status=ExternalPdfStatus.MATCHED,
         )
-        self._login_doctor()
-        r = self.client.get(self._doc_url("/preview-pdf"))
+        r = self._preview_draft_pdf()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", r.content[:8])
@@ -674,8 +692,7 @@ class Tests(TestCase):
             original_filename="x.pdf",
             status=ExternalPdfStatus.MATCHED,
         )
-        self._login_doctor()
-        r = self.client.get(self._doc_url("/preview-pdf"))
+        r = self._preview_draft_pdf()
         self.assertEqual(r.status_code, 200)
         warn = (r.get("X-Befund-Preview-Warning") or "").lower()
         self.assertIn("external_pdf_corrupt", warn)
@@ -808,8 +825,12 @@ class Tests(TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("details", r.json())
 
-    def test_draft_put_returns_423_when_refresh_lock_fails_after_save(self):
-        """If refresh_document_lock loses a race, API must roll back and report 423."""
+    def test_draft_put_returns_423_when_edit_session_expired(self):
+        """Expired lock → write gate returns 423 edit_session_expired (no silent save)."""
+        sess = self._start_edit_session()
+        MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
+            locked_at=timezone.now() - timedelta(hours=48)
+        )
         body = {
             "medical_payload_schema_version": 1,
             "medical_payload": {
@@ -822,16 +843,17 @@ class Tests(TestCase):
                 "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
                 "final_assessment": "NO_HIGH_GRADE_SUSPICION",
             },
+            "edit_session_token": sess["edit_session_token"],
+            "expected_draft_revision": sess["draft_revision"],
+            "draft_save_request_id": str(uuid4()),
         }
-        self._login_doctor()
-        with patch("apps.medical.api_views.refresh_document_lock", return_value=False):
-            r = self.client.put(
-                self._doc_url("/draft"),
-                data=json.dumps(body),
-                content_type="application/json",
-            )
+        r = self.client.put(
+            self._doc_url("/draft"),
+            data=json.dumps(body),
+            content_type="application/json",
+        )
         self.assertEqual(r.status_code, 423)
-        self.assertIn("locked_by_username", r.json())
+        self.assertEqual(r.json().get("error_key"), "edit_session_expired")
 
     # =============================================================
     # 3d. medical_document_publish_view — bad body

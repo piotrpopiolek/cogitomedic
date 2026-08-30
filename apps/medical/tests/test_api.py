@@ -2017,7 +2017,7 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         self.assertEqual(body["published_version_no"], 1)
         self.assertEqual(body["version_no"], 2)
         self.assertEqual(body["version_status"], "DRAFT")
-        self.assertEqual(body["draft_revision"], 3)
+        self.assertEqual(body["draft_revision"], 2)
 
     def test_get_during_pending_revision_includes_reception_note(self) -> None:
         note = "Bitte Geburtsdatum prüfen"
