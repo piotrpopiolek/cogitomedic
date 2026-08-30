@@ -362,10 +362,14 @@ def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     """
     Refresh ``locked_at`` for the current doctor holder.
     Returns False if another doctor holds an effective lock.
+
+    A free/expired lock goes through ``start_doctor_edit_session`` (StaffUser
+    then document). Refreshing an own lock takes only ``MedicalDocument`` and
+    never ``StaffUser`` afterwards.
     """
     if not getattr(user, "is_doctor", False):
         return False
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    doc = MedicalDocument.objects.get(id=medical_document_id)
     if not doctor_befund_edit_lock_applies(doc):
         return True
 
@@ -384,8 +388,14 @@ def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     if holder_id != user.id:
         return False
 
-    doc.locked_at = now
-    doc.save(update_fields=["locked_at", "updated_at"])
+    locked = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    if not doctor_befund_edit_lock_applies(locked):
+        return True
+    current_holder = effective_lock_holder_id(locked, now=timezone.now())
+    if current_holder != user.id:
+        return False
+    locked.locked_at = timezone.now()
+    locked.save(update_fields=["locked_at", "updated_at"])
     return True
 
 

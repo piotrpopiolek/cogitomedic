@@ -253,10 +253,16 @@ def start_doctor_edit_session(
     expected_edit_session_revision: int | None = None,
     reclaim_confirmed: bool = False,
 ) -> DoctorEditSessionResult:
-    """Acquire, resume, or reclaim a doctor Befund edit session."""
+    """Acquire, resume, or reclaim a doctor Befund edit session.
+
+    Lock order when both rows are needed: ``StaffUser`` then ``MedicalDocument``.
+    Save/publish/discard lock only the document and never take ``StaffUser``
+    afterwards, so they cannot deadlock with this path.
+    """
     doctor = assert_doctor_actor(user)
     now = timezone.now()
 
+    StaffUser.objects.select_for_update().get(id=doctor.id)
     doc = (
         MedicalDocument.objects.select_for_update()
         .select_related("queue_entry__daily_queue", "queue_entry__patient")
@@ -368,10 +374,8 @@ def start_doctor_edit_session(
             payload={"edit_session_revision": doc.edit_session_revision},
         )
 
-    # Serialize per-doctor acquires, then count under that lock so parallel
+    # StaffUser is already locked (above). Count under that lock so parallel
     # acquires on different documents cannot slip past DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS.
-    StaffUser.objects.select_for_update().get(id=doctor.id)
-
     if count_doctor_active_document_locks(user_id=doctor.id, now=now) >= (
         DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
     ):

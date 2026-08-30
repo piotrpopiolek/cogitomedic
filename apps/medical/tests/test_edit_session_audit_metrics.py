@@ -205,6 +205,34 @@ class EditSessionAuditMetricsTests(ServicesCoverageBase):
             source,
         )
 
+    def test_edit_session_locks_staff_user_before_document(self) -> None:
+        source = inspect.getsource(start_doctor_edit_session)
+        user_idx = source.find("StaffUser.objects.select_for_update()")
+        doc_idx = source.find("MedicalDocument.objects.select_for_update()")
+        self.assertGreaterEqual(user_idx, 0)
+        self.assertGreater(doc_idx, user_idx)
+        self.assertEqual(source.count("StaffUser.objects.select_for_update()"), 1)
+
+        from apps.medical.services import refresh_document_lock
+        from apps.medical.write_gate import (
+            mutate_doctor_discard_revision,
+            mutate_doctor_publish,
+            mutate_doctor_save_draft,
+        )
+
+        for fn in (
+            mutate_doctor_save_draft,
+            mutate_doctor_publish,
+            mutate_doctor_discard_revision,
+            refresh_document_lock,
+        ):
+            body = inspect.getsource(fn)
+            self.assertNotIn(
+                "StaffUser.objects.select_for_update",
+                body,
+                msg=f"{fn.__name__} must not lock StaffUser (document-only path)",
+            )
+
 
 class PublishOutboxLockOrderConcurrencyTests(TransactionTestCase):
     def setUp(self) -> None:
