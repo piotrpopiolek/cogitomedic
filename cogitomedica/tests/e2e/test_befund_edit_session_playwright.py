@@ -802,6 +802,9 @@ _MSG_PUBLISH_PREVIEW_REQUIRED = (
     "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen."
 )
 _MSG_AUTOSAVE_SUCCESS = "Entwurf automatisch gespeichert"
+_MSG_AUTOSAVE_PREVIEW_AGAIN = (
+    "Nach dem automatischen Speichern bitte erneut Vorschau prüfen vor dem Veröffentlichen."
+)
 _MSG_RECLAIM_TITLE = "Eigene Sitzung wiederherstellen?"
 _MSG_LOCAL_TAB_TITLE = "Bereits in einem anderen Tab geöffnet"
 
@@ -1172,4 +1175,96 @@ class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
         ):
             self.click_preview_pdf(self.page)
         self.wait_for_publish_enabled(self.page, enabled=True)
+
+    def test_autosave_shows_preview_again_status(self) -> None:
+        self.open_document_acquiring_session(self.page, self.doc.id)
+        with self.page.expect_response(
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT"
+            and r.ok,
+            timeout=20_000,
+        ):
+            self.mark_form_dirty(self.page, "autosave status note")
+        alert = self.alert_text(self.page)
+        self.assertIn(_MSG_AUTOSAVE_SUCCESS, alert)
+        self.assertIn(_MSG_AUTOSAVE_PREVIEW_AGAIN, alert)
+        self.wait_for_publish_enabled(self.page, enabled=False)
+        self.dispatch_publish_click(self.page)
+        self.assertIn(_MSG_PUBLISH_PREVIEW_REQUIRED, self.alert_text(self.page))
+
+    def test_autosave_retries_after_online(self) -> None:
+        self.open_document_acquiring_session(self.page, self.doc.id)
+        puts: list[str] = []
+
+        def on_request(req) -> None:
+            if req.method == "PUT" and req.url.rstrip("/").endswith("/draft"):
+                puts.append(req.url)
+
+        self.page.on("request", on_request)
+        self.page.evaluate(
+            """() => {
+              Object.defineProperty(navigator, 'onLine', {
+                configurable: true,
+                get: () => false,
+              });
+            }"""
+        )
+        self.page.context.set_offline(True)
+        self.mark_form_dirty(self.page, "reconnect then save")
+        self.page.wait_for_timeout(3500)
+        self.assertEqual(puts, [])
+        self.page.context.set_offline(False)
+        with self.page.expect_response(
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT"
+            and r.ok,
+            timeout=20_000,
+        ):
+            self.page.evaluate(
+                """() => {
+                  Object.defineProperty(navigator, 'onLine', {
+                    configurable: true,
+                    get: () => true,
+                  });
+                  window.dispatchEvent(new Event('online'));
+                }"""
+            )
+        self.assertIn("reconnect then save", self.page.input_value("#summary_text"))
+        self.assertIn(_MSG_AUTOSAVE_SUCCESS, self.alert_text(self.page))
+
+    def test_local_tab_trotzdem_oeffnen_blocks_first_tab(self) -> None:
+        self.open_document_acquiring_session(self.page, self.doc.id)
+        page2 = self.context.new_page()
+        page2.goto(
+            f"{self.live_server_url}/doctor/{self.doc.id}/?lang=de",
+            wait_until="domcontentloaded",
+        )
+        page2.wait_for_selector("#revision-modal:not(.hidden)", timeout=20_000)
+        self.assertIn(
+            _MSG_LOCAL_TAB_TITLE, page2.locator("#revision-modal-title").inner_text()
+        )
+        with page2.expect_response(
+            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
+            timeout=45_000,
+        ):
+            self.confirm_revision_modal(page2)
+        page2.wait_for_selector("#btn-save-draft:not([disabled])", timeout=30_000)
+        self.page.wait_for_function(
+            "() => { const b = document.querySelector('#btn-save-draft');"
+            " return b && b.disabled; }",
+            timeout=20_000,
+        )
+        self.mark_form_dirty(self.page, "stale after trotzdem")
+        self.assertIn("stale after trotzdem", self.page.input_value("#summary_text"))
+        self.assertTrue(self.page.is_disabled("#btn-publish"))
+        page2.fill("#summary_text", "second tab writes after trotzdem")
+        with page2.expect_response(
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT"
+            and r.ok,
+            timeout=20_000,
+        ):
+            page2.click("#btn-save-draft")
+        self.doc.refresh_from_db()
+        self.assertGreaterEqual(self.doc.draft_revision, 1)
 

@@ -750,11 +750,29 @@ def steps_sc_013(page, base: str, ctx: dict) -> None:
 
 
 def steps_sc_014(page, base: str, ctx: dict) -> None:
+    """Yellow row + disabled Open for a colleague's lock; direct URL stays read-only."""
     pwd = ctx["password"]
     login_doctor(page, base, pwd)
     page.goto(f"{base}/doctor/?lang=de", wait_until="networkidle")
     ensure_cursor_alive(page)
+    last = ctx.get("sc014_patient_last") or "LockDemo"
+    search = page.locator("#id_patient_search, input[name=\"patient_search\"]").first
+    if search.count():
+        human_fill(page, search, last, pause_after_ms=800)
+        form = search.locator("xpath=ancestor::form[1]")
+        if form.count():
+            human_click(page, form.locator('button[type="submit"]').first, pause_after_ms=1200)
+        else:
+            search.press("Enter")
+            page.wait_for_load_state("networkidle")
+    ensure_cursor_alive(page)
     _pause(page, 2200)
+    row = page.locator("tr", has_text=last).first
+    if row.count():
+        human_hover(page, row, pause_ms=1600)
+        open_ctrl = row.locator("span.cursor-not-allowed, a").first
+        if open_ctrl.count():
+            human_hover(page, open_ctrl, pause_ms=1400)
     page.goto(
         f"{base}/doctor/{ctx['sc014_doc_id']}/?lang=de",
         wait_until="networkidle",

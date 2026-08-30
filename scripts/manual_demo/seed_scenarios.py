@@ -12,6 +12,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from scripts.manual_demo.scenario_helpers import (
+    DEMO_PASSWORD,
     assert_demo_seed_dev_only,
     create_draft_document,
     create_outbox_event,
@@ -354,11 +355,34 @@ def seed_sc_013(ctx: dict) -> None:
 
 
 def seed_sc_014(ctx: dict) -> None:
-    """Document locked by manager."""
+    """Draft locked by another doctor (Admin/Manager never hold the Befund semaphore)."""
     seed_base(ctx)
+    from uuid import uuid4
+
     from django.utils import timezone
 
+    from apps.core.api_utils import assign_group_to_test_user
     from apps.medical.models import MedicalDocument
+    from apps.users.models import StaffUser
+
+    pwd = ctx.get("password") or DEMO_PASSWORD
+    holder, _ = StaffUser.objects.get_or_create(
+        username="screenshot_doctor_b",
+        defaults={
+            "email": "screenshot_doctor_b@example.invalid",
+            "first_name": "Screenshot",
+            "last_name": "Kollege",
+            "is_staff": True,
+            "is_active": True,
+        },
+    )
+    holder.set_password(pwd)
+    holder.is_staff = True
+    holder.is_active = True
+    holder.save()
+    holder.groups.clear()
+    assign_group_to_test_user(holder, "Doctor")
+    holder.clinic_sites.add(ctx["clinic"])
 
     p = upsert_patient(
         phone="491111000015",
@@ -371,12 +395,15 @@ def seed_sc_014(ctx: dict) -> None:
     entry, intake = create_submitted_entry(ctx, patient=p)
     md = create_draft_document(ctx, entry, intake)
     MedicalDocument.objects.filter(id=md.id).update(
-        locked_by_user=ctx["manager"],
+        locked_by_user=holder,
         locked_at=timezone.now(),
+        edit_session_token=uuid4(),
+        edit_session_revision=1,
     )
     ctx["sc014_doc_id"] = str(md.id)
     ctx["sc014_entry_id"] = str(entry.id)
     ctx["sc014_patient_last"] = p.last_name
+    ctx["sc014_holder_username"] = holder.username
 
 
 def seed_sc_015(ctx: dict) -> None:

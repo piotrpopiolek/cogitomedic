@@ -678,9 +678,18 @@
     setPublishEnabledFromPreviewFlag();
   }
 
+  function isBrowserOnline() {
+    return typeof navigator.onLine !== "boolean" || navigator.onLine;
+  }
+
+  function onOnlineAutosave() {
+    tryAutosave();
+  }
+
   function stopAutosave() {
     if (autosaveTimerId) { clearInterval(autosaveTimerId); autosaveTimerId = null; }
     document.removeEventListener("visibilitychange", onVisibilityChangeAutosave);
+    window.removeEventListener("online", onOnlineAutosave);
   }
 
   function setEditBlocked(message) {
@@ -738,11 +747,13 @@
     stopAutosave();
     autosaveTimerId = setInterval(tryAutosave, AUTOSAVE_MS);
     document.addEventListener("visibilitychange", onVisibilityChangeAutosave);
+    window.addEventListener("online", onOnlineAutosave);
   }
 
   function tryAutosave() {
     if (!befundFormDirty || !sessionReady || editBlocked || writeInFlight) return;
     if (document.visibilityState !== "visible") return;
+    if (!isBrowserOnline()) return;
     if (lastSuccessfulSaveAt && (Date.now() - lastSuccessfulSaveAt) < AUTOSAVE_MS) return;
     var built = buildDraftPayloadBody();
     if (built.error) return;
@@ -767,7 +778,10 @@
         previewSeenSinceLastSave = false;
         setPublishEnabledFromPreviewFlag();
         applyRevisionStateFromResponse(json);
-        alertMsg("success", UI.msgAutosaveSuccess);
+        alertMsg(
+          "success",
+          [UI.msgAutosaveSuccess, UI.msgAutosavePreviewAgain].filter(Boolean).join(" ")
+        );
       })
       .catch(function () {
         writeInFlight = false;

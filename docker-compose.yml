@@ -46,6 +46,7 @@ services:
   web:
     image: cogitomedica-web:dev
     build: .
+    shm_size: "1gb"
     restart: unless-stopped
     env_file:
       - .env

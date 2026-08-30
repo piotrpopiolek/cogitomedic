@@ -55,6 +55,9 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
         self.assertIn("AUTOSAVE_MS", src)
         self.assertIn("autosaveIntervalMs", src)
         self.assertIn("10 * 60 * 1000", src)
+        self.assertIn('addEventListener("online"', src)
+        self.assertIn("navigator.onLine", src)
+        self.assertIn("msgAutosavePreviewAgain", src)
 
     def test_reclaim_support(self) -> None:
         src = self._js_source()
