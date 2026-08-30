@@ -233,6 +233,7 @@ class DailyQueuesApiTests(TestCase):
         data = response.json()
         self.assertEqual(data["id"], str(entry.id))
         self.assertEqual(data["position_no"], 1)
+        self.assertFalse(data["ausfallhonorar"])
 
     def test_patch_queue_entry_updates_status_and_notes(self) -> None:
         queue = DailyQueue.objects.create(
@@ -517,7 +518,7 @@ class TabletQueueScopeApiTests(TestCase):
 
 
 class DoctorAndTabletAuthorizationApiTests(TestCase):
-    """DOCTOR can GET list + detail (in scope); TABLET cannot POST queues. PATCH/DELETE stay ADMIN-only."""
+    """DOCTOR can GET list + detail (in scope); TABLET cannot POST queues. PATCH/DELETE: Reception, Admin, Manager."""
 
     def setUp(self) -> None:
         self.client = Client()

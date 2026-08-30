@@ -616,6 +616,36 @@ class QueueEntry(models.Model):
             "Doctor list sort time",
         ),
     )
+    ausfallhonorar = models.BooleanField(
+        default=False,
+        verbose_name=db_gettext_lazy(
+            "administration.field_ausfallhonorar", "Ausfallhonorar"
+        ),
+        help_text=db_gettext_lazy(
+            "administration.field_ausfallhonorar_help",
+            "Manual fee for no-show, refused exam, or short-notice cancellation. "
+            "Appears on the accounting Ausfallhonorar list.",
+        ),
+    )
+    ausfallhonorar_set_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_ausfallhonorar_set_at",
+            "Ausfallhonorar set at",
+        ),
+    )
+    ausfallhonorar_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="ausfallhonorar_set_queue_entries",
+        verbose_name=db_gettext_lazy(
+            "administration.field_ausfallhonorar_set_by",
+            "Ausfallhonorar set by",
+        ),
+    )
 
     class Meta:
         db_table = "queue_entry"
@@ -653,6 +683,11 @@ class QueueEntry(models.Model):
                         QueueEntryStatus.PAPER_INTAKE_COMPLETED,
                     ],
                 ),
+            ),
+            models.Index(
+                fields=["ausfallhonorar"],
+                name="qentry_ausfall_true_idx",
+                condition=Q(ausfallhonorar=True),
             ),
         ]
         constraints = [

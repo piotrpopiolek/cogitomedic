@@ -65,7 +65,7 @@
         {% if report_mode == report_mode_attended %}
         {% admin_trans "administration.accounting_report_hint_attended" "Zeilen: Patienten mit ausgefülltem Fragebogen oder abgeschlossenem Paper-Intake nach Untersuchungsdatum; ohne stornierte Einträge und ohne No-Shows aus dem Import. Befund nicht erforderlich." %}
         {% elif report_mode == report_mode_ausfall %}
-        {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: Patienten aus der Tagesliste, die den Termin nicht abgeschlossen haben (nicht erschienen, abgelehnt oder Fragebogen/Paper-Intake nicht abgeschlossen). Ohne Stornierte. Nur Untersuchungstage bis heute — zukünftige Termine fehlen. Liste für die Forderungstabelle." %}
+        {% admin_trans "administration.accounting_report_hint_ausfall" "Zeilen: nur manuell markierte Ausfallhonorar-Einträge im gewählten Untersuchungszeitraum. Markierung durch Empfang, Manager oder Admin. Unabhängig vom Anamnesestatus oder Storno." %}
         {% else %}
         {% admin_trans "administration.accounting_report_hint" "Zeilen: erste gültige Befund-Veröffentlichung nach Untersuchungsdatum. Nachkorrekturen erzeugen keine neue Position; nach Widerruf zählt die nächste Veröffentlichung." %}
         {% endif %}

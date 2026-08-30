@@ -248,6 +248,11 @@ class AccountingReportBase(TestCase):
         self._make_published_version(doc, published_at=published_at)
         return doc
 
+    def _flag_ausfall(self, entry: QueueEntry | None = None) -> None:
+        target = entry or self.queue_entry
+        target.ausfallhonorar = True
+        target.save(update_fields=["ausfallhonorar", "updated_at"])
+
 
 class AccountingReportServiceTests(AccountingReportBase):
     def test_parse_report_mode_defaults_and_rejects_unknown(self) -> None:
@@ -472,9 +477,8 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual(report.rows[0].doctor_name, "Eva Schmidt")
         self.assertEqual(report.rows[0].medical_document_id, doc.id)
 
-    def test_ausfall_is_queue_minus_attended(self) -> None:
-        """Submitted intake → attended only; no-show (no completed intake) → ausfall."""
-        as_of = date(2026, 3, 16)
+    def test_ausfall_lists_only_manually_flagged(self) -> None:
+        """Ausfall rows are the manual flag, not queue-minus-attended."""
         attended = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
@@ -484,18 +488,24 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
-            as_of=as_of,
         )
         self.assertEqual(len(attended.rows), 1)
         self.assertEqual(ausfall.rows, [])
 
         self.intake.form_status = IntakeStatus.IN_PROGRESS
         self.intake.save(update_fields=["form_status"])
+        still_empty = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual(still_empty.rows, [])
+
+        self._flag_ausfall()
         ausfall_after = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
-            as_of=as_of,
         )
         self.assertEqual(len(ausfall_after.rows), 1)
         self.assertEqual(ausfall_after.rows[0].last_name, "Kowalska")
@@ -508,12 +518,26 @@ class AccountingReportServiceTests(AccountingReportBase):
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
             ausfallhonorar_yes="Tak",
-            as_of=as_of,
         )
         self.assertEqual(localized.rows[0].ausfallhonorar, "Tak")
 
-    def test_ausfall_excludes_future_queue_dates(self) -> None:
-        """Future WAITING appointments must not be billed as Ausfallhonorar."""
+    def test_flagged_attended_entry_appears_in_both_modes(self) -> None:
+        self._flag_ausfall()
+        attended = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_ATTENDED,
+        )
+        ausfall = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual({row.last_name for row in attended.rows}, {"Kowalska"})
+        self.assertEqual({row.last_name for row in ausfall.rows}, {"Kowalska"})
+
+    def test_ausfall_includes_future_queue_dates_when_flagged(self) -> None:
+        """A flagged future appointment in range is billed; unflagged is not."""
         future_queue = DailyQueue.objects.create(
             clinic_site=self.clinic_site,
             consulting_room=self.consulting_room,
@@ -529,29 +553,41 @@ class AccountingReportServiceTests(AccountingReportBase):
             phone="48500333444",
             email="future@example.com",
         )
-        QueueEntry.objects.create(
+        future_entry = QueueEntry.objects.create(
             daily_queue=future_queue,
             patient=future_patient,
             entry_status=QueueEntryStatus.WAITING,
             position_no=1,
             created_by_user=self.doctor,
         )
-        self.intake.form_status = IntakeStatus.IN_PROGRESS
-        self.intake.save(update_fields=["form_status"])
+        skipped_patient = Patient.objects.create(
+            first_name="Skip",
+            last_name="Unflagged",
+            date_of_birth=date(1993, 5, 5),
+            phone="48500333445",
+            email="skip@example.com",
+        )
+        QueueEntry.objects.create(
+            daily_queue=future_queue,
+            patient=skipped_patient,
+            entry_status=QueueEntryStatus.WAITING,
+            position_no=2,
+            created_by_user=self.doctor,
+        )
+        self._flag_ausfall(future_entry)
 
-        as_of = date(2026, 3, 12)
         report = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
-            as_of=as_of,
         )
         names = {row.last_name for row in report.rows}
-        self.assertIn("Kowalska", names)
-        self.assertNotIn("Termin", names)
+        self.assertIn("Termin", names)
+        self.assertNotIn("Unflagged", names)
+        self.assertNotIn("Kowalska", names)
 
     def test_paper_intake_completed_in_attended_not_ausfall(self) -> None:
-        """Paper path (no digital intake) counts as attended, never Ausfallhonorar."""
+        """Paper path counts as attended; without the flag it is not Ausfallhonorar."""
         paper_patient = Patient.objects.create(
             first_name="Paper",
             last_name="Weber",
@@ -597,18 +633,24 @@ class AccountingReportServiceTests(AccountingReportBase):
         )
         self.assertNotIn("Weber", {row.last_name for row in ausfall.rows})
 
-    def test_ausfall_excludes_cancelled(self) -> None:
-        self.intake.form_status = IntakeStatus.IN_PROGRESS
-        self.intake.save(update_fields=["form_status"])
+    def test_ausfall_includes_cancelled_when_flagged(self) -> None:
         self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
         self.queue_entry.save(update_fields=["entry_status"])
+        empty = build_accounting_report(
+            date_from=date(2026, 3, 10),
+            date_to=date(2026, 3, 16),
+            report_mode=REPORT_MODE_AUSFALL,
+        )
+        self.assertEqual(empty.rows, [])
+
+        self._flag_ausfall()
         report = build_accounting_report(
             date_from=date(2026, 3, 10),
             date_to=date(2026, 3, 16),
             report_mode=REPORT_MODE_AUSFALL,
-            as_of=date(2026, 3, 16),
         )
-        self.assertEqual(report.rows, [])
+        self.assertEqual(len(report.rows), 1)
+        self.assertEqual(report.rows[0].last_name, "Kowalska")
 
     def test_doctor_counts_aggregate_documents(self) -> None:
         doc1 = self._make_doc()
@@ -853,9 +895,8 @@ class AccountingReportViewTests(AccountingReportBase):
         self.assertEqual(response.context["items"][0].last_name, "Kowalska")
         self.assertIn("report_mode=attended", response.context["export_querystring"])
 
-    def test_ausfall_mode_lists_incomplete_intake(self) -> None:
-        self.intake.form_status = IntakeStatus.IN_PROGRESS
-        self.intake.save(update_fields=["form_status"])
+    def test_ausfall_mode_lists_flagged_entries(self) -> None:
+        self._flag_ausfall()
         self.client.force_login(self.accounting_user)
         response = self.client.get(
             reverse("admin_accounting_report"),
@@ -1068,8 +1109,7 @@ class AccountingReportViewTests(AccountingReportBase):
         )
 
     def test_export_csv_ausfall_includes_label_column(self) -> None:
-        self.intake.form_status = IntakeStatus.IN_PROGRESS
-        self.intake.save(update_fields=["form_status"])
+        self._flag_ausfall()
         self.client.force_login(self.accounting_user)
         response = self.client.get(
             reverse("admin_accounting_report_export_csv"),

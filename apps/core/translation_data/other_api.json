@@ -365,9 +365,9 @@
     "pl": "publish_request_id jest wymagane przy publikacji."
   },
   "other.api.provide_entry_status_or_notes": {
-    "de": "entry_status und/oder notes angeben.",
-    "en": "Provide entry_status and/or notes.",
-    "pl": "Podaj entry_status i/lub notes."
+    "de": "entry_status, notes und/oder ausfallhonorar angeben.",
+    "en": "Provide entry_status, notes, and/or ausfallhonorar.",
+    "pl": "Podaj entry_status, notes i/lub ausfallhonorar."
   },
   "other.api.provide_field_to_update": {
     "de": "Mindestens ein zu aktualisierendes Feld angeben.",

@@ -335,5 +335,3 @@ All rights reserved.
 This software and its source code are proprietary. You may not use, copy, modify, distribute, or deploy this project (in whole or in part) without prior written permission from the project owner. For licensing or collaboration inquiries, contact the repository owner.
 
 ---
-
-*Internal manuals and VPS runbooks stay out of the public tree. Use this README, OpenAPI docs on a running instance, and tagged releases as the public source of truth.*

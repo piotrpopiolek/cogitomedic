@@ -34,6 +34,11 @@
     "en": "Invalid queue entry status: {value}.",
     "pl": "Nieprawidłowy status wpisu kolejki: {value}."
   },
+  "other.domain.ausfallhonorar_role_required": {
+    "de": "Keine Berechtigung, Ausfallhonorar zu setzen (Empfang, Manager oder Admin erforderlich).",
+    "en": "Not allowed to set Ausfallhonorar (reception, manager, or admin required).",
+    "pl": "Brak uprawnień do ustawienia Ausfallhonorar (wymagana rola Recepcja, Manager lub Admin)."
+  },
   "other.domain.queue_closed_cannot_add_patient": {
     "de": "Patient kann nicht zu einer geschlossenen Warteschlange hinzugefügt werden.",
     "en": "Cannot add patient to closed queue.",

@@ -38,6 +38,18 @@ def _not_provided():
 NOT_PROVIDED = _not_provided()
 
 
+def staff_user_may_set_ausfallhonorar(user: StaffUser | None) -> bool:
+    """Reception, Manager, Admin (and superuser) may set the Ausfallhonorar flag."""
+    if user is None:
+        return False
+    return bool(
+        getattr(user, "is_superuser", False)
+        or user.is_reception
+        or user.is_admin_role
+        or user.is_manager
+    )
+
+
 class InvalidLocaleError(DomainError):
     """Raised when locale for tablet session is unsupported."""
 
@@ -466,17 +478,22 @@ def update_daily_queue(
 
 
 @transaction.atomic
+@transaction.atomic
 def update_queue_entry(
     queue_entry_id: uuid.UUID,
     *,
     entry_status: str | None = None,
     notes: str | None = None,
+    ausfallhonorar: bool | None = None,
     actor_user_id: uuid.UUID | None = None,
 ) -> QueueEntry:
-    """Update queue entry status and/or notes. DELETE semantic = set CANCELLED.
+    """Update queue entry status, notes, and/or Ausfallhonorar flag.
+
+    DELETE semantic = set CANCELLED.
 
     ``actor_user_id`` (optional): who initiated the change; used for audit when
-    paper intake authorization is auto-revoked on ``CANCELLED``.
+    paper intake authorization is auto-revoked on ``CANCELLED``, and required
+    when changing ``ausfallhonorar``.
     """
     if entry_status is not None and entry_status not in [
         c[0] for c in QueueEntryStatus.choices
@@ -488,7 +505,11 @@ def update_queue_entry(
             api_message_key="other.domain.invalid_queue_entry_status",
             api_message_params={"value": entry_status},
         )
-    entry = QueueEntry.objects.select_for_update(of=("self",)).get(id=queue_entry_id)
+    entry = (
+        QueueEntry.objects.select_for_update(of=("self",))
+        .select_related("daily_queue")
+        .get(id=queue_entry_id)
+    )
     update_fields: list[str] = ["updated_at"]
     if entry_status is not None:
         entry.entry_status = entry_status
@@ -515,6 +536,41 @@ def update_queue_entry(
     if notes is not None:
         entry.notes = notes
         update_fields.append("notes")
+    if ausfallhonorar is not None:
+        actor = (
+            StaffUser.objects.filter(id=actor_user_id).first()
+            if actor_user_id is not None
+            else None
+        )
+        if not staff_user_may_set_ausfallhonorar(actor):
+            raise DomainError(
+                domain_message("other.domain.ausfallhonorar_role_required"),
+                api_message_key="other.domain.ausfallhonorar_role_required",
+            )
+        new_flag = bool(ausfallhonorar)
+        if entry.ausfallhonorar != new_flag:
+            entry.ausfallhonorar = new_flag
+            entry.ausfallhonorar_set_at = timezone.now()
+            entry.ausfallhonorar_set_by_id = actor_user_id
+            update_fields.extend(
+                [
+                    "ausfallhonorar",
+                    "ausfallhonorar_set_at",
+                    "ausfallhonorar_set_by",
+                ]
+            )
+            from apps.operations.services import create_audit_event
+
+            create_audit_event(
+                event_type="QUEUE_ENTRY_AUSFALLHONORAR_CHANGED",
+                metadata={
+                    "queue_entry_id": str(entry.id),
+                    "ausfallhonorar": new_flag,
+                },
+                actor_user_id=actor_user_id,
+                patient_id=entry.patient_id,
+                context_clinic_site_id=entry.daily_queue.clinic_site_id,
+            )
     entry.save(update_fields=update_fields)
     return entry
 

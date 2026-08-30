@@ -40,6 +40,10 @@ from apps.reception.models import (
     QueueEntry,
     TabletDevice,
 )
+from apps.reception.services import (
+    staff_user_may_set_ausfallhonorar,
+    update_queue_entry,
+)
 from apps.reception.xlsx_import import enqueue_patient_xlsx_import
 from apps.users.models import StaffUser, StaffUserPreferredLocale
 
@@ -541,12 +545,14 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
         "daily_queue",
         "patient",
         "entry_status",
+        "ausfallhonorar",
         "visit_external_id",
         "appointment_time",
         "created_at",
     )
     list_display_links = ("position_no",)
     list_filter = (
+        "ausfallhonorar",
         "entry_status",
         "daily_queue__queue_date",
         "daily_queue__clinic_site",
@@ -560,17 +566,141 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
         "notes",
     )
     raw_id_fields = ("active_session", "created_by_user")
+    readonly_fields = ("ausfallhonorar_set_at", "ausfallhonorar_set_by")
     exclude = ("visit_external_id",)
     date_hierarchy = "created_at"
+    actions = ("mark_ausfallhonorar", "clear_ausfallhonorar")
 
     def get_form(self, request, obj=None, change=None, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
         _initial_created_by_user(request, form, bool(change))
         return form
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if not staff_user_may_set_ausfallhonorar(request.user):
+            if "ausfallhonorar" not in readonly:
+                readonly.append("ausfallhonorar")
+        return readonly
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not staff_user_may_set_ausfallhonorar(request.user):
+            actions.pop("mark_ausfallhonorar", None)
+            actions.pop("clear_ausfallhonorar", None)
+        return actions
+
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
+        desired_flag = bool(obj.ausfallhonorar)
+        if not change:
+            obj.ausfallhonorar = False
+            obj.ausfallhonorar_set_at = None
+            obj.ausfallhonorar_set_by = None
+            super().save_model(request, obj, form, change)
+            if desired_flag:
+                self._apply_ausfallhonorar(request, obj.id, True)
+            return
+        previous = QueueEntry.objects.get(pk=obj.pk)
+        obj.ausfallhonorar = previous.ausfallhonorar
+        obj.ausfallhonorar_set_at = previous.ausfallhonorar_set_at
+        obj.ausfallhonorar_set_by_id = previous.ausfallhonorar_set_by_id
         super().save_model(request, obj, form, change)
+        if desired_flag != previous.ausfallhonorar:
+            self._apply_ausfallhonorar(request, obj.id, desired_flag)
+
+    def _apply_ausfallhonorar(self, request, queue_entry_id, flagged: bool) -> None:
+        try:
+            update_queue_entry(
+                queue_entry_id,
+                ausfallhonorar=flagged,
+                actor_user_id=request.user.id,
+            )
+        except DomainError as exc:
+            self.message_user(
+                request,
+                resolve_other_message(
+                    request,
+                    exc.api_message_key or "",
+                    str(exc),
+                    **(exc.api_message_params or {}),
+                ),
+                level=messages.ERROR,
+            )
+
+    def _bulk_set_ausfallhonorar(self, request, queryset, *, flagged: bool) -> None:
+        if not staff_user_may_set_ausfallhonorar(request.user):
+            self.message_user(
+                request,
+                format_administration_message(
+                    "administration.admin_ausfallhonorar_permission_denied",
+                    "You do not have permission to set Ausfallhonorar "
+                    "(Reception, Manager, or Admin).",
+                    request=request,
+                ),
+                level=messages.ERROR,
+            )
+            return
+        ok = 0
+        failed = 0
+        last_error = ""
+        for entry in queryset:
+            try:
+                update_queue_entry(
+                    entry.id,
+                    ausfallhonorar=flagged,
+                    actor_user_id=request.user.id,
+                )
+                ok += 1
+            except DomainError as exc:
+                failed += 1
+                last_error = resolve_other_message(
+                    request,
+                    exc.api_message_key or "",
+                    str(exc),
+                    **(exc.api_message_params or {}),
+                )
+        result_key = (
+            "administration.admin_ausfallhonorar_marked"
+            if flagged
+            else "administration.admin_ausfallhonorar_cleared"
+        )
+        default = (
+            "Ausfallhonorar marked: {ok}."
+            if flagged
+            else "Ausfallhonorar cleared: {ok}."
+        )
+        summary = format_administration_message(
+            result_key,
+            default,
+            request=request,
+            ok=ok,
+        )
+        if failed and last_error:
+            summary = f"{summary} {last_error}"
+        self.message_user(
+            request,
+            summary,
+            level=messages.WARNING if failed else messages.SUCCESS,
+        )
+
+    @admin.action(
+        description=db_gettext_lazy(
+            "administration.admin_action_mark_ausfallhonorar",
+            "Mark Ausfallhonorar",
+        )
+    )
+    def mark_ausfallhonorar(self, request, queryset):
+        self._bulk_set_ausfallhonorar(request, queryset, flagged=True)
+
+    @admin.action(
+        description=db_gettext_lazy(
+            "administration.admin_action_clear_ausfallhonorar",
+            "Clear Ausfallhonorar",
+        )
+    )
+    def clear_ausfallhonorar(self, request, queryset):
+        self._bulk_set_ausfallhonorar(request, queryset, flagged=False)
 
 
 @admin.register(TabletDevice)

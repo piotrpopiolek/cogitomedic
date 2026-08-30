@@ -749,6 +749,26 @@
     "en": "Doctor list sort time",
     "pl": "Czas sortowania listy lekarza"
   },
+  "administration.field_ausfallhonorar": {
+    "de": "Ausfallhonorar",
+    "en": "Ausfallhonorar",
+    "pl": "Ausfallhonorar"
+  },
+  "administration.field_ausfallhonorar_help": {
+    "de": "Manuelle Gebühr: Nichterscheinen, Untersuchung abgelehnt oder kurzfristige Absage. Erscheint in der Buchhaltungsliste Ausfallhonorar.",
+    "en": "Manual fee for no-show, refused exam, or short-notice cancellation. Appears on the accounting Ausfallhonorar list.",
+    "pl": "Ręczna opłata: niestawienie się, odmowa badania lub krótkoterminowe odwołanie. Wchodzi na listę księgową Ausfallhonorar."
+  },
+  "administration.field_ausfallhonorar_set_at": {
+    "de": "Ausfallhonorar gesetzt am",
+    "en": "Ausfallhonorar set at",
+    "pl": "Ausfallhonorar ustawiono"
+  },
+  "administration.field_ausfallhonorar_set_by": {
+    "de": "Ausfallhonorar gesetzt von",
+    "en": "Ausfallhonorar set by",
+    "pl": "Ausfallhonorar ustawił"
+  },
   "administration.field_consulting_room": {
     "de": "Praxisraum",
     "en": "Consulting room",
@@ -1028,5 +1048,30 @@
     "de": "SMS „Ergebnis verfügbar“ wurde in die Warteschlange gestellt.",
     "en": "“Result available” SMS was queued.",
     "pl": "SMS „wynik dostępny” został dodany do kolejki."
+  },
+  "administration.admin_action_mark_ausfallhonorar": {
+    "de": "Ausfallhonorar setzen",
+    "en": "Mark Ausfallhonorar",
+    "pl": "Oznacz Ausfallhonorar"
+  },
+  "administration.admin_action_clear_ausfallhonorar": {
+    "de": "Ausfallhonorar entfernen",
+    "en": "Clear Ausfallhonorar",
+    "pl": "Zdejmij Ausfallhonorar"
+  },
+  "administration.admin_ausfallhonorar_permission_denied": {
+    "de": "Keine Berechtigung, Ausfallhonorar zu setzen (Empfang, Manager oder Admin).",
+    "en": "You do not have permission to set Ausfallhonorar (Reception, Manager, or Admin).",
+    "pl": "Brak uprawnień do ustawienia Ausfallhonorar (Recepcja, Manager lub Admin)."
+  },
+  "administration.admin_ausfallhonorar_marked": {
+    "de": "Ausfallhonorar gesetzt: {ok}.",
+    "en": "Ausfallhonorar marked: {ok}.",
+    "pl": "Oznaczono Ausfallhonorar: {ok}."
+  },
+  "administration.admin_ausfallhonorar_cleared": {
+    "de": "Ausfallhonorar entfernt: {ok}.",
+    "en": "Ausfallhonorar cleared: {ok}.",
+    "pl": "Zdjęto Ausfallhonorar: {ok}."
   }
 }

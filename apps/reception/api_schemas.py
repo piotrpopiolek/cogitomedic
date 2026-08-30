@@ -69,6 +69,7 @@ class UpdateQueueEntryRequest(BaseModel):
 
     entry_status: str | None = None
     notes: str | None = None
+    ausfallhonorar: bool | None = None
 
 
 class CreateTabletDeviceRequest(BaseModel):

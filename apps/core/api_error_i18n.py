@@ -134,7 +134,7 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.phone_required": "phone is required.",
     "other.api.publish_request_id_locale_conflict": "publish_request_id already used with different publish_locale.",
     "other.api.publish_request_id_required": "publish_request_id is required for publish.",
-    "other.api.provide_entry_status_or_notes": "Provide entry_status and/or notes.",
+    "other.api.provide_entry_status_or_notes": "Provide entry_status, notes, and/or ausfallhonorar.",
     "other.api.provide_field_to_update": "Provide at least one field to update.",
     "other.api.queue_entry_not_found": "Queue entry not found.",
     "other.api.queue_entry_not_in_scope": "Queue entry is not in your assigned scope.",

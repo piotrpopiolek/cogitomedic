@@ -72,6 +72,7 @@ def _serialize_entry(e: QueueEntry) -> dict:
             e.appointment_time.isoformat() if e.appointment_time else None
         ),
         "notes": e.notes,
+        "ausfallhonorar": e.ausfallhonorar,
         "created_at": e.created_at.isoformat(),
         "updated_at": e.updated_at.isoformat(),
     }
@@ -296,11 +297,12 @@ def daily_queue_entries_view(
 
 @require_auth
 def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonResponse:
-    allowed = (
-        {"RECEPTION", "ADMIN", "DOCTOR"}
-        if request.method == "GET"
-        else {"RECEPTION", "ADMIN"}
-    )
+    if request.method == "GET":
+        allowed = {"RECEPTION", "ADMIN", "DOCTOR", "MANAGER"}
+    elif request.method == "PATCH":
+        allowed = {"RECEPTION", "ADMIN", "MANAGER"}
+    else:
+        allowed = {"RECEPTION", "ADMIN"}
     role_error = require_user_role(request, allowed_roles=allowed)
     if role_error:
         return role_error
@@ -344,19 +346,25 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
         return JsonResponse(
             {"error": "Validation error.", "details": exc.errors()}, status=400
         )
-    if body.entry_status is None and body.notes is None:
+    if body.entry_status is None and body.notes is None and body.ausfallhonorar is None:
         return json_error("other.api.provide_entry_status_or_notes", status=400)
     try:
         entry = update_queue_entry(
             queue_entry_id,
             entry_status=body.entry_status,
             notes=body.notes,
+            ausfallhonorar=body.ausfallhonorar,
             actor_user_id=request.user.id,
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
     except DomainError as exc:
-        return json_domain_error(exc, status=400)
+        status = (
+            403
+            if exc.api_message_key == "other.domain.ausfallhonorar_role_required"
+            else 400
+        )
+        return json_domain_error(exc, status=status)
     return JsonResponse(_serialize_entry(entry))
 
 
