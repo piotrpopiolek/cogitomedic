@@ -234,6 +234,38 @@
       wrap.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (eScroll) {}
   }
+
+  function renderDoctorLockLimit(lockedDocuments) {
+    var wrap = el("alert-placeholder");
+    if (!wrap) return;
+    var items = Array.isArray(lockedDocuments) ? lockedDocuments : [];
+    var links = items
+      .map(function (d) {
+        var id = d && (d.medical_document_id || d.id);
+        if (!id) return "";
+        var href = "/doctor/" + encodeURIComponent(id) + "/?lang=de";
+        var label = escapeHtml(d.patient_display || String(id));
+        return (
+          '<li><a class="lock-limit-link underline font-medium" href="' +
+          href +
+          '">' +
+          label +
+          "</a></li>"
+        );
+      })
+      .join("");
+    wrap.innerHTML =
+      '<div role="alert" id="lock-limit-screen" class="bg-amber-50 border-amber-200 text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-100 rounded-default border px-4 py-3 text-sm leading-snug shadow-xs">' +
+      "<p>" +
+      escapeHtml(UI.msgDoctorLockLimit) +
+      "</p>" +
+      (links ? '<ul class="mt-2 list-disc pl-5 space-y-1">' + links + "</ul>" : "") +
+      "</div>";
+    try {
+      wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (eLimit) {}
+  }
+
   function getCookie(name) {
     const v = document.cookie.match("(^|;) ?" + name + "=([^;]*)(;|$)");
     return v ? v[2] : null;
@@ -529,6 +561,45 @@
         });
   }
 
+  var localTabId = newUuid();
+  var LOCAL_HOLDER_KEY = "befund-edit-local-" + DOC_ID;
+
+  function writeLocalHolderSignal(payload) {
+    try {
+      localStorage.setItem(
+        LOCAL_HOLDER_KEY,
+        JSON.stringify({
+          tabId: localTabId,
+          ts: Date.now(),
+          type: (payload && payload.type) || "hold",
+          docId: DOC_ID,
+        })
+      );
+    } catch (eLs) {}
+  }
+
+  function readLocalHolderSignal() {
+    try {
+      var raw = localStorage.getItem(LOCAL_HOLDER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (eRd) {
+      return null;
+    }
+  }
+
+  function localHolderIsFresh(signal) {
+    if (!signal || signal.tabId === localTabId) return false;
+    if (signal.type === "invalidate") return false;
+    return Date.now() - (signal.ts || 0) < 20000;
+  }
+
+  function broadcastInvalidate() {
+    try {
+      if (editBroadcast) editBroadcast.postMessage({ type: "invalidate", docId: DOC_ID });
+    } catch (eBcSend) {}
+    writeLocalHolderSignal({ type: "invalidate" });
+  }
+
   function sessionStorageKey() {
     return "befundEditSession:" + (PANEL.staffUserId || "anon") + ":" + DOC_ID;
   }
@@ -648,6 +719,16 @@
     };
   } catch (eBc) {}
 
+  window.addEventListener("storage", function (ev) {
+    if (ev.key !== LOCAL_HOLDER_KEY || !ev.newValue) return;
+    try {
+      var data = JSON.parse(ev.newValue);
+      if (data && data.type === "invalidate" && data.tabId !== localTabId) {
+        setEditBlocked(UI.msgEditSessionStale);
+      }
+    } catch (eStorage) {}
+  });
+
   /* ── Autosave helpers ───────────────────────────────────────────────── */
   function onVisibilityChangeAutosave() {
     if (document.visibilityState === "visible") tryAutosave();
@@ -704,13 +785,34 @@
       var reqBody = { purpose: "edit" };
       if (persisted && persisted.token) reqBody.edit_session_token = persisted.token;
       if (forceReclaim) {
+        var revisionHint = typeof reclaimRevisionHint === "number"
+          ? reclaimRevisionHint
+          : persisted && typeof persisted.editSessionRevision === "number"
+            ? persisted.editSessionRevision
+            : null;
+        if (typeof revisionHint !== "number") {
+          apiFetch(docUrl("/edit-session"), {
+            method: "POST",
+            body: JSON.stringify({ purpose: "edit" }),
+          }).then(function (probeRes) {
+            var probeJson = getResJson(probeRes);
+            var probeKey = probeJson && (probeJson.error_key || probeJson.api_message_key);
+            if (
+              probeRes.status === 409 &&
+              probeKey === "edit_session_reclaim_confirmation_required" &&
+              probeJson &&
+              typeof probeJson.edit_session_revision === "number"
+            ) {
+              proceedWithEditSession(true, probeJson.edit_session_revision);
+              return;
+            }
+            proceedWithEditSession(false);
+          }).catch(function () { alertMsg("danger", UI.msgNetwork); });
+          return;
+        }
         reqBody.reclaim_confirmed = true;
         reqBody.edit_session_request_id = newUuid();
-        if (typeof reclaimRevisionHint === "number") {
-          reqBody.expected_edit_session_revision = reclaimRevisionHint;
-        } else if (persisted && typeof persisted.editSessionRevision === "number") {
-          reqBody.expected_edit_session_revision = persisted.editSessionRevision;
-        }
+        reqBody.expected_edit_session_revision = revisionHint;
       }
       apiFetch(docUrl("/edit-session"), { method: "POST", body: JSON.stringify(reqBody) })
         .then(function (res) {
@@ -721,6 +823,7 @@
             editSessionRevision = json.edit_session_revision || 0;
             if (typeof json.draft_revision === "number") draftRevision = json.draft_revision;
             persistSessionLocally();
+            writeLocalHolderSignal({ type: "hold" });
             sessionReady = true;
             editBlocked = false;
             enableWriteButtons();
@@ -745,11 +848,7 @@
             return;
           }
           if (res.status === 409 && errorKey === "doctor_lock_limit_reached") {
-            var msg = UI.msgDoctorLockLimit;
-            if (json && json.locked_documents && json.locked_documents.length) {
-              msg += " " + json.locked_documents.map(function (d) { return d.patient_display || d.id; }).join(", ");
-            }
-            alertMsg("warning", msg);
+            renderDoctorLockLimit(json && json.locked_documents);
             return;
           }
           if (res.status === 423 && errorKey === "document_locked_by_other") {
@@ -762,25 +861,34 @@
         .catch(function () { alertMsg("danger", UI.msgNetwork); });
     }
 
+    function showLocalTabTakeoverModal() {
+      showRevisionModal({
+        title: UI.modalLocalTabTitle,
+        body: UI.modalLocalTabBody,
+        confirm: UI.modalLocalTabConfirm,
+        cancel: UI.modalStartRevisionCancel,
+      }).then(function (ok) {
+        if (!ok) return;
+        broadcastInvalidate();
+        writeLocalHolderSignal({ type: "hold" });
+        proceedWithEditSession(true);
+      });
+    }
+
     if (navigator.locks) {
       navigator.locks.request("befund-doc-" + DOC_ID, { ifAvailable: true }, function (lock) {
         if (lock) {
+          writeLocalHolderSignal({ type: "hold" });
           proceedWithEditSession(false);
           return new Promise(function () {});
         }
-        showRevisionModal({
-          title: UI.modalLocalTabTitle,
-          body: UI.modalLocalTabBody,
-          confirm: UI.modalLocalTabConfirm,
-          cancel: UI.modalStartRevisionCancel,
-        }).then(function (ok) {
-          if (!ok) return;
-          if (editBroadcast) editBroadcast.postMessage({ type: "invalidate", docId: DOC_ID });
-          proceedWithEditSession(true);
-        });
+        showLocalTabTakeoverModal();
         return undefined;
       });
+    } else if (localHolderIsFresh(readLocalHolderSignal())) {
+      showLocalTabTakeoverModal();
     } else {
+      writeLocalHolderSignal({ type: "hold" });
       proceedWithEditSession(false);
     }
   }
@@ -1729,6 +1837,7 @@
         if (typeof json.draft_revision === "number") draftRevision = json.draft_revision;
         hasPendingRevision = true;
         persistSessionLocally();
+        writeLocalHolderSignal({ type: "hold" });
         sessionReady = true;
         editBlocked = false;
         enableWriteButtons();

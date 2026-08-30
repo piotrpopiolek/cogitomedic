@@ -279,6 +279,36 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
                 timeout=timeout,
             )
 
+    def add_no_locks_no_broadcast_init(self) -> None:
+        """Force BroadcastChannel/storage fallback (no Web Locks, no BC)."""
+        self.context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'locks', {
+              configurable: true,
+              get: () => undefined,
+            });
+            window.BroadcastChannel = function () {
+              throw new Error('E2E BroadcastChannel disabled');
+            };
+            """
+        )
+
+    def alert_text(self, page: Page) -> str:
+        loc = page.locator('#alert-placeholder [role="alert"]').first
+        loc.wait_for(timeout=15_000)
+        return loc.inner_text()
+
+    def dispatch_publish_click(self, page: Page) -> None:
+        """Fire the Publish handler even when the button is disabled."""
+        page.evaluate(
+            """() => {
+              const b = document.querySelector('#btn-publish');
+              if (b) {
+                b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              }
+            }"""
+        )
+
     def click_preview_pdf(self, page: Page) -> None:
         with page.expect_popup(timeout=45_000) as popup_info:
             with page.expect_response(

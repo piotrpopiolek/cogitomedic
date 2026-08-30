@@ -62,11 +62,11 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
 
     def test_cross_tab_coordination(self) -> None:
         src = self._js_source()
-        has_bc = "BroadcastChannel" in src
-        has_locks = "navigator.locks" in src
-        self.assertTrue(
-            has_bc or has_locks, "Expected BroadcastChannel or navigator.locks"
-        )
+        self.assertIn("BroadcastChannel", src)
+        self.assertIn("navigator.locks", src)
+        self.assertIn("localStorage", src)
+        self.assertIn('addEventListener("storage"', src)
+        self.assertIn("lock-limit-link", src)
 
     # ── Dirty warning kept but no unlock ───────────────────────────────
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
+from contextlib import contextmanager
 from unittest.mock import patch
 
 import pytest
@@ -520,19 +522,15 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
 
     def test_broadcast_channel_invalidate_blocks_first_tab(self) -> None:
         self.open_document_acquiring_session(self.page, self.doc.id)
-        page2 = self.context.new_page()
-        page2.goto(
-            f"{self.live_server_url}/doctor/{self.doc.id}/?lang=de",
-            wait_until="domcontentloaded",
+        # Inject sibling-tab invalidate (Web Locks reclaim path is separate).
+        self.page.evaluate(
+            """(docId) => {
+              const ch = new BroadcastChannel('befund-edit-' + docId);
+              ch.postMessage({ type: 'invalidate', docId: docId });
+              ch.close();
+            }""",
+            str(self.doc.id),
         )
-        page2.wait_for_selector("#revision-modal:not(.hidden)", timeout=20_000)
-        with page2.expect_response(
-            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
-            timeout=45_000,
-        ):
-            self.confirm_revision_modal(page2)
-        page2.wait_for_selector("#btn-save-draft:not([disabled])", timeout=30_000)
-        # First tab receives BroadcastChannel invalidate → write controls disabled.
         self.page.wait_for_function(
             "() => { const b = document.querySelector('#btn-save-draft');"
             " return b && b.disabled; }",
@@ -570,12 +568,7 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
     def test_logout_does_not_call_unlock(self) -> None:
         self.open_document_acquiring_session(self.page, self.doc.id)
         unlock_hits = self.track_unlock_posts(self.page)
-        self.page.locator('form[action*="logout"] button[type="submit"]').click()
-        self.page.wait_for_function(
-            "() => window.location.pathname.includes('/doctor/login')"
-            " || window.location.pathname.includes('/login')",
-            timeout=30_000,
-        )
+        self.click_logout(self.page)
         self.assertEqual(unlock_hits, [])
         self.doc.refresh_from_db()
         self.assertEqual(self.doc.locked_by_user_id, self.doctor.id)
@@ -583,7 +576,6 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
 
     def test_closing_tab_does_not_unlock(self) -> None:
         page2 = self.context.new_page()
-        self.login_doctor(page2, username=self.doctor.username)
         unlock_hits = self.track_unlock_posts(page2)
         self.open_document_acquiring_session(page2, self.doc.id)
         page2.close()
@@ -778,57 +770,14 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
             self.click_preview_pdf(self.page)
             self.wait_for_publish_enabled(self.page, enabled=True)
 
-
-class BefundEditSessionSection63PlaywrightTests(PlaywrightDoctorE2EBase):
-    """Remaining §6.3 scenarios: navigation, autosave gates, races, republish."""
-
-    def setUp(self) -> None:
-        super().setUp()
-        suffix = uuid.uuid4().hex[:8]
-        self.doctor = create_doctor(username=f"e2e_doc_63_{suffix}")
-        self.queue = create_clinic_queue(
-            doctor=self.doctor, code=f"S{suffix[:4].upper()}"
-        )
-        self.doc = create_draft_document(
-            doctor=self.doctor, daily_queue=self.queue, position_no=1
-        )
-        self.login_doctor(self.page, username=self.doctor.username)
-
-    def _draft_puts(self) -> list:
-        hits: list[object] = []
-
-        def on_request(req) -> None:
-            if req.method == "PUT" and req.url.rstrip("/").endswith("/draft"):
-                hits.append(req)
-
-        self.page.on("request", on_request)
-        return hits
-
-    def test_broadcastchannel_invalidate_on_local_reclaim(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        # Simulate sibling-tab invalidate (BroadcastChannel contract).
-        self.page.evaluate(
-            """(docId) => {
-              const ch = new BroadcastChannel('befund-edit-' + docId);
-              ch.postMessage({ type: 'invalidate', docId: docId });
-              ch.close();
-            }""",
-            str(self.doc.id),
-        )
-        self.page.wait_for_function(
-            """() => {
-              const b = document.querySelector('#btn-save-draft');
-              return b && b.disabled;
-            }""",
-            timeout=15_000,
-        )
-
-    def test_session_storage_restore_after_new_page_same_context(self) -> None:
+    def test_session_restore_via_session_storage_init(self) -> None:
         first = self.open_document_acquiring_session(self.page, self.doc.id)
         token = first["edit_session_token"]
         key = f"befundEditSession:{self.doctor.id}:{self.doc.id}"
         raw = self.page.evaluate(
-            """(k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } }""",
+            """(k) => {
+              try { return sessionStorage.getItem(k); } catch (e) { return null; }
+            }""",
             key,
         )
         self.assertTrue(raw)
@@ -848,153 +797,186 @@ class BefundEditSessionSection63PlaywrightTests(PlaywrightDoctorE2EBase):
         self.assertEqual(resumed["edit_session_token"], token)
         self.assertEqual(resumed.get("mode"), "resumed")
 
-    def test_close_tab_does_not_unlock(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        unlock_hits: list[int] = []
 
-        def on_request(req) -> None:
-            if req.method == "POST" and "/unlock" in req.url:
-                unlock_hits.append(1)
+_MSG_PUBLISH_PREVIEW_REQUIRED = (
+    "Bitte zuerst PDF-Vorschau nach dem letzten Speichern öffnen."
+)
+_MSG_AUTOSAVE_SUCCESS = "Entwurf automatisch gespeichert"
+_MSG_RECLAIM_TITLE = "Eigene Sitzung wiederherstellen?"
+_MSG_LOCAL_TAB_TITLE = "Bereits in einem anderen Tab geöffnet"
 
-        self.page.on("request", on_request)
-        self.page.close()
-        self.assertEqual(unlock_hits, [])
-        self.doc.refresh_from_db()
-        self.assertEqual(self.doc.locked_by_user_id, self.doctor.id)
-        self.assertIsNotNone(self.doc.edit_session_token)
 
-    def test_logout_does_not_unlock(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        unlock_hits: list[int] = []
+class BefundEditSessionSection63GapsPlaywrightTests(PlaywrightDoctorE2EBase):
+    """Remaining §6.3 gaps: storage fallback, Clock, 409/423, limit links, reclaim."""
 
-        def on_request(req) -> None:
-            if req.method == "POST" and "/unlock" in req.url:
-                unlock_hits.append(1)
-
-        self.page.on("request", on_request)
-        self.click_logout(self.page)
-        self.assertEqual(unlock_hits, [])
-        self.doc.refresh_from_db()
-        self.assertEqual(self.doc.locked_by_user_id, self.doctor.id)
-        self.assertIsNotNone(self.doc.edit_session_token)
-
-    def test_bfcache_style_back_keeps_lock_without_unlock(self) -> None:
-        """Navigate away and Back: no unlock; lock remains (bfcache-friendly contract)."""
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        unlock_hits: list[int] = []
-
-        def on_request(req) -> None:
-            if req.method == "POST" and "/unlock" in req.url:
-                unlock_hits.append(1)
-
-        self.page.on("request", on_request)
-        self.page.goto(
-            f"{self.live_server_url}/doctor/?lang=de", wait_until="domcontentloaded"
+    def setUp(self) -> None:
+        super().setUp()
+        suffix = uuid.uuid4().hex[:8]
+        self.doctor = create_doctor(username=f"e2e_doc_g_{suffix}")
+        self.queue = create_clinic_queue(
+            doctor=self.doctor, code=f"G{suffix[:4].upper()}"
         )
-        self.page.go_back(wait_until="domcontentloaded")
-        self.page.wait_for_selector("#befund-form", timeout=30_000)
-        self.assertEqual(unlock_hits, [])
-        self.doc.refresh_from_db()
-        self.assertEqual(self.doc.locked_by_user_id, self.doctor.id)
+        self.doc = create_draft_document(
+            doctor=self.doctor,
+            daily_queue=self.queue,
+            position_no=1,
+            patient_last=f"Gap{suffix[:6]}",
+        )
+        self.login_doctor(self.page, username=self.doctor.username)
 
-    def test_hidden_tab_skips_autosave_until_visible(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        hits = self._draft_puts()
-        self.set_page_visibility(self.page, visible=False)
-        self.mark_form_dirty(self.page, "hidden dirty text")
-        self.page.wait_for_timeout(4500)
-        self.assertEqual(len(hits), 0)
-        with self.page.expect_response(
-            lambda r: r.url.rstrip("/").endswith("/draft")
-            and r.request.method == "PUT"
-            and r.ok,
-            timeout=20_000,
-        ):
-            self.set_page_visibility(self.page, visible=True)
-        self.assertIn("hidden dirty text", self.page.input_value("#summary_text"))
+    @contextmanager
+    def _production_autosave_interval(self):
+        prev = os.environ.get("E2E_AUTOSAVE_MS")
+        os.environ["E2E_AUTOSAVE_MS"] = ""
+        try:
+            yield
+        finally:
+            if prev is None:
+                os.environ.pop("E2E_AUTOSAVE_MS", None)
+            else:
+                os.environ["E2E_AUTOSAVE_MS"] = prev
 
-    def test_clean_form_does_not_autosave(self) -> None:
+    def test_storage_fallback_invalidates_first_tab(self) -> None:
+        self.add_no_locks_no_broadcast_init()
         self.open_document_acquiring_session(self.page, self.doc.id)
-        hits = self._draft_puts()
-        self.page.wait_for_timeout(4500)
-        self.assertEqual(len(hits), 0)
-
-    def test_validation_error_blocks_autosave(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        hits = self._draft_puts()
-        self.set_control_needed_without_lesions(self.page)
-        self.mark_form_dirty(self.page, "invalid without lesions")
-        self.page.wait_for_timeout(4500)
-        self.assertEqual(len(hits), 0)
+        page2 = self.context.new_page()
+        page2.goto(
+            f"{self.live_server_url}/doctor/{self.doc.id}/?lang=de",
+            wait_until="domcontentloaded",
+        )
+        page2.wait_for_selector("#revision-modal:not(.hidden)", timeout=20_000)
         self.assertIn(
-            "invalid without lesions", self.page.input_value("#summary_text")
+            _MSG_LOCAL_TAB_TITLE, page2.locator("#revision-modal-title").inner_text()
         )
+        with page2.expect_response(
+            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
+            timeout=45_000,
+        ):
+            self.confirm_revision_modal(page2)
+        page2.wait_for_selector("#btn-save-draft:not([disabled])", timeout=30_000)
+        self.page.wait_for_function(
+            "() => { const b = document.querySelector('#btn-save-draft');"
+            " return b && b.disabled; }",
+            timeout=20_000,
+        )
+        self.mark_form_dirty(self.page, "blocked via storage fallback")
+        self.assertIn(
+            "blocked via storage fallback", self.page.input_value("#summary_text")
+        )
+        self.assertTrue(self.page.is_disabled("#btn-publish"))
 
-    def test_autosave_timeout_keeps_form_text(self) -> None:
+    def test_simultaneous_two_tab_start_one_holder(self) -> None:
+        page2 = self.context.new_page()
+        url = f"{self.live_server_url}/doctor/{self.doc.id}/?lang=de"
+
+        def delay_edit_session(route) -> None:
+            if "/edit-session" in route.request.url and route.request.method == "POST":
+                time.sleep(0.6)
+            route.continue_()
+
+        self.page.route("**/api/v1/medical-documents/**", delay_edit_session)
+        page2.route("**/api/v1/medical-documents/**", delay_edit_session)
+        self.page.goto(url, wait_until="commit")
+        page2.goto(url, wait_until="commit")
+        self.page.wait_for_load_state("domcontentloaded")
+        page2.wait_for_load_state("domcontentloaded")
+
+        deadline = time.time() + 40
+
+        def state(page) -> dict:
+            return page.evaluate(
+                """() => {
+                  const save = document.querySelector('#btn-save-draft');
+                  const modal = document.querySelector('#revision-modal');
+                  return {
+                    saveEnabled: !!(save && !save.disabled),
+                    modalOpen: !!(modal && !modal.classList.contains('hidden')),
+                  };
+                }"""
+            )
+
+        s1 = s2 = {"saveEnabled": False, "modalOpen": False}
+        while time.time() < deadline:
+            s1, s2 = state(self.page), state(page2)
+            if (s1["saveEnabled"] or s1["modalOpen"]) and (
+                s2["saveEnabled"] or s2["modalOpen"]
+            ):
+                break
+            time.sleep(0.2)
+        self.assertEqual(int(s1["saveEnabled"]) + int(s2["saveEnabled"]), 1)
+        self.assertTrue(s1["modalOpen"] or s2["modalOpen"])
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.locked_by_user_id, self.doctor.id)
+        self.assertIsNotNone(self.doc.edit_session_token)
+
+    def test_draft_409_blocks_writes_without_reload(self) -> None:
         self.open_document_acquiring_session(self.page, self.doc.id)
+        url_before = self.page.url
+        puts_after_block: list[int] = []
+        blocked = {"done": False}
 
-        def timeout_draft(route) -> None:
+        def conflict(route) -> None:
             if route.request.method == "PUT" and route.request.url.rstrip("/").endswith(
                 "/draft"
             ):
-                route.abort("timedout")
+                if blocked["done"]:
+                    puts_after_block.append(1)
+                route.fulfill(
+                    status=409,
+                    content_type="application/json",
+                    body=json.dumps({"error_key": "draft_revision_conflict"}),
+                )
             else:
                 route.continue_()
 
-        self.page.route("**/api/v1/medical-documents/**", timeout_draft)
-        self.mark_form_dirty(self.page, "must survive timeout")
-        self.page.wait_for_timeout(3500)
-        self.assertIn("must survive timeout", self.page.input_value("#summary_text"))
+        self.page.route("**/api/v1/medical-documents/**", conflict)
+        self.mark_form_dirty(self.page, "must survive 409")
+        self.page.click("#btn-save-draft")
+        self.page.wait_for_function(
+            "() => { const b = document.querySelector('#btn-save-draft');"
+            " return b && b.disabled; }",
+            timeout=15_000,
+        )
+        blocked["done"] = True
+        self.assertEqual(self.page.url, url_before)
+        self.assertIn("must survive 409", self.page.input_value("#summary_text"))
+        self.assertTrue(self.page.is_disabled("#btn-publish"))
+        self.page.wait_for_timeout(2500)
+        self.assertEqual(puts_after_block, [])
+        self.assertTrue(self.page.locator("#befund-form").is_visible())
 
-    def test_lost_response_after_commit_keeps_text(self) -> None:
+    def test_draft_423_blocks_writes_without_reload(self) -> None:
         self.open_document_acquiring_session(self.page, self.doc.id)
-        seen = {"n": 0}
+        url_before = self.page.url
 
-        def drop_first_response(route) -> None:
+        def stale(route) -> None:
             if route.request.method == "PUT" and route.request.url.rstrip("/").endswith(
                 "/draft"
             ):
-                seen["n"] += 1
-                if seen["n"] == 1:
-                    # Server commits; client never receives the body.
-                    route.fetch()
-                    route.abort("failed")
-                    return
-            route.continue_()
+                route.fulfill(
+                    status=423,
+                    content_type="application/json",
+                    body=json.dumps({"error_key": "edit_session_stale"}),
+                )
+            else:
+                route.continue_()
 
-        self.page.route("**/api/v1/medical-documents/**", drop_first_response)
-        self.mark_form_dirty(self.page, "lost response text")
-        self.page.wait_for_timeout(4500)
-        self.assertIn("lost response text", self.page.input_value("#summary_text"))
-        self.assertTrue(self.page.is_enabled("#summary_text"))
-        self.doc.refresh_from_db()
-        # Commit may have landed despite the dropped response.
-        self.assertGreaterEqual(self.doc.draft_revision, 0)
-    def test_concurrent_save_and_preview_serialize_writes(self) -> None:
-        self.open_document_acquiring_session(self.page, self.doc.id)
-        self.mark_form_dirty(self.page, "serialize writes")
-        # Wait until form is dirty but before autosave fires.
-        puts: list[str] = []
+        self.page.route("**/api/v1/medical-documents/**", stale)
+        self.mark_form_dirty(self.page, "must survive 423")
+        self.page.click("#btn-save-draft")
+        self.page.wait_for_function(
+            "() => { const b = document.querySelector('#btn-save-draft');"
+            " return b && b.disabled; }",
+            timeout=15_000,
+        )
+        alert = self.alert_text(self.page)
+        self.assertTrue(alert.strip())
+        self.assertEqual(self.page.url, url_before)
+        self.assertIn("must survive 423", self.page.input_value("#summary_text"))
+        self.assertTrue(self.page.is_disabled("#btn-publish"))
+        self.assertTrue(self.page.locator("#befund-form").is_visible())
 
-        def on_request(req) -> None:
-            if req.method == "PUT" and req.url.rstrip("/").endswith("/draft"):
-                puts.append("draft")
-
-        self.page.on("request", on_request)
-        # Trigger manual save then immediately preview; writeInFlight blocks overlap.
-        with patch(
-            "apps.medical.api_views.build_merged_preview_pdf_bytes",
-            return_value=(_MIN_PDF, None),
-        ):
-            self.page.click("#btn-save-draft")
-            self.page.click("#btn-preview-pdf")
-            self.page.wait_for_timeout(3000)
-        # At most one in-flight mutation window: second click must not stack parallel PUTs
-        # beyond sequential completion (0..2 is ok; overlapping burst would be >>2 quickly).
-        self.assertLessEqual(len(puts), 2)
-        self.assertIn("serialize writes", self.page.input_value("#summary_text"))
-
-    def test_second_preview_reenables_publish_after_autosave(self) -> None:
+    def test_publish_after_autosave_shows_preview_required(self) -> None:
         self.open_document_acquiring_session(self.page, self.doc.id)
         with self.page.expect_response(
             lambda r: r.url.rstrip("/").endswith("/draft")
@@ -1002,98 +984,192 @@ class BefundEditSessionSection63PlaywrightTests(PlaywrightDoctorE2EBase):
             and r.ok,
             timeout=20_000,
         ):
-            self.mark_form_dirty(self.page, "preview loop note")
-
+            self.mark_form_dirty(self.page, "gate after autosave")
+        self.wait_for_publish_enabled(self.page, enabled=False)
         with patch(
             "apps.medical.api_views.build_merged_preview_pdf_bytes",
             return_value=(_MIN_PDF, None),
         ):
-            with self.page.expect_popup(timeout=45_000):
-                with self.page.expect_response(
-                    lambda r: "preview-pdf" in r.url and r.ok,
-                    timeout=45_000,
-                ):
-                    self.page.click("#btn-preview-pdf")
-            self.page.wait_for_function(
-                "() => { const b = document.querySelector('#btn-publish');"
-                " return b && !b.disabled; }",
-                timeout=15_000,
-            )
+            self.click_preview_pdf(self.page)
+        self.wait_for_publish_enabled(self.page, enabled=True)
+        # lastSuccessfulSaveAt blocks another autosave until AUTOSAVE_MS elapses.
+        self.page.wait_for_timeout(2200)
+        with self.page.expect_response(
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT"
+            and r.ok,
+            timeout=20_000,
+        ):
+            self.mark_form_dirty(self.page, "autosave disables publish")
+        self.wait_for_publish_enabled(self.page, enabled=False)
+        self.dispatch_publish_click(self.page)
+        self.assertIn(_MSG_PUBLISH_PREVIEW_REQUIRED, self.alert_text(self.page))
+        self.assertEqual(self.page.locator("#befund-form").count(), 1)
 
-            with self.page.expect_response(
+    def test_autosave_keeps_caret_and_shows_status(self) -> None:
+        self.open_document_acquiring_session(self.page, self.doc.id)
+        text = "caret stays here after autosave"
+        caret = 11
+        with self.page.expect_response(
+            lambda r: r.url.rstrip("/").endswith("/draft")
+            and r.request.method == "PUT"
+            and r.ok,
+            timeout=20_000,
+        ):
+            self.page.evaluate(
+                """({ text, caret }) => {
+                  const el = document.querySelector('#summary_text');
+                  el.focus();
+                  el.value = text;
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  el.setSelectionRange(caret, caret);
+                }""",
+                {"text": text, "caret": caret},
+            )
+        after = self.page.evaluate(
+            """() => {
+              const el = document.querySelector('#summary_text');
+              return {
+                active: document.activeElement === el,
+                start: el.selectionStart,
+                end: el.selectionEnd,
+                value: el.value,
+              };
+            }"""
+        )
+        self.assertEqual(after["value"], text)
+        self.assertTrue(after["active"])
+        self.assertEqual(after["start"], caret)
+        self.assertEqual(after["end"], caret)
+        self.assertIn(_MSG_AUTOSAVE_SUCCESS, self.alert_text(self.page))
+
+    def test_clock_one_autosave_after_ten_minutes(self) -> None:
+        with self._production_autosave_interval():
+            page = self.context.new_page()
+            page.clock.install()
+            self.open_document_acquiring_session(page, self.doc.id)
+            puts: list[str] = []
+
+            def on_request(req) -> None:
+                if req.method == "PUT" and req.url.rstrip("/").endswith("/draft"):
+                    puts.append(req.url)
+
+            page.on("request", on_request)
+            self.mark_form_dirty(page, "clocked autosave once")
+            page.clock.fast_forward("09:59")
+            self.assertEqual(puts, [])
+            with page.expect_response(
                 lambda r: r.url.rstrip("/").endswith("/draft")
                 and r.request.method == "PUT"
                 and r.ok,
                 timeout=20_000,
             ):
-                self.mark_form_dirty(self.page, "after first preview")
-            self.page.wait_for_function(
-                "() => { const b = document.querySelector('#btn-publish');"
-                " return b && b.disabled; }",
-                timeout=15_000,
-            )
+                page.clock.fast_forward("00:02")
+            self.assertEqual(len(puts), 1)
+            page.clock.fast_forward("10:00")
+            self.assertEqual(len(puts), 1)
+            self.assertIn("clocked autosave once", page.input_value("#summary_text"))
 
-            with self.page.expect_popup(timeout=45_000):
-                with self.page.expect_response(
-                    lambda r: "preview-pdf" in r.url and r.ok,
-                    timeout=45_000,
-                ):
-                    self.page.click("#btn-preview-pdf")
-            self.page.wait_for_function(
-                "() => { const b = document.querySelector('#btn-publish');"
-                " return b && !b.disabled; }",
-                timeout=15_000,
-            )
+    def test_clock_hidden_overdue_saves_when_visible(self) -> None:
+        with self._production_autosave_interval():
+            page = self.context.new_page()
+            page.clock.install()
+            self.open_document_acquiring_session(page, self.doc.id)
+            puts: list[str] = []
 
-    def test_republish_releases_lock(self) -> None:
+            def on_request(req) -> None:
+                if req.method == "PUT" and req.url.rstrip("/").endswith("/draft"):
+                    puts.append(req.url)
+
+            page.on("request", on_request)
+            self.set_document_visibility(page, hidden=True)
+            self.mark_form_dirty(page, "overdue hidden tab")
+            page.clock.fast_forward("10:00")
+            self.assertEqual(puts, [])
+            with page.expect_response(
+                lambda r: r.url.rstrip("/").endswith("/draft")
+                and r.request.method == "PUT"
+                and r.ok,
+                timeout=20_000,
+            ):
+                self.set_document_visibility(page, hidden=False)
+            self.assertEqual(len(puts), 1)
+            self.assertIn("overdue hidden tab", page.input_value("#summary_text"))
+
+    def test_lock_limit_screen_links_three_cases(self) -> None:
+        docs = [self.doc]
+        for i in range(2, 4):
+            docs.append(
+                create_draft_document(
+                    doctor=self.doctor,
+                    daily_queue=self.queue,
+                    position_no=i,
+                    patient_last=f"Held{i}{uuid.uuid4().hex[:4]}",
+                )
+            )
+        for d in docs:
+            page = self.context.new_page()
+            self.open_document_acquiring_session(page, d.id)
+
+        fourth = create_draft_document(
+            doctor=self.doctor, daily_queue=self.queue, position_no=4
+        )
+        page4 = self.context.new_page()
+        page4.goto(
+            f"{self.live_server_url}/doctor/{fourth.id}/?lang=de",
+            wait_until="domcontentloaded",
+        )
+        page4.wait_for_selector("#lock-limit-screen", timeout=30_000)
+        links = page4.locator("#lock-limit-screen a.lock-limit-link")
+        self.assertEqual(links.count(), 3)
+        hrefs = [links.nth(i).get_attribute("href") or "" for i in range(3)]
+        for d in docs:
+            self.assertTrue(
+                any(str(d.id) in href for href in hrefs),
+                msg=f"missing link for {d.id} in {hrefs}",
+            )
+        fourth.refresh_from_db()
+        self.assertIsNone(fourth.locked_by_user_id)
+
+    def test_second_device_shows_reclaim_modal(self) -> None:
+        first = self.open_document_acquiring_session(self.page, self.doc.id)
+        old_token = first["edit_session_token"]
+        ctx2 = self.new_context()
+        page2 = ctx2.new_page()
+        self.login_doctor(page2, username=self.doctor.username)
+        with page2.expect_response(
+            lambda r: "/edit-session" in r.url and r.request.method == "POST",
+            timeout=45_000,
+        ) as first_attempt:
+            self.open_document(page2, self.doc.id)
+        self.assertEqual(first_attempt.value.status, 409)
+        page2.wait_for_selector("#revision-modal:not(.hidden)", timeout=20_000)
+        self.assertIn(
+            _MSG_RECLAIM_TITLE, page2.locator("#revision-modal-title").inner_text()
+        )
+        with page2.expect_response(
+            lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,
+            timeout=45_000,
+        ) as reclaim:
+            self.confirm_revision_modal(page2)
+        body = reclaim.value.json()
+        self.assertEqual(body.get("mode"), "reclaimed")
+        self.assertNotEqual(body.get("edit_session_token"), old_token)
+        page2.wait_for_selector("#btn-save-draft:not([disabled])", timeout=30_000)
+
+    def test_pending_revision_requires_first_preview_before_publish(self) -> None:
         pub = create_published_document(
             doctor=self.doctor, daily_queue=self.queue, position_no=40
         )
         self.open_document(self.page, pub.id)
-        sess = self.start_amend_revision(self.page)
-        pub.refresh_from_db()
-        self.assertTrue(pub.has_pending_revision)
-        self.assertEqual(pub.locked_by_user_id, self.doctor.id)
+        self.start_amend_revision(self.page)
+        self.wait_for_publish_enabled(self.page, enabled=False)
+        self.dispatch_publish_click(self.page)
+        self.assertIn(_MSG_PUBLISH_PREVIEW_REQUIRED, self.alert_text(self.page))
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes",
+            return_value=(_MIN_PDF, None),
+        ):
+            self.click_preview_pdf(self.page)
+        self.wait_for_publish_enabled(self.page, enabled=True)
 
-        token = pub.edit_session_token
-        assert token is not None
-        payload = {
-            "schema_version": 1,
-            "authoring_locale": "de-DE",
-            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-            "fitzpatrick_type": "TYPE_III",
-            "overall_image_assessment": "NO_CONTROL_NEEDED",
-            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            "summary_text": "republish frees lock",
-        }
-        saved = mutate_doctor_save_draft(
-            medical_document_id=pub.id,
-            user=self.doctor,
-            edit_session_token=token,
-            expected_draft_revision=pub.draft_revision,
-            draft_save_request_id=uuid.uuid4(),
-            medical_payload_schema_version=1,
-            medical_payload=payload,
-            intent="amend",
-        )
-        mark_doctor_draft_previewed(
-            medical_document_id=pub.id,
-            user=self.doctor,
-            edit_session_token=token,
-            expected_draft_revision=saved.draft_revision,
-        )
-        mutate_doctor_publish(
-            medical_document_id=pub.id,
-            user=self.doctor,
-            edit_session_token=token,
-            expected_draft_revision=saved.draft_revision,
-            publish_request_id=uuid.uuid4(),
-            publish_locale="de-DE",
-        )
-        pub.refresh_from_db()
-        self.assertFalse(pub.has_pending_revision)
-        self.assertIsNone(pub.locked_by_user_id)
-        self.assertIsNone(pub.edit_session_token)
-        self.assertEqual(pub.status, MedicalDocStatus.PUBLISHED)
-        self.assertIn("edit_session_token", sess)
