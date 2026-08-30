@@ -59,6 +59,7 @@ from apps.core.translation_service import resolve_other_message
 from apps.medical.edit_session import (
     EditSessionResponseError,
     doctor_befund_edit_lock_applies,
+    http_status_for_edit_session_error,
     is_doctor_befund_source_type,
     start_doctor_edit_session,
 )
@@ -792,7 +793,10 @@ def medical_document_preview_pdf_view(
     resolved version (same bytes as ``…/external-upload/preview-pdf``), not the merged
     Befund+cover layout used for standard digital documents.
 
-    Statuses are never mutated here – previewing must be a pure read.
+    Document ``status`` / version rows are not mutated. For doctor Befund draft
+    preview under an active edit lock, a successful gated preview updates
+    ``last_previewed_draft_revision`` (and refreshes ``locked_at``) so publish
+    can require a matching preview.
     """
     role_error = require_user_role(
         request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
@@ -1172,6 +1176,14 @@ def medical_document_discard_revision_view(
 def _json_edit_session_error(
     request: HttpRequest, exc: EditSessionResponseError
 ) -> JsonResponse:
+    http_status = http_status_for_edit_session_error(exc.error_key)
+    if http_status in (409, 423):
+        try:
+            from apps.operations.prom_metrics import record_befund_edit_conflict
+
+            record_befund_edit_conflict(reason=exc.error_key)
+        except Exception:
+            pass
     payload: dict[str, object] = {"error_key": exc.error_key, **exc.payload}
     if exc.error_key == "document_locked_by_other":
         holder = exc.payload.get("locked_by_username")
@@ -1182,7 +1194,7 @@ def _json_edit_session_error(
             username=holder or "—",
         )
         payload["locked_by_username"] = holder
-    return JsonResponse(payload, status=exc.http_status)
+    return JsonResponse(payload, status=http_status)
 
 
 @require_auth

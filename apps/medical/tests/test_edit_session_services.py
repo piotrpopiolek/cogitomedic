@@ -13,6 +13,7 @@ from apps.medical.constants import DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
 from apps.medical.edit_session import (
     EditSessionResponseError,
     count_doctor_active_document_locks,
+    http_status_for_edit_session_error,
     start_doctor_edit_session,
 )
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -111,7 +112,9 @@ class StartDoctorEditSessionTests(EditSessionTestMixin):
                 medical_document_id=doc.id, user=other, purpose="edit"
             )
         self.assertEqual(ctx.exception.error_key, "document_locked_by_other")
-        self.assertEqual(ctx.exception.http_status, 423)
+        self.assertEqual(
+            http_status_for_edit_session_error(ctx.exception.error_key), 423
+        )
 
     def test_reclaim_requires_confirmation(self) -> None:
         doc = self._make_isolated_draft_doc()

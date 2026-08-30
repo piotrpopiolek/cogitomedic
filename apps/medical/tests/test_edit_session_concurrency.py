@@ -233,12 +233,12 @@ class EditSessionConcurrencyTests(TransactionTestCase):
         for thread in threads:
             thread.join()
 
-        self.assertLessEqual(len(ok), DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS)
+        self.assertEqual(len(ok), DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS)
+        self.assertEqual(errors, ["doctor_lock_limit_reached"])
         self.assertEqual(
             count_doctor_active_document_locks(user_id=self.doctor_a.id),
-            len(ok),
+            DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
         )
-        self.assertIn("doctor_lock_limit_reached", errors)
 
     def test_parallel_identical_draft_save_request_id_replays_once(self) -> None:
         doc = self._make_draft()
@@ -341,8 +341,7 @@ class EditSessionConcurrencyTests(TransactionTestCase):
             medical_document_id=doc.id, user=self.doctor_a, purpose="edit"
         )
         MedicalDocument.objects.filter(id=doc.id).update(
-            locked_at=timezone.now()
-            - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
+            locked_at=timezone.now() - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS + 1)
         )
         AuditEvent.objects.filter(
             medical_document_id=doc.id,
@@ -416,7 +415,15 @@ class EditSessionConcurrencyTests(TransactionTestCase):
                     ok.append(str(user.id))
             except Exception as exc:
                 with lock:
-                    errors.append(type(exc).__name__ + ":" + str(getattr(exc, "error_key", getattr(exc, "api_message_key", exc))))
+                    errors.append(
+                        type(exc).__name__
+                        + ":"
+                        + str(
+                            getattr(
+                                exc, "error_key", getattr(exc, "api_message_key", exc)
+                            )
+                        )
+                    )
             finally:
                 connection.close()
 

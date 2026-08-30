@@ -62,31 +62,45 @@ class DoctorActiveLockSummary:
 
 
 class EditSessionResponseError(Exception):
-    """Maps to a stable API ``error_key`` and HTTP status."""
+    """Domain/API conflict for edit-session flows (stable ``error_key`` + payload).
 
-    __slots__ = ("error_key", "http_status", "payload")
+    HTTP status and Prometheus counters are applied in the API layer
+    (``_json_edit_session_error``), not here.
+    """
+
+    __slots__ = ("error_key", "payload")
 
     def __init__(
         self,
         *,
         error_key: str,
-        http_status: int,
         payload: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(error_key)
         self.error_key = error_key
-        self.http_status = http_status
         self.payload = payload or {}
-        if http_status in (409, 423):
-            try:
-                from apps.operations.prom_metrics import record_befund_edit_conflict
-
-                record_befund_edit_conflict(reason=error_key)
-            except Exception:
-                pass
 
 
-def _assert_doctor_actor(user: Any) -> StaffUser:
+# Presentation mapping: domain error_key → HTTP status (API layer).
+EDIT_SESSION_ERROR_HTTP_STATUS: dict[str, int] = {
+    "document_locked_by_other": 423,
+    "edit_session_expired": 423,
+    "edit_session_stale": 423,
+    "edit_session_reclaim_confirmation_required": 409,
+    "reclaim_superseded": 409,
+    "doctor_lock_limit_reached": 409,
+    "draft_revision_conflict": 409,
+    "draft_request_id_reused": 409,
+    "publish_preview_revision_stale": 409,
+    "revision_in_progress": 409,
+}
+
+
+def http_status_for_edit_session_error(error_key: str) -> int:
+    return EDIT_SESSION_ERROR_HTTP_STATUS.get(error_key, 400)
+
+
+def assert_doctor_actor(user: Any) -> StaffUser:
     if not getattr(user, "is_doctor", False):
         raise DomainError(
             domain_message("other.domain.medical_document_edit_doctor_role_required"),
@@ -157,7 +171,7 @@ def list_doctor_active_lock_summaries(
     return summaries
 
 
-def _effective_lock_holder_id(
+def effective_lock_holder_id(
     doc: MedicalDocument, *, now: datetime
 ) -> uuid.UUID | None:
     if not doc.locked_by_user_id or not doc.locked_at:
@@ -167,7 +181,25 @@ def _effective_lock_holder_id(
     return doc.locked_by_user_id
 
 
-def _clear_edit_session_lock_fields(doc: MedicalDocument) -> None:
+# Fields cleared together on release / discard / publish (lock + draft idempotency).
+EDIT_SESSION_LOCK_CLEAR_UPDATE_FIELDS: tuple[str, ...] = (
+    "locked_by_user_id",
+    "locked_at",
+    "edit_session_token",
+    "last_edit_session_request_id",
+    "last_previewed_draft_revision",
+    "last_draft_request_id",
+    "last_draft_request_base_revision",
+    "last_draft_request_result_revision",
+)
+
+
+def clear_edit_session_lock_fields(doc: MedicalDocument) -> list[str]:
+    """Clear holder lock, session token, preview marker, and draft-save idempotency keys.
+
+    Returns ``update_fields`` names for ``Model.save`` (caller adds ``updated_at``
+    / other domain fields as needed).
+    """
     doc.locked_by_user_id = None
     doc.locked_at = None
     doc.edit_session_token = None
@@ -176,6 +208,7 @@ def _clear_edit_session_lock_fields(doc: MedicalDocument) -> None:
     doc.last_draft_request_id = None
     doc.last_draft_request_base_revision = None
     doc.last_draft_request_result_revision = None
+    return list(EDIT_SESSION_LOCK_CLEAR_UPDATE_FIELDS)
 
 
 def _session_lock_update_fields(*, include_holder: bool = True) -> list[str]:
@@ -192,7 +225,7 @@ def _session_lock_update_fields(*, include_holder: bool = True) -> list[str]:
     return fields
 
 
-def _audit_edit_session_event(
+def audit_edit_session_event(
     *,
     event_type: str,
     doc: MedicalDocument,
@@ -221,7 +254,7 @@ def start_doctor_edit_session(
     reclaim_confirmed: bool = False,
 ) -> DoctorEditSessionResult:
     """Acquire, resume, or reclaim a doctor Befund edit session."""
-    doctor = _assert_doctor_actor(user)
+    doctor = assert_doctor_actor(user)
     now = timezone.now()
 
     doc = (
@@ -258,7 +291,7 @@ def start_doctor_edit_session(
             api_message_key="other.domain.edit_session_document_read_only",
         )
 
-    holder_id = _effective_lock_holder_id(doc, now=now)
+    holder_id = effective_lock_holder_id(doc, now=now)
     had_expired_lock = (
         doc.locked_by_user_id is not None
         and doc.locked_at is not None
@@ -269,7 +302,6 @@ def start_doctor_edit_session(
         holder = StaffUser.objects.filter(id=holder_id).first()
         raise EditSessionResponseError(
             error_key="document_locked_by_other",
-            http_status=423,
             payload={"locked_by_username": staff_user_display_name(holder)},
         )
 
@@ -287,7 +319,7 @@ def start_doctor_edit_session(
         ):
             doc.locked_at = now
             doc.save(update_fields=["locked_at", "updated_at"])
-            _audit_edit_session_event(
+            audit_edit_session_event(
                 event_type="DOCUMENT_LOCK_RESUMED",
                 doc=doc,
                 actor_user_id=doctor.id,
@@ -320,7 +352,6 @@ def start_doctor_edit_session(
             if expected_edit_session_revision != doc.edit_session_revision:
                 raise EditSessionResponseError(
                     error_key="reclaim_superseded",
-                    http_status=409,
                     payload={
                         "edit_session_revision": doc.edit_session_revision,
                     },
@@ -334,9 +365,12 @@ def start_doctor_edit_session(
 
         raise EditSessionResponseError(
             error_key="edit_session_reclaim_confirmation_required",
-            http_status=409,
             payload={"edit_session_revision": doc.edit_session_revision},
         )
+
+    # Serialize per-doctor acquires, then count under that lock so parallel
+    # acquires on different documents cannot slip past DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS.
+    StaffUser.objects.select_for_update().get(id=doctor.id)
 
     if count_doctor_active_document_locks(user_id=doctor.id, now=now) >= (
         DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
@@ -344,7 +378,6 @@ def start_doctor_edit_session(
         locked_docs = list_doctor_active_lock_summaries(user=doctor, now=now)
         raise EditSessionResponseError(
             error_key="doctor_lock_limit_reached",
-            http_status=409,
             payload={
                 "locked_documents": [
                     {
@@ -357,8 +390,6 @@ def start_doctor_edit_session(
                 ],
             },
         )
-
-    StaffUser.objects.select_for_update().filter(id=doctor.id).exists()
 
     new_token = uuid.uuid4()
     doc.locked_by_user_id = doctor.id
@@ -374,7 +405,7 @@ def start_doctor_edit_session(
         if had_expired_lock
         else "DOCUMENT_LOCK_ACQUIRED"
     )
-    _audit_edit_session_event(
+    audit_edit_session_event(
         event_type=event_type,
         doc=doc,
         actor_user_id=doctor.id,
@@ -409,7 +440,7 @@ def _reclaim_edit_session(
     doc.save(update_fields=_session_lock_update_fields(include_holder=False))
 
     previous_prefix = str(previous_token)[:8] if previous_token is not None else None
-    _audit_edit_session_event(
+    audit_edit_session_event(
         event_type="DOCUMENT_LOCK_RECLAIMED",
         doc=doc,
         actor_user_id=doctor.id,
@@ -438,7 +469,7 @@ def document_locked_by_other_for_user(
     if not doctor_befund_edit_lock_applies(doc):
         return False, None
     at = now or timezone.now()
-    holder_id = _effective_lock_holder_id(doc, now=at)
+    holder_id = effective_lock_holder_id(doc, now=at)
     if holder_id is None or holder_id == getattr(user, "id", None):
         return False, None
     holder = StaffUser.objects.filter(id=holder_id).first()
@@ -457,18 +488,6 @@ def release_doctor_edit_session_lock(
         return True
     if doc.locked_by_user_id != user.id:
         return False
-    _clear_edit_session_lock_fields(doc)
-    doc.save(
-        update_fields=[
-            "locked_by_user_id",
-            "locked_at",
-            "edit_session_token",
-            "last_edit_session_request_id",
-            "last_previewed_draft_revision",
-            "last_draft_request_id",
-            "last_draft_request_base_revision",
-            "last_draft_request_result_revision",
-            "updated_at",
-        ]
-    )
+    clear_fields = clear_edit_session_lock_fields(doc)
+    doc.save(update_fields=[*clear_fields, "updated_at"])
     return True

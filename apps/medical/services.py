@@ -68,8 +68,9 @@ from apps.medical.models import (
 )
 from apps.medical.edit_session import (
     EditSessionResponseError,
-    _effective_lock_holder_id,
+    clear_edit_session_lock_fields,
     doctor_befund_edit_lock_applies,
+    effective_lock_holder_id,
     release_doctor_edit_session_lock,
     start_doctor_edit_session,
 )
@@ -369,7 +370,7 @@ def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
         return True
 
     now = timezone.now()
-    holder_id = _effective_lock_holder_id(doc, now=now)
+    holder_id = effective_lock_holder_id(doc, now=now)
     if holder_id is None:
         try:
             start_doctor_edit_session(
@@ -2017,27 +2018,13 @@ def discard_pending_revision(
 
     medical_document.has_pending_revision = False
     medical_document.updated_by_user_id = actor_user_id
-    medical_document.locked_by_user_id = None
-    medical_document.locked_at = None
-    medical_document.edit_session_token = None
-    medical_document.last_edit_session_request_id = None
-    medical_document.last_previewed_draft_revision = None
-    medical_document.last_draft_request_id = None
-    medical_document.last_draft_request_base_revision = None
-    medical_document.last_draft_request_result_revision = None
+    clear_fields = clear_edit_session_lock_fields(medical_document)
     medical_document.save(
         update_fields=[
             "has_pending_revision",
             "updated_by_user",
             "updated_at",
-            "locked_by_user",
-            "locked_at",
-            "edit_session_token",
-            "last_edit_session_request_id",
-            "last_previewed_draft_revision",
-            "last_draft_request_id",
-            "last_draft_request_base_revision",
-            "last_draft_request_result_revision",
+            *clear_fields,
         ]
     )
     create_audit_event(
@@ -2241,14 +2228,7 @@ def publish_document_version(
     medical_document.has_pending_revision = False
     medical_document.last_published_at = requested_at
     medical_document.updated_by_user_id = published_by_user_id
-    medical_document.locked_by_user_id = None
-    medical_document.locked_at = None
-    medical_document.edit_session_token = None
-    medical_document.last_edit_session_request_id = None
-    medical_document.last_previewed_draft_revision = None
-    medical_document.last_draft_request_id = None
-    medical_document.last_draft_request_base_revision = None
-    medical_document.last_draft_request_result_revision = None
+    clear_fields = clear_edit_session_lock_fields(medical_document)
     medical_document.save(
         update_fields=[
             "status",
@@ -2258,14 +2238,7 @@ def publish_document_version(
             "last_published_at",
             "updated_by_user",
             "updated_at",
-            "locked_by_user",
-            "locked_at",
-            "edit_session_token",
-            "last_edit_session_request_id",
-            "last_previewed_draft_revision",
-            "last_draft_request_id",
-            "last_draft_request_base_revision",
-            "last_draft_request_result_revision",
+            *clear_fields,
         ]
     )
 
