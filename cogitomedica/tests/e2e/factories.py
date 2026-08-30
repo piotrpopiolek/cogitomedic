@@ -28,6 +28,11 @@ from apps.reception.models import (
 from apps.users.models import StaffUser
 
 
+def e2e_patient_phone() -> str:
+    """Digits-only E.164-style DE mobile; always matches ``patient_phone_format``."""
+    return f"49170{uuid.uuid4().int % 10**8:08d}"
+
+
 def create_doctor(*, username: str, password: str = "x") -> StaffUser:
     user = StaffUser.objects.create_user(
         username=username,
@@ -66,7 +71,7 @@ def create_draft_document(
         first_name="E2E",
         last_name=patient_last or f"Patient{suffix}",
         date_of_birth=date(1980, 1, 15),
-        phone=f"49170{suffix[:8]}",
+        phone=e2e_patient_phone(),
         email=f"e2e.{suffix}@example.com",
     )
     entry = QueueEntry.objects.create(

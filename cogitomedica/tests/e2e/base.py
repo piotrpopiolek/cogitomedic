@@ -112,6 +112,15 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
     def tearDown(self) -> None:
         for ctx in list(self._contexts):
             try:
+                for page in list(ctx.pages):
+                    try:
+                        page.unroute_all(behavior="ignoreErrors")
+                    except Exception:
+                        pass
+                ctx.unroute_all(behavior="ignoreErrors")
+            except Exception:
+                pass
+            try:
                 ctx.close()
             except Exception:
                 pass
