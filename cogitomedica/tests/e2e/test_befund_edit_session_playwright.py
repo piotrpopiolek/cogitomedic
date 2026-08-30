@@ -112,14 +112,15 @@ class BefundEditSessionPlaywrightTests(PlaywrightDoctorE2EBase):
         self.doc.refresh_from_db()
         self.assertNotEqual(str(self.doc.edit_session_token), old_token)
 
+        # Separate browser context: no BroadcastChannel to the first tab.
+        # Stale tab learns via autosave PUT → 423 → setEditBlocked (save disabled).
+        # Assert dirty text survives; do not click the disabled control.
         self.mark_form_dirty(self.page, "stale tab text must survive")
-        with self.page.expect_response(
-            lambda r: r.url.rstrip("/").endswith("/draft")
-            and r.request.method == "PUT",
+        self.page.wait_for_function(
+            "() => { const b = document.querySelector('#btn-save-draft');"
+            " return b && b.disabled; }",
             timeout=30_000,
-        ) as save_info:
-            self.page.click("#btn-save-draft")
-        self.assertEqual(save_info.value.status, 423)
+        )
         self.assertIn(
             "stale tab text must survive", self.page.input_value("#summary_text")
         )
