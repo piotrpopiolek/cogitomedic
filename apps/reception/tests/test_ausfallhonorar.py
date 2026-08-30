@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from django.contrib import messages
 from django.contrib.admin.sites import AdminSite
+from django.contrib.auth.models import Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import Client, RequestFactory, TestCase
@@ -457,9 +458,41 @@ class AusfallhonorarFlagTests(TestCase):
         self.assertIn("ausfallhonorar", accounting_ro)
         self.assertNotIn("ausfallhonorar", reception_ro)
 
-    def test_admin_bulk_mark_and_clear_via_changelist(self) -> None:
+    def test_admin_bulk_mark_and_clear(self) -> None:
         other = self._extra_entry(position_no=2, suffix="Other")
-        self.client.login(username="af-reception", password="safe-password")
+        request = _request_with_messages(self.reception)
+        admin_inst = self._model_admin()
+        qs = QueueEntry.objects.filter(pk__in=[self.entry.pk, other.pk])
+        admin_inst.mark_ausfallhonorar(request, qs)
+        self.entry.refresh_from_db()
+        other.refresh_from_db()
+        self.assertTrue(self.entry.ausfallhonorar)
+        self.assertTrue(other.ausfallhonorar)
+        self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
+        self.assertEqual(other.ausfallhonorar_set_by_id, self.reception.id)
+        self.assertEqual(self._ausfall_audit_count(), 2)
+        self.assertTrue(
+            any(m.level == messages.SUCCESS for m in request._messages)
+        )
+
+        request = _request_with_messages(self.reception)
+        admin_inst.clear_ausfallhonorar(request, qs)
+        self.entry.refresh_from_db()
+        other.refresh_from_db()
+        self.assertFalse(self.entry.ausfallhonorar)
+        self.assertFalse(other.ausfallhonorar)
+        self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
+        self.assertEqual(self._ausfall_audit_count(), 4)
+
+    def test_admin_bulk_mark_via_changelist_post(self) -> None:
+        other = self._extra_entry(position_no=2, suffix="Http")
+        self.reception.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label="reception",
+                codename__in=("view_queueentry", "change_queueentry"),
+            )
+        )
+        self.client.force_login(self.reception)
         url = reverse("admin:reception_queueentry_changelist")
         mark = self.client.post(
             url,
@@ -475,24 +508,7 @@ class AusfallhonorarFlagTests(TestCase):
         self.assertTrue(self.entry.ausfallhonorar)
         self.assertTrue(other.ausfallhonorar)
         self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
-        self.assertEqual(other.ausfallhonorar_set_by_id, self.reception.id)
         self.assertEqual(self._ausfall_audit_count(), 2)
-
-        clear = self.client.post(
-            url,
-            {
-                "action": "clear_ausfallhonorar",
-                "_selected_action": [str(self.entry.pk), str(other.pk)],
-                "index": "0",
-            },
-        )
-        self.assertEqual(clear.status_code, 302)
-        self.entry.refresh_from_db()
-        other.refresh_from_db()
-        self.assertFalse(self.entry.ausfallhonorar)
-        self.assertFalse(other.ausfallhonorar)
-        self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
-        self.assertEqual(self._ausfall_audit_count(), 4)
 
     def test_admin_bulk_mark_denied_for_doctor(self) -> None:
         request = _request_with_messages(self.doctor)
