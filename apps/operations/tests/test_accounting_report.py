@@ -537,11 +537,13 @@ class AccountingReportServiceTests(AccountingReportBase):
         self.assertEqual({row.last_name for row in ausfall.rows}, {"Kowalska"})
 
     def test_ausfall_includes_future_queue_dates_when_flagged(self) -> None:
-        """A flagged future appointment in range is billed; unflagged is not."""
+        """A flagged exam day after local today is billed when it falls in range."""
+        today = timezone.localdate()
+        future_date = today + timedelta(days=7)
         future_queue = DailyQueue.objects.create(
             clinic_site=self.clinic_site,
             consulting_room=self.consulting_room,
-            queue_date=date(2026, 3, 14),
+            queue_date=future_date,
             status=QueueStatus.OPEN,
             assigned_doctor=self.doctor,
             created_by_user=self.doctor,
@@ -577,8 +579,8 @@ class AccountingReportServiceTests(AccountingReportBase):
         self._flag_ausfall(future_entry)
 
         report = build_accounting_report(
-            date_from=date(2026, 3, 10),
-            date_to=date(2026, 3, 16),
+            date_from=today + timedelta(days=1),
+            date_to=today + timedelta(days=14),
             report_mode=REPORT_MODE_AUSFALL,
         )
         names = {row.last_name for row in report.rows}

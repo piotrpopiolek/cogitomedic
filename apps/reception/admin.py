@@ -6,6 +6,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -592,22 +593,28 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
 
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
-        desired_flag = bool(obj.ausfallhonorar)
+        # Intent is the bound form vs its initial snapshot, not the live DB row.
+        # A stale unchecked box must not clear a flag set after the form was opened.
+        flag_changed = "ausfallhonorar" in getattr(form, "changed_data", [])
+        desired_flag = (
+            bool(form.cleaned_data.get("ausfallhonorar")) if flag_changed else None
+        )
         if not change:
             obj.ausfallhonorar = False
             obj.ausfallhonorar_set_at = None
             obj.ausfallhonorar_set_by = None
             super().save_model(request, obj, form, change)
-            if desired_flag:
+            if flag_changed and desired_flag:
                 self._apply_ausfallhonorar(request, obj.id, True)
             return
-        previous = QueueEntry.objects.get(pk=obj.pk)
-        obj.ausfallhonorar = previous.ausfallhonorar
-        obj.ausfallhonorar_set_at = previous.ausfallhonorar_set_at
-        obj.ausfallhonorar_set_by_id = previous.ausfallhonorar_set_by_id
-        super().save_model(request, obj, form, change)
-        if desired_flag != previous.ausfallhonorar:
-            self._apply_ausfallhonorar(request, obj.id, desired_flag)
+        with transaction.atomic():
+            stored = QueueEntry.objects.select_for_update().get(pk=obj.pk)
+            obj.ausfallhonorar = stored.ausfallhonorar
+            obj.ausfallhonorar_set_at = stored.ausfallhonorar_set_at
+            obj.ausfallhonorar_set_by_id = stored.ausfallhonorar_set_by_id
+            super().save_model(request, obj, form, change)
+            if flag_changed:
+                self._apply_ausfallhonorar(request, obj.id, bool(desired_flag))
 
     def _apply_ausfallhonorar(self, request, queue_entry_id, flagged: bool) -> None:
         try:

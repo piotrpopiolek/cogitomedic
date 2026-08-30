@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from django.test import Client, TestCase
+from django.contrib.admin.sites import AdminSite
+from django.test import Client, RequestFactory, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.operations.models import AuditEvent
+from apps.reception.admin import QueueEntryAdmin
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -223,3 +225,66 @@ class AusfallhonorarFlagTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.entry.refresh_from_db()
         self.assertFalse(self.entry.ausfallhonorar)
+
+    def _admin_save(
+        self,
+        *,
+        obj: QueueEntry,
+        user: StaffUser,
+        changed_data: list[str],
+        cleaned_data: dict,
+        change: bool = True,
+    ) -> None:
+        request = RequestFactory().post("/admin/reception/queueentry/")
+        request.user = user
+        form = type(
+            "BoundQueueEntryForm",
+            (),
+            {"changed_data": changed_data, "cleaned_data": cleaned_data},
+        )()
+        QueueEntryAdmin(QueueEntry, AdminSite()).save_model(request, obj, form, change)
+
+    def test_admin_notes_save_does_not_clear_concurrent_flag(self) -> None:
+        """Stale unchecked checkbox is not intent; concurrent mark must survive."""
+        update_queue_entry(
+            self.entry.id,
+            ausfallhonorar=True,
+            actor_user_id=self.manager.id,
+        )
+        obj = QueueEntry.objects.get(pk=self.entry.id)
+        obj.ausfallhonorar = False
+        obj.notes = "only notes"
+        self._admin_save(
+            obj=obj,
+            user=self.reception,
+            changed_data=["notes"],
+            cleaned_data={"notes": "only notes", "ausfallhonorar": False},
+        )
+        self.entry.refresh_from_db()
+        self.assertTrue(self.entry.ausfallhonorar)
+        self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.manager.id)
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="QUEUE_ENTRY_AUSFALLHONORAR_CHANGED"
+            ).count(),
+            1,
+        )
+
+    def test_admin_changed_checkbox_sets_flag_through_service(self) -> None:
+        obj = QueueEntry.objects.get(pk=self.entry.id)
+        obj.ausfallhonorar = True
+        self._admin_save(
+            obj=obj,
+            user=self.reception,
+            changed_data=["ausfallhonorar"],
+            cleaned_data={"ausfallhonorar": True},
+        )
+        self.entry.refresh_from_db()
+        self.assertTrue(self.entry.ausfallhonorar)
+        self.assertEqual(self.entry.ausfallhonorar_set_by_id, self.reception.id)
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                event_type="QUEUE_ENTRY_AUSFALLHONORAR_CHANGED"
+            ).count(),
+            1,
+        )
