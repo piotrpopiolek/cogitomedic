@@ -591,6 +591,15 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
             actions.pop("clear_ausfallhonorar", None)
         return actions
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        try:
+            return super().changeform_view(
+                request, object_id, form_url, extra_context
+            )
+        except DomainError:
+            # Flag write failed after message_user ERROR; skip admin "saved successfully".
+            return redirect(request.get_full_path())
+
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
         # Intent is the bound form vs its initial snapshot, not the live DB row.
@@ -599,15 +608,15 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
         desired_flag = (
             bool(form.cleaned_data.get("ausfallhonorar")) if flag_changed else None
         )
-        if not change:
-            obj.ausfallhonorar = False
-            obj.ausfallhonorar_set_at = None
-            obj.ausfallhonorar_set_by = None
-            super().save_model(request, obj, form, change)
-            if flag_changed and desired_flag:
-                self._apply_ausfallhonorar(request, obj.id, True)
-            return
         with transaction.atomic():
+            if not change:
+                obj.ausfallhonorar = False
+                obj.ausfallhonorar_set_at = None
+                obj.ausfallhonorar_set_by = None
+                super().save_model(request, obj, form, change)
+                if flag_changed and desired_flag:
+                    self._apply_ausfallhonorar(request, obj.id, True)
+                return
             stored = QueueEntry.objects.select_for_update().get(pk=obj.pk)
             obj.ausfallhonorar = stored.ausfallhonorar
             obj.ausfallhonorar_set_at = stored.ausfallhonorar_set_at
@@ -634,6 +643,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                 ),
                 level=messages.ERROR,
             )
+            raise
 
     def _bulk_set_ausfallhonorar(self, request, queryset, *, flagged: bool) -> None:
         if not staff_user_may_set_ausfallhonorar(request.user):

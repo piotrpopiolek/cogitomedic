@@ -478,7 +478,6 @@ def update_daily_queue(
 
 
 @transaction.atomic
-@transaction.atomic
 def update_queue_entry(
     queue_entry_id: uuid.UUID,
     *,
