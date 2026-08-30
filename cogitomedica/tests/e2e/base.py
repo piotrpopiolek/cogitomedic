@@ -175,6 +175,41 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
         page.wait_for_selector("#summary_text", timeout=15_000)
         page.fill("#summary_text", text)
 
+    def set_page_visibility(self, page: Page, *, visible: bool) -> None:
+        state = "visible" if visible else "hidden"
+        page.evaluate(
+            """(state) => {
+              Object.defineProperty(document, 'visibilityState', {
+                configurable: true,
+                get: () => state,
+              });
+              Object.defineProperty(document, 'hidden', {
+                configurable: true,
+                get: () => state !== 'visible',
+              });
+              document.dispatchEvent(new Event('visibilitychange'));
+            }""",
+            state,
+        )
+
+    def set_control_needed_without_lesions(self, page: Page) -> None:
+        """Force client-side validation failure used by autosave/save."""
+        page.evaluate(
+            """() => {
+              const ctrl = document.querySelector(
+                'input[name="overall_image_assessment"][value="CONTROL_NEEDED"]'
+              );
+              if (ctrl) {
+                ctrl.checked = true;
+                ctrl.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }"""
+        )
+
+    def click_logout(self, page: Page) -> None:
+        page.get_by_role("button", name="Abmelden").click()
+        page.wait_for_url("**/doctor/login/**", timeout=30_000)
+
     def confirm_revision_modal(self, page: Page) -> None:
         page.wait_for_selector("#revision-modal:not(.hidden)", timeout=15_000)
         page.click("#revision-modal-confirm")
@@ -203,3 +238,60 @@ class PlaywrightDoctorE2EBase(StaticLiveServerTestCase):
             self.confirm_revision_modal(page)
         page.wait_for_selector("#btn-save-draft:not([disabled])", timeout=30_000)
         return info.value.json()
+
+    def track_unlock_posts(self, page: Page) -> list[int]:
+        hits: list[int] = []
+
+        def on_request(req) -> None:
+            if req.method == "POST" and "/unlock" in req.url:
+                hits.append(1)
+
+        page.on("request", on_request)
+        return hits
+
+    def set_document_visibility(self, page: Page, *, hidden: bool) -> None:
+        page.evaluate(
+            """(hidden) => {
+              Object.defineProperty(document, 'visibilityState', {
+                configurable: true,
+                get: () => (hidden ? 'hidden' : 'visible'),
+              });
+              Object.defineProperty(document, 'hidden', {
+                configurable: true,
+                get: () => !!hidden,
+              });
+              document.dispatchEvent(new Event('visibilitychange'));
+            }""",
+            hidden,
+        )
+
+    def wait_for_publish_enabled(self, page: Page, *, enabled: bool, timeout: int = 15_000) -> None:
+        if enabled:
+            page.wait_for_function(
+                "() => { const b = document.querySelector('#btn-publish');"
+                " return b && !b.disabled; }",
+                timeout=timeout,
+            )
+        else:
+            page.wait_for_function(
+                "() => { const b = document.querySelector('#btn-publish');"
+                " return b && b.disabled; }",
+                timeout=timeout,
+            )
+
+    def click_preview_pdf(self, page: Page) -> None:
+        with page.expect_popup(timeout=45_000) as popup_info:
+            with page.expect_response(
+                lambda r: "preview-pdf" in r.url and r.ok,
+                timeout=45_000,
+            ):
+                page.click("#btn-preview-pdf")
+        popup = popup_info.value
+        try:
+            popup.wait_for_load_state("domcontentloaded")
+        except Exception:
+            pass
+        try:
+            popup.close()
+        except Exception:
+            pass
