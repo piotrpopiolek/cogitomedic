@@ -13,6 +13,7 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import DOCUMENT_LOCK_TIMEOUT_HOURS
 from apps.medical.edit_session import (
+    DoctorEditSessionResult,
     EditSessionResponseError,
     start_doctor_edit_session,
 )
@@ -35,7 +36,7 @@ from apps.users.models import StaffUser
 
 
 class _DenialMatrixMixin(ServicesCoverageBase):
-    def _make_locked_draft(self) -> tuple[MedicalDocument, object]:
+    def _make_locked_draft(self) -> tuple[MedicalDocument, DoctorEditSessionResult]:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),
             entry_status=QueueEntryStatus.PATIENT_COMPLETED,

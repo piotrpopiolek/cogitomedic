@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from apps.medical.models import MedicalDocStatus, MedicalDocument
+from apps.medical.models import MedicalDocument
 from apps.medical.write_gate import (
     mark_doctor_draft_previewed,
     mutate_doctor_publish,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.test import Client
 from django.utils import timezone

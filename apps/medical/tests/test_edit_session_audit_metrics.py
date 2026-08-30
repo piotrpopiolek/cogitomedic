@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.edit_session import start_doctor_edit_session
+from apps.medical.edit_session import DoctorEditSessionResult, start_doctor_edit_session
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -256,7 +256,7 @@ class PublishOutboxLockOrderConcurrencyTests(TransactionTestCase):
             created_by_user=self.doctor,
         )
 
-    def _make_ready_draft(self) -> tuple[MedicalDocument, object]:
+    def _make_ready_draft(self) -> tuple[MedicalDocument, DoctorEditSessionResult]:
         suffix = uuid.uuid4().hex[:8]
         patient = Patient.objects.create(
             first_name="PO",
