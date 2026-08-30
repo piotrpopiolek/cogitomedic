@@ -239,11 +239,12 @@
     var wrap = el("alert-placeholder");
     if (!wrap) return;
     var items = Array.isArray(lockedDocuments) ? lockedDocuments : [];
+    var uiLang = PANEL.lang === "en" || PANEL.lang === "pl" ? PANEL.lang : "de";
     var links = items
       .map(function (d) {
         var id = d && (d.medical_document_id || d.id);
         if (!id) return "";
-        var href = "/doctor/" + encodeURIComponent(id) + "/?lang=de";
+        var href = "/doctor/" + encodeURIComponent(id) + "/?lang=" + encodeURIComponent(uiLang);
         var label = escapeHtml(d.patient_display || String(id));
         return (
           '<li><a class="lock-limit-link underline font-medium" href="' +
@@ -377,7 +378,7 @@
   function setPublishEnabledFromPreviewFlag() {
     var pub = el("btn-publish");
     if (!pub) return;
-    if (hasPublishedHistory() && !hasPendingRevision) {
+    if (editBlocked || (hasPublishedHistory() && !hasPendingRevision)) {
       pub.disabled = true;
       return;
     }
@@ -715,6 +716,16 @@
         setEditBlocked(UI.msgEditSessionStale);
         return true;
       }
+      if (errorKey === "doctor_lock_limit_reached") {
+        renderDoctorLockLimit(json && json.locked_documents);
+        return true;
+      }
+      if (errorKey === "publish_preview_revision_stale") {
+        previewSeenSinceLastSave = false;
+        setPublishEnabledFromPreviewFlag();
+        alertMsg("warning", UI.msgPublishPreviewRequired);
+        return true;
+      }
     }
     return false;
   }
@@ -908,16 +919,16 @@
   }
 
   /* ── Form dirty tracking ────────────────────────────────────────────── */
+  function markBefundFormDirty() {
+    befundFormDirty = true;
+    befundFormDirtyGen++;
+    previewSeenSinceLastSave = false;
+    setPublishEnabledFromPreviewFlag();
+  }
   var befundFormEl = el("befund-form");
   if (befundFormEl) {
-    befundFormEl.addEventListener("input", function () {
-      befundFormDirty = true;
-      befundFormDirtyGen++;
-    });
-    befundFormEl.addEventListener("change", function () {
-      befundFormDirty = true;
-      befundFormDirtyGen++;
-    });
+    befundFormEl.addEventListener("input", markBefundFormDirty);
+    befundFormEl.addEventListener("change", markBefundFormDirty);
   }
   window.addEventListener("beforeunload", function (e) {
     if (!isDraftAuthoring() || !befundFormDirty) return;
@@ -1244,6 +1255,7 @@
         const favorite = lesionFavorites()[idx];
         if (!favorite) return;
         applyLesionFavorite(section, favorite);
+        markBefundFormDirty();
         alertMsg(
           "success",
           UI.msgFavoriteApplied
@@ -1398,6 +1410,7 @@
       if (!favorite) return;
       const summaryEl = el("summary_text");
       if (summaryEl) summaryEl.value = favorite.text || "";
+      markBefundFormDirty();
       alertMsg(
         "success",
         UI.msgFavoriteApplied
@@ -2361,7 +2374,7 @@
           }
           if (handleSessionErrorResponse(res)) {
             writeInFlight = false;
-            publishBtn.disabled = false;
+            setPublishEnabledFromPreviewFlag();
             return;
           }
           if (!res.ok) {
@@ -2431,6 +2444,10 @@
               window.location.href = listUrl;
             }, 1200);
           } else {
+            if (handleSessionErrorResponse(res)) {
+              setPublishEnabledFromPreviewFlag();
+              return;
+            }
             publishBtn.disabled = false;
             alertMsg(
               "danger",

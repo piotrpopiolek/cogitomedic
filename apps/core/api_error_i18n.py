@@ -96,6 +96,12 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.revision_in_progress": (
         "A pending revision or active edit lock is open; finish or discard it first."
     ),
+    "other.api.edit_session_reclaim_confirmation_required": (
+        "Confirm reclaiming this edit session from another tab or device."
+    ),
+    "other.api.reclaim_superseded": (
+        "This reclaim request is outdated. Reload the document and try again."
+    ),
     "other.api.no_pending_revision_to_discard": (
         "No pending revision to discard for this document."
     ),

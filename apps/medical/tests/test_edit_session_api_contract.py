@@ -6,7 +6,7 @@ import json
 import uuid
 from datetime import timedelta
 
-from django.test import Client
+from django.test import Client, SimpleTestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -14,6 +14,10 @@ from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import (
     DOCUMENT_LOCK_TIMEOUT_HOURS,
     DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
+)
+from apps.medical.edit_session import (
+    EDIT_SESSION_ERROR_HTTP_STATUS,
+    EDIT_SESSION_ERROR_MESSAGE,
 )
 from apps.medical.models import (
     MedicalDocStatus,
@@ -24,6 +28,25 @@ from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.operations.models import AuditEvent
 from apps.reception.models import PatientFormSession, QueueEntryStatus
 from apps.users.models import StaffUser
+
+
+class EditSessionErrorI18nMapTests(SimpleTestCase):
+    def test_http_status_keys_have_message_specs(self) -> None:
+        self.assertEqual(
+            set(EDIT_SESSION_ERROR_HTTP_STATUS), set(EDIT_SESSION_ERROR_MESSAGE)
+        )
+        for key, (msg_key, default) in EDIT_SESSION_ERROR_MESSAGE.items():
+            self.assertTrue(msg_key)
+            self.assertTrue(default)
+            self.assertNotEqual(default, key)
+
+    def test_amend_publisher_only_has_canonical_english(self) -> None:
+        from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
+        from apps.core.domain_messages import domain_message
+
+        key = "other.domain.amend_publisher_only"
+        self.assertIn(key, OTHER_I18N_KEY_DEFAULT_EN)
+        self.assertNotEqual(domain_message(key), key)
 
 
 class EditSessionApiContractTests(ServicesCoverageBase):
@@ -100,6 +123,12 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         assign_group_to_test_user(user, role)
         return user
 
+    def _assert_translated_error(self, body: dict) -> None:
+        self.assertIn("error", body)
+        self.assertIsInstance(body["error"], str)
+        self.assertTrue(body["error"].strip())
+        self.assertNotEqual(body["error"], body["error_key"])
+
     def test_error_key_document_locked_by_other(self) -> None:
         doc = self._make_draft()
         self._start(doc)
@@ -116,6 +145,8 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         self.assertEqual(body["error_key"], "document_locked_by_other")
         self.assertNotIn("edit_session_token", body)
         self.assertIn("locked_by_username", body)
+        self._assert_translated_error(body)
+        self.assertIn(self.doctor.username, body["error"])
 
     def test_error_key_reclaim_confirmation_and_superseded(self) -> None:
         doc = self._make_draft()
@@ -131,6 +162,7 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             body["error_key"], "edit_session_reclaim_confirmation_required"
         )
         self.assertNotIn("edit_session_token", body)
+        self._assert_translated_error(body)
         rev = body["edit_session_revision"]
         reclaim = self.client.post(
             f"/api/v1/medical-documents/{doc.id}/edit-session",
@@ -154,8 +186,10 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(stale.status_code, 409)
-        self.assertEqual(stale.json()["error_key"], "reclaim_superseded")
-        self.assertNotIn("edit_session_token", stale.json())
+        stale_body = stale.json()
+        self.assertEqual(stale_body["error_key"], "reclaim_superseded")
+        self.assertNotIn("edit_session_token", stale_body)
+        self._assert_translated_error(stale_body)
         self.assertNotIn(first["edit_session_token"], stale.content.decode())
 
     def test_error_key_draft_revision_conflict_and_request_id_reused(self) -> None:
@@ -186,8 +220,10 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(conflict.status_code, 409)
-        self.assertEqual(conflict.json()["error_key"], "draft_revision_conflict")
-        self.assertNotIn("edit_session_token", conflict.json())
+        conflict_body = conflict.json()
+        self.assertEqual(conflict_body["error_key"], "draft_revision_conflict")
+        self.assertNotIn("edit_session_token", conflict_body)
+        self._assert_translated_error(conflict_body)
 
         reused = self.client.put(
             f"/api/v1/medical-documents/{doc.id}/draft",
@@ -201,7 +237,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(reused.status_code, 409)
-        self.assertEqual(reused.json()["error_key"], "draft_request_id_reused")
+        reused_body = reused.json()
+        self.assertEqual(reused_body["error_key"], "draft_request_id_reused")
+        self._assert_translated_error(reused_body)
 
     def test_error_key_edit_session_stale_and_expired(self) -> None:
         doc = self._make_draft()
@@ -228,7 +266,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(stale.status_code, 423)
-        self.assertEqual(stale.json()["error_key"], "edit_session_stale")
+        stale_body = stale.json()
+        self.assertEqual(stale_body["error_key"], "edit_session_stale")
+        self._assert_translated_error(stale_body)
 
         doc2 = self._make_draft()
         sess2 = self._start(doc2)
@@ -247,7 +287,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(expired.status_code, 423)
-        self.assertEqual(expired.json()["error_key"], "edit_session_expired")
+        expired_body = expired.json()
+        self.assertEqual(expired_body["error_key"], "edit_session_expired")
+        self._assert_translated_error(expired_body)
 
     def test_error_key_doctor_lock_limit_reached_payload(self) -> None:
         for _ in range(DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS):
@@ -261,6 +303,7 @@ class EditSessionApiContractTests(ServicesCoverageBase):
         self.assertEqual(resp.status_code, 409)
         body = resp.json()
         self.assertEqual(body["error_key"], "doctor_lock_limit_reached")
+        self._assert_translated_error(body)
         self.assertEqual(
             len(body["locked_documents"]), DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
         )
@@ -296,8 +339,10 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             content_type="application/json",
         )
         self.assertEqual(pub.status_code, 409)
-        self.assertEqual(pub.json()["error_key"], "publish_preview_revision_stale")
-        self.assertNotIn("edit_session_token", pub.json())
+        pub_body = pub.json()
+        self.assertEqual(pub_body["error_key"], "publish_preview_revision_stale")
+        self.assertNotIn("edit_session_token", pub_body)
+        self._assert_translated_error(pub_body)
 
     def test_unlock_gone_and_missing_document(self) -> None:
         doc = self._make_draft()

@@ -494,6 +494,11 @@
     "en": "This document is read-only right now. Start an edit session first.",
     "pl": "Ten dokument jest teraz tylko do odczytu. Najpierw rozpocznij sesję edycji."
   },
+  "other.domain.amend_publisher_only": {
+    "de": "Nur der veröffentlichende Arzt kann eine Revision dieses Befunds starten.",
+    "en": "Only the publishing doctor can start a revision of this document.",
+    "pl": "Tylko lekarz publikujący może rozpocząć rewizję tego dokumentu."
+  },
   "other.domain.error": {
     "de": "Ein Fehler ist aufgetreten.",
     "en": "An error occurred.",

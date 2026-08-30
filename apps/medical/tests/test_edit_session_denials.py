@@ -398,6 +398,10 @@ class RevokeRevisionInProgressTests(_DenialMatrixMixin):
         self.assertEqual(resp.status_code, 409)
         body = resp.json()
         self.assertEqual(body.get("error_key"), "revision_in_progress")
+        self.assertIn("error", body)
+        self.assertIsInstance(body["error"], str)
+        self.assertTrue(body["error"].strip())
+        self.assertNotEqual(body["error"], body["error_key"])
         self._assert_unchanged(pub, before)
 
 

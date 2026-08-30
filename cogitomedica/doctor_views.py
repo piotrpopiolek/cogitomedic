@@ -906,6 +906,7 @@ def doctor_document_detail_view(
         and not befund_readonly,
         "befundReadOnly": befund_readonly,
         "staffUserId": str(request.user.id),
+        "lang": lang,
     }
     autosave_ms_raw = os.environ.get("E2E_AUTOSAVE_MS", "").strip()
     if autosave_ms_raw.isdigit():

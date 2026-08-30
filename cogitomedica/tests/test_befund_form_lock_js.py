@@ -70,6 +70,47 @@ class BefundFormEditSessionJsContractTests(SimpleTestCase):
         self.assertIn("localStorage", src)
         self.assertIn('addEventListener("storage"', src)
         self.assertIn("lock-limit-link", src)
+        lock_limit = src[
+            src.index("function renderDoctorLockLimit") : src.index(
+                "function renderDoctorLockLimit"
+            )
+            + 900
+        ]
+        self.assertIn("PANEL.lang", lock_limit)
+        self.assertNotIn("/?lang=de", lock_limit)
+        start = src.index("function handleSessionErrorResponse")
+        handler_end = src.index("\n  try {", start)
+        handler = src[start:handler_end]
+        # Amend (performStartRevision) routes 409 through this helper.
+        self.assertIn("doctor_lock_limit_reached", handler)
+        self.assertIn("renderDoctorLockLimit", handler)
+        amend = src[
+            src.index("function performStartRevision") : src.index(
+                "function performStartRevision"
+            )
+            + 800
+        ]
+        self.assertIn("handleSessionErrorResponse", amend)
+        self.assertIn("publish_preview_revision_stale", handler)
+        self.assertIn("msgPublishPreviewRequired", handler)
+
+    def test_edit_after_preview_clears_publish_gate(self) -> None:
+        src = self._js_source()
+        dirty = src[
+            src.index("function markBefundFormDirty") : src.index(
+                "function markBefundFormDirty"
+            )
+            + 280
+        ]
+        self.assertIn("previewSeenSinceLastSave = false", dirty)
+        self.assertIn("setPublishEnabledFromPreviewFlag", dirty)
+        self.assertIn('addEventListener("input", markBefundFormDirty)', src)
+        self.assertIn('addEventListener("change", markBefundFormDirty)', src)
+        click_at = src.index('publishBtn.addEventListener("click"')
+        publish_click = src[
+            click_at : src.index("document.body.addEventListener", click_at)
+        ]
+        self.assertGreaterEqual(publish_click.count("handleSessionErrorResponse"), 2)
 
     # ── Dirty warning kept but no unlock ───────────────────────────────
 

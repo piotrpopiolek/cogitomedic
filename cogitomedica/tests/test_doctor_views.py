@@ -522,6 +522,7 @@ class DoctorViewsSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode("utf-8")
         panel = _doctor_panel_data_from_detail_html(html)
+        self.assertEqual(panel.get("lang"), "de")
 
         self.assertTrue(panel.get("externalUploadReadOnly"))
         self.assertFalse(panel.get("externalUploadLoadAttachmentPanel"))

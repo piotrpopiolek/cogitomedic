@@ -100,6 +100,58 @@ def http_status_for_edit_session_error(error_key: str) -> int:
     return EDIT_SESSION_ERROR_HTTP_STATUS.get(error_key, 400)
 
 
+# Presentation: error_key → (translation key, English fallback).
+EDIT_SESSION_ERROR_MESSAGE: dict[str, tuple[str, str]] = {
+    "document_locked_by_other": (
+        "doctor.document_locked_error",
+        "This document is being edited by {username}. Please try again later.",
+    ),
+    "edit_session_expired": (
+        "doctor.msg_edit_session_expired",
+        "The edit lock has expired. Please open the document again.",
+    ),
+    "edit_session_stale": (
+        "doctor.msg_edit_session_stale",
+        "This edit session was taken over. Copy your text and open the document again.",
+    ),
+    "edit_session_reclaim_confirmation_required": (
+        "other.api.edit_session_reclaim_confirmation_required",
+        "Confirm reclaiming this edit session from another tab or device.",
+    ),
+    "reclaim_superseded": (
+        "other.api.reclaim_superseded",
+        "This reclaim request is outdated. Reload the document and try again.",
+    ),
+    "doctor_lock_limit_reached": (
+        "doctor.msg_doctor_lock_limit",
+        "You already hold 3 document locks. Finish one (publish or discard revision) "
+        "before opening another.",
+    ),
+    "draft_revision_conflict": (
+        "other.api.draft_revision_conflict",
+        "The draft revision does not match the server. Reload the document and retry.",
+    ),
+    "draft_request_id_reused": (
+        "other.api.draft_request_id_reused",
+        "This draft_save_request_id was already used with a different base revision.",
+    ),
+    "publish_preview_revision_stale": (
+        "other.api.publish_preview_revision_stale",
+        "Preview the current draft PDF again before publishing.",
+    ),
+    "revision_in_progress": (
+        "other.api.revision_in_progress",
+        "A pending revision or active edit lock is open; finish or discard it first.",
+    ),
+}
+
+
+def edit_session_error_message_spec(error_key: str) -> tuple[str, str]:
+    return EDIT_SESSION_ERROR_MESSAGE.get(
+        error_key, (f"other.api.{error_key}", error_key.replace("_", " "))
+    )
+
+
 def assert_doctor_actor(user: Any) -> StaffUser:
     if not getattr(user, "is_doctor", False):
         raise DomainError(

@@ -259,6 +259,16 @@
     "en": "A pending revision or active edit lock is open; finish or discard it first.",
     "pl": "Otwarta rewizja lub aktywna blokada edycji — najpierw zakończ lub odrzuć."
   },
+  "other.api.edit_session_reclaim_confirmation_required": {
+    "de": "Bestätigen Sie die Wiederaufnahme dieser Bearbeitungssitzung aus einem anderen Tab oder Gerät.",
+    "en": "Confirm reclaiming this edit session from another tab or device.",
+    "pl": "Potwierdź przejęcie tej sesji edycji z innej karty lub urządzenia."
+  },
+  "other.api.reclaim_superseded": {
+    "de": "Diese Wiederaufnahme ist veraltet. Laden Sie das Dokument neu und versuchen Sie es erneut.",
+    "en": "This reclaim request is outdated. Reload the document and try again.",
+    "pl": "To żądanie przejęcia jest nieaktualne. Odśwież dokument i spróbuj ponownie."
+  },
   "other.api.no_pending_revision_to_discard": {
     "de": "Keine laufende Revision zum Verwerfen für dieses Dokument.",
     "en": "No pending revision to discard for this document.",

@@ -45,6 +45,9 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.sms.patient_results": ["url"],
     "other.auth.already_authenticated_other_account": ["username"],
     "administration.login_authenticated_but_unauthorized": ["username"],
+    "doctor.document_locked_by": ["username"],
+    "doctor.document_locked_error": ["username"],
+    "doctor.msg_edit_session_locked_other": ["username"],
     "administration.error_lesion_favorites_preset_not_object": ["preset_no"],
     "administration.error_lesion_favorites_preset_invalid": ["preset_no", "details"],
     "administration.error_lesion_favorites_preset_bad_feature": [

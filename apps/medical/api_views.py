@@ -59,6 +59,7 @@ from apps.core.translation_service import resolve_other_message
 from apps.medical.edit_session import (
     EditSessionResponseError,
     doctor_befund_edit_lock_applies,
+    edit_session_error_message_spec,
     http_status_for_edit_session_error,
     is_doctor_befund_source_type,
     start_doctor_edit_session,
@@ -1185,15 +1186,13 @@ def _json_edit_session_error(
         except Exception:
             pass
     payload: dict[str, object] = {"error_key": exc.error_key, **exc.payload}
+    msg_key, default = edit_session_error_message_spec(exc.error_key)
+    format_kwargs: dict[str, object] = {}
     if exc.error_key == "document_locked_by_other":
         holder = exc.payload.get("locked_by_username")
-        payload["error"] = resolve_other_message(
-            request,
-            "doctor.document_locked_error",
-            "This document is being edited by {username}. Please try again later.",
-            username=holder or "—",
-        )
         payload["locked_by_username"] = holder
+        format_kwargs["username"] = holder or "—"
+    payload["error"] = resolve_other_message(request, msg_key, default, **format_kwargs)
     return JsonResponse(payload, status=http_status)
 
 
