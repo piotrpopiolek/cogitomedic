@@ -2022,6 +2022,9 @@ def discard_pending_revision(
     medical_document.edit_session_token = None
     medical_document.last_edit_session_request_id = None
     medical_document.last_previewed_draft_revision = None
+    medical_document.last_draft_request_id = None
+    medical_document.last_draft_request_base_revision = None
+    medical_document.last_draft_request_result_revision = None
     medical_document.save(
         update_fields=[
             "has_pending_revision",
@@ -2032,6 +2035,9 @@ def discard_pending_revision(
             "edit_session_token",
             "last_edit_session_request_id",
             "last_previewed_draft_revision",
+            "last_draft_request_id",
+            "last_draft_request_base_revision",
+            "last_draft_request_result_revision",
         ]
     )
     create_audit_event(
@@ -2240,6 +2246,9 @@ def publish_document_version(
     medical_document.edit_session_token = None
     medical_document.last_edit_session_request_id = None
     medical_document.last_previewed_draft_revision = None
+    medical_document.last_draft_request_id = None
+    medical_document.last_draft_request_base_revision = None
+    medical_document.last_draft_request_result_revision = None
     medical_document.save(
         update_fields=[
             "status",
@@ -2254,6 +2263,9 @@ def publish_document_version(
             "edit_session_token",
             "last_edit_session_request_id",
             "last_previewed_draft_revision",
+            "last_draft_request_id",
+            "last_draft_request_base_revision",
+            "last_draft_request_result_revision",
         ]
     )
 

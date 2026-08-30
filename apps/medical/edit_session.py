@@ -173,6 +173,9 @@ def _clear_edit_session_lock_fields(doc: MedicalDocument) -> None:
     doc.edit_session_token = None
     doc.last_edit_session_request_id = None
     doc.last_previewed_draft_revision = None
+    doc.last_draft_request_id = None
+    doc.last_draft_request_base_revision = None
+    doc.last_draft_request_result_revision = None
 
 
 def _session_lock_update_fields(*, include_holder: bool = True) -> list[str]:
@@ -462,6 +465,9 @@ def release_doctor_edit_session_lock(
             "edit_session_token",
             "last_edit_session_request_id",
             "last_previewed_draft_revision",
+            "last_draft_request_id",
+            "last_draft_request_base_revision",
+            "last_draft_request_result_revision",
             "updated_at",
         ]
     )

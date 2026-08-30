@@ -301,6 +301,85 @@ class DraftRevisionMatrixTests(ServicesCoverageBase):
             0,
         )
 
+    def test_stale_draft_request_id_after_discard_does_not_replay(self) -> None:
+        """Discard must clear draft save idempotency keys before a new amend cycle."""
+        pub = self._make_published()
+        amend = start_doctor_edit_session(
+            medical_document_id=pub.id, user=self.doctor, purpose="amend"
+        )
+        stale_request_id = uuid.uuid4()
+        stale_base = amend.draft_revision
+        mutate_doctor_save_draft(
+            medical_document_id=pub.id,
+            user=self.doctor,
+            edit_session_token=amend.edit_session_token,
+            expected_draft_revision=stale_base,
+            draft_save_request_id=stale_request_id,
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(note="first-cycle"),
+            intent="amend",
+        )
+        mutate_doctor_discard_revision(
+            medical_document_id=pub.id,
+            user=self.doctor,
+            edit_session_token=amend.edit_session_token,
+            expected_draft_revision=stale_base + 1,
+        )
+        pub.refresh_from_db()
+        self.assertIsNone(pub.last_draft_request_id)
+        self.assertIsNone(pub.last_draft_request_base_revision)
+        self.assertIsNone(pub.last_draft_request_result_revision)
+
+        again = start_doctor_edit_session(
+            medical_document_id=pub.id, user=self.doctor, purpose="amend"
+        )
+        # Stale client retry must apply to the new DRAFT, not silently replay.
+        applied = mutate_doctor_save_draft(
+            medical_document_id=pub.id,
+            user=self.doctor,
+            edit_session_token=again.edit_session_token,
+            expected_draft_revision=again.draft_revision,
+            draft_save_request_id=stale_request_id,
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(note="second-cycle"),
+            intent="amend",
+        )
+        self.assertFalse(applied.replayed)
+        self.assertEqual(applied.version.medical_payload.get("note"), "second-cycle")
+        pub.refresh_from_db()
+        self.assertEqual(pub.last_draft_request_id, stale_request_id)
+
+    def test_publish_clears_draft_request_idempotency_keys(self) -> None:
+        doc, sess = self._make_locked_draft()
+        request_id = uuid.uuid4()
+        saved = mutate_doctor_save_draft(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess.edit_session_token,
+            expected_draft_revision=0,
+            draft_save_request_id=request_id,
+            medical_payload_schema_version=1,
+            medical_payload=self._payload(note="to-publish"),
+        )
+        mark_doctor_draft_previewed(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess.edit_session_token,
+            expected_draft_revision=saved.draft_revision,
+        )
+        mutate_doctor_publish(
+            medical_document_id=doc.id,
+            user=self.doctor,
+            edit_session_token=sess.edit_session_token,
+            expected_draft_revision=saved.draft_revision,
+            publish_request_id=uuid.uuid4(),
+            publish_locale="de-DE",
+        )
+        doc.refresh_from_db()
+        self.assertIsNone(doc.last_draft_request_id)
+        self.assertIsNone(doc.last_draft_request_base_revision)
+        self.assertIsNone(doc.last_draft_request_result_revision)
+
     def test_atomic_block_open_during_failure(self) -> None:
         """Guard: mutate_doctor_save_draft stays inside transaction.atomic."""
         self.assertTrue(
