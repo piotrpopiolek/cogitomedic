@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from pypdf import PdfWriter
 
+from django.http import HttpResponse
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
@@ -135,11 +136,10 @@ class Tests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         return response.json()
 
-    def _preview_draft_pdf(self, *, query: str = "") -> object:
+    def _preview_draft_pdf(self, *, query: str = "") -> HttpResponse:
         sess = self._start_edit_session()
-        q = (
-            f"?source=draft&expected_draft_revision={sess['draft_revision']}"
-            + (f"&{query.lstrip('?&')}" if query else "")
+        q = f"?source=draft&expected_draft_revision={sess['draft_revision']}" + (
+            f"&{query.lstrip('?&')}" if query else ""
         )
         return self.client.get(
             self._doc_url("/preview-pdf") + q,
