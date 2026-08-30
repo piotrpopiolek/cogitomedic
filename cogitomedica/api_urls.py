@@ -23,6 +23,7 @@ from apps.medical.api_views import (
     medical_document_detail_view,
     medical_document_discard_revision_view,
     medical_document_draft_view,
+    medical_document_edit_session_view,
     medical_document_external_pdf_content_view,
     medical_document_external_pdf_reject_view,
     medical_document_external_pdfs_view,
@@ -259,6 +260,11 @@ urlpatterns = [
         "medical-documents/<uuid:medical_document_id>/discard-revision",
         medical_document_discard_revision_view,
         name="medical-document-discard-revision",
+    ),
+    path(
+        "medical-documents/<uuid:medical_document_id>/edit-session",
+        medical_document_edit_session_view,
+        name="medical-document-edit-session",
     ),
     path(
         "medical-documents/<uuid:medical_document_id>/unlock",

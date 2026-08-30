@@ -7,7 +7,6 @@ from uuid import UUID
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from pydantic import ValidationError
@@ -31,13 +30,16 @@ from apps.core.exceptions import (
     InvalidRequestBodyEncoding,
 )
 from apps.medical.api_schemas import (
+    EditSessionRequest,
     CreateMedicalDocumentRequest,
     CreateMedicalDocumentWithoutIntakeRequest,
+    DiscardRevisionRequest,
     PaperIntakeAuthorizationRequest,
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
     PublishMedicalDocumentRequest,
+    ExternalUploadPublishRequest,
     ExternalUploadRevisionStartRequest,
     ExternalUploadSelectAttachmentRequest,
     RetryProcessingRequest,
@@ -54,6 +56,21 @@ from apps.medical.pdf_builder import (
 )
 from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.core.translation_service import resolve_other_message
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    doctor_befund_edit_lock_applies,
+    edit_session_error_message_spec,
+    http_status_for_edit_session_error,
+    is_doctor_befund_source_type,
+    start_doctor_edit_session,
+)
+from apps.medical.write_gate import (
+    assert_no_revision_in_progress_for_revoke,
+    mark_doctor_draft_previewed,
+    mutate_doctor_discard_revision,
+    mutate_doctor_publish,
+    mutate_doctor_save_draft,
+)
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -66,7 +83,6 @@ from apps.medical.models import (
 from apps.reception.models import QueueEntry
 from apps.medical.services import (
     DoctorAccessAuditContext,
-    _is_admin_or_manager_medical_oversight,
     assigned_doctor_audit_metadata,
     authorize_paper_intake,
     check_doctor_document_access,
@@ -74,19 +90,13 @@ from apps.medical.services import (
     create_external_upload_pdf_and_bind_draft,
     create_medical_document_without_intake,
     create_or_get_medical_document,
-    discard_pending_revision,
-    get_document_lock_state,
     get_medical_document_context,
     list_doctor_work_queue,
     parse_doctor_work_queue_list_params,
-    publish_document_version,
     publish_external_upload_version,
-    refresh_document_lock,
-    release_document_lock,
     revoke_document_version,
     revoke_paper_intake_authorization,
     retry_latest_document_processing,
-    save_draft_document_version,
     select_external_upload_attachment_for_draft,
     start_external_upload_revision,
 )
@@ -107,33 +117,6 @@ logger = logging.getLogger(__name__)
 
 _PREVIEW_FILENAME_BEFUND_MERGED = "Befund preview.pdf"
 _PREVIEW_FILENAME_LABORATORY_REPORT = "External preview.pdf"
-
-
-class _MedicalDocumentEditLocked(Exception):
-    """Raised inside ``transaction.atomic`` to roll back and return HTTP 423."""
-
-    __slots__ = ("locked_by_username",)
-
-    def __init__(self, locked_by_username: str | None) -> None:
-        super().__init__()
-        self.locked_by_username = locked_by_username
-
-
-def _json_document_locked(
-    request: HttpRequest, locked_by_username: str | None
-) -> JsonResponse:
-    holder = locked_by_username or "—"
-    default = "This document is being edited by {username}. Please try again later."
-    msg = resolve_other_message(
-        request,
-        "doctor.document_locked_error",
-        default,
-        username=holder,
-    )
-    return JsonResponse(
-        {"error": msg, "locked_by_username": locked_by_username},
-        status=423,
-    )
 
 
 def _doctor_access_audit_context(request: HttpRequest) -> DoctorAccessAuditContext:
@@ -602,7 +585,7 @@ def medical_external_upload_publish_view(
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        body = PublishMedicalDocumentRequest.model_validate(read_json_body(request))
+        body = ExternalUploadPublishRequest.model_validate(read_json_body(request))
     except JSONDecodeError:
         return json_error("other.api.invalid_json_payload", status=400)
     except InvalidRequestBodyEncoding as exc:
@@ -811,7 +794,10 @@ def medical_document_preview_pdf_view(
     resolved version (same bytes as ``…/external-upload/preview-pdf``), not the merged
     Befund+cover layout used for standard digital documents.
 
-    Statuses are never mutated here – previewing must be a pure read.
+    Document ``status`` / version rows are not mutated. For doctor Befund draft
+    preview under an active edit lock, a successful gated preview updates
+    ``last_previewed_draft_revision`` (and refreshes ``locked_at``) so publish
+    can require a matching preview.
     """
     role_error = require_user_role(
         request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
@@ -919,6 +905,42 @@ def medical_document_preview_pdf_view(
             version, authoring_locale_override=authoring_locale_override
         )
 
+    # Doctor Befund draft preview: record last_previewed_draft_revision after PDF
+    # generation (short re-check under select_for_update). Audit only after this
+    # gate succeeds so failed token/revision checks do not emit PDF_PREVIEWED.
+    if (
+        getattr(request.user, "is_doctor", False)
+        and is_doctor_befund_source_type(doc)
+        and source == "draft"
+        and doctor_befund_edit_lock_applies(doc)
+    ):
+        token_raw = request.headers.get("X-Edit-Session-Token")
+        rev_raw = request.GET.get("expected_draft_revision")
+        if not token_raw or rev_raw is None or str(rev_raw).strip() == "":
+            return JsonResponse(
+                {
+                    "error_key": "edit_session_expired",
+                    "error": "Edit session token and expected_draft_revision "
+                    "are required to preview a draft for publish.",
+                },
+                status=423,
+            )
+        try:
+            mark_doctor_draft_previewed(
+                medical_document_id=medical_document_id,
+                user=request.user,
+                edit_session_token=UUID(str(token_raw)),
+                expected_draft_revision=int(rev_raw),
+            )
+        except (ValueError, TypeError):
+            return json_error("other.api.invalid_json_payload", status=400)
+        except EditSessionResponseError as exc:
+            return _json_edit_session_error(request, exc)
+        except ObjectDoesNotExist:
+            return json_error("other.api.medical_document_not_found", status=404)
+        except DomainError as exc:
+            return json_domain_error(exc, status=400)
+
     audit_metadata = {
         "client_ip": get_client_ip(request),
         "version_no": version.version_no,
@@ -938,6 +960,7 @@ def medical_document_preview_pdf_view(
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
         metadata=audit_metadata,
     )
+
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     preview_filename = (
         _PREVIEW_FILENAME_LABORATORY_REPORT
@@ -1025,9 +1048,7 @@ def medical_document_versions_view(
 def medical_document_draft_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    role_error = require_user_role(
-        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
-    )
+    role_error = require_user_role(request, allowed_roles={"DOCTOR"})
     if role_error:
         return role_error
     if request.method != "PUT":
@@ -1059,59 +1080,32 @@ def medical_document_draft_view(
             )
 
     try:
-        with transaction.atomic():
-            # Do not select_related("locked_by_user") here: PostgreSQL rejects
-            # FOR UPDATE on the nullable side of an outer join.
-            doc = (
-                MedicalDocument.objects.select_for_update()
-                .select_related(
-                    "queue_entry__daily_queue",
-                )
-                .get(id=medical_document_id)
-            )
-            check_doctor_document_access(
-                doc, request.user, audit_context=_doctor_access_audit_context(request)
-            )
-            if doc.status == MedicalDocStatus.DRAFT:
-                eff, holder_name, _ = get_document_lock_state(doc)
-                if (
-                    eff
-                    and doc.locked_by_user_id != request.user.id
-                    and not _is_admin_or_manager_medical_oversight(request.user)
-                ):
-                    raise _MedicalDocumentEditLocked(holder_name)
-
-            version = save_draft_document_version(
-                medical_document_id=medical_document_id,
-                updated_by_user_id=request.user.id,
-                medical_payload_schema_version=body.medical_payload_schema_version,
-                medical_payload=payload_dict,
-                diagnosis_code=body.diagnosis_code,
-                procedure_code=body.procedure_code,
-                intent=body.intent,
-            )
-            doc.refresh_from_db()
-
-            if doc.status == MedicalDocStatus.DRAFT:
-                if not refresh_document_lock(
-                    medical_document_id=medical_document_id, user=request.user
-                ):
-                    doc_after = MedicalDocument.objects.select_related(
-                        "locked_by_user"
-                    ).get(id=medical_document_id)
-                    _, holder2, _ = get_document_lock_state(doc_after)
-                    raise _MedicalDocumentEditLocked(holder2)
-    except _MedicalDocumentEditLocked as exc:
-        return _json_document_locked(request, exc.locked_by_username)
+        result = mutate_doctor_save_draft(
+            medical_document_id=medical_document_id,
+            user=request.user,
+            edit_session_token=body.edit_session_token,
+            expected_draft_revision=body.expected_draft_revision,
+            draft_save_request_id=body.draft_save_request_id,
+            medical_payload_schema_version=body.medical_payload_schema_version,
+            medical_payload=payload_dict,
+            diagnosis_code=body.diagnosis_code,
+            procedure_code=body.procedure_code,
+            intent=body.intent,
+        )
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
-        # 409 specifically for the amend-intent guardrail so the UI can show a
-        # confirmation modal instead of a generic validation toast.
-        if exc.api_message_key == "other.api.amend_intent_required":
+        if exc.api_message_key in (
+            "other.api.amend_intent_required",
+            "other.api.amend_requires_edit_session",
+        ):
             return json_domain_error(exc, status=409)
         return json_domain_error(exc, status=400)
 
+    doc = result.document
+    version = result.version
     return JsonResponse(
         {
             "medical_document_version_id": str(version.id),
@@ -1120,6 +1114,8 @@ def medical_document_draft_view(
             "document_status": doc.status,
             "has_pending_revision": doc.has_pending_revision,
             "published_version_no": doc.published_version_no,
+            "draft_revision": result.draft_revision,
+            "replayed": result.replayed,
         },
         status=200,
     )
@@ -1134,29 +1130,29 @@ def medical_document_discard_revision_view(
     Returns 200 with cleared state, 404 if the document is unknown, 409 if
     there is no pending revision to discard.
     """
-    role_error = require_user_role(
-        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
-    )
+    role_error = require_user_role(request, allowed_roles={"DOCTOR"})
     if role_error:
         return role_error
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = DiscardRevisionRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
 
     try:
-        doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
-            id=medical_document_id
-        )
-        check_doctor_document_access(
-            doc, request.user, audit_context=_doctor_access_audit_context(request)
-        )
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
-
-    try:
-        doc = discard_pending_revision(
+        doc = mutate_doctor_discard_revision(
             medical_document_id=medical_document_id,
-            actor_user_id=request.user.id,
+            user=request.user,
+            edit_session_token=body.edit_session_token,
+            expected_draft_revision=body.expected_draft_revision,
         )
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:
@@ -1172,23 +1168,53 @@ def medical_document_discard_revision_view(
             "current_version_no": doc.current_version_no,
             "published_version_no": doc.published_version_no,
             "has_pending_revision": doc.has_pending_revision,
+            "draft_revision": doc.draft_revision,
         },
         status=200,
     )
 
 
+def _json_edit_session_error(
+    request: HttpRequest, exc: EditSessionResponseError
+) -> JsonResponse:
+    http_status = http_status_for_edit_session_error(exc.error_key)
+    if http_status in (409, 423):
+        try:
+            from apps.operations.prom_metrics import record_befund_edit_conflict
+
+            record_befund_edit_conflict(reason=exc.error_key)
+        except Exception:
+            pass
+    payload: dict[str, object] = {"error_key": exc.error_key, **exc.payload}
+    msg_key, default = edit_session_error_message_spec(exc.error_key)
+    format_kwargs: dict[str, object] = {}
+    if exc.error_key == "document_locked_by_other":
+        holder = exc.payload.get("locked_by_username")
+        payload["locked_by_username"] = holder
+        format_kwargs["username"] = holder or "—"
+    payload["error"] = resolve_other_message(request, msg_key, default, **format_kwargs)
+    return JsonResponse(payload, status=http_status)
+
+
 @require_auth
-def medical_document_unlock_view(
+def medical_document_edit_session_view(
     request: HttpRequest, medical_document_id: UUID
 ) -> JsonResponse:
-    """POST: release edit lock (session holder or admin). Used on page unload from doctor panel."""
-    role_error = require_user_role(
-        request, allowed_roles={"DOCTOR", "ADMIN", "MANAGER"}
-    )
+    """POST: acquire, resume, or reclaim a doctor Befund edit session."""
+    role_error = require_user_role(request, allowed_roles={"DOCTOR"})
     if role_error:
         return role_error
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
+    try:
+        body = EditSessionRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
     try:
         doc = MedicalDocument.objects.select_related("queue_entry__daily_queue").get(
             id=medical_document_id
@@ -1198,25 +1224,52 @@ def medical_document_unlock_view(
         )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
+
     try:
-        released = release_document_lock(
-            medical_document_id=medical_document_id, user=request.user
+        result = start_doctor_edit_session(
+            medical_document_id=medical_document_id,
+            user=request.user,
+            purpose=body.purpose,
+            edit_session_token=body.edit_session_token,
+            edit_session_request_id=body.edit_session_request_id,
+            expected_edit_session_revision=body.expected_edit_session_revision,
+            reclaim_confirmed=body.reclaim_confirmed,
         )
-    except ObjectDoesNotExist:
-        return json_error("other.api.medical_document_not_found", status=404)
-    if not released:
-        return JsonResponse(
-            {
-                "released": False,
-                "error": resolve_other_message(
-                    request,
-                    "doctor.document_unlock_forbidden",
-                    "You cannot release this document lock.",
-                ),
-            },
-            status=403,
-        )
-    return JsonResponse({"released": True}, status=200)
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
+    except DomainError as exc:
+        return json_domain_error(exc, status=422)
+
+    return JsonResponse(
+        {
+            "mode": result.mode,
+            "edit_session_token": str(result.edit_session_token),
+            "edit_session_revision": result.edit_session_revision,
+            "draft_revision": result.draft_revision,
+        },
+        status=200,
+    )
+
+
+@require_auth
+def medical_document_unlock_view(
+    request: HttpRequest, medical_document_id: UUID
+) -> JsonResponse:
+    """POST: retired. Edit locks are released only by publish, discard, or TTL."""
+    if request.method != "POST":
+        return json_error("other.api.method_not_allowed", status=405)
+    return JsonResponse(
+        {
+            "error_key": "other.api.unlock_gone",
+            "error": resolve_other_message(
+                request,
+                "other.api.unlock_gone",
+                "Document unlock via API is no longer available. "
+                "Locks clear on publish, discard-revision, or TTL expiry.",
+            ),
+        },
+        status=410,
+    )
 
 
 @require_auth
@@ -1238,30 +1291,17 @@ def medical_document_publish_view(
         return json_pydantic_validation_error(exc)
 
     try:
-        with transaction.atomic():
-            doc = (
-                MedicalDocument.objects.select_for_update()
-                .select_related("queue_entry__daily_queue")
-                .get(id=medical_document_id)
-            )
-            check_doctor_document_access(
-                doc, request.user, audit_context=_doctor_access_audit_context(request)
-            )
-
-            if doc.status == MedicalDocStatus.DRAFT:
-                eff, holder_name, _ = get_document_lock_state(doc)
-                if eff and doc.locked_by_user_id != request.user.id:
-                    raise _MedicalDocumentEditLocked(holder_name)
-
-            version = publish_document_version(
-                medical_document_id=medical_document_id,
-                publish_request_id=body.publish_request_id,
-                published_by_user_id=request.user.id,
-                publish_locale=body.publish_locale,
-                resend_sms=body.resend_sms,
-            )
-    except _MedicalDocumentEditLocked as exc:
-        return _json_document_locked(request, exc.locked_by_username)
+        version = mutate_doctor_publish(
+            medical_document_id=medical_document_id,
+            user=request.user,
+            edit_session_token=body.edit_session_token,
+            expected_draft_revision=body.expected_draft_revision,
+            publish_request_id=body.publish_request_id,
+            publish_locale=body.publish_locale,
+            resend_sms=body.resend_sms,
+        )
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except IdempotencyConflictError as exc:
@@ -1422,10 +1462,13 @@ def medical_document_revoke_view(
         check_doctor_document_access(
             doc, request.user, audit_context=_doctor_access_audit_context(request)
         )
+        assert_no_revision_in_progress_for_revoke(doc)
         version = revoke_document_version(
             medical_document_id=medical_document_id,
             revoked_by_user_id=request.user.id,
         )
+    except EditSessionResponseError as exc:
+        return _json_edit_session_error(request, exc)
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
     except DomainError as exc:

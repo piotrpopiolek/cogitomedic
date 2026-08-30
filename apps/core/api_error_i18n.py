@@ -80,6 +80,28 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
         "This document is already published. To make changes, confirm starting a "
         "revision (intent=amend)."
     ),
+    "other.api.amend_requires_edit_session": (
+        "Start a revision via POST …/edit-session with purpose=amend before saving "
+        "draft changes on a published document."
+    ),
+    "other.api.draft_revision_conflict": (
+        "The draft revision does not match the server. Reload the document and retry."
+    ),
+    "other.api.draft_request_id_reused": (
+        "This draft_save_request_id was already used with a different base revision."
+    ),
+    "other.api.publish_preview_revision_stale": (
+        "Preview the current draft PDF again before publishing."
+    ),
+    "other.api.revision_in_progress": (
+        "A pending revision or active edit lock is open; finish or discard it first."
+    ),
+    "other.api.edit_session_reclaim_confirmation_required": (
+        "Confirm reclaiming this edit session from another tab or device."
+    ),
+    "other.api.reclaim_superseded": (
+        "This reclaim request is outdated. Reload the document and try again."
+    ),
     "other.api.no_pending_revision_to_discard": (
         "No pending revision to discard for this document."
     ),
@@ -130,6 +152,10 @@ API_ERROR_KEY_DEFAULT_EN: dict[str, str] = {
     "other.api.template_not_found": "Template not found.",
     "other.api.too_many_requests": "Too many requests. Try again later.",
     "other.api.unauthorized": "Unauthorized.",
+    "other.api.unlock_gone": (
+        "Document unlock via API is no longer available. Locks clear on publish, "
+        "discard-revision, or TTL expiry."
+    ),
     "other.api.username_or_email_exists": "Username or email already exists.",
 }
 

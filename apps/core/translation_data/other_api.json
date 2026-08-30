@@ -229,6 +229,46 @@
     "en": "This document is already published. To make changes, confirm starting a revision (intent=amend).",
     "pl": "Ten dokument jest już opublikowany. Aby wprowadzić zmiany, potwierdź rozpoczęcie rewizji (intent=amend)."
   },
+  "other.api.unlock_gone": {
+    "de": "Die Dokumententsperrung über die API ist nicht mehr verfügbar. Sperren werden bei Veröffentlichung, Verwerfen der Revision oder TTL-Ablauf freigegeben.",
+    "en": "Document unlock via API is no longer available. Locks clear on publish, discard-revision, or TTL expiry.",
+    "pl": "Odblokowanie dokumentu przez API nie jest już dostępne. Blokada zwalnia się przy publikacji, odrzuceniu rewizji lub wygaśnięciu TTL."
+  },
+  "other.api.amend_requires_edit_session": {
+    "de": "Starten Sie zuerst eine Revision über POST …/edit-session mit purpose=amend, bevor Sie Entwurfsänderungen an einem veröffentlichten Dokument speichern.",
+    "en": "Start a revision via POST …/edit-session with purpose=amend before saving draft changes on a published document.",
+    "pl": "Najpierw rozpocznij rewizję przez POST …/edit-session z purpose=amend, zanim zapiszesz zmiany szkicu na opublikowanym dokumencie."
+  },
+  "other.api.draft_revision_conflict": {
+    "de": "Die Entwurfsrevision stimmt nicht mit dem Server überein. Laden Sie das Dokument neu und versuchen Sie es erneut.",
+    "en": "The draft revision does not match the server. Reload the document and retry.",
+    "pl": "Rewizja szkicu nie zgadza się z serwerem. Odśwież dokument i spróbuj ponownie."
+  },
+  "other.api.draft_request_id_reused": {
+    "de": "Diese draft_save_request_id wurde bereits mit einer anderen Basisrevision verwendet.",
+    "en": "This draft_save_request_id was already used with a different base revision.",
+    "pl": "Ten draft_save_request_id został już użyty z inną bazową rewizją."
+  },
+  "other.api.publish_preview_revision_stale": {
+    "de": "Prüfen Sie die aktuelle Entwurfs-PDF-Vorschau erneut vor dem Veröffentlichen.",
+    "en": "Preview the current draft PDF again before publishing.",
+    "pl": "Ponownie wyświetl podgląd PDF bieżącego szkicu przed publikacją."
+  },
+  "other.api.revision_in_progress": {
+    "de": "Eine offene Revision oder aktive Bearbeitungssperre besteht; beenden oder verwerfen Sie sie zuerst.",
+    "en": "A pending revision or active edit lock is open; finish or discard it first.",
+    "pl": "Otwarta rewizja lub aktywna blokada edycji — najpierw zakończ lub odrzuć."
+  },
+  "other.api.edit_session_reclaim_confirmation_required": {
+    "de": "Bestätigen Sie die Wiederaufnahme dieser Bearbeitungssitzung aus einem anderen Tab oder Gerät.",
+    "en": "Confirm reclaiming this edit session from another tab or device.",
+    "pl": "Potwierdź przejęcie tej sesji edycji z innej karty lub urządzenia."
+  },
+  "other.api.reclaim_superseded": {
+    "de": "Diese Wiederaufnahme ist veraltet. Laden Sie das Dokument neu und versuchen Sie es erneut.",
+    "en": "This reclaim request is outdated. Reload the document and try again.",
+    "pl": "To żądanie przejęcia jest nieaktualne. Odśwież dokument i spróbuj ponownie."
+  },
   "other.api.no_pending_revision_to_discard": {
     "de": "Keine laufende Revision zum Verwerfen für dieses Dokument.",
     "en": "No pending revision to discard for this document.",

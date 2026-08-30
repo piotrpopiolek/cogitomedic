@@ -10,6 +10,7 @@ UI strings and error messages use the ``doctor`` translation category (see
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 from uuid import UUID
 
@@ -44,10 +45,10 @@ from apps.medical.models import (
     MedicalDocument,
     MedicalDocumentSourceType,
 )
+from apps.medical.edit_session import document_locked_by_other_for_user
 from apps.medical.services import (
     DoctorAccessAuditContext,
     _is_admin_or_manager_medical_oversight,
-    acquire_document_lock,
     check_doctor_queue_entry_access,
     create_medical_document_without_intake,
     create_or_get_medical_document,
@@ -775,6 +776,9 @@ def doctor_document_detail_view(
         if patient is None:
             raise ObjectDoesNotExist()
         external_readonly = doc.source_type == MedicalDocumentSourceType.EXTERNAL_UPLOAD
+        befund_readonly = external_readonly or not getattr(
+            request.user, "is_doctor", False
+        )
         gate = _external_pdf_gate_for_doctor_detail(doc=doc, patient=patient, ui=ui)
         if not gate.passed:
             # 424: zależność zewnętrzna (HiDrive / PDF w folderze). Odróżnia od 422 przy
@@ -798,11 +802,14 @@ def doctor_document_detail_view(
             )
 
         if external_readonly:
-            granted, lock_holder = True, None
-        else:
-            granted, lock_holder = acquire_document_lock(
-                medical_document_id=medical_document_id, user=request.user
+            lock_holder = None
+            blocked = False
+        elif getattr(request.user, "is_doctor", False):
+            blocked, lock_holder = document_locked_by_other_for_user(
+                doc, user=request.user
             )
+        else:
+            blocked, lock_holder = False, None
     except DomainError as exc:
         msg_key = exc.api_message_key or ""
         message = (
@@ -837,7 +844,7 @@ def doctor_document_detail_view(
             },
             status=404,
         )
-    if not granted:
+    if blocked:
         message = resolve_other_message(
             request,
             "doctor.document_locked_error",
@@ -894,7 +901,16 @@ def doctor_document_detail_view(
         "bodyMapImageUrl": request.build_absolute_uri(body_map_rel),
         "externalUploadReadOnly": external_readonly,
         "externalUploadLoadAttachmentPanel": external_upload_load_attachment_panel,
+        "editSessionRequired": not external_readonly
+        and getattr(request.user, "is_doctor", False)
+        and not befund_readonly,
+        "befundReadOnly": befund_readonly,
+        "staffUserId": str(request.user.id),
+        "lang": lang,
     }
+    autosave_ms_raw = os.environ.get("E2E_AUTOSAVE_MS", "").strip()
+    if autosave_ms_raw.isdigit():
+        panel_data["autosaveIntervalMs"] = int(autosave_ms_raw)
     return _render_doctor(
         request,
         "doctor/detail.html",
@@ -913,6 +929,7 @@ def doctor_document_detail_view(
             "doctor_external_upload_has_pending_revision": bool(
                 external_readonly and doc.has_pending_revision
             ),
+            "doctor_befund_readonly": befund_readonly,
             "reception_note": (
                 ((context.get("intake_summary") or {}).get("reception_note") or "")
             ).strip(),

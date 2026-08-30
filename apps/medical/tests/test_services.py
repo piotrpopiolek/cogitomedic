@@ -1233,11 +1233,37 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
         self.assertFalse(self.medical_document.has_pending_revision)
 
+    def test_save_draft_on_published_amend_without_edit_session_raises(self) -> None:
+        from apps.core.exceptions import DomainError
+
+        self._publish_initial_version()
+
+        with self.assertRaises(DomainError) as ctx:
+            save_draft_document_version(
+                medical_document_id=self.medical_document.id,
+                updated_by_user_id=self.doctor_user.id,
+                medical_payload={"authoring_locale": "de-DE", "version": 2},
+                intent="amend",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, "other.api.amend_requires_edit_session"
+        )
+
+        self.medical_document.refresh_from_db()
+        self.assertEqual(self.medical_document.status, MedicalDocStatus.PUBLISHED)
+        self.assertFalse(self.medical_document.has_pending_revision)
+
     def test_save_draft_amend_keeps_status_published_and_flags_pending(self) -> None:
+        from apps.medical.services import begin_pending_revision_from_published
+
         published = self._publish_initial_version()
         self.assertEqual(self.medical_document.published_version_no, 1)
         self.assertFalse(self.medical_document.has_pending_revision)
 
+        begin_pending_revision_from_published(
+            medical_document=self.medical_document,
+            actor_user_id=self.doctor_user.id,
+        )
         revision = save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
@@ -1261,10 +1287,16 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertIsNotNone(revision_started)
 
     def test_context_during_pending_revision_includes_reception_note(self) -> None:
+        from apps.medical.services import begin_pending_revision_from_published
+
         note = "Patient besorgt wegen Stellen auf der Kopfhaut."
         self.intake_form.reception_note = note
         self.intake_form.save(update_fields=["reception_note", "updated_at"])
         self._publish_initial_version()
+        begin_pending_revision_from_published(
+            medical_document=self.medical_document,
+            actor_user_id=self.doctor_user.id,
+        )
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
@@ -1285,7 +1317,13 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertEqual(ctx["intake_summary"]["reception_note"], note)
 
     def test_save_draft_amend_updates_existing_pending_revision_in_place(self) -> None:
+        from apps.medical.services import begin_pending_revision_from_published
+
         self._publish_initial_version()
+        begin_pending_revision_from_published(
+            medical_document=self.medical_document,
+            actor_user_id=self.doctor_user.id,
+        )
         first = save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
@@ -1303,9 +1341,16 @@ class DocumentRevisionStateTests(MedicalServicesTests):
         self.assertEqual(self.medical_document.versions.count(), 2)
 
     def test_discard_pending_revision_removes_draft_and_clears_flag(self) -> None:
-        from apps.medical.services import discard_pending_revision
+        from apps.medical.services import (
+            begin_pending_revision_from_published,
+            discard_pending_revision,
+        )
 
         self._publish_initial_version()
+        begin_pending_revision_from_published(
+            medical_document=self.medical_document,
+            actor_user_id=self.doctor_user.id,
+        )
         revision = save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,
@@ -1349,7 +1394,13 @@ class DocumentRevisionStateTests(MedicalServicesTests):
     def test_publish_after_amend_emits_republished_audit_and_updates_state(
         self,
     ) -> None:
+        from apps.medical.services import begin_pending_revision_from_published
+
         self._publish_initial_version()
+        begin_pending_revision_from_published(
+            medical_document=self.medical_document,
+            actor_user_id=self.doctor_user.id,
+        )
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,

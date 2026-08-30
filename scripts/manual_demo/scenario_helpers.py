@@ -384,7 +384,7 @@ def create_submitted_entry(
     return entry, intake
 
 
-def create_draft_document(ctx: dict, entry, intake):
+def create_draft_document(ctx: dict, entry, intake, *, seed_incoming_pdf: bool = True):
     from apps.medical.services import (
         create_or_get_medical_document,
         save_draft_document_version,
@@ -402,6 +402,74 @@ def create_draft_document(ctx: dict, entry, intake):
         diagnosis_code="DEMO",
         procedure_code="DEMO",
     )
+    # Draft EXTERNAL_UPLOAD / lab gate needs a matching PDF under HIDRIVE_INCOMING_PATH.
+    if seed_incoming_pdf:
+        patient = getattr(entry, "patient", None)
+        if patient is not None:
+            seed_mock_incoming_for_patients([patient], merge=True)
+    return md
+
+
+def apply_doctor_edit_lock(
+    md,
+    *,
+    holder,
+    locked_at=None,
+    edit_session_revision: int = 1,
+) -> None:
+    """Set holder + edit-session token for demo lock scenarios (dev seed only)."""
+    from uuid import uuid4
+
+    from django.utils import timezone
+
+    from apps.medical.models import MedicalDocument
+
+    MedicalDocument.objects.filter(id=md.id).update(
+        locked_by_user=holder,
+        locked_at=locked_at if locked_at is not None else timezone.now(),
+        edit_session_token=uuid4(),
+        edit_session_revision=edit_session_revision,
+    )
+
+
+def clear_doctor_edit_locks(holder) -> None:
+    """Drop all edit locks held by ``holder`` (demo isolation between lock SCs)."""
+    from apps.medical.models import MedicalDocument
+
+    MedicalDocument.objects.filter(locked_by_user=holder).update(
+        locked_by_user=None,
+        locked_at=None,
+        edit_session_token=None,
+        last_edit_session_request_id=None,
+        last_previewed_draft_revision=None,
+    )
+
+
+def open_demo_pending_revision(ctx: dict, md, *, medical_payload: dict | None = None):
+    """Start a pending revision for screenshot/video seeds (bypasses edit-session API)."""
+    from django.db import transaction
+
+    from apps.medical.models import MedicalDocument
+    from apps.medical.services import (
+        begin_pending_revision_from_published,
+        save_draft_document_version,
+    )
+
+    with transaction.atomic():
+        doc = MedicalDocument.objects.select_for_update().get(id=md.id)
+        if not doc.has_pending_revision:
+            begin_pending_revision_from_published(
+                medical_document=doc,
+                actor_user_id=ctx["doctor"].id,
+            )
+        if medical_payload is not None:
+            save_draft_document_version(
+                medical_document_id=md.id,
+                updated_by_user_id=ctx["doctor"].id,
+                medical_payload=medical_payload,
+                intent="amend",
+            )
+    md.refresh_from_db()
     return md
 
 
@@ -472,6 +540,7 @@ def seed_mock_incoming(
     *,
     remote_dir: str | None = None,
     file_bytes: bytes | None = None,
+    merge: bool = False,
 ) -> None:
     """Seed mock /incoming listing visible to the ``web`` process (shared JSON state).
 
@@ -479,6 +548,10 @@ def seed_mock_incoming(
     PdfReader accept mock lab files (SC-011/012 and external-upload previews).
     Pass ``file_bytes=b""`` only when you need empty content; pass ``None`` to
     use the default valid PDF (or skip seeding file bodies when ``files`` is empty).
+
+    When ``merge`` is True, entries are upserted by ``name`` into the existing
+    listing (other patients' PDFs stay). When False (default), the listing for
+    the incoming dir is replaced (SC-011/012 authoritative demos).
     """
     from apps.integrations.hidrive import client as hidrive_client
     from apps.medical.incoming_pdf_scan import hidrive_incoming_dir
@@ -493,20 +566,35 @@ def seed_mock_incoming(
     for entry in files:
         name = str(entry.get("name") or "")
         path = str(entry.get("path") or "")
-        if name and (not path or path.startswith("/incoming/")):
+        if name and (not path or path.startswith("/incoming/") or "/incoming/" in path):
             path = f"{inc.rstrip('/')}/{name}"
         # Prefer real byte length so dashboard / matching UI show plausible sizes.
         normalized_files.append({**entry, "name": name, "path": path, "size": pdf_size})
 
     adapter = hidrive_client._MockHiDriveAdapter
     adapter._load_state_from_disk()
-    # Authoritative listing for this incoming dir only (drop legacy /incoming vs /public/incoming).
-    adapter._dir_listings = {
-        k: v
-        for k, v in adapter._dir_listings.items()
-        if k not in ("/incoming", "/public/incoming", inc)
-    }
-    adapter._dir_listings[inc] = normalized_files
+    # Drop legacy alternate incoming keys so web always lists the configured path.
+    legacy_keys = {"/incoming", "/public/incoming", inc}
+    if merge:
+        existing = [
+            dict(e)
+            for e in (adapter._dir_listings.get(inc) or [])
+            if str(e.get("name") or "")
+        ]
+        by_name = {str(e.get("name") or ""): e for e in existing}
+        for entry in normalized_files:
+            name = str(entry.get("name") or "")
+            if name:
+                by_name[name] = entry
+        adapter._dir_listings = {
+            k: v for k, v in adapter._dir_listings.items() if k not in legacy_keys
+        }
+        adapter._dir_listings[inc] = list(by_name.values())
+    else:
+        adapter._dir_listings = {
+            k: v for k, v in adapter._dir_listings.items() if k not in legacy_keys
+        }
+        adapter._dir_listings[inc] = normalized_files
     adapter._list_dir_error = None
     adapter._persist_state()
     if file_bytes is not None and normalized_files:
@@ -514,6 +602,31 @@ def seed_mock_incoming(
             path = str(entry.get("path") or "")
             if path:
                 adapter.seed_file(path, file_bytes)
+
+
+def seed_mock_incoming_for_patients(
+    patients: list,
+    *,
+    merge: bool = True,
+    file_bytes: bytes | None = None,
+) -> None:
+    """Put matching lab PDFs in mock incoming for each patient (name convention)."""
+    from apps.medical.incoming_pdf_scan import suggest_incoming_pdf_filename
+
+    files: list[dict] = []
+    for patient in patients:
+        if patient is None:
+            continue
+        try:
+            patient.refresh_from_db()
+        except Exception:
+            pass
+        name = suggest_incoming_pdf_filename(patient)
+        if name:
+            files.append({"name": name})
+    if not files:
+        return
+    seed_mock_incoming(files, file_bytes=file_bytes, merge=merge)
 
 
 def seed_mock_hidrive_timeout(message: str = "Demo timeout for SC-027") -> None:

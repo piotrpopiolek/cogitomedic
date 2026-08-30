@@ -1,82 +1,132 @@
-"""Static contract: doctor befund-form.js edit-lock release policy (P0 + review fixes)."""
+"""Static contract: doctor befund-form.js write-gate edit-session protocol."""
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 from django.conf import settings
-from django.test import SimpleTestCase, TestCase
-from django.utils import timezone
-
-from apps.core.api_utils import assign_group_to_test_user
-from apps.medical.models import (
-    MedicalDocStatus,
-    MedicalDocument,
-    MedicalDocumentSourceType,
-)
-from apps.medical.services import acquire_document_lock, release_document_lock
-from apps.reception.models import (
-    ClinicSite,
-    ConsultingRoom,
-    DailyQueue,
-    Patient,
-    QueueEntry,
-    QueueEntryStatus,
-    QueueStatus,
-)
-from apps.users.models import StaffUser
+from django.test import SimpleTestCase
 
 
-class BefundFormLockJsContractTests(SimpleTestCase):
+class BefundFormEditSessionJsContractTests(SimpleTestCase):
+    """Verify the JS form honours the new edit-session write-gate contract."""
+
     def _js_source(self) -> str:
         path = Path(settings.BASE_DIR) / "static" / "doctor" / "js" / "befund-form.js"
         return path.read_text(encoding="utf-8")
 
-    def test_no_two_second_flag_clear_timer(self) -> None:
-        src = self._js_source()
-        self.assertNotIn("releaseLockOnNextPageHide", src)
-        self.assertNotIn("markIntentionalLeaveForLockRelease", src)
-        self.assertNotRegex(
-            src, r"setTimeout\(\s*function\s*\(\)\s*\{[^}]{0,80}releaseLock"
-        )
+    # ── Must NOT contain old unlock artefacts ──────────────────────────
 
-    def test_pagehide_skips_bfcache_but_unlocks_real_unload(self) -> None:
+    def test_no_unlock_artefacts(self) -> None:
         src = self._js_source()
-        self.assertIn('window.addEventListener("pagehide"', src)
-        self.assertIn("e.persisted", src)
-        self.assertIn("if (e && e.persisted) return;", src)
-        # Must still call unlock on non-persisted pagehide (Back / close / navigate).
-        pagehide_idx = src.index('window.addEventListener("pagehide"')
-        chunk = src[pagehide_idx : pagehide_idx + 280]
-        self.assertIn("releaseEditLockBestEffort", chunk)
+        self.assertNotIn("releaseEditLockBestEffort", src)
+        self.assertNotIn("releaseEditLockOnIntentionalLeave", src)
+        self.assertNotIn("js-release-document-lock", src)
+        self.assertNotIn("/unlock", src)
 
-    def test_no_visibilitychange_unlock(self) -> None:
+    def test_no_pagehide_listener(self) -> None:
         src = self._js_source()
-        self.assertNotIn("visibilitychange", src)
+        self.assertNotIn("pagehide", src)
 
-    def test_conscious_exit_unlocks_immediately(self) -> None:
+    # ── Must contain edit-session artefacts ─────────────────────────────
+
+    def test_edit_session_endpoint(self) -> None:
         src = self._js_source()
-        self.assertIn("js-release-document-lock", src)
-        self.assertIn("releaseEditLockOnIntentionalLeave", src)
-        self.assertIn("releaseEditLockBestEffort", src)
-        # Logout path must unlock immediately (slow POST must not wait on pagehide).
-        self.assertIn("Logout POST can be slow", src)
+        self.assertIn("edit-session", src)
+
+    def test_edit_session_token_field(self) -> None:
+        src = self._js_source()
+        self.assertIn("edit_session_token", src)
+
+    def test_expected_draft_revision_field(self) -> None:
+        src = self._js_source()
+        self.assertIn("expected_draft_revision", src)
+
+    def test_draft_save_request_id_field(self) -> None:
+        src = self._js_source()
+        self.assertIn("draft_save_request_id", src)
+
+    def test_session_token_header(self) -> None:
+        src = self._js_source()
+        self.assertIn("X-Edit-Session-Token", src)
+
+    def test_autosave_constant(self) -> None:
+        src = self._js_source()
+        self.assertIn("AUTOSAVE_MS", src)
+        self.assertIn("autosaveIntervalMs", src)
+        self.assertIn("10 * 60 * 1000", src)
+        self.assertIn('addEventListener("online"', src)
+        self.assertIn("navigator.onLine", src)
+        self.assertIn("msgAutosavePreviewAgain", src)
+
+    def test_reclaim_support(self) -> None:
+        src = self._js_source()
+        self.assertIn("reclaim", src)
+
+    def test_cross_tab_coordination(self) -> None:
+        src = self._js_source()
+        self.assertIn("BroadcastChannel", src)
+        self.assertIn("navigator.locks", src)
+        self.assertIn("localStorage", src)
+        self.assertIn('addEventListener("storage"', src)
+        self.assertIn("lock-limit-link", src)
+        lock_limit = src[
+            src.index("function renderDoctorLockLimit") : src.index(
+                "function renderDoctorLockLimit"
+            )
+            + 900
+        ]
+        self.assertIn("PANEL.lang", lock_limit)
+        self.assertNotIn("/?lang=de", lock_limit)
+        start = src.index("function handleSessionErrorResponse")
+        handler_end = src.index("\n  try {", start)
+        handler = src[start:handler_end]
+        # Amend (performStartRevision) routes 409 through this helper.
+        self.assertIn("doctor_lock_limit_reached", handler)
+        self.assertIn("renderDoctorLockLimit", handler)
+        amend = src[
+            src.index("function performStartRevision") : src.index(
+                "function performStartRevision"
+            )
+            + 800
+        ]
+        self.assertIn("handleSessionErrorResponse", amend)
+        self.assertIn("publish_preview_revision_stale", handler)
+        self.assertIn("msgPublishPreviewRequired", handler)
+
+    def test_edit_after_preview_clears_publish_gate(self) -> None:
+        src = self._js_source()
+        dirty = src[
+            src.index("function markBefundFormDirty") : src.index(
+                "function markBefundFormDirty"
+            )
+            + 280
+        ]
+        self.assertIn("previewSeenSinceLastSave = false", dirty)
+        self.assertIn("setPublishEnabledFromPreviewFlag", dirty)
+        self.assertIn('addEventListener("input", markBefundFormDirty)', src)
+        self.assertIn('addEventListener("change", markBefundFormDirty)', src)
+        click_at = src.index('publishBtn.addEventListener("click"')
+        publish_click = src[
+            click_at : src.index("document.body.addEventListener", click_at)
+        ]
+        self.assertGreaterEqual(publish_click.count("handleSessionErrorResponse"), 2)
+
+    # ── Dirty warning kept but no unlock ───────────────────────────────
+
+    def test_beforeunload_dirty_warning_no_unlock(self) -> None:
+        src = self._js_source()
         self.assertIn('addEventListener("beforeunload"', src)
-        beforeunload_idx = src.index('addEventListener("beforeunload"')
-        chunk = src[beforeunload_idx : beforeunload_idx + 350]
-        self.assertNotIn("releaseEditLock", chunk)
-        self.assertNotIn("/unlock", chunk)
+        idx = src.index('addEventListener("beforeunload"')
+        chunk = src[idx : idx + 350]
+        self.assertIn("returnValue", chunk)
+        self.assertNotIn("unlock", chunk.lower())
 
     def test_draft_save_clears_dirty_flag(self) -> None:
         src = self._js_source()
-        # Successful save-draft path must clear dirty so beforeunload is not shown.
-        marker = (
-            "previewSeenSinceLastSave = false;\n"
-            "            befundFormDirty = false;\n"
-            "            applyRevisionStateFromResponse"
-        )
-        self.assertIn(marker, src)
+        self.assertIn("befundFormDirty = false", src)
+
+    # ── Intake summary / reception note (unchanged behaviour) ──────────
 
     def test_intake_summary_renders_reception_note_after_anamnesis(self) -> None:
         src = self._js_source()
@@ -99,78 +149,3 @@ class BefundFormLockJsContractTests(SimpleTestCase):
         self.assertNotIn("hasPendingRevision", block)
         self.assertNotIn("isDraftAuthoring", block)
         self.assertNotIn("docStatus", block)
-
-
-class DocumentLockWithoutPagehideReleaseTests(TestCase):
-    """A keeps the lock without client unlock (tab in background / bfcache); B cannot acquire."""
-
-    def setUp(self) -> None:
-        self.doctor_a = StaffUser.objects.create_user(
-            username="lock-doc-a",
-            email="lock.a@example.com",
-            password="safe-password",
-            is_staff=True,
-        )
-        assign_group_to_test_user(self.doctor_a, "Doctor")
-        self.doctor_b = StaffUser.objects.create_user(
-            username="lock-doc-b",
-            email="lock.b@example.com",
-            password="safe-password",
-            is_staff=True,
-        )
-        assign_group_to_test_user(self.doctor_b, "Doctor")
-        clinic = ClinicSite.objects.create(code="LCK", name="Lock Clinic")
-        room = ConsultingRoom.objects.create(clinic_site=clinic, code="L1", name="L1")
-        queue = DailyQueue.objects.create(
-            queue_date=timezone.now().date(),
-            clinic_site=clinic,
-            consulting_room=room,
-            status=QueueStatus.OPEN,
-            created_by_user=self.doctor_a,
-        )
-        patient = Patient.objects.create(
-            first_name="Lock",
-            last_name="Patient",
-            date_of_birth=date(1980, 1, 1),
-            phone="+49111111111",
-            email="lock.patient@example.com",
-            doctolib_patient_id="DOC-LOCK-1",
-        )
-        entry = QueueEntry.objects.create(
-            daily_queue=queue,
-            patient=patient,
-            entry_status=QueueEntryStatus.PATIENT_COMPLETED,
-            position_no=1,
-            created_by_user=self.doctor_a,
-        )
-        self.doc = MedicalDocument.objects.create(
-            queue_entry=entry,
-            intake_form=None,
-            source_type=MedicalDocumentSourceType.PAPER_INTAKE,
-            status=MedicalDocStatus.DRAFT,
-            current_version_no=0,
-            created_by_user=self.doctor_a,
-            updated_by_user=self.doctor_a,
-        )
-
-    def test_b_cannot_acquire_while_a_holds_lock_without_release(self) -> None:
-        granted_a, _ = acquire_document_lock(
-            medical_document_id=self.doc.id, user=self.doctor_a
-        )
-        self.assertTrue(granted_a)
-
-        granted_b, holder = acquire_document_lock(
-            medical_document_id=self.doc.id, user=self.doctor_b
-        )
-        self.assertFalse(granted_b)
-        self.assertTrue(bool(holder))
-
-    def test_explicit_unlock_allows_second_doctor_acquire(self) -> None:
-        acquire_document_lock(medical_document_id=self.doc.id, user=self.doctor_a)
-        self.assertTrue(
-            release_document_lock(medical_document_id=self.doc.id, user=self.doctor_a)
-        )
-        granted_b, _ = acquire_document_lock(
-            medical_document_id=self.doc.id, user=self.doctor_b
-        )
-        self.assertTrue(granted_b)

@@ -20,6 +20,7 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     PdfStatus,
 )
+from apps.medical.edit_session import start_doctor_edit_session
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
@@ -173,6 +174,11 @@ class OutboxProcessingTests(TestCase):
         v1_sms_at = self.version.sms_sent_at
         self.assertEqual(mock_sms.send_sms.call_count, 1)
 
+        start_doctor_edit_session(
+            medical_document_id=self.medical_document.id,
+            user=self.doctor_user,
+            purpose="amend",
+        )
         save_draft_document_version(
             medical_document_id=self.medical_document.id,
             updated_by_user_id=self.doctor_user.id,

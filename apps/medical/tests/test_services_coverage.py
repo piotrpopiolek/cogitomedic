@@ -56,7 +56,6 @@ from apps.medical.services import (
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
-    save_draft_document_version,
     upload_external_pdf_to_incoming,
     work_queue_row_outbound_complete,
 )
@@ -901,6 +900,8 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
 class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
     @freeze_time("2026-03-10T12:00:00Z")
     def test_republish_after_retention_raises(self):
+        from apps.medical.services import begin_pending_revision_from_published
+
         doc = self._make_medical_doc()
         self._make_published_version(
             doc,
@@ -910,12 +911,11 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
             sms_sent_at=timezone.now(),
             local_pdf_deleted_at=timezone.now(),
         )
+        doc.refresh_from_db()
         with self.assertRaises(DomainError) as ctx:
-            save_draft_document_version(
-                medical_document_id=doc.id,
-                updated_by_user_id=self.doctor.id,
-                medical_payload={"authoring_locale": "de-DE"},
-                intent="amend",
+            begin_pending_revision_from_published(
+                medical_document=doc,
+                actor_user_id=self.doctor.id,
             )
         self.assertIn(
             "republish_after_retention_not_allowed",
@@ -2217,16 +2217,16 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertFalse(granted)
         self.assertIsNotNone(holder)
 
-    def test_acquire_admin_takes_over(self):
+    def test_acquire_admin_cannot_take_over(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         granted, holder = acquire_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(granted)
+        self.assertFalse(granted)
         doc.refresh_from_db()
-        self.assertEqual(doc.locked_by_user_id, admin.id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     def test_acquire_expired_lock_grants(self):
         doc = self._make_draft_doc()
@@ -2275,16 +2275,16 @@ class DocumentLockTests(ServicesCoverageBase):
         result = release_document_lock(medical_document_id=doc.id, user=other)
         self.assertFalse(result)
 
-    def test_release_admin_releases_other_lock(self):
+    def test_release_admin_cannot_release_other_lock(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         result = release_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(result)
+        self.assertFalse(result)
         doc.refresh_from_db()
-        self.assertIsNone(doc.locked_by_user_id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     # -- refresh_document_lock --
     def test_refresh_own_lock(self):
@@ -2298,12 +2298,13 @@ class DocumentLockTests(ServicesCoverageBase):
         doc.refresh_from_db()
         self.assertGreater(doc.locked_at, old_time)
 
-    def test_refresh_free_lock_acquires(self):
+    def test_refresh_free_lock_acquires_via_edit_session(self):
         doc = self._make_draft_doc()
         result = refresh_document_lock(medical_document_id=doc.id, user=self.doctor)
         self.assertTrue(result)
         doc.refresh_from_db()
         self.assertEqual(doc.locked_by_user_id, self.doctor.id)
+        self.assertIsNotNone(doc.edit_session_token)
 
     def test_refresh_other_lock_denied(self):
         doc = self._make_draft_doc()
@@ -2314,16 +2315,16 @@ class DocumentLockTests(ServicesCoverageBase):
         result = refresh_document_lock(medical_document_id=doc.id, user=other)
         self.assertFalse(result)
 
-    def test_refresh_admin_takes_over(self):
+    def test_refresh_admin_cannot_take_over(self):
         doc = self._make_draft_doc()
         doc.locked_by_user = self.doctor
         doc.locked_at = timezone.now()
         doc.save(update_fields=["locked_by_user", "locked_at"])
         admin = self._admin_user()
         result = refresh_document_lock(medical_document_id=doc.id, user=admin)
-        self.assertTrue(result)
+        self.assertFalse(result)
         doc.refresh_from_db()
-        self.assertEqual(doc.locked_by_user_id, admin.id)
+        self.assertEqual(doc.locked_by_user_id, self.doctor.id)
 
     def test_refresh_on_published_doc_returns_true(self):
         doc = self._make_medical_doc()
@@ -2415,6 +2416,29 @@ class DocumentLockTests(ServicesCoverageBase):
         self.assertFalse(found[0]["row_has_edit_semaphore"])
         self.assertFalse(found[0]["is_locked_by_other"])
         self.assertEqual(found[0]["editor_activity"], "last")
+        self.assertTrue(found[0]["editor_username"])
+
+    def test_work_queue_pending_revision_with_lock_shows_semaphore(self):
+        doc = self._make_medical_doc()
+        doc.status = MedicalDocStatus.PUBLISHED
+        doc.has_pending_revision = True
+        doc.save(update_fields=["status", "has_pending_revision", "updated_at"])
+        self._make_published_version(doc, version_no=1)
+        MedicalDocumentVersion.objects.create(
+            medical_document=doc,
+            version_no=2,
+            version_status=DocVersionStatus.DRAFT,
+            medical_payload_schema_version=1,
+            medical_payload={"schema_version": 1},
+        )
+        doc.locked_by_user = self.doctor
+        doc.locked_at = timezone.now()
+        doc.save(update_fields=["locked_by_user", "locked_at"])
+        items, total = list_doctor_work_queue(user=self.doctor)
+        found = [i for i in items if i["document_id"] == str(doc.id)]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["row_has_edit_semaphore"])
+        self.assertEqual(found[0]["editor_activity"], "active")
         self.assertTrue(found[0]["editor_username"])
 
     def test_work_queue_row_fully_delivered_when_pipeline_complete(self):

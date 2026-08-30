@@ -66,6 +66,14 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    clear_edit_session_lock_fields,
+    doctor_befund_edit_lock_applies,
+    effective_lock_holder_id,
+    release_doctor_edit_session_lock,
+    start_doctor_edit_session,
+)
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import retry_outbox_event, _try_delete_file
@@ -188,6 +196,11 @@ def _document_is_doctor_shared_work(doc: MedicalDocument) -> bool:
     return bool(doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision)
 
 
+def user_may_start_amend_revision(doc: MedicalDocument, user_id: uuid.UUID) -> bool:
+    """Whether a doctor may start a pending revision on clean PUBLISHED."""
+    return _user_is_publisher_of_record_version(doc, user_id)
+
+
 def _user_is_publisher_of_record_version(
     doc: MedicalDocument, user_id: uuid.UUID
 ) -> bool:
@@ -296,90 +309,93 @@ def acquire_document_lock(
     *, medical_document_id: uuid.UUID, user: Any
 ) -> tuple[bool, str | None]:
     """
-    Acquire or refresh edit lock for a DRAFT document. Published documents are not locked.
+    Legacy acquire wrapper around :func:`start_doctor_edit_session`.
 
-    Returns (granted, current_holder_display_name_if_denied).
-    Admin may take over an active lock held by another user.
+    Doctor-only; auto-confirms reclaim when the caller already holds the document.
     """
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if doc.status != MedicalDocStatus.DRAFT:
+    if not getattr(user, "is_doctor", False):
+        return False, None
+    doc = MedicalDocument.objects.get(id=medical_document_id)
+    if not doctor_befund_edit_lock_applies(doc):
         return True, None
 
-    now = timezone.now()
-    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
-    locked = (
-        doc.locked_by_user_id is not None
-        and doc.locked_at is not None
-        and doc.locked_at >= cutoff
-    )
-
-    if locked:
-        if doc.locked_by_user_id == user.id:
-            doc.locked_at = now
-            doc.save(update_fields=["locked_at", "updated_at"])
-            return True, None
-        if _is_admin_or_manager_medical_oversight(user):
-            doc.locked_by_user_id = user.id
-            doc.locked_at = now
-            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-            return True, None
-        holder = StaffUser.objects.filter(id=doc.locked_by_user_id).first()
-        return False, staff_user_display_name(holder)
-
-    doc.locked_by_user_id = user.id
-    doc.locked_at = now
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-    return True, None
+    base_kwargs = {
+        "medical_document_id": medical_document_id,
+        "user": user,
+        "purpose": "edit",
+    }
+    try:
+        start_doctor_edit_session(**base_kwargs)
+        return True, None
+    except EditSessionResponseError as exc:
+        if exc.error_key == "document_locked_by_other":
+            return False, exc.payload.get("locked_by_username")
+        if exc.error_key == "edit_session_reclaim_confirmation_required":
+            try:
+                start_doctor_edit_session(
+                    **base_kwargs,
+                    reclaim_confirmed=True,
+                    expected_edit_session_revision=int(
+                        exc.payload["edit_session_revision"]
+                    ),
+                )
+                return True, None
+            except EditSessionResponseError as retry_exc:
+                if retry_exc.error_key == "document_locked_by_other":
+                    return False, retry_exc.payload.get("locked_by_username")
+                raise
+        if exc.error_key == "doctor_lock_limit_reached":
+            return False, None
+        raise
 
 
 @transaction.atomic
 def release_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
-    """
-    Clear edit lock if the user holds it, or if the user is admin.
-    Returns True if the lock row was cleared or there was nothing to release.
-    """
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if not doc.locked_by_user_id:
-        return True
-    if doc.locked_by_user_id != user.id and not _is_admin_or_manager_medical_oversight(
-        user
-    ):
-        return False
-    doc.locked_by_user_id = None
-    doc.locked_at = None
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
-    return True
+    """Clear edit lock for the doctor holder only."""
+    return release_doctor_edit_session_lock(
+        medical_document_id=medical_document_id, user=user
+    )
 
 
 @transaction.atomic
 def refresh_document_lock(*, medical_document_id: uuid.UUID, user: Any) -> bool:
     """
-    Refresh ``locked_at`` for the current holder (or acquire if lock is free/expired).
-    Returns False if another user holds an effective lock (and caller is not admin).
+    Refresh ``locked_at`` for the current doctor holder.
+    Returns False if another doctor holds an effective lock.
+
+    A free/expired lock goes through ``start_doctor_edit_session`` (StaffUser
+    then document). Refreshing an own lock takes only ``MedicalDocument`` and
+    never ``StaffUser`` afterwards.
     """
-    doc = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
-    if doc.status != MedicalDocStatus.DRAFT:
+    if not getattr(user, "is_doctor", False):
+        return False
+    doc = MedicalDocument.objects.get(id=medical_document_id)
+    if not doctor_befund_edit_lock_applies(doc):
         return True
 
     now = timezone.now()
-    cutoff = now - timedelta(hours=DOCUMENT_LOCK_TIMEOUT_HOURS)
-    locked = (
-        doc.locked_by_user_id is not None
-        and doc.locked_at is not None
-        and doc.locked_at >= cutoff
-    )
-
-    if locked and doc.locked_by_user_id != user.id:
-        if _is_admin_or_manager_medical_oversight(user):
-            doc.locked_by_user_id = user.id
-            doc.locked_at = now
-            doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    holder_id = effective_lock_holder_id(doc, now=now)
+    if holder_id is None:
+        try:
+            start_doctor_edit_session(
+                medical_document_id=medical_document_id,
+                user=user,
+                purpose="edit",
+            )
             return True
+        except EditSessionResponseError:
+            return False
+    if holder_id != user.id:
         return False
 
-    doc.locked_by_user_id = user.id
-    doc.locked_at = now
-    doc.save(update_fields=["locked_by_user", "locked_at", "updated_at"])
+    locked = MedicalDocument.objects.select_for_update().get(id=medical_document_id)
+    if not doctor_befund_edit_lock_applies(locked):
+        return True
+    current_holder = effective_lock_holder_id(locked, now=timezone.now())
+    if current_holder != user.id:
+        return False
+    locked.locked_at = timezone.now()
+    locked.save(update_fields=["locked_at", "updated_at"])
     return True
 
 
@@ -1691,6 +1707,99 @@ SAVE_DRAFT_INTENT_AMEND = "amend"
 _VALID_SAVE_DRAFT_INTENTS = frozenset({SAVE_DRAFT_INTENT_EDIT, SAVE_DRAFT_INTENT_AMEND})
 
 
+def begin_pending_revision_from_published(
+    *,
+    medical_document: MedicalDocument,
+    actor_user_id: uuid.UUID,
+) -> MedicalDocumentVersion:
+    """
+    Create a pending DRAFT cloned from the published version.
+
+    Caller must hold ``MedicalDocument`` under ``select_for_update``.
+    """
+    if medical_document.status != MedicalDocStatus.PUBLISHED:
+        raise DomainError(
+            domain_message("other.domain.edit_session_document_read_only"),
+            api_message_key="other.domain.edit_session_document_read_only",
+        )
+    if medical_document.has_pending_revision:
+        pending = (
+            MedicalDocumentVersion.objects.filter(
+                medical_document_id=medical_document.id,
+                version_status=DocVersionStatus.DRAFT,
+            )
+            .order_by("-version_no")
+            .first()
+        )
+        if pending is not None:
+            return pending
+        raise DomainError(
+            domain_message("other.api.no_pending_revision_to_discard"),
+            api_message_key="other.api.no_pending_revision_to_discard",
+        )
+
+    pub_no = medical_document.published_version_no
+    if pub_no is None:
+        raise DomainError(
+            domain_message("other.api.no_version_to_preview"),
+            api_message_key="other.api.no_version_to_preview",
+        )
+
+    published_version = MedicalDocumentVersion.objects.get(
+        medical_document_id=medical_document.id,
+        version_no=pub_no,
+        version_status=DocVersionStatus.PUBLISHED,
+    )
+    if published_version.local_pdf_deleted_at is not None:
+        raise DomainError(
+            domain_message("other.domain.republish_after_retention_not_allowed"),
+            api_message_key="other.domain.republish_after_retention_not_allowed",
+        )
+
+    next_version_no = (
+        MedicalDocumentVersion.objects.filter(
+            medical_document_id=medical_document.id
+        ).aggregate(max_no=Max("version_no"))["max_no"]
+        or 0
+    ) + 1
+
+    created_version = MedicalDocumentVersion.objects.create(
+        medical_document_id=medical_document.id,
+        version_no=next_version_no,
+        version_status=DocVersionStatus.DRAFT,
+        medical_payload_schema_version=published_version.medical_payload_schema_version,
+        medical_payload=published_version.medical_payload,
+        diagnosis_code=published_version.diagnosis_code,
+        procedure_code=published_version.procedure_code,
+    )
+
+    medical_document.has_pending_revision = True
+    medical_document.draft_revision += 1
+    medical_document.updated_by_user_id = actor_user_id
+    medical_document.save(
+        update_fields=[
+            "has_pending_revision",
+            "draft_revision",
+            "updated_by_user",
+            "updated_at",
+        ]
+    )
+    create_audit_event(
+        event_type="DOCUMENT_REVISION_STARTED",
+        actor_user_id=actor_user_id,
+        patient_id=medical_document.queue_entry.patient_id,
+        medical_document_id=medical_document.id,
+        context_clinic_site_id=medical_document.queue_entry.daily_queue.clinic_site_id,
+        metadata={
+            "medical_document_version_id": str(created_version.id),
+            "version_no": created_version.version_no,
+            "previous_published_version_no": medical_document.published_version_no,
+            **assigned_doctor_audit_metadata(medical_document),
+        },
+    )
+    return created_version
+
+
 @transaction.atomic
 def save_draft_document_version(
     *,
@@ -1741,6 +1850,16 @@ def save_draft_document_version(
     )
 
     is_published_doc = medical_document.status == MedicalDocStatus.PUBLISHED
+    if is_published_doc and not medical_document.has_pending_revision:
+        if intent == SAVE_DRAFT_INTENT_AMEND:
+            raise DomainError(
+                domain_message("other.api.amend_requires_edit_session"),
+                api_message_key="other.api.amend_requires_edit_session",
+            )
+        raise DomainError(
+            domain_message("other.api.amend_intent_required"),
+            api_message_key="other.api.amend_intent_required",
+        )
     if is_published_doc and intent != SAVE_DRAFT_INTENT_AMEND:
         raise DomainError(
             domain_message("other.api.amend_intent_required"),
@@ -1909,15 +2028,13 @@ def discard_pending_revision(
 
     medical_document.has_pending_revision = False
     medical_document.updated_by_user_id = actor_user_id
-    medical_document.locked_by_user_id = None
-    medical_document.locked_at = None
+    clear_fields = clear_edit_session_lock_fields(medical_document)
     medical_document.save(
         update_fields=[
             "has_pending_revision",
             "updated_by_user",
             "updated_at",
-            "locked_by_user",
-            "locked_at",
+            *clear_fields,
         ]
     )
     create_audit_event(
@@ -2121,8 +2238,7 @@ def publish_document_version(
     medical_document.has_pending_revision = False
     medical_document.last_published_at = requested_at
     medical_document.updated_by_user_id = published_by_user_id
-    medical_document.locked_by_user_id = None
-    medical_document.locked_at = None
+    clear_fields = clear_edit_session_lock_fields(medical_document)
     medical_document.save(
         update_fields=[
             "status",
@@ -2132,8 +2248,7 @@ def publish_document_version(
             "last_published_at",
             "updated_by_user",
             "updated_at",
-            "locked_by_user",
-            "locked_at",
+            *clear_fields,
         ]
     )
 
@@ -2921,15 +3036,20 @@ def _serialize_doctor_work_queue_row(
     is_locked_by_self = bool(
         doc and locked_eff and doc.locked_by_user_id == getattr(user, "id", None)
     )
-    # Doctor list row tint: yellow = active edit lock (semaphore) on DRAFT.
-    row_has_edit_semaphore = bool(
-        doc and doc.status == MedicalDocStatus.DRAFT and locked_eff
+    row_has_open_befund_edit = bool(
+        doc
+        and (
+            doc.status == MedicalDocStatus.DRAFT
+            or (doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision)
+        )
     )
+    # Doctor list row tint: yellow = active edit lock on DRAFT or open revision.
+    row_has_edit_semaphore = bool(row_has_open_befund_edit and locked_eff)
     # Active lock → who holds it (self or other). Expired lock / idle DRAFT →
     # last draft editor so stale ENTWURF rows are not "ownerless".
     editor_activity: str | None = None
     editor_username: str | None = None
-    if doc and doc.status == MedicalDocStatus.DRAFT:
+    if row_has_open_befund_edit and doc is not None:
         if locked_eff and locked_name:
             editor_activity = "active"
             editor_username = locked_name
@@ -3212,6 +3332,12 @@ def get_medical_document_context(
         "current_version_no": doc.current_version_no,
         "published_version_no": doc.published_version_no,
         "has_pending_revision": doc.has_pending_revision,
+        "draft_revision": int(doc.draft_revision or 0),
+        "last_previewed_draft_revision": (
+            int(doc.last_previewed_draft_revision)
+            if doc.last_previewed_draft_revision is not None
+            else None
+        ),
         "last_published_at": (
             doc.last_published_at.isoformat() if doc.last_published_at else None
         ),

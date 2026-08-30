@@ -474,6 +474,66 @@
     "en": "No pending revision to discard.",
     "pl": "Brak rozpoczętej rewizji do odrzucenia."
   },
+  "doctor.msg_edit_session_stale": {
+    "de": "Diese Bearbeitungssitzung wurde übernommen. Kopieren Sie Ihren Text und öffnen Sie den Befund erneut.",
+    "en": "This edit session was taken over. Copy your text and open the document again.",
+    "pl": "Ta sesja edycji została przejęta. Skopiuj tekst i otwórz dokument ponownie."
+  },
+  "doctor.msg_edit_session_expired": {
+    "de": "Die Bearbeitungssperre ist abgelaufen. Bitte öffnen Sie den Befund erneut.",
+    "en": "The edit lock has expired. Please open the document again.",
+    "pl": "Blokada edycji wygasła. Otwórz dokument ponownie."
+  },
+  "doctor.msg_edit_session_locked_other": {
+    "de": "Dieses Dokument wird gerade von {username} bearbeitet.",
+    "en": "This document is being edited by {username}.",
+    "pl": "Ten dokument jest właśnie edytowany przez {username}."
+  },
+  "doctor.msg_autosave_success": {
+    "de": "Entwurf automatisch gespeichert",
+    "en": "Draft saved automatically",
+    "pl": "Szkic zapisany automatycznie"
+  },
+  "doctor.msg_autosave_preview_again": {
+    "de": "Nach dem automatischen Speichern bitte erneut Vorschau prüfen vor dem Veröffentlichen.",
+    "en": "After autosave, preview the PDF again before publishing.",
+    "pl": "Po autozapisie ponownie sprawdź podgląd PDF przed publikacją."
+  },
+  "doctor.msg_doctor_lock_limit": {
+    "de": "Sie haben bereits 3 Befunde gesperrt. Bitte schließen Sie einen davon (Veröffentlichen oder Revision verwerfen), bevor Sie einen weiteren öffnen.",
+    "en": "You already hold 3 document locks. Finish one (publish or discard revision) before opening another.",
+    "pl": "Masz już 3 aktywne blokady. Zakończ jedną (publikacja lub porzucenie rewizji), zanim otworzysz kolejną."
+  },
+  "doctor.modal_reclaim_title": {
+    "de": "Eigene Sitzung wiederherstellen?",
+    "en": "Restore your edit session?",
+    "pl": "Przywrócić własną sesję edycji?"
+  },
+  "doctor.modal_reclaim_body": {
+    "de": "Dieser Befund ist noch von Ihnen gesperrt (andere Karte oder Gerät). Möchten Sie die Bearbeitung hier fortsetzen? Die andere Sitzung verliert dann die Schreibrechte.",
+    "en": "You still hold the lock on this document (another tab or device). Continue editing here? The other session will lose write access.",
+    "pl": "Nadal trzymasz blokadę tego dokumentu (inna karta lub urządzenie). Kontynuować edycję tutaj? Druga sesja straci prawo zapisu."
+  },
+  "doctor.modal_reclaim_confirm": {
+    "de": "Hier fortsetzen",
+    "en": "Continue here",
+    "pl": "Kontynuuj tutaj"
+  },
+  "doctor.modal_local_tab_title": {
+    "de": "Bereits in einem anderen Tab geöffnet",
+    "en": "Already open in another tab",
+    "pl": "Już otwarte w innej karcie"
+  },
+  "doctor.modal_local_tab_body": {
+    "de": "Dieser Befund ist in einem anderen Browser-Tab geöffnet. Möchten Sie trotzdem hier öffnen? Der andere Tab wird schreibgeschützt.",
+    "en": "This document is open in another browser tab. Open here anyway? The other tab will become read-only.",
+    "pl": "Ten dokument jest otwarty w innej karcie. Otworzyć mimo to? Druga karta stanie się tylko do odczytu."
+  },
+  "doctor.modal_local_tab_confirm": {
+    "de": "Trotzdem öffnen",
+    "en": "Open anyway",
+    "pl": "Otwórz mimo to"
+  },
   "doctor.list_status_revision_chip": {
     "de": "Revision in Bearbeitung",
     "en": "Revision in progress",

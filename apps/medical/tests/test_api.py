@@ -6,7 +6,6 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import Client, TestCase
@@ -129,6 +128,102 @@ class MedicalApiTests(TestCase):
         )
         self.client.force_login(self.doctor_user)
 
+    def _start_edit_session(
+        self, medical_document_id: str, *, purpose: str = "edit"
+    ) -> dict:
+        response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/edit-session",
+            data=json.dumps({"purpose": purpose}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def _draft_session_body(
+        self,
+        medical_payload: dict,
+        *,
+        session: dict,
+        intent: str | None = None,
+        request_id=None,
+        schema_version: int = 1,
+    ) -> dict:
+        body: dict = {
+            "medical_payload_schema_version": schema_version,
+            "medical_payload": medical_payload,
+            "edit_session_token": session["edit_session_token"],
+            "expected_draft_revision": session["draft_revision"],
+            "draft_save_request_id": str(request_id or uuid4()),
+        }
+        if intent is not None:
+            body["intent"] = intent
+        return body
+
+    def _put_draft_with_session(
+        self,
+        medical_document_id: str,
+        medical_payload: dict,
+        *,
+        session: dict | None = None,
+        intent: str | None = None,
+        request_id=None,
+    ):
+        sess = session or self._start_edit_session(medical_document_id)
+        response = self.client.put(
+            f"/api/v1/medical-documents/{medical_document_id}/draft",
+            data=json.dumps(
+                self._draft_session_body(
+                    medical_payload,
+                    session=sess,
+                    intent=intent,
+                    request_id=request_id,
+                )
+            ),
+            content_type="application/json",
+        )
+        if response.status_code == 200:
+            sess = {
+                **sess,
+                "draft_revision": response.json()["draft_revision"],
+            }
+        return response, sess
+
+    def _mark_preview_with_session(
+        self, medical_document_id: str, session: dict
+    ) -> None:
+        with patch(
+            "apps.medical.api_views.build_merged_preview_pdf_bytes",
+            return_value=(b"%PDF-1.4 preview", None),
+        ):
+            response = self.client.get(
+                f"/api/v1/medical-documents/{medical_document_id}/preview-pdf"
+                f"?source=draft&expected_draft_revision={session['draft_revision']}",
+                HTTP_X_EDIT_SESSION_TOKEN=session["edit_session_token"],
+            )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def _publish_with_session(
+        self,
+        medical_document_id: str,
+        session: dict,
+        *,
+        publish_request_id=None,
+        publish_locale: str = "de-DE",
+        resend_sms: bool = False,
+    ):
+        body = {
+            "publish_request_id": str(publish_request_id or uuid4()),
+            "publish_locale": publish_locale,
+            "resend_sms": resend_sms,
+            "edit_session_token": session["edit_session_token"],
+            "expected_draft_revision": session["draft_revision"],
+        }
+        return self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/publish",
+            data=json.dumps(body),
+            content_type="application/json",
+        )
+
     def test_medical_document_create_rejects_cancelled_queue_entry(self) -> None:
         self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
         self.queue_entry.save(update_fields=["entry_status", "updated_at"])
@@ -169,54 +264,36 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
+        session = self._start_edit_session(medical_document_id)
 
         invalid_draft_response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
-                {
-                    "updated_by_user_id": str(self.doctor_user.id),
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 2},
-                }
+                self._draft_session_body({"schema_version": 2}, session=session)
             ),
             content_type="application/json",
         )
         self.assertEqual(invalid_draft_response.status_code, 400)
 
-        draft_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "updated_by_user_id": str(self.doctor_user.id),
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                        "fitzpatrick_type": "TYPE_III",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+        }
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id, payload, session=session
         )
         self.assertEqual(draft_response.status_code, 200)
         self.assertEqual(draft_response.json()["version_status"], "DRAFT")
+        self.assertEqual(draft_response.json()["draft_revision"], 1)
 
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(medical_document_id, session)
         self.assertEqual(publish_response.status_code, 200)
         self.assertEqual(publish_response.json()["version_status"], "PUBLISHED")
 
@@ -734,41 +811,24 @@ class MedicalApiTests(TestCase):
         }
         summary_generated_text = "Version A header."
 
-        draft_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                        "fitzpatrick_type": "TYPE_III",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                        "summary_generated_text": summary_generated_text,
-                        "template_context": template_context,
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                "summary_generated_text": summary_generated_text,
+                "template_context": template_context,
+            },
         )
         self.assertEqual(draft_response.status_code, 200)
-
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "resend_sms": False,
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(medical_document_id, session)
         self.assertEqual(publish_response.status_code, 200)
 
         patch_template = self.client.patch(
@@ -820,21 +880,15 @@ class MedicalApiTests(TestCase):
         self.assertEqual(versions_list.status_code, 200)
         self.assertEqual(versions_list.json()["items"], [])
 
-        self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "updated_by_user_id": str(self.doctor_user.id),
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, _ = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+            },
         )
+        self.assertEqual(draft_response.status_code, 200)
         versions_list2 = self.client.get(
             f"/api/v1/medical-documents/{medical_document_id}/versions"
         )
@@ -882,24 +936,18 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        r = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "lesions": [
-                            {
-                                "lesion_numbers": [2, 3, 2],
-                                "clinical_assessment": "CONTROL_NEEDED",
-                                "malignancy_risk": "NO_SUSPICION",
-                            }
-                        ],
-                    },
-                }
-            ),
-            content_type="application/json",
+        r, _ = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "lesions": [
+                    {
+                        "lesion_numbers": [2, 3, 2],
+                        "clinical_assessment": "CONTROL_NEEDED",
+                        "malignancy_risk": "NO_SUSPICION",
+                    }
+                ],
+            },
         )
         self.assertEqual(r.status_code, 400)
         self.assertIn("details", r.json())
@@ -920,19 +968,13 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        r = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "overall_image_assessment": "CONTROL_NEEDED",
-                        "lesions": [],
-                    },
-                }
-            ),
-            content_type="application/json",
+        r, _ = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "overall_image_assessment": "CONTROL_NEEDED",
+                "lesions": [],
+            },
         )
         self.assertEqual(r.status_code, 400)
         self.assertIn("details", r.json())
@@ -976,15 +1018,8 @@ class MedicalApiTests(TestCase):
                 "template_locale": "de-DE",
             },
         }
-        draft_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": full_payload,
-                }
-            ),
-            content_type="application/json",
+        draft_response, _ = self._put_draft_with_session(
+            medical_document_id, full_payload
         )
         self.assertEqual(draft_response.status_code, 200)
         version_id = draft_response.json()["medical_document_version_id"]
@@ -1018,41 +1053,28 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                        "fitzpatrick_type": "TYPE_III",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "resend_sms": True,
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(
+            medical_document_id, session, resend_sms=True
         )
         self.assertEqual(publish_response.status_code, 200)
 
-    def test_publish_without_draft_returns_400(self) -> None:
-        """Publish without prior 'Zapisz szkic' returns 400; full validation via draft is required."""
+    def test_publish_without_draft_returns_409_preview_required(self) -> None:
+        """Hard cutover: publish without draft/preview fails at preview revision gate."""
         create_response = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1066,25 +1088,13 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        # Do NOT save draft; publish directly
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(publish_response.status_code, 400)
-        err = publish_response.json().get("error", "")
-        self.assertTrue(
-            "draft" in err.lower()
-            or "entwurf" in err.lower()
-            or "szkic" in err.lower(),
-            f"Expected draft-related publish error, got: {err!r}",
+        # Do NOT save draft; publish with session only → preview gate (409).
+        session = self._start_edit_session(medical_document_id)
+        publish_response = self._publish_with_session(medical_document_id, session)
+        self.assertEqual(publish_response.status_code, 409)
+        self.assertEqual(
+            publish_response.json().get("error_key"),
+            "publish_preview_revision_stale",
         )
 
     def test_publish_with_incomplete_draft_returns_400(self) -> None:
@@ -1102,32 +1112,17 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "updated_by_user_id": str(self.doctor_user.id),
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+            },
         )
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(medical_document_id, session)
         self.assertEqual(publish_response.status_code, 400)
         error_msg = publish_response.json().get("error", "")
         # Komunikat w języku publish_locale (lub fallback EN); w teście bez seed tłumaczeń = angielski fallback
@@ -1152,27 +1147,24 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "lesions": [],
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "lesions": [],
+            },
         )
+        self.assertEqual(draft_response.status_code, 200)
         publish_response = self.client.post(
             f"/api/v1/medical-documents/{medical_document_id}/publish",
             data=json.dumps(
                 {
                     "publish_request_id": str(uuid4()),
                     "published_by_user_id": str(self.doctor_user.id),
+                    "edit_session_token": session["edit_session_token"],
+                    "expected_draft_revision": session["draft_revision"],
                 }
             ),
             content_type="application/json",
@@ -1198,51 +1190,33 @@ class MedicalApiTests(TestCase):
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
 
-        draft_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                        "fitzpatrick_type": "TYPE_III",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
         self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(medical_document_id, session)
 
         request_id = str(uuid4())
-        first_publish = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": request_id,
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
+        first_publish = self._publish_with_session(
+            medical_document_id, session, publish_request_id=request_id
         )
         self.assertEqual(first_publish.status_code, 200)
 
-        second_publish = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": request_id,
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "en-GB",
-                }
-            ),
-            content_type="application/json",
+        second_publish = self._publish_with_session(
+            medical_document_id,
+            session,
+            publish_request_id=request_id,
+            publish_locale="en-GB",
         )
         self.assertEqual(second_publish.status_code, 409)
         err = (second_publish.json().get("error") or "").lower()
@@ -1268,29 +1242,21 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_missing_dependencies.status_code, 404)
 
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
+        }
         draft_missing_doc = self.client.put(
             f"/api/v1/medical-documents/{missing_doc_id}/draft",
             data=json.dumps(
-                {
-                    "updated_by_user_id": str(self.doctor_user.id),
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {"schema_version": 1},
-                }
+                self._draft_session_body({"schema_version": 1}, session=fake_session)
             ),
             content_type="application/json",
         )
         self.assertEqual(draft_missing_doc.status_code, 404)
 
-        publish_missing_doc = self.client.post(
-            f"/api/v1/medical-documents/{missing_doc_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "published_by_user_id": str(self.doctor_user.id),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
+        publish_missing_doc = self._publish_with_session(
+            str(missing_doc_id), fake_session
         )
         self.assertEqual(publish_missing_doc.status_code, 404)
 
@@ -1308,32 +1274,22 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": {
-                        "schema_version": 1,
-                        "authoring_locale": "de-DE",
-                        "lesions": [],
-                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                        "fitzpatrick_type": "TYPE_III",
-                        "overall_image_assessment": "NO_CONTROL_NEEDED",
-                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-                    },
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id,
+            {
+                "schema_version": 1,
+                "authoring_locale": "de-DE",
+                "lesions": [],
+                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                "fitzpatrick_type": "TYPE_III",
+                "overall_image_assessment": "NO_CONTROL_NEEDED",
+                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+            },
         )
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(medical_document_id, session)
         self.assertEqual(publish_response.status_code, 200)
         version_id = publish_response.json()["medical_document_version_id"]
         event = OutboxEvent.objects.get(
@@ -1376,7 +1332,7 @@ class MedicalApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    def test_draft_423_when_locked_by_other_doctor_unlock_releases(self) -> None:
+    def test_draft_423_when_locked_by_other_doctor(self) -> None:
         other = StaffUser.objects.create_user(
             username="api-doc-lock-2",
             email="api.doc.lock2@example.com",
@@ -1405,49 +1361,34 @@ class MedicalApiTests(TestCase):
         MedicalDocument.objects.filter(id=mid).update(
             locked_by_user_id=self.doctor_user.id,
             locked_at=timezone.now(),
+            edit_session_token=uuid4(),
         )
 
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+        }
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
         }
 
         self.client.force_login(other)
         blocked = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
+            data=json.dumps(self._draft_session_body(payload, session=fake_session)),
             content_type="application/json",
         )
         self.assertEqual(blocked.status_code, 423)
         self.assertIn("locked_by_username", blocked.json())
 
-        self.client.force_login(self.doctor_user)
-        unlocked = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(unlocked.status_code, 200)
-        self.assertTrue(unlocked.json().get("released"))
-
-        self.client.force_login(other)
-        ok = self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
-        )
-        self.assertEqual(ok.status_code, 200)
-
-    def test_draft_manager_bypasses_lock_when_other_doctor_blocked(self) -> None:
+    def test_draft_manager_cannot_bypass_lock_when_other_doctor_blocked(self) -> None:
         other = StaffUser.objects.create_user(
             username="api-doc-lock-mgr",
             email="api.doc.lock.mgr@example.com",
@@ -1486,21 +1427,24 @@ class MedicalApiTests(TestCase):
         MedicalDocument.objects.filter(id=mid).update(
             locked_by_user_id=self.doctor_user.id,
             locked_at=timezone.now(),
+            edit_session_token=uuid4(),
         )
 
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
         }
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
+        }
+        draft_body = self._draft_session_body(payload, session=fake_session)
 
         self.client.force_login(other)
         blocked = self.client.put(
@@ -1511,12 +1455,12 @@ class MedicalApiTests(TestCase):
         self.assertEqual(blocked.status_code, 423)
 
         self.client.force_login(manager)
-        ok = self.client.put(
+        manager_blocked = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
             data=json.dumps(draft_body),
             content_type="application/json",
         )
-        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(manager_blocked.status_code, 403)
 
     def test_publish_423_when_locked_by_other_doctor(self) -> None:
         other = StaffUser.objects.create_user(
@@ -1540,45 +1484,30 @@ class MedicalApiTests(TestCase):
         self.assertEqual(create_response.status_code, 201)
         mid = create_response.json()["medical_document_id"]
 
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
         }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
-        )
+        draft_response, session = self._put_draft_with_session(mid, payload)
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(mid, session)
 
         dq = self.queue_entry.daily_queue
         dq.assigned_doctor = other
         dq.save(update_fields=["assigned_doctor", "updated_at"])
 
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=timezone.now(),
-        )
-
         self.client.force_login(other)
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": session["draft_revision"],
+        }
+        publish_response = self._publish_with_session(mid, fake_session)
         self.assertEqual(publish_response.status_code, 423)
         self.assertIn("locked_by_username", publish_response.json())
 
@@ -1600,40 +1529,21 @@ class MedicalApiTests(TestCase):
         self.assertEqual(create_response.status_code, 201)
         mid = create_response.json()["medical_document_id"]
 
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
         }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
-        )
+        draft_response, session = self._put_draft_with_session(mid, payload)
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(mid, session)
 
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=timezone.now(),
-        )
-
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        publish_response = self._publish_with_session(mid, session)
         self.assertEqual(publish_response.status_code, 200)
         self.assertEqual(publish_response.json()["version_status"], "PUBLISHED")
 
@@ -1642,14 +1552,7 @@ class MedicalApiTests(TestCase):
         self.assertIsNone(doc.locked_by_user_id)
         self.assertIsNone(doc.locked_at)
 
-    def test_unlock_returns_403_when_non_holder_non_admin(self) -> None:
-        other = StaffUser.objects.create_user(
-            username="api-doc-unlock-403",
-            email="api.doc.unlock403@example.com",
-            password="safe-password",
-            is_staff=True,
-        )
-        assign_group_to_test_user(other, "Doctor")
+    def test_unlock_returns_410_gone(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1665,24 +1568,28 @@ class MedicalApiTests(TestCase):
         MedicalDocument.objects.filter(id=mid).update(
             locked_by_user_id=self.doctor_user.id,
             locked_at=timezone.now(),
+            edit_session_token=uuid4(),
         )
-        self.client.force_login(other)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertFalse(resp.json()["released"])
-        self.assertIn("error", resp.json())
+        for user in (self.doctor_user, self.admin_user, self.reception_user):
+            self.client.force_login(user)
+            resp = self.client.post(
+                f"/api/v1/medical-documents/{mid}/unlock",
+                data=json.dumps({}),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 410, msg=f"role={user.username}")
+            self.assertEqual(resp.json().get("error_key"), "other.api.unlock_gone")
+        doc = MedicalDocument.objects.get(id=mid)
+        self.assertEqual(doc.locked_by_user_id, self.doctor_user.id)
 
-    def test_unlock_returns_404_for_missing_document(self) -> None:
+    def test_unlock_returns_410_for_missing_document(self) -> None:
         resp = self.client.post(
             f"/api/v1/medical-documents/{uuid4()}/unlock",
             data=json.dumps({}),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 410)
+        self.assertEqual(resp.json().get("error_key"), "other.api.unlock_gone")
 
     def test_unlock_returns_405_for_get(self) -> None:
         create_resp = self.client.post(
@@ -1699,52 +1606,7 @@ class MedicalApiTests(TestCase):
         resp = self.client.get(f"/api/v1/medical-documents/{mid}/unlock")
         self.assertEqual(resp.status_code, 405)
 
-    def test_unlock_returns_403_for_reception_role(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        self.client.force_login(self.reception_user)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertIn("error", resp.json())
-
-    def test_unlock_returns_404_when_release_raises_not_found(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        with patch(
-            "apps.medical.api_views.release_document_lock",
-            side_effect=ObjectDoesNotExist(),
-        ):
-            resp = self.client.post(
-                f"/api/v1/medical-documents/{mid}/unlock",
-                data=json.dumps({}),
-                content_type="application/json",
-            )
-        self.assertEqual(resp.status_code, 404)
-        self.assertIn("error", resp.json())
-
-    def test_admin_can_override_lock_on_draft_save(self) -> None:
+    def test_admin_cannot_override_lock_on_draft_save(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
             data=json.dumps(
@@ -1759,27 +1621,33 @@ class MedicalApiTests(TestCase):
         MedicalDocument.objects.filter(id=mid).update(
             locked_by_user_id=self.doctor_user.id,
             locked_at=timezone.now(),
+            edit_session_token=uuid4(),
         )
         self.client.force_login(self.admin_user)
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
         }
         resp = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
+            data=json.dumps(
+                self._draft_session_body(
+                    {
+                        "schema_version": 1,
+                        "authoring_locale": "de-DE",
+                        "lesions": [],
+                        "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+                        "fitzpatrick_type": "TYPE_III",
+                        "overall_image_assessment": "NO_CONTROL_NEEDED",
+                        "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+                        "final_assessment": "NO_HIGH_GRADE_SUSPICION",
+                    },
+                    session=fake_session,
+                )
+            ),
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 403)
 
     def test_admin_cannot_publish_medical_document(self) -> None:
         create_resp = self.client.post(
@@ -1793,32 +1661,20 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         mid = create_resp.json()["medical_document_id"]
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
         }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
-        )
+        draft_response, session = self._put_draft_with_session(mid, payload)
+        self.assertEqual(draft_response.status_code, 200)
         self.client.force_login(self.admin_user)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
+        resp = self._publish_with_session(mid, session)
         self.assertEqual(resp.status_code, 403)
 
     def test_manager_cannot_publish_medical_document(self) -> None:
@@ -1842,58 +1698,21 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         mid = create_resp.json()["medical_document_id"]
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
-                "schema_version": 1,
-                "authoring_locale": "de-DE",
-                "lesions": [],
-                "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
-                "fitzpatrick_type": "TYPE_III",
-                "overall_image_assessment": "NO_CONTROL_NEEDED",
-                "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
-                "final_assessment": "NO_HIGH_GRADE_SUSPICION",
-            },
+        payload = {
+            "schema_version": 1,
+            "authoring_locale": "de-DE",
+            "lesions": [],
+            "examination_scope": ["INTIMATE_AREA_NOT_EXAMINED"],
+            "fitzpatrick_type": "TYPE_III",
+            "overall_image_assessment": "NO_CONTROL_NEEDED",
+            "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
+            "final_assessment": "NO_HIGH_GRADE_SUSPICION",
         }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
-        )
+        draft_response, session = self._put_draft_with_session(mid, payload)
+        self.assertEqual(draft_response.status_code, 200)
         self.client.force_login(manager)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
+        resp = self._publish_with_session(mid, session)
         self.assertEqual(resp.status_code, 403)
-
-    def test_admin_can_unlock_another_users_lock(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=timezone.now(),
-        )
-        self.client.force_login(self.admin_user)
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.json()["released"])
 
     def test_list_includes_lock_fields(self) -> None:
         self.client.post(
@@ -1955,26 +1774,6 @@ class MedicalApiTests(TestCase):
         self.assertIn("locked_at", data)
         self.assertIsNone(data["locked_by_user_id"])
 
-    def test_unlock_on_already_unlocked_document(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/medical-documents",
-            data=json.dumps(
-                {
-                    "queue_entry_id": str(self.queue_entry.id),
-                    "intake_form_id": str(self.intake_form.id),
-                }
-            ),
-            content_type="application/json",
-        )
-        mid = create_resp.json()["medical_document_id"]
-        resp = self.client.post(
-            f"/api/v1/medical-documents/{mid}/unlock",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.json()["released"])
-
     def test_draft_save_by_lock_holder_succeeds_and_refreshes(self) -> None:
         create_resp = self.client.post(
             "/api/v1/medical-documents",
@@ -1987,14 +1786,12 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         mid = create_resp.json()["medical_document_id"]
+        session = self._start_edit_session(mid)
         lock_time = timezone.now() - timedelta(minutes=30)
-        MedicalDocument.objects.filter(id=mid).update(
-            locked_by_user_id=self.doctor_user.id,
-            locked_at=lock_time,
-        )
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
+        MedicalDocument.objects.filter(id=mid).update(locked_at=lock_time)
+        resp, _ = self._put_draft_with_session(
+            mid,
+            {
                 "schema_version": 1,
                 "authoring_locale": "de-DE",
                 "lesions": [],
@@ -2004,11 +1801,7 @@ class MedicalApiTests(TestCase):
                 "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
                 "final_assessment": "NO_HIGH_GRADE_SUSPICION",
             },
-        }
-        resp = self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
+            session=session,
         )
         self.assertEqual(resp.status_code, 200)
         doc = MedicalDocument.objects.get(id=mid)
@@ -2060,9 +1853,9 @@ class MedicalApiTests(TestCase):
             content_type="application/json",
         )
         mid = create_resp.json()["medical_document_id"]
-        draft_body = {
-            "medical_payload_schema_version": 1,
-            "medical_payload": {
+        draft_response, session = self._put_draft_with_session(
+            mid,
+            {
                 "schema_version": 1,
                 "authoring_locale": "de-DE",
                 "lesions": [],
@@ -2072,19 +1865,10 @@ class MedicalApiTests(TestCase):
                 "recommendations": ["NO_SHORT_TERM_FOLLOWUP_REQUIRED"],
                 "final_assessment": "NO_HIGH_GRADE_SUSPICION",
             },
-        }
-        self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(draft_body),
-            content_type="application/json",
         )
-        self.client.post(
-            f"/api/v1/medical-documents/{mid}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
+        self.assertEqual(draft_response.status_code, 200)
+        self._mark_preview_with_session(mid, session)
+        self._publish_with_session(mid, session)
         dq = self.queue_entry.daily_queue
         dq.assigned_doctor = None
         dq.save(update_fields=["assigned_doctor", "updated_at"])
@@ -2120,47 +1904,33 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
-        draft_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                }
-            ),
-            content_type="application/json",
+        draft_response, session = self._put_draft_with_session(
+            medical_document_id, self.VALID_PAYLOAD
         )
         self.assertEqual(draft_response.status_code, 200)
-        publish_response = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {
-                    "publish_request_id": str(uuid4()),
-                    "publish_locale": "de-DE",
-                }
-            ),
-            content_type="application/json",
-        )
+        self._mark_preview_with_session(medical_document_id, session)
+        publish_response = self._publish_with_session(medical_document_id, session)
         self.assertEqual(publish_response.status_code, 200)
         return medical_document_id
 
-    def test_draft_on_published_without_intent_returns_409(self) -> None:
+    def test_draft_on_published_without_intent_returns_400_read_only(self) -> None:
         medical_document_id = self._create_published_document()
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
+        }
         response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                }
+                self._draft_session_body(self.VALID_PAYLOAD, session=fake_session)
             ),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 409)
-        body = response.json()
+        # Clean PUBLISHED has no edit lock → write gate read-only (start amend session first).
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(
-            body.get("error_key") or body.get("api_message_key"),
-            "other.api.amend_intent_required",
+            response.json().get("error_key"),
+            "other.domain.edit_session_document_read_only",
         )
         doc = MedicalDocument.objects.get(id=medical_document_id)
         self.assertEqual(doc.status, MedicalDocStatus.PUBLISHED)
@@ -2181,14 +1951,13 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         )
         self.assertEqual(create_response.status_code, 201)
         medical_document_id = create_response.json()["medical_document_id"]
+        session = self._start_edit_session(medical_document_id)
         response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                    "intent": "typo",
-                }
+                self._draft_session_body(
+                    self.VALID_PAYLOAD, session=session, intent="typo"
+                )
             ),
             content_type="application/json",
         )
@@ -2197,20 +1966,49 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
             response.json().get("error_key"), "other.api.invalid_save_draft_intent"
         )
 
-    def test_draft_on_published_with_amend_intent_returns_200_pending_revision(
+    def test_draft_on_published_with_amend_intent_returns_400_read_only_without_session(
         self,
     ) -> None:
         medical_document_id = self._create_published_document()
+        fake_session = {
+            "edit_session_token": str(uuid4()),
+            "draft_revision": 0,
+        }
         response = self.client.put(
             f"/api/v1/medical-documents/{medical_document_id}/draft",
             data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                    "intent": "amend",
-                }
+                self._draft_session_body(
+                    self.VALID_PAYLOAD, session=fake_session, intent="amend"
+                )
             ),
             content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json().get("error_key"),
+            "other.domain.edit_session_document_read_only",
+        )
+
+    def _start_amend_via_edit_session(self, medical_document_id: str) -> dict:
+        response = self.client.post(
+            f"/api/v1/medical-documents/{medical_document_id}/edit-session",
+            data=json.dumps({"purpose": "amend"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def test_amend_via_edit_session_then_draft_save_returns_pending_revision(
+        self,
+    ) -> None:
+        medical_document_id = self._create_published_document()
+        session = self._start_amend_via_edit_session(medical_document_id)
+        self.assertEqual(session["mode"], "acquired")
+        response, session = self._put_draft_with_session(
+            medical_document_id,
+            self.VALID_PAYLOAD,
+            session=session,
+            intent="amend",
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -2219,22 +2017,19 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
         self.assertEqual(body["published_version_no"], 1)
         self.assertEqual(body["version_no"], 2)
         self.assertEqual(body["version_status"], "DRAFT")
+        self.assertEqual(body["draft_revision"], 2)
 
     def test_get_during_pending_revision_includes_reception_note(self) -> None:
         note = "Bitte Geburtsdatum prüfen"
         self.intake_form.reception_note = note
         self.intake_form.save(update_fields=["reception_note", "updated_at"])
         medical_document_id = self._create_published_document()
-        amend = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                    "intent": "amend",
-                }
-            ),
-            content_type="application/json",
+        session = self._start_amend_via_edit_session(medical_document_id)
+        amend, _ = self._put_draft_with_session(
+            medical_document_id,
+            self.VALID_PAYLOAD,
+            session=session,
+            intent="amend",
         )
         self.assertEqual(amend.status_code, 200)
         self.assertTrue(amend.json()["has_pending_revision"])
@@ -2248,22 +2043,23 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
 
     def test_discard_revision_clears_pending_state(self) -> None:
         medical_document_id = self._create_published_document()
-        amend_response = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(
-                {
-                    "medical_payload_schema_version": 1,
-                    "medical_payload": self.VALID_PAYLOAD,
-                    "intent": "amend",
-                }
-            ),
-            content_type="application/json",
+        session = self._start_amend_via_edit_session(medical_document_id)
+        amend_response, session = self._put_draft_with_session(
+            medical_document_id,
+            self.VALID_PAYLOAD,
+            session=session,
+            intent="amend",
         )
         self.assertEqual(amend_response.status_code, 200)
 
         discard_response = self.client.post(
             f"/api/v1/medical-documents/{medical_document_id}/discard-revision",
-            data=json.dumps({}),
+            data=json.dumps(
+                {
+                    "edit_session_token": session["edit_session_token"],
+                    "expected_draft_revision": session["draft_revision"],
+                }
+            ),
             content_type="application/json",
         )
         self.assertEqual(discard_response.status_code, 200)
@@ -2281,12 +2077,8 @@ class MedicalDocumentRevisionApiTests(MedicalApiTests):
             data=json.dumps({}),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 409)
-        body = response.json()
-        self.assertEqual(
-            body.get("error_key") or body.get("api_message_key"),
-            "other.api.no_pending_revision_to_discard",
-        )
+        # Hard cutover: discard body requires session fields.
+        self.assertEqual(response.status_code, 400)
 
     def test_preview_pdf_invalid_source_returns_400(self) -> None:
         medical_document_id = self._create_published_document()
@@ -2881,7 +2673,7 @@ class ExternalUploadApiTests(MedicalApiTests):
         merge_mock.assert_not_called()
 
 
-class DoctorRbacIdorMatrixTests(TestCase):
+class DoctorRbacIdorMatrixTests(MedicalApiTests):
     """IDOR matrix §6.3: doctor B vs doctor A's published document (tier 1)."""
 
     _VALID_PAYLOAD = {
@@ -2895,7 +2687,7 @@ class DoctorRbacIdorMatrixTests(TestCase):
     }
 
     def setUp(self) -> None:
-        MedicalApiTests.setUp(self)
+        super().setUp()
         self.doctor_b = StaffUser.objects.create_user(
             username="api-idor-b",
             email="api.idor.b@example.com",
@@ -2908,13 +2700,22 @@ class DoctorRbacIdorMatrixTests(TestCase):
             update_fields=["assigned_doctor", "updated_at"]
         )
 
-    def _draft_put_body(self, *, intent: str | None = None) -> dict:
+    def _draft_put_body(
+        self, *, intent: str | None = None, session: dict | None = None
+    ) -> dict:
         body: dict = {
             "medical_payload_schema_version": 1,
             "medical_payload": self._VALID_PAYLOAD,
+            "edit_session_token": str(uuid4()),
+            "expected_draft_revision": 0,
+            "draft_save_request_id": str(uuid4()),
         }
         if intent is not None:
             body["intent"] = intent
+        if session is not None:
+            body["edit_session_token"] = session["edit_session_token"]
+            body["expected_draft_revision"] = session["draft_revision"]
+            body["draft_save_request_id"] = str(uuid4())
         return body
 
     def _create_document_as(self, user: StaffUser) -> str:
@@ -2934,19 +2735,12 @@ class DoctorRbacIdorMatrixTests(TestCase):
 
     def _publish_document_as(self, user: StaffUser, medical_document_id: str) -> None:
         self.client.force_login(user)
-        draft_resp = self.client.put(
-            f"/api/v1/medical-documents/{medical_document_id}/draft",
-            data=json.dumps(self._draft_put_body()),
-            content_type="application/json",
+        draft_resp, session = self._put_draft_with_session(
+            medical_document_id, self._VALID_PAYLOAD
         )
         self.assertEqual(draft_resp.status_code, 200, draft_resp.content)
-        pub_resp = self.client.post(
-            f"/api/v1/medical-documents/{medical_document_id}/publish",
-            data=json.dumps(
-                {"publish_request_id": str(uuid4()), "publish_locale": "de-DE"}
-            ),
-            content_type="application/json",
-        )
+        self._mark_preview_with_session(medical_document_id, session)
+        pub_resp = self._publish_with_session(medical_document_id, session)
         self.assertEqual(pub_resp.status_code, 200, pub_resp.content)
 
     def _publish_as_doctor_a(self) -> str:
@@ -2977,11 +2771,13 @@ class DoctorRbacIdorMatrixTests(TestCase):
                 {
                     "publish_request_id": str(uuid4()),
                     "publish_locale": "de-DE",
+                    "edit_session_token": str(uuid4()),
+                    "expected_draft_revision": 0,
                 },
                 404,
             ),
             ("POST", f"/api/v1/medical-documents/{mid}/revoke", {}, 404),
-            ("POST", f"/api/v1/medical-documents/{mid}/unlock", {}, 404),
+            ("POST", f"/api/v1/medical-documents/{mid}/unlock", {}, 410),
             ("GET", f"/api/v1/medical-documents/{mid}/external-pdfs", None, 404),
             (
                 "GET",
@@ -2998,7 +2794,10 @@ class DoctorRbacIdorMatrixTests(TestCase):
             (
                 "POST",
                 f"/api/v1/medical-documents/{mid}/discard-revision",
-                {},
+                {
+                    "edit_session_token": str(uuid4()),
+                    "expected_draft_revision": 0,
+                },
                 404,
             ),
             ("GET", f"/api/v1/medical-documents/{mid}/versions", None, 404),
@@ -3051,33 +2850,41 @@ class DoctorRbacIdorMatrixTests(TestCase):
     def test_doctor_b_can_access_shared_draft(self) -> None:
         """P1: shared DRAFT from doctor A."""
         mid = self._create_document_as(self.doctor_user)
+        self.client.force_login(self.doctor_user)
+        session = self._start_edit_session(mid)
         self._login_doctor_b()
         detail = self.client.get(f"/api/v1/medical-documents/{mid}")
         self.assertEqual(detail.status_code, 200)
         draft = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(self._draft_put_body()),
+            data=json.dumps(self._draft_put_body(session=session)),
             content_type="application/json",
         )
-        self.assertEqual(draft.status_code, 200)
+        # Doctor B is not the lock holder → 423.
+        self.assertEqual(draft.status_code, 423)
 
-    def test_doctor_b_can_amend_when_pending_revision(self) -> None:
-        """P2: published + pending revision is tier-0 shared work."""
+    def test_doctor_b_sees_shared_revision_but_draft_without_lock_returns_423(
+        self,
+    ) -> None:
+        """P2: published + pending revision is shared work, but writes need holder."""
         mid = self._publish_as_doctor_a()
         self.client.force_login(self.doctor_user)
-        amend = self.client.put(
-            f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(self._draft_put_body(intent="amend")),
+        amend_sess = self.client.post(
+            f"/api/v1/medical-documents/{mid}/edit-session",
+            data=json.dumps({"purpose": "amend"}),
             content_type="application/json",
         )
-        self.assertEqual(amend.status_code, 200)
+        self.assertEqual(amend_sess.status_code, 200, amend_sess.content)
+        session = amend_sess.json()
         self._login_doctor_b()
+        detail = self.client.get(f"/api/v1/medical-documents/{mid}")
+        self.assertEqual(detail.status_code, 200)
         draft = self.client.put(
             f"/api/v1/medical-documents/{mid}/draft",
-            data=json.dumps(self._draft_put_body(intent="amend")),
+            data=json.dumps(self._draft_put_body(intent="amend", session=session)),
             content_type="application/json",
         )
-        self.assertEqual(draft.status_code, 200, draft.content)
+        self.assertEqual(draft.status_code, 423, draft.content)
 
     def test_doctor_b_can_preview_own_published_document(self) -> None:
         """P3: doctor B sees own published result."""

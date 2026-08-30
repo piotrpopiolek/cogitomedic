@@ -322,9 +322,13 @@ def seed_manual_demo(ctx: dict) -> None:
         }
     )
     from apps.medical.incoming_pdf_scan import suggest_incoming_pdf_filename
+    from scripts.manual_demo.scenario_helpers import seed_mock_incoming_for_patients
 
     ctx["anna_demo_incoming_pdf"] = suggest_incoming_pdf_filename(p_done)
     seed_manual_screenshot_extras(ctx)
+    # Lab PDF for Anna Demo (doctor draft gate) — must live under HIDRIVE_INCOMING_PATH
+    # shared via HIDRIVE_MOCK_STATE_PATH with the web process.
+    seed_mock_incoming_for_patients([p_done], merge=True)
 
 
 def seed_manual_screenshot_extras(ctx: dict) -> None:
@@ -338,7 +342,6 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         PaperIntakeAuthorization,
     )
     from apps.reception.models import Patient, QueueEntry, QueueEntryStatus
-    from apps.medical.services import save_draft_document_version
     from scripts.manual_demo.scenario_helpers import (
         create_draft_document,
         create_submitted_entry,
@@ -346,8 +349,8 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         ensure_manager_user,
         force_publish,
         next_position,
+        open_demo_pending_revision,
         rich_revision_payload,
-        seed_mock_incoming,
         upsert_patient,
     )
 
@@ -421,8 +424,8 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
     )
     ctx["paper_intake_entry_id"] = str(entry_paper.id)
 
-    # Empty /incoming so draft Befunds without lab PDF appear on reception dashboard.
-    seed_mock_incoming([])
+    # Iris intentionally has no matching lab PDF → reception dashboard NO_FILE.
+    # Do not wipe the whole incoming folder (that blocks doctor open for Anna Demo).
     p_hd = upsert_patient(
         phone="491111000005",
         first_name="Iris",
@@ -432,7 +435,7 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
         clinic=clinic,
     )
     entry_hd, intake_hd = create_submitted_entry(ctx, patient=p_hd)
-    create_draft_document(ctx, entry_hd, intake_hd)
+    create_draft_document(ctx, entry_hd, intake_hd, seed_incoming_pdf=False)
     ctx["hidrive_missing_entry_id"] = str(entry_hd.id)
 
     # Portal patient (session_doc_key): published Befund + mock PDF for documents list.
@@ -461,12 +464,7 @@ def seed_manual_screenshot_extras(ctx: dict) -> None:
     entry_rev, intake_rev = create_submitted_entry(ctx, patient=p_rev)
     md_rev = create_draft_document(ctx, entry_rev, intake_rev)
     force_publish(ctx, md_rev, pdf_label="revision_shot")
-    save_draft_document_version(
-        medical_document_id=md_rev.id,
-        updated_by_user_id=ctx["doctor"].id,
-        medical_payload=rich_revision_payload(),
-        intent="amend",
-    )
+    open_demo_pending_revision(ctx, md_rev, medical_payload=rich_revision_payload())
     md_rev.refresh_from_db()
     ctx["revision_demo_doc_id"] = str(md_rev.id)
 
