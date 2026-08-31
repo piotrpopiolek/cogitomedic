@@ -10,7 +10,7 @@ from apps.core.translation_service import db_gettext_lazy, format_administration
 from django.db.models import F, Q
 
 from apps.outbox.constants import outbox_max_retries_default
-from apps.reception.process_types import ProcessType
+from apps.reception.process_types import PROCESS_TYPE_STANDARD, ProcessType
 
 
 class IntakeStatus(models.TextChoices):
@@ -77,12 +77,29 @@ def _attach_process_types(
     process_types: list[str] | None,
 ) -> None:
     """Link catalog row to processes. None → STANDARD (test/legacy create)."""
-    values = (
-        [ProcessType.STANDARD.value] if process_types is None else list(process_types)
-    )
+    values = [PROCESS_TYPE_STANDARD] if process_types is None else list(process_types)
     for process_type in values:
         through_model.objects.get_or_create(
             **{fk_name: definition, "process_type": process_type}
+        )
+
+
+def _clean_active_definition_requires_process(definition: models.Model) -> None:
+    """Active catalog rows must have ≥1 process; skip on ADD.
+
+    UUID ``pk`` is assigned in memory before INSERT. Admin validates the parent
+    before inlines exist, so ``process_links.exists()`` is always false on ADD.
+    """
+    if definition._state.adding or not definition.is_active:
+        return
+    if not definition.process_links.exists():  # type: ignore[attr-defined]
+        raise ValidationError(
+            {
+                "process_links": db_gettext_lazy(
+                    "administration.error_definition_requires_process",
+                    "At least one process type is required.",
+                )
+            }
         )
 
 
@@ -207,15 +224,7 @@ class ConsentDefinition(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if self.pk and self.is_active and not self.process_links.exists():
-            raise ValidationError(
-                {
-                    "process_links": db_gettext_lazy(
-                        "administration.error_definition_requires_process",
-                        "At least one process type is required.",
-                    )
-                }
-            )
+        _clean_active_definition_requires_process(self)
 
     def __str__(self) -> str:
         return self.title_de or f"{self.code} (v{self.version})"
@@ -370,15 +379,7 @@ class AnamnesisQuestionDefinition(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if self.pk and self.is_active and not self.process_links.exists():
-            raise ValidationError(
-                {
-                    "process_links": db_gettext_lazy(
-                        "administration.error_definition_requires_process",
-                        "At least one process type is required.",
-                    )
-                }
-            )
+        _clean_active_definition_requires_process(self)
 
     def __str__(self) -> str:
         return self.question_text_de or f"{self.code} (v{self.version})"
