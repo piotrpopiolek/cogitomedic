@@ -581,7 +581,7 @@ def update_queue_entry(
 def parse_process_type(value: str | None) -> str:
     """Validate caller-supplied process_type; empty → STANDARD."""
     if value is None or str(value).strip() == "":
-        return ProcessType.STANDARD
+        return ProcessType.STANDARD.value
     normalized = str(value).strip()
     if normalized not in ProcessType.values:
         raise DomainError(

@@ -77,7 +77,9 @@ def _attach_process_types(
     process_types: list[str] | None,
 ) -> None:
     """Link catalog row to processes. None → STANDARD (test/legacy create)."""
-    values = [ProcessType.STANDARD] if process_types is None else list(process_types)
+    values = (
+        [ProcessType.STANDARD.value] if process_types is None else list(process_types)
+    )
     for process_type in values:
         through_model.objects.get_or_create(
             **{fk_name: definition, "process_type": process_type}

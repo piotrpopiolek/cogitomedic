@@ -190,13 +190,13 @@ def map_xlsx_process_type_cell(raw: str | None) -> tuple[str, bool]:
     """
     text = (raw or "").strip()
     if not text:
-        return ProcessType.STANDARD, True
+        return ProcessType.STANDARD.value, True
     key = " ".join(text.lower().split())
-    if key in _TELEDERM_CELL_VALUES or key == ProcessType.TELEDERM.lower():
-        return ProcessType.TELEDERM, False
-    if key == ProcessType.STANDARD.lower():
-        return ProcessType.STANDARD, False
-    return ProcessType.STANDARD, True
+    if key in _TELEDERM_CELL_VALUES or key == ProcessType.TELEDERM.value.lower():
+        return ProcessType.TELEDERM.value, False
+    if key == ProcessType.STANDARD.value.lower():
+        return ProcessType.STANDARD.value, False
+    return ProcessType.STANDARD.value, True
 
 
 GERMAN_MONTHS = {
@@ -408,7 +408,7 @@ class NormalizedRow:
     street: str | None = None
     postal_code: str | None = None
     city: str | None = None
-    process_type: str = ProcessType.STANDARD
+    process_type: str = ProcessType.STANDARD.value
     process_type_fallback: bool = False
 
 
@@ -487,7 +487,7 @@ def _normalize_row(
             _cell("process_type")
         )
     else:
-        process_type, process_type_fallback = ProcessType.STANDARD, False
+        process_type, process_type_fallback = ProcessType.STANDARD.value, False
 
     return NormalizedRow(
         row_number=row_index,

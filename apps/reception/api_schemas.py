@@ -63,7 +63,7 @@ class CreateQueueEntryRequest(BaseModel):
     visit_external_id: str | None = None
     appointment_time: datetime | None = None
     notes: str | None = None
-    process_type: str = ProcessType.STANDARD
+    process_type: str = ProcessType.STANDARD.value
 
     @field_validator("process_type", mode="after")
     @classmethod

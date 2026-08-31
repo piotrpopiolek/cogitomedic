@@ -2,68 +2,35 @@
 
 from django.conf import settings
 from django.db import migrations, models
-from django.db.models import Count
-from django.utils import timezone
-
-_STATUS_RANK = {
-    "DOCTOR_IN_PROGRESS": 5,
-    "PATIENT_COMPLETED": 4,
-    "PAPER_INTAKE_COMPLETED": 3,
-    "IN_PROGRESS": 2,
-    "WAITING": 1,
-}
 
 
 def cancel_duplicate_queue_entries(apps, schema_editor):
     """Keep one active row per (queue, patient, process_type); cancel extras.
 
-    Historical local/prod data can have several non-cancelled STANDARD entries
-    for the same patient in one DailyQueue. The unique constraint cannot be
-    created until those extras are out of the partial index.
+    KEEP prefers submitted intake / completed / paper / document over empty
+    WAITING (reimport). Two clinical rows in one group abort the migration.
+    Paper authorizations on cancelled extras are deleted (same as revoke).
+    Reverse is noop: CANCELLED is not restored.
     """
-    QueueEntry = apps.get_model("reception", "QueueEntry")
+    from apps.reception.queue_duplicate_resolution import cancel_extra_queue_entries
+
     db_alias = schema_editor.connection.alias
-    now = timezone.now()
-    groups = (
-        QueueEntry.objects.using(db_alias)
-        .exclude(entry_status="CANCELLED")
-        .values("daily_queue_id", "patient_id", "process_type")
-        .annotate(n=Count("id"))
-        .filter(n__gt=1)
+    cancel_extra_queue_entries(
+        QueueEntry=apps.get_model("reception", "QueueEntry"),
+        PatientIntakeForm=apps.get_model("intake", "PatientIntakeForm"),
+        PaperIntakeAuthorization=apps.get_model("medical", "PaperIntakeAuthorization"),
+        MedicalDocument=apps.get_model("medical", "MedicalDocument"),
+        PatientFormSession=apps.get_model("reception", "PatientFormSession"),
+        db_alias=db_alias,
     )
-    to_cancel: list = []
-    for group in groups:
-        rows = list(
-            QueueEntry.objects.using(db_alias)
-            .filter(
-                daily_queue_id=group["daily_queue_id"],
-                patient_id=group["patient_id"],
-                process_type=group["process_type"],
-            )
-            .exclude(entry_status="CANCELLED")
-            .only("id", "entry_status", "created_at")
-        )
-        rows.sort(
-            key=lambda row: (
-                -_STATUS_RANK.get(row.entry_status, 0),
-                row.created_at,
-                str(row.pk),
-            )
-        )
-        for extra in rows[1:]:
-            extra.entry_status = "CANCELLED"
-            extra.updated_at = now
-            to_cancel.append(extra)
-    if to_cancel:
-        QueueEntry.objects.using(db_alias).bulk_update(
-            to_cancel, ["entry_status", "updated_at"]
-        )
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ("reception", "0044_queueentry_ausfallhonorar"),
+        ("intake", "0028_patientintakeform_json_blank"),
+        ("medical", "0023_medicaldocument_edit_session_fields"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

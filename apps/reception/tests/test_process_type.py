@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.test import Client, RequestFactory, TestCase
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -415,7 +415,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
     def test_standard_context_includes_standard_catalog_not_telederm_only(
         self,
     ) -> None:
-        intake = self._intake_for(ProcessType.STANDARD)
+        intake = self._intake_for(ProcessType.STANDARD.value)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         codes = {c["code"] for c in ctx["consents"]}
         self.assertIn("PT_STANDARD_ONLY", codes)
@@ -425,7 +425,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertEqual(ctx["process_type"], ProcessType.STANDARD)
 
     def test_telederm_context_excludes_standard_only_catalog(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM)
+        intake = self._intake_for(ProcessType.TELEDERM.value)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         codes = {c["code"] for c in ctx["consents"]}
         self.assertNotIn("PT_STANDARD_ONLY", codes)
@@ -435,7 +435,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertEqual(ctx["process_type"], ProcessType.TELEDERM)
 
     def test_get_and_submit_use_the_same_consent_filter(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM)
+        intake = self._intake_for(ProcessType.TELEDERM.value)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         required_from_get = {
             c["consent_definition_id"] for c in ctx["consents"] if c["is_required"]
@@ -455,7 +455,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertNotIn(str(self.standard_only.id), required_from_get)
 
     def test_telederm_submit_does_not_require_standard_only_consent(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM)
+        intake = self._intake_for(ProcessType.TELEDERM.value)
         PatientIntakeConsent.objects.create(
             intake_form=intake,
             consent_definition=self.both,
@@ -475,7 +475,77 @@ class IntakeProcessTypeCatalogTests(TestCase):
             question_definition=self.question_a,
             process_type=ProcessType.TELEDERM,
         )
-        intake = self._intake_for(ProcessType.STANDARD)
+        intake = self._intake_for(ProcessType.STANDARD.value)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         question_codes = {q["question_code"] for q in ctx["anamnesis_questions"]}
         self.assertIn("PT_Q_A", question_codes)
+
+
+class QueueDuplicateResolutionTests(SimpleTestCase):
+    def _row(self, **kwargs):
+        from uuid import uuid4
+
+        from apps.reception.queue_duplicate_resolution import QueueDuplicateCandidate
+
+        defaults = {
+            "id": uuid4(),
+            "entry_status": "WAITING",
+            "created_at": timezone.now(),
+            "has_submitted_or_reopened_intake": False,
+            "has_intake_form": False,
+            "has_paper_authorization": False,
+            "has_medical_document": False,
+            "has_form_session": False,
+        }
+        defaults.update(kwargs)
+        return QueueDuplicateCandidate(**defaults)
+
+    def test_empty_reimport_loses_to_submitted_intake(self) -> None:
+        from datetime import timedelta
+
+        from apps.reception.queue_duplicate_resolution import pick_keep_candidate
+
+        older_empty = self._row(created_at=timezone.now() - timedelta(days=30))
+        newer_with_form = self._row(
+            has_submitted_or_reopened_intake=True,
+            has_intake_form=True,
+        )
+        keep = pick_keep_candidate([older_empty, newer_with_form])
+        self.assertEqual(keep.id, newer_with_form.id)
+
+    def test_two_clinical_rows_are_ambiguous(self) -> None:
+        from apps.reception.queue_duplicate_resolution import (
+            AmbiguousQueueDuplicates,
+            pick_keep_candidate,
+        )
+
+        digital = self._row(entry_status="PATIENT_COMPLETED")
+        paper = self._row(entry_status="PAPER_INTAKE_COMPLETED")
+        with self.assertRaises(AmbiguousQueueDuplicates):
+            pick_keep_candidate([digital, paper])
+
+    def test_two_empty_waiting_keeps_older(self) -> None:
+        from datetime import timedelta
+
+        from apps.reception.queue_duplicate_resolution import pick_keep_candidate
+
+        older = self._row(created_at=timezone.now() - timedelta(days=10))
+        newer = self._row(created_at=timezone.now())
+        keep = pick_keep_candidate([newer, older])
+        self.assertEqual(keep.id, older.id)
+
+    def test_paper_auth_waiting_beats_empty_waiting(self) -> None:
+        from apps.reception.queue_duplicate_resolution import pick_keep_candidate
+
+        empty = self._row()
+        paper = self._row(has_paper_authorization=True)
+        keep = pick_keep_candidate([empty, paper])
+        self.assertEqual(keep.id, paper.id)
+
+    def test_patient_completed_beats_waiting(self) -> None:
+        from apps.reception.queue_duplicate_resolution import pick_keep_candidate
+
+        waiting = self._row()
+        done = self._row(entry_status="PATIENT_COMPLETED")
+        keep = pick_keep_candidate([waiting, done])
+        self.assertEqual(keep.id, done.id)

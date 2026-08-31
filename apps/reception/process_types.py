@@ -24,4 +24,4 @@ def coerce_process_type(value: str | None) -> str:
     """Return a valid process type; unknown or empty → STANDARD (tablet fallback)."""
     if value in ProcessType.values:
         return str(value)
-    return ProcessType.STANDARD
+    return ProcessType.STANDARD.value
