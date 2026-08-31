@@ -124,6 +124,16 @@
     "en": "Position",
     "pl": "Pozycja"
   },
+  "waiting_room.staff.process_type_standard": {
+    "de": "Standard",
+    "en": "Standard",
+    "pl": "Standard"
+  },
+  "waiting_room.staff.process_type_telederm": {
+    "de": "Teledermatologie",
+    "en": "Teledermatology",
+    "pl": "Teledermatologia"
+  },
   "waiting_room.staff.queue_entries_title": {
     "de": "Patienten in der Warteschlange",
     "en": "Patients in queue",

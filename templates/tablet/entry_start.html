@@ -2,7 +2,7 @@
 {% block title %}{{ staff_ui.entry_start_title }}{% endblock %}
 {% block content %}
   <p class="back"><a class="btn secondary" href="{% url 'tablet:queue_entries' entry.daily_queue_id %}">{{ staff_ui.back_to_patients }}</a></p>
-  <h1>{{ staff_ui.patient_label }} {{ entry.patient.last_name }} {{ entry.patient.first_name }}</h1>
+  <h1>{{ staff_ui.patient_label }} {{ entry.patient.last_name }} {{ entry.patient.first_name }} {% include "tablet/includes/process_type_badge.html" with process_type=entry.process_type %}</h1>
   <p>{{ staff_ui.position_label }} {{ entry.position_no }}, {{ staff_ui.status_label }} {{ entry.get_entry_status_display }}</p>
   <form method="post" action="">
     {% csrf_token %}

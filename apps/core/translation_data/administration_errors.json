@@ -48,5 +48,15 @@
     "de": "Voreinstellung {preset_no}: ungültiges Malignitätsrisiko „{value}“. Zulässig: {allowed}.",
     "en": "Preset {preset_no}: invalid malignancy_risk '{value}'. Allowed: {allowed}.",
     "pl": "Preset {preset_no}: niedozwolone ryzyko złośliwości „{value}”. Dozwolone: {allowed}."
+  },
+  "administration.error_process_type_immutable": {
+    "de": "Der Prozesstyp kann nach dem Anlegen nicht geändert werden.",
+    "en": "Process type cannot be changed after creation.",
+    "pl": "Typ procesu nie może być zmieniony po utworzeniu."
+  },
+  "administration.error_definition_requires_process": {
+    "de": "Mindestens ein Prozesstyp ist erforderlich.",
+    "en": "At least one process type is required.",
+    "pl": "Wymagany jest co najmniej jeden typ procesu."
   }
 }

@@ -42,6 +42,7 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.services import (
+    create_queue_entry,
     staff_user_may_set_ausfallhonorar,
     update_queue_entry,
 )
@@ -545,6 +546,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
         "position_no",
         "daily_queue",
         "patient",
+        "process_type",
         "entry_status",
         "ausfallhonorar",
         "visit_external_id",
@@ -554,6 +556,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
     list_display_links = ("position_no",)
     list_filter = (
         "ausfallhonorar",
+        "process_type",
         "entry_status",
         "daily_queue__queue_date",
         "daily_queue__clinic_site",
@@ -577,11 +580,21 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
         _initial_created_by_user(request, form, bool(change))
         return form
 
+    def get_exclude(self, request, obj=None):
+        exclude = list(super().get_exclude(request, obj) or [])
+        if "visit_external_id" not in exclude:
+            exclude.append("visit_external_id")
+        if obj is None:
+            exclude.append("position_no")
+        return exclude
+
     def get_readonly_fields(self, request, obj=None):
         readonly = list(super().get_readonly_fields(request, obj))
         if not staff_user_may_set_ausfallhonorar(request.user):
             if "ausfallhonorar" not in readonly:
                 readonly.append("ausfallhonorar")
+        if obj is not None and "process_type" not in readonly:
+            readonly.append("process_type")
         return readonly
 
     def get_actions(self, request):
@@ -611,7 +624,34 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                 obj.ausfallhonorar = False
                 obj.ausfallhonorar_set_at = None
                 obj.ausfallhonorar_set_by = None
-                super().save_model(request, obj, form, change)
+                try:
+                    created = create_queue_entry(
+                        daily_queue_id=obj.daily_queue_id,
+                        patient_id=obj.patient_id,
+                        created_by_user_id=obj.created_by_user_id,
+                        appointment_time=obj.appointment_time,
+                        notes=obj.notes,
+                        process_type=obj.process_type,
+                    )
+                except DomainError as exc:
+                    self.message_user(
+                        request,
+                        resolve_other_message(
+                            request,
+                            exc.api_message_key or "",
+                            str(exc),
+                            **(exc.api_message_params or {}),
+                        ),
+                        level=messages.ERROR,
+                    )
+                    raise
+                obj.pk = created.pk
+                obj.id = created.id
+                obj.position_no = created.position_no
+                obj.entry_status = created.entry_status
+                obj.process_type = created.process_type
+                obj.created_at = created.created_at
+                obj.updated_at = created.updated_at
                 if flag_changed and desired_flag:
                     self._apply_ausfallhonorar(request, obj.id, True)
                 return

@@ -10,6 +10,10 @@ from django.db import models
 
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.name_normalize import compute_incoming_pdf_name_keys
+from apps.reception.process_types import (
+    QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
+    ProcessType,
+)
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -569,6 +573,14 @@ class QueueEntry(models.Model):
             "administration.field_entry_status", "Entry status"
         ),
     )
+    process_type = models.CharField(
+        max_length=20,
+        choices=ProcessType.choices,
+        default=ProcessType.STANDARD,
+        verbose_name=db_gettext_lazy(
+            "administration.field_process_type", "Process type"
+        ),
+    )
     position_no = models.IntegerField(
         verbose_name=db_gettext_lazy("administration.field_position_no", "Position no")
     )
@@ -700,7 +712,34 @@ class QueueEntry(models.Model):
                 condition=Q(visit_external_id__isnull=False),
                 name="queue_entry_visit_external_unique",
             ),
+            models.UniqueConstraint(
+                fields=["daily_queue", "patient", "process_type"],
+                condition=~Q(entry_status=QueueEntryStatus.CANCELLED),
+                name=QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
+            ),
         ]
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if not self._state.adding and (
+            update_fields is None or "process_type" in update_fields
+        ):
+            previous = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("process_type", flat=True)
+                .first()
+            )
+            if previous is not None and previous != self.process_type:
+                raise ValidationError(
+                    {
+                        "process_type": db_gettext_lazy(
+                            "administration.error_process_type_immutable",
+                            "Process type cannot be changed after creation.",
+                        )
+                    }
+                )
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return format_administration_message(

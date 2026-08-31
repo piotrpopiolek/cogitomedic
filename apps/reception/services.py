@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
@@ -24,6 +24,10 @@ from apps.reception.models import (
     QueueSource,
     QueueStatus,
     TabletDevice,
+)
+from apps.reception.process_types import (
+    QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
+    ProcessType,
 )
 from apps.users.models import StaffUser
 
@@ -574,6 +578,38 @@ def update_queue_entry(
     return entry
 
 
+def parse_process_type(value: str | None) -> str:
+    """Validate caller-supplied process_type; empty → STANDARD."""
+    if value is None or str(value).strip() == "":
+        return ProcessType.STANDARD
+    normalized = str(value).strip()
+    if normalized not in ProcessType.values:
+        raise DomainError(
+            domain_message("other.domain.invalid_process_type", value=normalized),
+            api_message_key="other.domain.invalid_process_type",
+            api_message_params={"value": normalized},
+        )
+    return normalized
+
+
+def active_queue_entry_for_process_exists(
+    *,
+    daily_queue_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    process_type: str,
+) -> bool:
+    """True if a non-cancelled entry of this process already exists in the queue."""
+    return (
+        QueueEntry.objects.filter(
+            daily_queue_id=daily_queue_id,
+            patient_id=patient_id,
+            process_type=process_type,
+        )
+        .exclude(entry_status=QueueEntryStatus.CANCELLED)
+        .exists()
+    )
+
+
 @transaction.atomic
 def create_queue_entry(
     *,
@@ -583,13 +619,29 @@ def create_queue_entry(
     appointment_time: timezone.datetime | None = None,
     visit_external_id: str | None = None,
     notes: str | None = None,
+    process_type: str | None = None,
 ) -> QueueEntry:
     """Create queue entry and auto-assign next position for the queue."""
+    resolved_process_type = parse_process_type(process_type)
     daily_queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     if daily_queue.status != QueueStatus.OPEN:
         raise StateTransitionError(
             domain_message("other.domain.queue_closed_cannot_add_patient"),
             api_message_key="other.domain.queue_closed_cannot_add_patient",
+        )
+
+    if active_queue_entry_for_process_exists(
+        daily_queue_id=daily_queue_id,
+        patient_id=patient_id,
+        process_type=resolved_process_type,
+    ):
+        raise DomainError(
+            domain_message(
+                "other.domain.queue_entry_process_type_exists",
+                process_type=resolved_process_type,
+            ),
+            api_message_key="other.domain.queue_entry_process_type_exists",
+            api_message_params={"process_type": resolved_process_type},
         )
 
     next_position = (
@@ -600,15 +652,28 @@ def create_queue_entry(
         or 0
     ) + 1
 
-    return QueueEntry.objects.create(
-        daily_queue_id=daily_queue_id,
-        patient_id=patient_id,
-        created_by_user_id=created_by_user_id,
-        position_no=next_position,
-        appointment_time=appointment_time,
-        visit_external_id=visit_external_id,
-        notes=notes,
-    )
+    try:
+        return QueueEntry.objects.create(
+            daily_queue_id=daily_queue_id,
+            patient_id=patient_id,
+            created_by_user_id=created_by_user_id,
+            position_no=next_position,
+            appointment_time=appointment_time,
+            visit_external_id=visit_external_id,
+            notes=notes,
+            process_type=resolved_process_type,
+        )
+    except IntegrityError as exc:
+        if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
+            raise DomainError(
+                domain_message(
+                    "other.domain.queue_entry_process_type_exists",
+                    process_type=resolved_process_type,
+                ),
+                api_message_key="other.domain.queue_entry_process_type_exists",
+                api_message_params={"process_type": resolved_process_type},
+            ) from exc
+        raise
 
 
 @transaction.atomic

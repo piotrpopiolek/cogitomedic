@@ -9,7 +9,7 @@
       {% for e in entries %}
         <li>
           <a class="btn" href="{% url 'tablet:entry_start' e.id %}">
-            {{ e.position_no }}. {{ e.patient.last_name }} {{ e.patient.first_name }}{% if e.appointment_time %} – {{ e.appointment_time|time:"H:i" }}{% endif %} ({{ e.get_entry_status_display }})
+            {{ e.position_no }}. {{ e.patient.last_name }} {{ e.patient.first_name }} {% include "tablet/includes/process_type_badge.html" with process_type=e.process_type %}{% if e.appointment_time %} – {{ e.appointment_time|time:"H:i" }}{% endif %} ({{ e.get_entry_status_display }})
           </a>
         </li>
       {% endfor %}

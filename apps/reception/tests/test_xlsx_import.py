@@ -27,6 +27,7 @@ from apps.reception.xlsx_import import (
     _sync_patient_address_from_import_row,
     _title_case_name,
     _validate_headers,
+    map_xlsx_process_type_cell,
 )
 
 # =================================================================
@@ -79,6 +80,47 @@ class FindHeaderIndicesTests(SimpleTestCase):
                 row = ["Vorname", "Nachname", header]
                 result = _find_header_indices(row)
                 self.assertEqual(result["city"], 2)
+
+    def test_process_type_header_exact_terminart(self) -> None:
+        row = ["Vorname", "Nachname", "Terminart", "Telefon", "Email"]
+        result = _find_header_indices(row)
+        self.assertEqual(result["process_type"], 2)
+
+    def test_process_type_header_does_not_match_substring(self) -> None:
+        row = ["Vorname", "Nachname", "Kommentar", "Telefon", "Email"]
+        result = _find_header_indices(row)
+        self.assertNotIn("process_type", result)
+
+
+class MapXlsxProcessTypeCellTests(SimpleTestCase):
+    def test_empty_is_standard_fallback(self) -> None:
+        process_type, fallback = map_xlsx_process_type_cell("")
+        self.assertEqual(process_type, "STANDARD")
+        self.assertTrue(fallback)
+
+    def test_explicit_codes(self) -> None:
+        self.assertEqual(map_xlsx_process_type_cell("STANDARD"), ("STANDARD", False))
+        self.assertEqual(map_xlsx_process_type_cell("TELEDERM"), ("TELEDERM", False))
+
+    def test_letter_aliases_are_not_process_types(self) -> None:
+        process_type, fallback = map_xlsx_process_type_cell("A")
+        self.assertEqual(process_type, "STANDARD")
+        self.assertTrue(fallback)
+        process_type, fallback = map_xlsx_process_type_cell("B")
+        self.assertEqual(process_type, "STANDARD")
+        self.assertTrue(fallback)
+
+    def test_example_telederm_string(self) -> None:
+        process_type, fallback = map_xlsx_process_type_cell(
+            "Hautarzt-Videosprechstunde mit professioneller Bilddokumentation"
+        )
+        self.assertEqual(process_type, "TELEDERM")
+        self.assertFalse(fallback)
+
+    def test_unknown_falls_back_to_standard(self) -> None:
+        process_type, fallback = map_xlsx_process_type_cell("Something else")
+        self.assertEqual(process_type, "STANDARD")
+        self.assertTrue(fallback)
 
 
 class ParseDateTests(SimpleTestCase):

@@ -66,6 +66,7 @@ def _serialize_entry(e: QueueEntry) -> dict:
         "daily_queue_id": str(e.daily_queue_id),
         "patient_id": str(e.patient_id),
         "entry_status": e.entry_status,
+        "process_type": e.process_type,
         "position_no": e.position_no,
         "visit_external_id": e.visit_external_id,
         "appointment_time": (
@@ -285,10 +286,13 @@ def daily_queue_entries_view(
             appointment_time=body.appointment_time,
             visit_external_id=body.visit_external_id,
             notes=body.notes,
+            process_type=body.process_type,
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_or_patient_not_found", status=404)
     except StateTransitionError as exc:
+        return json_domain_error(exc, status=409)
+    except DomainError as exc:
         return json_domain_error(exc, status=409)
     except IntegrityError:
         return json_error("other.api.duplicate_visit_external_id", status=409)

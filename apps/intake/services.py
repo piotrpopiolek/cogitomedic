@@ -31,6 +31,7 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
+from apps.reception.process_types import coerce_process_type
 from apps.reception.services import issue_tablet_session_latest_wins
 from apps.core.translation_service import get_form_ui_strings
 
@@ -349,8 +350,13 @@ def _build_intake_snapshot_payload(
     )
     questions = (
         AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(timezone.localdate(now)), code__in=question_codes
+            _effective_question_filter(
+                timezone.localdate(now),
+                coerce_process_type(intake_form.queue_entry.process_type),
+            ),
+            code__in=question_codes,
         )
+        .distinct()
         .prefetch_related(active_options_prefetch)
         .order_by("-version")
     )
@@ -530,19 +536,21 @@ def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
     return answered_codes
 
 
-def _effective_consent_filter(today: date):
+def _effective_consent_filter(today: date, process_type: str):
     return (
         Q(is_active=True)
         & Q(effective_from__lte=today)
         & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+        & Q(process_links__process_type=process_type)
     )
 
 
-def _effective_question_filter(today: date):
+def _effective_question_filter(today: date, process_type: str):
     return (
         Q(is_active=True)
         & Q(effective_from__lte=today)
         & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+        & Q(process_links__process_type=process_type)
     )
 
 
@@ -593,10 +601,12 @@ def get_intake_form_context(
     session = intake_form.session
     queue_entry = intake_form.queue_entry
     patient = queue_entry.patient
+    process_type = coerce_process_type(queue_entry.process_type)
 
-    # Consent definitions effective today; then merge with intake form's consent choices
+    # Consent definitions effective today for this process; then merge with choices
     consent_defs = (
-        ConsentDefinition.objects.filter(_effective_consent_filter(today))
+        ConsentDefinition.objects.filter(_effective_consent_filter(today, process_type))
+        .distinct()
         .order_by("display_order", "code")
         .values(
             "id",
@@ -693,7 +703,10 @@ def get_intake_form_context(
     )
     # Anamnesis questions effective today with options; attach current answer from payload
     question_defs = (
-        AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(today))
+        AnamnesisQuestionDefinition.objects.filter(
+            _effective_question_filter(today, process_type)
+        )
+        .distinct()
         .prefetch_related(active_options_prefetch)
         .order_by("display_order", "code")
     )
@@ -759,6 +772,7 @@ def get_intake_form_context(
     return {
         "intake_form_id": str(intake_form.id),
         "queue_entry_id": str(queue_entry.id),
+        "process_type": process_type,
         "form_status": intake_form.form_status,
         "form_locale": session.form_locale,
         "anamnesis_schema_version": intake_form.anamnesis_schema_version,
@@ -826,13 +840,6 @@ def save_intake_consents(
     Raises ConsentNotActiveError if any consent definition is not active for today.
     """
     today = timezone.localdate()
-    effective_defs = list(
-        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values(
-            "id", "code"
-        )
-    )
-    effective_ids = {row["id"] for row in effective_defs}
-    consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
     now = timezone.now()
 
     intake_form = (
@@ -840,6 +847,14 @@ def save_intake_consents(
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
+    process_type = coerce_process_type(intake_form.queue_entry.process_type)
+    effective_defs = list(
+        ConsentDefinition.objects.filter(_effective_consent_filter(today, process_type))
+        .distinct()
+        .values("id", "code")
+    )
+    effective_ids = {row["id"] for row in effective_defs}
+    consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
     _assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
@@ -1146,10 +1161,13 @@ def submit_patient_intake_form(
         )
 
     today = timezone.localdate(now)
+    process_type = coerce_process_type(queue_entry.process_type)
     required_consent_ids = set(
         ConsentDefinition.objects.filter(
-            _effective_consent_filter(today), is_required=True
-        ).values_list("id", flat=True)
+            _effective_consent_filter(today, process_type), is_required=True
+        )
+        .distinct()
+        .values_list("id", flat=True)
     )
     accepted_required_consent_ids = set(
         PatientIntakeConsent.objects.filter(
@@ -1167,8 +1185,10 @@ def submit_patient_intake_form(
 
     required_question_codes = set(
         AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(today), is_required=True
-        ).values_list("code", flat=True)
+            _effective_question_filter(today, process_type), is_required=True
+        )
+        .distinct()
+        .values_list("code", flat=True)
     )
     answered_question_codes = _extract_answered_question_codes(
         intake_form.anamnesis_payload

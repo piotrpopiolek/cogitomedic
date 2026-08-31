@@ -32,7 +32,6 @@ from apps.reception.models import (
     Patient,
     PatientImportBatch,
     PatientImportError,
-    QueueEntry,
     QueueSource,
 )
 from apps.reception.phone_utils import normalize_phone_for_patient_storage
@@ -43,7 +42,9 @@ from apps.reception.patient_identity import (
     stale_anonymized_patient_blocks_phone,
     validate_patient_names_for_import,
 )
+from apps.reception.process_types import ProcessType
 from apps.reception.services import (
+    active_queue_entry_for_process_exists,
     create_daily_queue,
     create_or_update_patient_manual,
     create_queue_entry,
@@ -74,7 +75,11 @@ class XlsxImportErrorCode:
 
 
 # Re-export for tests and callers.
-__all__ = ["find_patient_for_import", "process_patient_xlsx_import_batch"]
+__all__ = [
+    "find_patient_for_import",
+    "map_xlsx_process_type_cell",
+    "process_patient_xlsx_import_batch",
+]
 
 
 # --- Header mapping: possible header labels (normalized) -> internal key ---
@@ -97,6 +102,26 @@ HEADER_ALIASES = {
     "postal_code": ["kod pocztowy", "postal_code", "postleitzahl", "plz", "zip"],
     "city": ["miasto", "city", "ort", "stadt", "wohnort", "locality"],
 }
+
+# Exact header match only (B4): substring matching would catch unrelated columns.
+PROCESS_TYPE_HEADER_EXACT = frozenset(
+    {
+        "terminart",
+        "typ procesu",
+        "process_type",
+        "process type",
+        "typ uslugi",
+        "typ usługi",
+        "leistungstyp",
+    }
+)
+
+# Closed v2 cell mapping. Additional Terminart strings need an explicit decision.
+_TELEDERM_CELL_VALUES = frozenset(
+    {
+        "hautarzt-videosprechstunde mit professioneller bilddokumentation",
+    }
+)
 
 
 def _format_xlsx_cell_text(value) -> str:
@@ -134,7 +159,18 @@ def _normalize_header_cell(cell_value: str | None) -> str:
 def _find_header_indices(row: list) -> dict[str, int]:
     """Map internal key -> column index (0-based). Row is list of cell values."""
     result: dict[str, int] = {}
+    used: set[int] = set()
     for idx, raw in enumerate(row):
+        normalized = _normalize_header_cell(raw)
+        if not normalized:
+            continue
+        if normalized in PROCESS_TYPE_HEADER_EXACT:
+            result["process_type"] = idx
+            used.add(idx)
+            break
+    for idx, raw in enumerate(row):
+        if idx in used:
+            continue
         normalized = _normalize_header_cell(raw)
         if not normalized:
             continue
@@ -145,6 +181,22 @@ def _find_header_indices(row: list) -> dict[str, int]:
                 result[key] = idx
                 break
     return result
+
+
+def map_xlsx_process_type_cell(raw: str | None) -> tuple[str, bool]:
+    """Map a v2 process-type cell to ProcessType.
+
+    Returns (process_type, used_fallback). Empty or unknown → STANDARD + fallback.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return ProcessType.STANDARD, True
+    key = " ".join(text.lower().split())
+    if key in _TELEDERM_CELL_VALUES or key == ProcessType.TELEDERM.lower():
+        return ProcessType.TELEDERM, False
+    if key == ProcessType.STANDARD.lower():
+        return ProcessType.STANDARD, False
+    return ProcessType.STANDARD, True
 
 
 GERMAN_MONTHS = {
@@ -356,6 +408,8 @@ class NormalizedRow:
     street: str | None = None
     postal_code: str | None = None
     city: str | None = None
+    process_type: str = ProcessType.STANDARD
+    process_type_fallback: bool = False
 
 
 def _normalize_row(
@@ -427,6 +481,13 @@ def _normalize_row(
         else None
     )
     city = _cell("city") or None
+    has_process_type_column = "process_type" in header_indices
+    if has_process_type_column:
+        process_type, process_type_fallback = map_xlsx_process_type_cell(
+            _cell("process_type")
+        )
+    else:
+        process_type, process_type_fallback = ProcessType.STANDARD, False
 
     return NormalizedRow(
         row_number=row_index,
@@ -439,6 +500,8 @@ def _normalize_row(
         street=street,
         postal_code=postal_code,
         city=city,
+        process_type=process_type,
+        process_type_fallback=process_type_fallback,
     )
 
 
@@ -492,6 +555,7 @@ def _audit_xlsx_import_finished(
     matched_rows: int,
     skipped_already_present_count: int,
     error_rows: int,
+    v2_process_type_fallback_count: int = 0,
     failure_reason: str | None = None,
 ) -> None:
     md: dict = {
@@ -501,6 +565,7 @@ def _audit_xlsx_import_finished(
         "matched_rows": matched_rows,
         "skipped_already_present_count": skipped_already_present_count,
         "error_rows": error_rows,
+        "v2_process_type_fallback_count": v2_process_type_fallback_count,
     }
     if failure_reason:
         md["failure_reason"] = failure_reason
@@ -578,8 +643,9 @@ def process_patient_xlsx_import_batch(
     inserted = 0
     matched = 0
     skipped_already_present = 0
+    v2_process_type_fallback = 0
     errors_count = 0
-    seen_identity: set[tuple[str, str, str, date]] = set()
+    seen_identity: set[tuple[str, str, str, date, str]] = set()
     header_indices: dict[str, int] = {}
     daily_queue_id: uuid.UUID | None = None
     queue_date: date | None = None
@@ -662,11 +728,14 @@ def process_patient_xlsx_import_batch(
                 )
                 continue
 
-            identity_key = patient_identity_key(
-                first_name=norm.first_name,
-                last_name=norm.last_name,
-                phone=norm.phone,
-                date_of_birth=norm.date_of_birth,
+            identity_key = (
+                *patient_identity_key(
+                    first_name=norm.first_name,
+                    last_name=norm.last_name,
+                    phone=norm.phone,
+                    date_of_birth=norm.date_of_birth,
+                ),
+                norm.process_type,
             )
             if identity_key in seen_identity:
                 errors_count += 1
@@ -688,6 +757,9 @@ def process_patient_xlsx_import_batch(
                 )
                 continue
             seen_identity.add(identity_key)
+
+            if norm.process_type_fallback:
+                v2_process_type_fallback += 1
 
             existing_active = find_patient_for_import(
                 first_name=norm.first_name,
@@ -773,10 +845,11 @@ def process_patient_xlsx_import_batch(
                 )
 
             try:
-                already_present = QueueEntry.objects.filter(
+                already_present = active_queue_entry_for_process_exists(
                     daily_queue_id=daily_queue_id,
                     patient_id=patient.id,
-                ).exists()
+                    process_type=norm.process_type,
+                )
                 if already_present:
                     skipped_already_present += 1
                     continue
@@ -788,6 +861,7 @@ def process_patient_xlsx_import_batch(
                     appointment_time=appointment_dt,
                     visit_external_id=None,
                     notes=None,
+                    process_type=norm.process_type,
                 )
                 if reused_existing:
                     matched += 1
@@ -866,6 +940,7 @@ def process_patient_xlsx_import_batch(
         matched_rows=matched,
         skipped_already_present_count=skipped_already_present,
         error_rows=errors_count,
+        v2_process_type_fallback_count=v2_process_type_fallback,
     )
     _try_record_import_batch_finished(
         batch,

@@ -23,6 +23,7 @@ from apps.reception.models import (
     QueueStatus,
     TabletDevice,
 )
+from apps.reception.process_types import ProcessType
 from apps.users.models import StaffUser
 
 
@@ -199,6 +200,64 @@ class TabletViewsSmokeTests(TestCase):
         self.assertContains(resp, "01.01.1990")
         self.assertContains(resp, "48500000001")
         self.assertContains(resp, "Bitte prüfen Sie Name, Geburtsdatum")
+
+    def test_queue_entries_show_process_type_badge(self):
+        self._login_tablet()
+        url = f"/tablet/queue/{self.queue.id}/"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "process-type-badge")
+        self.assertContains(resp, 'data-process-type="STANDARD"')
+        self.assertContains(resp, "Standard")
+
+    def test_telederm_form_uses_telederm_template_without_type_confirmation(self):
+        patient_b = Patient.objects.create(
+            first_name="Tele",
+            last_name="Derm",
+            date_of_birth=date(1991, 2, 2),
+            phone="+48500000002",
+            email="tele@example.com",
+        )
+        entry_b = QueueEntry.objects.create(
+            daily_queue=self.queue,
+            patient=patient_b,
+            entry_status=QueueEntryStatus.IN_PROGRESS,
+            position_no=2,
+            created_by_user=self.tablet_user,
+            process_type=ProcessType.TELEDERM,
+        )
+        sess = PatientFormSession.objects.create(
+            queue_entry=entry_b,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(hours=1),
+            created_by_user=self.tablet_user,
+        )
+        intake_b = PatientIntakeForm.objects.create(
+            queue_entry=entry_b,
+            session=sess,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
+        self._login_tablet()
+        start = self.client.get(f"/tablet/entry/{entry_b.id}/")
+        self.assertEqual(start.status_code, 200)
+        self.assertContains(start, "process-type-badge")
+        self.assertContains(start, 'data-process-type="TELEDERM"')
+        self.assertContains(start, "Teledermatologie")
+        start_en = self.client.get(f"/tablet/entry/{entry_b.id}/?locale=en")
+        self.assertContains(start_en, "Teledermatology")
+        form_resp = self.client.get(f"/tablet/form/{intake_b.id}/")
+        self.assertEqual(form_resp.status_code, 200)
+        self.assertTemplateUsed(form_resp, "tablet/form_telederm.html")
+        self.assertContains(form_resp, 'data-process-type="TELEDERM"')
+        self.assertContains(form_resp, "Teledermatologie")
+
+    def test_standard_form_keeps_form_html(self):
+        self._login_tablet()
+        resp = self.client.get(f"/tablet/form/{self.intake.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "tablet/form.html")
+        self.assertContains(resp, 'data-process-type="STANDARD"')
+        self.assertContains(resp, "Standard")
 
 
 class TabletViewsScopeAndEdgeTests(TestCase):

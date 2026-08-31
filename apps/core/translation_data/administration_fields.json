@@ -619,6 +619,11 @@
     "en": "Position no",
     "pl": "Pozycja (nr)"
   },
+  "administration.field_process_type": {
+    "de": "Prozesstyp",
+    "en": "Process type",
+    "pl": "Typ procesu"
+  },
   "administration.field_question_text_pl": {
     "de": "Fragentext (PL)",
     "en": "Question text (PL)",

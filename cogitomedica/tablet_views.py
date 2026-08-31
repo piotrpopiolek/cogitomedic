@@ -23,6 +23,7 @@ from apps.core.api_utils import (
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
+from apps.reception.process_types import ProcessType
 from apps.reception.services import (
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
@@ -312,4 +313,9 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
         if form_locale.startswith("en")
         else "pl" if form_locale.startswith("pl") else "de"
     )
-    return render(request, "tablet/form.html", context)
+    template_name = (
+        "tablet/form_telederm.html"
+        if context.get("process_type") == ProcessType.TELEDERM
+        else "tablet/form.html"
+    )
+    return render(request, template_name, context)

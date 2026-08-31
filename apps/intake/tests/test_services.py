@@ -138,8 +138,9 @@ class SubmitPatientIntakeFormTests(TestCase):
     def _accept_all_required_consents_effective_today(self) -> None:
         today = timezone.localdate()
         for cdef in ConsentDefinition.objects.filter(
-            _effective_consent_filter(today), is_required=True
-        ):
+            _effective_consent_filter(today, self.queue_entry.process_type),
+            is_required=True,
+        ).distinct():
             PatientIntakeConsent.objects.get_or_create(
                 intake_form=self.intake_form,
                 consent_definition=cdef,
@@ -150,7 +151,8 @@ class SubmitPatientIntakeFormTests(TestCase):
         today = timezone.localdate()
         required = list(
             AnamnesisQuestionDefinition.objects.filter(
-                _effective_question_filter(today), is_required=True
+                _effective_question_filter(today, self.queue_entry.process_type),
+                is_required=True,
             ).prefetch_related("options")
         )
         answers = list(self.intake_form.anamnesis_payload.get("answers", []))

@@ -13,7 +13,9 @@ from apps.core.translation_service import (
 from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
+    AnamnesisQuestionDefinitionProcess,
     ConsentDefinition,
+    ConsentDefinitionProcess,
     IntakeDocumentVersion,
     IntakeOutboxEvent,
     PatientIntakeConsent,
@@ -27,6 +29,18 @@ _MARKDOWN_HELP = (
     "Fett: **Text**, Kursiv: *Text*. "
     "Zentriert: -> Text <- (z.B. -> Unterschrift <-)."
 )
+
+
+class ConsentDefinitionProcessInline(admin.TabularInline):
+    model = ConsentDefinitionProcess
+    extra = 0
+    min_num = 1
+
+
+class AnamnesisQuestionDefinitionProcessInline(admin.TabularInline):
+    model = AnamnesisQuestionDefinitionProcess
+    extra = 0
+    min_num = 1
 
 
 @admin.register(ConsentDefinition)
@@ -48,6 +62,7 @@ class ConsentDefinitionAdmin(CogitomedicaModelAdmin):
     list_filter = ("is_required", "is_active")
     search_fields = ("code", "title_de", "title_en", "title_pl")
     ordering = ["display_order", "code", "version"]
+    inlines = (ConsentDefinitionProcessInline,)
     fieldsets = (
         (
             None,
@@ -102,6 +117,7 @@ class AnamnesisQuestionDefinitionAdmin(CogitomedicaModelAdmin):
     list_filter = ("answer_type", "is_required", "is_active")
     search_fields = ("code", "question_text_de", "question_text_en", "question_text_pl")
     ordering = ["-created_at"]
+    inlines = (AnamnesisQuestionDefinitionProcessInline,)
 
 
 @admin.register(AnamnesisOptionDefinition)

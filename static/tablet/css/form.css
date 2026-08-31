@@ -332,6 +332,19 @@ button:disabled {
   color: var(--cm-grey-900, #111827);
 }
 
+.process-type-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  border: 1px solid var(--cm-primary, #075255);
+  border-radius: 4px;
+  color: var(--cm-primary, #075255);
+}
+
 .tablet-patient-identity-details {
   display: grid;
   grid-template-columns: minmax(8rem, auto) 1fr;

@@ -4,11 +4,13 @@ import uuid
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
+from django.core.exceptions import ValidationError
 from django.db import models
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
 
 from apps.outbox.constants import outbox_max_retries_default
+from apps.reception.process_types import ProcessType
 
 
 class IntakeStatus(models.TextChoices):
@@ -67,7 +69,50 @@ class IntakeOutboxStatus(models.TextChoices):
     )
 
 
+def _attach_process_types(
+    *,
+    through_model: type[models.Model],
+    fk_name: str,
+    definition: models.Model,
+    process_types: list[str] | None,
+) -> None:
+    """Link catalog row to processes. None → STANDARD (test/legacy create)."""
+    values = [ProcessType.STANDARD] if process_types is None else list(process_types)
+    for process_type in values:
+        through_model.objects.get_or_create(
+            **{fk_name: definition, "process_type": process_type}
+        )
+
+
+class ConsentDefinitionManager(models.Manager):
+    def create(self, **kwargs):  # type: ignore[no-untyped-def]
+        process_types = kwargs.pop("process_types", None)
+        obj = super().create(**kwargs)
+        _attach_process_types(
+            through_model=ConsentDefinitionProcess,
+            fk_name="consent_definition",
+            definition=obj,
+            process_types=process_types,
+        )
+        return obj
+
+
+class AnamnesisQuestionDefinitionManager(models.Manager):
+    def create(self, **kwargs):  # type: ignore[no-untyped-def]
+        process_types = kwargs.pop("process_types", None)
+        obj = super().create(**kwargs)
+        _attach_process_types(
+            through_model=AnamnesisQuestionDefinitionProcess,
+            fk_name="question_definition",
+            definition=obj,
+            process_types=process_types,
+        )
+        return obj
+
+
 class ConsentDefinition(models.Model):
+    objects = ConsentDefinitionManager()
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(
         max_length=60, verbose_name=db_gettext_lazy("administration.field_code", "Code")
@@ -158,11 +203,64 @@ class ConsentDefinition(models.Model):
             models.Index(fields=["code", "is_active", "-effective_from"]),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+        if self.pk and self.is_active and not self.process_links.exists():
+            raise ValidationError(
+                {
+                    "process_links": db_gettext_lazy(
+                        "administration.error_definition_requires_process",
+                        "At least one process type is required.",
+                    )
+                }
+            )
+
     def __str__(self) -> str:
         return self.title_de or f"{self.code} (v{self.version})"
 
 
+class ConsentDefinitionProcess(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    consent_definition = models.ForeignKey(
+        ConsentDefinition,
+        on_delete=models.CASCADE,
+        related_name="process_links",
+        verbose_name=db_gettext_lazy(
+            "administration.model_consentdefinition", "Consent definition"
+        ),
+    )
+    process_type = models.CharField(
+        max_length=20,
+        choices=ProcessType.choices,
+        verbose_name=db_gettext_lazy(
+            "administration.field_process_type", "Process type"
+        ),
+    )
+
+    class Meta:
+        db_table = "consent_definition_process"
+        verbose_name = db_gettext_lazy(
+            "administration.model_consentdefinitionprocess",
+            "Consent definition process",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_consentdefinitionprocess_plural",
+            "Consent definition processes",
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["consent_definition", "process_type"],
+                name="consent_definition_process_unique",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.consent_definition_id} / {self.get_process_type_display()}"
+
+
 class AnamnesisQuestionDefinition(models.Model):
+    objects = AnamnesisQuestionDefinitionManager()
+
     class AnswerType(models.TextChoices):
         SINGLE_CHOICE = "SINGLE_CHOICE", db_gettext_lazy(
             "administration.choice_anamnesis_answer_single_choice",
@@ -268,8 +366,60 @@ class AnamnesisQuestionDefinition(models.Model):
             models.Index(fields=["code", "is_active", "-effective_from"]),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+        if self.pk and self.is_active and not self.process_links.exists():
+            raise ValidationError(
+                {
+                    "process_links": db_gettext_lazy(
+                        "administration.error_definition_requires_process",
+                        "At least one process type is required.",
+                    )
+                }
+            )
+
     def __str__(self) -> str:
         return self.question_text_de or f"{self.code} (v{self.version})"
+
+
+class AnamnesisQuestionDefinitionProcess(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    question_definition = models.ForeignKey(
+        AnamnesisQuestionDefinition,
+        on_delete=models.CASCADE,
+        related_name="process_links",
+        verbose_name=db_gettext_lazy(
+            "administration.model_anamnesisquestiondefinition",
+            "Anamnesis question definition",
+        ),
+    )
+    process_type = models.CharField(
+        max_length=20,
+        choices=ProcessType.choices,
+        verbose_name=db_gettext_lazy(
+            "administration.field_process_type", "Process type"
+        ),
+    )
+
+    class Meta:
+        db_table = "anamnesis_question_definition_process"
+        verbose_name = db_gettext_lazy(
+            "administration.model_anamnesisquestiondefinitionprocess",
+            "Anamnesis question process",
+        )
+        verbose_name_plural = db_gettext_lazy(
+            "administration.model_anamnesisquestiondefinitionprocess_plural",
+            "Anamnesis question processes",
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["question_definition", "process_type"],
+                name="anamnesis_question_process_unique",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.question_definition_id} / {self.get_process_type_display()}"
 
 
 class AnamnesisOptionDefinition(models.Model):

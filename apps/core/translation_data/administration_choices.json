@@ -338,5 +338,15 @@
     "de": "Polnisch (Polen)",
     "en": "Polish (Poland)",
     "pl": "Polski (Polska)"
+  },
+  "administration.choice_process_type_standard": {
+    "de": "Standard",
+    "en": "Standard",
+    "pl": "Standard"
+  },
+  "administration.choice_process_type_telederm": {
+    "de": "Teledermatologie",
+    "en": "Teledermatology",
+    "pl": "Teledermatologia"
   }
 }

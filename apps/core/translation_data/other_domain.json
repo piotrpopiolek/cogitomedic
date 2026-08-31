@@ -44,6 +44,16 @@
     "en": "Cannot add patient to closed queue.",
     "pl": "Nie można dodać pacjenta do zamkniętej kolejki."
   },
+  "other.domain.queue_entry_process_type_exists": {
+    "de": "Für diesen Patienten gibt es in dieser Warteschlange bereits einen Eintrag vom Typ {process_type}.",
+    "en": "This patient already has a {process_type} entry in this queue.",
+    "pl": "Ten pacjent ma już wpis typu {process_type} w tej kolejce."
+  },
+  "other.domain.invalid_process_type": {
+    "de": "Ungültiger Prozesstyp: {value}.",
+    "en": "Invalid process type: {value}.",
+    "pl": "Nieprawidłowy typ procesu: {value}."
+  },
   "other.domain.expires_in_minutes_positive": {
     "de": "expires_in_minutes muss positiv sein.",
     "en": "expires_in_minutes must be positive.",

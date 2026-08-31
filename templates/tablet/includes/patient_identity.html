@@ -2,6 +2,7 @@
   <p class="tablet-patient-identity-eyebrow">{{ ui.patient_identity_eyebrow }}</p>
   <h2 id="patient-identity-heading" class="tablet-patient-identity-name">
     {{ patient.last_name }}, {{ patient.first_name }}
+    {% include "tablet/includes/process_type_badge.html" with process_type=process_type %}
   </h2>
   <dl class="tablet-patient-identity-details">
     <div>
