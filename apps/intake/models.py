@@ -103,9 +103,17 @@ def _clean_active_definition_requires_process(definition: models.Model) -> None:
         )
 
 
+def _pop_process_types(kwargs: dict, defaults: dict | None = None) -> tuple:
+    """Pull non-field ``process_types`` off manager create/get_or_create kwargs."""
+    merged = dict(defaults or {})
+    process_types = merged.pop("process_types", None)
+    process_types = kwargs.pop("process_types", process_types)
+    return process_types, merged
+
+
 class ConsentDefinitionManager(models.Manager):
     def create(self, **kwargs):  # type: ignore[no-untyped-def]
-        process_types = kwargs.pop("process_types", None)
+        process_types, _ = _pop_process_types(kwargs)
         obj = super().create(**kwargs)
         _attach_process_types(
             through_model=ConsentDefinitionProcess,
@@ -115,10 +123,22 @@ class ConsentDefinitionManager(models.Manager):
         )
         return obj
 
+    def get_or_create(self, defaults=None, **kwargs):  # type: ignore[no-untyped-def]
+        process_types, defaults = _pop_process_types(kwargs, defaults)
+        obj, created = super().get_or_create(defaults=defaults or None, **kwargs)
+        if created:
+            _attach_process_types(
+                through_model=ConsentDefinitionProcess,
+                fk_name="consent_definition",
+                definition=obj,
+                process_types=process_types,
+            )
+        return obj, created
+
 
 class AnamnesisQuestionDefinitionManager(models.Manager):
     def create(self, **kwargs):  # type: ignore[no-untyped-def]
-        process_types = kwargs.pop("process_types", None)
+        process_types, _ = _pop_process_types(kwargs)
         obj = super().create(**kwargs)
         _attach_process_types(
             through_model=AnamnesisQuestionDefinitionProcess,
@@ -127,6 +147,18 @@ class AnamnesisQuestionDefinitionManager(models.Manager):
             process_types=process_types,
         )
         return obj
+
+    def get_or_create(self, defaults=None, **kwargs):  # type: ignore[no-untyped-def]
+        process_types, defaults = _pop_process_types(kwargs, defaults)
+        obj, created = super().get_or_create(defaults=defaults or None, **kwargs)
+        if created:
+            _attach_process_types(
+                through_model=AnamnesisQuestionDefinitionProcess,
+                fk_name="question_definition",
+                definition=obj,
+                process_types=process_types,
+            )
+        return obj, created
 
 
 class ConsentDefinition(models.Model):

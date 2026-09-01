@@ -36,7 +36,11 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
-from apps.reception.process_types import ProcessType
+from apps.reception.process_types import (
+    PROCESS_TYPE_STANDARD,
+    PROCESS_TYPE_TELEDERM,
+    ProcessType,
+)
 from apps.reception.services import create_queue_entry
 from apps.users.models import StaffUser
 
@@ -415,7 +419,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
     def test_standard_context_includes_standard_catalog_not_telederm_only(
         self,
     ) -> None:
-        intake = self._intake_for(ProcessType.STANDARD.value)
+        intake = self._intake_for(PROCESS_TYPE_STANDARD)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         codes = {c["code"] for c in ctx["consents"]}
         self.assertIn("PT_STANDARD_ONLY", codes)
@@ -425,7 +429,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertEqual(ctx["process_type"], ProcessType.STANDARD)
 
     def test_telederm_context_excludes_standard_only_catalog(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM.value)
+        intake = self._intake_for(PROCESS_TYPE_TELEDERM)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         codes = {c["code"] for c in ctx["consents"]}
         self.assertNotIn("PT_STANDARD_ONLY", codes)
@@ -435,7 +439,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertEqual(ctx["process_type"], ProcessType.TELEDERM)
 
     def test_get_and_submit_use_the_same_consent_filter(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM.value)
+        intake = self._intake_for(PROCESS_TYPE_TELEDERM)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         required_from_get = {
             c["consent_definition_id"] for c in ctx["consents"] if c["is_required"]
@@ -455,7 +459,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
         self.assertNotIn(str(self.standard_only.id), required_from_get)
 
     def test_telederm_submit_does_not_require_standard_only_consent(self) -> None:
-        intake = self._intake_for(ProcessType.TELEDERM.value)
+        intake = self._intake_for(PROCESS_TYPE_TELEDERM)
         PatientIntakeConsent.objects.create(
             intake_form=intake,
             consent_definition=self.both,
@@ -475,7 +479,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
             question_definition=self.question_a,
             process_type=ProcessType.TELEDERM,
         )
-        intake = self._intake_for(ProcessType.STANDARD.value)
+        intake = self._intake_for(PROCESS_TYPE_STANDARD)
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         question_codes = {q["question_code"] for q in ctx["anamnesis_questions"]}
         self.assertIn("PT_Q_A", question_codes)

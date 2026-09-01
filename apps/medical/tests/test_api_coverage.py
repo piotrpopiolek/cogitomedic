@@ -331,9 +331,16 @@ class Tests(TestCase):
 
     def test_documents_post_intake_not_submitted_returns_400(self):
         """create_or_get rejects intake that is not SUBMITTED (clinical safety)."""
+        other = Patient.objects.create(
+            first_name="Inprog",
+            last_name="Intake",
+            date_of_birth=date(1991, 2, 2),
+            phone="+48500100211",
+            email="inprog.intake@example.com",
+        )
         qe = QueueEntry.objects.create(
             daily_queue=self.medical_doc.queue_entry.daily_queue,
-            patient=self.medical_doc.queue_entry.patient,
+            patient=other,
             entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=99,
             created_by_user=self.reception,
@@ -366,9 +373,16 @@ class Tests(TestCase):
     def test_documents_post_intake_wrong_queue_entry_returns_400(self):
         """Intake form must belong to the queue entry in the request."""
         dq = self.medical_doc.queue_entry.daily_queue
+        other = Patient.objects.create(
+            first_name="Wrong",
+            last_name="IntakeQe",
+            date_of_birth=date(1991, 3, 3),
+            phone="+48500100212",
+            email="wrong.intakeqe@example.com",
+        )
         other_qe = QueueEntry.objects.create(
             daily_queue=dq,
-            patient=self.medical_doc.queue_entry.patient,
+            patient=other,
             entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=98,
             created_by_user=self.reception,

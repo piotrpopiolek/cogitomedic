@@ -158,12 +158,25 @@ class ServicesCoverageBase(TestCase):
         )
         return current + 1
 
+    def _make_isolated_patient(self) -> Patient:
+        token = uuid.uuid4().hex[:8]
+        digits = f"{int(token, 16):010d}"[-10:]
+        return Patient.objects.create(
+            first_name="Iso",
+            last_name=token,
+            date_of_birth=date(1984, 4, 4),
+            phone=f"+489{digits[:8]}",
+            email=f"iso.{token}@example.com",
+        )
+
     def _make_queue_entry(self, **overrides):
+        if "patient" not in overrides:
+            overrides["patient"] = self._make_isolated_patient()
+        if "position_no" not in overrides:
+            overrides["position_no"] = self._next_queue_position_no()
         defaults = dict(
             daily_queue=self.daily_queue,
-            patient=self.patient,
             entry_status=QueueEntryStatus.WAITING,
-            position_no=99,
             created_by_user=self.doctor,
         )
         defaults.update(overrides)
@@ -197,9 +210,16 @@ class ServicesCoverageBase(TestCase):
 # ------------------------------------------------------------------
 class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
     def test_intake_form_wrong_queue_entry_raises(self):
+        other_patient = Patient.objects.create(
+            first_name="Jan",
+            last_name="WrongQe",
+            date_of_birth=date(1990, 2, 2),
+            phone="48600222001",
+            email="jan.wrongqe@example.com",
+        )
         other_qe = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
-            patient=self.patient,
+            patient=other_patient,
             entry_status=QueueEntryStatus.PATIENT_COMPLETED,
             position_no=2,
             created_by_user=self.doctor,

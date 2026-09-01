@@ -128,6 +128,17 @@ class MedicalApiTests(TestCase):
         )
         self.client.force_login(self.doctor_user)
 
+    def _extra_queue_patient(self) -> Patient:
+        """Another patient on the same queue (unique forbids two STANDARD rows)."""
+        suffix = str(uuid4().int)[-10:]
+        return Patient.objects.create(
+            first_name="Extra",
+            last_name=suffix,
+            date_of_birth=date(1992, 2, 2),
+            phone=f"+481{suffix}",
+            email=f"extra.{suffix}@example.com",
+        )
+
     def _start_edit_session(
         self, medical_document_id: str, *, purpose: str = "edit"
     ) -> dict:
@@ -452,7 +463,7 @@ class MedicalApiTests(TestCase):
     def test_create_medical_document_no_intake_happy_path(self) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=2,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -499,7 +510,7 @@ class MedicalApiTests(TestCase):
     def test_create_medical_document_no_intake_before_3h_returns_400(self) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=3,
             appointment_time=timezone.now() - timedelta(hours=2, minutes=59),
@@ -526,7 +537,7 @@ class MedicalApiTests(TestCase):
     def test_paper_intake_authorization_post_doctor_forbidden(self) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=40,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -543,7 +554,7 @@ class MedicalApiTests(TestCase):
     def test_paper_intake_authorization_post_reception_forbidden(self) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=41,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -560,7 +571,7 @@ class MedicalApiTests(TestCase):
     def test_paper_intake_authorization_post_short_reason_returns_400(self) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=42,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -592,7 +603,7 @@ class MedicalApiTests(TestCase):
         )
         waiting_entry = QueueEntry.objects.create(
             daily_queue=other_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=1,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -622,7 +633,7 @@ class MedicalApiTests(TestCase):
     ) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=43,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -684,7 +695,7 @@ class MedicalApiTests(TestCase):
     ) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=4,
             appointment_time=timezone.now() - timedelta(hours=4),
@@ -723,9 +734,9 @@ class MedicalApiTests(TestCase):
         self.assertEqual(payload["intake_summary"]["reception_note"], "")
         self.assertEqual(
             payload["intake_summary"]["patient"]["id"],
-            str(self.queue_entry.patient_id),
+            str(waiting_entry.patient_id),
         )
-        patient = self.queue_entry.patient
+        patient = waiting_entry.patient
         self.assertEqual(
             payload["intake_summary"]["patient"]["first_name"], patient.first_name
         )
@@ -744,7 +755,7 @@ class MedicalApiTests(TestCase):
     ) -> None:
         waiting_entry = QueueEntry.objects.create(
             daily_queue=self.queue_entry.daily_queue,
-            patient=self.queue_entry.patient,
+            patient=self._extra_queue_patient(),
             entry_status=QueueEntryStatus.WAITING,
             position_no=44,
             appointment_time=timezone.now() - timedelta(hours=4),

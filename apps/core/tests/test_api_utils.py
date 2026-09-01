@@ -155,7 +155,7 @@ class JsonErrorTests(SimpleTestCase):
 
 
 class JsonPydanticValidationErrorTests(SimpleTestCase):
-    def test_returns_400_with_error_key_and_details(self):
+    def test_returns_400_with_error_key_and_details(self) -> None:
         class _M(BaseModel):
             x: int
 
@@ -168,6 +168,25 @@ class JsonPydanticValidationErrorTests(SimpleTestCase):
         self.assertEqual(data["error_key"], "other.api.invalid_request_body")
         self.assertIn("error", data)
         self.assertIsInstance(data.get("details"), list)
+        self.assertGreater(len(data["details"]), 0)
+
+    def test_field_validator_value_error_details_are_json_serializable(self) -> None:
+        from pydantic import field_validator
+
+        class _M(BaseModel):
+            process_type: str
+
+            @field_validator("process_type")
+            @classmethod
+            def allowed(cls, v: str) -> str:
+                raise ValueError("must be STANDARD or TELEDERM.")
+
+        with self.assertRaises(ValidationError) as ctx:
+            _M.model_validate({"process_type": "VIDEO"})
+        resp = json_pydantic_validation_error(ctx.exception)
+        data = json.loads(resp.content)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIsInstance(data["details"], list)
         self.assertGreater(len(data["details"]), 0)
 
 

@@ -42,7 +42,10 @@ from apps.reception.patient_identity import (
     stale_anonymized_patient_blocks_phone,
     validate_patient_names_for_import,
 )
-from apps.reception.process_types import ProcessType
+from apps.reception.process_types import (
+    PROCESS_TYPE_STANDARD,
+    PROCESS_TYPE_TELEDERM,
+)
 from apps.reception.services import (
     active_queue_entry_for_process_exists,
     create_daily_queue,
@@ -190,13 +193,13 @@ def map_xlsx_process_type_cell(raw: str | None) -> tuple[str, bool]:
     """
     text = (raw or "").strip()
     if not text:
-        return ProcessType.STANDARD.value, True
+        return PROCESS_TYPE_STANDARD, True
     key = " ".join(text.lower().split())
-    if key in _TELEDERM_CELL_VALUES or key == ProcessType.TELEDERM.value.lower():
-        return ProcessType.TELEDERM.value, False
-    if key == ProcessType.STANDARD.value.lower():
-        return ProcessType.STANDARD.value, False
-    return ProcessType.STANDARD.value, True
+    if key in _TELEDERM_CELL_VALUES or key == PROCESS_TYPE_TELEDERM.lower():
+        return PROCESS_TYPE_TELEDERM, False
+    if key == PROCESS_TYPE_STANDARD.lower():
+        return PROCESS_TYPE_STANDARD, False
+    return PROCESS_TYPE_STANDARD, True
 
 
 GERMAN_MONTHS = {
@@ -408,7 +411,7 @@ class NormalizedRow:
     street: str | None = None
     postal_code: str | None = None
     city: str | None = None
-    process_type: str = ProcessType.STANDARD.value
+    process_type: str = PROCESS_TYPE_STANDARD
     process_type_fallback: bool = False
 
 
@@ -487,7 +490,7 @@ def _normalize_row(
             _cell("process_type")
         )
     else:
-        process_type, process_type_fallback = ProcessType.STANDARD.value, False
+        process_type, process_type_fallback = PROCESS_TYPE_STANDARD, False
 
     return NormalizedRow(
         row_number=row_index,

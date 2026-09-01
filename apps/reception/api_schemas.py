@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from apps.core.api_schemas import OffsetPaginationQueryParams
 from apps.core.api_utils import parse_bool_query
-from apps.reception.process_types import ProcessType
+from apps.reception.process_types import PROCESS_TYPE_STANDARD, ProcessType
 
 # Must match Patient model CheckConstraint patient_phone_format
 PHONE_PATTERN = re.compile(r"^[0-9+() -]{7,20}$")
@@ -63,7 +63,7 @@ class CreateQueueEntryRequest(BaseModel):
     visit_external_id: str | None = None
     appointment_time: datetime | None = None
     notes: str | None = None
-    process_type: str = ProcessType.STANDARD.value
+    process_type: str = PROCESS_TYPE_STANDARD
 
     @field_validator("process_type", mode="after")
     @classmethod

@@ -1344,7 +1344,8 @@ class PatientXlsxImportTests(TestCase):
             extra_header="Terminart",
         )
         self.assertEqual(batch.status, ImportStatus.COMPLETED)
-        self.assertEqual(batch.inserted_rows, 2)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 1)
         types = set(QueueEntry.objects.values_list("process_type", flat=True))
         self.assertEqual(types, {ProcessType.STANDARD, ProcessType.TELEDERM})
 
@@ -1369,7 +1370,8 @@ class PatientXlsxImportTests(TestCase):
         )
         self.assertEqual(first.inserted_rows, 1)
         self.assertEqual(second.skipped_already_present_count, 1)
-        self.assertEqual(second.inserted_rows, 1)
+        self.assertEqual(second.inserted_rows, 0)
+        self.assertEqual(second.matched_rows, 1)
         self.assertEqual(QueueEntry.objects.count(), 2)
 
     def test_import_v2_unknown_cell_falls_back_to_standard(self) -> None:

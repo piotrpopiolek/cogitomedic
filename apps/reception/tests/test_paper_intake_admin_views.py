@@ -94,9 +94,16 @@ class PaperIntakeAdminViewsTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_hub_pick_queryset_includes_only_waiting_in_window(self) -> None:
+        busy_patient = Patient.objects.create(
+            first_name="Busy",
+            last_name="Hub",
+            date_of_birth=date(1991, 2, 2),
+            phone="+48111222444",
+            email="paper.busy@example.com",
+        )
         busy = QueueEntry.objects.create(
             daily_queue=self.queue,
-            patient=self.entry.patient,
+            patient=busy_patient,
             entry_status=QueueEntryStatus.IN_PROGRESS,
             position_no=2,
             appointment_time=timezone.now() - timedelta(hours=4),

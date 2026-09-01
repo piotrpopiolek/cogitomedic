@@ -26,6 +26,7 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.process_types import (
+    PROCESS_TYPE_STANDARD,
     QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
     ProcessType,
 )
@@ -581,7 +582,7 @@ def update_queue_entry(
 def parse_process_type(value: str | None) -> str:
     """Validate caller-supplied process_type; empty → STANDARD."""
     if value is None or str(value).strip() == "":
-        return ProcessType.STANDARD.value
+        return PROCESS_TYPE_STANDARD
     normalized = str(value).strip()
     if normalized not in ProcessType.values:
         raise DomainError(

@@ -297,6 +297,7 @@ class SaveIntakeBodyMapTests(IntakeServiceBaseTestCase):
 
 
 @freeze_time("2026-03-10T12:00:00Z")
+@freeze_time("2026-03-10T12:00:00Z")
 class SaveIntakeConsentsTests(IntakeServiceBaseTestCase):
     def _create_consent_def(self, **overrides):
         defaults = {
