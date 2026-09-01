@@ -20,11 +20,13 @@ from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     get_tablet_scope_clinic_site_ids,
 )
+from apps.core.exceptions import DomainError
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
-from apps.reception.models import DailyQueue, QueueEntry, TabletDevice
+from apps.reception.models import DailyQueue, QueueEntry, QueueEntryStatus, TabletDevice
 from apps.reception.process_types import ProcessType
 from apps.reception.services import (
+    QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
     record_tablet_login_for_android_id,
@@ -45,6 +47,12 @@ def _staff_context(request: HttpRequest) -> dict:
     if request.GET.get("locale"):
         request.session["tablet_staff_locale"] = locale
     return {"staff_locale": locale, "staff_ui": get_staff_ui_strings(locale)}
+
+
+def _tablet_entry_cancelled_response(request: HttpRequest) -> HttpResponse:
+    ctx = {**_staff_context(request)}
+    ctx["message"] = ctx["staff_ui"]["err_entry_cancelled"]
+    return render(request, "tablet/error.html", ctx, status=400)
 
 
 def _tablet_role_ok(request: HttpRequest) -> bool:
@@ -182,6 +190,7 @@ def tablet_queue_entries_view(
         return render(request, "tablet/error.html", ctx, status=400)
     entries = (
         QueueEntry.objects.filter(daily_queue_id=daily_queue_id)
+        .exclude(entry_status=QueueEntryStatus.CANCELLED)
         .select_related("patient")
         .order_by("position_no")
     )
@@ -218,6 +227,8 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
             ctx = {**_staff_context(request)}
             ctx["message"] = ctx["staff_ui"]["err_entry_access_denied"]
             return render(request, "tablet/error.html", ctx, status=403)
+    if entry.entry_status == QueueEntryStatus.CANCELLED:
+        return _tablet_entry_cancelled_response(request)
     if request.method == "POST":
         tablet_device_id = None
         tablet_device_id_raw = (request.POST.get("tablet_device_id") or "").strip()
@@ -249,6 +260,13 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
             ctx = {**_staff_context(request)}
             ctx["message"] = ctx["staff_ui"]["err_session_create_failed"]
             return render(request, "tablet/error.html", ctx, status=404)
+        except DomainError as exc:
+            ctx = {**_staff_context(request)}
+            if exc.api_message_key == QUEUE_ENTRY_CANCELLED_MESSAGE_KEY:
+                ctx["message"] = ctx["staff_ui"]["err_entry_cancelled"]
+            else:
+                ctx["message"] = ctx["staff_ui"]["err_session_create_failed"]
+            return render(request, "tablet/error.html", ctx, status=400)
     ctx = {**_staff_context(request), "entry": entry}
     return render(request, "tablet/entry_start.html", ctx)
 

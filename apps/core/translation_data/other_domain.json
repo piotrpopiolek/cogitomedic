@@ -49,6 +49,11 @@
     "en": "This patient already has a {process_type} entry in this queue.",
     "pl": "Ten pacjent ma już wpis typu {process_type} w tej kolejce."
   },
+  "other.domain.queue_entry_cancelled": {
+    "de": "Dieser Warteschlangeneintrag ist storniert.",
+    "en": "This queue entry is cancelled.",
+    "pl": "Ten wpis kolejki jest anulowany."
+  },
   "other.domain.invalid_process_type": {
     "de": "Ungültiger Prozesstyp: {value}.",
     "en": "Invalid process type: {value}.",

@@ -33,6 +33,7 @@ from apps.reception.models import (
     PatientImportError,
     PatientFormSession,
     QueueEntry,
+    QueueEntryStatus,
     QueueStatus,
     TabletDevice,
 )
@@ -40,6 +41,7 @@ from apps.reception.process_types import ProcessType
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.reception.services import (
+    QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
     create_or_update_patient_manual,
     create_queue_entry,
     get_or_create_tablet_device_by_android_id,
@@ -371,6 +373,36 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(first_result.intake_form_id, second_result.intake_form_id)
         intake_form = PatientIntakeForm.objects.get(queue_entry=queue_entry)
         self.assertEqual(intake_form.session_id, second_result.session_id)
+
+    def test_issue_tablet_session_latest_wins_rejects_cancelled(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Cancelled",
+            last_name="Visit",
+            date_of_birth=date(1994, 4, 4),
+            phone="+48333333334",
+            email="cancelled.visit@example.com",
+            doctolib_patient_id="DOC-P3C",
+        )
+        queue_entry = create_queue_entry(
+            daily_queue_id=self.daily_queue.id,
+            patient_id=patient.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+        with self.assertRaises(DomainError) as ctx:
+            issue_tablet_session_latest_wins(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.reception_user.id,
+                form_locale="de-DE",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
+        )
+        self.assertFalse(
+            PatientFormSession.objects.filter(queue_entry=queue_entry).exists()
+        )
 
     def test_patients_api_view_doctor_filtered(self) -> None:
         doctor_user = StaffUser.objects.create_user(

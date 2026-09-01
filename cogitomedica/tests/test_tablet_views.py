@@ -11,6 +11,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.reception.models import (
     ClinicSite,
@@ -24,6 +25,7 @@ from apps.reception.models import (
     TabletDevice,
 )
 from apps.reception.process_types import ProcessType
+from apps.reception.services import QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
 from apps.users.models import StaffUser
 
 
@@ -522,3 +524,69 @@ class TabletViewsScopeAndEdgeTests(TestCase):
             resp = self.client.get(f"/tablet/form/{self.intake.id}/")
         self.assertEqual(resp.status_code, 404)
         self.assertTemplateUsed(resp, "tablet/error.html")
+
+    def test_queue_entries_list_excludes_cancelled(self) -> None:
+        cancelled_patient = Patient.objects.create(
+            first_name="Gone",
+            last_name="Cancelledrow",
+            date_of_birth=date(1980, 1, 1),
+            phone="+48500000999",
+            email="gone.cancelled@example.com",
+        )
+        QueueEntry.objects.create(
+            daily_queue=self.queue,
+            patient=cancelled_patient,
+            entry_status=QueueEntryStatus.CANCELLED,
+            position_no=2,
+            created_by_user=self.tablet_user,
+        )
+        self._login_tablet()
+        resp = self.client.get(f"/tablet/queue/{self.queue.id}/")
+        self.assertEqual(resp.status_code, 200)
+        ids = [str(e.id) for e in resp.context["entries"]]
+        self.assertIn(str(self.entry.id), ids)
+        self.assertEqual(len(resp.context["entries"]), 1)
+        self.assertNotContains(resp, "Cancelledrow")
+
+    def test_entry_start_get_cancelled_returns_400(self) -> None:
+        self.entry.entry_status = QueueEntryStatus.CANCELLED
+        self.entry.save(update_fields=["entry_status", "updated_at"])
+        self._login_tablet()
+        resp = self.client.get(f"/tablet/entry/{self.entry.id}/")
+        self.assertEqual(resp.status_code, 400)
+        self.assertTemplateUsed(resp, "tablet/error.html")
+        self.assertEqual(
+            resp.context["message"], resp.context["staff_ui"]["err_entry_cancelled"]
+        )
+
+    def test_entry_start_post_cancelled_returns_400(self) -> None:
+        self.entry.entry_status = QueueEntryStatus.CANCELLED
+        self.entry.save(update_fields=["entry_status", "updated_at"])
+        self._login_tablet()
+        resp = self.client.post(
+            f"/tablet/entry/{self.entry.id}/",
+            {"tablet_device_id": "", "android_id": ""},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertTemplateUsed(resp, "tablet/error.html")
+        self.assertEqual(
+            resp.context["message"], resp.context["staff_ui"]["err_entry_cancelled"]
+        )
+
+    def test_entry_start_post_cancelled_race_returns_400(self) -> None:
+        self._login_tablet()
+        with patch(
+            "cogitomedica.tablet_views.issue_tablet_session_latest_wins",
+            side_effect=DomainError(
+                "cancelled",
+                api_message_key=QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
+            ),
+        ):
+            resp = self.client.post(
+                f"/tablet/entry/{self.entry.id}/",
+                {"tablet_device_id": "", "android_id": ""},
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(
+            resp.context["message"], resp.context["staff_ui"]["err_entry_cancelled"]
+        )

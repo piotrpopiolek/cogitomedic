@@ -184,6 +184,11 @@
     "en": "No access to this queue entry.",
     "pl": "Brak dostępu do tego wpisu."
   },
+  "waiting_room.staff.err_entry_cancelled": {
+    "de": "Dieser Patienteneintrag wurde storniert.",
+    "en": "This patient visit was cancelled.",
+    "pl": "Ta wizyta pacjenta została anulowana."
+  },
   "waiting_room.staff.err_session_create_failed": {
     "de": "Sitzung konnte nicht erstellt werden.",
     "en": "Session could not be created.",

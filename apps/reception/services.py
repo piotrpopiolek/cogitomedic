@@ -677,6 +677,18 @@ def create_queue_entry(
         raise
 
 
+QUEUE_ENTRY_CANCELLED_MESSAGE_KEY = "other.domain.queue_entry_cancelled"
+
+
+def raise_if_queue_entry_cancelled(queue_entry: QueueEntry) -> None:
+    """Forbid session/intake mutations that would revive a cancelled visit."""
+    if queue_entry.entry_status == QueueEntryStatus.CANCELLED:
+        raise DomainError(
+            domain_message(QUEUE_ENTRY_CANCELLED_MESSAGE_KEY),
+            api_message_key=QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
+        )
+
+
 @transaction.atomic
 def issue_tablet_session_latest_wins(
     *,
@@ -707,6 +719,7 @@ def issue_tablet_session_latest_wins(
     queue_entry = QueueEntry.objects.select_for_update(of=("self",)).get(
         id=queue_entry_id
     )
+    raise_if_queue_entry_cancelled(queue_entry)
 
     tablet_device: TabletDevice | None = None
     if tablet_device_id:

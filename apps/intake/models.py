@@ -4,7 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import models
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
@@ -89,16 +89,21 @@ def _clean_active_definition_requires_process(definition: models.Model) -> None:
 
     UUID ``pk`` is assigned in memory before INSERT. Admin validates the parent
     before inlines exist, so ``process_links.exists()`` is always false on ADD.
+
+    Error is non-field: ``process_links`` is a reverse relation, not a parent
+    form field — a keyed ``ValidationError`` would 500 in admin ``add_error``.
     """
     if definition._state.adding or not definition.is_active:
         return
     if not definition.process_links.exists():  # type: ignore[attr-defined]
         raise ValidationError(
             {
-                "process_links": db_gettext_lazy(
-                    "administration.error_definition_requires_process",
-                    "At least one process type is required.",
-                )
+                NON_FIELD_ERRORS: [
+                    db_gettext_lazy(
+                        "administration.error_definition_requires_process",
+                        "At least one process type is required.",
+                    )
+                ]
             }
         )
 

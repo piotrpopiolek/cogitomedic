@@ -32,7 +32,10 @@ from apps.intake.models import (
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.reception.process_types import coerce_process_type
-from apps.reception.services import issue_tablet_session_latest_wins
+from apps.reception.services import (
+    issue_tablet_session_latest_wins,
+    raise_if_queue_entry_cancelled,
+)
 from apps.core.translation_service import get_form_ui_strings
 
 logger = logging.getLogger(__name__)
@@ -1133,6 +1136,7 @@ def submit_patient_intake_form(
 
     if intake_form.form_status == IntakeStatus.SUBMITTED:
         return intake_form
+    raise_if_queue_entry_cancelled(queue_entry)
     if not _intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_submit_in_progress_only"),

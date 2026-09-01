@@ -41,7 +41,10 @@ from apps.reception.process_types import (
     PROCESS_TYPE_TELEDERM,
     ProcessType,
 )
-from apps.reception.services import create_queue_entry
+from apps.reception.services import (
+    QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
+    create_queue_entry,
+)
 from apps.users.models import StaffUser
 
 
@@ -260,6 +263,24 @@ class QueueEntryProcessTypeApiTests(TestCase):
             }
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_post_session_on_cancelled_returns_400(self) -> None:
+        entry = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+        )
+        entry.entry_status = QueueEntryStatus.CANCELLED
+        entry.save(update_fields=["entry_status", "updated_at"])
+        response = self.client.post(
+            f"/api/v1/queue-entries/{entry.id}/sessions",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error_key"], QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
+        )
 
 
 class QueueEntryProcessTypeAdminTests(TestCase):

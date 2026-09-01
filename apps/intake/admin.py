@@ -31,16 +31,32 @@ _MARKDOWN_HELP = (
 )
 
 
-class ConsentDefinitionProcessInline(admin.TabularInline):
+def _posted_definition_is_active(request, obj) -> bool:
+    """True when the parent catalog row is saved as active (POST) or already is."""
+    if request.method == "POST":
+        return bool(request.POST.get("is_active"))
+    return bool(getattr(obj, "is_active", True))
+
+
+class _ProcessTypeInlineMixin:
+    """Django 6 ``get_formset`` omits ``validate_min``; ``min_num`` is display-only."""
+
+    extra = 0
+    min_num = 1
+
+    def get_formset(self, request, obj=None, **kwargs):
+        kwargs["validate_min"] = _posted_definition_is_active(request, obj)
+        return super().get_formset(request, obj, **kwargs)
+
+
+class ConsentDefinitionProcessInline(_ProcessTypeInlineMixin, admin.TabularInline):
     model = ConsentDefinitionProcess
-    extra = 0
-    min_num = 1
 
 
-class AnamnesisQuestionDefinitionProcessInline(admin.TabularInline):
+class AnamnesisQuestionDefinitionProcessInline(
+    _ProcessTypeInlineMixin, admin.TabularInline
+):
     model = AnamnesisQuestionDefinitionProcess
-    extra = 0
-    min_num = 1
 
 
 @admin.register(ConsentDefinition)

@@ -373,6 +373,20 @@ class IntakeFormSubmitViewTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("error", resp.json())
 
+    def test_submit_cancelled_queue_entry_returns_400(self) -> None:
+        clinic_id = self.intake_form.queue_entry.daily_queue.clinic_site_id
+        self.rec_user.clinic_sites.add(clinic_id)
+        self.intake_form.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.intake_form.queue_entry.save(update_fields=["entry_status", "updated_at"])
+        self.client.login(username="submit-rec", password=_PW)
+        resp = self.client.post(
+            self._url(),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["error_key"], "other.domain.queue_entry_cancelled")
+
 
 # ---------------------------------------------------------------
 # 3b. intake_form_detail_view — GET context scope & patient (read-only)
