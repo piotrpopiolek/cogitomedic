@@ -1,4 +1,4 @@
-{% load static cogitomedica_i18n %}
+{% load static static_versioned cogitomedica_i18n %}
 <!DOCTYPE html>
 <html lang="{{ locale_param|default:'de' }}">
 <head>
@@ -149,7 +149,7 @@
       hasSignature: {% if has_signature %}true{% else %}false{% endif %}
     };
   </script>
-  <script src="{% static 'tablet/js/form-telederm.js' %}"></script>
+  <script src="{% static_v 'tablet/js/form-telederm.js' %}"></script>
 
 </body>
 </html>

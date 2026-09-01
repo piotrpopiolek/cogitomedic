@@ -57,6 +57,7 @@ class UpdateTeledermPayloadRequest(BaseModel):
 
     schema_version: int = Field(default=1, ge=1)
     answers: dict[str, TeledermAnswerPayload] = Field(default_factory=dict)
+    # Ignored: path is derived from CC001. Kept so older tablets still validate.
     chief_complaint_path: str | None = None
 
 

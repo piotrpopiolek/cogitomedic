@@ -43,21 +43,19 @@ def active_path_code(
     payload: Mapping[str, Any],
     catalog: Sequence[TeledermQuestionDefinition] | None = None,
 ) -> str | None:
-    explicit = payload.get("chief_complaint_path")
-    if explicit:
-        return str(explicit)
+    """Path is derived only from CC001; inbound ``chief_complaint_path`` is ignored."""
     answers = answers_map(payload)
     cc = answers.get("CC001")
-    if cc and cc.selected:
-        selected_code = cc.selected[0]
-        if catalog:
-            cc_q = next((q for q in catalog if q.question_id == "CC001"), None)
-            if cc_q is not None:
-                for opt in cc_q.options.all():
-                    if opt.code == selected_code and opt.activates_path_code:
-                        return opt.activates_path_code
-        return str(selected_code)
-    return None
+    if not cc or not cc.selected:
+        return None
+    selected_code = cc.selected[0]
+    if catalog:
+        cc_q = next((q for q in catalog if q.question_id == "CC001"), None)
+        if cc_q is not None:
+            for opt in cc_q.options.all():
+                if opt.code == selected_code and opt.activates_path_code:
+                    return opt.activates_path_code
+    return str(selected_code)
 
 
 def triage_is_blocked(payload: Mapping[str, Any]) -> bool:
@@ -67,10 +65,7 @@ def triage_is_blocked(payload: Mapping[str, Any]) -> bool:
     triage = answers.get("T001")
     if not triage or not triage.selected:
         return False
-    if (
-        TRIAGE_NONE_OPTION_CODE in triage.selected
-        and len(triage.selected) == 1
-    ):
+    if TRIAGE_NONE_OPTION_CODE in triage.selected and len(triage.selected) == 1:
         return False
     return any(code != TRIAGE_NONE_OPTION_CODE for code in triage.selected)
 
@@ -136,7 +131,10 @@ def question_is_visible(
                 return False
         return True
     if question.path_code in {"TRIAGE", "CHIEF"}:
-        return question.section in {TeledermSection.TRIAGE, TeledermSection.CHIEF_COMPLAINT}
+        return question.section in {
+            TeledermSection.TRIAGE,
+            TeledermSection.CHIEF_COMPLAINT,
+        }
     if path_code is None:
         return False
     if question.path_code == "GLOBAL":
@@ -157,7 +155,9 @@ def visible_questions(
     answers = answers_map(payload)
     path = active_path_code(payload, catalog)
     if triage_is_blocked(payload):
-        return [q for q in catalog if q.section == TeledermSection.TRIAGE and q.is_active]
+        return [
+            q for q in catalog if q.section == TeledermSection.TRIAGE and q.is_active
+        ]
     out: list[TeledermQuestionDefinition] = []
     for question in catalog:
         if question_is_visible(question, answers=answers, path_code=path):

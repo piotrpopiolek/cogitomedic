@@ -283,12 +283,20 @@
     return answers;
   }
 
+  let lastSavedTeledermAnswersJson = "";
+  let teledermSaveTimer = null;
+  let teledermSaveInFlight = false;
+  let teledermSaveQueued = false;
+
+  function teledermAnswersJson() {
+    return JSON.stringify(collectTeledermAnswers());
+  }
+
   function saveTeledermPayload() {
     const localeQuery = "?form_locale=" + encodeURIComponent(formLocale);
     return api("PUT", "/intake-forms/" + formId + "/telederm-payload" + localeQuery, {
       schema_version: schemaVersion,
       answers: collectTeledermAnswers(),
-      chief_complaint_path: teledermState.chief_complaint_path || null,
     }).then(function (r) {
       if (!r.ok) {
         return r
@@ -301,11 +309,55 @@
           });
       }
       return r.json().then(function (ctx) {
+        const scrollY = window.scrollY;
         if (ctx.telederm) teledermState = ctx.telederm;
         renderTeledermQuestions();
+        window.scrollTo(0, scrollY);
+        lastSavedTeledermAnswersJson = teledermAnswersJson();
         return ctx;
       });
     });
+  }
+
+  function debounce(fn, ms) {
+    var timer;
+    return function () {
+      clearTimeout(timer);
+      timer = setTimeout(fn, ms);
+    };
+  }
+
+  function flushTeledermSave() {
+    if (teledermSaveInFlight) {
+      teledermSaveQueued = true;
+      return Promise.resolve();
+    }
+    if (teledermAnswersJson() === lastSavedTeledermAnswersJson) {
+      teledermSaveQueued = false;
+      return Promise.resolve();
+    }
+    teledermSaveQueued = false;
+    teledermSaveInFlight = true;
+    return saveTeledermPayload()
+      .catch(function (err) {
+        showMsg("telederm-msg", err.message || formUi.msg_save_error || "", true);
+        throw err;
+      })
+      .finally(function () {
+        teledermSaveInFlight = false;
+        if (teledermSaveQueued) {
+          teledermSaveQueued = false;
+          scheduleTeledermSave();
+        }
+      });
+  }
+
+  function scheduleTeledermSave() {
+    if (teledermSaveTimer) clearTimeout(teledermSaveTimer);
+    teledermSaveTimer = setTimeout(function () {
+      teledermSaveTimer = null;
+      flushTeledermSave().catch(function () {});
+    }, 500);
   }
 
   function collectAnamnesisAnswers() {
@@ -377,28 +429,12 @@
   }
 
   renderTeledermQuestions();
+  lastSavedTeledermAnswersJson = teledermAnswersJson();
 
   const teledermSection = document.getElementById("telederm-section");
   if (teledermSection) {
-    teledermSection.addEventListener("change", function () {
-      saveTeledermPayload().catch(function (err) {
-        showMsg("telederm-msg", err.message || formUi.msg_save_error || "", true);
-      });
-    });
-    teledermSection.addEventListener(
-      "input",
-      debounce(function () {
-        saveTeledermPayload().catch(function () {});
-      }, 400)
-    );
-  }
-
-  function debounce(fn, ms) {
-    var timer;
-    return function () {
-      clearTimeout(timer);
-      timer = setTimeout(fn, ms);
-    };
+    teledermSection.addEventListener("change", scheduleTeledermSave);
+    teledermSection.addEventListener("input", debounce(scheduleTeledermSave, 400));
   }
 
   const btnStep1Next = document.getElementById("btn-step1-next");

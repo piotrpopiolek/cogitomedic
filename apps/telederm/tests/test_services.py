@@ -157,6 +157,21 @@ class TeledermServicesTests(TestCase):
         self.assertIn("clinical_summary", finalized)
         self.assertEqual(finalized["chief_complaint_path"], "CCE-001")
 
+    def test_save_derives_path_from_cc001_not_stale_field(self) -> None:
+        intake = self._intake_form()
+        saved = save_telederm_payload(
+            intake_form_id=intake.id,
+            payload={
+                "chief_complaint_path": "CCE-002",
+                "answers": {
+                    "T001": {"selected": ["NONE"]},
+                    "CC001": {"selected": ["NEW_SKIN_LESION"]},
+                },
+            },
+            form_locale="de-DE",
+        )
+        self.assertEqual(saved.telederm_payload["chief_complaint_path"], "CCE-001")
+
 
 class TestSaveTeledermPayloadAutocommit(TransactionTestCase):
     """TestCase wraps each method in atomic and hides FOR UPDATE outside a transaction."""

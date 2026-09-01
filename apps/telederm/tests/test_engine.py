@@ -52,5 +52,30 @@ class TeledermEngineTests(TestCase):
 
     def test_validate_complete_smoke_path(self) -> None:
         payload = dict(SMOKE_TELEDERM_ANSWERS)
-        payload["chief_complaint_path"] = "CCE-001"
         self.assertEqual(validate_required_answers(self.catalog, payload), [])
+
+    def test_stale_chief_complaint_path_does_not_override_cc001(self) -> None:
+        payload = {
+            "chief_complaint_path": "CCE-002",
+            "answers": {
+                "T001": {"selected": ["NONE"]},
+                "CC001": {"selected": ["NEW_SKIN_LESION"]},
+            },
+        }
+        visible_ids = [q.question_id for q in visible_questions(self.catalog, payload)]
+        self.assertEqual(active_path_code(payload, self.catalog), "CCE-001")
+        self.assertIn("Q001", visible_ids)
+        self.assertNotIn("Q020", visible_ids)
+
+    def test_hair_loss_cc001_ignores_mole_path_field(self) -> None:
+        payload = {
+            "chief_complaint_path": "CCE-002",
+            "answers": {
+                "T001": {"selected": ["NONE"]},
+                "CC001": {"selected": ["HAIR_LOSS"]},
+            },
+        }
+        visible_ids = [q.question_id for q in visible_questions(self.catalog, payload)]
+        self.assertEqual(active_path_code(payload, self.catalog), "CCE-009")
+        self.assertIn("Q160", visible_ids)
+        self.assertNotIn("Q020", visible_ids)

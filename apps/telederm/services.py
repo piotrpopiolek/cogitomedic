@@ -127,9 +127,6 @@ def normalize_telederm_payload(
     if not isinstance(answers_in, dict):
         answers_in = {}
     normalized_answers: dict[str, Any] = {}
-    cc_path: str | None = payload.get("chief_complaint_path")
-    if cc_path is not None:
-        cc_path = str(cc_path) or None
     for qid, raw in answers_in.items():
         if not isinstance(raw, dict):
             continue
@@ -142,23 +139,14 @@ def normalize_telederm_payload(
                 str(raw.get("free_text")).strip() if raw.get("free_text") else None
             ),
         }
-    cc_answer = normalized_answers.get("CC001")
-    if cc_path is None and cc_answer and cc_answer["selected"]:
-        selected_code = cc_answer["selected"][0]
-        cc_q = next((q for q in catalog if q.question_id == "CC001"), None)
-        if cc_q:
-            for opt in cc_q.options.all():
-                if opt.code == selected_code and opt.activates_path_code:
-                    cc_path = opt.activates_path_code
-                    break
-        if cc_path is None:
-            cc_path = selected_code
 
     draft = {
         "schema_version": TELEDERM_PAYLOAD_SCHEMA_VERSION,
         "engine": "telederm",
         "answers": normalized_answers,
-        "chief_complaint_path": cc_path,
+        "chief_complaint_path": active_path_code(
+            {"answers": normalized_answers}, catalog
+        ),
         "triage_blocked": False,
     }
     draft["triage_blocked"] = triage_is_blocked(draft)

@@ -287,7 +287,7 @@ def intake_form_anamnesis_view(
 
 @require_auth
 @require_http_methods(["PUT"])
-@ratelimit(key="ip", rate="20/m", block=True)
+@ratelimit(key="ip", rate="120/m", block=True)
 def intake_form_telederm_view(
     request: HttpRequest, intake_form_id: UUID
 ) -> JsonResponse:
@@ -318,11 +318,9 @@ def intake_form_telederm_view(
         "schema_version": body.schema_version,
         "answers": answers_payload,
     }
-    if body.chief_complaint_path:
-        payload["chief_complaint_path"] = body.chief_complaint_path
 
     try:
-        intake_form = save_telederm_payload(
+        save_telederm_payload(
             intake_form_id=intake_form_id,
             payload=payload,
             form_locale=form_locale,
