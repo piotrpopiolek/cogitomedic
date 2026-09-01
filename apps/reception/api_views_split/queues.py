@@ -43,6 +43,24 @@ from apps.reception.services import (
 )
 
 
+def _queue_entry_domain_error_response(exc: DomainError) -> JsonResponse:
+    """Same DomainError key → same HTTP status on POST create and PATCH."""
+    key = exc.api_message_key or ""
+    if key in {
+        "other.domain.queue_entry_process_type_exists",
+        "other.domain.queue_closed_cannot_add_patient",
+    }:
+        status = 409
+    elif key in {
+        "other.domain.ausfallhonorar_role_required",
+        "other.domain.telederm_intake_disabled",
+    }:
+        status = 403
+    else:
+        status = 400
+    return json_domain_error(exc, status=status)
+
+
 def _pydantic_validation_error_response(exc: ValidationError) -> JsonResponse:
     """HTTP 400; omit ctx so field-validator ValueError is JSON-serializable."""
     return JsonResponse(
@@ -298,10 +316,7 @@ def daily_queue_entries_view(
     except StateTransitionError as exc:
         return json_domain_error(exc, status=409)
     except DomainError as exc:
-        status = (
-            400 if exc.api_message_key == "other.domain.invalid_process_type" else 409
-        )
-        return json_domain_error(exc, status=status)
+        return _queue_entry_domain_error_response(exc)
     except IntegrityError:
         return json_error("other.api.duplicate_visit_external_id", status=409)
     return JsonResponse(_serialize_entry(entry), status=201)
@@ -369,12 +384,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
     except DomainError as exc:
-        status = (
-            403
-            if exc.api_message_key == "other.domain.ausfallhonorar_role_required"
-            else 400
-        )
-        return json_domain_error(exc, status=status)
+        return _queue_entry_domain_error_response(exc)
     return JsonResponse(_serialize_entry(entry))
 
 

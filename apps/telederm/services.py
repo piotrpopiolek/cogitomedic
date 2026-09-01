@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Iterable, Mapping
 
+from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 
@@ -134,7 +135,9 @@ def normalize_telederm_payload(
             selected = [selected] if selected.strip() else []
         normalized_answers[str(qid)] = {
             "selected": [str(x).strip() for x in selected if str(x).strip()],
-            "free_text": (str(raw.get("free_text")).strip() if raw.get("free_text") else None),
+            "free_text": (
+                str(raw.get("free_text")).strip() if raw.get("free_text") else None
+            ),
         }
     cc_answer = normalized_answers.get("CC001")
     if cc_path is None and cc_answer and cc_answer["selected"]:
@@ -195,6 +198,7 @@ def assert_telederm_intake_form(intake_form: PatientIntakeForm) -> str:
     return process_type
 
 
+@transaction.atomic
 def save_telederm_payload(
     *,
     intake_form_id: uuid.UUID,

@@ -322,6 +322,7 @@ class IntakeFormSubmitViewTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["error_key"], "other.api.invalid_request_body")
         self.assertIn("details", resp.json())
 
     @patch("apps.intake.api_views.read_json_body")

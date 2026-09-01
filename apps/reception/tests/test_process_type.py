@@ -10,7 +10,13 @@ from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.test import Client, RequestFactory, SimpleTestCase, TestCase
+from django.test import (
+    Client,
+    RequestFactory,
+    SimpleTestCase,
+    TestCase,
+    override_settings,
+)
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
@@ -358,7 +364,22 @@ class QueueEntryProcessTypeApiTests(TestCase):
             response.json()["error_key"], QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
         )
 
-    def test_patch_uncancel_when_replacement_exists_returns_400(self) -> None:
+    def test_post_telederm_disabled_returns_403(self) -> None:
+        with override_settings(TELEDERM_INTAKE_ENABLED=False):
+            response = self._post(
+                {
+                    "patient_id": str(self.patient.id),
+                    "created_by_user_id": str(self.user.id),
+                    "process_type": ProcessType.TELEDERM,
+                }
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json()["error_key"],
+            "other.domain.telederm_intake_disabled",
+        )
+
+    def test_patch_uncancel_when_replacement_exists_returns_409(self) -> None:
         first = create_queue_entry(
             daily_queue_id=self.queue.id,
             patient_id=self.patient.id,
@@ -376,7 +397,7 @@ class QueueEntryProcessTypeApiTests(TestCase):
             data=json.dumps({"entry_status": "WAITING"}),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         self.assertEqual(
             response.json()["error_key"],
             "other.domain.queue_entry_process_type_exists",
