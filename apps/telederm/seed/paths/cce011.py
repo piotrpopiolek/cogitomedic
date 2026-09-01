@@ -5,7 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from apps.telederm.models import TeledermAnswerType, TeledermSection
-from apps.telederm.seed.helpers import NO, UNKNOWN, YES_NO, YES_NO_UNKNOWN, _ft, _opt, _q
+from apps.telederm.seed.helpers import (
+    NO,
+    UNKNOWN,
+    YES_NO,
+    YES_NO_UNKNOWN,
+    _ft,
+    _opt,
+    _q,
+)
 
 PATH_CODE = "CCE-011"
 BASE_ORDER = 11000

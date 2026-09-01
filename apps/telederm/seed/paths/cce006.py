@@ -48,7 +48,9 @@ CCE006_QUESTIONS: list[dict[str, Any]] = [
             ),
             _opt("NECK", label_de="Hals", label_en="Neck", label_pl="Szyja"),
             _opt("TRUNK", label_de="Rumpf", label_en="Trunk", label_pl="Tułów"),
-            _opt("LIMBS", label_de="Extremitäten", label_en="Limbs", label_pl="Kończyny"),
+            _opt(
+                "LIMBS", label_de="Extremitäten", label_en="Limbs", label_pl="Kończyny"
+            ),
             OTHER,
         ],
     ),
@@ -139,7 +141,12 @@ CCE006_QUESTIONS: list[dict[str, Any]] = [
                 label_en="Spicy food",
                 label_pl="Ostre jedzenie",
             ),
-            _opt("EXERTION", label_de="Anstrengung", label_en="Exertion", label_pl="Wysiłek"),
+            _opt(
+                "EXERTION",
+                label_de="Anstrengung",
+                label_en="Exertion",
+                label_pl="Wysiłek",
+            ),
             _opt("STRESS", label_de="Stress", label_en="Stress", label_pl="Stres"),
             _opt(
                 "COSMETICS",
@@ -173,7 +180,12 @@ CCE006_QUESTIONS: list[dict[str, Any]] = [
             ),
             _opt("ITCHING", label_de="Jucken", label_en="Itching", label_pl="Świąd"),
             _opt("PAIN", label_de="Schmerz", label_en="Pain", label_pl="Ból"),
-            _opt("SWELLING", label_de="Schwellung", label_en="Swelling", label_pl="Obrzęk"),
+            _opt(
+                "SWELLING",
+                label_de="Schwellung",
+                label_en="Swelling",
+                label_pl="Obrzęk",
+            ),
             _opt(
                 "PIMPLES",
                 label_de="Pickel/Knötchen",

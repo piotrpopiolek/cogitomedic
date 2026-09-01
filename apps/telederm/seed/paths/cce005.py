@@ -36,7 +36,9 @@ CCE005_QUESTIONS: list[dict[str, Any]] = [
                 label_pl="Jedna okolica",
             ),
             _opt("FACE", label_de="Gesicht", label_en="Face", label_pl="Twarz"),
-            _opt("SCALP", label_de="Kopfhaut", label_en="Scalp", label_pl="Skóra głowy"),
+            _opt(
+                "SCALP", label_de="Kopfhaut", label_en="Scalp", label_pl="Skóra głowy"
+            ),
             _opt("TRUNK", label_de="Rumpf", label_en="Trunk", label_pl="Tułów"),
             _opt("ARMS", label_de="Arme", label_en="Arms", label_pl="Ręce"),
             _opt("HANDS", label_de="Hände", label_en="Hands", label_pl="Dłonie"),

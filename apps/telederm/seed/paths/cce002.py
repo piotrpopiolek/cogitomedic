@@ -30,7 +30,9 @@ CCE002_QUESTIONS: list[dict[str, Any]] = [
         text_pl="Gdzie znajduje się znamię?",
         options=[
             _opt("FACE", label_de="Gesicht", label_en="Face", label_pl="Twarz"),
-            _opt("SCALP", label_de="Kopfhaut", label_en="Scalp", label_pl="Skóra głowy"),
+            _opt(
+                "SCALP", label_de="Kopfhaut", label_en="Scalp", label_pl="Skóra głowy"
+            ),
             _opt("NECK", label_de="Hals", label_en="Neck", label_pl="Szyja"),
             _opt(
                 "FRONT_TORSO",
@@ -248,7 +250,12 @@ CCE002_QUESTIONS: list[dict[str, Any]] = [
                 label_en="Follow-up visit",
                 label_pl="Kontrola",
             ),
-            _opt("REMOVAL", label_de="Entfernung", label_en="Removal", label_pl="Usunięcie"),
+            _opt(
+                "REMOVAL",
+                label_de="Entfernung",
+                label_en="Removal",
+                label_pl="Usunięcie",
+            ),
             _opt(
                 "OBSERVATION",
                 label_de="Beobachtung",

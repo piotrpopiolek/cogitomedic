@@ -13,7 +13,9 @@ from apps.telederm.engine import (
 from apps.telederm.models import TeledermQuestionDefinition, TeledermSection
 
 
-def _label_for_option(question: TeledermQuestionDefinition, code: str, locale: str) -> str:
+def _label_for_option(
+    question: TeledermQuestionDefinition, code: str, locale: str
+) -> str:
     for opt in question.options.all():
         if opt.code == code:
             if locale.startswith("pl") and opt.label_pl.strip():
