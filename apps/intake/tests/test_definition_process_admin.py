@@ -65,7 +65,7 @@ def _question_parent_post(code: str, *, is_active: bool = True) -> dict[str, str
         "question_text_de": "Neue Frage",
         "question_text_en": "New question",
         "question_text_pl": "",
-        "answer_type": AnamnesisQuestionDefinition.AnswerType.TEXT_OPTIONAL,
+        "answer_type": "TEXT_OPTIONAL",
         "display_order": "0",
         "is_required": "on",
         "_save": "Save",

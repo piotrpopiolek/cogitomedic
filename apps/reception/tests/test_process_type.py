@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.admin.sites import AdminSite
@@ -313,6 +314,29 @@ class QueueEntryProcessTypeApiTests(TestCase):
             }
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_post_invalid_process_type_domain_error_returns_400(self) -> None:
+        """Service DomainError must be 400 even if the schema already allowed the body."""
+        with patch(
+            "apps.reception.api_views_split.queues.create_queue_entry",
+            side_effect=DomainError(
+                "invalid process type",
+                api_message_key="other.domain.invalid_process_type",
+                api_message_params={"value": "VIDEO"},
+            ),
+        ):
+            response = self._post(
+                {
+                    "patient_id": str(self.patient.id),
+                    "created_by_user_id": str(self.user.id),
+                    "process_type": ProcessType.STANDARD,
+                }
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error_key"],
+            "other.domain.invalid_process_type",
+        )
 
     def test_post_session_on_cancelled_returns_400(self) -> None:
         entry = create_queue_entry(

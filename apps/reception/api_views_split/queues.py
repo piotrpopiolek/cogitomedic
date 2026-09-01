@@ -298,7 +298,10 @@ def daily_queue_entries_view(
     except StateTransitionError as exc:
         return json_domain_error(exc, status=409)
     except DomainError as exc:
-        return json_domain_error(exc, status=409)
+        status = (
+            400 if exc.api_message_key == "other.domain.invalid_process_type" else 409
+        )
+        return json_domain_error(exc, status=status)
     except IntegrityError:
         return json_error("other.api.duplicate_visit_external_id", status=409)
     return JsonResponse(_serialize_entry(entry), status=201)
