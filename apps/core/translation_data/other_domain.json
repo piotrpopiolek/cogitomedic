@@ -244,10 +244,20 @@
     "en": "A patient with the same identity (first name, last name, phone, date of birth) already exists.",
     "pl": "Pacjent o tej samej tożsamości (imię, nazwisko, telefon, data urodzenia) już istnieje."
   },
-  "other.domain.import_patient_anonymized_same_phone": {
+    "other.domain.import_patient_anonymized_same_phone": {
     "de": "Der Patient mit dieser Telefonnummer ist anonymisiert; ein weiterer Datensatz mit derselben Nummer ist nicht möglich.",
     "en": "The patient with this phone number is anonymized; another record cannot use the same phone number.",
     "pl": "Pacjent z tym numerem telefonu jest zanonimizowany; nie można utworzyć kolejnego rekordu z tym samym numerem."
+  },
+  "other.domain.import_process_type_required": {
+    "de": "Die Spalte Terminart ist leer.",
+    "en": "The Terminart column is empty.",
+    "pl": "Kolumna Terminart jest pusta."
+  },
+  "other.domain.import_invalid_process_type": {
+    "de": "Unbekannter Wert in der Spalte Terminart: {value}.",
+    "en": "Unknown value in the Terminart column: {value}.",
+    "pl": "Nieznana wartość w kolumnie Terminart: {value}."
   },
   "other.domain.outbox_event_not_retryable": {
     "de": "Ereignis ist im aktuellen Status nicht wiederholbar.",

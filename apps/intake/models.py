@@ -10,7 +10,13 @@ from apps.core.translation_service import db_gettext_lazy, format_administration
 from django.db.models import F, Q
 
 from apps.outbox.constants import outbox_max_retries_default
-from apps.reception.process_types import PROCESS_TYPE_STANDARD, ProcessType
+from apps.reception.process_types import (
+    ANAMNESIS_QUESTION_PROCESS_TYPE_ALLOWED,
+    CONSENT_DEFINITION_PROCESS_TYPE_ALLOWED,
+    PROCESS_TYPE_STANDARD,
+    ProcessType,
+    process_type_allowed_constraint,
+)
 
 
 class IntakeStatus(models.TextChoices):
@@ -300,6 +306,9 @@ class ConsentDefinitionProcess(models.Model):
                 fields=["consent_definition", "process_type"],
                 name="consent_definition_process_unique",
             ),
+            process_type_allowed_constraint(
+                name=CONSENT_DEFINITION_PROCESS_TYPE_ALLOWED
+            ),
         ]
 
     def __str__(self) -> str:
@@ -455,6 +464,9 @@ class AnamnesisQuestionDefinitionProcess(models.Model):
             models.UniqueConstraint(
                 fields=["question_definition", "process_type"],
                 name="anamnesis_question_process_unique",
+            ),
+            process_type_allowed_constraint(
+                name=ANAMNESIS_QUESTION_PROCESS_TYPE_ALLOWED
             ),
         ]
 

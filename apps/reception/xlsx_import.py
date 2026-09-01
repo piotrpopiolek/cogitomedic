@@ -75,6 +75,7 @@ class XlsxImportErrorCode:
     DUPLICATE_VISIT = "DUPLICATE_VISIT"
     DUPLICATE_IN_FILE = "DUPLICATE_IN_FILE"
     PATIENT_ANONYMIZED_NEW_RECORD = "PATIENT_ANONYMIZED_NEW_RECORD"
+    INVALID_PROCESS_TYPE = "INVALID_PROCESS_TYPE"
 
 
 # Re-export for tests and callers.
@@ -186,20 +187,27 @@ def _find_header_indices(row: list) -> dict[str, int]:
     return result
 
 
-def map_xlsx_process_type_cell(raw: str | None) -> tuple[str, bool]:
-    """Map a v2 process-type cell to ProcessType.
+def map_xlsx_process_type_cell(raw: str | None) -> str:
+    """Map a v2 Terminart cell to ProcessType.
 
-    Returns (process_type, used_fallback). Empty or unknown → STANDARD + fallback.
+    Empty or unknown values raise ``XlsxImportFailure`` (row error). v1 files
+    without this column never call this helper and stay STANDARD.
     """
     text = (raw or "").strip()
     if not text:
-        return PROCESS_TYPE_STANDARD, True
+        raise XlsxImportFailure(
+            XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+            domain_message("other.domain.import_process_type_required"),
+        )
     key = " ".join(text.lower().split())
     if key in _TELEDERM_CELL_VALUES or key == PROCESS_TYPE_TELEDERM.lower():
-        return PROCESS_TYPE_TELEDERM, False
+        return PROCESS_TYPE_TELEDERM
     if key == PROCESS_TYPE_STANDARD.lower():
-        return PROCESS_TYPE_STANDARD, False
-    return PROCESS_TYPE_STANDARD, True
+        return PROCESS_TYPE_STANDARD
+    raise XlsxImportFailure(
+        XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        domain_message("other.domain.import_invalid_process_type", value=text),
+    )
 
 
 GERMAN_MONTHS = {
@@ -412,7 +420,6 @@ class NormalizedRow:
     postal_code: str | None = None
     city: str | None = None
     process_type: str = PROCESS_TYPE_STANDARD
-    process_type_fallback: bool = False
 
 
 def _normalize_row(
@@ -486,11 +493,9 @@ def _normalize_row(
     city = _cell("city") or None
     has_process_type_column = "process_type" in header_indices
     if has_process_type_column:
-        process_type, process_type_fallback = map_xlsx_process_type_cell(
-            _cell("process_type")
-        )
+        process_type = map_xlsx_process_type_cell(_cell("process_type"))
     else:
-        process_type, process_type_fallback = PROCESS_TYPE_STANDARD, False
+        process_type = PROCESS_TYPE_STANDARD
 
     return NormalizedRow(
         row_number=row_index,
@@ -504,7 +509,6 @@ def _normalize_row(
         postal_code=postal_code,
         city=city,
         process_type=process_type,
-        process_type_fallback=process_type_fallback,
     )
 
 
@@ -646,7 +650,6 @@ def process_patient_xlsx_import_batch(
     inserted = 0
     matched = 0
     skipped_already_present = 0
-    v2_process_type_fallback = 0
     errors_count = 0
     seen_identity: set[tuple[str, str, str, date, str]] = set()
     header_indices: dict[str, int] = {}
@@ -760,9 +763,6 @@ def process_patient_xlsx_import_batch(
                 )
                 continue
             seen_identity.add(identity_key)
-
-            if norm.process_type_fallback:
-                v2_process_type_fallback += 1
 
             existing_active = find_patient_for_import(
                 first_name=norm.first_name,
@@ -943,7 +943,6 @@ def process_patient_xlsx_import_batch(
         matched_rows=matched,
         skipped_already_present_count=skipped_already_present,
         error_rows=errors_count,
-        v2_process_type_fallback_count=v2_process_type_fallback,
     )
     _try_record_import_batch_finished(
         batch,

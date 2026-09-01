@@ -482,6 +482,17 @@ def update_daily_queue(
     return queue
 
 
+def queue_entry_process_type_exists_error(process_type: str) -> DomainError:
+    return DomainError(
+        domain_message(
+            "other.domain.queue_entry_process_type_exists",
+            process_type=process_type,
+        ),
+        api_message_key="other.domain.queue_entry_process_type_exists",
+        api_message_params={"process_type": process_type},
+    )
+
+
 @transaction.atomic
 def update_queue_entry(
     queue_entry_id: uuid.UUID,
@@ -514,8 +525,19 @@ def update_queue_entry(
         .select_related("daily_queue")
         .get(id=queue_entry_id)
     )
+    previous_status = entry.entry_status
     update_fields: list[str] = ["updated_at"]
     if entry_status is not None:
+        if (
+            previous_status == QueueEntryStatus.CANCELLED
+            and entry_status != QueueEntryStatus.CANCELLED
+            and active_queue_entry_for_process_exists(
+                daily_queue_id=entry.daily_queue_id,
+                patient_id=entry.patient_id,
+                process_type=entry.process_type,
+            )
+        ):
+            raise queue_entry_process_type_exists_error(entry.process_type)
         entry.entry_status = entry_status
         update_fields.append("entry_status")
         if entry_status == QueueEntryStatus.CANCELLED:
@@ -575,7 +597,12 @@ def update_queue_entry(
                 patient_id=entry.patient_id,
                 context_clinic_site_id=entry.daily_queue.clinic_site_id,
             )
-    entry.save(update_fields=update_fields)
+    try:
+        entry.save(update_fields=update_fields)
+    except IntegrityError as exc:
+        if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
+            raise queue_entry_process_type_exists_error(entry.process_type) from exc
+        raise
     return entry
 
 
@@ -636,14 +663,7 @@ def create_queue_entry(
         patient_id=patient_id,
         process_type=resolved_process_type,
     ):
-        raise DomainError(
-            domain_message(
-                "other.domain.queue_entry_process_type_exists",
-                process_type=resolved_process_type,
-            ),
-            api_message_key="other.domain.queue_entry_process_type_exists",
-            api_message_params={"process_type": resolved_process_type},
-        )
+        raise queue_entry_process_type_exists_error(resolved_process_type)
 
     next_position = (
         QueueEntry.objects.select_for_update(of=("self",))
@@ -666,14 +686,7 @@ def create_queue_entry(
         )
     except IntegrityError as exc:
         if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
-            raise DomainError(
-                domain_message(
-                    "other.domain.queue_entry_process_type_exists",
-                    process_type=resolved_process_type,
-                ),
-                api_message_key="other.domain.queue_entry_process_type_exists",
-                api_message_params={"process_type": resolved_process_type},
-            ) from exc
+            raise queue_entry_process_type_exists_error(resolved_process_type) from exc
         raise
 
 

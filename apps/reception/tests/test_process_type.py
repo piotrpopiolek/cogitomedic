@@ -16,7 +16,9 @@ from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.intake.models import (
     AnamnesisQuestionDefinition,
+    AnamnesisQuestionDefinitionProcess,
     ConsentDefinition,
+    ConsentDefinitionProcess,
     IntakeStatus,
     PatientIntakeConsent,
     PatientIntakeForm,
@@ -44,6 +46,7 @@ from apps.reception.process_types import (
 from apps.reception.services import (
     QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
     create_queue_entry,
+    update_queue_entry,
 )
 from apps.users.models import StaffUser
 
@@ -194,6 +197,53 @@ class QueueEntryProcessTypeTests(TestCase):
             ctx.exception.api_message_key, "other.domain.invalid_process_type"
         )
 
+    def test_check_constraint_rejects_unknown_process_type(self) -> None:
+        with self.assertRaises(IntegrityError):
+            QueueEntry.objects.create(
+                daily_queue=self.queue,
+                patient=self.patient,
+                position_no=1,
+                created_by_user=self.user,
+                process_type="VIDEO",
+            )
+
+    def test_uncancel_rejected_when_same_process_active(self) -> None:
+        first = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=ProcessType.STANDARD,
+        )
+        first.entry_status = QueueEntryStatus.CANCELLED
+        first.save(update_fields=["entry_status", "updated_at"])
+        create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=ProcessType.STANDARD,
+        )
+        with self.assertRaises(DomainError) as ctx:
+            update_queue_entry(first.id, entry_status=QueueEntryStatus.WAITING)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.queue_entry_process_type_exists",
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.entry_status, QueueEntryStatus.CANCELLED)
+
+    def test_uncancel_allowed_when_no_active_same_process(self) -> None:
+        first = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=ProcessType.STANDARD,
+        )
+        first.entry_status = QueueEntryStatus.CANCELLED
+        first.save(update_fields=["entry_status", "updated_at"])
+        update_queue_entry(first.id, entry_status=QueueEntryStatus.WAITING)
+        first.refresh_from_db()
+        self.assertEqual(first.entry_status, QueueEntryStatus.WAITING)
+
 
 class QueueEntryProcessTypeApiTests(TestCase):
     def setUp(self) -> None:
@@ -282,6 +332,32 @@ class QueueEntryProcessTypeApiTests(TestCase):
             response.json()["error_key"], QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
         )
 
+    def test_patch_uncancel_when_replacement_exists_returns_400(self) -> None:
+        first = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+        )
+        first.entry_status = QueueEntryStatus.CANCELLED
+        first.save(update_fields=["entry_status", "updated_at"])
+        create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+        )
+        response = self.client.patch(
+            f"/api/v1/queue-entries/{first.id}",
+            data=json.dumps({"entry_status": "WAITING"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error_key"],
+            "other.domain.queue_entry_process_type_exists",
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.entry_status, QueueEntryStatus.CANCELLED)
+
 
 class QueueEntryProcessTypeAdminTests(TestCase):
     def setUp(self) -> None:
@@ -352,6 +428,37 @@ class QueueEntryProcessTypeAdminTests(TestCase):
             QueueEntryAdmin(QueueEntry, AdminSite()).save_model(
                 _request_with_messages(self.user), obj, form, False
             )
+
+    def test_admin_change_uncancel_rejects_duplicate_process_type(self) -> None:
+        first = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=ProcessType.STANDARD,
+        )
+        first.entry_status = QueueEntryStatus.CANCELLED
+        first.save(update_fields=["entry_status", "updated_at"])
+        create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=ProcessType.STANDARD,
+        )
+        first.entry_status = QueueEntryStatus.WAITING
+        form = type(
+            "BoundQueueEntryForm",
+            (),
+            {
+                "changed_data": ["entry_status"],
+                "cleaned_data": {"entry_status": QueueEntryStatus.WAITING},
+            },
+        )()
+        with self.assertRaises(DomainError):
+            QueueEntryAdmin(QueueEntry, AdminSite()).save_model(
+                _request_with_messages(self.user), first, form, True
+            )
+        first.refresh_from_db()
+        self.assertEqual(first.entry_status, QueueEntryStatus.CANCELLED)
 
 
 class IntakeProcessTypeCatalogTests(TestCase):
@@ -494,8 +601,6 @@ class IntakeProcessTypeCatalogTests(TestCase):
     def test_attaching_question_to_telederm_does_not_remove_it_from_standard(
         self,
     ) -> None:
-        from apps.intake.models import AnamnesisQuestionDefinitionProcess
-
         AnamnesisQuestionDefinitionProcess.objects.get_or_create(
             question_definition=self.question_a,
             process_type=ProcessType.TELEDERM,
@@ -504,6 +609,20 @@ class IntakeProcessTypeCatalogTests(TestCase):
         ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
         question_codes = {q["question_code"] for q in ctx["anamnesis_questions"]}
         self.assertIn("PT_Q_A", question_codes)
+
+    def test_check_constraint_rejects_unknown_consent_process_type(self) -> None:
+        with self.assertRaises(IntegrityError):
+            ConsentDefinitionProcess.objects.create(
+                consent_definition=self.both,
+                process_type="VIDEO",
+            )
+
+    def test_check_constraint_rejects_unknown_question_process_type(self) -> None:
+        with self.assertRaises(IntegrityError):
+            AnamnesisQuestionDefinitionProcess.objects.create(
+                question_definition=self.question_a,
+                process_type="VIDEO",
+            )
 
 
 class QueueDuplicateResolutionTests(SimpleTestCase):

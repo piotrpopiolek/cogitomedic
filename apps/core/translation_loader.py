@@ -36,6 +36,7 @@ _KEY_ALLOWED_PLACEHOLDERS: dict[str, list[str]] = {
     "other.domain.invalid_queue_status": ["value"],
     "other.domain.invalid_queue_entry_status": ["value"],
     "other.domain.invalid_process_type": ["value"],
+    "other.domain.import_invalid_process_type": ["value"],
     "other.domain.queue_entry_process_type_exists": ["process_type"],
     "other.domain.unsupported_form_locale": ["locale"],
     "other.domain.invalid_staff_role": ["role"],

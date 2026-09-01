@@ -11,8 +11,10 @@ from django.db import models
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.name_normalize import compute_incoming_pdf_name_keys
 from apps.reception.process_types import (
+    QUEUE_ENTRY_PROCESS_TYPE_ALLOWED,
     QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
     ProcessType,
+    process_type_allowed_constraint,
 )
 from django.db.models import F, Q
 from django.utils import timezone
@@ -717,6 +719,7 @@ class QueueEntry(models.Model):
                 condition=~Q(entry_status=QueueEntryStatus.CANCELLED),
                 name=QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
             ),
+            process_type_allowed_constraint(name=QUEUE_ENTRY_PROCESS_TYPE_ALLOWED),
         ]
 
     def save(self, *args, **kwargs):

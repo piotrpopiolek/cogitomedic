@@ -6,7 +6,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -41,8 +41,10 @@ from apps.reception.models import (
     QueueEntry,
     TabletDevice,
 )
+from apps.reception.process_types import QUEUE_ENTRY_PROCESS_TYPE_UNIQUE
 from apps.reception.services import (
     create_queue_entry,
+    queue_entry_process_type_exists_error,
     staff_user_may_set_ausfallhonorar,
     update_queue_entry,
 )
@@ -611,6 +613,18 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
             # Flag write failed after message_user ERROR; skip admin "saved successfully".
             return redirect(request.get_full_path())
 
+    def _report_domain_error(self, request, exc: DomainError) -> None:
+        self.message_user(
+            request,
+            resolve_other_message(
+                request,
+                exc.api_message_key or "",
+                str(exc),
+                **(exc.api_message_params or {}),
+            ),
+            level=messages.ERROR,
+        )
+
     def save_model(self, request, obj, form, change):
         _set_created_by_user(request, obj, change)
         # Intent is the bound form vs its initial snapshot, not the live DB row.
@@ -634,16 +648,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                         process_type=obj.process_type,
                     )
                 except DomainError as exc:
-                    self.message_user(
-                        request,
-                        resolve_other_message(
-                            request,
-                            exc.api_message_key or "",
-                            str(exc),
-                            **(exc.api_message_params or {}),
-                        ),
-                        level=messages.ERROR,
-                    )
+                    self._report_domain_error(request, exc)
                     raise
                 obj.pk = created.pk
                 obj.id = created.id
@@ -659,7 +664,27 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
             obj.ausfallhonorar = stored.ausfallhonorar
             obj.ausfallhonorar_set_at = stored.ausfallhonorar_set_at
             obj.ausfallhonorar_set_by_id = stored.ausfallhonorar_set_by_id
-            super().save_model(request, obj, form, change)
+            status_changed = "entry_status" in getattr(form, "changed_data", [])
+            try:
+                if status_changed:
+                    try:
+                        updated = update_queue_entry(
+                            obj.pk,
+                            entry_status=obj.entry_status,
+                            actor_user_id=request.user.id,
+                        )
+                    except DomainError as exc:
+                        self._report_domain_error(request, exc)
+                        raise
+                    obj.entry_status = updated.entry_status
+                    obj.doctor_list_sort_at = updated.doctor_list_sort_at
+                super().save_model(request, obj, form, change)
+            except IntegrityError as exc:
+                if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
+                    err = queue_entry_process_type_exists_error(obj.process_type)
+                    self._report_domain_error(request, err)
+                    raise err from exc
+                raise
             if flag_changed:
                 self._apply_ausfallhonorar(request, obj.id, bool(desired_flag))
 
@@ -671,16 +696,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                 actor_user_id=request.user.id,
             )
         except DomainError as exc:
-            self.message_user(
-                request,
-                resolve_other_message(
-                    request,
-                    exc.api_message_key or "",
-                    str(exc),
-                    **(exc.api_message_params or {}),
-                ),
-                level=messages.ERROR,
-            )
+            self._report_domain_error(request, exc)
             raise
 
     def _bulk_set_ausfallhonorar(self, request, queryset, *, flagged: bool) -> None:

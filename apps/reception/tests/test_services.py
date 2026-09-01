@@ -1406,7 +1406,7 @@ class PatientXlsxImportTests(TestCase):
         self.assertEqual(second.matched_rows, 1)
         self.assertEqual(QueueEntry.objects.count(), 2)
 
-    def test_import_v2_unknown_cell_falls_back_to_standard(self) -> None:
+    def test_import_v2_unknown_cell_is_row_error(self) -> None:
         batch = self._run_import(
             [
                 (
@@ -1420,9 +1420,59 @@ class PatientXlsxImportTests(TestCase):
             ],
             extra_header="Terminart",
         )
-        self.assertEqual(batch.status, ImportStatus.COMPLETED)
-        entry = QueueEntry.objects.get()
-        self.assertEqual(entry.process_type, ProcessType.STANDARD)
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(batch.inserted_rows, 0)
+        self.assertEqual(QueueEntry.objects.count(), 0)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        )
+
+    def test_import_v2_empty_terminart_is_row_error(self) -> None:
+        batch = self._run_import(
+            [
+                (
+                    "Erika",
+                    "Mustermann",
+                    "01.01.1991",
+                    "+48 777 888 913",
+                    "erika.empty@example.com",
+                    "",
+                )
+            ],
+            extra_header="Terminart",
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(QueueEntry.objects.count(), 0)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        )
+
+    def test_import_v2_unknown_cell_does_not_skip_as_standard(self) -> None:
+        identity = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 914",
+            "erika.skip@example.com",
+        )
+        first = self._run_import(
+            [(*identity, "STANDARD")],
+            extra_header="Terminart",
+        )
+        self.assertEqual(first.status, ImportStatus.COMPLETED)
+        second = self._run_import(
+            [(*identity, "Unbekannte Leistung")],
+            extra_header="Terminart",
+        )
+        self.assertEqual(second.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(second.skipped_already_present_count, 0)
+        self.assertEqual(second.error_rows, 1)
+        self.assertEqual(QueueEntry.objects.count(), 1)
+        self.assertEqual(QueueEntry.objects.get().process_type, ProcessType.STANDARD)
 
 
 class PurgeSeedClinicDataTests(TestCase):
