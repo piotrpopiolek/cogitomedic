@@ -7,6 +7,12 @@ from typing import Any
 from apps.telederm.models import TeledermAnswerType, TeledermSection
 
 
+def _choice_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return value.value
+
+
 def _opt(
     code: str,
     *,
@@ -32,8 +38,8 @@ def _q(
     question_id: str,
     *,
     path_code: str,
-    section: str = TeledermSection.QUESTIONNAIRE,
-    answer_type: str,
+    section: Any = TeledermSection.QUESTIONNAIRE,
+    answer_type: Any,
     text_de: str,
     text_en: str,
     text_pl: str,
@@ -46,8 +52,8 @@ def _q(
     return {
         "question_id": question_id,
         "path_code": path_code,
-        "section": section,
-        "answer_type": answer_type,
+        "section": _choice_str(section),
+        "answer_type": _choice_str(answer_type),
         "question_text_de": text_de,
         "question_text_en": text_en,
         "question_text_pl": text_pl,
@@ -87,7 +93,9 @@ def _ft(
 
 YES = _opt("YES", label_de="Ja", label_en="Yes", label_pl="Tak")
 NO = _opt("NO", label_de="Nein", label_en="No", label_pl="Nie")
-UNKNOWN = _opt("UNKNOWN", label_de="Weiß nicht", label_en="Don't know", label_pl="Nie wiem")
+UNKNOWN = _opt(
+    "UNKNOWN", label_de="Weiß nicht", label_en="Don't know", label_pl="Nie wiem"
+)
 NONE = _opt("NONE", label_de="Keine", label_en="None", label_pl="Brak")
 OTHER = _opt("OTHER", label_de="Sonstiges", label_en="Other", label_pl="Inne")
 NOT_APPLICABLE = _opt(

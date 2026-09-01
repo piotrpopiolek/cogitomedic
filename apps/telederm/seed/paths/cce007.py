@@ -9,7 +9,6 @@ from apps.telederm.seed.helpers import (
     DURATION_UNDER_SEVEN,
     NO,
     OTHER,
-    YES,
     YES_NO,
     YES_NO_UNKNOWN,
     _opt,

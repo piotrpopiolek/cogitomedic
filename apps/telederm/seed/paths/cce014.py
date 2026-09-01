@@ -8,7 +8,6 @@ from apps.telederm.models import TeledermAnswerType, TeledermSection
 from apps.telederm.seed.helpers import (
     NO,
     NOT_APPLICABLE,
-    UNKNOWN,
     YES,
     YES_NO,
     YES_NO_UNKNOWN,

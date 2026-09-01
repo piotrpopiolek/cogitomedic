@@ -105,7 +105,7 @@ def serialize_catalog_for_tablet(
                 },
             }
         )
-    path = active_path_code(payload, catalog)
+    path = active_path_code(payload, list(catalog))
     return {
         "schema_version": TELEDERM_PAYLOAD_SCHEMA_VERSION,
         "chief_complaint_path": path,

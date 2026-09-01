@@ -21,7 +21,9 @@ def normalize_answer(raw: Any) -> TeledermAnswerValue:
         return TeledermAnswerValue(selected=())
     selected_raw = raw.get("selected") or raw.get("selected_option_codes") or []
     if isinstance(selected_raw, str):
-        selected = (selected_raw.strip(),) if selected_raw.strip() else ()
+        selected: tuple[str, ...] = (
+            (selected_raw.strip(),) if selected_raw.strip() else ()
+        )
     elif isinstance(selected_raw, list):
         selected = tuple(str(x).strip() for x in selected_raw if str(x).strip())
     else:

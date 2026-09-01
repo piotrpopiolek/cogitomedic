@@ -7,10 +7,7 @@ from typing import Any
 from apps.telederm.models import TeledermAnswerType, TeledermSection
 from apps.telederm.seed.helpers import (
     DURATION_UNDER_SEVEN,
-    NO,
     OTHER,
-    UNKNOWN,
-    YES,
     YES_NO,
     YES_NO_UNKNOWN,
     _ft,

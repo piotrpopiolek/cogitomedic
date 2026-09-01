@@ -9,8 +9,6 @@ from apps.telederm.seed.helpers import (
     NONE,
     NO,
     PREGNANCY,
-    UNKNOWN,
-    YES,
     YES_NO,
     YES_NO_UNKNOWN,
     _ft,

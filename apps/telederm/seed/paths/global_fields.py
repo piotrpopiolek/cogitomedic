@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from apps.telederm.models import TeledermAnswerType, TeledermSection
-from apps.telederm.seed.helpers import NO, NOT_APPLICABLE, OTHER, YES, YES_NO, _ft, _opt, _q
+from apps.telederm.seed.helpers import NO, NOT_APPLICABLE, OTHER, YES_NO, _ft, _opt, _q
 
 PATH_CODE = "GLOBAL"
 BASE_ORDER = 16000
