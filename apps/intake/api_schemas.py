@@ -45,6 +45,21 @@ class UpdateAnamnesisPayloadRequest(BaseModel):
     answers: list[AnamnesisAnswerPayload] = Field(default_factory=list)
 
 
+class TeledermAnswerPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selected: list[str] = Field(default_factory=list)
+    free_text: str | None = None
+
+
+class UpdateTeledermPayloadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(default=1, ge=1)
+    answers: dict[str, TeledermAnswerPayload] = Field(default_factory=dict)
+    chief_complaint_path: str | None = None
+
+
 class SubmitIntakeFormRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

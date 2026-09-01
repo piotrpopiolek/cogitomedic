@@ -273,5 +273,30 @@
     "de": "Sprache wählen",
     "en": "Choose language",
     "pl": "Wybierz język"
+  },
+  "waiting_room.form.telederm_title": {
+    "de": "Teledermatologie-Fragebogen",
+    "en": "Teledermatology questionnaire",
+    "pl": "Kwestionariusz teledermatologiczny"
+  },
+  "waiting_room.form.telederm_hint": {
+    "de": "Bitte beantworten Sie die Fragen zu Ihrem Hautproblem.",
+    "en": "Please answer the questions about your skin concern.",
+    "pl": "Proszę odpowiedzieć na pytania dotyczące problemu skórnego."
+  },
+  "waiting_room.form.telederm_summary_title": {
+    "de": "Zusammenfassung",
+    "en": "Summary",
+    "pl": "Podsumowanie"
+  },
+  "waiting_room.form.telederm_problem_label": {
+    "de": "Hauptproblem:",
+    "en": "Main concern:",
+    "pl": "Główny problem:"
+  },
+  "waiting_room.form.telederm_triage_blocked": {
+    "de": "Aufgrund der Dringlichkeit wenden Sie sich bitte umgehend an eine Notaufnahme.",
+    "en": "Because of urgency, please go to emergency care immediately.",
+    "pl": "Ze względu na pilność prosimy niezwłocznie udać się na SOR."
   }
 }

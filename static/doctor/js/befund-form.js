@@ -65,6 +65,8 @@
     lesionHeader: uiText("lesion_header"),
     patientLabel: uiText("patient_label"),
     intakeAnamnesisHeading: uiText("intake_summary_anamnesis_heading"),
+    intakeClinicalSummaryHeading: uiText("intake_summary_clinical_summary_heading"),
+    teledermTriageBlocked: uiText("telederm_triage_blocked"),
     intakeReceptionNoteHeading: uiText("intake_summary_reception_note_heading"),
     templateNameFallback: uiText("template_name_fallback"),
     externalPdfRejectBtn: uiText("external_pdf_reject_btn"),
@@ -1049,6 +1051,34 @@
             escapeHtml(answerText || "—") +
             "</span></p>";
         });
+      }
+      const clinicalSummary = CTX.intake_summary.clinical_summary;
+      if (clinicalSummary && !clinicalSummary.triage_blocked) {
+        html +=
+          '<p class="mb-2 mt-2"><strong>' +
+          escapeHtml(UI.intakeClinicalSummaryHeading) +
+          "</strong></p>";
+        if (clinicalSummary.problem_label) {
+          html +=
+            '<p class="small mb-1"><strong>' +
+            escapeHtml(clinicalSummary.problem_label) +
+            "</strong></p>";
+        }
+        (clinicalSummary.lines || []).forEach(function (line) {
+          html +=
+            '<p class="small mb-1"><strong>' +
+            escapeHtml(line.label || line.question_id || "") +
+            '</strong><br/><span class="text-muted">' +
+            escapeHtml(line.value || "—") +
+            "</span></p>";
+        });
+      } else if (clinicalSummary && clinicalSummary.triage_blocked) {
+        html +=
+          '<p class="mb-2 mt-2 text-danger"><strong>' +
+          escapeHtml(UI.intakeClinicalSummaryHeading) +
+          "</strong><br/><span>" +
+          escapeHtml(UI.teledermTriageBlocked) +
+          "</span></p>";
       }
       const summaryEl = el("intake-summary");
       if (summaryEl) summaryEl.innerHTML = html;

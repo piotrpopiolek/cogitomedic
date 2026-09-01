@@ -591,6 +591,20 @@ class PatientIntakeForm(models.Model):
             "administration.field_anamnesis_payload", "Anamnesis payload"
         ),
     )
+    telederm_schema_version = models.SmallIntegerField(
+        default=0,
+        verbose_name=db_gettext_lazy(
+            "administration.field_telederm_schema_version",
+            "Telederm schema version",
+        ),
+    )
+    telederm_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=db_gettext_lazy(
+            "administration.field_telederm_payload", "Telederm payload"
+        ),
+    )
     signature_file_path = models.CharField(
         max_length=500,
         blank=True,

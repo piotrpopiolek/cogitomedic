@@ -1,0 +1,218 @@
+"""Seed questions for CCE-014 – shingles (Q260–Q268)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from apps.telederm.models import TeledermAnswerType, TeledermSection
+from apps.telederm.seed.helpers import (
+    NO,
+    NOT_APPLICABLE,
+    UNKNOWN,
+    YES,
+    YES_NO,
+    YES_NO_UNKNOWN,
+    _opt,
+    _q,
+)
+
+PATH_CODE = "CCE-014"
+BASE_ORDER = 14000
+
+CCE014_CATALOG: list[dict[str, Any]] = [
+    _q(
+        "Q260",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=BASE_ORDER,
+        text_de="Wo befinden sich die Veränderungen?",
+        text_en="Where are the changes located?",
+        text_pl="Gdzie znajdują się zmiany?",
+        options=[
+            _opt("FACE", label_de="Gesicht", label_en="Face", label_pl="Twarz"),
+            _opt(
+                "PERIORBITAL",
+                label_de="Augenumgebung",
+                label_en="Around the eye",
+                label_pl="Okolica oka",
+            ),
+            _opt("EAR", label_de="Ohr", label_en="Ear", label_pl="Ucho"),
+            _opt("NECK", label_de="Hals", label_en="Neck", label_pl="Szyja"),
+            _opt(
+                "CHEST",
+                label_de="Brustkorb",
+                label_en="Chest",
+                label_pl="Klatka",
+            ),
+            _opt("BACK", label_de="Rücken", label_en="Back", label_pl="Plecy"),
+            _opt("ABDOMEN", label_de="Bauch", label_en="Abdomen", label_pl="Brzuch"),
+            _opt(
+                "UPPER_LIMB",
+                label_de="Obere Extremität",
+                label_en="Upper limb",
+                label_pl="Kończyna górna",
+            ),
+            _opt(
+                "LOWER_LIMB",
+                label_de="Untere Extremität",
+                label_en="Lower limb",
+                label_pl="Kończyna dolna",
+            ),
+        ],
+    ),
+    _q(
+        "Q261",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 10,
+        text_de="Sind die Veränderungen nur auf einer Körperseite?",
+        text_en="Are the changes only on one side of the body?",
+        text_pl="Czy zmiany są tylko po jednej stronie ciała?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q262",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 20,
+        text_de="Seit wann bestehen die Veränderungen?",
+        text_en="How long have the changes been present?",
+        text_pl="Od kiedy trwa problem?",
+        options=[
+            _opt(
+                "UNDER_24H",
+                label_de="Weniger als 24 Stunden",
+                label_en="Less than 24 hours",
+                label_pl="Mniej niż 24 h",
+            ),
+            _opt(
+                "TWO_TO_THREE_DAYS",
+                label_de="2–3 Tage",
+                label_en="2–3 days",
+                label_pl="2–3 dni",
+            ),
+            _opt(
+                "FOUR_TO_SEVEN_DAYS",
+                label_de="4–7 Tage",
+                label_en="4–7 days",
+                label_pl="4–7 dni",
+            ),
+            _opt(
+                "OVER_SEVEN_DAYS",
+                label_de="Länger als 7 Tage",
+                label_en="More than 7 days",
+                label_pl="Ponad 7 dni",
+            ),
+        ],
+    ),
+    _q(
+        "Q263",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=BASE_ORDER + 30,
+        text_de="Bestehen Schmerzen, Brennen oder Überempfindlichkeit der Haut?",
+        text_en="Do you have pain, burning, or skin hypersensitivity?",
+        text_pl="Czy występuje ból, pieczenie lub nadwrażliwość skóry?",
+        options=[
+            _opt("PAIN", label_de="Schmerz", label_en="Pain", label_pl="Ból"),
+            _opt(
+                "BURNING",
+                label_de="Brennen",
+                label_en="Burning",
+                label_pl="Pieczenie",
+            ),
+            _opt(
+                "HYPERSENSITIVITY",
+                label_de="Überempfindlichkeit",
+                label_en="Hypersensitivity",
+                label_pl="Nadwrażliwość",
+            ),
+            _opt("NONE", label_de="Keine", label_en="None", label_pl="Brak"),
+        ],
+    ),
+    _q(
+        "Q264",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 40,
+        text_de="Sind Bläschen sichtbar?",
+        text_en="Are blisters visible?",
+        text_pl="Czy widoczne są pęcherzyki?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q265",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 50,
+        text_de="Bestehen Fieber oder Schwächegefühl?",
+        text_en="Do you have fever or feel weak?",
+        text_pl="Czy występuje gorączka lub osłabienie?",
+        options=YES_NO,
+    ),
+    _q(
+        "Q266",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=BASE_ORDER + 60,
+        text_de="Bestehen Sehstörungen, Augenschmerzen oder Veränderungen an der Nase bzw. am Auge?",
+        text_en="Do you have vision problems, eye pain, or changes on the nose or around the eye?",
+        text_pl="Czy występują zaburzenia widzenia, ból oka lub zmiany na nosie/około oka?",
+        options=[
+            _opt(
+                "EYE_PAIN",
+                label_de="Augenschmerz",
+                label_en="Eye pain",
+                label_pl="Ból oka",
+            ),
+            _opt(
+                "VISION_DISTURBANCE",
+                label_de="Sehstörung",
+                label_en="Vision disturbance",
+                label_pl="Zaburzenia widzenia",
+            ),
+            _opt(
+                "CHANGES_NEAR_EYE",
+                label_de="Veränderungen am Auge",
+                label_en="Changes near the eye",
+                label_pl="Zmiany przy oku",
+            ),
+            _opt(
+                "CHANGES_ON_NOSE",
+                label_de="Veränderungen an der Nase",
+                label_en="Changes on the nose",
+                label_pl="Zmiany na nosie",
+            ),
+            _opt("NONE", label_de="Nein", label_en="No", label_pl="Nie"),
+        ],
+    ),
+    _q(
+        "Q267",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 70,
+        text_de="Besteht eine geschwächte Immunabwehr?",
+        text_en="Do you have weakened immunity?",
+        text_pl="Czy występuje osłabienie odporności?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q268",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 80,
+        text_de="Sind Sie schwanger?",
+        text_en="Are you pregnant?",
+        text_pl="Czy jest Pani w ciąży?",
+        options=[YES, NO, NOT_APPLICABLE],
+    ),
+]

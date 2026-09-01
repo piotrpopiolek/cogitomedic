@@ -8,6 +8,7 @@ from apps.intake.api_views import (
     intake_form_detail_view,
     intake_form_signature_view,
     intake_form_submit_view,
+    intake_form_telederm_view,
     intake_outbox_event_retry_view,
     intake_outbox_events_view,
     intake_outbox_process_view,
@@ -390,6 +391,11 @@ urlpatterns = [
         "intake-forms/<uuid:intake_form_id>/anamnesis",
         intake_form_anamnesis_view,
         name="intake-form-anamnesis",
+    ),
+    path(
+        "intake-forms/<uuid:intake_form_id>/telederm-payload",
+        intake_form_telederm_view,
+        name="intake-form-telederm-payload",
     ),
     path(
         "intake-forms/<uuid:intake_form_id>/submit",

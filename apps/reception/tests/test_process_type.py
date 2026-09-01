@@ -28,6 +28,8 @@ from apps.intake.services import (
     get_intake_form_context,
     submit_patient_intake_form,
 )
+from apps.telederm.services import save_telederm_payload
+from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 from apps.reception.admin import QueueEntryAdmin
 from apps.reception.models import (
     ClinicSite,
@@ -568,6 +570,13 @@ class IntakeProcessTypeCatalogTests(TestCase):
             anamnesis_payload={"schema_version": 1, "answers": []},
         )
 
+    def _fill_smoke_telederm(self, intake: PatientIntakeForm) -> None:
+        save_telederm_payload(
+            intake_form_id=intake.id,
+            form_locale="de-DE",
+            payload=SMOKE_TELEDERM_ANSWERS,
+        )
+
     def test_standard_context_includes_standard_catalog_not_telederm_only(
         self,
     ) -> None:
@@ -579,6 +588,14 @@ class IntakeProcessTypeCatalogTests(TestCase):
         question_codes = {q["question_code"] for q in ctx["anamnesis_questions"]}
         self.assertIn("PT_Q_A", question_codes)
         self.assertEqual(ctx["process_type"], ProcessType.STANDARD)
+
+    def test_telederm_context_includes_telederm_catalog(self) -> None:
+        intake = self._intake_for(PROCESS_TYPE_TELEDERM)
+        ctx = get_intake_form_context(intake_form_id=intake.id, form_locale="de-DE")
+        self.assertIn("telederm", ctx)
+        self.assertIn("questions", ctx["telederm"])
+        question_ids = {q["question_id"] for q in ctx["telederm"]["questions"]}
+        self.assertIn("T001", question_ids)
 
     def test_telederm_context_excludes_standard_only_catalog(self) -> None:
         intake = self._intake_for(PROCESS_TYPE_TELEDERM)
@@ -604,6 +621,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
                     accepted=True,
                     accepted_at=timezone.now(),
                 )
+        self._fill_smoke_telederm(intake)
         submit_patient_intake_form(intake_form_id=intake.id)
         intake.refresh_from_db()
         self.assertEqual(intake.form_status, IntakeStatus.SUBMITTED)
@@ -618,6 +636,7 @@ class IntakeProcessTypeCatalogTests(TestCase):
             accepted=True,
             accepted_at=timezone.now(),
         )
+        self._fill_smoke_telederm(intake)
         submit_patient_intake_form(intake_form_id=intake.id)
         intake.refresh_from_db()
         self.assertEqual(intake.form_status, IntakeStatus.SUBMITTED)

@@ -52,6 +52,7 @@ from apps.reception.services import (
     create_or_update_patient_manual,
     create_queue_entry,
 )
+from apps.reception.telederm_gate import telederm_intake_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -563,6 +564,7 @@ def _audit_xlsx_import_finished(
     skipped_already_present_count: int,
     error_rows: int,
     v2_process_type_fallback_count: int = 0,
+    telederm_import_skipped_count: int = 0,
     failure_reason: str | None = None,
 ) -> None:
     md: dict = {
@@ -573,6 +575,7 @@ def _audit_xlsx_import_finished(
         "skipped_already_present_count": skipped_already_present_count,
         "error_rows": error_rows,
         "v2_process_type_fallback_count": v2_process_type_fallback_count,
+        "telederm_import_skipped_count": telederm_import_skipped_count,
     }
     if failure_reason:
         md["failure_reason"] = failure_reason
@@ -650,6 +653,7 @@ def process_patient_xlsx_import_batch(
     inserted = 0
     matched = 0
     skipped_already_present = 0
+    telederm_import_skipped = 0
     errors_count = 0
     seen_identity: set[tuple[str, str, str, date, str]] = set()
     header_indices: dict[str, int] = {}
@@ -732,6 +736,13 @@ def process_patient_xlsx_import_batch(
                     error_message=str(e),
                     raw_row=dict(zip(range(len(row_list)), row_list)),
                 )
+                continue
+
+            if (
+                norm.process_type == PROCESS_TYPE_TELEDERM
+                and not telederm_intake_enabled()
+            ):
+                telederm_import_skipped += 1
                 continue
 
             identity_key = (
@@ -943,6 +954,7 @@ def process_patient_xlsx_import_batch(
         matched_rows=matched,
         skipped_already_present_count=skipped_already_present,
         error_rows=errors_count,
+        telederm_import_skipped_count=telederm_import_skipped,
     )
     _try_record_import_batch_finished(
         batch,

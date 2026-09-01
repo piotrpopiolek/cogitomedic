@@ -78,6 +78,10 @@ if ENVIRONMENT == "prod" and not os.environ.get("SECRET_KEY"):
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-secret")
 DEBUG = ENVIRONMENT != "prod" and os.environ.get("DEBUG", "1") == "1"
+TELEDERM_INTAKE_ENABLED = os.environ.get(
+    "TELEDERM_INTAKE_ENABLED",
+    "1" if ENVIRONMENT != "prod" else "0",
+).lower() in ("1", "true", "yes")
 
 PROMETHEUS_METRICS_TOKEN = os.environ.get("PROMETHEUS_METRICS_TOKEN")
 SCHEDULER_METRICS_PORT = int(os.environ.get("SCHEDULER_METRICS_PORT", "8001"))
@@ -122,6 +126,7 @@ INSTALLED_APPS += [
     "apps.users",
     "apps.reception",
     "apps.intake",
+    "apps.telederm",
     "apps.medical",
     "apps.outbox",
     "apps.integrations",

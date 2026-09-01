@@ -651,6 +651,9 @@ def create_queue_entry(
 ) -> QueueEntry:
     """Create queue entry and auto-assign next position for the queue."""
     resolved_process_type = parse_process_type(process_type)
+    from apps.reception.telederm_gate import assert_telederm_creation_allowed
+
+    assert_telederm_creation_allowed(resolved_process_type)
     daily_queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     if daily_queue.status != QueueStatus.OPEN:
         raise StateTransitionError(

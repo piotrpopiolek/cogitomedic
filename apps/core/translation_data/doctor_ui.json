@@ -579,6 +579,16 @@
     "en": "Anamnesis",
     "pl": "Ankieta"
   },
+  "doctor.intake_summary_clinical_summary_heading": {
+    "de": "Clinical Summary (Teledermatologie)",
+    "en": "Clinical Summary (Teledermatology)",
+    "pl": "Clinical Summary (teledermatologia)"
+  },
+  "doctor.telederm_triage_blocked": {
+    "de": "Triage: dringend – Notaufnahme empfohlen",
+    "en": "Triage: urgent – emergency care recommended",
+    "pl": "Triaż: pilne – zalecana opieka na SOR"
+  },
   "doctor.intake_summary_reception_note_heading": {
     "de": "Empfangsnotiz",
     "en": "Reception note",

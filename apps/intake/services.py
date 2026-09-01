@@ -31,7 +31,7 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
-from apps.reception.process_types import coerce_process_type
+from apps.reception.process_types import PROCESS_TYPE_TELEDERM, coerce_process_type
 from apps.reception.services import (
     issue_tablet_session_latest_wins,
     raise_if_queue_entry_cancelled,
@@ -483,7 +483,7 @@ def _build_intake_snapshot_payload(
         )
     )
 
-    return {
+    snapshot: dict[str, Any] = {
         "schema_version": 1,
         "captured_at": now.isoformat(),
         "base_locale": "de-DE",
@@ -511,6 +511,12 @@ def _build_intake_snapshot_payload(
         "submitted_at": now.isoformat(),
         "body_map": body_map_section,
     }
+    if (
+        coerce_process_type(queue_entry.process_type) == PROCESS_TYPE_TELEDERM
+        and intake_form.telederm_payload
+    ):
+        snapshot["telederm"] = intake_form.telederm_payload
+    return snapshot
 
 
 def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
@@ -772,7 +778,7 @@ def get_intake_form_context(
         "email": patient.email,
     }
 
-    return {
+    context: dict[str, Any] = {
         "intake_form_id": str(intake_form.id),
         "queue_entry_id": str(queue_entry.id),
         "process_type": process_type,
@@ -786,6 +792,18 @@ def get_intake_form_context(
         "patient": patient_payload,
         "has_signature": bool(intake_form.signature_file_path),
     }
+    if process_type == PROCESS_TYPE_TELEDERM:
+        from apps.telederm.services import load_catalog, serialize_catalog_for_tablet
+
+        catalog = load_catalog()
+        payload = intake_form.telederm_payload or {}
+        context["telederm"] = serialize_catalog_for_tablet(
+            catalog=catalog, payload=payload, locale=form_locale
+        )
+        context["telederm_schema_version"] = (
+            intake_form.telederm_schema_version or 1
+        )
+    return context
 
 
 @transaction.atomic
@@ -1187,22 +1205,40 @@ def submit_patient_intake_form(
             api_message_key="other.domain.required_consents_not_accepted",
         )
 
-    required_question_codes = set(
-        AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(today, process_type), is_required=True
+    if process_type == PROCESS_TYPE_TELEDERM:
+        from apps.telederm.services import finalize_telederm_payload_on_submit
+
+        finalized = finalize_telederm_payload_on_submit(
+            intake_form,
+            form_locale=(session.form_locale or "de-DE"),
+            submitted_at=now,
         )
-        .distinct()
-        .values_list("code", flat=True)
-    )
-    answered_question_codes = _extract_answered_question_codes(
-        intake_form.anamnesis_payload
-    )
-    missing_question_codes = required_question_codes - answered_question_codes
-    if missing_question_codes:
-        raise RequiredAnamnesisMissingError(
-            domain_message("other.domain.required_anamnesis_not_answered"),
-            api_message_key="other.domain.required_anamnesis_not_answered",
+        intake_form.telederm_payload = finalized
+        intake_form.telederm_schema_version = finalized.get("schema_version", 1)
+        intake_form.save(
+            update_fields=[
+                "telederm_payload",
+                "telederm_schema_version",
+                "updated_at",
+            ]
         )
+    else:
+        required_question_codes = set(
+            AnamnesisQuestionDefinition.objects.filter(
+                _effective_question_filter(today, process_type), is_required=True
+            )
+            .distinct()
+            .values_list("code", flat=True)
+        )
+        answered_question_codes = _extract_answered_question_codes(
+            intake_form.anamnesis_payload
+        )
+        missing_question_codes = required_question_codes - answered_question_codes
+        if missing_question_codes:
+            raise RequiredAnamnesisMissingError(
+                domain_message("other.domain.required_anamnesis_not_answered"),
+                api_message_key="other.domain.required_anamnesis_not_answered",
+            )
 
     # Optimistic lock style transition: only one concurrent submit wins.
     updated_rows = PatientIntakeForm.objects.filter(

@@ -59,6 +59,31 @@
     "en": "Invalid process type: {value}.",
     "pl": "Nieprawidłowy typ procesu: {value}."
   },
+  "other.domain.telederm_intake_disabled": {
+    "de": "Teledermatologie-Intake ist derzeit deaktiviert.",
+    "en": "Teledermatology intake is currently disabled.",
+    "pl": "Wywiad teledermatologiczny jest obecnie wyłączony."
+  },
+  "other.domain.not_telederm_intake": {
+    "de": "Dieses Formular ist kein Teledermatologie-Intake.",
+    "en": "This form is not a teledermatology intake.",
+    "pl": "Ten formularz nie jest w teledermatologicznym."
+  },
+  "other.domain.intake_telederm_in_progress_only": {
+    "de": "Teledermatologie-Fragebogen kann nur bei laufendem Intake bearbeitet werden.",
+    "en": "Teledermatology questionnaire can only be edited while intake is in progress.",
+    "pl": "Kwestionariusz teledermatologiczny można edytować tylko przy trwającym wywadzie."
+  },
+  "other.domain.required_telederm_not_answered": {
+    "de": "Bitte alle Pflichtfragen im Teledermatologie-Fragebogen beantworten.",
+    "en": "Please answer all required teledermatology questionnaire items.",
+    "pl": "Proszę odpowiedzieć na wszystkie wymagane pytania kwestionariusza teledermatologicznego."
+  },
+  "other.domain.telederm_triage_blocked": {
+    "de": "Aufgrund der Dringlichkeit wenden Sie sich bitte umgehend an eine Notaufnahme.",
+    "en": "Because of urgency, please go to emergency care immediately.",
+    "pl": "Ze względu na pilność prosimy niezwłocznie udać się na SOR."
+  },
   "other.domain.expires_in_minutes_positive": {
     "de": "expires_in_minutes muss positiv sein.",
     "en": "expires_in_minutes must be positive.",
