@@ -6,9 +6,13 @@ from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import models
-from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
 
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
+from apps.intake.constants import (
+    TELEDERM_PAYLOAD_SCHEMA_VERSION,
+    default_telederm_payload,
+)
 from apps.outbox.constants import outbox_max_retries_default
 from apps.reception.process_types import (
     ANAMNESIS_QUESTION_PROCESS_TYPE_ALLOWED,
@@ -592,14 +596,14 @@ class PatientIntakeForm(models.Model):
         ),
     )
     telederm_schema_version = models.SmallIntegerField(
-        default=0,
+        default=TELEDERM_PAYLOAD_SCHEMA_VERSION,
         verbose_name=db_gettext_lazy(
             "administration.field_telederm_schema_version",
             "Telederm schema version",
         ),
     )
     telederm_payload = models.JSONField(
-        default=dict,
+        default=default_telederm_payload,
         blank=True,
         verbose_name=db_gettext_lazy(
             "administration.field_telederm_payload", "Telederm payload"

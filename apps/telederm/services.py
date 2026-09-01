@@ -11,7 +11,13 @@ from django.db.models import Prefetch
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
-from apps.core.exceptions import DomainError
+from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.otel_spans import cogito_business_span
+from apps.intake.constants import TELEDERM_PAYLOAD_SCHEMA_VERSION
+from apps.intake.form_access import (
+    assert_intake_form_clinic_scope,
+    intake_allows_patient_edits,
+)
 from apps.intake.models import PatientIntakeForm
 from apps.reception.process_types import PROCESS_TYPE_TELEDERM, coerce_process_type
 from apps.telederm.clinical_summary import build_clinical_summary
@@ -24,10 +30,7 @@ from apps.telederm.engine import (
 from apps.telederm.models import (
     TeledermQuestionDefinition,
     TeledermQuestionOption,
-    TeledermSection,
 )
-
-TELEDERM_PAYLOAD_SCHEMA_VERSION = 1
 
 
 class RequiredTeledermMissingError(DomainError):
@@ -206,36 +209,38 @@ def save_telederm_payload(
     form_locale: str = "de-DE",
     allowed_clinic_site_ids: Iterable[uuid.UUID] | None = None,
 ) -> PatientIntakeForm:
-    from apps.intake.services import (
-        StateTransitionError,
-        _assert_intake_form_clinic_scope,
-        _intake_allows_patient_edits,
-    )
-
     intake_form = (
         PatientIntakeForm.objects.select_for_update()
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
-        intake_form=intake_form,
-        allowed_clinic_site_ids=allowed_clinic_site_ids,
-    )
-    assert_telederm_intake_form(intake_form)
-    if not _intake_allows_patient_edits(intake_form.form_status):
-        raise StateTransitionError(
-            domain_message("other.domain.intake_telederm_in_progress_only"),
-            api_message_key="other.domain.intake_telederm_in_progress_only",
+    with cogito_business_span(
+        "telederm.save_telederm_payload",
+        queue_entry_id=intake_form.queue_entry_id,
+        extra_attributes={
+            "cogito.intake_form_id": str(intake_form.id),
+            "cogito.telederm_schema_version": TELEDERM_PAYLOAD_SCHEMA_VERSION,
+        },
+    ):
+        assert_intake_form_clinic_scope(
+            intake_form=intake_form,
+            allowed_clinic_site_ids=allowed_clinic_site_ids,
         )
-    catalog = load_catalog()
-    normalized = normalize_telederm_payload(
-        payload=payload, catalog=catalog, locale=form_locale
-    )
-    intake_form.telederm_schema_version = TELEDERM_PAYLOAD_SCHEMA_VERSION
-    intake_form.telederm_payload = normalized
-    intake_form.save(
-        update_fields=["telederm_schema_version", "telederm_payload", "updated_at"]
-    )
+        assert_telederm_intake_form(intake_form)
+        if not intake_allows_patient_edits(intake_form.form_status):
+            raise StateTransitionError(
+                domain_message("other.domain.intake_telederm_in_progress_only"),
+                api_message_key="other.domain.intake_telederm_in_progress_only",
+            )
+        catalog = load_catalog()
+        normalized = normalize_telederm_payload(
+            payload=payload, catalog=catalog, locale=form_locale
+        )
+        intake_form.telederm_schema_version = TELEDERM_PAYLOAD_SCHEMA_VERSION
+        intake_form.telederm_payload = normalized
+        intake_form.save(
+            update_fields=["telederm_schema_version", "telederm_payload", "updated_at"]
+        )
     return intake_form
 
 

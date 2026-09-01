@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
 from django.test import TestCase, TransactionTestCase
@@ -85,6 +86,57 @@ class TeledermServicesTests(TestCase):
             form_status=IntakeStatus.IN_PROGRESS,
             signature_file_path=str(signature_path),
             signature_sha256=hashlib.sha256(signature_bytes).hexdigest(),
+        )
+
+    def test_new_form_telederm_payload_includes_schema_version(self) -> None:
+        intake = self._intake_form()
+        self.assertEqual(intake.telederm_schema_version, 1)
+        self.assertEqual(intake.telederm_payload, {"schema_version": 1})
+
+    def test_save_opens_business_span(self) -> None:
+        intake = self._intake_form()
+        with patch("apps.telederm.services.cogito_business_span") as mock_span:
+            save_telederm_payload(
+                intake_form_id=intake.id,
+                payload={"answers": {"T001": {"selected": ["NONE"]}}},
+                form_locale="de-DE",
+            )
+        mock_span.assert_called_once()
+        self.assertEqual(mock_span.call_args.args[0], "telederm.save_telederm_payload")
+        self.assertEqual(
+            mock_span.call_args.kwargs["queue_entry_id"], intake.queue_entry_id
+        )
+        self.assertEqual(
+            mock_span.call_args.kwargs["extra_attributes"]["cogito.intake_form_id"],
+            str(intake.id),
+        )
+        self.assertEqual(
+            mock_span.call_args.kwargs["extra_attributes"][
+                "cogito.telederm_schema_version"
+            ],
+            1,
+        )
+
+    def test_backfill_adds_schema_version_without_dropping_answers(self) -> None:
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        backfill = importlib.import_module(
+            "apps.intake.migrations.0032_telederm_payload_schema_version"
+        ).backfill_telederm_json_schema_version
+
+        intake = self._intake_form()
+        PatientIntakeForm.objects.filter(id=intake.id).update(
+            telederm_schema_version=0,
+            telederm_payload={"answers": {"T001": {"selected": ["NONE"]}}},
+        )
+        backfill(django_apps, None)
+        intake.refresh_from_db()
+        self.assertEqual(intake.telederm_schema_version, 1)
+        self.assertEqual(intake.telederm_payload["schema_version"], 1)
+        self.assertEqual(
+            intake.telederm_payload["answers"]["T001"]["selected"], ["NONE"]
         )
 
     def test_finalize_rejects_incomplete_payload(self) -> None:
