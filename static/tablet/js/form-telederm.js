@@ -185,13 +185,24 @@
       block.dataset.answerType = q.answer_type;
 
       const title = document.createElement("strong");
-      title.textContent =
-        (q.question_text || q.question_id) + (q.is_required ? " *" : "");
+      title.appendChild(
+        document.createTextNode(q.question_text || q.question_id)
+      );
+      if (q.is_required) {
+        title.appendChild(document.createTextNode(" "));
+        const star = document.createElement("span");
+        star.className = "required-mark";
+        star.setAttribute("aria-hidden", "true");
+        star.textContent = "*";
+        title.appendChild(star);
+      }
       block.appendChild(title);
 
       const msg = document.createElement("div");
-      msg.className = "telederm-field-msg error";
+      msg.className = "anamnesis-field-msg";
       msg.style.display = "none";
+      msg.setAttribute("role", "alert");
+      msg.setAttribute("aria-live", "polite");
       block.appendChild(msg);
 
       const answer = q.answer || {};
@@ -247,9 +258,9 @@
       }
       (preview.lines || []).forEach(function (line) {
         html +=
-          "<p class=\"small mb-1\"><strong>" +
+          "<p class=\"telederm-summary-line\"><strong>" +
           (line.label || "") +
-          "</strong><br/><span class=\"text-muted\">" +
+          "</strong><br/><span class=\"telederm-summary-value\">" +
           (line.value || "—") +
           "</span></p>";
       });

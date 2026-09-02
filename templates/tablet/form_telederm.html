@@ -48,7 +48,7 @@
       <h2>{{ ui.consents_title }}</h2>
       {% for c in consents %}
       <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
-        <h3>{{ c.title }}{% if c.is_required %} <span style="color:var(--cm-danger)">*</span>{% endif %}</h3>
+        <h3>{{ c.title }}{% if c.is_required %} <span class="required-mark" aria-hidden="true">*</span>{% endif %}</h3>
         <div class="consent-content">{{ c.content|markdown_consent }}</div>
         <div class="consent-block-msg error" style="display:none;" role="alert" aria-live="polite"></div>
         {% if c.is_multi %}
@@ -89,7 +89,7 @@
       <h2>{{ ui.anamnesis_title }}</h2>
       {% for q in anamnesis_questions %}
       <div class="field" data-question-code="{{ q.question_code }}" data-required="{{ q.is_required|yesno:'true,false' }}">
-        <strong>{{ q.question_text }}{% if q.is_required %} *{% endif %}</strong>
+        <strong>{{ q.question_text }}{% if q.is_required %} <span class="required-mark" aria-hidden="true">*</span>{% endif %}</strong>
         <div class="anamnesis-field-msg" style="display:none;" role="alert" aria-live="polite"></div>
         {% if q.answer_type == "BOOLEAN" or q.answer_type == "SINGLE_CHOICE" %}
           {% for opt in q.options %}
