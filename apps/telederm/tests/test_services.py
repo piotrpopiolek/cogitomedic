@@ -241,19 +241,33 @@ class TeledermServicesTests(TestCase):
         from apps.reception.process_types import PROCESS_TYPE_STANDARD
         from apps.telederm.services import assert_telederm_intake_form
 
-        intake = self._intake_form()
-        intake.queue_entry.process_type = PROCESS_TYPE_STANDARD
-        intake.queue_entry.save(update_fields=["process_type", "updated_at"])
+        entry = create_queue_entry(
+            daily_queue_id=self.queue.id,
+            patient_id=self.patient.id,
+            created_by_user_id=self.user.id,
+            process_type=PROCESS_TYPE_STANDARD,
+        )
+        session = PatientFormSession.objects.create(
+            queue_entry=entry,
+            form_locale="de-DE",
+            expires_at=timezone.now() + timedelta(minutes=30),
+            created_by_user=self.user,
+        )
+        intake = PatientIntakeForm.objects.create(
+            queue_entry=entry,
+            session=session,
+            form_status=IntakeStatus.IN_PROGRESS,
+        )
         with self.assertRaises(DomainError):
             assert_telederm_intake_form(intake)
 
     def test_save_rejects_submitted_form(self) -> None:
         from apps.core.exceptions import StateTransitionError
-        from apps.intake.models import IntakeStatus
 
         intake = self._intake_form()
         intake.form_status = IntakeStatus.SUBMITTED
-        intake.save(update_fields=["form_status", "updated_at"])
+        intake.submitted_at = timezone.now()
+        intake.save(update_fields=["form_status", "submitted_at", "updated_at"])
         with self.assertRaises(StateTransitionError):
             save_telederm_payload(
                 intake_form_id=intake.id,

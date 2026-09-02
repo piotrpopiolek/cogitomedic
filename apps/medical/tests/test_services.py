@@ -161,10 +161,6 @@ class MedicalServicesTests(TestCase):
         )
 
     def test_get_medical_document_context_uses_telederm_preview(self) -> None:
-        from apps.reception.process_types import PROCESS_TYPE_TELEDERM
-
-        self.queue_entry.process_type = PROCESS_TYPE_TELEDERM
-        self.queue_entry.save(update_fields=["process_type", "updated_at"])
         preview = {
             "schema_version": 1,
             "triage_blocked": False,
@@ -192,10 +188,6 @@ class MedicalServicesTests(TestCase):
     def test_get_medical_document_context_builds_telederm_summary_fallback(
         self,
     ) -> None:
-        from apps.reception.process_types import PROCESS_TYPE_TELEDERM
-
-        self.queue_entry.process_type = PROCESS_TYPE_TELEDERM
-        self.queue_entry.save(update_fields=["process_type", "updated_at"])
         self.intake_form.telederm_payload = {
             "schema_version": 1,
             "answers": {

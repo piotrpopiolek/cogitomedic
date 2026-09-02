@@ -581,6 +581,9 @@ class IntakeFormTeledermViewTests(TestCase):
             created_by=self.rec_user,
             process_type=PROCESS_TYPE_TELEDERM,
         )
+        self.rec_user.clinic_sites.add(
+            self.intake_form.queue_entry.daily_queue.clinic_site_id
+        )
 
     def _url(self, form_id=None, *, locale: str = "de-DE") -> str:
         fid = form_id or self.intake_form.id
