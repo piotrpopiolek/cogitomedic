@@ -172,6 +172,95 @@ class TeledermServicesTests(TestCase):
         )
         self.assertEqual(saved.telederm_payload["chief_complaint_path"], "CCE-001")
 
+    def test_serialize_uses_pl_and_en_labels(self) -> None:
+        from apps.telederm.services import load_catalog, serialize_catalog_for_tablet
+
+        catalog = load_catalog()
+        payload = {
+            "answers": {
+                "T001": {"selected": ["NONE"]},
+                "CC001": {"selected": ["NEW_SKIN_LESION"]},
+            }
+        }
+        pl = serialize_catalog_for_tablet(
+            catalog=catalog, payload=payload, locale="pl-PL"
+        )
+        en = serialize_catalog_for_tablet(
+            catalog=catalog, payload=payload, locale="en-US"
+        )
+        self.assertTrue(pl["questions"])
+        self.assertTrue(en["questions"])
+        self.assertEqual(pl["chief_complaint_path"], "CCE-001")
+
+    def test_normalize_rejects_non_dict_answers(self) -> None:
+        from apps.telederm.services import load_catalog, normalize_telederm_payload
+
+        catalog = load_catalog()
+        normalized = normalize_telederm_payload(
+            payload={"answers": "bad", "chief_complaint_path": None},
+            catalog=catalog,
+            locale="de-DE",
+        )
+        self.assertEqual(normalized["answers"], {})
+
+    def test_normalize_skips_non_dict_answer_rows(self) -> None:
+        from apps.telederm.services import load_catalog, normalize_telederm_payload
+
+        catalog = load_catalog()
+        normalized = normalize_telederm_payload(
+            payload={
+                "answers": {
+                    "T001": "nope",
+                    "CC001": {"selected": "NEW_SKIN_LESION"},
+                }
+            },
+            catalog=catalog,
+            locale="de-DE",
+        )
+        self.assertNotIn("T001", normalized["answers"])
+        self.assertEqual(
+            normalized["answers"]["CC001"]["selected"], ["NEW_SKIN_LESION"]
+        )
+
+    def test_validate_rejects_triage_blocked(self) -> None:
+        from apps.telederm.services import (
+            RequiredTeledermMissingError,
+            load_catalog,
+            validate_telederm_for_submit,
+        )
+
+        catalog = load_catalog()
+        with self.assertRaises(RequiredTeledermMissingError):
+            validate_telederm_for_submit(
+                catalog=catalog,
+                payload={"answers": {"T001": {"selected": ["SEVERE_PAIN"]}}},
+            )
+
+    def test_assert_rejects_standard_process(self) -> None:
+        from apps.core.exceptions import DomainError
+        from apps.reception.process_types import PROCESS_TYPE_STANDARD
+        from apps.telederm.services import assert_telederm_intake_form
+
+        intake = self._intake_form()
+        intake.queue_entry.process_type = PROCESS_TYPE_STANDARD
+        intake.queue_entry.save(update_fields=["process_type", "updated_at"])
+        with self.assertRaises(DomainError):
+            assert_telederm_intake_form(intake)
+
+    def test_save_rejects_submitted_form(self) -> None:
+        from apps.core.exceptions import StateTransitionError
+        from apps.intake.models import IntakeStatus
+
+        intake = self._intake_form()
+        intake.form_status = IntakeStatus.SUBMITTED
+        intake.save(update_fields=["form_status", "updated_at"])
+        with self.assertRaises(StateTransitionError):
+            save_telederm_payload(
+                intake_form_id=intake.id,
+                payload={"answers": {"T001": {"selected": ["NONE"]}}},
+                form_locale="de-DE",
+            )
+
 
 class TestSaveTeledermPayloadAutocommit(TransactionTestCase):
     """TestCase wraps each method in atomic and hides FOR UPDATE outside a transaction."""

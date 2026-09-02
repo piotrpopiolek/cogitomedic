@@ -36,13 +36,17 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
+from apps.reception.process_types import PROCESS_TYPE_TELEDERM
 from apps.users.models import StaffUser
 
 _PW = "safe-password"
 
 
 def _create_intake_form(
-    *, created_by: StaffUser, clinic_site: ClinicSite | None = None
+    *,
+    created_by: StaffUser,
+    clinic_site: ClinicSite | None = None,
+    process_type: str | None = None,
 ) -> PatientIntakeForm:
     """Minimal fixture: clinic → queue → patient → entry → form.
 
@@ -71,13 +75,16 @@ def _create_intake_form(
         phone=f"+48500{digit_sfx}00",
         email=f"t-{sfx}@example.com",
     )
-    entry = QueueEntry.objects.create(
-        daily_queue=queue,
-        patient=patient,
-        entry_status=QueueEntryStatus.IN_PROGRESS,
-        position_no=1,
-        created_by_user=created_by,
-    )
+    entry_kwargs: dict = {
+        "daily_queue": queue,
+        "patient": patient,
+        "entry_status": QueueEntryStatus.IN_PROGRESS,
+        "position_no": 1,
+        "created_by_user": created_by,
+    }
+    if process_type is not None:
+        entry_kwargs["process_type"] = process_type
+    entry = QueueEntry.objects.create(**entry_kwargs)
     sess = PatientFormSession.objects.create(
         queue_entry=entry,
         form_locale="de-DE",
@@ -545,3 +552,156 @@ class IntakeOutboxProcessAccessTests(TestCase):
         data = resp.json()
         self.assertIn("processed", data)
         self.assertIn("failed", data)
+
+
+# ---------------------------------------------------------------
+# intake_form_telederm_view  PUT .../telederm-payload
+# ---------------------------------------------------------------
+
+
+@override_settings(RATELIMIT_ENABLE=False)
+class IntakeFormTeledermViewTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.rec_user = StaffUser.objects.create_user(
+            username="td-rec",
+            email="td-rec@ex.com",
+            password=_PW,
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.rec_user, "Reception")
+        self.doc_user = StaffUser.objects.create_user(
+            username="td-doc",
+            email="td-doc@ex.com",
+            password=_PW,
+            is_staff=True,
+        )
+        assign_group_to_test_user(self.doc_user, "Doctor")
+        self.intake_form = _create_intake_form(
+            created_by=self.rec_user,
+            process_type=PROCESS_TYPE_TELEDERM,
+        )
+
+    def _url(self, form_id=None, *, locale: str = "de-DE") -> str:
+        fid = form_id or self.intake_form.id
+        return f"/api/v1/intake-forms/{fid}/telederm-payload?form_locale={locale}"
+
+    def test_doctor_returns_403(self) -> None:
+        self.client.login(username="td-doc", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps({"schema_version": 1, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_invalid_json_returns_400(self) -> None:
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data="BAD_JSON{",
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_pydantic_validation_returns_400(self) -> None:
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps({"schema_version": 0, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["error_key"], "other.api.invalid_request_body")
+
+    @patch("apps.intake.api_views.read_json_body")
+    def test_invalid_body_encoding_returns_domain_error(
+        self, mock_read: MagicMock
+    ) -> None:
+        mock_read.side_effect = InvalidRequestBodyEncoding(
+            "bad utf-8",
+            api_message_key="other.api.request_body_too_large",
+            api_message_params={"max_bytes": 42},
+            http_status=413,
+        )
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps({"schema_version": 1, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 413)
+
+    def test_invalid_locale_returns_400(self) -> None:
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(locale="!!!"),
+            data=json.dumps({"schema_version": 1, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_nonexistent_form_returns_404(self) -> None:
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(uuid4()),
+            data=json.dumps(
+                {
+                    "schema_version": 1,
+                    "answers": {"T001": {"selected": ["NONE"]}},
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @patch("apps.telederm.services.save_telederm_payload")
+    def test_state_transition_returns_409(self, mock_save: MagicMock) -> None:
+        mock_save.side_effect = StateTransitionError(
+            domain_message("other.domain.intake_telederm_in_progress_only"),
+            api_message_key="other.domain.intake_telederm_in_progress_only",
+        )
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps({"schema_version": 1, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    @patch("apps.telederm.services.save_telederm_payload")
+    def test_domain_error_returns_409(self, mock_save: MagicMock) -> None:
+        mock_save.side_effect = DomainError(
+            domain_message("other.domain.not_telederm_intake"),
+            api_message_key="other.domain.not_telederm_intake",
+        )
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps({"schema_version": 1, "answers": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_happy_path_persists_answers(self) -> None:
+        self.client.login(username="td-rec", password=_PW)
+        resp = self.client.put(
+            self._url(),
+            data=json.dumps(
+                {
+                    "schema_version": 1,
+                    "answers": {
+                        "T001": {"selected": ["NONE"]},
+                        "CC001": {"selected": ["NEW_SKIN_LESION"]},
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.intake_form.refresh_from_db()
+        self.assertEqual(self.intake_form.telederm_schema_version, 1)
+        self.assertEqual(
+            self.intake_form.telederm_payload["chief_complaint_path"], "CCE-001"
+        )
+        self.assertIn("telederm", resp.json())
