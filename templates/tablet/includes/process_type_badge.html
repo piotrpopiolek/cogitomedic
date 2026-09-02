@@ -1,0 +1,8 @@
+{% with code=process_type|default:"STANDARD" %}
+{% if staff_ui %}
+  {% if code == "TELEDERM" %}{% firstof staff_ui.process_type_telederm as label %}{% else %}{% firstof staff_ui.process_type_standard as label %}{% endif %}
+{% else %}
+  {% if code == "TELEDERM" %}{% firstof ui.process_type_telederm as label %}{% else %}{% firstof ui.process_type_standard as label %}{% endif %}
+{% endif %}
+<span class="process-type-badge" data-process-type="{{ code }}" title="{{ label }}">{{ label }}</span>
+{% endwith %}

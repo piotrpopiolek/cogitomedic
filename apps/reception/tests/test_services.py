@@ -33,12 +33,15 @@ from apps.reception.models import (
     PatientImportError,
     PatientFormSession,
     QueueEntry,
+    QueueEntryStatus,
     QueueStatus,
     TabletDevice,
 )
+from apps.reception.process_types import ProcessType
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
 from apps.reception.services import (
+    QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
     create_or_update_patient_manual,
     create_queue_entry,
     get_or_create_tablet_device_by_android_id,
@@ -370,6 +373,36 @@ class ReceptionServicesTests(TestCase):
         self.assertEqual(first_result.intake_form_id, second_result.intake_form_id)
         intake_form = PatientIntakeForm.objects.get(queue_entry=queue_entry)
         self.assertEqual(intake_form.session_id, second_result.session_id)
+
+    def test_issue_tablet_session_latest_wins_rejects_cancelled(self) -> None:
+        patient = Patient.objects.create(
+            first_name="Cancelled",
+            last_name="Visit",
+            date_of_birth=date(1994, 4, 4),
+            phone="+48333333334",
+            email="cancelled.visit@example.com",
+            doctolib_patient_id="DOC-P3C",
+        )
+        queue_entry = create_queue_entry(
+            daily_queue_id=self.daily_queue.id,
+            patient_id=patient.id,
+            created_by_user_id=self.reception_user.id,
+        )
+        queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+        with self.assertRaises(DomainError) as ctx:
+            issue_tablet_session_latest_wins(
+                queue_entry_id=queue_entry.id,
+                created_by_user_id=self.reception_user.id,
+                form_locale="de-DE",
+            )
+        self.assertEqual(
+            ctx.exception.api_message_key, QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
+        )
+        self.assertFalse(
+            PatientFormSession.objects.filter(queue_entry=queue_entry).exists()
+        )
 
     def test_patients_api_view_doctor_filtered(self) -> None:
         doctor_user = StaffUser.objects.create_user(
@@ -767,7 +800,8 @@ def _write_minimal_patient_xlsx(
     *,
     queue_date: date,
     standort_name: str,
-    data_rows: list[tuple[str, str, str, str, str]],
+    data_rows: list[tuple[str, ...]],
+    extra_header: str | None = None,
 ) -> None:
     from openpyxl import Workbook
 
@@ -776,10 +810,10 @@ def _write_minimal_patient_xlsx(
     ws["A1"] = queue_date.strftime("%d.%m.%Y")
     ws["A2"] = f"Standort: {standort_name}"
     header_row = 4
-    for col, title in enumerate(
-        ("first_name", "last_name", "date_of_birth", "phone", "email"),
-        start=1,
-    ):
+    headers = ["first_name", "last_name", "date_of_birth", "phone", "email"]
+    if extra_header:
+        headers.append(extra_header)
+    for col, title in enumerate(headers, start=1):
         ws.cell(header_row, col, title)
     r = header_row + 1
     for data in data_rows:
@@ -812,7 +846,10 @@ class PatientXlsxImportTests(TestCase):
         self.import_day = date(2026, 6, 10)
 
     def _run_import(
-        self, data_rows: list[tuple[str, str, str, str, str]]
+        self,
+        data_rows: list[tuple[str, ...]],
+        *,
+        extra_header: str | None = None,
     ) -> PatientImportBatch:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             path = Path(tmp.name)
@@ -822,6 +859,7 @@ class PatientXlsxImportTests(TestCase):
                 queue_date=self.import_day,
                 standort_name=self.clinic.name,
                 data_rows=data_rows,
+                extra_header=extra_header,
             )
             batch = PatientImportBatch.objects.create(
                 source_file_name="rows.xlsx",
@@ -1284,6 +1322,157 @@ class PatientXlsxImportTests(TestCase):
         self.assertEqual(metadata["matched_rows"], 1)
         self.assertEqual(metadata["skipped_already_present_count"], 3)
         self.assertEqual(metadata["error_rows"], 0)
+
+    def test_import_v1_without_process_column_creates_standard(self) -> None:
+        batch = self._run_import(
+            [
+                (
+                    "Erika",
+                    "Mustermann",
+                    "01.01.1991",
+                    "+48 777 888 907",
+                    "erika.v1@example.com",
+                )
+            ]
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        entry = QueueEntry.objects.get()
+        self.assertEqual(entry.process_type, ProcessType.STANDARD)
+
+    def test_import_v1_duplicate_identity_in_file_is_error(self) -> None:
+        row = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 908",
+            "erika.dup@example.com",
+        )
+        batch = self._run_import([row, row])
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertTrue(
+            PatientImportError.objects.filter(
+                batch=batch,
+                error_code=XlsxImportErrorCode.DUPLICATE_IN_FILE,
+            ).exists()
+        )
+
+    def test_import_v2_standard_then_telederm_creates_two_entries(self) -> None:
+        identity = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 909",
+            "erika.ab@example.com",
+        )
+        batch = self._run_import(
+            [
+                (*identity, "STANDARD"),
+                (
+                    *identity,
+                    "Hautarzt-Videosprechstunde mit professioneller Bilddokumentation",
+                ),
+            ],
+            extra_header="Terminart",
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED)
+        self.assertEqual(batch.inserted_rows, 1)
+        self.assertEqual(batch.matched_rows, 1)
+        types = set(QueueEntry.objects.values_list("process_type", flat=True))
+        self.assertEqual(types, {ProcessType.STANDARD, ProcessType.TELEDERM})
+
+    def test_import_v2_reimport_same_type_skips_second_type_creates(self) -> None:
+        identity = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 910",
+            "erika.re@example.com",
+        )
+        first = self._run_import(
+            [(*identity, "STANDARD")],
+            extra_header="Terminart",
+        )
+        second = self._run_import(
+            [
+                (*identity, "STANDARD"),
+                (*identity, "TELEDERM"),
+            ],
+            extra_header="Terminart",
+        )
+        self.assertEqual(first.inserted_rows, 1)
+        self.assertEqual(second.skipped_already_present_count, 1)
+        self.assertEqual(second.inserted_rows, 0)
+        self.assertEqual(second.matched_rows, 1)
+        self.assertEqual(QueueEntry.objects.count(), 2)
+
+    def test_import_v2_unknown_cell_is_row_error(self) -> None:
+        batch = self._run_import(
+            [
+                (
+                    "Erika",
+                    "Mustermann",
+                    "01.01.1991",
+                    "+48 777 888 911",
+                    "erika.fb@example.com",
+                    "Unbekannte Leistung",
+                )
+            ],
+            extra_header="Terminart",
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(batch.inserted_rows, 0)
+        self.assertEqual(QueueEntry.objects.count(), 0)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        )
+
+    def test_import_v2_empty_terminart_is_row_error(self) -> None:
+        batch = self._run_import(
+            [
+                (
+                    "Erika",
+                    "Mustermann",
+                    "01.01.1991",
+                    "+48 777 888 913",
+                    "erika.empty@example.com",
+                    "",
+                )
+            ],
+            extra_header="Terminart",
+        )
+        self.assertEqual(batch.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(batch.error_rows, 1)
+        self.assertEqual(QueueEntry.objects.count(), 0)
+        PatientImportError.objects.get(
+            batch=batch,
+            error_code=XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        )
+
+    def test_import_v2_unknown_cell_does_not_skip_as_standard(self) -> None:
+        identity = (
+            "Erika",
+            "Mustermann",
+            "01.01.1991",
+            "+48 777 888 914",
+            "erika.skip@example.com",
+        )
+        first = self._run_import(
+            [(*identity, "STANDARD")],
+            extra_header="Terminart",
+        )
+        self.assertEqual(first.status, ImportStatus.COMPLETED)
+        second = self._run_import(
+            [(*identity, "Unbekannte Leistung")],
+            extra_header="Terminart",
+        )
+        self.assertEqual(second.status, ImportStatus.COMPLETED_WITH_ERRORS)
+        self.assertEqual(second.skipped_already_present_count, 0)
+        self.assertEqual(second.error_rows, 1)
+        self.assertEqual(QueueEntry.objects.count(), 1)
+        self.assertEqual(QueueEntry.objects.get().process_type, ProcessType.STANDARD)
 
 
 class PurgeSeedClinicDataTests(TestCase):

@@ -44,6 +44,46 @@
     "en": "Cannot add patient to closed queue.",
     "pl": "Nie można dodać pacjenta do zamkniętej kolejki."
   },
+  "other.domain.queue_entry_process_type_exists": {
+    "de": "Für diesen Patienten gibt es in dieser Warteschlange bereits einen Eintrag vom Typ {process_type}.",
+    "en": "This patient already has a {process_type} entry in this queue.",
+    "pl": "Ten pacjent ma już wpis typu {process_type} w tej kolejce."
+  },
+  "other.domain.queue_entry_cancelled": {
+    "de": "Dieser Warteschlangeneintrag ist storniert.",
+    "en": "This queue entry is cancelled.",
+    "pl": "Ten wpis kolejki jest anulowany."
+  },
+  "other.domain.invalid_process_type": {
+    "de": "Ungültiger Prozesstyp: {value}.",
+    "en": "Invalid process type: {value}.",
+    "pl": "Nieprawidłowy typ procesu: {value}."
+  },
+  "other.domain.telederm_intake_disabled": {
+    "de": "Teledermatologie-Intake ist derzeit deaktiviert.",
+    "en": "Teledermatology intake is currently disabled.",
+    "pl": "Wywiad teledermatologiczny jest obecnie wyłączony."
+  },
+  "other.domain.not_telederm_intake": {
+    "de": "Dieses Formular ist kein Teledermatologie-Intake.",
+    "en": "This form is not a teledermatology intake.",
+    "pl": "Ten formularz nie jest w teledermatologicznym."
+  },
+  "other.domain.intake_telederm_in_progress_only": {
+    "de": "Teledermatologie-Fragebogen kann nur bei laufendem Intake bearbeitet werden.",
+    "en": "Teledermatology questionnaire can only be edited while intake is in progress.",
+    "pl": "Kwestionariusz teledermatologiczny można edytować tylko przy trwającym wywadzie."
+  },
+  "other.domain.required_telederm_not_answered": {
+    "de": "Bitte alle Pflichtfragen im Teledermatologie-Fragebogen beantworten.",
+    "en": "Please answer all required teledermatology questionnaire items.",
+    "pl": "Proszę odpowiedzieć na wszystkie wymagane pytania kwestionariusza teledermatologicznego."
+  },
+  "other.domain.telederm_triage_blocked": {
+    "de": "Aufgrund der Dringlichkeit wenden Sie sich bitte umgehend an eine Notaufnahme.",
+    "en": "Because of urgency, please go to emergency care immediately.",
+    "pl": "Ze względu na pilność prosimy niezwłocznie udać się na SOR."
+  },
   "other.domain.expires_in_minutes_positive": {
     "de": "expires_in_minutes muss positiv sein.",
     "en": "expires_in_minutes must be positive.",
@@ -229,10 +269,20 @@
     "en": "A patient with the same identity (first name, last name, phone, date of birth) already exists.",
     "pl": "Pacjent o tej samej tożsamości (imię, nazwisko, telefon, data urodzenia) już istnieje."
   },
-  "other.domain.import_patient_anonymized_same_phone": {
+    "other.domain.import_patient_anonymized_same_phone": {
     "de": "Der Patient mit dieser Telefonnummer ist anonymisiert; ein weiterer Datensatz mit derselben Nummer ist nicht möglich.",
     "en": "The patient with this phone number is anonymized; another record cannot use the same phone number.",
     "pl": "Pacjent z tym numerem telefonu jest zanonimizowany; nie można utworzyć kolejnego rekordu z tym samym numerem."
+  },
+  "other.domain.import_process_type_required": {
+    "de": "Die Spalte Terminart ist leer.",
+    "en": "The Terminart column is empty.",
+    "pl": "Kolumna Terminart jest pusta."
+  },
+  "other.domain.import_invalid_process_type": {
+    "de": "Unbekannter Wert in der Spalte Terminart: {value}.",
+    "en": "Unknown value in the Terminart column: {value}.",
+    "pl": "Nieznana wartość w kolumnie Terminart: {value}."
   },
   "other.domain.outbox_event_not_retryable": {
     "de": "Ereignis ist im aktuellen Status nicht wiederholbar.",

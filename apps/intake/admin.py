@@ -13,7 +13,9 @@ from apps.core.translation_service import (
 from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
+    AnamnesisQuestionDefinitionProcess,
     ConsentDefinition,
+    ConsentDefinitionProcess,
     IntakeDocumentVersion,
     IntakeOutboxEvent,
     PatientIntakeConsent,
@@ -27,6 +29,34 @@ _MARKDOWN_HELP = (
     "Fett: **Text**, Kursiv: *Text*. "
     "Zentriert: -> Text <- (z.B. -> Unterschrift <-)."
 )
+
+
+def _posted_definition_is_active(request, obj) -> bool:
+    """True when the parent catalog row is saved as active (POST) or already is."""
+    if request.method == "POST":
+        return bool(request.POST.get("is_active"))
+    return bool(getattr(obj, "is_active", True))
+
+
+class _ProcessTypeInlineMixin:
+    """Django 6 ``get_formset`` omits ``validate_min``; ``min_num`` is display-only."""
+
+    extra = 0
+    min_num = 1
+
+    def get_formset(self, request, obj=None, **kwargs):
+        kwargs["validate_min"] = _posted_definition_is_active(request, obj)
+        return super().get_formset(request, obj, **kwargs)
+
+
+class ConsentDefinitionProcessInline(_ProcessTypeInlineMixin, admin.TabularInline):
+    model = ConsentDefinitionProcess
+
+
+class AnamnesisQuestionDefinitionProcessInline(
+    _ProcessTypeInlineMixin, admin.TabularInline
+):
+    model = AnamnesisQuestionDefinitionProcess
 
 
 @admin.register(ConsentDefinition)
@@ -48,6 +78,7 @@ class ConsentDefinitionAdmin(CogitomedicaModelAdmin):
     list_filter = ("is_required", "is_active")
     search_fields = ("code", "title_de", "title_en", "title_pl")
     ordering = ["display_order", "code", "version"]
+    inlines = (ConsentDefinitionProcessInline,)
     fieldsets = (
         (
             None,
@@ -102,6 +133,7 @@ class AnamnesisQuestionDefinitionAdmin(CogitomedicaModelAdmin):
     list_filter = ("answer_type", "is_required", "is_active")
     search_fields = ("code", "question_text_de", "question_text_en", "question_text_pl")
     ordering = ["-created_at"]
+    inlines = (AnamnesisQuestionDefinitionProcessInline,)
 
 
 @admin.register(AnamnesisOptionDefinition)

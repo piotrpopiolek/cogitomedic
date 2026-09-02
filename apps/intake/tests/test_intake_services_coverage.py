@@ -297,6 +297,7 @@ class SaveIntakeBodyMapTests(IntakeServiceBaseTestCase):
 
 
 @freeze_time("2026-03-10T12:00:00Z")
+@freeze_time("2026-03-10T12:00:00Z")
 class SaveIntakeConsentsTests(IntakeServiceBaseTestCase):
     def _create_consent_def(self, **overrides):
         defaults = {
@@ -546,3 +547,18 @@ class SubmitIntakeFormErrorTests(IntakeServiceBaseTestCase):
                 submit_patient_intake_form(
                     intake_form_id=form.id,
                 )
+
+    def test_cancelled_queue_entry_raises(self):
+        form, qe, _s = self._make_form(
+            signature_file_path="signatures/fake.png",
+        )
+        qe.entry_status = QueueEntryStatus.CANCELLED
+        qe.save(update_fields=["entry_status", "updated_at"])
+        with self.assertRaises(DomainError) as ctx:
+            submit_patient_intake_form(intake_form_id=form.id)
+        self.assertEqual(
+            ctx.exception.api_message_key,
+            "other.domain.queue_entry_cancelled",
+        )
+        qe.refresh_from_db()
+        self.assertEqual(qe.entry_status, QueueEntryStatus.CANCELLED)

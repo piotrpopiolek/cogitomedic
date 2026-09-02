@@ -1,0 +1,143 @@
+"""Seed questions for CCE-012 – suspected fungal infection (Q220–Q228a)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from apps.telederm.models import TeledermAnswerType, TeledermSection
+from apps.telederm.seed.helpers import (
+    DURATION_UNDER_SEVEN,
+    OTHER,
+    YES_NO,
+    YES_NO_UNKNOWN,
+    _ft,
+    _opt,
+    _q,
+)
+
+PATH_CODE = "CCE-012"
+BASE_ORDER = 12000
+
+CCE012_CATALOG: list[dict[str, Any]] = [
+    _q(
+        "Q220",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=BASE_ORDER,
+        text_de="Wo treten die Veränderungen auf?",
+        text_en="Where do the changes occur?",
+        text_pl="Gdzie występują zmiany?",
+        options=[
+            _opt("TRUNK", label_de="Rumpf", label_en="Trunk", label_pl="Tułów"),
+            _opt("GROIN", label_de="Leiste", label_en="Groin", label_pl="Pachwiny"),
+            _opt("FEET", label_de="Füße", label_en="Feet", label_pl="Stopy"),
+            _opt("HANDS", label_de="Hände", label_en="Hands", label_pl="Dłonie"),
+            _opt("FACE", label_de="Gesicht", label_en="Face", label_pl="Twarz"),
+            _opt(
+                "SCALP",
+                label_de="Kopfhaut",
+                label_en="Scalp",
+                label_pl="Skóra głowy",
+            ),
+            OTHER,
+        ],
+    ),
+    _q(
+        "Q221",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 10,
+        text_de="Seit wann bestehen die Veränderungen?",
+        text_en="How long have the changes been present?",
+        text_pl="Od kiedy trwa problem?",
+        options=DURATION_UNDER_SEVEN,
+    ),
+    _q(
+        "Q222",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 20,
+        text_de="Vergrößert oder breitet sich die Veränderung aus?",
+        text_en="Is the change enlarging or spreading?",
+        text_pl="Czy zmiana się powiększa / rozszerza?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q223",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 30,
+        text_de="Juckt es?",
+        text_en="Is it itchy?",
+        text_pl="Czy swędzi?",
+        options=YES_NO,
+    ),
+    _q(
+        "Q224",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 40,
+        text_de="Schuppt es sich?",
+        text_en="Is there scaling?",
+        text_pl="Czy łuszczy się?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q225",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 50,
+        text_de="Hat jemand im Haushalt ähnliche Veränderungen?",
+        text_en="Does anyone in your household have similar changes?",
+        text_pl="Czy podobne zmiany ma ktoś z domowników?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q226",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 60,
+        text_de="Hatten Sie Kontakt mit Tieren mit Hautproblemen?",
+        text_en="Have you had contact with animals that have skin problems?",
+        text_pl="Czy miał(a) Pan/Pani kontakt ze zwierzęciem z problemami skórnymi?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q227",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 70,
+        text_de="Haben Sie kürzlich Schwimmbad, Sauna oder gemeinsame Duschen genutzt?",
+        text_en="Have you recently used a swimming pool, sauna, or shared showers?",
+        text_pl="Czy korzystał(a) Pan/Pani ostatnio z basenu, sauny, wspólnych pryszniców?",
+        options=YES_NO,
+    ),
+    _q(
+        "Q228",
+        path_code=PATH_CODE,
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=BASE_ORDER + 80,
+        text_de="Wurde bereits ein antimykotisches Medikament angewendet?",
+        text_en="Have you already used an antifungal medication?",
+        text_pl="Czy stosowano lek przeciwgrzybiczy?",
+        options=YES_NO,
+    ),
+    _ft(
+        "Q228a",
+        path_code=PATH_CODE,
+        display_order=BASE_ORDER + 85,
+        text_de="Welches Medikament und wie lange?",
+        text_en="Which medication and for how long?",
+        text_pl="Jaki i jak długo?",
+        show_if={"question_id": "Q228", "op": "eq", "value": "YES"},
+    ),
+]

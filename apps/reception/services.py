@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
@@ -24,6 +24,11 @@ from apps.reception.models import (
     QueueSource,
     QueueStatus,
     TabletDevice,
+)
+from apps.reception.process_types import (
+    PROCESS_TYPE_STANDARD,
+    QUEUE_ENTRY_PROCESS_TYPE_UNIQUE,
+    ProcessType,
 )
 from apps.users.models import StaffUser
 
@@ -477,6 +482,17 @@ def update_daily_queue(
     return queue
 
 
+def queue_entry_process_type_exists_error(process_type: str) -> DomainError:
+    return DomainError(
+        domain_message(
+            "other.domain.queue_entry_process_type_exists",
+            process_type=process_type,
+        ),
+        api_message_key="other.domain.queue_entry_process_type_exists",
+        api_message_params={"process_type": process_type},
+    )
+
+
 @transaction.atomic
 def update_queue_entry(
     queue_entry_id: uuid.UUID,
@@ -509,8 +525,19 @@ def update_queue_entry(
         .select_related("daily_queue")
         .get(id=queue_entry_id)
     )
+    previous_status = entry.entry_status
     update_fields: list[str] = ["updated_at"]
     if entry_status is not None:
+        if (
+            previous_status == QueueEntryStatus.CANCELLED
+            and entry_status != QueueEntryStatus.CANCELLED
+            and active_queue_entry_for_process_exists(
+                daily_queue_id=entry.daily_queue_id,
+                patient_id=entry.patient_id,
+                process_type=entry.process_type,
+            )
+        ):
+            raise queue_entry_process_type_exists_error(entry.process_type)
         entry.entry_status = entry_status
         update_fields.append("entry_status")
         if entry_status == QueueEntryStatus.CANCELLED:
@@ -570,8 +597,45 @@ def update_queue_entry(
                 patient_id=entry.patient_id,
                 context_clinic_site_id=entry.daily_queue.clinic_site_id,
             )
-    entry.save(update_fields=update_fields)
+    try:
+        entry.save(update_fields=update_fields)
+    except IntegrityError as exc:
+        if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
+            raise queue_entry_process_type_exists_error(entry.process_type) from exc
+        raise
     return entry
+
+
+def parse_process_type(value: str | None) -> str:
+    """Validate caller-supplied process_type; empty → STANDARD."""
+    if value is None or str(value).strip() == "":
+        return PROCESS_TYPE_STANDARD
+    normalized = str(value).strip()
+    if normalized not in ProcessType.values:
+        raise DomainError(
+            domain_message("other.domain.invalid_process_type", value=normalized),
+            api_message_key="other.domain.invalid_process_type",
+            api_message_params={"value": normalized},
+        )
+    return normalized
+
+
+def active_queue_entry_for_process_exists(
+    *,
+    daily_queue_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    process_type: str,
+) -> bool:
+    """True if a non-cancelled entry of this process already exists in the queue."""
+    return (
+        QueueEntry.objects.filter(
+            daily_queue_id=daily_queue_id,
+            patient_id=patient_id,
+            process_type=process_type,
+        )
+        .exclude(entry_status=QueueEntryStatus.CANCELLED)
+        .exists()
+    )
 
 
 @transaction.atomic
@@ -583,14 +647,26 @@ def create_queue_entry(
     appointment_time: timezone.datetime | None = None,
     visit_external_id: str | None = None,
     notes: str | None = None,
+    process_type: str | None = None,
 ) -> QueueEntry:
     """Create queue entry and auto-assign next position for the queue."""
+    resolved_process_type = parse_process_type(process_type)
+    from apps.reception.telederm_gate import assert_telederm_creation_allowed
+
+    assert_telederm_creation_allowed(resolved_process_type)
     daily_queue = DailyQueue.objects.select_for_update().get(id=daily_queue_id)
     if daily_queue.status != QueueStatus.OPEN:
         raise StateTransitionError(
             domain_message("other.domain.queue_closed_cannot_add_patient"),
             api_message_key="other.domain.queue_closed_cannot_add_patient",
         )
+
+    if active_queue_entry_for_process_exists(
+        daily_queue_id=daily_queue_id,
+        patient_id=patient_id,
+        process_type=resolved_process_type,
+    ):
+        raise queue_entry_process_type_exists_error(resolved_process_type)
 
     next_position = (
         QueueEntry.objects.select_for_update(of=("self",))
@@ -600,15 +676,33 @@ def create_queue_entry(
         or 0
     ) + 1
 
-    return QueueEntry.objects.create(
-        daily_queue_id=daily_queue_id,
-        patient_id=patient_id,
-        created_by_user_id=created_by_user_id,
-        position_no=next_position,
-        appointment_time=appointment_time,
-        visit_external_id=visit_external_id,
-        notes=notes,
-    )
+    try:
+        return QueueEntry.objects.create(
+            daily_queue_id=daily_queue_id,
+            patient_id=patient_id,
+            created_by_user_id=created_by_user_id,
+            position_no=next_position,
+            appointment_time=appointment_time,
+            visit_external_id=visit_external_id,
+            notes=notes,
+            process_type=resolved_process_type,
+        )
+    except IntegrityError as exc:
+        if QUEUE_ENTRY_PROCESS_TYPE_UNIQUE in str(exc):
+            raise queue_entry_process_type_exists_error(resolved_process_type) from exc
+        raise
+
+
+QUEUE_ENTRY_CANCELLED_MESSAGE_KEY = "other.domain.queue_entry_cancelled"
+
+
+def raise_if_queue_entry_cancelled(queue_entry: QueueEntry) -> None:
+    """Forbid session/intake mutations that would revive a cancelled visit."""
+    if queue_entry.entry_status == QueueEntryStatus.CANCELLED:
+        raise DomainError(
+            domain_message(QUEUE_ENTRY_CANCELLED_MESSAGE_KEY),
+            api_message_key=QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
+        )
 
 
 @transaction.atomic
@@ -641,6 +735,7 @@ def issue_tablet_session_latest_wins(
     queue_entry = QueueEntry.objects.select_for_update(of=("self",)).get(
         id=queue_entry_id
     )
+    raise_if_queue_entry_cancelled(queue_entry)
 
     tablet_device: TabletDevice | None = None
     if tablet_device_id:

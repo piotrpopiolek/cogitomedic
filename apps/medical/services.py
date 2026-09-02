@@ -3225,6 +3225,20 @@ def get_medical_document_context(
             ],
             "patient": intake_context.get("patient"),
         }
+        telederm_block = intake_context.get("telederm")
+        if isinstance(telederm_block, dict):
+            clinical_summary = telederm_block.get("clinical_summary_preview")
+            if isinstance(clinical_summary, dict):
+                intake_summary["clinical_summary"] = clinical_summary
+            elif doc.intake_form and doc.intake_form.telederm_payload:
+                from apps.telederm.clinical_summary import build_clinical_summary
+                from apps.telederm.services import load_catalog
+
+                intake_summary["clinical_summary"] = build_clinical_summary(
+                    catalog=load_catalog(),
+                    payload=doc.intake_form.telederm_payload,
+                    locale=form_locale,
+                )
 
     current_version_payload: dict[str, Any] | None = None
     if current_version:

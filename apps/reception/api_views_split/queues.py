@@ -43,6 +43,35 @@ from apps.reception.services import (
 )
 
 
+def _queue_entry_domain_error_response(exc: DomainError) -> JsonResponse:
+    """Same DomainError key → same HTTP status on POST create and PATCH."""
+    key = exc.api_message_key or ""
+    if key in {
+        "other.domain.queue_entry_process_type_exists",
+        "other.domain.queue_closed_cannot_add_patient",
+    }:
+        status = 409
+    elif key in {
+        "other.domain.ausfallhonorar_role_required",
+        "other.domain.telederm_intake_disabled",
+    }:
+        status = 403
+    else:
+        status = 400
+    return json_domain_error(exc, status=status)
+
+
+def _pydantic_validation_error_response(exc: ValidationError) -> JsonResponse:
+    """HTTP 400; omit ctx so field-validator ValueError is JSON-serializable."""
+    return JsonResponse(
+        {
+            "error": "Validation error.",
+            "details": exc.errors(include_url=False, include_context=False),
+        },
+        status=400,
+    )
+
+
 def _serialize_queue(q: DailyQueue) -> dict:
     return {
         "id": str(q.id),
@@ -66,6 +95,7 @@ def _serialize_entry(e: QueueEntry) -> dict:
         "daily_queue_id": str(e.daily_queue_id),
         "patient_id": str(e.patient_id),
         "entry_status": e.entry_status,
+        "process_type": e.process_type,
         "position_no": e.position_no,
         "visit_external_id": e.visit_external_id,
         "appointment_time": (
@@ -137,9 +167,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return _pydantic_validation_error_response(exc)
         scope_ids = get_scoped_clinic_site_ids(request.user)
         if scope_ids is not None and str(body.clinic_site_id) not in {
             str(sid) for sid in scope_ids
@@ -199,9 +227,7 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return _pydantic_validation_error_response(exc)
     try:
         queue = update_daily_queue(
             daily_queue_id,
@@ -274,9 +300,7 @@ def daily_queue_entries_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return _pydantic_validation_error_response(exc)
     try:
         entry = create_queue_entry(
             daily_queue_id=daily_queue_id,
@@ -285,11 +309,14 @@ def daily_queue_entries_view(
             appointment_time=body.appointment_time,
             visit_external_id=body.visit_external_id,
             notes=body.notes,
+            process_type=body.process_type,
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_or_patient_not_found", status=404)
     except StateTransitionError as exc:
         return json_domain_error(exc, status=409)
+    except DomainError as exc:
+        return _queue_entry_domain_error_response(exc)
     except IntegrityError:
         return json_error("other.api.duplicate_visit_external_id", status=409)
     return JsonResponse(_serialize_entry(entry), status=201)
@@ -343,9 +370,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return _pydantic_validation_error_response(exc)
     if body.entry_status is None and body.notes is None and body.ausfallhonorar is None:
         return json_error("other.api.provide_entry_status_or_notes", status=400)
     try:
@@ -359,12 +384,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
     except DomainError as exc:
-        status = (
-            403
-            if exc.api_message_key == "other.domain.ausfallhonorar_role_required"
-            else 400
-        )
-        return json_domain_error(exc, status=status)
+        return _queue_entry_domain_error_response(exc)
     return JsonResponse(_serialize_entry(entry))
 
 
@@ -395,9 +415,7 @@ def queue_entry_sessions_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return _pydantic_validation_error_response(exc)
     tablet_device_id = body.tablet_device_id
     if tablet_device_id is None and body.android_id:
         device, _ = get_or_create_tablet_device_by_android_id(

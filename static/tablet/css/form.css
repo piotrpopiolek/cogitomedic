@@ -32,20 +32,29 @@ label {
   color: var(--cm-danger, #c00);
 }
 
-.anamnesis-field-msg {
+.required-mark {
+  color: var(--cm-danger, #c00);
+  font-weight: 700;
+}
+
+.anamnesis-field-msg,
+.telederm-field-msg {
   margin: 0.35rem 0 0.25rem;
   font-size: 0.95rem;
 }
 
-.anamnesis-field-msg.error {
+.anamnesis-field-msg.error,
+.telederm-field-msg.error {
   color: var(--cm-danger, #c00);
 }
 
-.anamnesis-field-msg.success {
+.anamnesis-field-msg.success,
+.telederm-field-msg.success {
   color: var(--cm-success, #0a0);
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
   width: auto;
   margin-right: 0.5rem;
   min-width: 1.25rem;
@@ -163,12 +172,14 @@ button:disabled {
   margin: 0.5rem 0;
 }
 
-#anamnesis-section .field {
+#anamnesis-section .field,
+#telederm-questions .field {
   margin: 1rem 0;
   line-height: 1.5;
 }
 
-#anamnesis-section .field strong {
+#anamnesis-section .field strong,
+#telederm-questions .field strong {
   display: block;
   line-height: 1.55;
   hyphens: auto;
@@ -176,6 +187,19 @@ button:disabled {
   word-wrap: break-word;
   overflow-wrap: break-word;
   margin-bottom: 0.35rem;
+}
+
+#telederm-section .text-muted-portal {
+  margin-bottom: 0.75rem;
+}
+
+#telederm-summary-preview .telederm-summary-line {
+  margin: 0.5rem 0;
+  line-height: 1.45;
+}
+
+#telederm-summary-preview .telederm-summary-value {
+  color: var(--cm-muted, #6b7280);
 }
 
 .consent-block {
@@ -330,6 +354,19 @@ button:disabled {
   font-weight: 600;
   line-height: 1.2;
   color: var(--cm-grey-900, #111827);
+}
+
+.process-type-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  border: 1px solid var(--cm-primary, #075255);
+  border-radius: 4px;
+  color: var(--cm-primary, #075255);
 }
 
 .tablet-patient-identity-details {

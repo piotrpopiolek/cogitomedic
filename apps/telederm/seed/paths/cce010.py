@@ -1,0 +1,157 @@
+"""Seed questions for telederm path CCE-010 (scalp problem)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from apps.telederm.models import TeledermAnswerType, TeledermSection
+from apps.telederm.seed.helpers import (
+    DURATION_UNDER_SEVEN,
+    YES_NO,
+    YES_NO_UNKNOWN,
+    _ft,
+    _opt,
+    _q,
+)
+
+CCE010_QUESTIONS: list[dict[str, Any]] = [
+    _q(
+        "Q180",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=10000,
+        text_de="Was beunruhigt Sie am meisten?",
+        text_en="What concerns you most?",
+        text_pl="Co najbardziej niepokoi?",
+        options=[
+            _opt("ITCHING", label_de="Jucken", label_en="Itching", label_pl="Świąd"),
+            _opt(
+                "FLAKING",
+                label_de="Schuppung",
+                label_en="Flaking",
+                label_pl="Łuszczenie",
+            ),
+            _opt(
+                "REDNESS",
+                label_de="Rötung",
+                label_en="Redness",
+                label_pl="Zaczerwienienie",
+            ),
+            _opt(
+                "PIMPLES",
+                label_de="Pickel/Knötchen",
+                label_en="Pimples",
+                label_pl="Krostki",
+            ),
+            _opt("CRUSTS", label_de="Kruster", label_en="Crusts", label_pl="Strupy"),
+            _opt("PAIN", label_de="Schmerz", label_en="Pain", label_pl="Ból"),
+            _opt(
+                "OOZING",
+                label_de="Nässen",
+                label_en="Oozing",
+                label_pl="Sączenie",
+            ),
+            _opt(
+                "HAIR_LOSS",
+                label_de="Haarausfall",
+                label_en="Hair loss",
+                label_pl="Wypadanie włosów",
+            ),
+        ],
+    ),
+    _q(
+        "Q181",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10010,
+        text_de="Seit wann?",
+        text_en="Since when?",
+        text_pl="Od kiedy?",
+        options=DURATION_UNDER_SEVEN,
+    ),
+    _q(
+        "Q182",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10020,
+        text_de="Betrifft das Problem die gesamte Kopfhaut oder nur eine Stelle?",
+        text_en="Does the problem affect the entire scalp or one area?",
+        text_pl="Czy problem obejmuje całą skórę głowy czy jedną okolicę?",
+        options=[
+            _opt(
+                "ENTIRE_SCALP",
+                label_de="Ganze Kopfhaut",
+                label_en="Entire scalp",
+                label_pl="Cała",
+            ),
+            _opt(
+                "ONE_AREA",
+                label_de="Eine Stelle",
+                label_en="One area",
+                label_pl="Jedna okolica",
+            ),
+            _opt(
+                "SEVERAL_FOCI",
+                label_de="Mehrere Herde",
+                label_en="Several areas",
+                label_pl="Kilka ognisk",
+            ),
+        ],
+    ),
+    _q(
+        "Q183",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10030,
+        text_de="Treten kahle Stellen auf?",
+        text_en="Are there bald patches?",
+        text_pl="Czy występują łyse placki?",
+        options=YES_NO,
+    ),
+    _q(
+        "Q184",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10040,
+        text_de="Wurden neue Haarpflegeprodukte oder Haarfarben verwendet?",
+        text_en="Have new hair care products or dyes been used?",
+        text_pl="Czy pojawiły się nowe kosmetyki/farby do włosów?",
+        options=YES_NO,
+    ),
+    _q(
+        "Q185",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10050,
+        text_de="Haben andere Haushaltsmitglieder ähnliche Symptome?",
+        text_en="Do other household members have similar symptoms?",
+        text_pl="Czy inni domownicy mają podobne objawy?",
+        options=YES_NO_UNKNOWN,
+    ),
+    _q(
+        "Q186",
+        path_code="CCE-010",
+        section=TeledermSection.QUESTIONNAIRE,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=10060,
+        text_de="Wurden medizinische Shampoos oder Medikamente angewendet?",
+        text_en="Have medicated shampoos or medications been used?",
+        text_pl="Czy stosowano szampony lecznicze lub leki?",
+        options=YES_NO,
+    ),
+    _ft(
+        "Q186a",
+        path_code="CCE-010",
+        display_order=10065,
+        text_de="Welche und mit welchem Effekt?",
+        text_en="Which ones and with what effect?",
+        text_pl="Jakie i z jakim efektem?",
+        show_if={"question_id": "Q186", "op": "eq", "value": "YES"},
+    ),
+]

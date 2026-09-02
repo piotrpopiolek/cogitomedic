@@ -27,6 +27,7 @@ from apps.reception.xlsx_import import (
     _sync_patient_address_from_import_row,
     _title_case_name,
     _validate_headers,
+    map_xlsx_process_type_cell,
 )
 
 # =================================================================
@@ -79,6 +80,56 @@ class FindHeaderIndicesTests(SimpleTestCase):
                 row = ["Vorname", "Nachname", header]
                 result = _find_header_indices(row)
                 self.assertEqual(result["city"], 2)
+
+    def test_process_type_header_exact_terminart(self) -> None:
+        row = ["Vorname", "Nachname", "Terminart", "Telefon", "Email"]
+        result = _find_header_indices(row)
+        self.assertEqual(result["process_type"], 2)
+
+    def test_process_type_header_does_not_match_substring(self) -> None:
+        row = ["Vorname", "Nachname", "Kommentar", "Telefon", "Email"]
+        result = _find_header_indices(row)
+        self.assertNotIn("process_type", result)
+
+
+class MapXlsxProcessTypeCellTests(SimpleTestCase):
+    def test_empty_raises(self) -> None:
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            map_xlsx_process_type_cell("")
+        self.assertEqual(
+            ctx.exception.error_code, XlsxImportErrorCode.INVALID_PROCESS_TYPE
+        )
+
+    def test_explicit_codes(self) -> None:
+        self.assertEqual(map_xlsx_process_type_cell("STANDARD"), "STANDARD")
+        self.assertEqual(map_xlsx_process_type_cell("TELEDERM"), "TELEDERM")
+
+    def test_letter_aliases_are_not_process_types(self) -> None:
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            map_xlsx_process_type_cell("A")
+        self.assertEqual(
+            ctx.exception.error_code, XlsxImportErrorCode.INVALID_PROCESS_TYPE
+        )
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            map_xlsx_process_type_cell("B")
+        self.assertEqual(
+            ctx.exception.error_code, XlsxImportErrorCode.INVALID_PROCESS_TYPE
+        )
+
+    def test_example_telederm_string(self) -> None:
+        self.assertEqual(
+            map_xlsx_process_type_cell(
+                "Hautarzt-Videosprechstunde mit professioneller Bilddokumentation"
+            ),
+            "TELEDERM",
+        )
+
+    def test_unknown_raises(self) -> None:
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            map_xlsx_process_type_cell("Something else")
+        self.assertEqual(
+            ctx.exception.error_code, XlsxImportErrorCode.INVALID_PROCESS_TYPE
+        )
 
 
 class ParseDateTests(SimpleTestCase):
@@ -541,6 +592,54 @@ class NormalizeRowTests(SimpleTestCase):
         self.assertEqual(result.street, "Musterstraße 1")
         self.assertEqual(result.postal_code, "10115")
         self.assertEqual(result.city, "Berlin")
+
+    def test_v2_valid_terminart_sets_process_type(self) -> None:
+        headers = {**self.HEADERS, "process_type": 6}
+        row = [
+            "Jan",
+            "K",
+            "15.05.1990",
+            "+48500100200",
+            "a@b.com",
+            "",
+            "TELEDERM",
+        ]
+        result = _normalize_row(2, row, headers)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.process_type, "TELEDERM")
+
+    def test_v2_empty_terminart_raises(self) -> None:
+        headers = {**self.HEADERS, "process_type": 6}
+        row = [
+            "Jan",
+            "K",
+            "15.05.1990",
+            "+48500100200",
+            "a@b.com",
+            "",
+            "",
+        ]
+        with self.assertRaises(XlsxImportFailure) as ctx:
+            _normalize_row(2, row, headers)
+        self.assertEqual(
+            ctx.exception.error_code,
+            XlsxImportErrorCode.INVALID_PROCESS_TYPE,
+        )
+
+    def test_v1_without_process_column_defaults_standard(self) -> None:
+        row = [
+            "Jan",
+            "K",
+            "15.05.1990",
+            "+48500100200",
+            "a@b.com",
+            "",
+        ]
+        result = _normalize_row(2, row, self.HEADERS)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.process_type, "STANDARD")
 
 
 class SyncPatientAddressFromImportRowTests(TestCase):

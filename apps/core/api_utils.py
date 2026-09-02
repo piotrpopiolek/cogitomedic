@@ -87,7 +87,7 @@ def json_pydantic_validation_error(
         {
             "error": message,
             "error_key": error_key,
-            "details": exc.errors(include_url=False),
+            "details": exc.errors(include_url=False, include_context=False),
         },
         status=400,
     )

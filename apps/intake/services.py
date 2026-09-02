@@ -15,8 +15,13 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
-from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.translation_service import get_form_ui_strings
+from apps.intake.constants import SIGNATURE_MAX_SIZE
+from apps.intake.form_access import (
+    assert_intake_form_clinic_scope,
+    intake_allows_patient_edits,
+)
 from apps.intake.models import (
     AnamnesisOptionDefinition,
     AnamnesisQuestionDefinition,
@@ -31,8 +36,11 @@ from apps.intake.models import (
 )
 from apps.operations.services import create_audit_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
-from apps.reception.services import issue_tablet_session_latest_wins
-from apps.core.translation_service import get_form_ui_strings
+from apps.reception.process_types import PROCESS_TYPE_TELEDERM, coerce_process_type
+from apps.reception.services import (
+    issue_tablet_session_latest_wins,
+    raise_if_queue_entry_cancelled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +55,6 @@ def _format_patient_dob_for_form(dob: date | None, form_locale: str) -> str:
     if form_locale.startswith("en"):
         return dob.strftime("%d %B %Y")
     return dob.strftime("%d.%m.%Y")
-
-
-_INTAKE_STATUSES_ALLOWING_PATIENT_EDITS = frozenset(
-    {IntakeStatus.IN_PROGRESS, IntakeStatus.REOPENED}
-)
-
-
-def _intake_allows_patient_edits(form_status: str) -> bool:
-    return form_status in _INTAKE_STATUSES_ALLOWING_PATIENT_EDITS
 
 
 # Melanoma intake: if NEW_SKIN_CHANGES_LOCATION is answered affirmatively, the PDF includes the body map.
@@ -349,8 +348,13 @@ def _build_intake_snapshot_payload(
     )
     questions = (
         AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(timezone.localdate(now)), code__in=question_codes
+            _effective_question_filter(
+                timezone.localdate(now),
+                coerce_process_type(intake_form.queue_entry.process_type),
+            ),
+            code__in=question_codes,
         )
+        .distinct()
         .prefetch_related(active_options_prefetch)
         .order_by("-version")
     )
@@ -474,7 +478,7 @@ def _build_intake_snapshot_payload(
         )
     )
 
-    return {
+    snapshot: dict[str, Any] = {
         "schema_version": 1,
         "captured_at": now.isoformat(),
         "base_locale": "de-DE",
@@ -502,6 +506,12 @@ def _build_intake_snapshot_payload(
         "submitted_at": now.isoformat(),
         "body_map": body_map_section,
     }
+    if (
+        coerce_process_type(queue_entry.process_type) == PROCESS_TYPE_TELEDERM
+        and intake_form.telederm_payload
+    ):
+        snapshot["telederm"] = intake_form.telederm_payload
+    return snapshot
 
 
 def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
@@ -530,33 +540,22 @@ def _extract_answered_question_codes(anamnesis_payload: dict) -> set[str]:
     return answered_codes
 
 
-def _effective_consent_filter(today: date):
+def _effective_consent_filter(today: date, process_type: str):
     return (
         Q(is_active=True)
         & Q(effective_from__lte=today)
         & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+        & Q(process_links__process_type=process_type)
     )
 
 
-def _effective_question_filter(today: date):
+def _effective_question_filter(today: date, process_type: str):
     return (
         Q(is_active=True)
         & Q(effective_from__lte=today)
         & (Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+        & Q(process_links__process_type=process_type)
     )
-
-
-def _assert_intake_form_clinic_scope(
-    *,
-    intake_form: PatientIntakeForm,
-    allowed_clinic_site_ids: Iterable[uuid.UUID] | None,
-) -> None:
-    if allowed_clinic_site_ids is None:
-        return
-    allowed = set(allowed_clinic_site_ids)
-    clinic_site_id = intake_form.queue_entry.daily_queue.clinic_site_id
-    if clinic_site_id not in allowed:
-        raise ObjectDoesNotExist("Intake form is outside clinic scope.")
 
 
 def get_intake_form_context(
@@ -581,7 +580,7 @@ def get_intake_form_context(
         "queue_entry__patient",
         "queue_entry__daily_queue",
     ).get(id=intake_form_id)
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
@@ -593,10 +592,12 @@ def get_intake_form_context(
     session = intake_form.session
     queue_entry = intake_form.queue_entry
     patient = queue_entry.patient
+    process_type = coerce_process_type(queue_entry.process_type)
 
-    # Consent definitions effective today; then merge with intake form's consent choices
+    # Consent definitions effective today for this process; then merge with choices
     consent_defs = (
-        ConsentDefinition.objects.filter(_effective_consent_filter(today))
+        ConsentDefinition.objects.filter(_effective_consent_filter(today, process_type))
+        .distinct()
         .order_by("display_order", "code")
         .values(
             "id",
@@ -693,7 +694,10 @@ def get_intake_form_context(
     )
     # Anamnesis questions effective today with options; attach current answer from payload
     question_defs = (
-        AnamnesisQuestionDefinition.objects.filter(_effective_question_filter(today))
+        AnamnesisQuestionDefinition.objects.filter(
+            _effective_question_filter(today, process_type)
+        )
+        .distinct()
         .prefetch_related(active_options_prefetch)
         .order_by("display_order", "code")
     )
@@ -756,9 +760,10 @@ def get_intake_form_context(
         "email": patient.email,
     }
 
-    return {
+    context: dict[str, Any] = {
         "intake_form_id": str(intake_form.id),
         "queue_entry_id": str(queue_entry.id),
+        "process_type": process_type,
         "form_status": intake_form.form_status,
         "form_locale": session.form_locale,
         "anamnesis_schema_version": intake_form.anamnesis_schema_version,
@@ -769,6 +774,16 @@ def get_intake_form_context(
         "patient": patient_payload,
         "has_signature": bool(intake_form.signature_file_path),
     }
+    if process_type == PROCESS_TYPE_TELEDERM:
+        from apps.telederm.services import load_catalog, serialize_catalog_for_tablet
+
+        catalog = load_catalog()
+        payload = intake_form.telederm_payload or {}
+        context["telederm"] = serialize_catalog_for_tablet(
+            catalog=catalog, payload=payload, locale=form_locale
+        )
+        context["telederm_schema_version"] = intake_form.telederm_schema_version or 1
+    return context
 
 
 @transaction.atomic
@@ -789,11 +804,11 @@ def save_intake_body_map(
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if not _intake_allows_patient_edits(intake_form.form_status):
+    if not intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_body_map_in_progress_only"),
             api_message_key="other.domain.intake_body_map_in_progress_only",
@@ -826,13 +841,6 @@ def save_intake_consents(
     Raises ConsentNotActiveError if any consent definition is not active for today.
     """
     today = timezone.localdate()
-    effective_defs = list(
-        ConsentDefinition.objects.filter(_effective_consent_filter(today)).values(
-            "id", "code"
-        )
-    )
-    effective_ids = {row["id"] for row in effective_defs}
-    consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
     now = timezone.now()
 
     intake_form = (
@@ -840,11 +848,19 @@ def save_intake_consents(
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
+    process_type = coerce_process_type(intake_form.queue_entry.process_type)
+    effective_defs = list(
+        ConsentDefinition.objects.filter(_effective_consent_filter(today, process_type))
+        .distinct()
+        .values("id", "code")
+    )
+    effective_ids = {row["id"] for row in effective_defs}
+    consent_code_by_id = {row["id"]: row["code"] for row in effective_defs}
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if not _intake_allows_patient_edits(intake_form.form_status):
+    if not intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_consents_in_progress_only"),
             api_message_key="other.domain.intake_consents_in_progress_only",
@@ -938,11 +954,11 @@ def save_intake_signature(
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if not _intake_allows_patient_edits(intake_form.form_status):
+    if not intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_signature_in_progress_only"),
             api_message_key="other.domain.intake_signature_in_progress_only",
@@ -1030,7 +1046,7 @@ def reopen_patient_intake_form(
         .select_related("session", "queue_entry", "queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
@@ -1106,7 +1122,7 @@ def submit_patient_intake_form(
         "queue_entry__patient",
         "queue_entry__daily_queue",
     ).get(id=intake_form_id)
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
@@ -1118,7 +1134,8 @@ def submit_patient_intake_form(
 
     if intake_form.form_status == IntakeStatus.SUBMITTED:
         return intake_form
-    if not _intake_allows_patient_edits(intake_form.form_status):
+    raise_if_queue_entry_cancelled(queue_entry)
+    if not intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_submit_in_progress_only"),
             api_message_key="other.domain.intake_submit_in_progress_only",
@@ -1146,10 +1163,13 @@ def submit_patient_intake_form(
         )
 
     today = timezone.localdate(now)
+    process_type = coerce_process_type(queue_entry.process_type)
     required_consent_ids = set(
         ConsentDefinition.objects.filter(
-            _effective_consent_filter(today), is_required=True
-        ).values_list("id", flat=True)
+            _effective_consent_filter(today, process_type), is_required=True
+        )
+        .distinct()
+        .values_list("id", flat=True)
     )
     accepted_required_consent_ids = set(
         PatientIntakeConsent.objects.filter(
@@ -1165,20 +1185,40 @@ def submit_patient_intake_form(
             api_message_key="other.domain.required_consents_not_accepted",
         )
 
-    required_question_codes = set(
-        AnamnesisQuestionDefinition.objects.filter(
-            _effective_question_filter(today), is_required=True
-        ).values_list("code", flat=True)
-    )
-    answered_question_codes = _extract_answered_question_codes(
-        intake_form.anamnesis_payload
-    )
-    missing_question_codes = required_question_codes - answered_question_codes
-    if missing_question_codes:
-        raise RequiredAnamnesisMissingError(
-            domain_message("other.domain.required_anamnesis_not_answered"),
-            api_message_key="other.domain.required_anamnesis_not_answered",
+    if process_type == PROCESS_TYPE_TELEDERM:
+        from apps.telederm.services import finalize_telederm_payload_on_submit
+
+        finalized = finalize_telederm_payload_on_submit(
+            intake_form,
+            form_locale=(session.form_locale or "de-DE"),
+            submitted_at=now,
         )
+        intake_form.telederm_payload = finalized
+        intake_form.telederm_schema_version = finalized.get("schema_version", 1)
+        intake_form.save(
+            update_fields=[
+                "telederm_payload",
+                "telederm_schema_version",
+                "updated_at",
+            ]
+        )
+    else:
+        required_question_codes = set(
+            AnamnesisQuestionDefinition.objects.filter(
+                _effective_question_filter(today, process_type), is_required=True
+            )
+            .distinct()
+            .values_list("code", flat=True)
+        )
+        answered_question_codes = _extract_answered_question_codes(
+            intake_form.anamnesis_payload
+        )
+        missing_question_codes = required_question_codes - answered_question_codes
+        if missing_question_codes:
+            raise RequiredAnamnesisMissingError(
+                domain_message("other.domain.required_anamnesis_not_answered"),
+                api_message_key="other.domain.required_anamnesis_not_answered",
+            )
 
     # Optimistic lock style transition: only one concurrent submit wins.
     updated_rows = PatientIntakeForm.objects.filter(
@@ -1292,11 +1332,11 @@ def save_intake_anamnesis_payload(
         .select_related("queue_entry__daily_queue")
         .get(id=intake_form_id)
     )
-    _assert_intake_form_clinic_scope(
+    assert_intake_form_clinic_scope(
         intake_form=intake_form,
         allowed_clinic_site_ids=allowed_clinic_site_ids,
     )
-    if not _intake_allows_patient_edits(intake_form.form_status):
+    if not intake_allows_patient_edits(intake_form.form_status):
         raise StateTransitionError(
             domain_message("other.domain.intake_anamnesis_in_progress_only"),
             api_message_key="other.domain.intake_anamnesis_in_progress_only",

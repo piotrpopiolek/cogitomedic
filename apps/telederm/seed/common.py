@@ -1,0 +1,202 @@
+"""Triage and chief complaint (shared across all telederm paths)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from apps.telederm.models import TeledermAnswerType, TeledermSection
+from apps.telederm.seed.helpers import _opt, _q
+
+COMMON_QUESTIONS: list[dict[str, Any]] = [
+    _q(
+        "T001",
+        path_code="TRIAGE",
+        section=TeledermSection.TRIAGE,
+        answer_type=TeledermAnswerType.MULTIPLE,
+        display_order=10,
+        text_de="Erfordert Ihr Problem dringende medizinische Hilfe?",
+        text_en="Does your problem require urgent medical care?",
+        text_pl="Czy problem wymaga pilnej pomocy medycznej?",
+        options=[
+            _opt(
+                "HIGH_FEVER",
+                label_de="Hohes Fieber",
+                label_en="High fever",
+                label_pl="Wysoka gorączka",
+                is_urgent=True,
+            ),
+            _opt(
+                "AFFECTED_EYE",
+                label_de="Betroffenes Auge",
+                label_en="Affected eye",
+                label_pl="Zajęte oko",
+                is_urgent=True,
+            ),
+            _opt(
+                "AFFECTED_MOUTH",
+                label_de="Betroffener Mund",
+                label_en="Affected mouth",
+                label_pl="Zajęte usta",
+                is_urgent=True,
+            ),
+            _opt(
+                "RAPID_WORSENING",
+                label_de="Verschlechtert sich schnell",
+                label_en="Rapidly worsening",
+                label_pl="Szybko się pogarsza",
+                is_urgent=True,
+            ),
+            _opt(
+                "SHORTNESS_OF_BREATH",
+                label_de="Atemnot",
+                label_en="Shortness of breath",
+                label_pl="Duszność",
+                is_urgent=True,
+            ),
+            _opt(
+                "FACIAL_SWELLING",
+                label_de="Gesichtsschwellung",
+                label_en="Facial swelling",
+                label_pl="Obrzęk twarzy",
+                is_urgent=True,
+            ),
+            _opt(
+                "SEVERE_PAIN",
+                label_de="Starke Schmerzen",
+                label_en="Severe pain",
+                label_pl="Silny ból",
+                is_urgent=True,
+            ),
+            _opt(
+                "NONE",
+                label_de="Keines der Genannten",
+                label_en="None of the above",
+                label_pl="Żadne z powyższych",
+            ),
+        ],
+    ),
+    _q(
+        "CC001",
+        path_code="CHIEF",
+        section=TeledermSection.CHIEF_COMPLAINT,
+        answer_type=TeledermAnswerType.SINGLE,
+        display_order=20,
+        text_de="Was ist Ihr Hauptanliegen?",
+        text_en="What is your main concern?",
+        text_pl="Co Pana/Panią niepokoi?",
+        options=[
+            _opt(
+                "NEW_SKIN_LESION",
+                label_de="Neue Hautveränderung",
+                label_en="New skin lesion",
+                label_pl="Nowa zmiana skórna",
+                activates_path_code="CCE-001",
+            ),
+            _opt(
+                "CHANGING_MOLE",
+                label_de="Sich veränderndes Muttermal",
+                label_en="Changing mole",
+                label_pl="Zmieniające się znamię",
+                activates_path_code="CCE-002",
+            ),
+            _opt(
+                "SUBCUTANEOUS_NODULE",
+                label_de="Knoten / Verdickung unter der Haut",
+                label_en="Lump or thickening under the skin",
+                label_pl="Guzek pod skórą",
+                activates_path_code="CCE-003",
+            ),
+            _opt(
+                "RASH",
+                label_de="Hautausschlag",
+                label_en="Rash",
+                label_pl="Wysypka",
+                activates_path_code="CCE-004",
+            ),
+            _opt(
+                "SKIN_ITCH",
+                label_de="Juckreiz der Haut",
+                label_en="Itchy skin",
+                label_pl="Świąd skóry",
+                activates_path_code="CCE-005",
+            ),
+            _opt(
+                "SKIN_REDNESS",
+                label_de="Rötung der Haut",
+                label_en="Skin redness",
+                label_pl="Zaczerwienienie skóry",
+                activates_path_code="CCE-006",
+            ),
+            _opt(
+                "SKIN_SCALING",
+                label_de="Schuppung der Haut",
+                label_en="Skin scaling",
+                label_pl="Łuszczenie skóry",
+                activates_path_code="CCE-007",
+            ),
+            _opt(
+                "ACNE",
+                label_de="Akne",
+                label_en="Acne",
+                label_pl="Trądzik",
+                activates_path_code="CCE-008",
+            ),
+            _opt(
+                "HAIR_LOSS",
+                label_de="Haarausfall",
+                label_en="Hair loss",
+                label_pl="Wypadanie włosów",
+                activates_path_code="CCE-009",
+            ),
+            _opt(
+                "SCALP_PROBLEM",
+                label_de="Problem an der Kopfhaut",
+                label_en="Scalp problem",
+                label_pl="Problem skóry głowy",
+                activates_path_code="CCE-010",
+            ),
+            _opt(
+                "NAIL_PROBLEM",
+                label_de="Problem am Nagel",
+                label_en="Nail problem",
+                label_pl="Problem z paznokciem",
+                activates_path_code="CCE-011",
+            ),
+            _opt(
+                "SUSPECTED_FUNGAL_INFECTION",
+                label_de="Verdacht auf Pilzinfektion",
+                label_en="Suspected fungal infection",
+                label_pl="Podejrzenie grzybicy",
+                activates_path_code="CCE-012",
+            ),
+            _opt(
+                "HERPES",
+                label_de="Herpes",
+                label_en="Herpes",
+                label_pl="Opryszczka",
+                activates_path_code="CCE-013",
+            ),
+            _opt(
+                "SHINGLES",
+                label_de="Gürtelrose",
+                label_en="Shingles",
+                label_pl="Półpasiec",
+                activates_path_code="CCE-014",
+            ),
+            _opt(
+                "FOLLOW_UP_PRIOR_LESION",
+                label_de="Kontrolle einer früher beurteilten Veränderung",
+                label_en="Follow-up of a previously assessed lesion",
+                label_pl="Kontrola wcześniej ocenionej zmiany",
+                activates_path_code="CCE-015",
+            ),
+            _opt(
+                "OTHER_DERMATOLOGIC",
+                label_de="Anderes dermatologisches Problem",
+                label_en="Other dermatologic problem",
+                label_pl="Inny problem dermatologiczny",
+                activates_path_code="GLOBAL",
+            ),
+        ],
+    ),
+]

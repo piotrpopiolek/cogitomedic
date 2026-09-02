@@ -114,6 +114,26 @@
     "en": "Consent definitions",
     "pl": "Definicje zgód"
   },
+  "administration.model_consentdefinitionprocess": {
+    "de": "Einwilligung – Prozess",
+    "en": "Consent definition process",
+    "pl": "Proces definicji zgody"
+  },
+  "administration.model_consentdefinitionprocess_plural": {
+    "de": "Einwilligung – Prozesse",
+    "en": "Consent definition processes",
+    "pl": "Procesy definicji zgody"
+  },
+  "administration.model_anamnesisquestiondefinitionprocess": {
+    "de": "Anamnesefrage – Prozess",
+    "en": "Anamnesis question process",
+    "pl": "Proces pytania anamnezy"
+  },
+  "administration.model_anamnesisquestiondefinitionprocess_plural": {
+    "de": "Anamnesefrage – Prozesse",
+    "en": "Anamnesis question processes",
+    "pl": "Procesy pytania anamnezy"
+  },
   "administration.model_intakedocumentversion": {
     "de": "Version des Aufnahmeformulars",
     "en": "Intake document version",

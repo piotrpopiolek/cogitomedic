@@ -38,7 +38,7 @@ from apps.intake.services import (
     submit_patient_intake_form,
 )
 from apps.core.api_utils import assign_group_to_test_user
-from apps.core.exceptions import StateTransitionError
+from apps.core.exceptions import DomainError, StateTransitionError
 from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
@@ -49,6 +49,11 @@ from apps.reception.models import (
     QueueEntry,
     QueueEntryStatus,
     QueueStatus,
+)
+from apps.reception.process_types import ProcessType
+from apps.reception.services import (
+    QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
+    create_queue_entry,
 )
 from apps.users.models import StaffUser
 
@@ -138,8 +143,9 @@ class SubmitPatientIntakeFormTests(TestCase):
     def _accept_all_required_consents_effective_today(self) -> None:
         today = timezone.localdate()
         for cdef in ConsentDefinition.objects.filter(
-            _effective_consent_filter(today), is_required=True
-        ):
+            _effective_consent_filter(today, self.queue_entry.process_type),
+            is_required=True,
+        ).distinct():
             PatientIntakeConsent.objects.get_or_create(
                 intake_form=self.intake_form,
                 consent_definition=cdef,
@@ -150,7 +156,8 @@ class SubmitPatientIntakeFormTests(TestCase):
         today = timezone.localdate()
         required = list(
             AnamnesisQuestionDefinition.objects.filter(
-                _effective_question_filter(today), is_required=True
+                _effective_question_filter(today, self.queue_entry.process_type),
+                is_required=True,
             ).prefetch_related("options")
         )
         answers = list(self.intake_form.anamnesis_payload.get("answers", []))
@@ -297,6 +304,83 @@ class SubmitPatientIntakeFormTests(TestCase):
 
         with self.assertRaises(IntakeSessionValidationError):
             submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+    def test_submit_patient_intake_form_rejects_cancelled_queue_entry(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+        with self.assertRaises(DomainError) as ctx:
+            submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+        self.assertEqual(
+            ctx.exception.api_message_key, QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
+        )
+        self.intake_form.refresh_from_db()
+        self.queue_entry.refresh_from_db()
+        self.assertEqual(self.intake_form.form_status, IntakeStatus.IN_PROGRESS)
+        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.CANCELLED)
+        self.assertFalse(
+            IntakeDocumentVersion.objects.filter(intake_form=self.intake_form).exists()
+        )
+
+    def test_submit_cancelled_does_not_resurrect_beside_telederm(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+        telederm = create_queue_entry(
+            daily_queue_id=self.queue_entry.daily_queue_id,
+            patient_id=self.queue_entry.patient_id,
+            created_by_user_id=self.reception_user.id,
+            process_type=ProcessType.TELEDERM,
+        )
+
+        with self.assertRaises(DomainError):
+            submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+        self.queue_entry.refresh_from_db()
+        telederm.refresh_from_db()
+        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.CANCELLED)
+        self.assertEqual(telederm.entry_status, QueueEntryStatus.WAITING)
+        self.assertEqual(telederm.process_type, ProcessType.TELEDERM)
+
+    def test_submit_cancelled_does_not_collide_with_replacement_standard(
+        self,
+    ) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+        replacement = create_queue_entry(
+            daily_queue_id=self.queue_entry.daily_queue_id,
+            patient_id=self.queue_entry.patient_id,
+            created_by_user_id=self.reception_user.id,
+            process_type=ProcessType.STANDARD,
+        )
+
+        with self.assertRaises(DomainError):
+            submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+        self.queue_entry.refresh_from_db()
+        replacement.refresh_from_db()
+        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.CANCELLED)
+        self.assertEqual(replacement.entry_status, QueueEntryStatus.WAITING)
+
+    def test_submit_already_submitted_is_noop_if_later_cancelled(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submitted = submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        self.queue_entry.entry_status = QueueEntryStatus.CANCELLED
+        self.queue_entry.save(update_fields=["entry_status", "updated_at"])
+
+        again = submit_patient_intake_form(intake_form_id=self.intake_form.id)
+
+        self.assertEqual(again.id, submitted.id)
+        self.assertEqual(again.form_status, IntakeStatus.SUBMITTED)
+        self.queue_entry.refresh_from_db()
+        self.assertEqual(self.queue_entry.entry_status, QueueEntryStatus.CANCELLED)
 
     @override_settings(HIDRIVE_USE_MOCK="1")
     def test_process_intake_outbox_events_generates_pdf_and_hidrive_upload(

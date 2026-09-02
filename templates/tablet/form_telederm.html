@@ -1,0 +1,155 @@
+{% load static static_versioned cogitomedica_i18n %}
+<!DOCTYPE html>
+<html lang="{{ locale_param|default:'de' }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% if locale_param == 'en' %}Teledermatology intake – {{ patient.last_name }}{% elif locale_param == 'pl' %}Ankieta teledermatologiczna – {{ patient.last_name }}{% else %}Teledermatologie-Formular – {{ patient.last_name }}{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'cogitomedica/css/cogitomedica-brand.css' %}" />
+  <link rel="stylesheet" href="{% static 'tablet/css/form.css' %}" />
+</head>
+<body class="cm-portal">
+  {% csrf_token %}
+  <div id="tablet-form-connection-error" class="tablet-form-connection-error" role="alert" aria-live="assertive">
+    <span class="tablet-form-connection-error-text"></span>
+    <button type="button" id="tablet-form-retry-btn" class="retry-btn">{{ ui.msg_try_again }}</button>
+  </div>
+  <div class="form-nav-lang-wrap">
+    <nav class="form-nav-lang" aria-label="{% db_trans 'waiting_room.form.choose_language' 'Choose language' %}">
+      {% if locale_param == 'en' %}
+        <a href="?locale=de" title="{{ ui.lang_de }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_en }}">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span></a>
+      {% elif locale_param == 'pl' %}
+        <a href="?locale=de" title="{{ ui.lang_de }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span></a>
+        <a href="?locale=en" title="{{ ui.lang_en }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span></a>
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_pl }}">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span>
+      {% else %}
+        <span class="form-lang-flag form-lang-current" title="{{ ui.lang_de }}">{% include "tablet/includes/flag_icon.html" with code="de" only %}</span>
+        <a href="?locale=en" title="{{ ui.lang_en }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="en" only %}</span></a>
+        <a href="?locale=pl" title="{{ ui.lang_pl }}" class="form-lang-flag-link"><span class="form-lang-flag" aria-hidden="true">{% include "tablet/includes/flag_icon.html" with code="pl" only %}</span></a>
+      {% endif %}
+    </nav>
+  </div>
+
+  <nav class="tablet-form-stepper" aria-label="{{ ui.step_1_title }}">
+    <span class="stepper-dot current" id="stepper-dot-1" aria-current="step">1</span>
+    <span class="stepper-line" aria-hidden="true"></span>
+    <span class="stepper-dot" id="stepper-dot-2">2</span>
+    <span class="stepper-line" aria-hidden="true"></span>
+    <span class="stepper-dot" id="stepper-dot-3">3</span>
+  </nav>
+  <p class="step-header" id="step-indicator">{{ ui.step_1_title }}</p>
+
+  <div class="form-steps-wrapper" role="region" aria-labelledby="step-indicator">
+  <div class="form-step active" id="step-1" role="group" aria-labelledby="step-indicator" aria-hidden="false">
+    {% include "tablet/includes/patient_identity.html" %}
+    <section id="consents-section">
+      <h2>{{ ui.consents_title }}</h2>
+      {% for c in consents %}
+      <div class="consent-block" data-consent-id="{{ c.consent_definition_id }}" data-consent-code="{{ c.code }}" data-required="{{ c.is_required|yesno:'true,false' }}">
+        <h3>{{ c.title }}{% if c.is_required %} <span class="required-mark" aria-hidden="true">*</span>{% endif %}</h3>
+        <div class="consent-content">{{ c.content|markdown_consent }}</div>
+        <div class="consent-block-msg error" style="display:none;" role="alert" aria-live="polite"></div>
+        {% if c.is_multi %}
+          {% for opt in c.options %}
+          <label class="consent-check">
+            <input type="checkbox" name="multi-consent" data-id="{{ c.consent_definition_id }}" value="{{ opt.code }}" {% if opt.code in c.selected_option_codes %}checked{% endif %}>
+            {{ opt.label }}
+          </label>
+          {% endfor %}
+        {% else %}
+          <label class="consent-check">
+            <input type="checkbox" name="consent" data-id="{{ c.consent_definition_id }}" data-required="{{ c.is_required|yesno:'true,false' }}" {% if c.accepted %}checked{% endif %}>
+            {% if c.confirm_label %}
+              {{ c.confirm_label }}
+            {% else %}
+              {{ ui.consent_confirm }}
+            {% endif %}
+          </label>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    <div class="step-actions">
+      <button type="button" id="btn-step1-next">{{ ui.step_save_and_next }}</button>
+    </div>
+  </div>
+
+  <div class="form-step" id="step-2" role="group" aria-labelledby="step-indicator" aria-hidden="true">
+    <section id="telederm-section">
+      <h2>{{ ui.telederm_title }}</h2>
+      <p class="text-muted-portal">{{ ui.telederm_hint }}</p>
+      <div id="telederm-triage-blocked" class="error" style="display:none;" role="alert"></div>
+      <div id="telederm-msg" class="error" style="display:none;"></div>
+      <div id="telederm-questions"></div>
+    </section>
+    {% if anamnesis_questions %}
+    <section id="anamnesis-section">
+      <h2>{{ ui.anamnesis_title }}</h2>
+      {% for q in anamnesis_questions %}
+      <div class="field" data-question-code="{{ q.question_code }}" data-required="{{ q.is_required|yesno:'true,false' }}">
+        <strong>{{ q.question_text }}{% if q.is_required %} <span class="required-mark" aria-hidden="true">*</span>{% endif %}</strong>
+        <div class="anamnesis-field-msg" style="display:none;" role="alert" aria-live="polite"></div>
+        {% if q.answer_type == "BOOLEAN" or q.answer_type == "SINGLE_CHOICE" %}
+          {% for opt in q.options %}
+          <label><input type="radio" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
+          {% endfor %}
+        {% elif q.answer_type == "MULTI_CHOICE" %}
+          {% for opt in q.options %}
+          <label><input type="checkbox" name="q-{{ q.question_code }}" value="{{ opt.option_code }}" {% if opt.option_code in q.answer.selected_option_codes %}checked{% endif %}> {{ opt.label }}</label>
+          {% endfor %}
+        {% endif %}
+        <label>{{ ui.notes }} <input type="text" name="q-text-{{ q.question_code }}" placeholder="{{ ui.notes_placeholder }}" value="{{ q.answer.free_text|default:'' }}"></label>
+      </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+    <section id="telederm-summary-preview" class="telederm-summary-preview" style="display:none;">
+      <h2>{{ ui.telederm_summary_title }}</h2>
+      <div id="telederm-summary-content"></div>
+    </section>
+    <div class="step-actions">
+      <button type="button" id="btn-step2-back" class="btn secondary">{{ ui.step_back }}</button>
+      <button type="button" id="btn-step2-next">{{ ui.step_save_and_next }}</button>
+    </div>
+  </div>
+
+  <div class="form-step" id="step-3" role="group" aria-labelledby="step-indicator" aria-hidden="true">
+    <section id="signature-section">
+    <h2>{{ ui.signature_title }}</h2>
+    <div id="signature-msg" class="error" style="display:none;"></div>
+    <canvas id="signatureCanvas"></canvas>
+    <button type="button" id="clear-signature">{{ ui.clear }}</button>
+    <button type="button" id="save-signature">{{ ui.save_signature }}</button>
+    <span id="signature-saved" class="success" style="display:none;">{{ ui.signature_saved }}</span>
+    </section>
+    <section class="tablet-step3-footer">
+      <p id="auto-submit-hint" class="text-muted-portal tablet-step3-hint" style="display: none;" role="status" aria-live="polite"></p>
+      <div id="submit-msg" class="error" style="display:none;"></div>
+      <div class="step-actions tablet-step3-actions">
+        <button type="button" id="btn-step3-back" class="btn secondary">{{ ui.step_back }}</button>
+        <button type="button" id="submit-form" {% if not has_signature %}disabled{% endif %}>{{ ui.submit_form }}</button>
+      </div>
+    </section>
+  </div>
+  </div>
+
+  {{ telederm|json_script:"telederm-initial" }}
+  {{ ui|json_script:"form-ui" }}
+
+  <script>
+    window.__TABLET_TELEDERM_FORM_CONFIG__ = {
+      formId: "{{ intake_form_id|escapejs }}",
+      apiBase: "/api/v1",
+      formLocale: "{{ form_locale|escapejs }}",
+      schemaVersion: {{ telederm_schema_version|default:1 }},
+      anamnesisSchemaVersion: {{ anamnesis_schema_version }},
+      hasAnamnesis: {% if anamnesis_questions %}true{% else %}false{% endif %},
+      hasSignature: {% if has_signature %}true{% else %}false{% endif %}
+    };
+  </script>
+  <script src="{% static_v 'tablet/js/form-telederm.js' %}"></script>
+
+</body>
+</html>

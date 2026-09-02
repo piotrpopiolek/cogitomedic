@@ -160,6 +160,68 @@ class MedicalServicesTests(TestCase):
             "Bitte Geburtsdatum prüfen",
         )
 
+    def test_get_medical_document_context_uses_telederm_preview(self) -> None:
+        from apps.reception.process_types import PROCESS_TYPE_TELEDERM
+
+        self.queue_entry.process_type = PROCESS_TYPE_TELEDERM
+        self.queue_entry.save(update_fields=["process_type", "updated_at"])
+        preview = {
+            "schema_version": 1,
+            "triage_blocked": False,
+            "path_code": "CCE-001",
+            "problem_label": "Neue Hautveränderung",
+            "lines": [],
+        }
+        with patch(
+            "apps.medical.services.get_intake_form_context",
+            return_value={
+                "consents": [],
+                "body_map_data": [],
+                "anamnesis_questions": [],
+                "patient": {"id": str(self.queue_entry.patient_id)},
+                "telederm": {"clinical_summary_preview": preview},
+            },
+        ):
+            ctx = get_medical_document_context(
+                medical_document_id=self.medical_document.id,
+                form_locale="de-DE",
+                user=self.doctor_user,
+            )
+        self.assertEqual(ctx["intake_summary"]["clinical_summary"], preview)
+
+    def test_get_medical_document_context_builds_telederm_summary_fallback(
+        self,
+    ) -> None:
+        from apps.reception.process_types import PROCESS_TYPE_TELEDERM
+
+        self.queue_entry.process_type = PROCESS_TYPE_TELEDERM
+        self.queue_entry.save(update_fields=["process_type", "updated_at"])
+        self.intake_form.telederm_payload = {
+            "schema_version": 1,
+            "answers": {
+                "T001": {"selected": ["NONE"]},
+                "CC001": {"selected": ["NEW_SKIN_LESION"]},
+            },
+        }
+        self.intake_form.save(update_fields=["telederm_payload", "updated_at"])
+        with patch(
+            "apps.medical.services.get_intake_form_context",
+            return_value={
+                "consents": [],
+                "body_map_data": [],
+                "anamnesis_questions": [],
+                "patient": {"id": str(self.queue_entry.patient_id)},
+                "telederm": {"questions": []},
+            },
+        ):
+            ctx = get_medical_document_context(
+                medical_document_id=self.medical_document.id,
+                form_locale="de-DE",
+                user=self.doctor_user,
+            )
+        self.assertIn("clinical_summary", ctx["intake_summary"])
+        self.assertIn("problem_label", ctx["intake_summary"]["clinical_summary"])
+
     def test_medical_document_consistency_constraint_blocks_paper_with_intake(
         self,
     ) -> None:

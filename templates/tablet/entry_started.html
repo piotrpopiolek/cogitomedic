@@ -2,7 +2,7 @@
 {% block title %}{{ staff_ui.entry_started_title }}{% endblock %}
 {% block content %}
   <h1>{{ staff_ui.entry_started_title }}</h1>
-  <p>{{ staff_ui.patient_label }} <strong>{{ entry.patient.last_name }} {{ entry.patient.first_name }}</strong></p>
+  <p>{{ staff_ui.patient_label }} <strong>{{ entry.patient.last_name }} {{ entry.patient.first_name }}</strong> {% include "tablet/includes/process_type_badge.html" with process_type=entry.process_type %}</p>
   <p>{{ staff_ui.hand_tablet_msg }}</p>
   <p><a class="btn" href="{% url 'tablet:form' intake_form_id=intake_form_id %}" style="display:block; margin:1rem 0; padding:1rem; text-align:center;">{{ staff_ui.cta_fill_form }}</a></p>
   <p><a class="btn secondary" href="{% url 'tablet:queue_entries' entry.daily_queue_id %}">{{ staff_ui.back_to_patients }}</a></p>

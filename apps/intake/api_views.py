@@ -16,6 +16,7 @@ from apps.core.api_utils import (
     json_domain_error,
     json_error,
     json_pydantic_query_validation_error,
+    json_pydantic_validation_error,
     read_json_body,
     require_auth,
     require_user_role,
@@ -37,6 +38,7 @@ from apps.intake.api_schemas import (
     UpdateAnamnesisPayloadRequest,
     UpdateBodyMapRequest,
     UpdateConsentsRequest,
+    UpdateTeledermPayloadRequest,
 )
 from apps.intake.models import IntakeOutboxEvent, PatientIntakeConsent
 from apps.intake.outbox_services import (
@@ -114,9 +116,7 @@ def intake_form_detail_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
         except InvalidRequestBodyEncoding as exc:
             return json_domain_error(exc)
         except ValidationError as exc:
-            return JsonResponse(
-                {"error": "Validation error.", "details": exc.errors()}, status=400
-            )
+            return json_pydantic_validation_error(exc)
         try:
             body_map_data = [p.model_dump() for p in body.body_map_data]
             intake_form = save_intake_body_map(
@@ -158,9 +158,7 @@ def intake_form_consents_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
     try:
         intake_form = save_intake_consents(
             intake_form_id=intake_form_id,
@@ -217,9 +215,7 @@ def intake_form_signature_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
     try:
         intake_form = save_intake_signature(
             intake_form_id=intake_form_id,
@@ -265,9 +261,7 @@ def intake_form_anamnesis_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         intake_form = save_intake_anamnesis_payload(
@@ -292,6 +286,57 @@ def intake_form_anamnesis_view(
 
 
 @require_auth
+@require_http_methods(["PUT"])
+@ratelimit(key="ip", rate="120/m", block=True)
+def intake_form_telederm_view(
+    request: HttpRequest, intake_form_id: UUID
+) -> JsonResponse:
+    """PUT telederm questionnaire payload (TELEDERM process only)."""
+    role_error = require_user_role(
+        request, allowed_roles={"RECEPTION", "ADMIN", "TABLET"}
+    )
+    if role_error:
+        return role_error
+
+    try:
+        body = UpdateTeledermPayloadRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+
+    form_locale = request.GET.get("form_locale", "de-DE")[:10]
+    if not LOCALE_PATTERN.match(form_locale):
+        return json_error("other.api.invalid_form_locale_format", status=400)
+
+    from apps.telederm.services import save_telederm_payload
+
+    answers_payload = {qid: answer.model_dump() for qid, answer in body.answers.items()}
+    payload = {
+        "schema_version": body.schema_version,
+        "answers": answers_payload,
+    }
+
+    try:
+        save_telederm_payload(
+            intake_form_id=intake_form_id,
+            payload=payload,
+            form_locale=form_locale,
+            allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
+        )
+    except ObjectDoesNotExist:
+        return json_error("other.api.intake_form_not_found", status=404)
+    except StateTransitionError as exc:
+        return json_domain_error(exc, status=409)
+    except DomainError as exc:
+        return json_domain_error(exc, status=409)
+
+    return _intake_form_context_json(intake_form_id, request)
+
+
+@require_auth
 @ratelimit(key="ip", rate="5/m", block=True)
 def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonResponse:
     role_error = require_user_role(
@@ -309,9 +354,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         intake_form = submit_patient_intake_form(
@@ -408,9 +451,7 @@ def intake_outbox_event_retry_view(
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     try:
         event = IntakeOutboxEvent.objects.select_related(
@@ -461,9 +502,7 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
     except InvalidRequestBodyEncoding as exc:
         return json_domain_error(exc)
     except ValidationError as exc:
-        return JsonResponse(
-            {"error": "Validation error.", "details": exc.errors()}, status=400
-        )
+        return json_pydantic_validation_error(exc)
 
     create_audit_event(
         event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
