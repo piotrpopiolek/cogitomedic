@@ -48,12 +48,12 @@ class PatientResultsPhoneFlowByRegionTests(TestCase):
         return case["e164"]
 
     @patch(
-        "apps.patient_results.services.random.randint",
-        return_value=_FIXED_OTP,
+        "apps.patient_results.services.secrets.randbelow",
+        return_value=_FIXED_OTP - 100000,
     )
     @patch("apps.patient_results.services.get_sms_adapter")
     def test_full_flow_all_supported_regions(
-        self, mock_get_adapter: MagicMock, _mock_randint: MagicMock
+        self, mock_get_adapter: MagicMock, _mock_randbelow: MagicMock
     ) -> None:
         mock_adapter = mock_get_adapter.return_value
         mock_adapter.send_sms = MagicMock()

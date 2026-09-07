@@ -65,8 +65,8 @@ def _api_otp_login(
         request_body["last_name"] = last_name
     with (
         patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ),
         patch("apps.patient_results.services.get_sms_adapter") as mock_sms,
     ):
@@ -110,8 +110,8 @@ class SharedPhoneFamilyResultsTests(FamilyResultsTestCase):
                 PatientResultsOtpSession.objects.filter(patient=member.patient).delete()
                 with (
                     patch(
-                        "apps.patient_results.services.random.randint",
-                        return_value=FIXED_OTP_FAMILY,
+                        "apps.patient_results.services.secrets.randbelow",
+                        return_value=FIXED_OTP_FAMILY - 100000,
                     ),
                     patch("apps.patient_results.services.get_sms_adapter") as mock_sms,
                 ):
@@ -155,8 +155,8 @@ class SharedPhoneFamilyResultsTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         member1, member2, _ = self.fixture.shared_family_a
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             request_otp(
                 phone=member1.portal_phone,
@@ -202,8 +202,8 @@ class SeparatePhoneFamilyResultsTests(FamilyResultsTestCase):
                 PatientResultsOtpSession.objects.filter(patient=member.patient).delete()
                 with (
                     patch(
-                        "apps.patient_results.services.random.randint",
-                        return_value=FIXED_OTP_FAMILY,
+                        "apps.patient_results.services.secrets.randbelow",
+                        return_value=FIXED_OTP_FAMILY - 100000,
                     ),
                     patch("apps.patient_results.services.get_sms_adapter") as mock_sms,
                 ):
@@ -236,8 +236,8 @@ class SeparatePhoneFamilyResultsTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         m1, m2, _ = self.fixture.separate_family_b
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             request_otp(
                 phone=m1.portal_phone,
@@ -259,8 +259,8 @@ class SeparatePhoneFamilyResultsTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         m1, m2, _ = self.fixture.separate_family_b
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             request_otp(
                 phone=m1.portal_phone,
@@ -290,8 +290,8 @@ class CrossFamilyIsolationTests(FamilyResultsTestCase):
         member_a = self.fixture.shared_family_a[0]
         member_b = self.fixture.separate_family_b[0]
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             request_otp(
                 phone=member_a.portal_phone,
@@ -365,8 +365,8 @@ class SharedPhoneAmbiguousIdentityTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         gina, _ = self.fixture.collision_pair
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             request_otp(
                 phone=gina.portal_phone,
@@ -388,8 +388,8 @@ class SharedPhoneAmbiguousIdentityTests(FamilyResultsTestCase):
                 PatientResultsOtpSession.objects.filter(patient=member.patient).delete()
                 with (
                     patch(
-                        "apps.patient_results.services.random.randint",
-                        return_value=FIXED_OTP_FAMILY,
+                        "apps.patient_results.services.secrets.randbelow",
+                        return_value=FIXED_OTP_FAMILY - 100000,
                     ),
                     patch("apps.patient_results.services.get_sms_adapter") as mock_sms,
                 ):
@@ -552,8 +552,8 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         gina = self.fixture.collision_pair[0]
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             self.client.post(
                 "/api/v1/patient-results/request-otp",
@@ -588,8 +588,8 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         mock_get_adapter.return_value.send_sms = MagicMock()
         gina = self.fixture.collision_pair[0]
         with patch(
-            "apps.patient_results.services.random.randint",
-            return_value=FIXED_OTP_FAMILY,
+            "apps.patient_results.services.secrets.randbelow",
+            return_value=FIXED_OTP_FAMILY - 100000,
         ):
             self.client.post(
                 "/api/v1/patient-results/request-otp",
@@ -756,8 +756,8 @@ class FamilyOutboxPortalSmokeTests(FamilyResultsTestCase):
 
         with (
             patch(
-                "apps.patient_results.services.random.randint",
-                return_value=FIXED_OTP_FAMILY,
+                "apps.patient_results.services.secrets.randbelow",
+                return_value=FIXED_OTP_FAMILY - 100000,
             ),
             patch("apps.patient_results.services.get_sms_adapter") as mock_sms,
         ):

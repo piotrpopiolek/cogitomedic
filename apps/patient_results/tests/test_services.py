@@ -80,6 +80,56 @@ class RequestOtpTests(TestCase):
         self.assertIn("1762222222", str(call_args))
         self.assertRegex(call_args[1]["message"], r"\d{6}")
 
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.secrets.randbelow", return_value=0)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_uses_csprng_and_verify_succeeds(
+        self, mock_get_adapter, mock_randbelow
+    ) -> None:
+        mock_get_adapter.return_value.send_sms = MagicMock()
+        result = request_otp(
+            phone="01762222222",
+            date_of_birth=date(1990, 5, 15),
+            captcha_token="skip",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "sms_sent")
+        mock_randbelow.assert_called_once_with(900000)
+        otp = "100000"
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        self.assertEqual(
+            session.otp_code_hash,
+            hashlib.sha256(f"test-pepper{otp}".encode()).hexdigest(),
+        )
+        verified = verify_otp(
+            phone="01762222222",
+            date_of_birth=date(1990, 5, 15),
+            otp_code=otp,
+        )
+        self.assertTrue(verified.success)
+        self.assertEqual(verified.patient_id, str(self.patient.id))
+
+    @override_settings(
+        CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
+    )
+    @patch("apps.patient_results.services.secrets.randbelow", return_value=899999)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_request_otp_csprng_upper_bound_is_six_digits(
+        self, mock_get_adapter, mock_randbelow
+    ) -> None:
+        mock_get_adapter.return_value.send_sms = MagicMock()
+        request_otp(
+            phone="01762222222",
+            date_of_birth=date(1990, 5, 15),
+            captcha_token="skip",
+        )
+        mock_randbelow.assert_called_once_with(900000)
+        message = mock_get_adapter.return_value.send_sms.call_args.kwargs["message"]
+        self.assertIn("999999", message)
+        self.assertNotRegex(message, r"\b\d{7,}\b")
+
     @override_settings(CAPTCHA_VERIFY_SKIP=True)
     @patch("apps.patient_results.services.get_sms_adapter")
     def test_request_otp_sms_failure_returns_ok_without_session(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import random
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -139,7 +139,7 @@ def request_otp(
             "PATIENT_RESULTS_OTP_PEPPER must be set outside development environments."
         )
 
-    otp_code = f"{random.randint(100000, 999999)}"
+    otp_code = f"{100000 + secrets.randbelow(900000)}"
     otp_hash = _hash_otp(otp_code)
     expires_at = timezone.now() + timedelta(minutes=OTP_VALID_MINUTES)
 
