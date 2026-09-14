@@ -4,6 +4,8 @@ Clinic web application for **digital patient intake**, **consent signing**, **me
 
 **Current release:** [`v1.8.0`](https://github.com/piotrpopiolek/cogitomedic/releases/tag/v1.8.0) · UI languages: **German**, **English**, **Polish**
 
+**CI on every change to `main`:** Playwright E2E on **Chromium, Firefox, and Microsoft Edge**; pytest against **PostgreSQL 16**; **90% diff-cover** vs `origin/main`. Full gate list: [Quality & CI](#quality--ci).
+
 ## Table of contents
 
 - [Overview](#overview)
@@ -255,15 +257,21 @@ Operational hardening (backups, tag checkout after history rewrites, smoke check
 
 ## Quality & CI
 
-| Gate | Tooling |
-|------|---------|
-| Lint | ruff + black ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) |
-| Types | mypy |
-| Tests | pytest + coverage |
-| Mutation pilot | mutmut (`make mutmut-smoke`) |
-| Dependencies | scheduled `pip-audit` ([`.github/workflows/security.yml`](.github/workflows/security.yml)) |
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on **push** and **pull_request** to `main`. Eight gates in that file (plus a weekly dependency audit).
 
-CI runs on **push** and **pull_request** to `main`.
+| Gate | What actually runs |
+|------|---------------------|
+| **Lint** | ruff + black (`ruff check .`, `black --check .`) |
+| **Types** | `mypy .` — settings in [`pyproject.toml`](pyproject.toml) (`python_version = "3.13"`). **Not** `strict = true` / `--strict`. |
+| **Unit / integration** | pytest (`-m "not e2e"`) on a **PostgreSQL 16** GitHub Actions service (`postgres:16-alpine` + `pg_isready` healthcheck). Django is configured with `django.db.backends.postgresql` — the same engine as production. Line coverage gate: `fail_under = 80` in `pyproject.toml`. |
+| **Diff coverage** | `diff-cover coverage.xml --compare-branch=origin/main --fail-under=90` |
+| **Translations** | `load_default_translations` then `check_translations_completeness` (de / en / pl) |
+| **Mutation** | mutmut smoke (`scripts/mutmut_smoke.sh`, `name_normalize` pilot) in the test job; locally `make mutmut-smoke` |
+| **E2E** | Playwright job matrix **`chromium` · `firefox` · `msedge`** (`fail-fast: false`). On failure, traces/screenshots from `artifacts/e2e/` are uploaded as workflow artifacts. |
+| **Docker image** | `docker build .` on every **push** (not on pull requests) |
+| **Dependencies** | scheduled `pip-audit` on `requirements.txt` ([`.github/workflows/security.yml`](.github/workflows/security.yml)) |
+
+CI uses **mock secrets** only (`SECRET_KEY`, DB password, OTP pepper, metrics token). External integrations stay in mock mode: `SMSAPI_USE_MOCK=1`, `HIDRIVE_USE_MOCK=1`, `CAPTCHA_VERIFY_SKIP=1`.
 
 Document publishing is designed to be idempotent. Each publication stores an immutable locale for auditable PDF language.
 
@@ -277,8 +285,9 @@ Run from the project root (venv activated, or via `docker compose run --rm web �
 |---------|-------------|
 | `python manage.py runserver` | Development server |
 | `python manage.py migrate` | Apply migrations |
-| `make pytest` | Full pytest suite in Docker `web` |
+| `make pytest` | Full pytest suite in Docker `web` (excludes Playwright unless `E2E_BROWSER` is set) |
 | `make test-ci` | Migrate + translation checks + pytest |
+| Playwright E2E | `E2E_BROWSER=chromium python -m pytest cogitomedica/tests/e2e/ -m e2e` (also `firefox` / `msedge`; browsers via `python -m playwright install --with-deps`) |
 | `make mutmut-smoke` | Mutation-testing smoke |
 | `python manage.py collectstatic` | Collect static files |
 | `python manage.py createsuperuser` | Create admin user |

@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -10,15 +10,19 @@ RUN apt-get update \
         build-essential \
         gettext \
         libpq-dev \
+        libffi-dev \
         libcairo2 \
         libglib2.0-0 \
         libpango-1.0-0 \
+        libpangocairo-1.0-0 \
         libpangoft2-1.0-0 \
         libgdk-pixbuf-2.0-0 \
-        libffi-dev \
         shared-mime-info \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
@@ -28,11 +32,37 @@ COPY . /app
 
 RUN python manage.py compilemessages
 
+FROM python:3.13-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpq5 \
+        libffi8 \
+        libcairo2 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        shared-mime-info \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app /app
+
 # Skrypty z Windows mogą mieć CRLF — wtedy "exec /docker-entrypoint-prod.sh: no such file or directory" (shebang /bin/sh\r).
 COPY scripts/docker-entrypoint-prod.sh /docker-entrypoint-prod.sh
 COPY scripts/docker-healthcheck-web.sh /app/scripts/docker-healthcheck-web.sh
-RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh \
-    && chmod +x /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh
+COPY scripts/verify_prod_image.sh /app/scripts/verify_prod_image.sh
+RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh /app/scripts/verify_prod_image.sh \
+    && chmod +x /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh /app/scripts/verify_prod_image.sh
 
 EXPOSE 8000
 

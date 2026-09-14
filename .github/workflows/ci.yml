@@ -240,5 +240,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build Docker image
-        run: docker build .
+      - name: Build development image
+        run: docker build -t cogitomedica-web:ci-dev .
+
+      - name: Build production image
+        run: docker build -f Dockerfile.prod -t cogitomedica-web:ci-prod .
+
+      - name: Verify production runtime (no toolchain, WeasyPrint PDF)
+        run: |
+          docker run --rm --entrypoint /bin/sh \
+            -e SECRET_KEY=ci-secret-key-for-testing-only \
+            -e ENVIRONMENT=dev \
+            cogitomedica-web:ci-prod \
+            /app/scripts/verify_prod_image.sh
