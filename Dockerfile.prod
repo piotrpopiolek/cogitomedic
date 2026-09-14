@@ -65,9 +65,8 @@ COPY --from=builder /app/static /app/static
 # Skrypty z Windows mogą mieć CRLF — wtedy "exec /docker-entrypoint-prod.sh: no such file or directory" (shebang /bin/sh\r).
 COPY scripts/docker-entrypoint-prod.sh /docker-entrypoint-prod.sh
 COPY scripts/docker-healthcheck-web.sh /app/scripts/docker-healthcheck-web.sh
-COPY scripts/verify_prod_image.sh /app/scripts/verify_prod_image.sh
-RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh /app/scripts/verify_prod_image.sh \
-    && chmod +x /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh /app/scripts/verify_prod_image.sh
+RUN sed -i 's/\r$//' /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh \
+    && chmod +x /docker-entrypoint-prod.sh /app/scripts/docker-healthcheck-web.sh
 
 EXPOSE 8000
 

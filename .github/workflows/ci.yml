@@ -251,5 +251,6 @@ jobs:
           docker run --rm --entrypoint /bin/sh \
             -e SECRET_KEY=ci-secret-key-for-testing-only \
             -e ENVIRONMENT=dev \
+            -v "$GITHUB_WORKSPACE/scripts/verify_prod_image.sh:/verify_prod_image.sh:ro" \
             cogitomedica-web:ci-prod \
-            /app/scripts/verify_prod_image.sh
+            /verify_prod_image.sh

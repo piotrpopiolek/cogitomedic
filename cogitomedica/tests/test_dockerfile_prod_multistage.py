@@ -61,7 +61,27 @@ def test_prod_entrypoint_and_gunicorn_unchanged() -> None:
     text = _dockerfile()
     assert 'ENTRYPOINT ["/docker-entrypoint-prod.sh"]' in text
     assert '"--timeout", "600"' in text
-    assert "verify_prod_image.sh" in text
+    assert "docker-healthcheck-web.sh" in text
+    assert "verify_prod_image.sh" not in text
+
+
+def test_verify_prod_image_script_exists_and_skips_django_check() -> None:
+    script = _REPO_ROOT / "scripts" / "verify_prod_image.sh"
+    assert script.is_file()
+    body = script.read_text(encoding="utf-8")
+    assert not any(
+        line.strip().startswith("python manage.py check")
+        for line in body.splitlines()
+    )
+    assert "weasyprint" in body
+    assert "libpq5" in body
+
+
+def test_ci_mounts_verify_script_into_prod_image() -> None:
+    ci = (_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "Dockerfile.prod" in ci
+    assert "scripts/verify_prod_image.sh:/verify_prod_image.sh" in ci
+    assert "/app/scripts/verify_prod_image.sh" not in ci
 
 
 def test_runtime_does_not_copy_entire_builder_app_tree() -> None:

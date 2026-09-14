@@ -1,5 +1,7 @@
 #!/bin/sh
 # Smoke the production runtime image: no build toolchain, psycopg + WeasyPrint, sample PDF.
+# Intentionally does not run `manage.py check`: that command's database checks need
+# Postgres + DB_* (see the pytest CI job). This script is mounted in CI, not baked into prod.
 set -eu
 
 fail() {
@@ -24,5 +26,4 @@ python -c "import psycopg, weasyprint; print('imports ok', psycopg.__version__, 
 
 python -c "from pathlib import Path; from weasyprint import HTML; p = Path('/tmp/weasyprint-smoke.pdf'); HTML(string='<h1>CogitoMedica</h1>').write_pdf(p); assert p.stat().st_size > 0; print('pdf ok', p.stat().st_size)"
 
-python manage.py check
 echo "verify_prod_image: OK"

@@ -268,7 +268,7 @@ Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on **push** and
 | **Translations** | `load_default_translations` then `check_translations_completeness` (de / en / pl) |
 | **Mutation** | mutmut smoke (`scripts/mutmut_smoke.sh`, `name_normalize` pilot) in the test job; locally `make mutmut-smoke` |
 | **E2E** | Playwright job matrix **`chromium` · `firefox` · `msedge`** (`fail-fast: false`). On failure, traces/screenshots from `artifacts/e2e/` are uploaded as workflow artifacts. |
-| **Docker image** | On every **push** (not PRs): `docker build .` (dev [`Dockerfile`](Dockerfile)) **and** `docker build -f Dockerfile.prod` (prod). Prod image is smoke-tested with [`scripts/verify_prod_image.sh`](scripts/verify_prod_image.sh) (no gcc/`libpq-dev`, psycopg + WeasyPrint import, sample PDF, `manage.py check`). |
+| **Docker image** | On every **push** (not PRs): `docker build .` (dev [`Dockerfile`](Dockerfile)) **and** `docker build -f Dockerfile.prod` (prod). Prod image is smoke-tested by mounting [`scripts/verify_prod_image.sh`](scripts/verify_prod_image.sh) (no gcc/`libpq-dev`, psycopg + WeasyPrint import, sample PDF). `manage.py check` against PostgreSQL stays in the **test** job. |
 | **Dependencies** | scheduled `pip-audit` on `requirements.txt` ([`.github/workflows/security.yml`](.github/workflows/security.yml)) |
 
 CI uses **mock secrets** only (`SECRET_KEY`, DB password, OTP pepper, metrics token). External integrations stay in mock mode: `SMSAPI_USE_MOCK=1`, `HIDRIVE_USE_MOCK=1`, `CAPTCHA_VERIFY_SKIP=1`.
