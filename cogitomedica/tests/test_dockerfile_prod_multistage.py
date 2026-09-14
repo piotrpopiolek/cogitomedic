@@ -62,3 +62,23 @@ def test_prod_entrypoint_and_gunicorn_unchanged() -> None:
     assert 'ENTRYPOINT ["/docker-entrypoint-prod.sh"]' in text
     assert '"--timeout", "600"' in text
     assert "verify_prod_image.sh" in text
+
+
+def test_runtime_does_not_copy_entire_builder_app_tree() -> None:
+    runtime = _runtime_section(_dockerfile())
+    assert "COPY --from=builder /app /app" not in runtime
+    for path in (
+        "/app/manage.py",
+        "/app/apps",
+        "/app/cogitomedica",
+        "/app/templates",
+        "/app/locale",
+        "/app/static",
+    ):
+        assert f"COPY --from=builder {path} {path}" in runtime
+
+
+def test_dockerignore_excludes_tests_and_dev_trees() -> None:
+    text = (_REPO_ROOT / ".dockerignore").read_text(encoding="utf-8")
+    for pattern in (".github", "learning", "**/tests", "media", "public"):
+        assert pattern in text, pattern

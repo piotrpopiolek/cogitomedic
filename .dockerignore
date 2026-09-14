@@ -5,7 +5,10 @@
 .env.production
 .cursor
 .ai
+.github
 docs
+learning
+deploy
 _local_private
 venv
 __pycache__
@@ -14,6 +17,22 @@ __pycache__
 *.pyd
 .mypy_cache
 .pytest_cache
+htmlcov
+coverage.xml
+mutants
+artifacts
 tmp
 *.log
 db.sqlite3
+
+# Runtime does not serve these; prod mounts volumes / collectstatic instead.
+media
+public
+
+# Tests and CI/dev-only trees (apps/*/tests, cogitomedica/tests, …)
+**/tests
+**/tests/**
+conftest.py
+pytest.ini
+mutmut_pytest.ini
+requirements-dev.txt
