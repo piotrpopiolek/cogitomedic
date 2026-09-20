@@ -120,7 +120,9 @@ class OpenAPISchemaIntegrationTests(TestCase):
             .get("post", {})
         )
         verify_otp = (
-            schema["paths"].get("/api/v1/patient-results/verify-otp", {}).get("post", {})
+            schema["paths"]
+            .get("/api/v1/patient-results/verify-otp", {})
+            .get("post", {})
         )
         self.assertEqual(
             request_otp.get("requestBody", {})

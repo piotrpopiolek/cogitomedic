@@ -851,7 +851,9 @@ def _upload_external_pdf_attachment_to_hidrive(
         else:
             local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
             cleanup_tmp = True
-        adapter = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+        adapter = (
+            hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+        )
         adapter.upload(remote_path=remote_path, local_path=local_tmp)
     except (HiDriveApiError, HiDriveAuthError) as exc:
         with transaction.atomic():

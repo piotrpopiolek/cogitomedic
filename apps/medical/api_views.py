@@ -1873,9 +1873,7 @@ def medical_document_external_pdf_reject_view(
     if att.status == ExternalPdfStatus.REJECTED:
         return JsonResponse({"ok": True, "status": att.status}, status=200)
     try:
-        reject_external_pdf(
-            att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter()
-        )
+        reject_external_pdf(att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter())
     except Exception:
         logger.exception(
             "reject_external_pdf failed: attachment=%s path=%s",
