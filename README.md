@@ -2,7 +2,7 @@
 
 Clinic web application for **digital patient intake**, **consent signing**, **medical documentation (Befund)**, and a **patient results portal** — with cloud archiving, SMS logistics, audit trail, and production observability.
 
-**Current release:** [`v1.8.0`](https://github.com/piotrpopiolek/cogitomedic/releases/tag/v1.8.0) · UI languages: **German**, **English**, **Polish**
+**Current release:** [`v1.9.4`](https://github.com/piotrpopiolek/cogitomedic/releases/tag/v1.9.4) · UI languages: **German**, **English**, **Polish**
 
 **CI on every change to `main`:** Playwright E2E on **Chromium, Firefox, and Microsoft Edge**; pytest against **PostgreSQL 16**; **90% diff-cover** vs `origin/main`. Full gate list: [Quality & CI](#quality--ci).
 
@@ -44,8 +44,9 @@ Clinic user manuals and internal runbooks are maintained **outside the public re
 
 | Area | What it does |
 |------|----------------|
-| **Reception** | Daily waiting room (CRUD + spreadsheet import), start tablet sessions, browse generated intake PDFs in the staff panel |
+| **Reception** | Daily waiting room (CRUD + spreadsheet import), start tablet sessions, browse generated intake PDFs in the staff panel; per-visit process type (`STANDARD` / `TELEDERM`) and optional Ausfallhonorar flag |
 | **Paper intake** | Controlled paper path for selected queue entries (staff authorization in admin / API) |
+| **Telederm** | Separate teledermatology intake: catalog-driven tablet form, path questions, clinical summary |
 | **Patient (tablet)** | Touch-optimized form: read-only demographics, consents, interactive body map, electronic signature |
 | **Doctor** | Medical section, draft / publish / amend; shared draft work queue; published documents scoped by ownership rules |
 | **Edit session lock** | Concurrent-edit protection for doctor Befund editing (session token + revision checks; external-upload path excluded) |
@@ -67,6 +68,7 @@ Django project package `cogitomedica/` with domain apps under `apps/`:
 |-----|----------------|
 | `reception` | Waiting room, tablet devices, import |
 | `intake` | Patient tablet consents / body map / signature |
+| `telederm` | Teledermatology question catalog, paths, clinical summary |
 | `medical` | Befund documents, edit sessions, PDF build, external upload |
 | `patient_results` | Patient portal and downloads |
 | `outbox` | Transactional outbox |
@@ -305,7 +307,8 @@ Background contract: **Django Tasks + Transactional Outbox**. Local default back
 ### In scope
 
 - Reception: daily list (CRUD + spreadsheet import), intake PDF viewer for staff
-- Tablet patient app: consents, body map, e-signature
+- Queue process types: standard visit and teledermatology (`TELEDERM`)
+- Tablet patient app: consents, body map, e-signature; telederm form B where applicable
 - Doctor module: medical data, draft/publish/amend, edit-session locking
 - External PDF upload and verification
 - PDF generation and archive upload
@@ -331,7 +334,7 @@ Background contract: **Django Tasks + Transactional Outbox**. Local default back
 | **2** | Doctor panel, archive upload, SMS, results portal | Done |
 | **3** | Spreadsheet import, live archive API, ops hardening | Done (core) |
 
-**In production use** with tagged releases (current: **v1.8.0**).
+**In production use** with tagged releases (current: **v1.9.4**).
 
 Scheduled clock-triggered daily import remains a placeholder; spreadsheet import via the staff upload path is available.
 
