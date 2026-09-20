@@ -81,7 +81,7 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
         self.assertEqual(r.status_code, 404)
 
     @patch(
-        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        "apps.medical.api_views.medical_services.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "hidrive",
             api_message_key="other.api.server_error",

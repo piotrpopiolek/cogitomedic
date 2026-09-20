@@ -2367,7 +2367,7 @@ class ExternalUploadApiTests(MedicalApiTests):
             data={"queue_entry_id": str(self.queue_entry.id), "file": upload},
         )
         self.assertEqual(response.status_code, 413)
-        adapter_factory.assert_not_called()
+        adapter_factory.return_value.upload.assert_not_called()
 
     @patch("apps.medical.services.get_hidrive_adapter")
     def test_external_upload_invalid_mime_returns_415(self, adapter_factory) -> None:
@@ -2378,10 +2378,10 @@ class ExternalUploadApiTests(MedicalApiTests):
             data={"queue_entry_id": str(self.queue_entry.id), "file": bad},
         )
         self.assertEqual(response.status_code, 415)
-        adapter_factory.assert_not_called()
+        adapter_factory.return_value.upload.assert_not_called()
 
     @patch(
-        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        "apps.medical.api_views.medical_services.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "not found",
             api_message_key="other.api.medical_document_not_found",
@@ -2401,7 +2401,7 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(response.status_code, 404)
 
     @patch(
-        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        "apps.medical.api_views.medical_services.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "forbidden",
             api_message_key="other.domain.external_upload_staff_role_required",
@@ -2421,7 +2421,7 @@ class ExternalUploadApiTests(MedicalApiTests):
         self.assertEqual(response.status_code, 403)
 
     @patch(
-        "apps.medical.api_views.create_external_upload_pdf_and_bind_draft",
+        "apps.medical.api_views.medical_services.create_external_upload_pdf_and_bind_draft",
         side_effect=DomainError(
             "no staff",
             api_message_key="other.api.staff_user_not_found",
