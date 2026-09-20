@@ -70,8 +70,7 @@ def test_verify_prod_image_script_exists_and_skips_django_check() -> None:
     assert script.is_file()
     body = script.read_text(encoding="utf-8")
     assert not any(
-        line.strip().startswith("python manage.py check")
-        for line in body.splitlines()
+        line.strip().startswith("python manage.py check") for line in body.splitlines()
     )
     assert "weasyprint" in body
     assert "libpq5" in body
