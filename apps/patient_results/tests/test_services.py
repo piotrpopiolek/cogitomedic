@@ -6,12 +6,20 @@ import hashlib
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, override_settings
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from apps.patient_results.constants import OTP_RATE_LIMIT_PER_HOUR
 from apps.patient_results.models import PatientResultsOtpSession
-from apps.patient_results.services import request_otp, verify_otp
+from apps.patient_results.services import (
+    get_patient_id_from_session,
+    request_otp,
+    set_patient_results_session,
+    verify_otp,
+)
 import phonenumbers
 
 from apps.reception.phone_utils import infer_sms_region_from_phone
@@ -457,3 +465,23 @@ class VerifyOtpTests(TestCase):
             otp_code="123456",
         )
         self.assertFalse(result.success)
+
+
+class TestSetPatientResultsSession(TestCase):
+    def test_cycle_key_invalidates_pre_auth_session_cookie(self) -> None:
+        request = RequestFactory().get("/")
+        SessionMiddleware(lambda _req: HttpResponse()).process_request(request)
+        request.session["pre_auth_marker"] = "1"
+        request.session.save()
+        old_key = request.session.session_key
+        self.assertIsNotNone(old_key)
+
+        patient_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        set_patient_results_session(request, patient_id)
+        request.session.save()
+
+        self.assertNotEqual(request.session.session_key, old_key)
+        self.assertEqual(get_patient_id_from_session(request), patient_id)
+        self.assertTrue(request.session.get("patient_results_verified_at"))
+        old_store = SessionStore(session_key=old_key)
+        self.assertFalse(old_store.exists(old_key))

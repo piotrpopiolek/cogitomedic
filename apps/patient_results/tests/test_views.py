@@ -306,9 +306,11 @@ class ErgebnisseOtpPostTests(TestCase):
             expires_at=timezone.now() + timedelta(minutes=15),
         )
         self.assertIsNotNone(session.id)
+        old_session_key = self.client.session.session_key
         response = self.client.post(OTP_URL, {"otp_code": otp})
         self.assertEqual(response.status_code, 302)
         self.assertIn("/documents/", response.url)
+        self.assertNotEqual(self.client.session.session_key, old_session_key)
         self.assertNotIn("ergebnisse_phone", self.client.session)
         self.assertNotIn("ergebnisse_last_name", self.client.session)
         ev = AuditEvent.objects.filter(

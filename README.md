@@ -234,7 +234,7 @@ make test-ci
 
 **Default stack** ([`docker-compose.prod.yml`](docker-compose.prod.yml)): PostgreSQL, Gunicorn app, background scheduler, and Nginx TLS reverse proxy. Application media is **not** exposed as a public static alias — downloads go through authenticated application flows.
 
-Deploy from **immutable git tags** (e.g. `v1.8.0`) with a clean tree. Images bake the application code (no live bind-mount of the source tree).
+Deploy from **immutable git tags** (e.g. `v1.9.4`) with a clean tree. Images bake the application code (no live bind-mount of the source tree).
 
 Optional **`--profile observability`** starts the metrics/tracing sidecars. Bind them to loopback on the host and reach them only through a trusted channel; do not publish monitoring ports to the public internet.
 

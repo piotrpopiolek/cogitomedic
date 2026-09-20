@@ -146,6 +146,8 @@ class PatientResultsVerifyOtpApiTests(TestCase):
     @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
     def test_verify_otp_success_sets_session(self) -> None:
         self._create_session("654321")
+        self.client.session.save()
+        old_session_key = self.client.session.session_key
         response = self.client.post(
             "/api/v1/patient-results/verify-otp",
             data={
@@ -157,6 +159,7 @@ class PatientResultsVerifyOtpApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("sessionid", self.client.cookies)
+        self.assertNotEqual(self.client.session.session_key, old_session_key)
         verify_ev = (
             AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY")
             .order_by("-event_time")
