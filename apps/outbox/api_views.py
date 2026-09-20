@@ -28,8 +28,8 @@ from apps.outbox.api_schemas import (
 )
 from apps.outbox.models import OutboxEvent
 from apps.intake.retention_services import run_intake_retention_cleanup
+from apps.outbox import services as outbox_services
 from apps.outbox.services import (
-    process_outbox_events,
     retry_outbox_event,
     run_retention_cleanup,
 )
@@ -109,7 +109,11 @@ def operations_outbox_process_view(request: HttpRequest) -> JsonResponse:
             "client_ip": get_client_ip(request),
         },
     )
-    result = process_outbox_events(batch_size=body.limit)
+    result = outbox_services.process_outbox_events(
+        batch_size=body.limit,
+        hidrive_adapter=outbox_services.get_hidrive_adapter(),
+        sms_adapter=outbox_services.get_sms_adapter(),
+    )
     return JsonResponse(
         {
             "processed": result.processed,

@@ -411,6 +411,22 @@ class SubmitPatientIntakeFormTests(TestCase):
         )
 
     @override_settings(HIDRIVE_USE_MOCK="1")
+    @patch("apps.intake.outbox_services.get_hidrive_adapter")
+    def test_injected_hidrive_adapter_skips_factory(
+        self, mock_get_hidrive: MagicMock
+    ) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        hidrive = MagicMock()
+        first = process_intake_outbox_events(hidrive_adapter=hidrive)
+        second = process_intake_outbox_events(hidrive_adapter=hidrive)
+        self.assertEqual(first.processed, 1)
+        self.assertEqual(second.processed, 1)
+        mock_get_hidrive.assert_not_called()
+        hidrive.upload.assert_called_once()
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
     def test_process_intake_outbox_simulate_error_marks_failed_and_records_metrics(
         self,
     ) -> None:

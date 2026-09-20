@@ -765,6 +765,20 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
         adapter.upload.assert_called_once()
 
     @patch("apps.medical.services.get_hidrive_adapter")
+    def test_injected_hidrive_adapter_skips_factory(self, adapter_factory: Mock):
+        doc = self._make_external_doc()
+        adapter = Mock()
+        att = upload_external_pdf_to_incoming(
+            medical_document_id=doc.id,
+            uploaded_file=self._pdf_upload(name="injected.pdf"),
+            actor_user_id=self.reception.id,
+            hidrive_adapter=adapter,
+        )
+        self.assertEqual(att.status, ExternalPdfStatus.MATCHED)
+        adapter_factory.assert_not_called()
+        adapter.upload.assert_called_once()
+
+    @patch("apps.medical.services.get_hidrive_adapter")
     def test_upload_is_idempotent_on_same_remote_path(self, adapter_factory: Mock):
         doc = self._make_external_doc()
         adapter_factory.return_value = Mock()

@@ -105,17 +105,14 @@ class ExternalPdfGateTests(TestCase):
         )
         adapter = MagicMock()
         adapter.list_dir.side_effect = RuntimeError("connection reset")
-        with patch(
-            "apps.medical.incoming_pdf_scan.get_hidrive_adapter",
-            return_value=adapter,
-        ):
-            gate = check_external_pdf_gate(
-                patient,
-                error_no_file="NO_FILE",
-                error_no_pdfs_in_folder="NO_PDFS",
-                error_ambiguous="AMBIG",
-                error_hidrive="HIDRIVE",
-            )
+        gate = check_external_pdf_gate(
+            patient,
+            error_no_file="NO_FILE",
+            error_no_pdfs_in_folder="NO_PDFS",
+            error_ambiguous="AMBIG",
+            error_hidrive="HIDRIVE",
+            hidrive_adapter=adapter,
+        )
         self.assertTrue(gate.passed)
         self.assertEqual(gate.matched_files, ())
         self.assertEqual(gate.error_message, "HIDRIVE")

@@ -3,13 +3,16 @@ from __future__ import annotations
 from django.conf import settings
 from django.tasks import task
 
-from apps.outbox.services import process_outbox_events as process_outbox_events_service
+from apps.outbox import services as outbox_services
 from apps.outbox.services import run_retention_cleanup as run_retention_cleanup_service
 
 
 @task(queue_name="outbox")
 def process_outbox_events() -> None:
-    process_outbox_events_service()
+    outbox_services.process_outbox_events(
+        hidrive_adapter=outbox_services.get_hidrive_adapter(),
+        sms_adapter=outbox_services.get_sms_adapter(),
+    )
 
 
 @task(queue_name="retention")

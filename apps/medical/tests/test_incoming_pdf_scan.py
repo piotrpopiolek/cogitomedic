@@ -26,26 +26,32 @@ class IncomingPdfScanTests(TestCase):
     def setUp(self) -> None:
         hidrive_client._MockHiDriveAdapter.reset_test_state()
 
+    @patch("apps.medical.incoming_pdf_scan.get_hidrive_adapter")
+    def test_injected_hidrive_adapter_skips_factory(
+        self, mock_get_adapter: MagicMock
+    ) -> None:
+        adapter = MagicMock()
+        adapter.list_dir.return_value = []
+        listing = list_incoming_lab_pdf_rows(hidrive_adapter=adapter)
+        self.assertTrue(listing.hidrive_ok)
+        mock_get_adapter.assert_not_called()
+        adapter.list_dir.assert_called_once()
+
     def test_list_incoming_lab_pdf_rows_hidrive_error(self) -> None:
         adapter = MagicMock()
         adapter.list_dir.side_effect = RuntimeError("down")
-        with patch(
-            "apps.medical.incoming_pdf_scan.get_hidrive_adapter",
-            return_value=adapter,
-        ):
-            listing = list_incoming_lab_pdf_rows()
+        listing = list_incoming_lab_pdf_rows(hidrive_adapter=adapter)
         self.assertFalse(listing.hidrive_ok)
         self.assertEqual(listing.pdf_rows, [])
 
     def test_list_incoming_lab_pdf_rows_timeout_propagates(self) -> None:
         adapter = MagicMock()
         adapter.list_dir.side_effect = HiDriveTimeoutError("timed out")
-        with patch(
-            "apps.medical.incoming_pdf_scan.get_hidrive_adapter",
-            return_value=adapter,
-        ):
-            with self.assertRaises(HiDriveTimeoutError):
-                list_incoming_lab_pdf_rows(hidrive_total_timeout_seconds=8)
+        with self.assertRaises(HiDriveTimeoutError):
+            list_incoming_lab_pdf_rows(
+                hidrive_total_timeout_seconds=8,
+                hidrive_adapter=adapter,
+            )
 
     def test_evaluate_match_matched(self) -> None:
         patient = Patient.objects.create(

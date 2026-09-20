@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from json import JSONDecodeError
 from uuid import UUID
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
+from pydantic import ValidationError
 
-from apps.core.api_utils import json_error, read_json_body
+from apps.core.api_utils import (
+    json_domain_error,
+    json_error,
+    json_pydantic_validation_error,
+    read_json_body,
+)
+from apps.core.exceptions import InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
+from apps.patient_results import services as patient_results_services
+from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
 from apps.patient_results.document_services import (
     get_patient_pdf_path,
     list_patient_documents,
@@ -19,26 +27,9 @@ from apps.patient_results.document_services import (
 )
 from apps.patient_results.services import (
     get_patient_id_from_session,
-    request_otp,
     set_patient_results_session,
     verify_otp,
 )
-
-
-def _parse_date(s: str | None) -> date | None:
-    """Parse YYYY-MM-DD. Returns None on invalid or out-of-range (future, >120 years ago)."""
-    if not s or not isinstance(s, str):
-        return None
-    try:
-        d = datetime.strptime(s.strip()[:10], "%Y-%m-%d").date()
-    except ValueError:
-        return None
-    today = timezone.now().date()
-    if d > today:
-        return None
-    if d < today - timedelta(days=120 * 365):
-        return None
-    return d
 
 
 @ratelimit(key="ip", rate="10/m", method="POST", block=True)
@@ -47,25 +38,19 @@ def patient_results_request_otp_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        body = read_json_body(request)
-    except Exception:
-        return json_error("other.api.invalid_json_body", status=400)
-    phone = (body.get("phone") or "").strip()
-    dob_str = body.get("date_of_birth")
-    captcha_token = (body.get("captcha_token") or "").strip()
-    if not phone:
-        return json_error("other.api.phone_required", status=400)
-    if not dob_str:
-        return json_error("other.api.date_of_birth_required", status=400)
-    dob = _parse_date(str(dob_str))
-    if not dob:
-        return json_error("other.api.date_of_birth_format", status=400)
-    last_name = (body.get("last_name") or "").strip() or None
-    result = request_otp(
-        phone=phone,
-        date_of_birth=dob,
-        captcha_token=captcha_token,
-        last_name=last_name,
+        body = RequestOtpRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
+    result = patient_results_services.request_otp(
+        phone=body.phone,
+        date_of_birth=body.date_of_birth,
+        captcha_token=body.captcha_token,
+        last_name=body.last_name,
+        sms_adapter=patient_results_services.get_sms_adapter(),
     )
     client_ip = get_client_ip(request)
     meta = {"client_ip": client_ip, "outcome": result.audit_outcome}
@@ -88,27 +73,18 @@ def patient_results_verify_otp_view(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return json_error("other.api.method_not_allowed", status=405)
     try:
-        body = read_json_body(request)
-    except Exception:
-        return json_error("other.api.invalid_json_body", status=400)
-    phone = (body.get("phone") or "").strip()
-    dob_str = body.get("date_of_birth")
-    otp_code = (body.get("otp_code") or "").strip()
-    if not phone:
-        return json_error("other.api.phone_required", status=400)
-    if not dob_str:
-        return json_error("other.api.date_of_birth_required", status=400)
-    dob = _parse_date(str(dob_str))
-    if not dob:
-        return json_error("other.api.date_of_birth_format", status=400)
-    if not otp_code:
-        return json_error("other.api.otp_code_required", status=400)
-    last_name = (body.get("last_name") or "").strip() or None
+        body = VerifyOtpRequest.model_validate(read_json_body(request))
+    except JSONDecodeError:
+        return json_error("other.api.invalid_json_payload", status=400)
+    except InvalidRequestBodyEncoding as exc:
+        return json_domain_error(exc)
+    except ValidationError as exc:
+        return json_pydantic_validation_error(exc)
     result = verify_otp(
-        phone=phone,
-        date_of_birth=dob,
-        otp_code=otp_code,
-        last_name=last_name,
+        phone=body.phone,
+        date_of_birth=body.date_of_birth,
+        otp_code=body.otp_code,
+        last_name=body.last_name,
     )
     client_ip = get_client_ip(request)
     if not result.success:

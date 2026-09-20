@@ -35,6 +35,7 @@ from apps.core.list_pagination import (
 )
 from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus
+from apps.medical import external_pdf_service as external_pdf_svc
 from apps.medical.external_pdf_service import (
     GateResult,
     check_external_pdf_gate,
@@ -99,6 +100,7 @@ def _external_pdf_gate_for_doctor_detail(
             error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
             error_ambiguous=ui["external_pdf_gate_ambiguous"],
             error_hidrive=ui["external_pdf_gate_hidrive_error"],
+            hidrive_adapter=external_pdf_svc.get_hidrive_adapter(),
         )
 
     if doc.status == MedicalDocStatus.PUBLISHED and doc.has_pending_revision:
@@ -108,6 +110,7 @@ def _external_pdf_gate_for_doctor_detail(
             error_no_pdfs_in_folder=ui["external_pdf_gate_no_pdfs_in_folder"],
             error_ambiguous=ui["external_pdf_gate_ambiguous"],
             error_hidrive=ui["external_pdf_gate_hidrive_error"],
+            hidrive_adapter=external_pdf_svc.get_hidrive_adapter(),
         )
         if gate.skip_attachment_sync:
             return GateResult(

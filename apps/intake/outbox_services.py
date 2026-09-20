@@ -21,7 +21,10 @@ from apps.intake.models import (
 from apps.intake.pdf_builder import generate_intake_pdf
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
-from apps.integrations.hidrive.client import get_hidrive_adapter
+from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
+    get_hidrive_adapter,
+)
 from apps.operations.prom_metrics import record_outbox_execution
 from apps.operations.services import create_audit_event
 from apps.outbox.hidrive_paths import build_intake_hidrive_path
@@ -43,7 +46,13 @@ class IntakeOutboxProcessingResult:
     dead_lettered: int
 
 
-def _execute_intake_outbox_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
+def _execute_intake_outbox_event(
+    event: IntakeOutboxEvent,
+    *,
+    now: datetime,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> None:
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
     with tracer.start_as_current_span(
         f"execute_intake_outbox_event_{event.event_type.lower()}",
         attributes={
@@ -54,15 +63,21 @@ def _execute_intake_outbox_event(event: IntakeOutboxEvent, *, now: datetime) -> 
         },
     ) as span:
         try:
-            _execute_intake_outbox_event_internal(event, now=now)
+            _execute_intake_outbox_event_internal(
+                event, now=now, hidrive_adapter=hidrive
+            )
         except Exception as e:
             span.record_exception(e)
             raise
 
 
 def _execute_intake_outbox_event_internal(
-    event: IntakeOutboxEvent, *, now: datetime
+    event: IntakeOutboxEvent,
+    *,
+    now: datetime,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> None:
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
     version = (
         IntakeDocumentVersion.objects.select_for_update()
         .select_related(
@@ -115,7 +130,7 @@ def _execute_intake_outbox_event_internal(
             raise RuntimeError("Intake PDF local path is missing for HiDrive upload.")
         hidrive_path = build_intake_hidrive_path(version)
         full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path
-        adapter = get_hidrive_adapter()
+        adapter = hidrive
         adapter.upload(remote_path=hidrive_path, local_path=full_path)
         version.hidrive_path = hidrive_path
         version.hidrive_sent = True
@@ -142,19 +157,29 @@ def _execute_intake_outbox_event_internal(
     raise RuntimeError(f"Unsupported intake outbox event type: {event.event_type}")
 
 
-def _execute_event(event: IntakeOutboxEvent, *, now: datetime) -> None:
+def _execute_event(
+    event: IntakeOutboxEvent,
+    *,
+    now: datetime,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> None:
     """Backward-compatible name; delegates to traced implementation."""
-    _execute_intake_outbox_event(event, now=now)
+    _execute_intake_outbox_event(event, now=now, hidrive_adapter=hidrive_adapter)
 
 
 def process_intake_outbox_events(
     *,
     batch_size: int | None = None,
     now: datetime | None = None,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> IntakeOutboxProcessingResult:
-    """Process pending/failed intake outbox events (commit-per-event)."""
+    """Process pending/failed intake outbox events (commit-per-event).
+
+    Pass ``hidrive_adapter`` from the Task/API composition root.
+    """
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
 
     processed = 0
     failed = 0
@@ -212,7 +237,7 @@ def process_intake_outbox_events(
                         "updated_at",
                     ]
                 )
-                _execute_event(event, now=effective_now)
+                _execute_event(event, now=effective_now, hidrive_adapter=hidrive)
                 event.status = IntakeOutboxStatus.PROCESSED
                 event.processed_at = effective_now
                 event.locked_at = None

@@ -12,6 +12,7 @@ from django.conf import settings
 from django.db.models import Q
 
 from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
     HiDriveTimeoutError,
     get_hidrive_adapter,
 )
@@ -144,8 +145,9 @@ def suggest_incoming_pdf_filename(patient: Patient) -> str:
 def list_incoming_lab_pdf_rows(
     *,
     hidrive_total_timeout_seconds: float | None = None,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> IncomingPdfListing:
-    adapter = get_hidrive_adapter()
+    adapter = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
     inc = hidrive_incoming_dir()
     try:
         entries = adapter.list_dir(

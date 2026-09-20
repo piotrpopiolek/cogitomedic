@@ -322,6 +322,10 @@ class QueueEntryProcessTypeApiTests(TestCase):
             }
         )
         self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body["error_key"], "other.api.invalid_request_body")
+        self.assertIsInstance(body.get("details"), list)
+        self.assertGreater(len(body["details"]), 0)
 
     def test_post_invalid_process_type_domain_error_returns_400(self) -> None:
         """Service DomainError must be 400 even if the schema already allowed the body."""

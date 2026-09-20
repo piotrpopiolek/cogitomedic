@@ -16,8 +16,15 @@ from django.utils import timezone
 from apps.core.domain_messages import domain_message
 from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
-from apps.integrations.hidrive.client import get_hidrive_adapter
-from apps.integrations.sms.client import get_sms_adapter, get_sms_patient_results_text
+from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
+    get_hidrive_adapter,
+)
+from apps.integrations.sms.client import (
+    SmsAdapterProtocol,
+    get_sms_adapter,
+    get_sms_patient_results_text,
+)
 from apps.medical.pdf_builder import (
     AllExternalPdfDownloadsFailed,
     generate_befund_pdf,
@@ -74,7 +81,15 @@ class OutboxEventNotRetryableError(DomainError):
 tracer = trace.get_tracer(__name__)
 
 
-def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
+def _execute_event(
+    event: OutboxEvent,
+    *,
+    now: datetime,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+    sms_adapter: SmsAdapterProtocol | None = None,
+) -> None:
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+    sms = sms_adapter if sms_adapter is not None else get_sms_adapter()
     with tracer.start_as_current_span(
         f"execute_outbox_event_{event.event_type.lower()}",
         attributes={
@@ -85,13 +100,26 @@ def _execute_event(event: OutboxEvent, *, now: datetime) -> None:
         },
     ) as span:
         try:
-            _execute_event_internal(event, now=now)
+            _execute_event_internal(
+                event,
+                now=now,
+                hidrive_adapter=hidrive,
+                sms_adapter=sms,
+            )
         except Exception as e:
             span.record_exception(e)
             raise
 
 
-def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
+def _execute_event_internal(
+    event: OutboxEvent,
+    *,
+    now: datetime,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+    sms_adapter: SmsAdapterProtocol | None = None,
+) -> None:
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+    sms = sms_adapter if sms_adapter is not None else get_sms_adapter()
     version = (
         MedicalDocumentVersion.objects.select_for_update(of=("self",))
         .select_related(
@@ -127,9 +155,13 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             version.medical_document.source_type
             == MedicalDocumentSourceType.EXTERNAL_UPLOAD
         ):
-            pdf_local_path, pdf_checksum_sha256 = generate_external_upload_pdf(version)
+            pdf_local_path, pdf_checksum_sha256 = generate_external_upload_pdf(
+                version, hidrive_adapter=hidrive
+            )
         else:
-            pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(version)
+            pdf_local_path, pdf_checksum_sha256 = generate_befund_pdf(
+                version, hidrive_adapter=hidrive
+            )
         version.pdf_generation_status = PdfStatus.COMPLETED
         version.pdf_local_path = pdf_local_path
         version.pdf_checksum_sha256 = pdf_checksum_sha256
@@ -158,7 +190,7 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
             raise RuntimeError("PDF local path is missing for HiDrive upload.")
         hidrive_path = build_befund_hidrive_path(version)
         full_path = Path(settings.MEDIA_ROOT) / version.pdf_local_path
-        adapter = get_hidrive_adapter()
+        adapter = hidrive
         adapter.upload(remote_path=hidrive_path, local_path=full_path)
         version.hidrive_path = hidrive_path
         version.hidrive_sent = True
@@ -260,9 +292,8 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
         if intake_form and intake_form.session_id:
             form_locale = intake_form.session.form_locale
         sms_text = get_sms_patient_results_text(form_locale, base_url)
-        sms_adapter = get_sms_adapter()
         region = infer_sms_region_from_phone(patient.phone)
-        sms_adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
+        sms.send_sms(to=patient.phone, message=sms_text, default_region=region)
 
         version.sms_sent = True
         version.sms_sent_at = now
@@ -273,16 +304,25 @@ def _execute_event_internal(event: OutboxEvent, *, now: datetime) -> None:
 
 
 def process_outbox_events(
-    *, batch_size: int | None = None, now: datetime | None = None
+    *,
+    batch_size: int | None = None,
+    now: datetime | None = None,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+    sms_adapter: SmsAdapterProtocol | None = None,
 ) -> OutboxProcessingResult:
     """Process pending/failed outbox events available for execution.
 
     Each event runs in its own DB transaction (commit-per-event) so a crash or
     deploy kill after an external side-effect (SMS / HiDrive) cannot roll back
     earlier events in the same batch.
+
+    Pass adapters from the Task/API composition root. ``None`` falls back to
+    ``get_hidrive_adapter()`` / ``get_sms_adapter()``.
     """
     effective_now = now or timezone.now()
     effective_batch = batch_size or settings.OUTBOX_BATCH_SIZE
+    hidrive = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+    sms = sms_adapter if sms_adapter is not None else get_sms_adapter()
 
     processed = 0
     failed = 0
@@ -331,7 +371,12 @@ def process_outbox_events(
                         "updated_at",
                     ]
                 )
-                _execute_event(event, now=effective_now)
+                _execute_event(
+                    event,
+                    now=effective_now,
+                    hidrive_adapter=hidrive,
+                    sms_adapter=sms,
+                )
                 event.status = OutboxStatus.PROCESSED
                 event.processed_at = effective_now
                 event.locked_at = None

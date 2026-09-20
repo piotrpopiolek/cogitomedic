@@ -54,7 +54,11 @@ from apps.medical.external_pdf_service import (
     hidrive_processed_dir,
 )
 from apps.integrations.hidrive.auth import HiDriveAuthError
-from apps.integrations.hidrive.client import HiDriveApiError, get_hidrive_adapter
+from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
+    HiDriveApiError,
+    get_hidrive_adapter,
+)
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -816,6 +820,7 @@ def _upload_external_pdf_attachment_to_hidrive(
     *,
     attachment_id: uuid.UUID,
     uploaded_file: UploadedFile,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> None:
     """Phase B: upload bytes to HiDrive (outside any enclosing DB transaction)."""
     try:
@@ -846,7 +851,8 @@ def _upload_external_pdf_attachment_to_hidrive(
         else:
             local_tmp = _persist_uploaded_file_to_temp(uploaded_file)
             cleanup_tmp = True
-        get_hidrive_adapter().upload(remote_path=remote_path, local_path=local_tmp)
+        adapter = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
+        adapter.upload(remote_path=remote_path, local_path=local_tmp)
     except (HiDriveApiError, HiDriveAuthError) as exc:
         with transaction.atomic():
             ExternalPdfAttachment.objects.filter(
@@ -883,6 +889,7 @@ def upload_external_pdf_to_incoming(
     medical_document_id: uuid.UUID,
     uploaded_file: UploadedFile,
     actor_user_id: uuid.UUID,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> ExternalPdfAttachment:
     """Validate PDF, commit DB intent, upload to HiDrive, then mark ``MATCHED``.
 
@@ -899,6 +906,7 @@ def upload_external_pdf_to_incoming(
     _upload_external_pdf_attachment_to_hidrive(
         attachment_id=attachment.id,
         uploaded_file=uploaded_file,
+        hidrive_adapter=hidrive_adapter,
     )
     _mark_external_pdf_attachment_matched_after_hidrive(attachment_id=attachment.id)
     attachment.refresh_from_db()
@@ -1203,6 +1211,7 @@ def create_external_upload_pdf_and_bind_draft(
     queue_entry_id: uuid.UUID,
     uploaded_file: UploadedFile,
     actor_user_id: uuid.UUID,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> tuple[MedicalDocument, ExternalPdfAttachment, MedicalDocumentVersion]:
     """Create or resolve EXTERNAL_UPLOAD document, upload PDF, bind active DRAFT.
 
@@ -1220,6 +1229,7 @@ def create_external_upload_pdf_and_bind_draft(
         medical_document_id=document.id,
         uploaded_file=uploaded_file,
         actor_user_id=actor_user_id,
+        hidrive_adapter=hidrive_adapter,
     )
     draft_version = select_external_upload_attachment_for_draft(
         medical_document_id=document.id,

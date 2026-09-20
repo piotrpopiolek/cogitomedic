@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.db import connection
 from django.http import HttpResponse
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
-from apps.patient_results.constants import OTP_RATE_LIMIT_PER_HOUR
+from apps.patient_results.constants import (
+    OTP_MAX_VERIFY_ATTEMPTS,
+    OTP_RATE_LIMIT_PER_HOUR,
+)
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.patient_results.services import (
+    VerifyOtpResult,
     get_patient_id_from_session,
     request_otp,
     set_patient_results_session,
@@ -87,6 +93,21 @@ class RequestOtpTests(TestCase):
         call_args = mock_adapter.send_sms.call_args
         self.assertIn("1762222222", str(call_args))
         self.assertRegex(call_args[1]["message"], r"\d{6}")
+
+    @override_settings(CAPTCHA_VERIFY_SKIP=True)
+    @patch("apps.patient_results.services.get_sms_adapter")
+    def test_injected_sms_adapter_skips_factory(self, mock_get_adapter) -> None:
+        mock_sms = MagicMock()
+        result = request_otp(
+            phone="01762222222",
+            date_of_birth=date(1990, 5, 15),
+            captcha_token="skip",
+            sms_adapter=mock_sms,
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.audit_outcome, "sms_sent")
+        mock_get_adapter.assert_not_called()
+        mock_sms.send_sms.assert_called_once()
 
     @override_settings(
         CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper"
@@ -455,6 +476,31 @@ class VerifyOtpTests(TestCase):
         )
         self.assertFalse(result.success)
         self.assertEqual(result.error, "invalid")
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        self.assertEqual(session.verify_attempt_count, 1)
+        self.assertIsNone(session.verified_at)
+
+    @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
+    def test_verify_otp_blocked_after_max_attempts(self) -> None:
+        self._create_session_with_otp("123456")
+        for _ in range(OTP_MAX_VERIFY_ATTEMPTS):
+            result = verify_otp(
+                phone="01761111111",
+                date_of_birth=date(1985, 3, 20),
+                otp_code="000000",
+            )
+            self.assertFalse(result.success)
+            self.assertEqual(result.error, "invalid")
+        blocked = verify_otp(
+            phone="01761111111",
+            date_of_birth=date(1985, 3, 20),
+            otp_code="123456",
+        )
+        self.assertFalse(blocked.success)
+        self.assertEqual(blocked.error, "blocked")
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        self.assertEqual(session.verify_attempt_count, OTP_MAX_VERIFY_ATTEMPTS)
+        self.assertIsNone(session.verified_at)
 
     @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
     def test_verify_otp_no_matching_session_fails(self) -> None:
@@ -465,6 +511,104 @@ class VerifyOtpTests(TestCase):
             otp_code="123456",
         )
         self.assertFalse(result.success)
+
+
+class VerifyOtpConcurrencyTests(TransactionTestCase):
+    """Parallel verify_otp must serialize on the OTP session row (PostgreSQL)."""
+
+    def setUp(self) -> None:
+        self.patient = Patient.objects.create(
+            first_name="Race",
+            last_name="Patient",
+            date_of_birth=date(1985, 3, 20),
+            phone="01761111111",
+            email="otp-race@example.com",
+            doctolib_patient_id=None,
+        )
+
+    def _create_session_with_otp(self, otp: str) -> PatientResultsOtpSession:
+        pepper = "test-pepper"
+        h = hashlib.sha256(f"{pepper}{otp}".encode()).hexdigest()
+        return PatientResultsOtpSession.objects.create(
+            patient=self.patient,
+            phone=self.patient.phone,
+            otp_code_hash=h,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+    @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
+    def test_parallel_wrong_codes_increment_attempt_count(self) -> None:
+        self._create_session_with_otp("123456")
+        n = OTP_MAX_VERIFY_ATTEMPTS
+        results: list[VerifyOtpResult] = []
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(n)
+
+        def attempt() -> None:
+            try:
+                barrier.wait(timeout=5)
+                results.append(
+                    verify_otp(
+                        phone="01761111111",
+                        date_of_birth=date(1985, 3, 20),
+                        otp_code="999999",
+                    )
+                )
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=attempt) for _ in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=15)
+        self.assertTrue(all(not t.is_alive() for t in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(len(results), n)
+        self.assertTrue(all(not r.success and r.error == "invalid" for r in results))
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        self.assertEqual(session.verify_attempt_count, n)
+        self.assertIsNone(session.verified_at)
+
+    @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
+    def test_parallel_correct_otp_only_one_success(self) -> None:
+        self._create_session_with_otp("123456")
+        results: list[VerifyOtpResult] = []
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(2)
+
+        def attempt() -> None:
+            try:
+                barrier.wait(timeout=5)
+                results.append(
+                    verify_otp(
+                        phone="01761111111",
+                        date_of_birth=date(1985, 3, 20),
+                        otp_code="123456",
+                    )
+                )
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=attempt) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=15)
+        self.assertTrue(all(not t.is_alive() for t in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(len(results), 2)
+        successes = [r for r in results if r.success]
+        failures = [r for r in results if not r.success]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].error, "invalid")
+        session = PatientResultsOtpSession.objects.get(patient=self.patient)
+        self.assertIsNotNone(session.verified_at)
 
 
 class TestSetPatientResultsSession(TestCase):

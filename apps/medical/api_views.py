@@ -46,6 +46,7 @@ from apps.medical.api_schemas import (
     SaveDraftMedicalDocumentRequest,
     MedicalDocumentAuditTrailQueryParams,
 )
+from apps.medical import external_pdf_service as external_pdf_svc
 from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
     download_external_pdf,
@@ -81,13 +82,13 @@ from apps.medical.models import (
     MedicalDocumentVersion,
 )
 from apps.reception.models import QueueEntry
+from apps.medical import services as medical_services
 from apps.medical.services import (
     DoctorAccessAuditContext,
     assigned_doctor_audit_metadata,
     authorize_paper_intake,
     check_doctor_document_access,
     check_doctor_queue_entry_access,
-    create_external_upload_pdf_and_bind_draft,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
@@ -348,10 +349,13 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
         return err
 
     try:
-        document, attachment, draft_version = create_external_upload_pdf_and_bind_draft(
-            queue_entry_id=queue_entry_id,
-            uploaded_file=uploaded_file,
-            actor_user_id=request.user.id,
+        document, attachment, draft_version = (
+            medical_services.create_external_upload_pdf_and_bind_draft(
+                queue_entry_id=queue_entry_id,
+                uploaded_file=uploaded_file,
+                actor_user_id=request.user.id,
+                hidrive_adapter=medical_services.get_hidrive_adapter(),
+            )
         )
     except DomainError as exc:
         return json_domain_error(exc, status=_external_upload_error_status(exc))
@@ -381,7 +385,9 @@ def _external_upload_pdf_bytes_for_preview(
         att = ExternalPdfAttachment.objects.get(
             pk=version.external_selected_attachment_id
         )
-        return download_external_pdf(att)
+        return download_external_pdf(
+            att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter()
+        )
 
     if version.pdf_local_path:
         full = Path(settings.MEDIA_ROOT) / version.pdf_local_path
@@ -391,7 +397,9 @@ def _external_upload_pdf_bytes_for_preview(
         att = ExternalPdfAttachment.objects.get(
             pk=version.external_selected_attachment_id
         )
-        return download_external_pdf(att)
+        return download_external_pdf(
+            att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter()
+        )
     return None
 
 
@@ -902,7 +910,9 @@ def medical_document_preview_pdf_view(
         ).strip()[:10]
         authoring_locale_override = form_locale if form_locale else None
         pdf_bytes, preview_warn = build_merged_preview_pdf_bytes(
-            version, authoring_locale_override=authoring_locale_override
+            version,
+            authoring_locale_override=authoring_locale_override,
+            hidrive_adapter=external_pdf_svc.get_hidrive_adapter(),
         )
 
     # Doctor Befund draft preview: record last_previewed_draft_revision after PDF
@@ -1796,7 +1806,9 @@ def medical_document_external_pdf_content_view(
     if att.status == ExternalPdfStatus.REJECTED:
         return json_error("other.api.external_pdf_rejected", status=410)
     try:
-        data = download_external_pdf(att)
+        data = download_external_pdf(
+            att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter()
+        )
     except ExternalPdfCorruptError:
         return JsonResponse(
             {
@@ -1861,7 +1873,9 @@ def medical_document_external_pdf_reject_view(
     if att.status == ExternalPdfStatus.REJECTED:
         return JsonResponse({"ok": True, "status": att.status}, status=200)
     try:
-        reject_external_pdf(att)
+        reject_external_pdf(
+            att, hidrive_adapter=external_pdf_svc.get_hidrive_adapter()
+        )
     except Exception:
         logger.exception(
             "reject_external_pdf failed: attachment=%s path=%s",

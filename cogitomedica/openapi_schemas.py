@@ -262,6 +262,7 @@ def _get_request_model_registry() -> list[type]:
         UpdateQueueEntryRequest,
         UpdateTabletDeviceRequest,
     )
+    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.users.api_schemas import (
         AuthLoginRequest,
         CreateStaffUserRequest,
@@ -319,6 +320,8 @@ def _get_request_model_registry() -> list[type]:
         UpdateConsultingRoomRequest,
         CreatePatientRequest,
         UpdatePatientRequest,
+        RequestOtpRequest,
+        VerifyOtpRequest,
         # Response models (documentation; §2)
         AnamnesisUpdateResponse,
         ApiLocalizedErrorBody,
@@ -385,6 +388,7 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         UpdateQueueEntryRequest,
         UpdateTabletDeviceRequest,
     )
+    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.users.api_schemas import (
         AuthLoginRequest,
         CreateStaffUserRequest,
@@ -394,6 +398,8 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
     P = "/api/v1"
     return {
         (f"{P}/auth/login", "post"): AuthLoginRequest,
+        (f"{P}/patient-results/request-otp", "post"): RequestOtpRequest,
+        (f"{P}/patient-results/verify-otp", "post"): VerifyOtpRequest,
         (f"{P}/staff-users", "post"): CreateStaffUserRequest,
         (f"{P}/staff-users/{{staff_user_id}}", "patch"): UpdateStaffUserRequest,
         (f"{P}/doctor-text-templates", "post"): DoctorTemplateCreateRequest,

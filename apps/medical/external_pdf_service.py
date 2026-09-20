@@ -10,7 +10,10 @@ from pathlib import PurePosixPath
 from django.conf import settings
 from pypdf import PdfReader
 
-from apps.integrations.hidrive.client import get_hidrive_adapter
+from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
+    get_hidrive_adapter,
+)
 from apps.medical.incoming_pdf_scan import (
     IncomingMatchStatus,
     MatchedIncomingFile,
@@ -83,12 +86,13 @@ def check_external_pdf_gate(
     error_no_pdfs_in_folder: str,
     error_ambiguous: str,
     error_hidrive: str,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> GateResult:
     """
     Two-phase gate: (1) list ``/incoming`` — if that fails, HiDrive is unreadable;
     (2) among PDF-like filenames, match to the patient (strict + diacritics), no download.
     """
-    listing = list_incoming_lab_pdf_rows()
+    listing = list_incoming_lab_pdf_rows(hidrive_adapter=hidrive_adapter)
     if not listing.hidrive_ok:
         return GateResult(True, (), error_hidrive, skip_attachment_sync=True)
 
@@ -142,9 +146,13 @@ def create_attachment_records(
     return out
 
 
-def download_external_pdf(attachment: ExternalPdfAttachment) -> bytes:
+def download_external_pdf(
+    attachment: ExternalPdfAttachment,
+    *,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> bytes:
     """Download PDF from HiDrive and validate with ``PdfReader``."""
-    adapter = get_hidrive_adapter()
+    adapter = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
     data = adapter.download(remote_path=attachment.hidrive_remote_path)
     try:
         reader = PdfReader(BytesIO(data))
@@ -155,7 +163,11 @@ def download_external_pdf(attachment: ExternalPdfAttachment) -> bytes:
     return data
 
 
-def reject_external_pdf(attachment: ExternalPdfAttachment) -> None:
+def reject_external_pdf(
+    attachment: ExternalPdfAttachment,
+    *,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> None:
     """Rename on HiDrive to ``rejected_<name>`` and mark attachment REJECTED."""
     if attachment.status == ExternalPdfStatus.REJECTED:
         return
@@ -168,7 +180,7 @@ def reject_external_pdf(attachment: ExternalPdfAttachment) -> None:
         attachment.save(update_fields=["status"])
         return
     dest = f"{parent.rstrip('/')}/rejected_{base_name}".replace("//", "/")
-    adapter = get_hidrive_adapter()
+    adapter = hidrive_adapter if hidrive_adapter is not None else get_hidrive_adapter()
     adapter.move_file(source_path=src, dest_path=dest)
     attachment.hidrive_remote_path = dest
     attachment.original_filename = f"rejected_{base_name}"

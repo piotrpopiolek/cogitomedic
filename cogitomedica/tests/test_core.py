@@ -112,6 +112,34 @@ class OpenAPISchemaIntegrationTests(TestCase):
             pub_200, {"$ref": "#/components/schemas/PublishDocumentVersionResponse"}
         )
 
+    def test_patient_results_otp_request_bodies_use_ref(self) -> None:
+        schema = build_cogito_openapi_schema()
+        request_otp = (
+            schema["paths"]
+            .get("/api/v1/patient-results/request-otp", {})
+            .get("post", {})
+        )
+        verify_otp = (
+            schema["paths"].get("/api/v1/patient-results/verify-otp", {}).get("post", {})
+        )
+        self.assertEqual(
+            request_otp.get("requestBody", {})
+            .get("content", {})
+            .get("application/json", {})
+            .get("schema"),
+            {"$ref": "#/components/schemas/RequestOtpRequest"},
+        )
+        self.assertEqual(
+            verify_otp.get("requestBody", {})
+            .get("content", {})
+            .get("application/json", {})
+            .get("schema"),
+            {"$ref": "#/components/schemas/VerifyOtpRequest"},
+        )
+        components = schema["components"]["schemas"]
+        self.assertIn("RequestOtpRequest", components)
+        self.assertIn("VerifyOtpRequest", components)
+
     def test_auth_login_request_body_uses_ref(self) -> None:
         schema = build_cogito_openapi_schema()
         login = schema["paths"].get("/api/v1/auth/login", {}).get("post", {})

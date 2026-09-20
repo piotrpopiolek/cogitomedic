@@ -8,21 +8,15 @@ from django.test import TestCase, override_settings
 
 
 class ProcessIntakeOutboxEventsTaskTests(TestCase):
-    @patch("apps.intake.tasks.process_intake_outbox_events_service")
-    def test_task_calls_outbox_service_once(self, mock_svc) -> None:
+    @patch("apps.intake.tasks.intake_outbox_services.get_hidrive_adapter")
+    @patch("apps.intake.tasks.intake_outbox_services.process_intake_outbox_events")
+    def test_task_injects_hidrive_adapter(self, mock_svc, mock_get_hidrive) -> None:
         from apps.intake.tasks import process_intake_outbox_events
 
         process_intake_outbox_events.call()
-        mock_svc.assert_called_once_with()
-
-    @patch("apps.intake.tasks.process_intake_outbox_events_service")
-    def test_task_passes_no_arguments_to_service(self, mock_svc) -> None:
-        from apps.intake.tasks import process_intake_outbox_events
-
-        process_intake_outbox_events.call()
-        args, kwargs = mock_svc.call_args
-        self.assertEqual(args, ())
-        self.assertEqual(kwargs, {})
+        mock_svc.assert_called_once_with(
+            hidrive_adapter=mock_get_hidrive.return_value,
+        )
 
 
 class RunIntakeRetentionCleanupTaskTests(TestCase):

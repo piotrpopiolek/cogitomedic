@@ -23,6 +23,7 @@ from apps.core.translation_service import (
     get_fitzpatrick_choices,
     get_translation_map,
 )
+from apps.integrations.hidrive.client import HiDriveAdapterProtocol
 from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
     download_external_pdf,
@@ -602,7 +603,11 @@ def build_befund_pdf_bytes(
     )
 
 
-def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
+def generate_befund_pdf(
+    version: MedicalDocumentVersion,
+    *,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> tuple[str, str]:
     """
     Generate and store Befund PDF for medical document version.
 
@@ -642,7 +647,7 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     infra_errors: list[tuple[ExternalPdfAttachment, Exception]] = []
     for att in attachments:
         try:
-            ext_bytes = download_external_pdf(att)
+            ext_bytes = download_external_pdf(att, hidrive_adapter=hidrive_adapter)
         except ExternalPdfCorruptError:
             # Corrupt: only flip newly MATCHED to MERGE_FAILED. Historical
             # ACCEPTED attachments keep their state (audit log captures it).
@@ -760,7 +765,11 @@ def generate_befund_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
     return relative_str, checksum
 
 
-def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, str]:
+def generate_external_upload_pdf(
+    version: MedicalDocumentVersion,
+    *,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
+) -> tuple[str, str]:
     """
     Copy the reception-selected external PDF to local storage for ``HIDRIVE_UPLOAD``.
 
@@ -794,7 +803,7 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
     patient_id = doc.queue_entry.patient_id
     status_before_download = att.status
     try:
-        pdf_bytes = download_external_pdf(att)
+        pdf_bytes = download_external_pdf(att, hidrive_adapter=hidrive_adapter)
     except ExternalPdfCorruptError:
         ExternalPdfAttachment.objects.filter(
             pk=att.pk,
@@ -891,6 +900,8 @@ def generate_external_upload_pdf(version: MedicalDocumentVersion) -> tuple[str, 
 def build_merged_preview_pdf_bytes(
     version: MedicalDocumentVersion,
     authoring_locale_override: str | None = None,
+    *,
+    hidrive_adapter: HiDriveAdapterProtocol | None = None,
 ) -> tuple[bytes, str | None]:
     """
     Build Befund + external HiDrive PDFs for doctor preview (no DB status changes).
@@ -919,7 +930,9 @@ def build_merged_preview_pdf_bytes(
     download_failed = False
     for att in attachments:
         try:
-            external_bytes_list.append(download_external_pdf(att))
+            external_bytes_list.append(
+                download_external_pdf(att, hidrive_adapter=hidrive_adapter)
+            )
         except ExternalPdfCorruptError:
             corrupt = True
             continue

@@ -120,6 +120,20 @@ class PatientResultsRequestOtpApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error_key"], "other.api.invalid_request_body")
+
+    def test_request_otp_missing_phone_is_validation_error(self) -> None:
+        response = self.client.post(
+            "/api/v1/patient-results/request-otp",
+            data={
+                "date_of_birth": "1990-01-15",
+                "captcha_token": "skip",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error_key"], "other.api.invalid_request_body")
+        self.assertIsInstance(response.json().get("details"), list)
 
 
 class PatientResultsVerifyOtpApiTests(TestCase):
@@ -198,6 +212,25 @@ class PatientResultsVerifyOtpApiTests(TestCase):
         self.assertIsNotNone(ev)
         self.assertEqual(ev.metadata.get("outcome"), "invalid")
         self.assertIsNone(ev.patient_id)
+
+    def test_verify_otp_malformed_code_is_validation_error_without_verify_audit(
+        self,
+    ) -> None:
+        self._create_session("654321")
+        response = self.client.post(
+            "/api/v1/patient-results/verify-otp",
+            data={
+                "phone": "01764444444",
+                "date_of_birth": "1988-07-20",
+                "otp_code": "12",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error_key"], "other.api.invalid_request_body")
+        self.assertFalse(
+            AuditEvent.objects.filter(event_type="PATIENT_RESULTS_OTP_VERIFY").exists()
+        )
 
 
 class PatientResultsSharedPhoneOtpApiTests(TestCase):

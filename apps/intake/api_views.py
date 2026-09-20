@@ -41,8 +41,8 @@ from apps.intake.api_schemas import (
     UpdateTeledermPayloadRequest,
 )
 from apps.intake.models import IntakeOutboxEvent, PatientIntakeConsent
+from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import (
-    process_intake_outbox_events,
     retry_intake_outbox_event,
 )
 from apps.intake.services import (
@@ -512,7 +512,10 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
             "client_ip": get_client_ip(request),
         },
     )
-    result = process_intake_outbox_events(batch_size=body.limit)
+    result = intake_outbox_services.process_intake_outbox_events(
+        batch_size=body.limit,
+        hidrive_adapter=intake_outbox_services.get_hidrive_adapter(),
+    )
     return JsonResponse(
         {
             "processed": result.processed,

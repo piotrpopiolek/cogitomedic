@@ -7,6 +7,22 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 
 
+class ProcessOutboxEventsTaskTests(TestCase):
+    @patch("apps.outbox.tasks.outbox_services.get_sms_adapter")
+    @patch("apps.outbox.tasks.outbox_services.get_hidrive_adapter")
+    @patch("apps.outbox.tasks.outbox_services.process_outbox_events")
+    def test_task_injects_hidrive_and_sms_adapters(
+        self, mock_svc, mock_get_hidrive, mock_get_sms
+    ) -> None:
+        from apps.outbox.tasks import process_outbox_events
+
+        process_outbox_events.call()
+        mock_svc.assert_called_once_with(
+            hidrive_adapter=mock_get_hidrive.return_value,
+            sms_adapter=mock_get_sms.return_value,
+        )
+
+
 class RunRetentionCleanupTaskTests(TestCase):
     @override_settings(PDF_RETENTION_DAYS=60)
     @patch("apps.outbox.tasks.run_retention_cleanup_service")

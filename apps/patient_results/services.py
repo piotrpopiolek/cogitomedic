@@ -15,7 +15,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.integrations.sms.client import get_sms_adapter
+from apps.integrations.sms.client import SmsAdapterProtocol, get_sms_adapter
 from apps.patient_results.constants import (
     OTP_MAX_VERIFY_ATTEMPTS,
     OTP_RATE_LIMIT_PER_HOUR,
@@ -98,10 +98,15 @@ def request_otp(
     date_of_birth: date,
     captcha_token: str,
     last_name: str | None = None,
+    *,
+    sms_adapter: SmsAdapterProtocol | None = None,
 ) -> RequestOtpResult:
     """
     Request OTP for patient results. Sends SMS if patient exists.
     Always returns success-like response to prevent enumeration.
+
+    Pass ``sms_adapter`` from the HTTP/Task composition root. ``None`` uses
+    ``get_sms_adapter()`` so existing tests can still patch the factory.
     """
     if not _verify_captcha(captcha_token):
         return RequestOtpResult(
@@ -152,7 +157,7 @@ def request_otp(
         )
 
     sms_text = _get_otp_sms_text(otp_code)
-    adapter = get_sms_adapter()
+    adapter = sms_adapter if sms_adapter is not None else get_sms_adapter()
     region = infer_sms_region_from_phone(patient.phone)
     try:
         adapter.send_sms(to=patient.phone, message=sms_text, default_region=region)
@@ -182,7 +187,11 @@ def verify_otp(
     otp_code: str,
     last_name: str | None = None,
 ) -> VerifyOtpResult:
-    """Verify OTP and return patient_id on success. Uses session for authenticated access."""
+    """Verify OTP and return patient_id on success.
+
+    Locks the latest open OTP row so parallel verifies cannot lose
+    ``verify_attempt_count`` updates or both mark the same session verified.
+    """
     patient = resolve_patient_for_portal(phone, date_of_birth, last_name)
     if not patient:
         return VerifyOtpResult(success=False, error="invalid")
@@ -191,36 +200,33 @@ def verify_otp(
     if len(otp_stripped) != 6 or not otp_stripped.isdigit():
         return VerifyOtpResult(success=False, error="invalid")
 
-    now = timezone.now()
-    session = (
-        PatientResultsOtpSession.objects.select_related("patient")
-        .filter(
-            patient=patient,
-            expires_at__gt=now,
-            verified_at__isnull=True,
-        )
-        .order_by("-created_at")
-        .first()
-    )
-    if not session:
-        return VerifyOtpResult(success=False, error="invalid")
-
-    if session.verify_attempt_count >= OTP_MAX_VERIFY_ATTEMPTS:
-        return VerifyOtpResult(success=False, error="blocked")
-
     expected_hash = _hash_otp(otp_stripped)
-    if session.otp_code_hash != expected_hash:
-        session.verify_attempt_count += 1
-        session.save(update_fields=["verify_attempt_count"])
-        return VerifyOtpResult(success=False, error="invalid")
 
-    # Atomic mark as verified
-    updated = PatientResultsOtpSession.objects.filter(
-        id=session.id,
-        verified_at__isnull=True,
-    ).update(verified_at=now)
-    if updated == 0:
-        return VerifyOtpResult(success=False, error="invalid")
+    with transaction.atomic():
+        now = timezone.now()
+        session = (
+            PatientResultsOtpSession.objects.select_for_update(of=("self",))
+            .filter(
+                patient=patient,
+                expires_at__gt=now,
+                verified_at__isnull=True,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if session is None:
+            return VerifyOtpResult(success=False, error="invalid")
+
+        if session.verify_attempt_count >= OTP_MAX_VERIFY_ATTEMPTS:
+            return VerifyOtpResult(success=False, error="blocked")
+
+        if session.otp_code_hash != expected_hash:
+            session.verify_attempt_count += 1
+            session.save(update_fields=["verify_attempt_count"])
+            return VerifyOtpResult(success=False, error="invalid")
+
+        session.verified_at = now
+        session.save(update_fields=["verified_at"])
 
     return VerifyOtpResult(
         success=True,

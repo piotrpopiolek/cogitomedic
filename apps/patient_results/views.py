@@ -19,9 +19,9 @@ from apps.patient_results.audit import (
     audit_patient_results_otp_verify,
 )
 from apps.patient_results.document_services import list_patient_documents
+from apps.patient_results import services as patient_results_services
 from apps.patient_results.services import (
     get_patient_id_from_session,
-    request_otp,
     set_patient_results_session,
     verify_otp,
 )
@@ -87,11 +87,12 @@ def ergebnisse_login_view(request):
         )
         return render(request, "ergebnisse/login.html", ui)
     dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
-    result = request_otp(
+    result = patient_results_services.request_otp(
         phone=phone,
         date_of_birth=dob,
         captcha_token=captcha_token,
         last_name=last_name or None,
+        sms_adapter=patient_results_services.get_sms_adapter(),
     )
     audit_patient_results_otp_request(request, result)
     if result.status != "ok":

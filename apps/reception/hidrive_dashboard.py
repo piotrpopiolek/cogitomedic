@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.api_utils import get_scoped_clinic_site_ids
-from apps.integrations.hidrive.client import HiDriveTimeoutError
+from apps.integrations.hidrive.client import HiDriveTimeoutError, get_hidrive_adapter
 from apps.intake.models import IntakeStatus
 from apps.medical.incoming_pdf_scan import (
     IncomingMatchStatus,
@@ -112,6 +112,7 @@ def build_missing_hidrive_results_report(user) -> MissingHiDriveResultsReport:
     try:
         listing = list_incoming_lab_pdf_rows(
             hidrive_total_timeout_seconds=dashboard_timeout,
+            hidrive_adapter=get_hidrive_adapter(),
         )
     except HiDriveTimeoutError:
         logger.warning(

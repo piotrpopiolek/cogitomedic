@@ -2443,23 +2443,7 @@ COGITO_PATHS = {
             "tags": ["Patient results"],
             "requestBody": {
                 "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "phone": {"type": "string"},
-                                "date_of_birth": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "YYYY-MM-DD",
-                                },
-                                "captcha_token": {"type": "string"},
-                            },
-                            "required": ["phone", "date_of_birth", "captcha_token"],
-                        }
-                    }
-                },
+                "content": {"application/json": {"schema": {"type": "object"}}},
             },
             "responses": {
                 "200": {"description": "OK (always, to prevent enumeration)"},
@@ -2474,23 +2458,7 @@ COGITO_PATHS = {
             "tags": ["Patient results"],
             "requestBody": {
                 "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "phone": {"type": "string"},
-                                "date_of_birth": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "YYYY-MM-DD",
-                                },
-                                "otp_code": {"type": "string"},
-                            },
-                            "required": ["phone", "date_of_birth", "otp_code"],
-                        }
-                    }
-                },
+                "content": {"application/json": {"schema": {"type": "object"}}},
             },
             "responses": {
                 "200": {"description": "OK, session cookie set"},

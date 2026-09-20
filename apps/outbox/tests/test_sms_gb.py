@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import phonenumbers
@@ -34,12 +34,8 @@ from apps.users.models import StaffUser
 
 class SmsSendGbTests(TestCase):
     @override_settings(SMSAPI_USE_MOCK="1")
-    @patch("apps.outbox.services.get_sms_adapter")
-    def test_sms_send_uses_inferred_gb_region_not_country_code(
-        self, mock_get_adapter: MagicMock
-    ) -> None:
+    def test_sms_send_uses_inferred_gb_region_not_country_code(self) -> None:
         mock_adapter = MagicMock()
-        mock_get_adapter.return_value = mock_adapter
 
         ex = phonenumbers.example_number("GB")
         self.assertIsNotNone(ex)
@@ -126,7 +122,12 @@ class SmsSendGbTests(TestCase):
             status=OutboxStatus.PENDING,
         )
 
-        _execute_event(event, now=timezone.now())
+        _execute_event(
+            event,
+            now=timezone.now(),
+            sms_adapter=mock_adapter,
+            hidrive_adapter=MagicMock(),
+        )
 
         mock_adapter.send_sms.assert_called_once()
         kwargs = mock_adapter.send_sms.call_args.kwargs

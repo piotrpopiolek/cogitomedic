@@ -40,8 +40,8 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
+from apps.medical import services as medical_services
 from apps.medical.services import (
-    create_external_upload_pdf_and_bind_draft,
     get_single_medical_document_for_queue_entry,
     publish_external_upload_version,
     select_external_upload_attachment_for_draft,
@@ -343,10 +343,11 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
                         ),
                     )
                 else:
-                    create_external_upload_pdf_and_bind_draft(
+                    medical_services.create_external_upload_pdf_and_bind_draft(
                         queue_entry_id=entry.id,
                         uploaded_file=uploaded,
                         actor_user_id=request.user.id,
+                        hidrive_adapter=medical_services.get_hidrive_adapter(),
                     )
                     messages.success(
                         request,

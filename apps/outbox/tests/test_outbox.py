@@ -161,6 +161,25 @@ class OutboxProcessingTests(TestCase):
 
     @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
     @patch("apps.outbox.services.get_sms_adapter")
+    @patch("apps.outbox.services.get_hidrive_adapter")
+    def test_injected_adapters_skip_factories(
+        self, mock_get_hidrive: MagicMock, mock_get_sms: MagicMock
+    ) -> None:
+        hidrive = MagicMock()
+        sms = MagicMock()
+        first = process_outbox_events(hidrive_adapter=hidrive, sms_adapter=sms)
+        second = process_outbox_events(hidrive_adapter=hidrive, sms_adapter=sms)
+        third = process_outbox_events(hidrive_adapter=hidrive, sms_adapter=sms)
+        self.assertEqual(first.processed, 1)
+        self.assertEqual(second.processed, 1)
+        self.assertEqual(third.processed, 1)
+        mock_get_hidrive.assert_not_called()
+        mock_get_sms.assert_not_called()
+        hidrive.upload.assert_called_once()
+        sms.send_sms.assert_called_once()
+
+    @override_settings(SMSAPI_USE_MOCK="1", HIDRIVE_USE_MOCK="1")
+    @patch("apps.outbox.services.get_sms_adapter")
     def test_republished_version_sms_sent_when_prior_version_notified(
         self, mock_get_sms: MagicMock
     ) -> None:
