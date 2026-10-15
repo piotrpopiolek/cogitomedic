@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 from django.contrib.admin.sites import AdminSite
 from django.test import SimpleTestCase
@@ -29,14 +30,21 @@ class ExternalSelectedAttachmentLinkTests(SimpleTestCase):
 
     def test_returns_em_dash_when_no_attachment(self) -> None:
         obj = SimpleNamespace(external_selected_attachment=None)
-        self.assertEqual(self.admin.external_selected_attachment_link(obj), "—")
+        self.assertEqual(
+            self.admin.external_selected_attachment_link(
+                cast(MedicalDocumentVersion, obj)
+            ),
+            "—",
+        )
 
     def test_truncates_long_hidrive_path(self) -> None:
         long_path = "/" + ("x" * 200) + ".pdf"
         att_id = uuid.uuid4()
         a = _StubExternalAttachment(att_id, long_path)
         obj = SimpleNamespace(external_selected_attachment=a)
-        out = self.admin.external_selected_attachment_link(obj)
+        out = self.admin.external_selected_attachment_link(
+            cast(MedicalDocumentVersion, obj)
+        )
         self.assertIn("…", out)
         self.assertIn(str(att_id), out)
         self.assertLess(len(out), len(long_path) + 80)
@@ -48,4 +56,9 @@ class ExternalSelectedAttachmentLinkTests(SimpleTestCase):
                 "   ",
             )
         )
-        self.assertIn("—", self.admin.external_selected_attachment_link(obj))
+        self.assertIn(
+            "—",
+            self.admin.external_selected_attachment_link(
+                cast(MedicalDocumentVersion, obj)
+            ),
+        )

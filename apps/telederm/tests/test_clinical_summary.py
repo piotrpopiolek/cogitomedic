@@ -2,20 +2,26 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.test import TestCase
 
-from apps.telederm.clinical_summary import build_clinical_summary
-from apps.telederm.engine import TeledermAnswerValue
 from apps.telederm.clinical_summary import (
     _format_answer,
     _label_for_option,
     _question_text,
+    build_clinical_summary,
 )
+from apps.telederm.engine import TeledermAnswerValue
 from apps.telederm.services import load_catalog
 from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 
 
 class ClinicalSummaryTests(TestCase):
+    catalog: Any
+    cc: Any
+    q_ft: Any
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.catalog = load_catalog()

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import uuid
 
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import models
 from django.db.models import Q
-from django.contrib.postgres.indexes import GinIndex
 
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.users.models import StaffUserPreferredLocale

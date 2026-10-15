@@ -20,15 +20,17 @@ from apps.core.api_utils import (
     read_json_body,
     require_auth,
     require_user_role,
+    staff_user,
+    staff_user_id,
     validate_get_query_params,
 )
-from apps.core.http_utils import get_client_ip
-from apps.operations.services import create_audit_event
 from apps.core.exceptions import (
     DomainError,
     InvalidRequestBodyEncoding,
     StateTransitionError,
 )
+from apps.core.http_utils import get_client_ip
+from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.api_schemas import (
     IntakeOutboxEventsQueryParams,
     ProcessIntakeOutboxRequest,
@@ -41,7 +43,6 @@ from apps.intake.api_schemas import (
     UpdateTeledermPayloadRequest,
 )
 from apps.intake.models import IntakeOutboxEvent, PatientIntakeConsent
-from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import (
     retry_intake_outbox_event,
 )
@@ -55,6 +56,7 @@ from apps.intake.services import (
     save_intake_signature,
     submit_patient_intake_form,
 )
+from apps.operations.services import create_audit_event
 
 _INTAKE_SIGNATURE_PAYLOAD_TOO_LARGE_KEYS = frozenset(
     {
@@ -68,7 +70,7 @@ LOCALE_PATTERN = re.compile(r"^(de|en|pl)(-[A-Z]{2})?$")
 
 def _resolve_request_clinic_scope_ids(request: HttpRequest) -> list[UUID] | None:
     scoped_ids = get_scoped_clinic_site_ids(request.user)
-    if request.user.is_tablet:
+    if staff_user(request).is_tablet:
         tablet_scope_ids = get_tablet_scope_clinic_site_ids(request)
         if tablet_scope_ids is not None:
             return tablet_scope_ids
@@ -79,7 +81,7 @@ def _intake_form_context_json(
     intake_form_id: UUID, request: HttpRequest
 ) -> JsonResponse:
     """Build and return GET intake form context (shared by view and PATCH response)."""
-    is_tablet = request.user.is_tablet
+    is_tablet = staff_user(request).is_tablet
     form_locale = request.GET.get("form_locale", "de-DE")[:10]
 
     if not LOCALE_PATTERN.match(form_locale):
@@ -359,7 +361,7 @@ def intake_form_submit_view(request: HttpRequest, intake_form_id: UUID) -> JsonR
     try:
         intake_form = submit_patient_intake_form(
             intake_form_id=intake_form_id,
-            submitted_by_user_id=request.user.id,
+            submitted_by_user_id=staff_user_id(request),
             allowed_clinic_site_ids=_resolve_request_clinic_scope_ids(request),
         )
     except ObjectDoesNotExist:
@@ -471,7 +473,7 @@ def intake_outbox_event_retry_view(
         retried = retry_intake_outbox_event(
             event=event,
             reason=body.reason,
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
         )
     except DomainError as exc:
         return json_domain_error(exc, status=409)
@@ -506,7 +508,7 @@ def intake_outbox_process_view(request: HttpRequest) -> JsonResponse:
 
     create_audit_event(
         event_type="OPERATIONS_INTAKE_OUTBOX_BATCH_TRIGGERED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         metadata={
             "limit": body.limit,
             "client_ip": get_client_ip(request),

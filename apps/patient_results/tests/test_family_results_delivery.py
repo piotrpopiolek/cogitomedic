@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any, ClassVar
 from unittest.mock import MagicMock, patch
 
 from django.test import Client, TestCase, override_settings
 
-from apps.operations.models import AuditEvent
-from apps.patient_results.document_services import (
-    list_patient_documents,
-    resolve_patient_befund_download,
-)
-from apps.patient_results.models import PatientResultsOtpSession
-from apps.patient_results.services import request_otp, verify_otp
+from apps.core.api_utils import assign_group_to_test_user
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -21,14 +16,20 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.services import publish_document_version, save_draft_document_version
+from apps.operations.models import AuditEvent
 from apps.outbox.services import process_outbox_events
+from apps.patient_results.document_services import (
+    list_patient_documents,
+    resolve_patient_befund_download,
+)
+from apps.patient_results.models import PatientResultsOtpSession
+from apps.patient_results.services import request_otp, verify_otp
 from apps.patient_results.tests.family_results_fixtures import (
     FIXED_OTP_FAMILY,
     TEST_PEPPER_FAMILY,
     MemberBundle,
     build_family_results_fixture,
 )
-from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.patient_identity import portal_identity_is_ambiguous
 
 _TEST_SETTINGS = dict(
@@ -95,6 +96,8 @@ def _api_otp_login(
 
 
 class FamilyResultsTestCase(TestCase):
+    fixture: ClassVar[Any]
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.fixture = build_family_results_fixture()
@@ -517,6 +520,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
             .order_by("-event_time")
             .first()
         )
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertIsNone(ev.patient_id)
 
@@ -540,6 +544,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "needs_last_name": True})
         ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
+        assert ev is not None
         assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertIsNone(ev.patient_id)
@@ -578,6 +583,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         self.assertNotIn("sessionid", self.client.cookies)
         ev = _latest_audit("PATIENT_RESULTS_OTP_VERIFY")
         assert ev is not None
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "invalid")
         self.assertIsNone(ev.patient_id)
 
@@ -614,6 +620,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         self.assertEqual(verify.status_code, 200)
         ev = _latest_audit("PATIENT_RESULTS_OTP_VERIFY")
         assert ev is not None
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "success")
         self.assertEqual(ev.patient_id, gina.patient.id)
 
@@ -643,6 +650,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         ).count()
         self.assertEqual(request_audits_after, request_audits_before + 1)
         ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
+        assert ev is not None
         assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertEqual(ev.metadata.get("channel"), "html")
@@ -676,6 +684,7 @@ class AmbiguousIdentityApiHtmlTests(FamilyResultsTestCase):
         ).count()
         self.assertEqual(request_audits_after, request_audits_before + 1)
         ev = _latest_audit("PATIENT_RESULTS_OTP_REQUEST")
+        assert ev is not None
         assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertEqual(ev.metadata.get("channel"), "html")

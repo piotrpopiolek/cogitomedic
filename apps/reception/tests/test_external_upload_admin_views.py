@@ -14,12 +14,12 @@ from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.reception import external_upload_admin_views as ext_hub_views
 from apps.medical.models import (
     ExternalPdfAttachment,
     MedicalDocument,
     MedicalDocumentVersion,
 )
+from apps.reception import external_upload_admin_views as ext_hub_views
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,

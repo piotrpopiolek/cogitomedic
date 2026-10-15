@@ -34,8 +34,6 @@ from apps.intake.services import (
     get_intake_form_context,
     submit_patient_intake_form,
 )
-from apps.telederm.services import save_telederm_payload
-from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 from apps.reception.admin import QueueEntryAdmin
 from apps.reception.models import (
     ClinicSite,
@@ -57,6 +55,8 @@ from apps.reception.services import (
     create_queue_entry,
     update_queue_entry,
 )
+from apps.telederm.services import save_telederm_payload
+from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 from apps.users.models import StaffUser
 
 
@@ -66,9 +66,11 @@ def _request_with_messages(user: StaffUser):
 
     request = RequestFactory().post("/admin/reception/queueentry/")
     request.user = user
-    SessionMiddleware(lambda r: None).process_request(request)
+    from django.http import HttpResponse
+
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
     request.session.save()
-    request._messages = FallbackStorage(request)
+    request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
     return request
 
 

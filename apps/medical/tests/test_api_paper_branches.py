@@ -10,6 +10,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
+from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -18,7 +19,6 @@ from apps.medical.models import (
     PdfStatus,
 )
 from apps.medical.services import authorize_paper_intake
-from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,

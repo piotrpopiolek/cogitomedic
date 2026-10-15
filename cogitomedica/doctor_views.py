@@ -19,23 +19,29 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
-from django.http import HttpResponseRedirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.core.api_utils import staff_user_id
+from apps.core.exceptions import DomainError
 from apps.core.http_utils import get_client_ip
 from apps.core.list_pagination import (
     effective_default_page_size,
     page_size_switch_items,
 )
-from apps.core.exceptions import DomainError
+from apps.core.translation_service import (
+    get_doctor_ui,
+    get_fitzpatrick_choices,
+    resolve_other_message,
+)
 from apps.intake.models import IntakeStatus
 from apps.medical import external_pdf_service as external_pdf_svc
+from apps.medical.edit_session import document_locked_by_other_for_user
 from apps.medical.external_pdf_service import (
     GateResult,
     check_external_pdf_gate,
@@ -46,7 +52,6 @@ from apps.medical.models import (
     MedicalDocument,
     MedicalDocumentSourceType,
 )
-from apps.medical.edit_session import document_locked_by_other_for_user
 from apps.medical.services import (
     DoctorAccessAuditContext,
     _is_admin_or_manager_medical_oversight,
@@ -60,11 +65,6 @@ from apps.medical.services import (
 from apps.reception.models import Patient, QueueEntry
 from apps.users.display import staff_user_display_name
 from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
-from apps.core.translation_service import (
-    get_doctor_ui,
-    get_fitzpatrick_choices,
-    resolve_other_message,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -687,7 +687,7 @@ def doctor_open_by_queue_view(
             doc = create_or_get_medical_document(
                 queue_entry_id=entry.id,
                 intake_form_id=intake_form.id,
-                created_by_user_id=request.user.id,
+                created_by_user_id=staff_user_id(request),
             )
     url = reverse("doctor-document-detail", kwargs={"medical_document_id": doc.id})
     return HttpResponseRedirect(url + "?lang=" + lang)
@@ -725,7 +725,7 @@ def doctor_create_no_intake_view(
     try:
         doc = create_medical_document_without_intake(
             queue_entry_id=entry.id,
-            created_by_user_id=request.user.id,
+            created_by_user_id=staff_user_id(request),
         )
     except DomainError as exc:
         if (
@@ -908,7 +908,7 @@ def doctor_document_detail_view(
         and getattr(request.user, "is_doctor", False)
         and not befund_readonly,
         "befundReadOnly": befund_readonly,
-        "staffUserId": str(request.user.id),
+        "staffUserId": str(staff_user_id(request)),
         "lang": lang,
     }
     autosave_ms_raw = os.environ.get("E2E_AUTOSAVE_MS", "").strip()
@@ -934,7 +934,7 @@ def doctor_document_detail_view(
             ),
             "doctor_befund_readonly": befund_readonly,
             "reception_note": (
-                ((context.get("intake_summary") or {}).get("reception_note") or "")
+                (context.get("intake_summary") or {}).get("reception_note") or ""
             ).strip(),
         },
     )

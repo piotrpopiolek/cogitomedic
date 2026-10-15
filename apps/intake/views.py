@@ -4,21 +4,21 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.contrib import admin
 from django.urls import reverse
 
 from apps.core.admin_list_page_size import changelist_page_size_context
 from apps.core.api_utils import get_scoped_clinic_site_ids
+from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
 from apps.core.translation_service import (
     format_administration_message,
     get_admin_translation,
 )
-from apps.core.staff_custom_admin import is_reception_admin_or_manager_staff
 from apps.intake.document_services import (
     check_intake_document_access,
     get_intake_document_detail,
@@ -71,7 +71,7 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
     if params.get("clinic_site_id"):
         try:
             clinic_site_id = UUID(params["clinic_site_id"])
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
 
     items, total = list_intake_documents(
@@ -103,7 +103,7 @@ def intake_documents_list_view(request: HttpRequest) -> HttpResponse:
 
     def pagination_url(p: int) -> str:
         q = get_copy.copy()
-        q["page"] = p
+        q["page"] = str(p)
         return "?" + q.urlencode()
 
     previous_page_url = pagination_url(page - 1) if page > 1 else None

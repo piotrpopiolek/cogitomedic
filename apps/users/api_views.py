@@ -4,10 +4,10 @@ from json import JSONDecodeError
 from uuid import UUID
 
 from django.contrib.auth import authenticate, login, logout
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
-from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
 from pydantic import ValidationError
 
@@ -23,6 +23,7 @@ from apps.core.api_utils import (
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.core.http_utils import get_client_ip
 from apps.operations.services import create_audit_event
+from apps.reception.models import ClinicSite
 from apps.reception.services import record_tablet_login_for_android_id
 from apps.users.api_schemas import (
     AuthLoginRequest,
@@ -353,7 +354,7 @@ def staff_user_clinic_sites_view(
                 {"error": "Validation error.", "details": exc.errors()}, status=400
             )
 
-        user.clinic_sites.set(body.clinic_site_ids)
+        user.clinic_sites.set(ClinicSite.objects.filter(id__in=body.clinic_site_ids))
         items = [
             {
                 "id": str(site.id),

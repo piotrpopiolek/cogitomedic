@@ -6,9 +6,9 @@ from typing import Any
 
 from apps.telederm.models import TeledermAnswerType, TeledermSection
 from apps.telederm.seed.helpers import (
-    NOT_APPLICABLE,
     NO,
     NONE,
+    NOT_APPLICABLE,
     OTHER,
     UNKNOWN,
     YES,

@@ -127,10 +127,11 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "signature": snapshot.get("signature") or {},
         "body_map": body_map_for_footer,
     }
-    base["pdf_consent_acceptance_meta"] = _pdf_consent_acceptance_summary(
-        base["consents"]
-    )
-    raw_sig_sha = base["signature"].get("sha256")
+    consents_raw = base["consents"]
+    consents = consents_raw if isinstance(consents_raw, list) else []
+    base["pdf_consent_acceptance_meta"] = _pdf_consent_acceptance_summary(consents)
+    signature = base["signature"]
+    raw_sig_sha = signature.get("sha256") if isinstance(signature, dict) else None
     base["pdf_signature_sha256"] = (
         raw_sig_sha.strip()
         if isinstance(raw_sig_sha, str) and raw_sig_sha.strip()

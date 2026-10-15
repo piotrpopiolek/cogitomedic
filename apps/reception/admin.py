@@ -3,16 +3,14 @@ from __future__ import annotations
 import uuid
 
 from django import forms
-from django.contrib import admin
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.urls import path
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.http import urlencode
 
@@ -22,7 +20,7 @@ except ImportError:
     UnfoldAdminSelectWidget = forms.Select
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
-
+from apps.core.api_utils import staff_user_id
 from apps.core.exceptions import DomainError
 from apps.core.translation_service import (
     db_gettext_lazy,
@@ -143,7 +141,7 @@ class PatientAdmin(CogitomedicaModelAdmin):
         try:
             enqueue_result_available_sms_for_patient(
                 patient_id=patient.id,
-                actor_user_id=request.user.id,
+                actor_user_id=staff_user_id(request),
             )
             self.message_user(
                 request,
@@ -193,7 +191,7 @@ class PatientAdmin(CogitomedicaModelAdmin):
             try:
                 enqueue_result_available_sms_for_patient(
                     patient_id=patient.id,
-                    actor_user_id=request.user.id,
+                    actor_user_id=staff_user_id(request),
                 )
                 ok += 1
             except DomainError as exc:
@@ -251,7 +249,7 @@ def _admin_resolve_dailyqueue_clinic_site_id(
         if raw:
             try:
                 return uuid.UUID(raw)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return None
     if obj is not None and getattr(obj, "clinic_site_id", None):
         return obj.clinic_site_id
@@ -671,7 +669,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                         updated = update_queue_entry(
                             obj.pk,
                             entry_status=obj.entry_status,
-                            actor_user_id=request.user.id,
+                            actor_user_id=staff_user_id(request),
                         )
                     except DomainError as exc:
                         self._report_domain_error(request, exc)
@@ -693,7 +691,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
             update_queue_entry(
                 queue_entry_id,
                 ausfallhonorar=flagged,
-                actor_user_id=request.user.id,
+                actor_user_id=staff_user_id(request),
             )
         except DomainError as exc:
             self._report_domain_error(request, exc)
@@ -720,7 +718,7 @@ class QueueEntryAdmin(CogitomedicaModelAdmin):
                 update_queue_entry(
                     entry.id,
                     ausfallhonorar=flagged,
-                    actor_user_id=request.user.id,
+                    actor_user_id=staff_user_id(request),
                 )
                 ok += 1
             except DomainError as exc:

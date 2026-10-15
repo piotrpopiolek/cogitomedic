@@ -11,7 +11,6 @@ from unittest.mock import patch
 from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
-
 from freezegun import freeze_time
 
 from apps.core.exceptions import DomainError

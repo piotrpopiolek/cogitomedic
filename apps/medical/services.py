@@ -4,11 +4,11 @@ import re
 import tempfile
 import unicodedata
 import uuid
-from os import close as os_close
-from datetime import date, datetime, timedelta
-from pathlib import Path, PurePosixPath
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias
+from datetime import date, datetime, timedelta
+from os import close as os_close
+from pathlib import Path, PurePosixPath
+from typing import Any, Literal
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import UploadedFile
@@ -26,21 +26,25 @@ from django.db.models import (
     When,
 )
 from django.utils import timezone
+from pypdf import PdfReader
 
 from apps.core.api_utils import safe_parse_positive_int
 from apps.core.constants import DEFAULT_LIST_LIMIT
-from apps.core.list_pagination import parse_page_size
 from apps.core.domain_messages import domain_message
-from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import (
     DomainError,
     IdempotencyConflictError,
 )
-from apps.medical.medical_payload_schemas import (
-    validate_medical_payload_complete_for_publish,
-)
+from apps.core.list_pagination import parse_page_size
+from apps.core.otel_spans import cogito_business_span
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.intake.services import get_intake_form_context
+from apps.integrations.hidrive.auth import HiDriveAuthError
+from apps.integrations.hidrive.client import (
+    HiDriveAdapterProtocol,
+    HiDriveApiError,
+    get_hidrive_adapter,
+)
 from apps.medical.constants import (
     DOCTOR_LIST_UNPUBLISHED_SLA_HOURS,
     DOCUMENT_LOCK_TIMEOUT_HOURS,
@@ -49,15 +53,20 @@ from apps.medical.constants import (
     PAPER_INTAKE_AUTH_REASON_MIN_LEN,
     PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT,
 )
+from apps.medical.edit_session import (
+    EditSessionResponseError,
+    clear_edit_session_lock_fields,
+    doctor_befund_edit_lock_applies,
+    effective_lock_holder_id,
+    release_doctor_edit_session_lock,
+    start_doctor_edit_session,
+)
 from apps.medical.external_pdf_service import (
     hidrive_incoming_dir,
     hidrive_processed_dir,
 )
-from apps.integrations.hidrive.auth import HiDriveAuthError
-from apps.integrations.hidrive.client import (
-    HiDriveAdapterProtocol,
-    HiDriveApiError,
-    get_hidrive_adapter,
+from apps.medical.medical_payload_schemas import (
+    validate_medical_payload_complete_for_publish,
 )
 from apps.medical.models import (
     DocVersionStatus,
@@ -70,23 +79,14 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
-from apps.medical.edit_session import (
-    EditSessionResponseError,
-    clear_edit_session_lock_fields,
-    doctor_befund_edit_lock_applies,
-    effective_lock_holder_id,
-    release_doctor_edit_session_lock,
-    start_doctor_edit_session,
-)
 from apps.operations.services import create_audit_event
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
-from apps.outbox.services import retry_outbox_event, _try_delete_file
+from apps.outbox.services import _try_delete_file, retry_outbox_event
 from apps.reception.models import QueueEntry, QueueEntryStatus
 from apps.users.display import staff_user_display_name
 from apps.users.models import StaffUser
-from pypdf import PdfReader
 
-PaperIntakeAutorevokeTrigger: TypeAlias = Literal[
+type PaperIntakeAutorevokeTrigger = Literal[
     "intake_form_submitted",
     "queue_entry_cancelled",
 ]
@@ -123,7 +123,7 @@ def _paper_intake_authorization_context_for_document(
     if raw_by:
         try:
             by_uuid = uuid.UUID(str(raw_by))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             by_uuid = None
     display = ""
     if by_uuid is not None:
@@ -799,7 +799,9 @@ def _register_external_upload_pdf_pending(
         if local_tmp is not None:
             local_tmp.unlink(missing_ok=True)
 
-    safe_filename = _sanitize_external_upload_filename(uploaded_file.name)
+    safe_filename = _sanitize_external_upload_filename(
+        uploaded_file.name or "upload.pdf"
+    )
     queue_entry_id = medical_document.queue_entry_id
     remote_path = (
         f"{hidrive_incoming_dir()}/external-upload/{queue_entry_id}/{safe_filename}"
@@ -2703,7 +2705,7 @@ def parse_doctor_work_queue_list_params(
             queue_date = datetime.strptime(
                 get_params.get("queue_date", "") or "", "%Y-%m-%d"
             ).date()
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     patient_search = get_params.get("patient_search") or None
     published_by_user_id: uuid.UUID | None = None
@@ -2722,7 +2724,7 @@ def parse_doctor_work_queue_list_params(
         if raw_pub_id:
             try:
                 published_by_user_id = uuid.UUID(raw_pub_id)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 published_by_user_id = None
     sort = (get_params.get("sort") or "date").strip().lower()
     if sort not in {"date", "patient"}:
@@ -3111,7 +3113,9 @@ def _serialize_doctor_work_queue_row(
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat(),
+            "date_of_birth": (
+                patient.date_of_birth.isoformat() if patient.date_of_birth else None
+            ),
         },
         "queue_date": queue.queue_date.isoformat(),
         "status": doc.status if doc else "—",

@@ -6,8 +6,9 @@ import json
 import re
 from datetime import date, timedelta
 from io import BytesIO
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
@@ -16,8 +17,6 @@ from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.operations.models import AuditEvent
-from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.medical.external_pdf_service import GateResult, MatchedIncomingFile
 from apps.medical.models import (
     DocVersionStatus,
@@ -30,9 +29,8 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
-from apps.reception.patient_identity import (
-    normalize_patient_name_for_storage as _stored_patient_name,
-)
+from apps.operations.models import AuditEvent
+from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -43,7 +41,11 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
+from apps.reception.patient_identity import (
+    normalize_patient_name_for_storage as _stored_patient_name,
+)
 from apps.users.models import StaffUser
+from cogitomedica.tests.redirects import redirect_url
 
 
 def _doctor_panel_data_from_detail_html(html: str) -> dict:
@@ -137,13 +139,13 @@ class DoctorViewsSmokeTests(TestCase):
     def test_list_anonymous_redirects_to_login(self):
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+        self.assertIn("login", redirect_url(resp))
 
     def test_list_reception_user_redirects(self):
         self.client.force_login(self.reception_user)
         resp = self.client.get("/doctor/")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+        self.assertIn("login", redirect_url(resp))
 
     # ==========================================================
     # List
@@ -202,7 +204,7 @@ class DoctorViewsSmokeTests(TestCase):
         self._login_doctor()
         resp = self.client.post("/doctor/logout/")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+        self.assertIn("login", redirect_url(resp))
 
     # ==========================================================
     # Document detail – nonexistent UUID
@@ -372,8 +374,8 @@ class DoctorViewsSmokeTests(TestCase):
             m_cog.assert_not_called()
 
         self.assertEqual(resp.status_code, 302)
-        self.assertIn(f"/doctor/{ext_doc.id}/", resp.url)
-        self.assertIn("lang=en", resp.url)
+        self.assertIn(f"/doctor/{ext_doc.id}/", redirect_url(resp))
+        self.assertIn("lang=en", redirect_url(resp))
 
     @patch("cogitomedica.doctor_views.document_locked_by_other_for_user")
     @patch("cogitomedica.doctor_views.check_external_pdf_gate")
@@ -964,7 +966,7 @@ class DoctorViewsSmokeTests(TestCase):
         doc = MedicalDocument.objects.get(queue_entry=entry)
         self.assertEqual(doc.source_type, MedicalDocumentSourceType.PAPER_INTAKE)
         self.assertIsNone(doc.intake_form_id)
-        self.assertIn(f"/doctor/{doc.id}/?lang=en", resp.url)
+        self.assertIn(f"/doctor/{doc.id}/?lang=en", redirect_url(resp))
 
     def test_paper_intake_document_detail_panel_has_paper_context_and_ui_keys(
         self,
@@ -1888,10 +1890,14 @@ class DoctorListScopeAndPreviewTests(TestCase):
 class DoctorRbacIdorHtmlTests(TestCase):
     """IDOR matrix §6.3: HTML paths H1–H2."""
 
+    doctor_user: Any
+    intake_form: Any
+    queue_entry: Any
+
     def setUp(self) -> None:
         from apps.medical.tests.test_api import MedicalApiTests
 
-        MedicalApiTests.setUp(self)
+        MedicalApiTests.setUp(cast(MedicalApiTests, self))
 
         self.doctor_b = StaffUser.objects.create_user(
             username="html-idor-b",
@@ -1999,7 +2005,7 @@ class DoctorRbacIdorHtmlTests(TestCase):
         self.assertEqual(
             AuditEvent.objects.filter(
                 event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
-                medical_document_id=mid,
+                medical_document_id=UUID(str(mid)),
             ).count(),
             1,
         )

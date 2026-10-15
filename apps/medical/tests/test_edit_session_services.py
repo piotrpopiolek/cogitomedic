@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import Any
 
+from django.test import Client
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
+from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS
 from apps.medical.edit_session import (
     EditSessionResponseError,
@@ -16,21 +19,21 @@ from apps.medical.edit_session import (
     http_status_for_edit_session_error,
     start_doctor_edit_session,
 )
-from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
+    DocVersionStatus,
     MedicalDocStatus,
     MedicalDocument,
-    DocVersionStatus,
     MedicalDocumentVersion,
 )
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.operations.models import AuditEvent
 from apps.reception.models import PatientFormSession, QueueEntryStatus
 from apps.users.models import StaffUser
-from django.test import Client
 
 
 class EditSessionTestMixin(ServicesCoverageBase):
+    doctor: Any
+
     def _make_isolated_draft_doc(self) -> MedicalDocument:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),
@@ -69,6 +72,8 @@ class EditSessionTestMixin(ServicesCoverageBase):
 
 
 class StartDoctorEditSessionTests(EditSessionTestMixin):
+    doctor: Any
+
     def test_acquire_free_lock_issues_token(self) -> None:
         doc = self._make_isolated_draft_doc()
         result = start_doctor_edit_session(
@@ -98,6 +103,7 @@ class StartDoctorEditSessionTests(EditSessionTestMixin):
         self.assertEqual(resumed.mode, "resumed")
         self.assertEqual(resumed.edit_session_token, first.edit_session_token)
         doc.refresh_from_db()
+        assert doc.locked_at is not None and old_locked_at is not None
         self.assertGreater(doc.locked_at, old_locked_at)
         self.assertEqual(doc.edit_session_revision, first.edit_session_revision)
 

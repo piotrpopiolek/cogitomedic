@@ -4,7 +4,6 @@ from django.contrib import admin
 from django.db.models import Q
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
-
 from apps.operations.models import AuditEvent
 
 

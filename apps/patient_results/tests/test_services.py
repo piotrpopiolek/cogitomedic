@@ -7,6 +7,7 @@ import threading
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
+import phonenumbers
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import connection
@@ -26,9 +27,6 @@ from apps.patient_results.services import (
     set_patient_results_session,
     verify_otp,
 )
-import phonenumbers
-
-from apps.reception.phone_utils import infer_sms_region_from_phone
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -37,6 +35,7 @@ from apps.reception.models import (
     QueueEntry,
     QueueStatus,
 )
+from apps.reception.phone_utils import infer_sms_region_from_phone
 from apps.users.models import StaffUser
 
 
@@ -87,6 +86,7 @@ class RequestOtpTests(TestCase):
         self.assertEqual(result.status, "ok")
         session = PatientResultsOtpSession.objects.filter(patient=self.patient).first()
         self.assertIsNotNone(session)
+        assert session is not None
         self.assertEqual(session.phone, "1762222222")
         self.assertIsNone(session.verified_at)
         mock_adapter.send_sms.assert_called_once()
@@ -618,7 +618,7 @@ class TestSetPatientResultsSession(TestCase):
         request.session["pre_auth_marker"] = "1"
         request.session.save()
         old_key = request.session.session_key
-        self.assertIsNotNone(old_key)
+        assert old_key is not None
 
         patient_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         set_patient_results_session(request, patient_id)

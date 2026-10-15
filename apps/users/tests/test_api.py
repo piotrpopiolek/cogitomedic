@@ -40,6 +40,7 @@ class UsersAuthApiTests(TestCase):
             event_type="STAFF_AUTH_LOGIN_SUCCESS", actor_user_id=self.user.id
         ).first()
         self.assertIsNotNone(success_ev)
+        assert success_ev is not None
         self.assertIn("client_ip", success_ev.metadata)
 
         me_response = self.client.get("/api/v1/auth/me")
@@ -55,6 +56,7 @@ class UsersAuthApiTests(TestCase):
             event_type="STAFF_AUTH_LOGOUT", actor_user_id=self.user.id
         ).first()
         self.assertIsNotNone(logout_ev)
+        assert logout_ev is not None
 
         me_after_logout = self.client.get("/api/v1/auth/me")
         self.assertEqual(me_after_logout.status_code, 401)
@@ -72,6 +74,7 @@ class UsersAuthApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(fail_ev)
+        assert fail_ev is not None
         self.assertEqual(fail_ev.metadata.get("reason"), "invalid_credentials")
         self.assertEqual(fail_ev.metadata.get("username"), "auth-user")
 

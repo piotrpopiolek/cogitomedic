@@ -15,15 +15,14 @@ except ImportError:
     UnfoldAdminSelectWidget = forms.Select
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
-
+from apps.core.exceptions import DomainError
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.api_schemas import FavoriteLesionGroupPreset
 from apps.medical.constants import (
     CLINICAL_ASSESSMENT_CHOICES,
     DERMATOSCOPIC_FEATURE_CHOICES,
     MALIGNANCY_RISK_CHOICES,
 )
-from apps.core.exceptions import DomainError
-from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.models import (
     DoctorTextTemplate,
     MedicalDocument,
@@ -64,14 +63,14 @@ class DoctorTextTemplateForm(forms.ModelForm):
         if not isinstance(value, list):
             try:
                 value = json.loads(value) if isinstance(value, str) else list(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as exc:
                 raise ValidationError(
                     format_administration_message(
                         "administration.error_lesion_favorites_invalid_json_list",
                         "Invalid JSON list for lesion group favorites.",
                         request=req,
                     )
-                )
+                ) from exc
         for i, item in enumerate(value):
             preset_no = i + 1
             if not isinstance(item, dict):
@@ -98,7 +97,7 @@ class DoctorTextTemplateForm(forms.ModelForm):
                         preset_no=preset_no,
                         details=_escape_curly_for_format(msg),
                     )
-                )
+                ) from e
             for code in item.get("dermatoscopic_features") or []:
                 if code not in _ALLOWED_FEATURES:
                     raise ValidationError(

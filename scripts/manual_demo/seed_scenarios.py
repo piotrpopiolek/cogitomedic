@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable
 
 _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:

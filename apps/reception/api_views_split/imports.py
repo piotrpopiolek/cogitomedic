@@ -7,9 +7,10 @@ from django.http import HttpRequest, JsonResponse
 
 from apps.core.api_utils import (
     json_error,
-    resolve_list_limit_query,
     require_auth,
     require_user_role,
+    resolve_list_limit_query,
+    staff_user,
 )
 from apps.reception.models import PatientImportBatch, PatientImportError
 
@@ -47,9 +48,10 @@ def _serialize_error(error: PatientImportError) -> dict:
 
 def _visible_batches(request: HttpRequest):
     qs = PatientImportBatch.objects.all().order_by("-created_at")
-    if request.user.is_admin_role:
+    actor = staff_user(request)
+    if actor.is_admin_role:
         return qs
-    return qs.filter(created_by_user=request.user)
+    return qs.filter(created_by_user=actor)
 
 
 @require_auth

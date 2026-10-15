@@ -230,8 +230,8 @@ class PatientsListQuery(OffsetPaginationQueryParams):
             return v
         try:
             return date.fromisoformat(v.strip())
-        except ValueError:
-            raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.")
+        except ValueError as exc:
+            raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.") from exc
 
     @field_validator(
         "search",

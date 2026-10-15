@@ -6,6 +6,8 @@ import ast
 import uuid
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
+
 from django.test import Client
 from django.utils import timezone
 
@@ -36,6 +38,8 @@ from apps.users.models import StaffUser
 
 
 class _DenialMatrixMixin(ServicesCoverageBase):
+    doctor: Any
+
     def _make_locked_draft(self) -> tuple[MedicalDocument, DoctorEditSessionResult]:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),
@@ -122,6 +126,8 @@ class _DenialMatrixMixin(ServicesCoverageBase):
 
 
 class EditSessionDenialSideEffectTests(_DenialMatrixMixin):
+    doctor: Any
+
     def test_other_doctor_acquire_has_no_side_effects(self) -> None:
         doc, _sess = self._make_locked_draft()
         before = self._snapshot(doc)
@@ -327,6 +333,8 @@ class EditSessionDenialSideEffectTests(_DenialMatrixMixin):
 
 
 class RevokeRevisionInProgressTests(_DenialMatrixMixin):
+    doctor: Any
+
     def _make_published_with_delivery(self) -> MedicalDocument:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),

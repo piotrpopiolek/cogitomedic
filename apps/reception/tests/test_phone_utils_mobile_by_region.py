@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.test import SimpleTestCase
 
 from apps.reception.phone_test_numbers import MOBILE_NUMBERS_PER_REGION, MobilePhoneCase
@@ -33,6 +35,8 @@ def _assert_e164_contract(
 
 
 class MobileNumbersFixtureTests(SimpleTestCase):
+    fixtures: Any
+
     @classmethod
     def setUpClass(cls) -> None:
         super().setUpClass()

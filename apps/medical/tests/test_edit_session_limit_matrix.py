@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import Any
 
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import (
-    DOCUMENT_LOCK_TIMEOUT_HOURS,
     DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
 )
 from apps.medical.edit_session import (
     EditSessionResponseError,
@@ -38,6 +39,8 @@ from apps.users.models import StaffUser
 
 
 class DoctorLockLimitMatrixTests(ServicesCoverageBase):
+    doctor: Any
+
     def _payload(self, **extra) -> dict:
         body = {
             "schema_version": 1,

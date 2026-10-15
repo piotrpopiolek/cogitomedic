@@ -13,8 +13,8 @@ from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
-from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.integrations.hidrive import client as hidrive_client
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,

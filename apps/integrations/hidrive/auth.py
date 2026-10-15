@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -54,7 +54,7 @@ class HiDriveOAuthClient:
 
     @staticmethod
     def _is_expired(state: _AccessTokenState) -> bool:
-        return datetime.now(timezone.utc) >= state.expires_at
+        return datetime.now(UTC) >= state.expires_at
 
     def _refresh_access_token(self, *, refresh_token: str) -> _AccessTokenState:
         _hidrive_token_refresh_total.labels(outcome="attempt").inc()
@@ -100,9 +100,7 @@ class HiDriveOAuthClient:
             raise HiDriveAuthError("HiDrive token refresh returned empty refresh_token")
 
         # Small safety margin before actual expiry.
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            seconds=max(30, expires_in - 30)
-        )
+        expires_at = datetime.now(UTC) + timedelta(seconds=max(30, expires_in - 30))
         return _AccessTokenState(
             access_token=access_token,
             expires_at=expires_at,

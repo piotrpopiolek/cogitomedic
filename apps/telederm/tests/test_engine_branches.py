@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.test import SimpleTestCase, TestCase
 
 from apps.telederm.engine import (
+    TeledermAnswerValue,
     _evaluate_condition,
     active_path_code,
     answers_map,
@@ -13,7 +16,6 @@ from apps.telederm.engine import (
     validate_required_answers,
     visible_questions,
 )
-from apps.telederm.engine import TeledermAnswerValue
 from apps.telederm.services import load_catalog
 
 
@@ -73,6 +75,8 @@ class EvaluateConditionTests(SimpleTestCase):
 
 
 class TeledermEngineBranchTests(TestCase):
+    catalog: Any
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.catalog = load_catalog()

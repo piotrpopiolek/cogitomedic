@@ -5,10 +5,12 @@ from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError, IdempotencyConflictError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
@@ -24,6 +26,8 @@ from apps.medical.services import (
     PAPER_INTAKE_AUTOREVOKE_TRIGGER_QUEUE_ENTRY_CANCELLED,
     authorize_paper_intake,
     autorevoke_paper_intake_authorization_after_intake_submit,
+    check_doctor_document_access,
+    check_doctor_queue_entry_access,
     create_medical_document_without_intake,
     create_or_get_medical_document,
     get_medical_document_context,
@@ -35,13 +39,6 @@ from apps.medical.services import (
 from apps.operations.models import AuditEvent
 from apps.operations.services import REF_KEY
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
-from django.core.exceptions import ObjectDoesNotExist
-
-from apps.core.api_utils import assign_group_to_test_user
-from apps.medical.services import (
-    check_doctor_document_access,
-    check_doctor_queue_entry_access,
-)
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -324,6 +321,7 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(ctx["source_type"], MedicalDocumentSourceType.PAPER_INTAKE)
         paper = ctx["paper_intake_authorization"]
         self.assertIsNotNone(paper)
+        assert paper is not None
         self.assertEqual(paper["reason"], _PAPER_AUTH_REASON)
         self.assertEqual(paper["authorized_by_user_id"], str(self.admin_user.id))
         p = ctx["intake_summary"]["patient"]
@@ -335,6 +333,8 @@ class MedicalServicesTests(TestCase):
         self.assertEqual(p["id"], str(patient.id))
         self.assertEqual(p["first_name"], patient.first_name)
         self.assertEqual(p["last_name"], patient.last_name)
+        assert patient.date_of_birth is not None
+        assert patient.date_of_birth is not None
         self.assertEqual(p["date_of_birth"], patient.date_of_birth.isoformat())
         self.assertEqual(p["phone"], patient.phone)
         self.assertEqual(p["email"], patient.email)
@@ -623,6 +623,7 @@ class MedicalServicesTests(TestCase):
         self.assertIsNotNone(queue_entry.doctor_list_sort_at)
         ev = AuditEvent.objects.filter(event_type="PAPER_INTAKE_AUTHORIZED").first()
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("authorization_id"), str(auth.id))
 
     def test_authorize_paper_intake_rejects_doctor_role(self) -> None:
@@ -749,6 +750,7 @@ class MedicalServicesTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(
             ev.metadata.get("trigger"),
             PAPER_INTAKE_AUTOREVOKE_TRIGGER_INTAKE_SUBMITTED,
@@ -795,6 +797,7 @@ class MedicalServicesTests(TestCase):
             .first()
         )
         self.assertIsNotNone(cancel_ev)
+        assert cancel_ev is not None
         self.assertEqual(cancel_ev.actor_user_id, self.admin_user.id)
         self.assertEqual(
             cancel_ev.metadata.get("trigger"),
@@ -820,6 +823,7 @@ class MedicalServicesTests(TestCase):
             medical_document_id=self.medical_document.id,
         ).first()
         self.assertIsNotNone(audit)
+        assert audit is not None
         self.assertEqual(
             audit.context_clinic_site_id, self.queue_entry.daily_queue.clinic_site_id
         )
@@ -1339,6 +1343,7 @@ class DocumentRevisionStateTests(MedicalServicesTests):
             medical_document_id=self.medical_document.id,
         ).first()
         self.assertIsNotNone(revision_started)
+        assert revision_started is not None
 
     def test_context_during_pending_revision_includes_reception_note(self) -> None:
         from apps.medical.services import begin_pending_revision_from_published
@@ -1428,6 +1433,7 @@ class DocumentRevisionStateTests(MedicalServicesTests):
             medical_document_id=self.medical_document.id,
         ).first()
         self.assertIsNotNone(discarded)
+        assert discarded is not None
 
     def test_discard_pending_revision_without_pending_raises(self) -> None:
         from apps.core.exceptions import DomainError
@@ -1491,6 +1497,7 @@ class DocumentRevisionStateTests(MedicalServicesTests):
             medical_document_id=self.medical_document.id,
         ).first()
         self.assertIsNotNone(republished_audit)
+        assert republished_audit is not None
         self.assertEqual(republished_audit.metadata.get("new_published_version_no"), 2)
         self.assertEqual(
             republished_audit.metadata.get("previous_published_version_no"), 1

@@ -126,13 +126,13 @@ def _phase2_delete_files(patient_id: uuid.UUID) -> None:
             pdf_local_path=None,
             anonymization_deleted_at=now_ts,
         )
-    for v in IntakeDocumentVersion.objects.filter(
+    for intake_version in IntakeDocumentVersion.objects.filter(
         intake_form__queue_entry__patient_id=patient_id,
         anonymization_deleted_at__isnull=True,
     ):
-        if v.pdf_local_path:
-            _try_delete_file(v.pdf_local_path)
-        IntakeDocumentVersion.objects.filter(id=v.id).update(
+        if intake_version.pdf_local_path:
+            _try_delete_file(intake_version.pdf_local_path)
+        IntakeDocumentVersion.objects.filter(id=intake_version.id).update(
             pdf_local_path=None,
             anonymization_deleted_at=now_ts,
         )

@@ -3,7 +3,6 @@ from __future__ import annotations
 from django.contrib import admin
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
-
 from apps.outbox.models import OutboxEvent
 
 

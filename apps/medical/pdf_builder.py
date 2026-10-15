@@ -8,12 +8,11 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from pypdf import PdfReader, PdfWriter
-from pypdf.errors import PdfReadError
-
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 from weasyprint import HTML
 
 from apps.core.domain_messages import domain_message
@@ -117,7 +116,7 @@ def _effective_publication_datetime_for_header(
 
     Prefer ``version.published_at``. If it is missing (e.g. draft preview, or rare
     inconsistent rows), fall back to ``medical_document.last_published_at``, then
-    ``version.updated_at`` for a published version, then ``generated_at`` so the
+    ``version.created_at`` for a published version, then ``generated_at`` so the
     line is not a dash when a meaningful date exists or for preview parity with
     intake (render-time day).
     """
@@ -126,8 +125,8 @@ def _effective_publication_datetime_for_header(
     doc = version.medical_document
     if doc is not None and doc.last_published_at:
         return doc.last_published_at
-    if version.version_status == DocVersionStatus.PUBLISHED and version.updated_at:
-        return version.updated_at
+    if version.version_status == DocVersionStatus.PUBLISHED:
+        return version.created_at
     return generated_at
 
 
@@ -793,12 +792,12 @@ def generate_external_upload_pdf(
         "external_selected_attachment",
         "medical_document",
     ).get(pk=version.pk)
-    if version.external_selected_attachment_id is None:
+    att = version.external_selected_attachment
+    if att is None:
         raise DomainError(
             domain_message("other.domain.external_upload_generate_pdf_no_attachment"),
             api_message_key="other.domain.external_upload_generate_pdf_no_attachment",
         )
-    att = version.external_selected_attachment
     doc = version.medical_document
     patient_id = doc.queue_entry.patient_id
     status_before_download = att.status

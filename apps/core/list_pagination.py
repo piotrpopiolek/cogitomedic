@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -17,7 +18,7 @@ def effective_default_page_size() -> int:
     if configured is not None:
         try:
             value = int(configured)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return DEFAULT_LIST_LIMIT
         if value in ALLOWED_LIST_PAGE_SIZES:
             return value

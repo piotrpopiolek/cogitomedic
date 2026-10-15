@@ -11,6 +11,8 @@ from django.db import transaction
 from django.utils import timezone
 from opentelemetry import trace
 
+from apps.core.domain_messages import domain_message
+from apps.core.exceptions import DomainError
 from apps.intake.models import (
     IntakeDocumentVersion,
     IntakeOutboxEvent,
@@ -19,8 +21,6 @@ from apps.intake.models import (
     IntakePdfStatus,
 )
 from apps.intake.pdf_builder import generate_intake_pdf
-from apps.core.domain_messages import domain_message
-from apps.core.exceptions import DomainError
 from apps.integrations.hidrive.client import (
     HiDriveAdapterProtocol,
     get_hidrive_adapter,

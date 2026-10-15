@@ -5,12 +5,12 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
+from apps.integrations.hidrive import client as hidrive_client
 from apps.integrations.hidrive.auth import (
     HiDriveAuthError,
     HiDriveOAuthClient,
     get_hidrive_refresh_metrics,
 )
-from apps.integrations.hidrive import client as hidrive_client
 from apps.integrations.hidrive.client import (
     HiDriveApiError,
     HiDriveTimeoutError,
@@ -610,7 +610,7 @@ class HiDriveRealAdapterMoveFileTests(SimpleTestCase):
             if c.args and str(c.args[0]).endswith("/file")
         ]
         self.assertEqual(len(file_gets), 2)
-        self.assertTrue((file_gets[1].kwargs.get("stream")))
+        self.assertTrue(file_gets[1].kwargs.get("stream"))
 
     @override_settings(HIDRIVE_USE_MOCK="0")
     @patch("apps.integrations.hidrive.client.requests.post")

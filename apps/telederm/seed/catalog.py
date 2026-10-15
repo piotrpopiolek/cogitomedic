@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from apps.telederm.seed.common import COMMON_QUESTIONS
+from apps.telederm.seed.paths.cce001 import CCE001_QUESTIONS
 from apps.telederm.seed.paths.cce002 import CCE002_QUESTIONS
 from apps.telederm.seed.paths.cce003 import CCE003_QUESTIONS
 from apps.telederm.seed.paths.cce004 import CCE004_QUESTIONS
@@ -19,7 +20,6 @@ from apps.telederm.seed.paths.cce012 import CCE012_CATALOG
 from apps.telederm.seed.paths.cce013 import CCE013_CATALOG
 from apps.telederm.seed.paths.cce014 import CCE014_CATALOG
 from apps.telederm.seed.paths.cce015 import CCE015_CATALOG
-from apps.telederm.seed.paths.cce001 import CCE001_QUESTIONS
 from apps.telederm.seed.paths.global_fields import GLOBAL_FIELDS_CATALOG
 
 TELEDERM_CATALOG: list[dict[str, Any]] = [

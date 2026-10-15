@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.domain_messages import domain_message
-from apps.core.otel_spans import cogito_business_span
 from apps.core.exceptions import DomainError, StateTransitionError
+from apps.core.otel_spans import cogito_business_span
 from apps.intake.models import PatientIntakeForm
 from apps.reception.models import (
     ClinicSite,
@@ -64,7 +64,7 @@ class IssuedSessionResult:
     """Return payload for newly created session (no token)."""
 
     session_id: uuid.UUID
-    expires_at: timezone.datetime
+    expires_at: datetime
     intake_form_id: uuid.UUID
 
 
@@ -127,7 +127,7 @@ def update_clinic_site(
     if pdf_import_default_consulting_room_id is not CLINIC_SITE_FIELD_NOT_PROVIDED:
         if pdf_import_default_consulting_room_id is None:
             site.pdf_import_default_consulting_room = None
-        else:
+        elif isinstance(pdf_import_default_consulting_room_id, uuid.UUID):
             room = ConsultingRoom.objects.get(id=pdf_import_default_consulting_room_id)
             if room.clinic_site_id != site.id:
                 raise DomainError(
@@ -137,7 +137,9 @@ def update_clinic_site(
             site.pdf_import_default_consulting_room = room
         update_fields.append("pdf_import_default_consulting_room")
     if pdf_import_shift_code is not CLINIC_SITE_FIELD_NOT_PROVIDED:
-        if pdf_import_shift_code not in [choice[0] for choice in QueueShift.choices]:
+        if not isinstance(pdf_import_shift_code, str) or pdf_import_shift_code not in [
+            choice[0] for choice in QueueShift.choices
+        ]:
             raise DomainError(
                 domain_message(
                     "other.domain.invalid_shift_code", value=pdf_import_shift_code
@@ -322,7 +324,7 @@ def create_or_update_patient_manual(
     *,
     first_name: str,
     last_name: str,
-    date_of_birth: timezone.datetime.date,
+    date_of_birth: date,
     phone: str,
     email: str,
     created_or_updated_by_user_id: uuid.UUID,
@@ -362,8 +364,10 @@ def create_or_update_patient_manual(
     patient = (
         Patient.objects.select_for_update().filter(id=patient_id).first()
         if patient_id
-        else Patient()
+        else None
     )
+    if patient is None:
+        patient = Patient()
     patient.first_name = first_name
     patient.last_name = last_name
     patient.date_of_birth = date_of_birth
@@ -378,7 +382,7 @@ def create_or_update_patient_manual(
 @transaction.atomic
 def create_daily_queue(
     *,
-    queue_date: timezone.datetime.date,
+    queue_date: date,
     clinic_site_id: uuid.UUID,
     consulting_room_id: uuid.UUID,
     assigned_doctor_id: uuid.UUID | None = None,
@@ -644,7 +648,7 @@ def create_queue_entry(
     daily_queue_id: uuid.UUID,
     patient_id: uuid.UUID,
     created_by_user_id: uuid.UUID,
-    appointment_time: timezone.datetime | None = None,
+    appointment_time: datetime | None = None,
     visit_external_id: str | None = None,
     notes: str | None = None,
     process_type: str | None = None,

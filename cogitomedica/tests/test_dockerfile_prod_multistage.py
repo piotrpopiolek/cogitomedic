@@ -11,21 +11,21 @@ def _dockerfile() -> str:
 
 
 def _builder_section(text: str) -> str:
-    marker = "FROM python:3.13-slim AS runtime"
+    marker = "FROM python:3.14-slim AS runtime"
     idx = text.index(marker)
     return text[:idx]
 
 
 def _runtime_section(text: str) -> str:
-    marker = "FROM python:3.13-slim AS runtime"
+    marker = "FROM python:3.14-slim AS runtime"
     idx = text.index(marker)
     return text[idx:]
 
 
 def test_prod_dockerfile_is_multistage() -> None:
     text = _dockerfile()
-    assert "FROM python:3.13-slim AS builder" in text
-    assert "FROM python:3.13-slim AS runtime" in text
+    assert "FROM python:3.14-slim AS builder" in text
+    assert "FROM python:3.14-slim AS runtime" in text
 
 
 def test_toolchain_stays_in_builder() -> None:

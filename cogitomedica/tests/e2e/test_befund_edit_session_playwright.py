@@ -778,8 +778,9 @@ class BefundEditSessionExtendedPlaywrightTests(PlaywrightDoctorE2EBase):
         page2 = self.context.new_page()
         # Browser session restore recreates sessionStorage for the document tab.
         page2.add_init_script(
-            "try { sessionStorage.setItem(%s, %s); } catch (e) {}"
-            % (json.dumps(key), json.dumps(raw))
+            "try { sessionStorage.setItem("
+            f"{json.dumps(key)}, {json.dumps(raw)}"
+            "); } catch (e) {}"
         )
         with page2.expect_response(
             lambda r: "/edit-session" in r.url and r.request.method == "POST" and r.ok,

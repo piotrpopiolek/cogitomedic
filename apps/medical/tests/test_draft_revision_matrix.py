@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import Any
 from unittest.mock import patch
 
 from django.db import transaction
@@ -34,6 +35,8 @@ from apps.reception.models import PatientFormSession, QueueEntryStatus
 
 
 class DraftRevisionMatrixTests(ServicesCoverageBase):
+    doctor: Any
+
     def _payload(self, **extra) -> dict:
         body = {
             "schema_version": 1,

@@ -8,11 +8,10 @@ from io import BytesIO
 from unittest.mock import patch
 from uuid import uuid4
 
-from pypdf import PdfWriter
-
-from django.http import HttpResponse
+from django.http import HttpResponseBase
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
@@ -136,7 +135,7 @@ class Tests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         return response.json()
 
-    def _preview_draft_pdf(self, *, query: str = "") -> HttpResponse:
+    def _preview_draft_pdf(self, *, query: str = "") -> HttpResponseBase:
         sess = self._start_edit_session()
         q = f"?source=draft&expected_draft_revision={sess['draft_revision']}" + (
             f"&{query.lstrip('?&')}" if query else ""

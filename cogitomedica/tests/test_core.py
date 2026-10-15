@@ -5,6 +5,7 @@ Tests for Cogitomedica OpenAPI schema and Pydantic → OpenAPI conversion.
 from __future__ import annotations
 
 from django.test import TestCase
+from pydantic import BaseModel, Field
 
 from cogitomedica.openapi_extension import build_cogito_openapi_schema
 from cogitomedica.openapi_schemas import (
@@ -14,7 +15,6 @@ from cogitomedica.openapi_schemas import (
     get_request_body_schema_for,
     pydantic_to_openapi_schema,
 )
-from pydantic import BaseModel, Field
 
 
 class _DummyNested(BaseModel):

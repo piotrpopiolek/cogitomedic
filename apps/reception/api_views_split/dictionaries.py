@@ -14,10 +14,11 @@ from apps.core.api_utils import (
     json_domain_error,
     json_error,
     parse_bool_query,
-    resolve_list_limit_query,
     read_json_body,
     require_auth,
     require_user_role,
+    resolve_list_limit_query,
+    staff_user,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import (
@@ -94,7 +95,7 @@ def clinic_sites_view(request: HttpRequest) -> JsonResponse:
         )
 
     if request.method == "POST":
-        if not request.user.is_admin_role:
+        if not staff_user(request).is_admin_role:
             return json_error("other.api.only_admin_create_clinic_site", status=403)
         try:
             body = CreateClinicSiteRequest.model_validate(read_json_body(request))
@@ -142,7 +143,7 @@ def clinic_site_detail_view(request: HttpRequest, clinic_site_id: UUID) -> JsonR
         return json_error("other.api.clinic_site_not_in_scope", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_clinic_site(site))
-    if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
+    if request.method in ("PATCH", "DELETE") and not staff_user(request).is_admin_role:
         return json_error("other.api.only_admin_update_clinic_site", status=403)
     if request.method == "DELETE":
         try:
@@ -203,7 +204,10 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(clinic_site_id__in=scope_ids)
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:
-            qs = qs.filter(clinic_site_id=clinic_site_id)
+            try:
+                qs = qs.filter(clinic_site_id=UUID(clinic_site_id))
+            except ValueError:
+                qs = qs.none()
         is_active = parse_bool_query(request.GET.get("is_active"))
         if request.GET.get("is_active") is not None and is_active is None:
             return json_error("other.api.invalid_is_active", status=400)
@@ -220,7 +224,7 @@ def consulting_rooms_view(request: HttpRequest) -> JsonResponse:
         )
 
     if request.method == "POST":
-        if not request.user.is_admin_role:
+        if not staff_user(request).is_admin_role:
             return json_error("other.api.only_admin_create_consulting_room", status=403)
         try:
             body = CreateConsultingRoomRequest.model_validate(read_json_body(request))
@@ -268,7 +272,7 @@ def consulting_room_detail_view(
         return json_error("other.api.consulting_room_not_in_scope", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_consulting_room(room))
-    if request.method in ("PATCH", "DELETE") and not request.user.is_admin_role:
+    if request.method in ("PATCH", "DELETE") and not staff_user(request).is_admin_role:
         return json_error("other.api.only_admin_update_consulting_room", status=403)
     if request.method == "DELETE":
         try:

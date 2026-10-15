@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.test import TestCase
 
 from apps.telederm.engine import (
@@ -15,6 +17,8 @@ from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 
 
 class TeledermEngineTests(TestCase):
+    catalog: Any
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.catalog = load_catalog()

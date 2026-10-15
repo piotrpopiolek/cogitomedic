@@ -35,7 +35,7 @@ shell:
 check-translations:
 	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness"
 
-# CI / bramka: migracje + tłumaczenia + ten sam pytest co `make pytest` (cały zbiór z pytest.ini).
+# CI / bramka: migracje + tłumaczenia + ten sam pytest co `make pytest` (cały zbiór z pyproject.toml).
 test-ci:
 	docker compose run --rm web sh -c "python manage.py migrate && python manage.py load_default_translations && python manage.py check_translations_completeness && $(DOCKER_PYTEST)"
 

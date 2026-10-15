@@ -3,19 +3,19 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from opentelemetry import trace
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.db.utils import OperationalError
 from django.utils import timezone
+from opentelemetry import trace
 
 from apps.core.domain_messages import domain_message
-from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.core.exceptions import DomainError
+from apps.core.retention_payloads import RETENTION_CLEARED_MEDICAL_PAYLOAD
 from apps.integrations.hidrive.client import (
     HiDriveAdapterProtocol,
     get_hidrive_adapter,
@@ -24,11 +24,6 @@ from apps.integrations.sms.client import (
     SmsAdapterProtocol,
     get_sms_adapter,
     get_sms_patient_results_text,
-)
-from apps.medical.pdf_builder import (
-    AllExternalPdfDownloadsFailed,
-    generate_befund_pdf,
-    generate_external_upload_pdf,
 )
 from apps.medical.external_pdf_service import (
     hidrive_incoming_dir,
@@ -41,6 +36,11 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
     PdfStatus,
+)
+from apps.medical.pdf_builder import (
+    AllExternalPdfDownloadsFailed,
+    generate_befund_pdf,
+    generate_external_upload_pdf,
 )
 from apps.operations.models import AuditEvent
 from apps.operations.prom_metrics import record_outbox_execution

@@ -26,8 +26,8 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -164,7 +164,7 @@ def _write_hidrive_mock_state(
     if HIDRIVE_MOCK_STATE.is_file():
         try:
             existing = json.loads(HIDRIVE_MOCK_STATE.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError, ValueError:
             existing = {}
     listings: dict = {}
     files_b64: dict = {}
@@ -1237,11 +1237,11 @@ def _load_ctx(sid: str, ctx_dir: Path) -> dict | None:
 
 
 def _record_sc007(base: str, slow_mo: int, width: int, height: int) -> Path | None:
-    from scripts.record_import_troubleshooting_video import (
-        record_import_troubleshooting_video,
-    )
     from scripts.manual_demo.seed_import_troubleshooting import (
         seed_import_troubleshooting_demo,
+    )
+    from scripts.record_import_troubleshooting_video import (
+        record_import_troubleshooting_video,
     )
 
     setup_django()

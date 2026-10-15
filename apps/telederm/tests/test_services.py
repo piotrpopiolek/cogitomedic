@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from django.conf import settings
@@ -32,6 +33,10 @@ from apps.telederm.tests.smoke_answers import SMOKE_TELEDERM_ANSWERS
 
 
 class TeledermServicesTests(TestCase):
+    patient: Any
+    queue: Any
+    user: Any
+
     @classmethod
     def setUpTestData(cls) -> None:
         from apps.users.models import StaffUser

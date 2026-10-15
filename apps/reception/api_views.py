@@ -3,16 +3,16 @@ from apps.reception.api_views_split.devices import (
     tablet_device_heartbeat_view,
     tablet_devices_view,
 )
-from apps.reception.api_views_split.imports import (
-    import_batch_detail_view,
-    import_batch_errors_view,
-    import_batches_view,
-)
 from apps.reception.api_views_split.dictionaries import (
     clinic_site_detail_view,
     clinic_sites_view,
     consulting_room_detail_view,
     consulting_rooms_view,
+)
+from apps.reception.api_views_split.imports import (
+    import_batch_detail_view,
+    import_batch_errors_view,
+    import_batches_view,
 )
 from apps.reception.api_views_split.patients import (
     patient_anonymize_view,

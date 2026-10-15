@@ -9,18 +9,20 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.dateparse import parse_datetime
 from pydantic import ValidationError
 
-from apps.operations.services import REF_KEY
 from apps.core.api_utils import (
     json_error,
     json_pydantic_query_validation_error,
     require_auth,
     require_user_role,
+    staff_user,
+    staff_user_id,
     validate_get_query_params,
 )
 from apps.operations.api_schemas import AuditEventsListQueryParams
 from apps.operations.metrics import build_metrics_payload
-from apps.operations.observability_auth import bearer_authorized
 from apps.operations.models import AuditEvent
+from apps.operations.observability_auth import bearer_authorized
+from apps.operations.services import REF_KEY
 
 
 def _ref(event: AuditEvent, key: str) -> str | None:
@@ -77,13 +79,13 @@ def audit_events_view(request: HttpRequest) -> JsonResponse:
 
     qs = AuditEvent.objects.all().order_by("-event_time")
 
-    if request.user.is_doctor:
+    if staff_user(request).is_doctor:
         # DOCTOR: only events where metadata.assigned_doctor_id == current_user.id
         # OR actor_user_id == current_user.id
         qs = qs.filter(
-            Q(metadata__assigned_doctor_id=str(request.user.id))
-            | Q(metadata__actor_user_id=str(request.user.id))
-            | Q(actor_user_id=request.user.id)
+            Q(metadata__assigned_doctor_id=str(staff_user_id(request)))
+            | Q(metadata__actor_user_id=str(staff_user_id(request)))
+            | Q(actor_user_id=staff_user_id(request))
         )
 
     if query.event_type:

@@ -13,7 +13,6 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.operations.models import AuditEvent
 from apps.intake.models import (
     IntakeDocumentVersion,
     IntakeOutboxEvent,
@@ -22,6 +21,7 @@ from apps.intake.models import (
     IntakePdfStatus,
     PatientIntakeForm,
 )
+from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -288,6 +288,7 @@ class IntakeOutboxOperationsApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("limit"), 3)
         self.assertIn("client_ip", ev.metadata)
 
@@ -613,8 +614,8 @@ class IntakeFormDetailViewTests(TestCase):
 
     @patch("apps.intake.api_views.save_intake_body_map")
     def test_patch_state_error_returns_409(self, mock_save) -> None:
-        from apps.core.exceptions import StateTransitionError
         from apps.core.domain_messages import domain_message
+        from apps.core.exceptions import StateTransitionError
 
         mock_save.side_effect = StateTransitionError(
             domain_message("other.domain.invalid_shift_code", value="x"),
@@ -766,8 +767,8 @@ class IntakeFormConsentsViewTests(TestCase):
 
     @patch("apps.intake.api_views.save_intake_consents")
     def test_state_error_returns_409(self, mock_save) -> None:
-        from apps.core.exceptions import StateTransitionError
         from apps.core.domain_messages import domain_message
+        from apps.core.exceptions import StateTransitionError
 
         mock_save.side_effect = StateTransitionError(
             domain_message("other.domain.invalid_shift_code", value="x"),

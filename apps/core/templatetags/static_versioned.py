@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from django import template
 from django.contrib.staticfiles import finders
@@ -10,7 +9,7 @@ from django.templatetags.static import static
 register = template.Library()
 
 
-def _resolve_mtime(relative_path: str) -> Optional[int]:
+def _resolve_mtime(relative_path: str) -> int | None:
     """Return integer mtime for a static asset, or None if the file is not found.
 
     Uses Django's staticfiles finders so it works in both DEBUG (per-app static

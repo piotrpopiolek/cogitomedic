@@ -6,6 +6,7 @@ import json
 import tempfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -26,8 +27,6 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
-from apps.medical.tests.test_api import ExternalUploadApiTests, _minimal_pdf_bytes
-from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.medical.services import (
     _hidrive_path_is_external_upload_prefix,
     _sanitize_external_upload_filename,
@@ -37,6 +36,8 @@ from apps.medical.services import (
     start_external_upload_revision,
     upload_external_pdf_to_incoming,
 )
+from apps.medical.tests.test_api import ExternalUploadApiTests, _minimal_pdf_bytes
+from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 from apps.outbox.models import OutboxEvent, OutboxStatus
 from apps.reception.models import QueueEntry
 from apps.users.models import StaffUser
@@ -215,9 +216,10 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
         self.assertEqual(r.status_code, 403)
 
     def _ensure_intake_submitted(self, entry: QueueEntry) -> None:
+        from datetime import timedelta
+
         from apps.intake.models import IntakeStatus, PatientIntakeForm
         from apps.reception.models import PatientFormSession
-        from datetime import timedelta
 
         session = PatientFormSession.objects.create(
             queue_entry=entry,
@@ -591,6 +593,10 @@ class ExternalUploadApiDiffCoverageTests(ExternalUploadApiTests):
 class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
     """Unit tests for uncovered ``apps.medical.services`` diff lines."""
 
+    intake: Any
+    queue_entry: Any
+    reception: Any
+
     @classmethod
     def setUpTestData(cls) -> None:
         super().setUpTestData()
@@ -628,7 +634,7 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
                 )
         self.assertIn(
             "external_upload_multiple_medical_documents_for_queue_entry",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     @patch("apps.medical.services.get_hidrive_adapter")
@@ -662,7 +668,7 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
                 published_by_user_id=uuid4(),
                 publish_locale="de-DE",
             )
-        self.assertIn("staff_user_not_found", ctx.exception.api_message_key)
+        self.assertIn("staff_user_not_found", ctx.exception.api_message_key or "")
 
     @patch("apps.medical.services.get_hidrive_adapter")
     def test_start_revision_requires_published_document(
@@ -680,7 +686,7 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
             )
         self.assertIn(
             "external_upload_revision_requires_published",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_upload_unknown_actor_raises_staff_not_found(self) -> None:
@@ -696,7 +702,7 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
                 ),
                 actor_user_id=uuid4(),
             )
-        self.assertIn("staff_user_not_found", ctx.exception.api_message_key)
+        self.assertIn("staff_user_not_found", ctx.exception.api_message_key or "")
 
     def test_create_external_upload_bootstraps_draft_when_document_has_no_versions(
         self,
@@ -804,5 +810,5 @@ class ExternalUploadServiceDiffCoverageTests(ServicesCoverageBase):
             )
         self.assertIn(
             "external_upload_invalid_or_empty_pdf",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )

@@ -46,7 +46,7 @@ def _digits_only(value: str) -> str:
 def _region_from_parsed_digits(digits: str) -> str | None:
     if not digits:
         return None
-    for prefix, region in _PREFIX_TABLE:
+    for prefix, _region in _PREFIX_TABLE:
         if not digits.startswith(prefix):
             continue
         try:

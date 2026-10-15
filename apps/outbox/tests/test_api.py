@@ -8,16 +8,16 @@ from uuid import uuid4
 from django.test import Client, TestCase
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
     save_draft_document_version,
 )
+from apps.operations.models import AuditEvent
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.outbox.services import process_outbox_events
-from apps.core.api_utils import assign_group_to_test_user
-from apps.operations.models import AuditEvent
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -215,6 +215,7 @@ class OutboxApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ret_ev)
+        assert ret_ev is not None
         self.assertTrue(ret_ev.metadata.get("dry_run"))
         self.assertEqual(ret_ev.metadata.get("older_than_days"), 30)
 

@@ -2,17 +2,19 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from io import BytesIO
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from pypdf import PdfWriter
-from unittest.mock import MagicMock, patch
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
-from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.integrations.hidrive import client as hidrive_client
+from apps.medical.edit_session import start_doctor_edit_session
 from apps.medical.models import (
     ExternalPdfAttachment,
     ExternalPdfStatus,
@@ -20,19 +22,17 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     PdfStatus,
 )
-from apps.medical.edit_session import start_doctor_edit_session
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
     save_draft_document_version,
 )
 from apps.operations.models import AuditEvent
+from apps.operations.prom_metrics import build_metrics_payload
+from apps.outbox import services as outbox_services
 from apps.outbox.hidrive_paths import build_befund_hidrive_path
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
-from apps.outbox import services as outbox_services
 from apps.outbox.services import process_outbox_events
-from apps.operations.prom_metrics import build_metrics_payload
-from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,

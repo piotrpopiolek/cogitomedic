@@ -1,7 +1,7 @@
 """
 Root pytest conftest.
 
-Repository runs: staff-user fixtures; Django via pytest-django (``pytest.ini``).
+Repository runs: staff-user fixtures; Django via pytest-django (``pyproject.toml``).
 
 When copied to ``mutants/conftest.py`` by mutmut (``also_copy``), pins imports to the
 mutant workspace and bootstraps Django idempotently across repeated ``pytest.main()``
@@ -37,8 +37,10 @@ def _bootstrap_mutmut_workspace() -> None:
 
     django.setup()
 
-    from django.test.utils import _TestState  # noqa: E402
-    from django.test.utils import setup_test_environment  # noqa: E402
+    from django.test.utils import (
+        _TestState,  # noqa: E402
+        setup_test_environment,  # noqa: E402
+    )
 
     if not hasattr(_TestState, "saved_data"):
         setup_test_environment()

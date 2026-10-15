@@ -5,7 +5,8 @@ from __future__ import annotations
 import inspect
 import threading
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
+from typing import Any
 from unittest.mock import patch
 
 from django.db import connection
@@ -14,7 +15,11 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.edit_session import DoctorEditSessionResult, start_doctor_edit_session
+from apps.medical.edit_session import (
+    DoctorEditSessionResult,
+    EditSessionResponseError,
+    start_doctor_edit_session,
+)
 from apps.medical.models import (
     DocVersionStatus,
     MedicalDocStatus,
@@ -43,10 +48,11 @@ from apps.reception.models import (
     QueueStatus,
 )
 from apps.users.models import StaffUser
-from datetime import date
 
 
 class EditSessionAuditMetricsTests(ServicesCoverageBase):
+    doctor: Any
+
     def _payload(self, **extra) -> dict:
         body = {
             "schema_version": 1,
@@ -124,7 +130,9 @@ class EditSessionAuditMetricsTests(ServicesCoverageBase):
             medical_document_id=medical.id, event_type="DOCUMENT_LOCK_ACQUIRED"
         )
         self.assertEqual(acquired.count(), 1)
-        meta = acquired.first().metadata or {}
+        acquired_event = acquired.first()
+        assert acquired_event is not None
+        meta = acquired_event.metadata or {}
         self.assertEqual(meta.get("mode"), "acquired")
         self.assertEqual(meta.get("draft_revision"), 0)
         self.assertNotIn("edit_session_token", meta)
@@ -155,7 +163,7 @@ class EditSessionAuditMetricsTests(ServicesCoverageBase):
         audits_before_conflict = AuditEvent.objects.filter(
             medical_document_id=medical.id
         ).count()
-        with self.assertRaises(Exception):
+        with self.assertRaises(EditSessionResponseError):
             mutate_doctor_save_draft(
                 medical_document_id=medical.id,
                 user=self.doctor,
@@ -179,7 +187,9 @@ class EditSessionAuditMetricsTests(ServicesCoverageBase):
         effective, name, locked_at = get_document_lock_state(doc)
         self.assertTrue(effective)
         self.assertIsNotNone(name)
+        assert name is not None
         self.assertIsNotNone(locked_at)
+        assert locked_at is not None
         self.assertEqual(
             AuditEvent.objects.filter(medical_document_id=doc.id).count(), before
         )

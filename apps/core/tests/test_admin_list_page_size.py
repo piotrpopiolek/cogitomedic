@@ -6,8 +6,8 @@ from django.contrib import admin
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
-from apps.core.api_utils import assign_group_to_test_user
 from apps.core.admin_list_page_size import resolve_admin_list_page_size
+from apps.core.api_utils import assign_group_to_test_user
 from apps.core.constants import DEFAULT_LIST_LIMIT
 from apps.operations.admin import AuditEventAdmin
 from apps.operations.models import AuditEvent

@@ -20,43 +20,37 @@ from apps.core.api_utils import (
     read_json_body,
     require_auth,
     require_user_role,
+    staff_user,
+    staff_user_id,
     validate_get_query_params,
 )
 from apps.core.domain_messages import domain_message
-from apps.core.http_utils import get_client_ip
 from apps.core.exceptions import (
     DomainError,
     IdempotencyConflictError,
     InvalidRequestBodyEncoding,
 )
+from apps.core.http_utils import get_client_ip
+from apps.core.translation_service import resolve_other_message
+from apps.medical import external_pdf_service as external_pdf_svc
+from apps.medical import services as medical_services
 from apps.medical.api_schemas import (
-    EditSessionRequest,
     CreateMedicalDocumentRequest,
     CreateMedicalDocumentWithoutIntakeRequest,
     DiscardRevisionRequest,
-    PaperIntakeAuthorizationRequest,
     DoctorTemplateCreateRequest,
     DoctorTemplateListQuery,
     DoctorTemplateUpdateRequest,
-    PublishMedicalDocumentRequest,
+    EditSessionRequest,
     ExternalUploadPublishRequest,
     ExternalUploadRevisionStartRequest,
     ExternalUploadSelectAttachmentRequest,
+    MedicalDocumentAuditTrailQueryParams,
+    PaperIntakeAuthorizationRequest,
+    PublishMedicalDocumentRequest,
     RetryProcessingRequest,
     SaveDraftMedicalDocumentRequest,
-    MedicalDocumentAuditTrailQueryParams,
 )
-from apps.medical import external_pdf_service as external_pdf_svc
-from apps.medical.external_pdf_service import (
-    ExternalPdfCorruptError,
-    download_external_pdf,
-    reject_external_pdf,
-)
-from apps.medical.pdf_builder import (
-    build_merged_preview_pdf_bytes,
-)
-from apps.medical.medical_payload_schemas import validate_medical_payload_v1
-from apps.core.translation_service import resolve_other_message
 from apps.medical.edit_session import (
     EditSessionResponseError,
     doctor_befund_edit_lock_applies,
@@ -65,13 +59,12 @@ from apps.medical.edit_session import (
     is_doctor_befund_source_type,
     start_doctor_edit_session,
 )
-from apps.medical.write_gate import (
-    assert_no_revision_in_progress_for_revoke,
-    mark_doctor_draft_previewed,
-    mutate_doctor_discard_revision,
-    mutate_doctor_publish,
-    mutate_doctor_save_draft,
+from apps.medical.external_pdf_service import (
+    ExternalPdfCorruptError,
+    download_external_pdf,
+    reject_external_pdf,
 )
+from apps.medical.medical_payload_schemas import validate_medical_payload_v1
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -81,8 +74,9 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
-from apps.reception.models import QueueEntry
-from apps.medical import services as medical_services
+from apps.medical.pdf_builder import (
+    build_merged_preview_pdf_bytes,
+)
 from apps.medical.services import (
     DoctorAccessAuditContext,
     assigned_doctor_audit_metadata,
@@ -95,9 +89,9 @@ from apps.medical.services import (
     list_doctor_work_queue,
     parse_doctor_work_queue_list_params,
     publish_external_upload_version,
+    retry_latest_document_processing,
     revoke_document_version,
     revoke_paper_intake_authorization,
-    retry_latest_document_processing,
     select_external_upload_attachment_for_draft,
     start_external_upload_revision,
 )
@@ -110,9 +104,17 @@ from apps.medical.template_services import (
     list_templates,
     update_template,
 )
+from apps.medical.write_gate import (
+    assert_no_revision_in_progress_for_revoke,
+    mark_doctor_draft_previewed,
+    mutate_doctor_discard_revision,
+    mutate_doctor_publish,
+    mutate_doctor_save_draft,
+)
 from apps.operations.api_views import _serialize_audit_event
 from apps.operations.models import AuditEvent
 from apps.operations.services import create_audit_event
+from apps.reception.models import QueueEntry
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +143,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
         )
         create_audit_event(
             event_type="MEDICAL_DOCUMENTS_LISTED",
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
             metadata={
                 "client_ip": get_client_ip(request),
                 "page": list_params["page"],
@@ -181,7 +183,7 @@ def medical_documents_view(request: HttpRequest) -> JsonResponse:
             document = create_or_get_medical_document(
                 queue_entry_id=body.queue_entry_id,
                 intake_form_id=body.intake_form_id,
-                created_by_user_id=request.user.id,
+                created_by_user_id=staff_user_id(request),
             )
         except ObjectDoesNotExist:
             return json_error("other.api.queue_entry_or_intake_not_found", status=404)
@@ -227,7 +229,7 @@ def medical_documents_no_intake_view(request: HttpRequest) -> JsonResponse:
         )
         document = create_medical_document_without_intake(
             queue_entry_id=body.queue_entry_id,
-            created_by_user_id=request.user.id,
+            created_by_user_id=staff_user_id(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
@@ -353,7 +355,7 @@ def medical_external_upload_upload_view(request: HttpRequest) -> JsonResponse:
             medical_services.create_external_upload_pdf_and_bind_draft(
                 queue_entry_id=queue_entry_id,
                 uploaded_file=uploaded_file,
-                actor_user_id=request.user.id,
+                actor_user_id=staff_user_id(request),
                 hidrive_adapter=medical_services.get_hidrive_adapter(),
             )
         )
@@ -439,7 +441,7 @@ def medical_external_upload_select_attachment_view(
         draft_version = select_external_upload_attachment_for_draft(
             medical_document_id=medical_document_id,
             attachment_id=body.attachment_id,
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
         )
     except DomainError as exc:
         return json_domain_error(exc, status=_external_upload_error_status(exc))
@@ -554,7 +556,7 @@ def medical_external_upload_preview_pdf_view(
 
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
@@ -610,7 +612,7 @@ def medical_external_upload_publish_view(
         version = publish_external_upload_version(
             medical_document_id=medical_document_id,
             publish_request_id=body.publish_request_id,
-            published_by_user_id=request.user.id,
+            published_by_user_id=staff_user_id(request),
             publish_locale=body.publish_locale,
             resend_sms=body.resend_sms,
         )
@@ -664,7 +666,7 @@ def medical_external_upload_revision_start_view(
             return err
         created = start_external_upload_revision(
             medical_document_id=medical_document_id,
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.medical_document_not_found", status=404)
@@ -714,7 +716,7 @@ def queue_entry_paper_intake_authorization_view(
         try:
             authorization = authorize_paper_intake(
                 queue_entry_id=queue_entry_id,
-                authorized_by_user_id=request.user.id,
+                authorized_by_user_id=staff_user_id(request),
                 reason=body.reason,
             )
         except DomainError as exc:
@@ -731,7 +733,7 @@ def queue_entry_paper_intake_authorization_view(
     try:
         revoke_paper_intake_authorization(
             queue_entry_id=queue_entry_id,
-            revoked_by_user_id=request.user.id,
+            revoked_by_user_id=staff_user_id(request),
             reason=body.reason,
         )
     except DomainError as exc:
@@ -771,7 +773,7 @@ def medical_document_detail_view(
     )
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VIEWED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
@@ -942,7 +944,7 @@ def medical_document_preview_pdf_view(
                 edit_session_token=UUID(str(token_raw)),
                 expected_draft_revision=int(rev_raw),
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return json_error("other.api.invalid_json_payload", status=400)
         except EditSessionResponseError as exc:
             return _json_edit_session_error(request, exc)
@@ -964,7 +966,7 @@ def medical_document_preview_pdf_view(
 
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_PDF_PREVIEWED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
@@ -1041,7 +1043,7 @@ def medical_document_versions_view(
     ]
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VERSIONS_LISTED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
@@ -1359,7 +1361,7 @@ def medical_document_version_detail_view(
     mdoc = version.medical_document
     create_audit_event(
         event_type="MEDICAL_DOCUMENT_VERSION_VIEWED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=mdoc.queue_entry.patient_id,
         medical_document_id=mdoc.id,
         context_clinic_site_id=mdoc.queue_entry.daily_queue.clinic_site_id,
@@ -1434,7 +1436,7 @@ def medical_document_retry_processing_view(
         )
         retried = retry_latest_document_processing(
             medical_document_id=medical_document_id,
-            actor=request.user,
+            actor=staff_user(request),
             reason=body.reason,
         )
     except ObjectDoesNotExist:
@@ -1475,7 +1477,7 @@ def medical_document_revoke_view(
         assert_no_revision_in_progress_for_revoke(doc)
         version = revoke_document_version(
             medical_document_id=medical_document_id,
-            revoked_by_user_id=request.user.id,
+            revoked_by_user_id=staff_user_id(request),
         )
     except EditSessionResponseError as exc:
         return _json_edit_session_error(request, exc)
@@ -1519,7 +1521,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
         try:
             templates = list_templates(
                 filters=TemplateListFilters(
-                    actor_user_id=request.user.id,
+                    actor_user_id=staff_user_id(request),
                     template_locale=query.template_locale,
                     include_inactive=query.include_inactive,
                 )
@@ -1569,7 +1571,7 @@ def doctor_text_templates_view(request: HttpRequest) -> JsonResponse:
 
         try:
             template = create_template(
-                actor_user_id=request.user.id,
+                actor_user_id=staff_user_id(request),
                 name=body.name,
                 template_locale=body.template_locale,
                 template_body=body.template_body,
@@ -1618,7 +1620,7 @@ def doctor_text_template_detail_view(
     if request.method == "GET":
         try:
             template = get_template(
-                template_id=template_id, actor_user_id=request.user.id
+                template_id=template_id, actor_user_id=staff_user_id(request)
             )
         except TemplateNotFoundError:
             return json_error("other.api.template_not_found", status=404)
@@ -1655,7 +1657,7 @@ def doctor_text_template_detail_view(
     try:
         template = update_template(
             template_id=template_id,
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
             name=body.name,
             template_locale=body.template_locale,
             template_body=body.template_body,
@@ -1885,7 +1887,7 @@ def medical_document_external_pdf_reject_view(
         return json_error("other.api.external_pdf_reject_failed", status=502)
     create_audit_event(
         event_type="EXTERNAL_PDF_REJECTED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=doc.queue_entry.patient_id,
         medical_document_id=doc.id,
         context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,

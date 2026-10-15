@@ -6,6 +6,7 @@ import uuid
 import bleach
 from django.core.exceptions import ValidationError
 from django.db import models
+
 from apps.core.translation_service import db_gettext_lazy
 from apps.users.models import StaffUserPreferredLocale
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tempfile
-from datetime import date, datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
@@ -11,14 +11,13 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
-
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
-from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.integrations.hidrive import client as hidrive_client
 from apps.medical.external_pdf_service import ExternalPdfCorruptError
 from apps.medical.models import (
     DocVersionStatus,
@@ -291,7 +290,7 @@ class GenerateBefundPdfExternalTests(TestCase):
     def test_publication_date_display_for_draft_uses_render_day_not_dash(
         self, now_mock: MagicMock
     ) -> None:
-        now_mock.return_value = datetime(2026, 4, 13, 10, 0, 0, tzinfo=dt_timezone.utc)
+        now_mock.return_value = datetime(2026, 4, 13, 10, 0, 0, tzinfo=UTC)
         MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
             last_published_at=None
         )
@@ -599,8 +598,9 @@ class GenerateExternalUploadPdfTests(GenerateBefundPdfExternalTests):
         )
 
     def test_external_upload_metadata_helper_raises_on_invalid_pdf(self) -> None:
-        from apps.medical import pdf_builder as pb
         from pypdf.errors import PdfReadError
+
+        from apps.medical import pdf_builder as pb
 
         with self.assertRaises(PdfReadError):
             pb._external_upload_pdf_bytes_with_document_metadata(

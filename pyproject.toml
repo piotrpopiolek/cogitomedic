@@ -1,14 +1,19 @@
 [tool.ruff]
 line-length = 88
+target-version = "py314"
 exclude = [
     "*/migrations/*",
 ]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*.py" = ["E402"]
 
 [tool.black]
 line-length = 88
+target-version = ["py314"]
 exclude = '''
 /(
     migrations
@@ -16,13 +21,19 @@ exclude = '''
 '''
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
+plugins = ["mypy_django_plugin.main"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 exclude = [
     "migrations/",
     "scripts/",
+    "mutants/",
+    "tmp/",
 ]
+
+[tool.django-stubs]
+django_settings_module = "cogitomedica.settings"
 
 [tool.coverage.run]
 branch = true
@@ -41,6 +52,20 @@ omit = [
 fail_under = 80
 show_missing = true
 skip_covered = true
+exclude_also = [
+    "if __name__ == .__main__.:",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "cogitomedica.settings"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+norecursedirs = ["mutants", ".git", "__pycache__", "*.egg", ".eggs", "dist", "build"]
+markers = [
+    "e2e: Playwright browser E2E (requires E2E_BROWSER and installed browsers)",
+]
 
 [tool.mutmut]
 source_paths = ["apps", "cogitomedica"]
@@ -56,4 +81,3 @@ pytest_add_cli_args = [
 ]
 also_copy = ["conftest.py", "mutmut_pytest.ini"]
 max_stack_depth = 50
-

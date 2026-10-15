@@ -27,6 +27,7 @@ from apps.reception.models import (
 from apps.reception.process_types import ProcessType
 from apps.reception.services import QUEUE_ENTRY_CANCELLED_MESSAGE_KEY
 from apps.users.models import StaffUser
+from cogitomedica.tests.redirects import redirect_url
 
 
 class TabletViewsSmokeTests(TestCase):
@@ -108,7 +109,7 @@ class TabletViewsSmokeTests(TestCase):
             {"username": "tablet-smoke", "password": "x"},
         )
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/tablet/", resp.url)
+        self.assertIn("/tablet/", redirect_url(resp))
 
     def test_login_post_ignores_unsafe_next_query_param(self):
         """``next`` is read from the query string; external URLs must not win redirects."""
@@ -118,7 +119,8 @@ class TabletViewsSmokeTests(TestCase):
         )
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(
-            resp.url.endswith("/tablet/") or resp.url.rstrip("/").endswith("/tablet")
+            redirect_url(resp).endswith("/tablet/")
+            or redirect_url(resp).rstrip("/").endswith("/tablet")
         )
 
     def test_login_post_doctor_stays_on_login(self):
@@ -133,7 +135,7 @@ class TabletViewsSmokeTests(TestCase):
     def test_home_anonymous_redirects_to_login(self):
         resp = self.client.get("/tablet/")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+        self.assertIn("login", redirect_url(resp))
 
     # -- home (authenticated) -----------------------------------
 
@@ -148,7 +150,7 @@ class TabletViewsSmokeTests(TestCase):
         self._login_tablet()
         resp = self.client.get("/tablet/logout/")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+        self.assertIn("login", redirect_url(resp))
 
     # -- queue entries (nonexistent) ----------------------------
 
@@ -319,7 +321,9 @@ class TabletViewsScopeAndEdgeTests(TestCase):
         self._login_tablet()
         resp = self.client.get("/tablet/login/")
         self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp.url.endswith("/tablet/") or "/tablet/" in resp.url)
+        self.assertTrue(
+            redirect_url(resp).endswith("/tablet/") or "/tablet/" in redirect_url(resp)
+        )
 
     def test_login_post_with_android_id_marks_device_unassigned_home(self) -> None:
         """Device auto-registered without clinic_site → empty queue list + tablet_unassigned."""

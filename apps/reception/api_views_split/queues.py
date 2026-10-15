@@ -15,10 +15,12 @@ from apps.core.api_utils import (
     json_domain_error,
     json_error,
     json_pydantic_validation_error,
-    resolve_list_limit_query,
     read_json_body,
     require_auth,
     require_user_role,
+    resolve_list_limit_query,
+    staff_user,
+    staff_user_id,
 )
 from apps.core.exceptions import (
     DomainError,
@@ -113,7 +115,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             "-queue_date", "clinic_site_id", "consulting_room_id"
         )
         queue_date = request.GET.get("queue_date")
-        is_tablet = request.user.is_tablet
+        is_tablet = staff_user(request).is_tablet
         if is_tablet:
             today = timezone.now().date()
             if queue_date and queue_date != today.isoformat():
@@ -127,17 +129,23 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
             if not scope_ids:
                 return JsonResponse({"items": []})
             qs = qs.filter(clinic_site_id__in=scope_ids)
-        if request.user.is_doctor:
-            qs = qs.filter(assigned_doctor_id=request.user.id)
+        if staff_user(request).is_doctor:
+            qs = qs.filter(assigned_doctor_id=staff_user_id(request))
 
         if queue_date:
             qs = qs.filter(queue_date=queue_date)
         clinic_site_id = request.GET.get("clinic_site_id")
         if clinic_site_id:
-            qs = qs.filter(clinic_site_id=clinic_site_id)
+            try:
+                qs = qs.filter(clinic_site_id=UUID(clinic_site_id))
+            except ValueError:
+                qs = qs.none()
         consulting_room_id = request.GET.get("consulting_room_id")
         if consulting_room_id:
-            qs = qs.filter(consulting_room_id=consulting_room_id)
+            try:
+                qs = qs.filter(consulting_room_id=UUID(consulting_room_id))
+            except ValueError:
+                qs = qs.none()
         shift_code = request.GET.get("shift_code")
         if shift_code:
             qs = qs.filter(shift_code=shift_code)
@@ -170,7 +178,7 @@ def daily_queues_view(request: HttpRequest) -> JsonResponse:
                 consulting_room_id=body.consulting_room_id,
                 assigned_doctor_id=body.assigned_doctor_id,
                 shift_code=body.shift_code,
-                created_by_user_id=request.user.id,
+                created_by_user_id=staff_user_id(request),
                 source=body.source,
             )
         except ObjectDoesNotExist:
@@ -203,11 +211,13 @@ def daily_queue_detail_view(request: HttpRequest, daily_queue_id: UUID) -> JsonR
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
         return json_error("other.api.daily_queue_not_in_scope", status=403)
-    if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
+    if staff_user(request).is_doctor and queue.assigned_doctor_id != staff_user_id(
+        request
+    ):
         return json_error("other.api.doctor_own_assigned_queues", status=403)
     if request.method == "GET":
         return JsonResponse(_serialize_queue(queue))
-    if request.user.is_doctor:
+    if staff_user(request).is_doctor:
         return json_error("other.api.only_reception_admin_update_queue", status=403)
     try:
         raw = read_json_body(request)
@@ -257,10 +267,12 @@ def daily_queue_entries_view(
         scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and queue.clinic_site_id not in scope_ids:
         return json_error("other.api.daily_queue_not_in_scope", status=403)
-    if request.user.is_tablet and queue.queue_date != timezone.now().date():
+    if staff_user(request).is_tablet and queue.queue_date != timezone.now().date():
         return json_error("other.api.tablet_entries_today_only", status=403)
 
-    if request.user.is_doctor and queue.assigned_doctor_id != request.user.id:
+    if staff_user(request).is_doctor and queue.assigned_doctor_id != staff_user_id(
+        request
+    ):
         return json_error("other.api.doctor_own_queues", status=403)
 
     if request.method == "GET":
@@ -295,7 +307,7 @@ def daily_queue_entries_view(
         entry = create_queue_entry(
             daily_queue_id=daily_queue_id,
             patient_id=body.patient_id,
-            created_by_user_id=request.user.id,
+            created_by_user_id=staff_user_id(request),
             appointment_time=body.appointment_time,
             visit_external_id=body.visit_external_id,
             notes=body.notes,
@@ -333,10 +345,9 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
     scope_ids = get_scoped_clinic_site_ids(request.user)
     if scope_ids is not None and entry.daily_queue.clinic_site_id not in scope_ids:
         return json_error("other.api.queue_entry_not_in_scope", status=403)
-    if (
-        request.user.is_doctor
-        and entry.daily_queue.assigned_doctor_id != request.user.id
-    ):
+    if staff_user(
+        request
+    ).is_doctor and entry.daily_queue.assigned_doctor_id != staff_user_id(request):
         return json_error("other.api.doctor_entries_own_queues", status=403)
 
     if request.method == "GET":
@@ -346,7 +357,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
             entry = update_queue_entry(
                 queue_entry_id,
                 entry_status="CANCELLED",
-                actor_user_id=request.user.id,
+                actor_user_id=staff_user_id(request),
             )
         except ObjectDoesNotExist:
             return json_error("other.api.queue_entry_not_found", status=404)
@@ -369,7 +380,7 @@ def queue_entry_detail_view(request: HttpRequest, queue_entry_id: UUID) -> JsonR
             entry_status=body.entry_status,
             notes=body.notes,
             ausfallhonorar=body.ausfallhonorar,
-            actor_user_id=request.user.id,
+            actor_user_id=staff_user_id(request),
         )
     except ObjectDoesNotExist:
         return json_error("other.api.queue_entry_not_found", status=404)
@@ -415,7 +426,7 @@ def queue_entry_sessions_view(
     try:
         issued = issue_tablet_session_latest_wins(
             queue_entry_id=queue_entry_id,
-            created_by_user_id=request.user.id,
+            created_by_user_id=staff_user_id(request),
             form_locale=body.form_locale,
             expires_in_minutes=body.expires_in_minutes,
             tablet_device_id=tablet_device_id,

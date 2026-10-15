@@ -7,12 +7,12 @@ from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical.constants import PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
 from apps.medical.models import (
     MedicalDocument,
     MedicalDocumentSourceType,
     PaperIntakeAuthorization,
 )
-from apps.medical.constants import PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
 from apps.medical.paper_intake_policy import paper_intake_authorize_eligibility
 from apps.reception.models import (
     ClinicSite,

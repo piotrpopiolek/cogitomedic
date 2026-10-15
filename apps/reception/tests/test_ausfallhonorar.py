@@ -9,6 +9,7 @@ from django.contrib.admin.sites import AdminSite
 from django.contrib.auth.models import Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -36,9 +37,9 @@ def _request_with_messages(
 ):
     request = RequestFactory().post(path)
     request.user = user
-    SessionMiddleware(lambda r: None).process_request(request)
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
     request.session.save()
-    request._messages = FallbackStorage(request)
+    request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
     return request
 
 

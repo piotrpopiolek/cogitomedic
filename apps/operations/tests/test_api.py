@@ -6,13 +6,13 @@ from uuid import uuid4
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.services import (
     create_or_get_medical_document,
     publish_document_version,
     save_draft_document_version,
 )
-from apps.core.api_utils import assign_group_to_test_user
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,

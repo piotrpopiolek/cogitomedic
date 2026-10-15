@@ -34,7 +34,6 @@ from apps.reception.models import (
     PatientImportError,
     QueueSource,
 )
-from apps.reception.phone_utils import normalize_phone_for_patient_storage
 from apps.reception.patient_identity import (
     find_patient_for_import,
     normalize_email_for_storage,
@@ -42,6 +41,7 @@ from apps.reception.patient_identity import (
     stale_anonymized_patient_blocks_phone,
     validate_patient_names_for_import,
 )
+from apps.reception.phone_utils import normalize_phone_for_patient_storage
 from apps.reception.process_types import (
     PROCESS_TYPE_STANDARD,
     PROCESS_TYPE_TELEDERM,
@@ -724,7 +724,7 @@ def process_patient_xlsx_import_batch(
                     row_number=row_no,
                     error_code=e.error_code,
                     error_message=str(e),
-                    raw_row=dict(zip(range(len(row_list)), row_list)),
+                    raw_row=dict(zip(range(len(row_list)), row_list, strict=True)),
                 )
                 continue
             except DomainError as e:
@@ -734,7 +734,7 @@ def process_patient_xlsx_import_batch(
                     row_number=row_no,
                     error_code=XlsxImportErrorCode.INVALID_ROW_FORMAT,
                     error_message=str(e),
-                    raw_row=dict(zip(range(len(row_list)), row_list)),
+                    raw_row=dict(zip(range(len(row_list)), row_list, strict=True)),
                 )
                 continue
 
@@ -854,7 +854,7 @@ def process_patient_xlsx_import_batch(
             appointment_dt = None
             if norm.appointment_time and daily_queue_id:
                 appointment_dt = timezone.make_aware(
-                    timezone.datetime.combine(queue_date, norm.appointment_time),
+                    datetime.combine(queue_date, norm.appointment_time),
                     timezone.get_current_timezone(),
                 )
 

@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
-
 from io import BytesIO
+from typing import Any, ClassVar
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
-
 from openpyxl import load_workbook
 from pydantic import ValidationError
 
@@ -26,6 +25,7 @@ from apps.medical.models import (
     MedicalDocumentVersion,
     PdfStatus,
 )
+from apps.operations.accounting_access import accounting_report_access_ok
 from apps.operations.accounting_report import (
     REPORT_MODE_ATTENDED,
     REPORT_MODE_AUSFALL,
@@ -51,7 +51,6 @@ from apps.operations.export import (
     render_accounting_report_xlsx,
 )
 from apps.operations.models import AuditEvent
-from apps.operations.accounting_access import accounting_report_access_ok
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,
@@ -67,6 +66,17 @@ from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser
 
 
 class AccountingReportBase(TestCase):
+    doctor: ClassVar[Any]
+    doctor2: ClassVar[Any]
+    accounting_user: ClassVar[Any]
+    clinic_site: ClassVar[Any]
+    consulting_room: ClassVar[Any]
+    daily_queue: ClassVar[Any]
+    patient: ClassVar[Any]
+    intake: ClassVar[Any]
+    queue_entry: ClassVar[Any]
+    session: ClassVar[Any]
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.doctor = StaffUser.objects.create_user(
@@ -1270,9 +1280,9 @@ class AccountingReportViewTests(AccountingReportBase):
             )
 
         self.client.force_login(self.accounting_user)
-        session = self.client.session
-        session[ADMIN_LIST_PAGE_SIZE_SESSION_KEY] = 10
-        session.save()
+        client_session = self.client.session
+        client_session[ADMIN_LIST_PAGE_SIZE_SESSION_KEY] = 10
+        client_session.save()
 
         response = self.client.get(
             reverse("admin_accounting_report"),

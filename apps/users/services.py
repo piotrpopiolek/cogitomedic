@@ -7,7 +7,7 @@ from django.db import transaction
 
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError
-from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
+from apps.users.models import ROLE_GROUP_NAME_MAP, VALID_STAFF_ROLES, StaffUser
 
 
 def _get_required_role_group(*, role: str) -> Group:

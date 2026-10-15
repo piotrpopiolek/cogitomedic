@@ -9,17 +9,19 @@ from pathlib import Path
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
-from dotenv import load_dotenv
 from django.urls import reverse_lazy
+from dotenv import load_dotenv
 
-from cogitomedica.sentry_sampling import (
-    parse_sentry_traces_sample_rate,
-    sentry_traces_sampler,
-)
 from apps.core.constants import ALLOWED_LIST_PAGE_SIZES, DEFAULT_LIST_LIMIT
 from apps.operations.accounting_access import (
     is_accounting_report_role as _is_accounting_report_role,
+)
+from apps.operations.accounting_access import (
     staff_admin_login_redirect as _staff_admin_login_redirect,
+)
+from cogitomedica.sentry_sampling import (
+    parse_sentry_traces_sample_rate,
+    sentry_traces_sampler,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent

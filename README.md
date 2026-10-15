@@ -85,7 +85,7 @@ Deploy configuration lives in `deploy/`. Production Compose: [`docker-compose.pr
 
 | Layer | Technologies |
 |-------|----------------|
-| **Runtime** | Python **3.13**, Django **6.0.8**, Gunicorn (prod) |
+| **Runtime** | Python **3.14**, Django **6.0.8**, Gunicorn (prod) |
 | **API** | Django REST Framework, drf-spectacular (OpenAPI) |
 | **Database** | PostgreSQL 16 |
 | **Admin UI** | django-unfold |
@@ -116,7 +116,7 @@ Staff list endpoints use offset pagination with a bounded page size (see OpenAPI
 
 ### Prerequisites
 
-- **Python 3.13** (matches Docker images and CI)
+- **Python 3.14** (matches Docker images and CI)
 - **PostgreSQL 16** (or use Docker for the database)
 - **pip** and a virtual environment
 
@@ -181,7 +181,7 @@ Staff list endpoints use offset pagination with a bounded page size (see OpenAPI
 
 ## Docker (development)
 
-[`docker-compose.yml`](docker-compose.yml) + [`Dockerfile`](Dockerfile) (Python 3.13):
+[`docker-compose.yml`](docker-compose.yml) + [`Dockerfile`](Dockerfile) (Python 3.14):
 
 - **`web`** — Django development server on port **8000**
 - **`db`** — PostgreSQL 16
@@ -264,7 +264,7 @@ Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on **push** and
 | Gate | What actually runs |
 |------|---------------------|
 | **Lint** | ruff + black (`ruff check .`, `black --check .`) |
-| **Types** | `mypy .` — settings in [`pyproject.toml`](pyproject.toml) (`python_version = "3.13"`). **Not** `strict = true` / `--strict`. |
+| **Types** | `mypy .` — settings in [`pyproject.toml`](pyproject.toml) (`python_version = "3.14"`). **Not** `strict = true` / `--strict`. |
 | **Unit / integration** | pytest (`-m "not e2e"`) on a **PostgreSQL 16** GitHub Actions service (`postgres:16-alpine` + `pg_isready` healthcheck). Django is configured with `django.db.backends.postgresql` — the same engine as production. Line coverage gate: `fail_under = 80` in `pyproject.toml`. |
 | **Diff coverage** | `diff-cover coverage.xml --compare-branch=origin/main --fail-under=90` |
 | **Translations** | `load_default_translations` then `check_translations_completeness` (de / en / pl) |

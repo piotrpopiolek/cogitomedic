@@ -136,7 +136,7 @@ DEFAULT_PAUSE_AFTER_MS = 550
 def install_cursor(page) -> None:
     """Install cursor overlay for this page and all future navigations."""
     # Signal shared auth helpers to use human_move/click (videos only).
-    setattr(page.context, "_cogito_visible_cursor", True)
+    page.context._cogito_visible_cursor = True
     page.add_init_script(CURSOR_INIT_JS)
 
     def _reinject(_frame=None) -> None:

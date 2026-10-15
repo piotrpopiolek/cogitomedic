@@ -83,6 +83,7 @@ class PatientResultsRequestOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "sms_sent")
         self.assertEqual(ev.patient_id, self.patient.id)
         self.assertIn("client_ip", ev.metadata)
@@ -105,6 +106,7 @@ class PatientResultsRequestOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "captcha_failed")
         self.assertIsNone(ev.patient_id)
 
@@ -180,6 +182,7 @@ class PatientResultsVerifyOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(verify_ev)
+        assert verify_ev is not None
         self.assertEqual(verify_ev.metadata.get("outcome"), "success")
         self.assertEqual(verify_ev.patient_id, self.patient.id)
 
@@ -189,7 +192,9 @@ class PatientResultsVerifyOtpApiTests(TestCase):
             event_type="PATIENT_RESULTS_DOCUMENTS_LISTED", patient=self.patient
         )
         self.assertEqual(listed.count(), 1)
-        self.assertEqual(listed.first().metadata.get("item_count"), 0)
+        listed_event = listed.first()
+        assert listed_event is not None
+        self.assertEqual(listed_event.metadata.get("item_count"), 0)
 
     @override_settings(PATIENT_RESULTS_OTP_PEPPER="test-pepper")
     def test_verify_otp_wrong_code_creates_audit_event(self) -> None:
@@ -210,6 +215,7 @@ class PatientResultsVerifyOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "invalid")
         self.assertIsNone(ev.patient_id)
 
@@ -281,6 +287,7 @@ class PatientResultsSharedPhoneOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "ambiguous_identity")
         self.assertIsNone(ev.patient_id)
 
@@ -342,6 +349,7 @@ class PatientResultsSharedPhoneOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "invalid")
         self.assertIsNone(ev.patient_id)
 
@@ -401,6 +409,7 @@ class PatientResultsSharedPhoneOtpApiTests(TestCase):
             .first()
         )
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("outcome"), "success")
         self.assertEqual(ev.patient_id, anna.id)
 
@@ -433,6 +442,7 @@ class PatientResultsDocumentsApiTests(TestCase):
             event_type="PATIENT_RESULTS_DOCUMENTS_LISTED", patient_id=self.patient.id
         ).first()
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("item_count"), len(data["items"]))
 
     def test_download_unknown_version_creates_denied_audit(self) -> None:
@@ -448,5 +458,6 @@ class PatientResultsDocumentsApiTests(TestCase):
             event_type="PATIENT_RESULTS_PDF_DOWNLOAD_DENIED", patient_id=self.patient.id
         ).first()
         self.assertIsNotNone(ev)
+        assert ev is not None
         self.assertEqual(ev.metadata.get("version_id"), str(bad_id))
         self.assertEqual(ev.metadata.get("reason"), "version_not_found")

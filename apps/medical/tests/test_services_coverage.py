@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
-from datetime import date, datetime, timedelta, timezone as dt_timezone
 from time import perf_counter
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -15,7 +16,6 @@ from django.db.models import Max
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-
 from freezegun import freeze_time
 from pypdf import PdfWriter
 
@@ -38,14 +38,10 @@ from apps.medical.models import (
     PaperIntakeAuthorization,
     PdfStatus,
 )
-from apps.reception.patient_identity import (
-    normalize_patient_name_for_storage as _stored_patient_name,
-)
 from apps.medical.services import (
     acquire_document_lock,
     create_external_upload_medical_document,
     create_or_get_medical_document,
-    select_external_upload_attachment_for_draft,
     get_document_lock_state,
     get_medical_document_context,
     latest_retryable_outbox_event,
@@ -56,6 +52,7 @@ from apps.medical.services import (
     refresh_document_lock,
     release_document_lock,
     revoke_document_version,
+    select_external_upload_attachment_for_draft,
     upload_external_pdf_to_incoming,
     work_queue_row_outbound_complete,
 )
@@ -74,6 +71,9 @@ from apps.reception.models import (
     QueueEntryStatus,
     QueueStatus,
 )
+from apps.reception.patient_identity import (
+    normalize_patient_name_for_storage as _stored_patient_name,
+)
 from apps.users.models import StaffUser
 
 
@@ -87,6 +87,8 @@ def _minimal_pdf_bytes() -> bytes:
 
 class ServicesCoverageBase(TestCase):
     """Shared fixtures for medical-services coverage tests."""
+
+    daily_queue: Any
 
     @classmethod
     def setUpTestData(cls):
@@ -232,7 +234,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             )
         self.assertIn(
             "intake_form_wrong_queue_entry",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_intake_form_not_submitted_raises(self):
@@ -269,7 +271,7 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             )
         self.assertIn(
             "intake_form_must_be_submitted",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_intake_form_reopened_raises_on_create_medical_document(self):
@@ -306,11 +308,15 @@ class CreateOrGetMedicalDocumentValidationTests(ServicesCoverageBase):
             )
         self.assertIn(
             "intake_form_must_be_submitted",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
 
 class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
+    doctor: Any
+    queue_entry: Any
+    reception: Any
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -389,7 +395,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
             )
         self.assertIn(
             "external_upload_intake_not_ready",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_no_intake_form_raises(self) -> None:
@@ -401,7 +407,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
             )
         self.assertIn(
             "queue_entry_or_intake_not_found",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_unknown_queue_entry_raises(self) -> None:
@@ -410,7 +416,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
                 queue_entry_id=uuid.uuid4(),
                 created_by_user_id=self.reception.id,
             )
-        self.assertIn("queue_entry_not_found", ctx.exception.api_message_key)
+        self.assertIn("queue_entry_not_found", ctx.exception.api_message_key or "")
 
     def test_mismatch_when_digital_document_exists(self) -> None:
         self._make_medical_doc(
@@ -424,7 +430,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
             )
         self.assertIn(
             "medical_document_source_type_mismatch",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_doctor_role_raises(self) -> None:
@@ -435,7 +441,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
             )
         self.assertIn(
             "external_upload_staff_role_required",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_unknown_actor_user_raises(self) -> None:
@@ -444,7 +450,7 @@ class CreateExternalUploadMedicalDocumentTests(ServicesCoverageBase):
                 queue_entry_id=self.queue_entry.id,
                 created_by_user_id=uuid.uuid4(),
             )
-        self.assertIn("staff_user_not_found", ctx.exception.api_message_key)
+        self.assertIn("staff_user_not_found", ctx.exception.api_message_key or "")
 
 
 class SelectExternalUploadAttachmentForDraftTests(
@@ -538,7 +544,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_attachment_invalid_status",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_attachment_wrong_document_raises(self) -> None:
@@ -578,7 +584,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_attachment_not_found",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_non_external_document_raises(self) -> None:
@@ -607,7 +613,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_not_external_source",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_no_active_draft_raises(self) -> None:
@@ -644,7 +650,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_no_active_draft",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_invalid_hidrive_prefix_raises(self) -> None:
@@ -666,7 +672,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_attachment_path_invalid",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_hidrive_path_traversal_raises(self) -> None:
@@ -690,7 +696,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_attachment_path_invalid",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_doctor_role_raises(self) -> None:
@@ -712,7 +718,7 @@ class SelectExternalUploadAttachmentForDraftTests(
             )
         self.assertIn(
             "external_upload_staff_role_required",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_medical_document_not_found_raises(self) -> None:
@@ -732,10 +738,14 @@ class SelectExternalUploadAttachmentForDraftTests(
                 attachment_id=att.id,
                 actor_user_id=self.reception.id,
             )
-        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key or "")
 
 
 class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests):
+    doctor: Any
+    queue_entry: Any
+    reception: Any
+
     def _make_external_doc(self) -> MedicalDocument:
         return create_external_upload_medical_document(
             queue_entry_id=self.queue_entry.id,
@@ -821,7 +831,9 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
                 uploaded_file=upload,
                 actor_user_id=self.reception.id,
             )
-        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+        self.assertIn(
+            "external_upload_file_too_large", ctx.exception.api_message_key or ""
+        )
 
     @patch("apps.medical.services.EXTERNAL_UPLOAD_MAX_BYTES", 64)
     def test_upload_streaming_byte_limit_rejects_body_larger_than_declared_size(
@@ -837,7 +849,9 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
                 uploaded_file=upload,
                 actor_user_id=self.reception.id,
             )
-        self.assertIn("external_upload_file_too_large", ctx.exception.api_message_key)
+        self.assertIn(
+            "external_upload_file_too_large", ctx.exception.api_message_key or ""
+        )
 
     def test_invalid_content_type_raises(self):
         doc = self._make_external_doc()
@@ -852,7 +866,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
             )
         self.assertIn(
             "external_upload_invalid_content_type",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     def test_invalid_magic_raises(self):
@@ -866,7 +880,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
                 uploaded_file=upload,
                 actor_user_id=self.reception.id,
             )
-        self.assertIn("external_upload_not_pdf", ctx.exception.api_message_key)
+        self.assertIn("external_upload_not_pdf", ctx.exception.api_message_key or "")
 
     def test_corrupt_pdf_raises(self):
         doc = self._make_external_doc()
@@ -881,7 +895,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
             )
         self.assertIn(
             "external_upload_invalid_or_empty_pdf",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     @patch("apps.medical.services.get_hidrive_adapter")
@@ -896,7 +910,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
             )
         self.assertIn(
             "external_upload_not_external_source",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
         adapter_factory.assert_not_called()
 
@@ -911,7 +925,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
             )
         self.assertIn(
             "external_upload_staff_role_required",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
         adapter_factory.assert_not_called()
 
@@ -923,7 +937,7 @@ class UploadExternalPdfToIncomingTests(CreateExternalUploadMedicalDocumentTests)
                 uploaded_file=self._pdf_upload(),
                 actor_user_id=self.reception.id,
             )
-        self.assertIn("medical_document_not_found", ctx.exception.api_message_key)
+        self.assertIn("medical_document_not_found", ctx.exception.api_message_key or "")
         adapter_factory.assert_not_called()
 
 
@@ -953,7 +967,7 @@ class SaveDraftRepublishAfterRetentionTests(ServicesCoverageBase):
             )
         self.assertIn(
             "republish_after_retention_not_allowed",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
 
@@ -996,7 +1010,7 @@ class RevokeDocumentVersionTests(ServicesCoverageBase):
             )
         self.assertIn(
             "no_published_version_to_revoke",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     @freeze_time("2026-03-10T12:00:00Z")
@@ -1049,7 +1063,7 @@ class RevokeDocumentVersionTests(ServicesCoverageBase):
             )
         self.assertIn(
             "revoke_requires_full_delivery",
-            ctx.exception.api_message_key,
+            ctx.exception.api_message_key or "",
         )
 
     @freeze_time("2026-03-10T12:00:00Z")
@@ -1082,6 +1096,9 @@ class RevokeDocumentVersionTests(ServicesCoverageBase):
 # 4. list_doctor_work_queue (lines 600-705) — whole function
 # ------------------------------------------------------------------
 class ListDoctorWorkQueueTests(ServicesCoverageBase):
+    daily_queue: Any
+    doctor: Any
+
     def test_returns_intake_for_assigned_doctor(self):
         doc = self._make_medical_doc()
         self._make_published_version(doc)
@@ -1564,7 +1581,7 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
 
     @freeze_time("2026-03-10T14:00:00Z")
     def test_unpublished_sla_urgency_half_after_12h_rolling(self):
-        t0 = datetime(2026, 3, 10, 2, 0, 0, tzinfo=dt_timezone.utc)
+        t0 = datetime(2026, 3, 10, 2, 0, 0, tzinfo=UTC)
         self.queue_entry.doctor_list_sort_at = t0
         self.queue_entry.save(update_fields=["doctor_list_sort_at"])
         doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
@@ -1583,7 +1600,7 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
 
     @freeze_time("2026-03-10T12:00:00Z")
     def test_unpublished_sla_urgency_zero_immediately_at_t0(self):
-        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=dt_timezone.utc)
+        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=UTC)
         self.queue_entry.doctor_list_sort_at = t0
         self.queue_entry.save(update_fields=["doctor_list_sort_at"])
         doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
@@ -1601,7 +1618,7 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
 
     @freeze_time("2026-03-11T13:00:00Z")
     def test_unpublished_sla_urgency_one_after_25h(self):
-        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=dt_timezone.utc)
+        t0 = datetime(2026, 3, 10, 12, 0, 0, tzinfo=UTC)
         self.queue_entry.doctor_list_sort_at = t0
         self.queue_entry.save(update_fields=["doctor_list_sort_at"])
         doc_d = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
@@ -1718,6 +1735,9 @@ class ListDoctorWorkQueueTests(ServicesCoverageBase):
 
 
 class ListDoctorWorkQueuePerfTests(ServicesCoverageBase):
+    daily_queue: Any
+    doctor: Any
+
     def test_query_count_budget_for_mixed_abc_page(self) -> None:
         digital_entry = QueueEntry.objects.create(
             daily_queue=self.daily_queue,
@@ -2135,6 +2155,8 @@ class LatestVersionProcessingErrorTests(ServicesCoverageBase):
 # 7. Document locking services
 # ------------------------------------------------------------------
 class DocumentLockTests(ServicesCoverageBase):
+    doctor: Any
+
     def _make_draft_doc(self):
         return MedicalDocument.objects.create(
             queue_entry=self.queue_entry,
@@ -2627,6 +2649,8 @@ class WorkQueueRowOutboundCompleteTests(TestCase):
 # ------------------------------------------------------------------
 class GetMedicalDocumentContextRevokeUiTests(ServicesCoverageBase):
     """Contract for ``current_version`` flags consumed by doctor ``befund-form.js``."""
+
+    doctor: Any
 
     def test_current_version_exposes_hidrive_and_sms_sent(self) -> None:
         doc = self._make_medical_doc()

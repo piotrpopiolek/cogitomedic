@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -38,7 +38,7 @@ def hidrive_incoming_dir() -> str:
     return raw.rstrip("/") or "/incoming"
 
 
-class IncomingMatchStatus(str, Enum):
+class IncomingMatchStatus(StrEnum):
     MATCHED = "MATCHED"
     NO_FILE = "NO_FILE"
     AMBIGUOUS = "AMBIGUOUS"

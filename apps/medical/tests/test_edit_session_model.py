@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import importlib
+from typing import Any
 
 from django.apps import apps
 from django.utils import timezone
 
+from apps.medical.edit_session import doctor_befund_edit_lock_applies
 from apps.medical.models import (
     MedicalDocStatus,
     MedicalDocumentSourceType,
 )
-from apps.medical.edit_session import doctor_befund_edit_lock_applies
 from apps.medical.tests.test_services_coverage import ServicesCoverageBase
 
 _clear_legacy_edit_locks = importlib.import_module(
@@ -66,6 +67,8 @@ class MedicalDocumentEditSessionFieldDefaultsTests(ServicesCoverageBase):
 
 
 class MedicalDocumentEditSessionCutoverTests(ServicesCoverageBase):
+    doctor: Any
+
     def test_clear_legacy_edit_locks_resets_holder_and_session_markers(self) -> None:
         doc = self._make_medical_doc(status=MedicalDocStatus.DRAFT)
         doc.locked_by_user = self.doctor

@@ -1,6 +1,6 @@
 # Obraz do jednorazowego generowania PNG (Playwright Chromium) — ten sam requirements.txt co web.
-# Brak --with-deps: na Debian Trixie (python:3.13-slim) playwright install-deps zgłasza brak pakietów ttf-*.
-FROM python:3.13-slim
+# Brak --with-deps: na Debian Trixie (python:3.14-slim) playwright install-deps zgłasza brak pakietów ttf-*.
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

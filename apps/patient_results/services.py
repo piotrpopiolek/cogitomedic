@@ -234,7 +234,7 @@ def verify_otp(
     )
 
 
-def set_patient_results_session(request: "HttpRequest", patient_id: str) -> None:
+def set_patient_results_session(request: HttpRequest, patient_id: str) -> None:
     """Store patient_id in session for document access.
 
     ``cycle_key()`` first so a pre-auth cookie cannot keep the post-OTP session
@@ -245,6 +245,6 @@ def set_patient_results_session(request: "HttpRequest", patient_id: str) -> None
     request.session["patient_results_verified_at"] = timezone.now().isoformat()
 
 
-def get_patient_id_from_session(request: "HttpRequest") -> str | None:
+def get_patient_id_from_session(request: HttpRequest) -> str | None:
     """Get patient_id from patient_results session."""
     return request.session.get("patient_results_patient_id")

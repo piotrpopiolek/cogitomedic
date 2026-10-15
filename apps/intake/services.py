@@ -4,9 +4,10 @@ import base64
 import hashlib
 import logging
 import uuid
+from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
@@ -392,16 +393,16 @@ def _build_intake_snapshot_payload(
                 )
             options_by_code = {opt.code: opt for opt in question.options.all()}
             for option_code in selected_option_codes:
-                opt = options_by_code.get(option_code)
-                if opt:
+                selected_opt = options_by_code.get(option_code)
+                if selected_opt:
                     selected_options.append(
                         {
-                            "option_code": opt.code,
-                            "label_de": opt.option_text_de,
+                            "option_code": selected_opt.code,
+                            "label_de": selected_opt.option_text_de,
                             "label_locale": _localized_text(
-                                value_de=opt.option_text_de,
-                                value_en=opt.option_text_en,
-                                value_pl=opt.option_text_pl,
+                                value_de=selected_opt.option_text_de,
+                                value_en=selected_opt.option_text_en,
+                                value_pl=selected_opt.option_text_pl,
                                 locale=locale,
                             ),
                         }
@@ -489,7 +490,9 @@ def _build_intake_snapshot_payload(
             "id": str(patient.id),
             "first_name": patient.first_name,
             "last_name": patient.last_name,
-            "date_of_birth": patient.date_of_birth.isoformat(),
+            "date_of_birth": (
+                patient.date_of_birth.isoformat() if patient.date_of_birth else None
+            ),
             "phone": patient.phone,
             "email": patient.email,
         },
@@ -977,11 +980,11 @@ def save_intake_signature(
 
     try:
         raw = base64.b64decode(data, validate=True)
-    except Exception:
+    except Exception as exc:
         raise InvalidSignatureError(
             domain_message("other.domain.signature_invalid_base64"),
             api_message_key="other.domain.signature_invalid_base64",
-        )
+        ) from exc
     if len(raw) == 0:
         raise InvalidSignatureError(
             domain_message("other.domain.signature_payload_empty"),

@@ -5,18 +5,19 @@ from io import StringIO
 from typing import Any
 from unittest.mock import patch
 
-from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.conf import settings
-from django.template import Context, Template
-from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
+from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 
 from apps.core.api_utils import MAX_JSON_BODY_BYTES, read_json_body
 from apps.core.exceptions import InvalidRequestBodyEncoding
+from apps.core.middleware import RoleBasedSessionExpiryMiddleware
 from apps.core.models import (
     TranslationCacheVersion,
     TranslationCategory,
@@ -29,7 +30,6 @@ from apps.core.translation_service import (
     get_translation_map,
     resolve_other_message,
 )
-from apps.core.middleware import RoleBasedSessionExpiryMiddleware
 
 
 class TranslationServiceTests(TestCase):

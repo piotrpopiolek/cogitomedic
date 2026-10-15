@@ -6,8 +6,8 @@ from typing import Any
 
 from apps.telederm.models import TeledermAnswerType, TeledermSection
 from apps.telederm.seed.helpers import (
-    NONE,
     NO,
+    NONE,
     PREGNANCY,
     YES_NO,
     YES_NO_UNKNOWN,

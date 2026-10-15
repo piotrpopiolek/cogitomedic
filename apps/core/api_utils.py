@@ -1,28 +1,46 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from functools import wraps
-from typing import Any, Mapping, TypeVar
+from typing import Any
 from uuid import UUID
 
 from django.contrib.auth.models import Group
-from django.http import HttpRequest, QueryDict
-from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.http import HttpRequest, JsonResponse, QueryDict
 from pydantic import BaseModel, ValidationError
 
 from apps.core.api_error_i18n import OTHER_I18N_KEY_DEFAULT_EN
 from apps.core.constants import (
     MAX_JSON_BODY_BYTES,
 )
-from apps.core.list_pagination import validate_allowed_page_size
 from apps.core.domain_messages import domain_message
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.list_pagination import validate_allowed_page_size
 from apps.core.translation_service import (
     get_current_request,
     get_translation_map,
     resolve_other_message,
     translation_category_for_message_key,
 )
+from apps.users.models import StaffUser
+
+
+def staff_user(request: HttpRequest) -> StaffUser:
+    """Authenticated ``AUTH_USER_MODEL`` after the view has rejected anonymous users."""
+    user = request.user
+    if isinstance(user, StaffUser):
+        return user
+    raise PermissionDenied
+
+
+def staff_user_id(request: HttpRequest) -> UUID:
+    """Primary key of :func:`staff_user`. Unsaved users have no id."""
+    user_id = staff_user(request).id
+    if user_id is None:
+        raise PermissionDenied
+    return user_id
 
 
 def assign_group_to_test_user(user, group_name: str) -> None:
@@ -125,11 +143,11 @@ def read_json_body(request: HttpRequest) -> dict:
         )
     try:
         raw = request.body.decode("utf-8")
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as exc:
         raise InvalidRequestBodyEncoding(
             domain_message("other.api.invalid_request_encoding"),
             api_message_key="other.api.invalid_request_encoding",
-        )
+        ) from exc
     return json.loads(raw or "{}")
 
 
@@ -193,10 +211,7 @@ def resolve_list_limit_query(value: str | None) -> int | JsonResponse:
         return json_error("other.api.invalid_limit", status=400)
 
 
-QueryParamsModelT = TypeVar("QueryParamsModelT", bound=BaseModel)
-
-
-def validate_get_query_params(
+def validate_get_query_params[QueryParamsModelT: BaseModel](
     model: type[QueryParamsModelT],
     query: QueryDict | Mapping[str, Any],
 ) -> QueryParamsModelT:
@@ -297,7 +312,7 @@ def get_tablet_scope_clinic_site_ids(request: HttpRequest) -> list[UUID] | None:
         return None
     try:
         device_id = UUID(device_id_str)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
     try:
         device = TabletDevice.objects.only("clinic_site_id").get(

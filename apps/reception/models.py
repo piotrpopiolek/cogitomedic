@@ -7,6 +7,8 @@ from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import F, Q
+from django.utils import timezone
 
 from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.medical.name_normalize import compute_incoming_pdf_name_keys
@@ -16,8 +18,6 @@ from apps.reception.process_types import (
     ProcessType,
     process_type_allowed_constraint,
 )
-from django.db.models import F, Q
-from django.utils import timezone
 
 
 class QueueShift(models.TextChoices):

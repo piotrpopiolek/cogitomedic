@@ -19,8 +19,11 @@ from django.views.decorators.http import require_http_methods
 from apps.core.api_utils import (
     get_scoped_clinic_site_ids,
     get_tablet_scope_clinic_site_ids,
+    staff_user,
+    staff_user_id,
 )
 from apps.core.exceptions import DomainError
+from apps.core.translation_service import get_form_ui_strings, get_staff_ui_strings
 from apps.intake.models import PatientIntakeForm
 from apps.intake.services import get_intake_form_context
 from apps.reception.models import DailyQueue, QueueEntry, QueueEntryStatus, TabletDevice
@@ -31,8 +34,6 @@ from apps.reception.services import (
     issue_tablet_session_latest_wins,
     record_tablet_login_for_android_id,
 )
-
-from apps.core.translation_service import get_form_ui_strings, get_staff_ui_strings
 
 TABLET_ALLOWED_ROLES = {"TABLET", "RECEPTION", "ADMIN"}
 
@@ -69,7 +70,7 @@ def _get_tablet_device_from_session(request: HttpRequest) -> TabletDevice | None
         return None
     try:
         device_id = UUID(device_id_str)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
     try:
         return TabletDevice.objects.select_related("clinic_site").get(
@@ -82,7 +83,7 @@ def _get_tablet_device_from_session(request: HttpRequest) -> TabletDevice | None
 def _resolve_tablet_area_scope_ids(request: HttpRequest) -> list[UUID] | None:
     """Resolve clinic scope for tablet-area pages: ADMIN sees all, others are scoped."""
     scoped_ids = get_scoped_clinic_site_ids(request.user)
-    if request.user.is_tablet:
+    if staff_user(request).is_tablet:
         tablet_scope_ids = get_tablet_scope_clinic_site_ids(request)
         if tablet_scope_ids is not None:
             return tablet_scope_ids
@@ -140,7 +141,7 @@ def tablet_home_view(request: HttpRequest) -> HttpResponse:
     scope_ids = _resolve_tablet_area_scope_ids(request)
     if scope_ids is not None:
         qs = qs.filter(clinic_site_id__in=scope_ids)
-        if request.user.is_tablet and not scope_ids:
+        if staff_user(request).is_tablet and not scope_ids:
             tablet_unassigned = True
     device = _get_tablet_device_from_session(request)
     if device is not None:
@@ -236,7 +237,7 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
         if tablet_device_id_raw:
             try:
                 tablet_device_id = UUID(tablet_device_id_raw)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
         if tablet_device_id is None and android_id:
             device, _ = get_or_create_tablet_device_by_android_id(android_id=android_id)
@@ -244,7 +245,7 @@ def tablet_entry_start_view(request: HttpRequest, queue_entry_id: UUID) -> HttpR
         try:
             result = issue_tablet_session_latest_wins(
                 queue_entry_id=queue_entry_id,
-                created_by_user_id=request.user.id,
+                created_by_user_id=staff_user_id(request),
                 form_locale="de-DE",
                 expires_in_minutes=120,
                 tablet_device_id=tablet_device_id,
@@ -294,7 +295,7 @@ def tablet_form_view(request: HttpRequest, intake_form_id: UUID) -> HttpResponse
         )
         session.save(update_fields=["form_locale"])
     form_locale = session.form_locale or "de-DE"
-    is_tablet = request.user.is_tablet
+    is_tablet = staff_user(request).is_tablet
     try:
         context = get_intake_form_context(
             intake_form_id=intake_form_id,

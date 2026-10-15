@@ -17,9 +17,11 @@ from apps.core.api_utils import (
     require_user_role,
     validate_get_query_params,
 )
-from apps.core.http_utils import get_client_ip
-from apps.operations.services import create_audit_event
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
+from apps.core.http_utils import get_client_ip
+from apps.intake.retention_services import run_intake_retention_cleanup
+from apps.operations.services import create_audit_event
+from apps.outbox import services as outbox_services
 from apps.outbox.api_schemas import (
     OutboxEventsQueryParams,
     ProcessOutboxRequest,
@@ -27,8 +29,6 @@ from apps.outbox.api_schemas import (
     RetryOutboxEventRequest,
 )
 from apps.outbox.models import OutboxEvent
-from apps.intake.retention_services import run_intake_retention_cleanup
-from apps.outbox import services as outbox_services
 from apps.outbox.services import (
     retry_outbox_event,
     run_retention_cleanup,

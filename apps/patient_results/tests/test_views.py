@@ -17,6 +17,7 @@ from django.utils import timezone
 from apps.operations.models import AuditEvent
 from apps.patient_results.models import PatientResultsOtpSession
 from apps.reception.models import Patient
+from cogitomedica.tests.redirects import redirect_url
 
 LOGIN_URL = "/"
 OTP_URL = "/otp/"
@@ -72,7 +73,7 @@ class ErgebnisseViewSmokeTests(TestCase):
     def test_otp_without_session_redirects_to_login(self):
         resp = self.client.get(OTP_URL)
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/", resp.url)
+        self.assertIn("/", redirect_url(resp))
 
     # -- documents page ----------------------------------------------------
 
@@ -81,7 +82,7 @@ class ErgebnisseViewSmokeTests(TestCase):
     ):
         resp = self.client.get(DOCUMENTS_URL)
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/", resp.url)
+        self.assertIn("/", redirect_url(resp))
 
 
 @override_settings(CAPTCHA_VERIFY_SKIP=True, PATIENT_RESULTS_OTP_PEPPER="test-pepper")
@@ -309,7 +310,7 @@ class ErgebnisseOtpPostTests(TestCase):
         old_session_key = self.client.session.session_key
         response = self.client.post(OTP_URL, {"otp_code": otp})
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/documents/", response.url)
+        self.assertIn("/documents/", redirect_url(response))
         self.assertNotEqual(self.client.session.session_key, old_session_key)
         self.assertNotIn("ergebnisse_phone", self.client.session)
         self.assertNotIn("ergebnisse_last_name", self.client.session)

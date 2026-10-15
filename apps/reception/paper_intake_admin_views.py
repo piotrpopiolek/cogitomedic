@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 from django.contrib import admin as django_admin
@@ -77,7 +77,7 @@ class PaperIntakeHubPickForm(forms.Form):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        f = self.fields["queue_entry"]
+        f = cast(forms.ModelChoiceField, self.fields["queue_entry"])
         f.queryset = queryset
         f.empty_label = empty_label
         f.error_messages["invalid_choice"] = invalid_choice_message

@@ -13,10 +13,10 @@ from apps.core.api_utils import (
     json_domain_error,
     json_error,
     parse_bool_query,
-    resolve_list_limit_query,
     read_json_body,
     require_auth,
     require_user_role,
+    resolve_list_limit_query,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
 from apps.reception.api_schemas import (
@@ -166,7 +166,19 @@ def tablet_device_detail_view(
             return json_error("other.api.clinic_site_not_found", status=404)
         update_kwargs["clinic_site_id"] = body.clinic_site_id
     try:
-        device = update_tablet_device(**update_kwargs)
+        if "clinic_site_id" in update_kwargs:
+            device = update_tablet_device(
+                tablet_device_id=tablet_device_id,
+                android_id=body.android_id,
+                is_active=body.is_active,
+                clinic_site_id=body.clinic_site_id,
+            )
+        else:
+            device = update_tablet_device(
+                tablet_device_id=tablet_device_id,
+                android_id=body.android_id,
+                is_active=body.is_active,
+            )
     except ObjectDoesNotExist:
         return json_error("other.api.tablet_device_not_found", status=404)
     except DomainError as exc:
@@ -197,4 +209,7 @@ def tablet_device_heartbeat_view(
     ):
         return json_error("other.api.tablet_device_not_found", status=404)
     device = mark_tablet_heartbeat(tablet_device_id=tablet_device_id)
-    return JsonResponse({"last_seen_at": device.last_seen_at.isoformat()})
+    seen_at = device.last_seen_at
+    return JsonResponse(
+        {"last_seen_at": seen_at.isoformat() if seen_at is not None else None}
+    )

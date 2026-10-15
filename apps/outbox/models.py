@@ -4,9 +4,9 @@ import uuid
 
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from django.db.models import F, Q
 
+from apps.core.translation_service import db_gettext_lazy, format_administration_message
 from apps.outbox.constants import outbox_max_retries_default
 
 

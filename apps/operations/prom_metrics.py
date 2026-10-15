@@ -146,8 +146,8 @@ class _OrmMetricsCollector:
         from django.db.models import Count, F, Min, Sum
         from django.utils import timezone
 
-        from apps.integrations.hidrive.auth import get_hidrive_refresh_metrics
         from apps.intake.models import IntakeOutboxEvent, IntakeOutboxStatus
+        from apps.integrations.hidrive.auth import get_hidrive_refresh_metrics
         from apps.outbox.models import OutboxEvent, OutboxStatus
         from apps.reception.models import PatientImportBatch
 

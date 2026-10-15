@@ -9,6 +9,7 @@ from uuid import uuid4
 from django.contrib import admin, messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -44,10 +45,10 @@ def _request_with_messages(user: StaffUser):
     factory = RequestFactory()
     request = factory.get("/admin/reception/patient/")
     request.user = user
-    middleware = SessionMiddleware(lambda r: None)
+    middleware = SessionMiddleware(lambda r: HttpResponse())
     middleware.process_request(request)
     request.session.save()
-    request._messages = FallbackStorage(request)
+    request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
     return request
 
 

@@ -7,8 +7,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from django.contrib.admin.sites import AdminSite
 from django.apps import apps as django_apps
+from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models import Q
@@ -16,8 +16,11 @@ from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import MedicalDocument, MedicalDocumentVersion
+from apps.operations.prom_metrics import build_metrics_payload
 from apps.outbox.models import OutboxEvent, OutboxEventType, OutboxStatus
 from apps.reception.admin import (
     DailyQueueAdmin,
@@ -29,28 +32,25 @@ from apps.reception.models import (
     DailyQueue,
     ImportStatus,
     Patient,
+    PatientFormSession,
     PatientImportBatch,
     PatientImportError,
-    PatientFormSession,
     QueueEntry,
     QueueEntryStatus,
     QueueStatus,
     TabletDevice,
 )
+from apps.reception.phone_utils import (
+    normalize_phone,
+    normalize_phone_for_patient_storage,
+)
 from apps.reception.process_types import ProcessType
-from apps.core.api_utils import assign_group_to_test_user
-from apps.core.exceptions import DomainError
 from apps.reception.services import (
     QUEUE_ENTRY_CANCELLED_MESSAGE_KEY,
     create_or_update_patient_manual,
     create_queue_entry,
     get_or_create_tablet_device_by_android_id,
     issue_tablet_session_latest_wins,
-)
-from apps.operations.prom_metrics import build_metrics_payload
-from apps.reception.phone_utils import (
-    normalize_phone,
-    normalize_phone_for_patient_storage,
 )
 from apps.reception.xlsx_import import (
     XlsxImportErrorCode,

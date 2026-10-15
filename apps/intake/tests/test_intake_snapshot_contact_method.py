@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-from typing import cast
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase

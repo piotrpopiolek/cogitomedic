@@ -8,10 +8,9 @@ from django.apps import apps as django_apps
 from django.test import TestCase
 
 from apps.intake.models import IntakeOutboxEvent
+from apps.operations.prom_metrics import _OrmMetricsCollector, build_metrics_payload
 from apps.outbox.models import OutboxEvent
 from apps.reception.models import PatientImportBatch, PatientImportError
-
-from apps.operations.prom_metrics import _OrmMetricsCollector, build_metrics_payload
 
 
 def _purge_seed_clinic_data() -> None:

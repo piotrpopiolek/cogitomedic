@@ -70,7 +70,7 @@ class MedicalPayloadLesionV1(BaseModel):
     edited_text: str | None = Field(default=None, max_length=50000)
 
     @model_validator(mode="after")
-    def no_duplicate_lesion_numbers(self) -> "MedicalPayloadLesionV1":
+    def no_duplicate_lesion_numbers(self) -> MedicalPayloadLesionV1:
         if len(self.lesion_numbers) != len(set(self.lesion_numbers)):
             raise ValueError("lesion_numbers must not contain duplicates")
         return self
@@ -106,7 +106,7 @@ class MedicalPayloadV1(BaseModel):
     template_context: MedicalPayloadTemplateContextV1 | dict | None = None
 
     @model_validator(mode="after")
-    def lesions_empty_only_when_no_control_needed(self) -> "MedicalPayloadV1":
+    def lesions_empty_only_when_no_control_needed(self) -> MedicalPayloadV1:
         if self.overall_image_assessment == "CONTROL_NEEDED" and len(self.lesions) == 0:
             raise ValueError(
                 "lesions must not be empty when overall_image_assessment is CONTROL_NEEDED"

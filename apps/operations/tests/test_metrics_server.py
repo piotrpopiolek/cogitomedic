@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest import mock
 
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -39,7 +39,7 @@ class BearerAuthTests(SimpleTestCase):
 
 class RuntimeMetricsPayloadTests(SimpleTestCase):
     def test_payload_includes_counter_after_record(self) -> None:
-        now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 21, 12, 0, tzinfo=UTC)
         record_outbox_execution(
             stream="befund",
             event_type="SMS_SEND",
@@ -58,7 +58,7 @@ class RuntimeMetricsIgnoresOrmCollectorTests(TestCase):
 
     def test_runtime_payload_excludes_orm_gauges_after_full_payload(self) -> None:
         build_metrics_payload()
-        now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 21, 12, 0, tzinfo=UTC)
         record_outbox_execution(
             stream="befund",
             event_type="HIDRIVE_UPLOAD",

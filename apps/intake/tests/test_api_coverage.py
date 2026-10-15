@@ -382,8 +382,8 @@ class IntakeFormSubmitViewTests(TestCase):
         self.assertIn("error", resp.json())
 
     def test_submit_cancelled_queue_entry_returns_400(self) -> None:
-        clinic_id = self.intake_form.queue_entry.daily_queue.clinic_site_id
-        self.rec_user.clinic_sites.add(clinic_id)
+        clinic_site = self.intake_form.queue_entry.daily_queue.clinic_site
+        self.rec_user.clinic_sites.add(clinic_site)
         self.intake_form.queue_entry.entry_status = QueueEntryStatus.CANCELLED
         self.intake_form.queue_entry.save(update_fields=["entry_status", "updated_at"])
         self.client.login(username="submit-rec", password=_PW)
@@ -582,7 +582,7 @@ class IntakeFormTeledermViewTests(TestCase):
             process_type=PROCESS_TYPE_TELEDERM,
         )
         self.rec_user.clinic_sites.add(
-            self.intake_form.queue_entry.daily_queue.clinic_site_id
+            self.intake_form.queue_entry.daily_queue.clinic_site
         )
 
     def _url(self, form_id=None, *, locale: str = "de-DE") -> str:

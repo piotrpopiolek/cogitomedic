@@ -12,8 +12,8 @@ from django.utils import timezone
 from pypdf import PdfWriter
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.integrations.hidrive import client as hidrive_client
 from apps.medical.external_pdf_service import (
     ExternalPdfCorruptError,
     MatchedIncomingFile,
@@ -36,9 +36,9 @@ from apps.medical.models import (
     MedicalDocument,
 )
 from apps.medical.name_normalize import (
+    _stem_without_pdf,
     incoming_stem_norm_lookup_bases,
     normalize_name,
-    _stem_without_pdf,
 )
 from apps.reception.models import (
     ClinicSite,

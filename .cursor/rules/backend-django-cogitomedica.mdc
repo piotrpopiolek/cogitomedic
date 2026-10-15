@@ -49,7 +49,7 @@ alwaysApply: false
 
 ## 8) Jakość kodu i testy
 - **Migracje i testy — wyłącznie w kontenerze Docker** (środowisko jak w CI/prod: WeasyPrint, biblioteki natywne, ta sama baza). Nie uruchamiaj `manage.py migrate` ani `pytest` / `make pytest` na gołym interpreterze hosta, o ile użytkownik nie wymusi inaczej.
-- **Uruchomienie stacku:** z katalogu repo `docker compose up -d db web` (lub pełny `docker compose up -d`). Jednorazowe polecenia: `docker compose run --rm web python manage.py migrate` oraz testy przez `make pytest` albo `docker compose run --rm web pytest` (wg `Makefile` / `pytest.ini`).
+- **Uruchomienie stacku:** z katalogu repo `docker compose up -d db web` (lub pełny `docker compose up -d`). Jednorazowe polecenia: `docker compose run --rm web python manage.py migrate` oraz testy przez `make pytest` albo `docker compose run --rm web pytest` (wg `Makefile` / `pyproject.toml`).
 - Przy edycji kodu poza kontenerem nadal możesz używać lokalnego lintera; runtime Django dla migracji/testów ma być w kontenerze `web`.
 - Zachowuj PEP 8 i formatowanie `black`.
 - Dla nowego kodu wymagane są adnotacje typów.

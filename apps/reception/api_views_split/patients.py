@@ -17,6 +17,8 @@ from apps.core.api_utils import (
     read_json_body,
     require_auth,
     require_user_role,
+    staff_user,
+    staff_user_id,
     validate_get_query_params,
 )
 from apps.core.exceptions import DomainError, InvalidRequestBodyEncoding
@@ -160,7 +162,7 @@ def patients_view(request: HttpRequest) -> JsonResponse:
                 phone=body.phone,
                 email=body.email,
                 doctolib_patient_id=body.doctolib_patient_id,
-                created_or_updated_by_user_id=request.user.id,
+                created_or_updated_by_user_id=staff_user_id(request),
             )
             update_fields = ["updated_at"]
             patient.street = body.street
@@ -195,7 +197,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
     if request.method not in ("GET", "PATCH"):
         return json_error("other.api.method_not_allowed", status=405)
 
-    if request.method == "PATCH" and request.user.is_doctor:
+    if request.method == "PATCH" and staff_user(request).is_doctor:
         return json_error("other.api.method_not_allowed_for_role", status=403)
 
     try:
@@ -240,29 +242,40 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
 
     try:
         if identity_or_contact_fields.intersection(fields_set):
+            first_name = (
+                body.first_name if "first_name" in fields_set else patient.first_name
+            )
+            last_name = (
+                body.last_name if "last_name" in fields_set else patient.last_name
+            )
+            date_of_birth = (
+                body.date_of_birth
+                if "date_of_birth" in fields_set
+                else patient.date_of_birth
+            )
+            phone = body.phone if "phone" in fields_set else patient.phone
+            email = body.email if "email" in fields_set else patient.email
+            if (
+                first_name is None
+                or last_name is None
+                or date_of_birth is None
+                or phone is None
+                or email is None
+            ):
+                return json_error("other.api.provide_field_to_update", status=400)
             patient = create_or_update_patient_manual(
                 patient_id=patient.id,
-                first_name=(
-                    body.first_name
-                    if "first_name" in fields_set
-                    else patient.first_name
-                ),
-                last_name=(
-                    body.last_name if "last_name" in fields_set else patient.last_name
-                ),
-                date_of_birth=(
-                    body.date_of_birth
-                    if "date_of_birth" in fields_set
-                    else patient.date_of_birth
-                ),
-                phone=body.phone if "phone" in fields_set else patient.phone,
-                email=body.email if "email" in fields_set else patient.email,
+                first_name=first_name,
+                last_name=last_name,
+                date_of_birth=date_of_birth,
+                phone=phone,
+                email=email,
                 doctolib_patient_id=(
                     body.doctolib_patient_id
                     if "doctolib_patient_id" in fields_set
                     else patient.doctolib_patient_id
                 ),
-                created_or_updated_by_user_id=request.user.id,
+                created_or_updated_by_user_id=staff_user_id(request),
             )
         update_fields: list[str] = ["updated_at"]
         if "street" in fields_set:
@@ -274,7 +287,7 @@ def patient_detail_view(request: HttpRequest, patient_id: UUID) -> JsonResponse:
         if "postal_code" in fields_set:
             patient.postal_code = body.postal_code
             update_fields.append("postal_code")
-        if "country_code" in fields_set:
+        if "country_code" in fields_set and body.country_code is not None:
             patient.country_code = body.country_code
             update_fields.append("country_code")
         if "is_active" in fields_set and body.is_active is not None:
@@ -308,13 +321,13 @@ def patient_anonymize_view(request: HttpRequest, patient_id: UUID) -> JsonRespon
 
     create_audit_event(
         event_type="PATIENT_ANONYMIZE_REQUESTED",
-        actor_user_id=request.user.id,
+        actor_user_id=staff_user_id(request),
         patient_id=patient_id,
         metadata={"client_ip": get_client_ip(request)},
     )
 
     try:
-        patient = anonymize_patient(patient_id, actor_user_id=request.user.id)
+        patient = anonymize_patient(patient_id, actor_user_id=staff_user_id(request))
     except ObjectDoesNotExist:
         return json_error("other.api.patient_not_found", status=404)
     except DomainError as exc:

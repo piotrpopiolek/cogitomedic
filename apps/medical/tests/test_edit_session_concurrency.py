@@ -13,8 +13,8 @@ from django.utils import timezone
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import (
-    DOCUMENT_LOCK_TIMEOUT_HOURS,
     DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
 )
 from apps.medical.edit_session import (
     EditSessionResponseError,
@@ -148,6 +148,7 @@ class EditSessionConcurrencyTests(TransactionTestCase):
         self.assertEqual(errors, ["document_locked_by_other"])
         doc.refresh_from_db()
         self.assertIsNotNone(doc.locked_by_user_id)
+        assert doc.locked_by_user_id is not None
         self.assertEqual(
             count_doctor_active_document_locks(user_id=doc.locked_by_user_id), 1
         )

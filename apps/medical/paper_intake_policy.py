@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 from django.utils import timezone
 
 from apps.intake.models import IntakeStatus, PatientIntakeForm
-from apps.medical.models import MedicalDocument, PaperIntakeAuthorization
 from apps.medical.constants import PAPER_INTAKE_MIN_HOURS_AFTER_APPOINTMENT
+from apps.medical.models import MedicalDocument, PaperIntakeAuthorization
 from apps.reception.models import QueueEntry, QueueEntryStatus
 
 

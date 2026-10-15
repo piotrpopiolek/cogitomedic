@@ -28,4 +28,4 @@ class CoreConfig(AppConfig):
                 return redirect("admin_accounting_report")
             return _original_index(request, extra_context=extra_context)
 
-        admin.site.index = index
+        admin.site.index = index  # type: ignore[method-assign]

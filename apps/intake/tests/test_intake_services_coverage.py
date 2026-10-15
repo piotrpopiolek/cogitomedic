@@ -9,7 +9,6 @@ from datetime import date, timedelta
 
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
-
 from freezegun import freeze_time
 
 from apps.core.exceptions import DomainError, StateTransitionError

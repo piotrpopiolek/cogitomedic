@@ -9,8 +9,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Q
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone as django_timezone
 
 from apps.core.api_utils import get_scoped_clinic_site_ids, safe_parse_positive_int
@@ -50,7 +49,7 @@ def parse_intake_documents_list_params(get_params: Any) -> dict[str, Any]:
         raw = get_params.get("queue_date", "") or ""
         try:
             queue_date = datetime.strptime(raw, "%Y-%m-%d").date()
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     pdf_generation_status = get_params.get("pdf_generation_status") or None
     patient_search = (get_params.get("patient_search") or "").strip() or None

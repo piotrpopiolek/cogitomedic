@@ -33,6 +33,5 @@ public
 **/tests
 **/tests/**
 conftest.py
-pytest.ini
 mutmut_pytest.ini
 requirements-dev.txt

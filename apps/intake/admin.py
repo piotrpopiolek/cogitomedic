@@ -49,11 +49,13 @@ class _ProcessTypeInlineMixin:
         return super().get_formset(request, obj, **kwargs)
 
 
-class ConsentDefinitionProcessInline(_ProcessTypeInlineMixin, admin.TabularInline):
+class ConsentDefinitionProcessInline(  # type: ignore[misc]
+    _ProcessTypeInlineMixin, admin.TabularInline
+):
     model = ConsentDefinitionProcess
 
 
-class AnamnesisQuestionDefinitionProcessInline(
+class AnamnesisQuestionDefinitionProcessInline(  # type: ignore[misc]
     _ProcessTypeInlineMixin, admin.TabularInline
 ):
     model = AnamnesisQuestionDefinitionProcess
@@ -112,7 +114,7 @@ class ConsentDefinitionAdmin(CogitomedicaModelAdmin):
         extra_context = extra_context or {}
         if self.has_add_permission(request):
             info = self.model._meta.app_label, self.model._meta.model_name
-            extra_context["add_url"] = reverse("admin:%s_%s_add" % info)
+            extra_context["add_url"] = reverse("admin:{}_{}_add".format(*info))
         return super().changelist_view(request, extra_context=extra_context)
 
 

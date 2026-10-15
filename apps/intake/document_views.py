@@ -9,8 +9,6 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 
 from apps.core.api_utils import json_error, require_auth, require_user_role
 from apps.core.http_utils import get_client_ip
-from apps.operations.services import create_audit_event
-from apps.intake.models import IntakeDocumentVersion, IntakePdfStatus
 from apps.intake.document_services import (
     check_intake_document_access,
     get_intake_document_detail,
@@ -19,6 +17,8 @@ from apps.intake.document_services import (
     parse_intake_documents_list_params,
     read_intake_pdf_bytes,
 )
+from apps.intake.models import IntakeDocumentVersion, IntakePdfStatus
+from apps.operations.services import create_audit_event
 
 
 @require_auth
@@ -37,7 +37,7 @@ def intake_documents_view(request: HttpRequest) -> JsonResponse:
     if params.get("clinic_site_id"):
         try:
             clinic_site_id = UUID(params["clinic_site_id"])
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     items, total = list_intake_documents(
         user=request.user,

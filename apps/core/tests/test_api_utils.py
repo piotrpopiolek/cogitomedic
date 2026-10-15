@@ -7,8 +7,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 from django.http import HttpRequest
-from django.test import SimpleTestCase, TestCase, RequestFactory
-
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from pydantic import BaseModel, ValidationError
 
 from apps.core.api_utils import (

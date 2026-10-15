@@ -10,9 +10,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.api_utils import assign_group_to_test_user
-from apps.integrations.hidrive.client import HiDriveTimeoutError
-from apps.integrations.hidrive import client as hidrive_client
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.integrations.hidrive import client as hidrive_client
+from apps.integrations.hidrive.client import HiDriveTimeoutError
 from apps.medical.incoming_pdf_scan import IncomingMatchStatus
 from apps.medical.models import (
     MedicalDocStatus,

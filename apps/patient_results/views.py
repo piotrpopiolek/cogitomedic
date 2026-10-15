@@ -13,13 +13,13 @@ from apps.core.translation_service import (
     get_ergebnisse_ui_strings,
     normalize_language_code,
 )
+from apps.patient_results import services as patient_results_services
 from apps.patient_results.audit import (
     audit_patient_results_documents_listed,
     audit_patient_results_otp_request,
     audit_patient_results_otp_verify,
 )
 from apps.patient_results.document_services import list_patient_documents
-from apps.patient_results import services as patient_results_services
 from apps.patient_results.services import (
     get_patient_id_from_session,
     set_patient_results_session,

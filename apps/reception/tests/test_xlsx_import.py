@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date, time
 
 from django.test import SimpleTestCase, TestCase
-
 from freezegun import freeze_time
 
 from apps.reception.models import Patient

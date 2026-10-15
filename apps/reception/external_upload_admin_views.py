@@ -31,6 +31,7 @@ from apps.core.staff_custom_admin import (
 )
 from apps.core.translation_service import resolve_other_message
 from apps.intake.models import IntakeStatus, PatientIntakeForm
+from apps.medical import services as medical_services
 from apps.medical.constants import EXTERNAL_UPLOAD_HUB_QUEUE_ENTRY_LOOKBACK_DAYS
 from apps.medical.models import (
     DocVersionStatus,
@@ -40,7 +41,6 @@ from apps.medical.models import (
     MedicalDocumentSourceType,
     MedicalDocumentVersion,
 )
-from apps.medical import services as medical_services
 from apps.medical.services import (
     get_single_medical_document_for_queue_entry,
     publish_external_upload_version,
@@ -144,7 +144,7 @@ class ExternalUploadHubPickForm(forms.Form):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        f = self.fields["queue_entry"]
+        f = cast(forms.ModelChoiceField, self.fields["queue_entry"])
         f.queryset = queryset
         f.empty_label = empty_label
         f.error_messages["invalid_choice"] = invalid_choice_message
@@ -208,8 +208,8 @@ def external_upload_admin_hub_view(request):
                 legacy_entry = QueueEntry.objects.select_related("daily_queue").get(
                     pk=qid
                 )
-            except QueueEntry.DoesNotExist:
-                raise Http404()
+            except QueueEntry.DoesNotExist as exc:
+                raise Http404() from exc
             if (
                 denied_legacy := ensure_clinic_site_visible_to_staff_user(
                     request, legacy_entry.daily_queue.clinic_site_id
@@ -314,8 +314,8 @@ def external_upload_admin_entry_view(request, queue_entry_id: uuid.UUID):
         scope_probe = QueueEntry.objects.select_related("daily_queue").get(
             pk=queue_entry_id
         )
-    except QueueEntry.DoesNotExist:
-        raise Http404()
+    except QueueEntry.DoesNotExist as exc:
+        raise Http404() from exc
     if (
         denied_scope := ensure_clinic_site_visible_to_staff_user(
             request, scope_probe.daily_queue.clinic_site_id

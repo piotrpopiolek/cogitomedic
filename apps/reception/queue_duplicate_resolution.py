@@ -6,9 +6,10 @@ KEEP/CANCEL semantics here — they will not re-apply.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any
 from uuid import UUID
 
 from django.db.models import Count

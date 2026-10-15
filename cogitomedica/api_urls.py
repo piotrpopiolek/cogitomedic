@@ -21,6 +21,7 @@ from apps.intake.document_views import (
 from apps.medical.api_views import (
     doctor_text_template_detail_view,
     doctor_text_templates_view,
+    medical_document_audit_trail_view,
     medical_document_detail_view,
     medical_document_discard_revision_view,
     medical_document_draft_view,
@@ -35,15 +36,19 @@ from apps.medical.api_views import (
     medical_document_unlock_view,
     medical_document_version_detail_view,
     medical_document_versions_view,
+    medical_documents_no_intake_view,
+    medical_documents_view,
     medical_external_upload_preview_pdf_view,
     medical_external_upload_publish_view,
     medical_external_upload_revision_start_view,
     medical_external_upload_select_attachment_view,
     medical_external_upload_upload_view,
-    medical_document_audit_trail_view,
-    medical_documents_view,
-    medical_documents_no_intake_view,
     queue_entry_paper_intake_authorization_view,
+)
+from apps.operations.api_views import (
+    audit_events_view,
+    observability_health_view,
+    observability_metrics_view,
 )
 from apps.outbox.api_views import (
     operations_outbox_process_view,
@@ -51,10 +56,11 @@ from apps.outbox.api_views import (
     outbox_event_retry_view,
     outbox_events_view,
 )
-from apps.operations.api_views import (
-    audit_events_view,
-    observability_health_view,
-    observability_metrics_view,
+from apps.patient_results.api_views import (
+    patient_results_documents_view,
+    patient_results_download_view,
+    patient_results_request_otp_view,
+    patient_results_verify_otp_view,
 )
 from apps.reception.api_views import (
     clinic_site_detail_view,
@@ -75,12 +81,6 @@ from apps.reception.api_views import (
     tablet_device_detail_view,
     tablet_device_heartbeat_view,
     tablet_devices_view,
-)
-from apps.patient_results.api_views import (
-    patient_results_documents_view,
-    patient_results_download_view,
-    patient_results_request_otp_view,
-    patient_results_verify_otp_view,
 )
 from apps.users.api_views import (
     auth_login_view,

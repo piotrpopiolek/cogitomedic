@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 from django.test import TestCase
 from django.utils import timezone
@@ -153,6 +154,9 @@ class ListPatientDocumentsTests(DocumentServicesBaseTestCase):
 
 
 class ExternalUploadPatientResultsTests(DocumentServicesBaseTestCase):
+    medical_doc: Any
+    patient: Any
+
     def test_list_includes_external_upload_when_published_complete(self) -> None:
         MedicalDocument.objects.filter(pk=self.medical_doc.pk).update(
             source_type=MedicalDocumentSourceType.EXTERNAL_UPLOAD

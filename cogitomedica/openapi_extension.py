@@ -16,13 +16,13 @@ from typing import Any
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
+from apps.core.constants import ALLOWED_LIST_PAGE_SIZES, DEFAULT_LIST_LIMIT
 from cogitomedica.openapi_schemas import (
     COMPONENTS_REF_PREFIX,
     get_components_schemas,
     get_request_body_schema_for,
     get_response_schema_for,
 )
-from apps.core.constants import ALLOWED_LIST_PAGE_SIZES, DEFAULT_LIST_LIMIT
 
 PREFIX = "/api/v1"
 

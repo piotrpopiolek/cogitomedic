@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import timedelta
+from typing import Any
 
 from django.test import Client, SimpleTestCase
 from django.utils import timezone
@@ -12,8 +13,8 @@ from django.utils import timezone
 from apps.core.api_utils import assign_group_to_test_user
 from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.constants import (
-    DOCUMENT_LOCK_TIMEOUT_HOURS,
     DOCTOR_MAX_ACTIVE_DOCUMENT_LOCKS,
+    DOCUMENT_LOCK_TIMEOUT_HOURS,
 )
 from apps.medical.edit_session import (
     EDIT_SESSION_ERROR_HTTP_STATUS,
@@ -50,6 +51,8 @@ class EditSessionErrorI18nMapTests(SimpleTestCase):
 
 
 class EditSessionApiContractTests(ServicesCoverageBase):
+    doctor: Any
+
     def setUp(self):
         super().setUp()
         self.client = Client()
@@ -442,7 +445,9 @@ class EditSessionApiContractTests(ServicesCoverageBase):
             event_type="DOCUMENT_LOCK_RECLAIMED",
         )
         self.assertEqual(events.count(), 1)
-        meta = events.first().metadata or {}
+        event = events.first()
+        assert event is not None
+        meta = event.metadata or {}
         dumped = json.dumps(meta)
         self.assertNotIn(token, dumped)
         self.assertIn("previous_token_prefix", meta)

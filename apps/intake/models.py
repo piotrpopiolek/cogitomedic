@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any, Protocol
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
@@ -79,6 +80,12 @@ class IntakeOutboxStatus(models.TextChoices):
     )
 
 
+class _ProcessLinkedDefinition(Protocol):
+    is_active: bool
+    _state: Any
+    process_links: Any
+
+
 def _attach_process_types(
     *,
     through_model: type[models.Model],
@@ -88,13 +95,15 @@ def _attach_process_types(
 ) -> None:
     """Link catalog row to processes. None → STANDARD (test/legacy create)."""
     values = [PROCESS_TYPE_STANDARD] if process_types is None else list(process_types)
+    manager = through_model._default_manager
     for process_type in values:
-        through_model.objects.get_or_create(
-            **{fk_name: definition, "process_type": process_type}
-        )
+        payload: dict[str, Any] = {fk_name: definition, "process_type": process_type}
+        manager.get_or_create(**payload)
 
 
-def _clean_active_definition_requires_process(definition: models.Model) -> None:
+def _clean_active_definition_requires_process(
+    definition: _ProcessLinkedDefinition,
+) -> None:
     """Active catalog rows must have ≥1 process; skip on ADD.
 
     UUID ``pk`` is assigned in memory before INSERT. Admin validates the parent
@@ -105,7 +114,7 @@ def _clean_active_definition_requires_process(definition: models.Model) -> None:
     """
     if definition._state.adding or not definition.is_active:
         return
-    if not definition.process_links.exists():  # type: ignore[attr-defined]
+    if not definition.process_links.exists():
         raise ValidationError(
             {
                 NON_FIELD_ERRORS: [

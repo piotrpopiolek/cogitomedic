@@ -21,7 +21,15 @@ from django.shortcuts import redirect
 from django.urls import include, path
 from drf_spectacular.views import SpectacularRedocView, SpectacularSwaggerView
 
-from cogitomedica.openapi_extension import cogito_openapi_schema_view
+from apps.intake.views import (
+    intake_document_detail_view,
+    intake_documents_list_view,
+)
+from apps.operations.views import (
+    accounting_report_dashboard_view,
+    accounting_report_export_csv_view,
+    accounting_report_export_xlsx_view,
+)
 from apps.reception.external_upload_admin_views import (
     external_upload_admin_entry_view,
     external_upload_admin_hub_view,
@@ -31,15 +39,7 @@ from apps.reception.paper_intake_admin_views import (
     paper_intake_admin_hub_view,
 )
 from apps.reception.views import reception_dashboard_view
-from apps.intake.views import (
-    intake_documents_list_view,
-    intake_document_detail_view,
-)
-from apps.operations.views import (
-    accounting_report_dashboard_view,
-    accounting_report_export_csv_view,
-    accounting_report_export_xlsx_view,
-)
+from cogitomedica.openapi_extension import cogito_openapi_schema_view
 
 urlpatterns = [
     path("", include("apps.patient_results.urls", namespace="ergebnisse")),

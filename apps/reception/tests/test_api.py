@@ -484,9 +484,9 @@ class TabletQueueScopeApiTests(TestCase):
         )
         self.client.session["tablet_device_id"] = str(device.id)
         self.client.session.save()
-        self.client.cookies[settings.SESSION_COOKIE_NAME] = (
-            self.client.session.session_key
-        )
+        session_key = self.client.session.session_key
+        assert session_key is not None
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = session_key
         response = self.client.get("/api/v1/daily-queues")
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]

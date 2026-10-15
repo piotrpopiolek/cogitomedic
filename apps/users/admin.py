@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from django.contrib import admin
+from django.contrib.admin.exceptions import NotRegistered
 from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
 from django.utils import timezone as django_timezone
 
 from apps.core.admin_list_page_size import CogitomedicaModelAdmin
-
 from apps.core.translation_service import db_gettext_lazy
 from apps.users.api_views import get_primary_role
 from apps.users.forms import StaffUserChangeForm, StaffUserCreationForm
-from apps.users.models import ROLE_GROUP_NAME_MAP, StaffUser, VALID_STAFF_ROLES
+from apps.users.models import ROLE_GROUP_NAME_MAP, VALID_STAFF_ROLES, StaffUser
 
 
 @admin.register(StaffUser)
@@ -177,6 +177,6 @@ class GroupAdmin(CogitomedicaModelAdmin, DjangoGroupAdmin):
 
 try:
     admin.site.unregister(Group)
-except admin.sites.NotRegistered:
+except NotRegistered:
     pass
 admin.site.register(Group, GroupAdmin)

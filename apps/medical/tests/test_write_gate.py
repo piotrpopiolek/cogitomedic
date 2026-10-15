@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import Any
 from unittest.mock import patch
 
 from django.test import Client
@@ -29,6 +30,8 @@ from apps.users.models import StaffUser
 
 
 class WriteGateServiceTests(ServicesCoverageBase):
+    doctor: Any
+
     def _make_locked_draft(self) -> tuple[MedicalDocument, dict]:
         qe = self._make_queue_entry(
             position_no=self._next_queue_position_no(),
@@ -364,6 +367,8 @@ class WriteGateServiceTests(ServicesCoverageBase):
 
 
 class WriteGateApiTests(WriteGateServiceTests):
+    doctor: Any
+
     def setUp(self):
         super().setUp()
         self.client = Client()

@@ -9,6 +9,10 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.core.api_utils import assign_group_to_test_user
+from apps.core.exceptions import DomainError, StateTransitionError
+from apps.intake import outbox_services as intake_outbox_services
+from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.intake.models import (
     AnamnesisQuestionDefinition,
     ConsentDefinition,
@@ -21,25 +25,21 @@ from apps.intake.models import (
     PatientIntakeConsent,
     PatientIntakeForm,
 )
-from apps.intake import outbox_services as intake_outbox_services
 from apps.intake.outbox_services import process_intake_outbox_events
-from apps.operations.prom_metrics import build_metrics_payload
-from apps.intake.constants import SIGNATURE_MAX_SIZE
 from apps.intake.services import (
+    IntakeSessionValidationError,
     InvalidSignatureError,
     RequiredAnamnesisMissingError,
     RequiredConsentMissingError,
-    IntakeSessionValidationError,
-    _read_signature_data_url,
     _effective_consent_filter,
     _effective_question_filter,
+    _read_signature_data_url,
     get_intake_form_context,
     reopen_patient_intake_form,
     submit_patient_intake_form,
 )
-from apps.core.api_utils import assign_group_to_test_user
-from apps.core.exceptions import DomainError, StateTransitionError
 from apps.operations.models import AuditEvent
+from apps.operations.prom_metrics import build_metrics_payload
 from apps.reception.models import (
     ClinicSite,
     ConsultingRoom,

@@ -247,6 +247,7 @@ def _get_request_model_registry() -> list[type]:
         RetentionRunRequest,
         RetryOutboxEventRequest,
     )
+    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.reception.api_schemas import (
         CreateClinicSiteRequest,
         CreateConsultingRoomRequest,
@@ -262,7 +263,6 @@ def _get_request_model_registry() -> list[type]:
         UpdateQueueEntryRequest,
         UpdateTabletDeviceRequest,
     )
-    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.users.api_schemas import (
         AuthLoginRequest,
         CreateStaffUserRequest,
@@ -373,6 +373,7 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         RetentionRunRequest,
         RetryOutboxEventRequest,
     )
+    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.reception.api_schemas import (
         CreateClinicSiteRequest,
         CreateConsultingRoomRequest,
@@ -388,7 +389,6 @@ def _request_body_model_map() -> dict[tuple[str, str], type]:
         UpdateQueueEntryRequest,
         UpdateTabletDeviceRequest,
     )
-    from apps.patient_results.api_schemas import RequestOtpRequest, VerifyOtpRequest
     from apps.users.api_schemas import (
         AuthLoginRequest,
         CreateStaffUserRequest,

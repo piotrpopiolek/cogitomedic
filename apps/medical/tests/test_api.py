@@ -4,7 +4,7 @@ import json
 from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
@@ -13,9 +13,9 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from pypdf import PdfWriter
 
-from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.core.api_utils import assign_group_to_test_user
 from apps.core.exceptions import DomainError
+from apps.intake.models import IntakeStatus, PatientIntakeForm
 from apps.medical.models import (
     DocVersionStatus,
     ExternalPdfAttachment,
@@ -1817,6 +1817,8 @@ class MedicalApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         doc = MedicalDocument.objects.get(id=mid)
         self.assertEqual(doc.locked_by_user_id, self.doctor_user.id)
+        assert doc.locked_at is not None and lock_time is not None
+        assert doc.locked_at is not None
         self.assertGreater(doc.locked_at, lock_time)
 
     def test_non_assigned_doctor_can_access_draft_document(self) -> None:
@@ -2853,7 +2855,7 @@ class DoctorRbacIdorMatrixTests(MedicalApiTests):
         self.assertEqual(
             AuditEvent.objects.filter(
                 event_type="MEDICAL_DOCUMENT_ACCESS_DENIED",
-                medical_document_id=mid,
+                medical_document_id=UUID(str(mid)),
             ).count(),
             1,
         )
