@@ -290,12 +290,15 @@ class BefundEditSessionPlaywrightTests(PlaywrightDoctorE2EBase):
             "apps.medical.api_views.build_merged_preview_pdf_bytes",
             return_value=(_MIN_PDF, None),
         ):
-            with self.page.expect_popup(timeout=45_000):
+            with self.page.expect_popup(timeout=45_000) as popup_info:
                 with self.page.expect_response(
                     lambda r: "preview-pdf" in r.url and r.ok,
                     timeout=45_000,
                 ):
                     self.page.click("#btn-preview-pdf")
+        preview_tab = popup_info.value
+        preview_tab.close()
+        self.page.bring_to_front()
 
         self.page.wait_for_function(
             "() => { const b = document.querySelector('#btn-publish');"
