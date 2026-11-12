@@ -108,7 +108,7 @@ class _MockHiDriveAdapter:
             return
         try:
             data = json.loads(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return
         listings = data.get("listings") or {}
         cls._dir_listings = {
@@ -119,7 +119,7 @@ class _MockHiDriveAdapter:
         for k, v in files_b64.items():
             try:
                 decoded[str(k)] = base64.b64decode(v)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
         cls._file_contents = decoded
         err = data.get("list_dir_error")
@@ -787,7 +787,7 @@ def _parse_dir_list_response(
         size = item.get("size")
         try:
             size_int = int(size) if size is not None else 0
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             size_int = 0
         mtime = item.get("mtime")
         out.append(

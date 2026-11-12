@@ -69,7 +69,7 @@ class LesionGroupFavoritesWidget(Textarea):
         if not isinstance(value, list):
             try:
                 value = json.loads(value) if isinstance(value, str) else list(value)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 value = []
         value_json = json.dumps(value, ensure_ascii=False)
         context["widget"]["value"] = value

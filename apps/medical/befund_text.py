@@ -234,13 +234,13 @@ def generate_befund_text(
             if no is not None:
                 try:
                     raw_numbers = [int(no)]
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
         if not raw_numbers:
             continue
         try:
             lesion_numbers = [int(n) for n in raw_numbers]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if not lesion_numbers:
             continue

@@ -146,10 +146,10 @@ def format_administration_message(
         return template
     try:
         return template.format(**params)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         try:
             return default.format(**params)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             return default
 
 
@@ -351,10 +351,10 @@ def resolve_other_message(
         return template
     try:
         return template.format(**params)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         try:
             return default.format(**params)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             return default
 
 

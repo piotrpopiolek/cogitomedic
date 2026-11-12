@@ -14,5 +14,5 @@ def domain_message(key: str, **params: Any) -> str:
         return template
     try:
         return template.format(**params)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return template

@@ -85,7 +85,7 @@ class AuditEventsListQueryParams(OffsetPaginationQueryParams):
             return None
         try:
             return UUID(str(value))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     @field_validator("from_", "to_", mode="before")
