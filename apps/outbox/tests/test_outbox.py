@@ -351,6 +351,67 @@ class OutboxProcessingTests(TestCase):
             ).exists()
         )
 
+    def test_failed_outbox_event_persists_when_failure_audit_raises(self) -> None:
+        """Failure-path audit must not roll back retry_count inside atomic()."""
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {"simulate_error": True}
+        event.max_retries = 10
+        event.retry_count = 0
+        event.status = OutboxStatus.PENDING
+        event.available_at = timezone.now() - timedelta(seconds=5)
+        event.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        with patch(
+            "apps.outbox.services.create_audit_event",
+            side_effect=RuntimeError("audit unavailable"),
+        ):
+            result = process_outbox_events()
+        self.assertEqual(result.failed, 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.FAILED)
+        self.assertEqual(event.retry_count, 1)
+
+    def test_dead_letter_persists_when_failure_audit_raises(self) -> None:
+        event = OutboxEvent.objects.get(
+            medical_document_version=self.version,
+            event_type=OutboxEventType.GENERATE_PDF,
+        )
+        event.payload = {"simulate_error": True}
+        event.max_retries = 1
+        event.retry_count = 0
+        event.status = OutboxStatus.PENDING
+        event.available_at = timezone.now() - timedelta(seconds=5)
+        event.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        with patch(
+            "apps.outbox.services.create_audit_event",
+            side_effect=RuntimeError("audit unavailable"),
+        ):
+            result = process_outbox_events()
+        self.assertEqual(result.dead_lettered, 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxStatus.DEAD_LETTER)
+        self.assertEqual(event.retry_count, 1)
+
     @override_settings(
         SMSAPI_USE_MOCK="1",
         HIDRIVE_USE_MOCK="1",

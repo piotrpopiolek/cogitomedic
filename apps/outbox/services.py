@@ -407,26 +407,6 @@ def process_outbox_events(
                 success_committed = True
             except Exception as exc:
                 transaction.savepoint_rollback(sid)
-                if isinstance(exc, AllExternalPdfDownloadsFailed):
-                    for meta in exc.failed_download_metadata:
-                        att_id = meta.get("external_pdf_attachment_id")
-                        if (
-                            att_id
-                            and AuditEvent.objects.filter(
-                                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-                                outbox_event_id=event_id,
-                                medical_document_id=exc.medical_document_id,
-                                metadata__external_pdf_attachment_id=att_id,
-                            ).exists()
-                        ):
-                            continue
-                        create_audit_event(
-                            event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
-                            patient_id=exc.patient_id,
-                            medical_document_id=exc.medical_document_id,
-                            outbox_event_id=event_id,
-                            metadata=meta,
-                        )
                 ev = OutboxEvent.objects.get(pk=event_id)
                 if ev.event_type == OutboxEventType.GENERATE_PDF:
                     MedicalDocumentVersion.objects.filter(
@@ -461,23 +441,49 @@ def process_outbox_events(
                         "updated_at",
                     ]
                 )
-                doc = ev.medical_document_version.medical_document
-                create_audit_event(
-                    event_type=(
-                        "OUTBOX_EVENT_DEAD_LETTERED"
-                        if ev.status == OutboxStatus.DEAD_LETTER
-                        else "OUTBOX_EVENT_FAILED"
-                    ),
-                    patient_id=doc.queue_entry.patient_id,
-                    medical_document_id=doc.id,
-                    outbox_event_id=ev.id,
-                    context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
-                    metadata={
-                        "event_type": ev.event_type,
-                        "retry_count": ev.retry_count,
-                        "error_message": ev.error_message or "",
-                    },
-                )
+                try:
+                    if isinstance(exc, AllExternalPdfDownloadsFailed):
+                        for meta in exc.failed_download_metadata:
+                            att_id = meta.get("external_pdf_attachment_id")
+                            if (
+                                att_id
+                                and AuditEvent.objects.filter(
+                                    event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                                    outbox_event_id=event_id,
+                                    medical_document_id=exc.medical_document_id,
+                                    metadata__external_pdf_attachment_id=att_id,
+                                ).exists()
+                            ):
+                                continue
+                            create_audit_event(
+                                event_type="EXTERNAL_PDF_DOWNLOAD_FAILED",
+                                patient_id=exc.patient_id,
+                                medical_document_id=exc.medical_document_id,
+                                outbox_event_id=event_id,
+                                metadata=meta,
+                            )
+                    doc = ev.medical_document_version.medical_document
+                    create_audit_event(
+                        event_type=(
+                            "OUTBOX_EVENT_DEAD_LETTERED"
+                            if ev.status == OutboxStatus.DEAD_LETTER
+                            else "OUTBOX_EVENT_FAILED"
+                        ),
+                        patient_id=doc.queue_entry.patient_id,
+                        medical_document_id=doc.id,
+                        outbox_event_id=ev.id,
+                        context_clinic_site_id=doc.queue_entry.daily_queue.clinic_site_id,
+                        metadata={
+                            "event_type": ev.event_type,
+                            "retry_count": ev.retry_count,
+                            "error_message": ev.error_message or "",
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "create_audit_event failed after failed outbox event %s",
+                        event_id,
+                    )
                 try:
                     record_outbox_execution(
                         stream="befund",

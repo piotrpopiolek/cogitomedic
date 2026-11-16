@@ -311,22 +311,28 @@ def process_intake_outbox_events(
                         "updated_at",
                     ]
                 )
-                create_audit_event(
-                    event_type=(
-                        "INTAKE_OUTBOX_EVENT_DEAD_LETTERED"
-                        if ev.status == IntakeOutboxStatus.DEAD_LETTER
-                        else "INTAKE_OUTBOX_EVENT_FAILED"
-                    ),
-                    patient_id=patient_id,
-                    context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
-                    metadata={
-                        "intake_document_version_id": str(version.id),
-                        "intake_outbox_event_id": str(ev.id),
-                        "event_type": ev.event_type,
-                        "retry_count": ev.retry_count,
-                        "error_message": ev.error_message or "",
-                    },
-                )
+                try:
+                    create_audit_event(
+                        event_type=(
+                            "INTAKE_OUTBOX_EVENT_DEAD_LETTERED"
+                            if ev.status == IntakeOutboxStatus.DEAD_LETTER
+                            else "INTAKE_OUTBOX_EVENT_FAILED"
+                        ),
+                        patient_id=patient_id,
+                        context_clinic_site_id=version.intake_form.queue_entry.daily_queue.clinic_site_id,
+                        metadata={
+                            "intake_document_version_id": str(version.id),
+                            "intake_outbox_event_id": str(ev.id),
+                            "event_type": ev.event_type,
+                            "retry_count": ev.retry_count,
+                            "error_message": ev.error_message or "",
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "create_audit_event failed after failed intake outbox event %s",
+                        ev.id,
+                    )
                 if ev.status == IntakeOutboxStatus.DEAD_LETTER:
                     logger.warning(
                         "intake_outbox_event_dead_lettered",

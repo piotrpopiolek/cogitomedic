@@ -458,6 +458,45 @@ class SubmitPatientIntakeFormTests(TestCase):
         self.assertEqual(ev.status, IntakeOutboxStatus.FAILED)
 
     @override_settings(HIDRIVE_USE_MOCK="1")
+    def test_failed_intake_outbox_persists_when_failure_audit_raises(self) -> None:
+        self._accept_all_required_consents_effective_today()
+        self._ensure_all_required_questions_answered_today()
+        submit_patient_intake_form(intake_form_id=self.intake_form.id)
+        ev = IntakeOutboxEvent.objects.get(
+            intake_document_version__intake_form=self.intake_form,
+            event_type=IntakeOutboxEventType.GENERATE_INTAKE_PDF,
+        )
+        ev.payload = {"simulate_error": True}
+        ev.max_retries = 10
+        ev.retry_count = 0
+        ev.status = IntakeOutboxStatus.PENDING
+        ev.available_at = timezone.now() - timedelta(seconds=5)
+        ev.save(
+            update_fields=[
+                "payload",
+                "max_retries",
+                "retry_count",
+                "status",
+                "available_at",
+                "updated_at",
+            ]
+        )
+        with patch(
+            "apps.intake.outbox_services.create_audit_event",
+            side_effect=RuntimeError("audit unavailable"),
+        ):
+            result = process_intake_outbox_events()
+        self.assertEqual(result.failed, 1)
+        ev.refresh_from_db()
+        self.assertEqual(ev.status, IntakeOutboxStatus.FAILED)
+        self.assertEqual(ev.retry_count, 1)
+        self.assertFalse(
+            AuditEvent.objects.filter(
+                event_type="INTAKE_OUTBOX_EVENT_FAILED",
+            ).exists()
+        )
+
+    @override_settings(HIDRIVE_USE_MOCK="1")
     def test_intake_outbox_internal_sets_span_attribute_when_recording(self) -> None:
         self._accept_all_required_consents_effective_today()
         self._ensure_all_required_questions_answered_today()
